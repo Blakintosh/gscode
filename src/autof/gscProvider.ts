@@ -7,7 +7,7 @@ export class GSCProvider extends ScriptProvider {
 
         // Add GSC functions here
     }
-    
+
     getSuggestions(term: String): BuiltInScriptFunction[] {
         throw new Error("Method not implemented.");
     }

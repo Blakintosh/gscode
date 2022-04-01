@@ -12,7 +12,7 @@ This is the README for your extension "gsc". After writing up a brief descriptio
 ### Semantic Highlighting Ideas
 * Function calls are unhighlighted when a definition for that call cannot be found, and the function is not built-in
 * References to function parameters in the body of the function are given a light blue highlight
-* Waittill parameters are given a blue highlight like function parameters and further references do the same as above
+* Waittill, foreach, for, etc. parameters are given a blue highlight like function parameters and further references do the same as above
 * Preprocessor references are unhighlighted if they cannot be found
 * Special highlight for parameters, functions that are never used
 * ...

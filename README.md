@@ -2,6 +2,20 @@
 
 This is the README for your extension "gsc". After writing up a brief description, we recommend including the following sections.
 
+## TODO
+### Syntax Highlighting
+* `#if`, `#elif`, `#else`, `#endif` etc.
+* `#define`
+* basic function highlighting (and it not clash with control)
+* `/# #/`
+
+### Semantic Highlighting Ideas
+* Function calls are unhighlighted when a definition for that call cannot be found, and the function is not built-in
+* References to function parameters in the body of the function are given a light blue highlight
+* Waittill parameters are given a blue highlight like function parameters and further references do the same as above
+* Preprocessor references are unhighlighted if they cannot be found
+* ...
+
 ## Features
 
 Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.

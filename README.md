@@ -14,7 +14,7 @@ For example if there is an image subfolder under your extension project workspac
 
 ## Requirements
 
-n/a
+n/
 
 ## Extension Settings
 

@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 export function provide()
 {
-    const tokenTypes = ['class', 'interface', 'enum', 'function', 'variable'];
+    const tokenTypes = ['class', 'interface', 'enum', 'function', 'variable', 'parameter'];
     const tokenModifiers = ['declaration', 'documentation'];
     const legend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 
@@ -17,15 +17,15 @@ export function provide()
         const tokensBuilder = new vscode.SemanticTokensBuilder(legend);
         // on line 1, characters 1-5 are a class declaration
         tokensBuilder.push(
-        new vscode.Range(new vscode.Position(1, 1), new vscode.Position(1, 5)),
-        'class',
+        new vscode.Range(new vscode.Position(1, 0), new vscode.Position(1, 5)),
+        'parameter',
         ['declaration']
         );
         return tokensBuilder.build();
     }
     };
 
-    const selector = { language: 'java', scheme: 'file' }; // register for all Java documents from the local file system
+    const selector = { language: 'gsc', scheme: 'file' }; // register for all Java documents from the local file system
 
     vscode.languages.registerDocumentSemanticTokensProvider(selector, provider, legend);
 }

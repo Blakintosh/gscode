@@ -14,6 +14,14 @@ This is the README for your extension "gsc". After writing up a brief descriptio
 * References to function parameters in the body of the function are given a light blue highlight
 * Waittill parameters are given a blue highlight like function parameters and further references do the same as above
 * Preprocessor references are unhighlighted if they cannot be found
+* Special highlight for parameters, functions that are never used
+* ...
+
+### IntelliSense
+* Language server that is capable of grabbing the existence of functions and classes, references within specific scopes. Need to be able to determine syntax errors also, missing {} etc.
+* Auto complete
+* Documentation via `/@ @/` including a generate autocomplete, fallback to `/* */` or `//` before the function if no documentation found.
+* Number of references before functions, maybe?
 * ...
 
 ## Features

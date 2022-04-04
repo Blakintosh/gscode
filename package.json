@@ -24,7 +24,7 @@
 				"extensions": [
 					".gsc"
 				],
-                "configuration": "./language-configuration.json"
+				"configuration": "./language-configuration.json"
 			},
 			{
 				"id": "csc",
@@ -34,18 +34,18 @@
 				"extensions": [
 					".csc"
 				],
-                "configuration": "./language-configuration.json"
+				"configuration": "./language-configuration.json"
 			},
-            {
-                "id": "gsh",
-                "aliases": [
-                    "GSH"
-                ],
-                "extensions": [
-                    ".gsh"
-                ],
-                "configuration": "./language-configuration.json"
-            }
+			{
+				"id": "gsh",
+				"aliases": [
+					"GSH"
+				],
+				"extensions": [
+					".gsh"
+				],
+				"configuration": "./language-configuration.json"
+			}
 		],
 		"commands": [
 			{
@@ -59,12 +59,12 @@
 				"scopeName": "source.gsc",
 				"path": "./syntaxes/gsc.tmGrammar.json"
 			},
-            {
+			{
 				"language": "csc",
 				"scopeName": "source.gsc",
 				"path": "./syntaxes/gsc.tmGrammar.json"
 			},
-            {
+			{
 				"language": "gsh",
 				"scopeName": "source.gsc",
 				"path": "./syntaxes/gsc.tmGrammar.json"
@@ -93,6 +93,7 @@
 		"typescript": "^4.5.5"
 	},
 	"dependencies": {
+		"vscode-nls": "^5.0.0",
 		"vscode-textmate": "^6.0.0"
 	}
 }

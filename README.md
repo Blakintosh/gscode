@@ -5,8 +5,6 @@ This is the README for your extension "gsc". After writing up a brief descriptio
 ## TODO
 ### Syntax Highlighting
 * `#if`, `#elif`, `#else`, `#endif` etc.
-* `#define`
-* basic function highlighting (and it not clash with control)
 * `/# #/`
 
 ### Semantic Highlighting Ideas

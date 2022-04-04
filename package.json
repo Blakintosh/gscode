@@ -23,7 +23,8 @@
 				],
 				"extensions": [
 					".gsc"
-				]
+				],
+                "configuration": "./language-configuration.json"
 			},
 			{
 				"id": "csc",
@@ -32,8 +33,19 @@
 				],
 				"extensions": [
 					".csc"
-				]
-			}
+				],
+                "configuration": "./language-configuration.json"
+			},
+            {
+                "id": "gsh",
+                "aliases": [
+                    "GSH"
+                ],
+                "extensions": [
+                    ".gsh"
+                ],
+                "configuration": "./language-configuration.json"
+            }
 		],
 		"commands": [
 			{
@@ -44,6 +56,16 @@
 		"grammars": [
 			{
 				"language": "gsc",
+				"scopeName": "source.gsc",
+				"path": "./syntaxes/gsc.tmGrammar.json"
+			},
+            {
+				"language": "csc",
+				"scopeName": "source.gsc",
+				"path": "./syntaxes/gsc.tmGrammar.json"
+			},
+            {
+				"language": "gsh",
 				"scopeName": "source.gsc",
 				"path": "./syntaxes/gsc.tmGrammar.json"
 			}

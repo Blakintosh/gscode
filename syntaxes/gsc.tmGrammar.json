@@ -7,94 +7,13 @@
     "foldingStartMarker": "^.*\bfunction\\s*(\\w+\\s*)?\\([^\\)]*\\)(\\s*\\{[^\\}]*)?\\s*$",
     "foldingStopMarker": "^\\s*\\}",
     "patterns": [
-        {	
-            "name": "meta.function.gsc",
-			"comment": "match regular function like: function myFunc(arg) { É }",
-			"match": "\\b(function)(\\s[a-zA-Z_$]\\w*)?\\s+([a-zA-Z_$]\\w*)?\\s*(\\()(.*?)(\\))",
-			"captures": {
-                "1": { "name": "storage.type.function.gsc" },
-                "2": {
-                    "patterns": [
-                        {
-                            "name": "storage.modifier.function.gsc",
-                            "match": "\\b(private|autoexec)\\b"
-                        }
-                    ]
-                },
-                "3": { "name": "entity.name.function.gsc" },
-                "4": { "name": "punctuation.definition.parameters.begin.gsc" },
-                "5": { 
-                    "name": "variable.parameter.function.gsc",
-                    "patterns": [
-                        {
-                            "include": "#function-parameter-defaults"
-                        },
-                        {
-                            "include": "#expression"
-                        },
-                        {
-                            "include": "#function-vararg"
-                        },
-                        {
-                            "name": "keyword.operator.parameter-comma.gsc",
-                            "match": ","
-                        }
-                    ]
-                },
-                "6": { "name": "punctuation.definition.parameters.end.gsc" }
-            }
-        },
-        {	
-            "name": "meta.class.gsc",
-			"comment": "match classes like: class Ham, class Cheddar : Cheese { É }",
-			"match": "\\b(class)\\s([a-zA-Z_$]\\w*)(\\s:\\s+([a-zA-Z_$]\\w*))?",
-			"captures": {
-                "1": { "name": "storage.type.class.gsc" },
-                "2": { "name": "entity.name.class.gsc" },
-                "4": { "name": "entity.other.inherited-class.gsc" }
-            }
-        },
-        {	
-            "name": "meta.class.structor.gsc",
-			"comment": "con/de structor()",
-			"match": "\\b(constructor|destructor)\\s*(\\()(.*?)(\\))",
-			"captures": {
-                "1": { "name": "storage.type.function.gsc" },
-                "2": { "name": "punctuation.definition.parameters.begin.gsc" },
-                "3": { 
-                    "name": "variable.parameter.function.gsc",
-                    "patterns": [
-                        {
-                            "include": "#function-parameter-defaults"
-                        },
-                        {
-                            "include": "#expression"
-                        },
-                        {
-                            "include": "#function-vararg"
-                        },
-                        {
-                            "name": "keyword.operator.parameter-comma.gsc",
-                            "match": ","
-                        }
-                    ]
-                },
-                "4": { "name": "punctuation.definition.parameters.end.gsc" }
-            }
-        },
+        { "include": "#function" },
+        { "include": "#class" },
         { "include": "#block-comment" },
         { "include": "#expression" },
         { "include": "#control" },
-        {
-            "name": "keyword.operator.gsc",
-            "comment": "Reserved operators in GSC/CSC",
-            "match": "(\\|\\||\\&\\&|\\||\\&|\\^|\\=\\=|\\=\\=\\=|\\!\\=|\\!\\=\\=|\\<|\\>|\\<\\=|\\>\\=|\\<\\<|\\>\\>|\\+|\\-|\\*|\\%|\\!|\\~|\\=|\\-\\>|\\+\\+|\\-\\-|\\|\\=|\\^\\=|\\&\\=|\\<\\<\\=|\\>\\>\\=|\\+\\=|\\-\\=|\\*\\=|\\/\\=|\\%\\=)"
-        },
-        {
-            "name": "comment.line.double-slash.gsc",
-            "begin": "//",
-            "end": "\n"
-        },
+        { "include": "#operator" },
+        { "include": "#line-comment" },
         {
             "name": "comment.block.documentation.gsc",
             "begin": "/@",
@@ -102,7 +21,7 @@
         },
         {
             "name": "meta.preprocessor.file-directives.gsc",
-            "match": "(#(?:using|insert)) ([^ ]*)(;)",
+            "match": "(#(?:using|insert))\\s([^ ]*)(;)",
             "captures": {
                 "1": { "name": "keyword.control.directive.using.gsc" },
                 "2": { "name": "string.quoted.other.blank.using.gsc" },
@@ -111,7 +30,7 @@
         },
         {
             "name": "meta.preprocessor.namespace.gsc",
-            "match": "(#(?:namespace)) ([^ ]*)(;)",
+            "match": "(#(?:namespace))\\s([^ ]*)(;)",
             "captures": {
                 "1": { "name": "keyword.control.directive.using.gsc" },
                 "2": { "name": "entity.name.namespace.gsc" },
@@ -133,6 +52,43 @@
                 },
                 "3": { "name": "keyword.control.directive.asset.end.gsc" }
             }
+        },
+        {
+            "name": "meta.preprocessor.macro.gsc",
+            "begin": "(#define)\\s([^\\s\\(]+)(?:(\\()(.+?)(\\)))?\\s+",
+            "end": "(?<=\\n)(?<!\\\\\\n)",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.directive.define.gsc" },
+                "2": { "name": "entity.name.function.preprocessor.gsc" },
+                "3": { "name": "punctuation.definition.parameters.begin.preprocessor.gsc" },
+                "4": { 
+                    "name": "variable.parameter.preprocessor.gsc",
+                    "patterns": [
+                        {
+                            "comment": "Not sure if this even works in GSC",
+                            "include": "#function-parameter-defaults"
+                        },
+                        {
+                            "include": "#expression"
+                        },
+                        {
+                            "name": "meta.preprocessor.separator.parameters.gsc",
+                            "match": ","
+                        }
+                    ]
+                },
+                "5": { "name": "punctuation.definition.parameters.end.preprocessor.gsc" }
+            },
+            "patterns": [
+                { "include": "#line-continuation-character" },
+                { "include": "#block-comment" },
+                { "include": "#expression" },
+                { "include": "#control" },
+                { "include": "#function-call" },
+                { "include": "#function" },
+                { "include": "#class" },
+                { "include": "#line-comment" }
+            ]
         },
         { "include": "#function-call" }
     ],
@@ -203,7 +159,9 @@
                 { "include": "#block-comment" },
                 { "include": "#double-quote-string" },
                 { "include": "#number" },
-                { "include": "#expression-keywords" }
+                { "include": "#function-pointer" },
+                { "include": "#expression-keywords" },
+                { "include": "#operator" }
             ]
         },
         "control": {
@@ -235,6 +193,37 @@
                 { "include": "#block-comment"}
             ]
         },
+        "other-function": {	
+            "name": "meta.function-call.gsc",
+			"comment": "match function calls like: burger('example');",
+			"match": "((?:[[:alnum:]]|_)\\w+)\\b(\\()(.*?)(\\))",
+			"captures": {
+                "1": { 
+                    "name": "entity.name.function.gsc",
+                    "patterns": [
+                        {
+                            "include": "#control"
+                        }
+                    ]
+                },
+                "3": {
+                    "patterns": [
+                        { "include": "#expression" }
+                    ]
+                }
+            },
+            "patterns": [
+                { "include": "#function-call" },
+                { "include": "#block-comment"}
+            ]
+        },
+        "function-pointer": {
+            "name": "entity.name.function.pointer.gsc",
+            "match": "\\&(?:((?:[[:alpha:]]|_)\\w+)(::))?(?:[[:alnum:]]|_)+?\\b",
+            "captures": {
+                "1": { "name": "entity.name.scope-resolution.gsc" }
+            }
+        },
         "inbuilt-function":
         {
             "name": "support.function.builtin.gsc",
@@ -243,8 +232,108 @@
         "function-call": {
             "patterns": [
                 { "include": "#namespace-call" },
-                { "include": "#inbuilt-function" }
+                { "include": "#inbuilt-function" },
+                { "include": "#other-function" }
             ]
+        },
+        "line-continuation-character": {
+            "match": "\\\\\\n",
+            "name": "constant.character.escape.line-continuation.gsc"
+        },
+        "function": {	
+            "name": "meta.function.gsc",
+			"comment": "match regular function like: function myFunc(arg) { É }",
+			"match": "\\b(function)(\\s[a-zA-Z_$]\\w*)?\\s+([a-zA-Z_$]\\w*)?\\s*(\\()(.*?)(\\))",
+			"captures": {
+                "1": { "name": "storage.type.function.gsc" },
+                "2": {
+                    "patterns": [
+                        {
+                            "name": "storage.modifier.function.gsc",
+                            "match": "\\b(private|autoexec)\\b"
+                        }
+                    ]
+                },
+                "3": { "name": "entity.name.function.gsc" },
+                "4": { "name": "punctuation.definition.parameters.begin.gsc" },
+                "5": { 
+                    "name": "variable.parameter.function.gsc",
+                    "patterns": [
+                        {
+                            "include": "#function-parameter-defaults"
+                        },
+                        {
+                            "include": "#expression"
+                        },
+                        {
+                            "include": "#function-vararg"
+                        },
+                        {
+                            "name": "keyword.operator.parameter-comma.gsc",
+                            "match": ","
+                        }
+                    ]
+                },
+                "6": { "name": "punctuation.definition.parameters.end.gsc" }
+            }
+        },
+        "line-comment": 
+        {
+            "name": "comment.line.double-slash.gsc",
+            "begin": "//",
+            "end": "(?<=\\n)(?<!\\\\\\n)",
+            "patterns": [
+                { "include": "#line-continuation-character" }
+            ]
+        },
+        "class": {
+            "patterns": [
+                { "include": "#class-decl" },
+                { "include": "#class-structor" }
+            ]
+        },
+        "class-decl": {	
+            "name": "meta.class.gsc",
+			"comment": "match classes like: class Ham, class Cheddar : Cheese { É }",
+			"match": "\\b(class)\\s([a-zA-Z_$]\\w*)(\\s:\\s+([a-zA-Z_$]\\w*))?",
+			"captures": {
+                "1": { "name": "storage.type.class.gsc" },
+                "2": { "name": "entity.name.class.gsc" },
+                "4": { "name": "entity.other.inherited-class.gsc" }
+            }
+        },
+        "class-structor": {	
+            "name": "meta.class.structor.gsc",
+			"comment": "con/de structor()",
+			"match": "\\b(constructor|destructor)\\s*(\\()(.*?)(\\))",
+			"captures": {
+                "1": { "name": "storage.type.function.gsc" },
+                "2": { "name": "punctuation.definition.parameters.begin.gsc" },
+                "3": { 
+                    "name": "variable.parameter.function.gsc",
+                    "patterns": [
+                        {
+                            "include": "#function-parameter-defaults"
+                        },
+                        {
+                            "include": "#expression"
+                        },
+                        {
+                            "include": "#function-vararg"
+                        },
+                        {
+                            "name": "keyword.operator.parameter-comma.gsc",
+                            "match": ","
+                        }
+                    ]
+                },
+                "4": { "name": "punctuation.definition.parameters.end.gsc" }
+            }
+        },
+        "operator": {
+            "name": "keyword.operator.gsc",
+            "comment": "Reserved operators in GSC/CSC",
+            "match": "(\\|\\||\\&\\&|\\||\\&|\\^|\\=\\=|\\=\\=\\=|\\!\\=|\\!\\=\\=|\\<|\\>|\\<\\=|\\>\\=|\\<\\<|\\>\\>|\\+|\\-|\\*|\\%|\\!|\\~|\\=|\\-\\>|\\+\\+|\\-\\-|\\|\\=|\\^\\=|\\&\\=|\\<\\<\\=|\\>\\>\\=|\\+\\=|\\-\\=|\\*\\=|\\/\\=|\\%\\=)"
         }
     }
 }

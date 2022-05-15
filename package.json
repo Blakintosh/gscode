@@ -93,6 +93,7 @@
 		"typescript": "^4.5.5"
 	},
 	"dependencies": {
+		"functional-red-black-tree": "^1.0.1",
 		"vscode-nls": "^5.0.0",
 		"vscode-textmate": "^6.0.0"
 	}

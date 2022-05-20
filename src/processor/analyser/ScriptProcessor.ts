@@ -20,7 +20,7 @@ export class ScriptProcessor {
 		}
 
 		let test = new FunctionCall();
-		test.tokenMatches(0);
+		//test.tokenMatches(0);
 
 		console.log("parsing file of length "+fileLength);
 

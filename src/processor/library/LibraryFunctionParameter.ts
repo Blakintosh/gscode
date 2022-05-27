@@ -1,9 +1,9 @@
 export class LibraryFunctionParameter {
-	readonly name: String;
-	readonly description: String;
+	readonly name: string;
+	readonly description: string;
 	readonly mandatory: boolean;
 
-	constructor(name: String, description: String, mandatory=true) {
+	constructor(name: string, description: string, mandatory=true) {
 		this.name = name;
 		this.description = description;
 		this.mandatory = mandatory;

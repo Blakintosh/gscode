@@ -17,7 +17,7 @@ export function provide()
 
         const tokensBuilder = new vscode.SemanticTokensBuilder(legend);
 
-		ScriptProcessor.semanticProvider(document, tokensBuilder);
+		//ScriptProcessor.semanticProvider(document, tokensBuilder);
         // on line 1, characters 1-5 are a class declaration
         tokensBuilder.push(
         new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 5)),

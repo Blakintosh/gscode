@@ -1,3 +1,6 @@
+/**
+ * Class that stores the information associated with a built-in function parameter.
+ */
 export class LibraryFunctionParameter {
 	readonly name: string;
 	readonly description: string;

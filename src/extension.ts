@@ -2,7 +2,8 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as semantics from './semantics';
-import {LibraryCompletionItemProvider} from './languageFeatures/LibraryCompletionItemProvider';
+import {ScriptCompletionItemProvider} from './languageFeatures/ScriptCompletionItemProvider';
+import { ScriptHoverProvider } from './languageFeatures/ScriptHoverProvider';
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -18,25 +19,19 @@ export function activate(context: vscode.ExtensionContext) {
 	let disposable = vscode.commands.registerCommand('gsc.helloWorld', () => {
 		// The code you place here will be executed every time your command is executed
 		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from GSC!');
+		let env = process.env["TA_TOOLS_PATH"];
+		if(env !== undefined) {
+			vscode.window.showInformationMessage("test "+env);
+			
+		}
 	});
 
-	vscode.languages.registerCompletionItemProvider("gsc", new LibraryCompletionItemProvider());
-
-	vscode.languages.registerHoverProvider('gsc', {
-		provideHover(document, position, token) {
-			const range = document.getWordRangeAtPosition(position);
-            const word = document.getText(range);
-
-            if (word === "HELLO") {
-
-                return new vscode.Hover({
-                    language: "Hello language",
-                    value: "Hello Value"
-                });
-            }
-		}
-	  });
+	// Register the completion providers
+	vscode.languages.registerCompletionItemProvider("gsc", new ScriptCompletionItemProvider());
+	vscode.languages.registerCompletionItemProvider("csc", new ScriptCompletionItemProvider());
+	// Register the hover providers
+	vscode.languages.registerHoverProvider('gsc', new ScriptHoverProvider());
+	vscode.languages.registerHoverProvider('csc', new ScriptHoverProvider());
 
 	semantics.provide();
 

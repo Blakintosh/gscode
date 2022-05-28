@@ -69,7 +69,17 @@
 				"scopeName": "source.gsc",
 				"path": "./syntaxes/gsc.tmGrammar.json"
 			}
-		]
+		],
+		"configuration": {
+			"title": "GSCode",
+			"properties": {
+			  	"gsc.overrideSharedScriptsPath": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "Specify an alternative folder path for shared scripts. This will override the default setting of using Black Ops III's `share/raw/scripts`."
+			 	}
+			}
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",

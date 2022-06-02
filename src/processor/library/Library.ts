@@ -36,7 +36,7 @@ export class Library {
 			Please also after manual verification move them into their respective "Manually verified" areas for organisation.
 			Follow PascalCase conventions for the naming of functions as a default, despite GSC built-in functions being 
 			case-insensitive. Again, for organisation.
-			I will accept GitHub forks that commit function verification/correction as long as they follow the above conventions
+			GitHub forks that commit function verification/correction will be accepted as long as they follow the above conventions
 		 */
 
 		// Manually verified: Both

@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { ScriptProcessor } from './processor/analyser/ScriptProcessor';
+import { Lexer } from './processor/lexer/Lexer';
 
 export function provide()
 {
@@ -17,7 +18,11 @@ export function provide()
 
         const tokensBuilder = new vscode.SemanticTokensBuilder(legend);
 
-		//ScriptProcessor.semanticProvider(document, tokensBuilder);
+		let lexer = new Lexer(document);
+		lexer.tokenize();
+
+		console.log(lexer.tokens);
+		
         // on line 1, characters 1-5 are a class declaration
         tokensBuilder.push(
         new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 5)),

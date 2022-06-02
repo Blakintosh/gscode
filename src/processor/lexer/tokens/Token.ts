@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import * as vscode from 'vscode';
-import { IToken } from '../interfaces/IToken';
+import { IToken } from './IToken';
 
 /**
  * Enum for all the possible token types
@@ -8,36 +8,36 @@ import { IToken } from '../interfaces/IToken';
  */
 export enum TokenType {
 	Unknown,
-	File,
+	Keyword,
+	Name,
 	Operator,
-	Data,
-	Expression,
-	Conditional,
-	Switch,
-	Case,
-	Loop,
-	ClassDeclaration,
-	FunctionDeclaration,
-	VariableDeclaration
+	Punctuation,
+	SpecialToken,
+	Whitespace,
+	Number,
+	ScriptString,
+	Comment
 }
 
 /**
- * Abstract AST class for a Token
+ * Abstract Lexer Token class
  * All Tokens should be derived from this
  */
 export abstract class Token implements IToken {
-	contents: string;
-	start: number;
-	end: number;
+	contents: string = "";
+	start: number = 0;
+	end: number = 0;
 
 	/**
-	 * Constructor that populates basic values
+	 * Populates this token's values after validation has passed
+	 * @param contents The text content of this token
+	 * @param start The starting position of this token
+	 * @param end The ending position of this token
 	 */
-	constructor()
-	{
-		this.contents = "";
-		this.start = 0;
-		this.end = 0;
+	populate(contents: string, start: number, end: number): void {
+		this.contents = contents;
+		this.start = start;
+		this.end = end;
 	}
 
 	/**
@@ -57,24 +57,21 @@ export abstract class Token implements IToken {
 	}
 
 	/**
-	 * Pushes this token, and its children tokens, onto the Semantic Tokens Builder
-	 * @param builder Reference to the builder
-	 */
-	abstract pushSemanticTokens(builder: vscode.SemanticTokensBuilder): void;
-
-	/**
 	 * Gets the unique Token Type for this Token
 	 */
 	abstract getType(): TokenType;
 
 	/**
-	 * Returns whether the next Token in the file matches this type
-	 * @param position Current file position
+	 * Gets the specific subtype of the token, if it applies.
 	 */
-	abstract tokenMatches(inputText: String, position: number): boolean;
+	abstract getSpecificType(): string;
 
 	/**
-	 * Returns whether this token leads to a branch
+	 * Returns the regular expression associated with this token type
 	 */
-	abstract isBranch(): boolean;
+	abstract getRegex(): RegExp;
+
+	toString(): string {
+		return `Token: ${this.getType().toString()} at ${this.start}-${this.end}`;
+	}
 }

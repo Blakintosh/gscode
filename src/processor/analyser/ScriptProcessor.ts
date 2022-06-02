@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import { FunctionDeclaration } from '../lexer/tokens/FunctionDeclaration';
-import { FunctionCall } from '../lexer/tokens/FunctionCall';
 
 export class ScriptProcessor {
 	static semanticProvider(document: vscode.TextDocument, builder: vscode.SemanticTokensBuilder): void {
@@ -9,6 +7,16 @@ export class ScriptProcessor {
 		// Get end line and end position
 		const endLine = lines.length - 1;
 		const endPosition = lines[endLine].length;*/
+
+		/*let range = document.getWordRangeAtPosition(new vscode.Position(0, 0));
+
+		while(range !== undefined && range.end !== undefined) {
+			const word = document.getText(range);
+
+			console.log(word);
+
+			range = document.getWordRangeAtPosition(new vscode.Position(range.end.line, range.end.character + 1));
+		}*/
 
 		let text = document.getText();
 
@@ -19,7 +27,7 @@ export class ScriptProcessor {
 			lineLengths[i] = lines[i].length;
 		}
 
-		let test = new FunctionCall();
+		//let test = new FunctionCall();
 		//test.tokenMatches(0);
 
 		console.log("parsing file of length "+fileLength);

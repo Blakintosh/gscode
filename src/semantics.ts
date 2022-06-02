@@ -18,6 +18,8 @@ export function provide()
 
         const tokensBuilder = new vscode.SemanticTokensBuilder(legend);
 
+		// test
+
 		let lexer = new Lexer(document);
 		lexer.tokenize();
 

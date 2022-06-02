@@ -1,11 +1,6 @@
-import { IToken } from "../interfaces/IToken";
+import { IToken } from "../tokens/IToken";
 import {Token} from "../tokens/Token";
 import {Statement} from "./Statement";
-
-import {Conditional} from "../tokens/Conditional";
-import { Expression } from "../tokens/Expression";
-import { Reference } from "../tokens/Reference";
-import { FunctionCall } from "../tokens/FunctionCall";
 
 export class Branch extends Statement {
 	/**
@@ -30,16 +25,16 @@ export class Branch extends Statement {
 
 		// Tokens we would expect to see in the average branch
 		let potentialTokens: Array<IToken> = [
-			new FunctionCall()
+			//new FunctionCall()
 		];
 
 		while(text.charAt(position) !== endChar) {
 			for(let i = 0; i < potentialTokens.length; i++) {
 				let element = potentialTokens[i];
-				if(element.tokenMatches(text.substring(position), position)) {
+				/*if(element.tokenMatches(text.substring(position), position)) {
 					console.log("yeah we found one and what ??");
 					break;
-				}
+				}*/
 			}
 		}
 		return startPosition;

@@ -1,11 +1,10 @@
-import {Token, TokenType} from "./Token";
-import * as vscode from 'vscode';
-
 /* eslint-disable @typescript-eslint/naming-convention */
+import { Token, TokenType } from "../Token";
+
 /**
  * Operators that GSC supports. Ordered by char count as first match will be used
  */
-enum OperatorType {
+ enum OperatorType {
 	// 3
 	AssignmentBitwiseLeftShift = "<<=",
 	AssignmentBitwiseRightShift = ">>=",
@@ -45,42 +44,38 @@ enum OperatorType {
 	Not = "!",
 	Plus = "+",
 	Xor = "^",
-	Unknown = "unk"
+	TernaryStart = "?",
+	TernaryElse = ":",
 }
 
 /**
- * AST Class for an Operator Token
- * Structure:
- * {Operator}
- * Examples (see above)
+ * Standard GSC operator Token
+ * Arithmetic and assignment operators
+ * As specified in Treyarch's spec.
  */
 export class Operator extends Token {
-	type: OperatorType;
+	type: string = OperatorType.And;
 
-	constructor() {
-		super();
-		this.type = OperatorType.Unknown;
+	populate(contents: string, start: number, end: number): void {
+		super.populate(contents, start, end);
+
+		for(const keyword in OperatorType) {
+			if(keyword === contents) {
+				this.type = keyword;
+				break;
+			}
+		}
 	}
 
-	pushSemanticTokens(builder: vscode.SemanticTokensBuilder): void {
-		// Not implemented
-	}
-	
 	getType(): TokenType {
-		throw new Error("Method not implemented.");
-	}
-	
-	/**
-	 * Validates whether the next Token in the file matches this type.
-	 * @param position Current base position in the file.
-	 * @param prefix Prefix that may be applied to expand RegEx search in the case of a syntax error.
-	 * @returns true if matches, false otherwise
-	 */
-	tokenMatches(inputText: String, position: number): boolean {
-		throw new Error("Method not implemented.");
+		return TokenType.Operator;
 	}
 
-	isBranch(): boolean {
-		return false;
+	getSpecificType(): string {
+		return this.type;
+	}
+
+	getRegex(): RegExp {
+		return /<<=|>>=|!==|===|\|\||&&|==|!=|<=|>=|<<|>>|->|\+\+|--|\|=|\^=|&=|\+=|-=|\*=|\/=|%=|\||&|\^|<|>|\+|-|\*|\/|%|!|~|=|\?|:/;
 	}
 }

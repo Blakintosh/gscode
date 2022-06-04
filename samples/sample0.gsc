@@ -1,3 +1,5 @@
+#using scripts/shared/scene_shared;
+
 /* 
 SAMPLE FILE
 */

@@ -73,10 +73,15 @@
 		"configuration": {
 			"title": "GSCode",
 			"properties": {
-			  	"gsc.overrideSharedScriptsPath": {
+				"gsc.dependencies.validateExternals": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Specify whether the editor should perform validation on `#using` and `#include` directive paths and external function calls."
+				},
+			  	"gsc.dependencies.overrideSharedScriptsPath": {
 					"type": "string",
 					"default": "",
-					"markdownDescription": "Specify an alternative folder path for shared scripts. This will override the default setting of using Black Ops III's `share/raw/scripts`."
+					"markdownDescription": "Specify an alternative folder path for shared scripts. This will override the default setting of using Black Ops III's mod tools path plus `share/raw/scripts`."
 			 	}
 			}
 		}

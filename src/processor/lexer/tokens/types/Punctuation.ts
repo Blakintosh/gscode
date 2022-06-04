@@ -4,7 +4,7 @@ import { Token, TokenType } from "../Token";
 /**
  * Punctuation types in GSC.
  */
-enum PunctuationTypes {
+export enum PunctuationTypes {
 	OpenBrace = "{",
 	CloseBrace = "}",
 	OpenBracket = "[",

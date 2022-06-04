@@ -4,7 +4,7 @@ import { Token, TokenType } from "../Token";
 /**
  * Special Tokens in GSC. Ordered by (loosely) char count as first match will be used
  */
-enum KeywordTypes {
+export enum KeywordTypes {
 	Classes = "classes",
 	Function = "function",
 	Var = "var",

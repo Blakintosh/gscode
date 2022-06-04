@@ -68,6 +68,14 @@ Fixed issue #.
 Added features X, Y, and Z.
 
 -----------------------------------------------------------------------------------------------------------
+## Footnote
+
+GSCode's language processor is my first time creating a Lexer / Parser and was designed in such a way to make it easy to recreate it in any object-oriented language. It tries to use JavaScript's typeless nature as sparingly as possible.
+
+Due to this, I welcome any suggestions and constructive criticism so the implementation of the language processor can be improved where appropriate.
+
+For those interested in a technical documentation on how this implementation of a Lexer / Parser works, see PARSER.md.
+
 ## Following extension guidelines
 
 Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.

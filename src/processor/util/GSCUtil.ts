@@ -40,7 +40,7 @@ export class GSCUtil {
         }
         
         // File not found in workspace, fallback to shared path
-        const sharePath = (overrideShared !== "" ? overrideShared : process.env.TA_TOOLS_PATH + "/share/raw/scripts/");
+        const sharePath = (overrideShared !== "" ? overrideShared : process.env.TA_TOOLS_PATH + "/share/raw/");
 
         // Check if it exists in shared
         if(fs.existsSync(sharePath + path)) {

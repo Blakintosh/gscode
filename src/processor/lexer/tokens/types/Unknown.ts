@@ -20,39 +20,19 @@
 import { Token, TokenType } from "../Token";
 
 /**
- * String types in GSC.
+ * Unknown GSC Token
+ * Used to fill gaps where no other token type can be found
  */
-enum NumberTypes {
-	Integer = "0",
-	Float = "0.0",
-}
-
-/**
- * Punctuation GSC Token
- * For code branches, [], ().
- */
-export class Number extends Token {
-	type: NumberTypes = NumberTypes.Integer;
-
-	populate(contents: string, start: number, end: number): void {
-		super.populate(contents, start, end);
-
-		if(!contents.includes(".")) {
-			this.type = NumberTypes.Integer;
-		} else {
-			this.type = NumberTypes.Float;
-		}
-	}
-
+export class Unknown extends Token {
 	getType(): TokenType {
-		return TokenType.Number;
+		return TokenType.Unknown;
 	}
 
-	getSpecificType(): NumberTypes {
-		return this.type;
+	getSpecificType(): string {
+		throw new Error("Unintended usage of Unknown token.");
 	}
 
 	getRegex(): RegExp {
-		return /^\d*\.\d+|\d+/;
+		throw new Error("Unintended usage of Unknown token.");
 	}
 }

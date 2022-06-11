@@ -78,11 +78,11 @@
 					"default": true,
 					"markdownDescription": "Specify whether the editor should perform validation on `#using` and `#include` directive paths and external function calls."
 				},
-			  	"gsc.dependencies.overrideSharedScriptsPath": {
+				"gsc.dependencies.overrideSharedScriptsPath": {
 					"type": "string",
 					"default": "",
 					"markdownDescription": "Specify an alternative folder path for shared scripts. This will override the default setting of using Black Ops III's mod tools path plus `share/raw/scripts`."
-			 	}
+				}
 			}
 		}
 	},
@@ -108,6 +108,7 @@
 		"typescript": "^4.5.5"
 	},
 	"dependencies": {
+		"async-wait-until": "^2.0.12",
 		"functional-red-black-tree": "^1.0.1",
 		"vscode-nls": "^5.0.0",
 		"vscode-textmate": "^6.0.0"

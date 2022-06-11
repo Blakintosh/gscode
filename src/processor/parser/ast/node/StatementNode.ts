@@ -5,7 +5,11 @@ import { ScriptSemanticToken } from "../../ScriptSemanticToken";
 import { StatementContents } from "../expression/StatementContents";
 import { IASTNode } from "./IASTNode";
 import * as vscode from "vscode";
-import { TokenReader } from "../../logic/TokenReader";
+import { ScriptReader } from "../../logic/ScriptReader";
+import { PunctuationTypes } from "../../../lexer/tokens/types/Punctuation";
+import { TokenType } from "../../../lexer/tokens/Token";
+import { BranchNode } from "./BranchNode";
+import { SpecialTokenTypes } from "../../../lexer/tokens/types/SpecialToken";
 
 /**
  * Abstract class that all statements are derived from.
@@ -18,6 +22,7 @@ export abstract class StatementNode implements IASTNode {
     diagnostics: ScriptDiagnostic[] = [];
     semantics: ScriptSemanticToken[] = [];
     child?: IASTNode;
+	// For subclasses that open branches: these should be defined in their constructor
     expectsBranch: boolean = false;
     expectedChildren?: IASTNode[];
 
@@ -54,9 +59,11 @@ export abstract class StatementNode implements IASTNode {
      * @param parser Reference to the token reader.
      * @returns true if matches, false otherwise.
      */
-    matches(parser: TokenReader): boolean {
+    matches(parser: ScriptReader): boolean {
         const rule = this.getRule();
+		console.log(rule);
         for(let i = 0; i < rule.length; i++) {
+			console.log(parser.readToken(i));
             if(!rule[i].matches(parser.readToken(i))) {
                 return false;
             }
@@ -74,4 +81,39 @@ export abstract class StatementNode implements IASTNode {
      * Example: function test() would be [TokenRule(Keyword, Function), TokenRule(Name)]
      */
     abstract getRule(): TokenRule[];
+
+	/**
+     * Parses the given statement, which may include recursion calls.
+	 * The Superclass parse handles branching
+     */
+	parse(reader: ScriptReader): void {
+		if(this.expectsBranch) {
+			// Parse branch
+			let nextToken = reader.readToken();
+			let openBranch = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenBrace);
+
+			let oneStatement = !openBranch.matches(nextToken);
+
+			// Advance the reader to the next token if we have a multiline branch
+			if(!oneStatement) {
+				reader.index++;
+			}
+
+			this.child = new BranchNode(oneStatement);
+
+			// Parse the branch with the children types expected, as defined in the subclass
+			this.child.parse(reader, this.expectedChildren);
+		} else {
+			// Check and verify a semicolon has been used
+			let nextToken = reader.readToken();
+			let semicolon = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
+
+			if(!semicolon.matches(nextToken)) {
+				// Throw an error at the end of the last statement.
+				reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Token error: missing semicolon");
+			} else {
+				reader.index++;
+			}
+		}
+	}
 }

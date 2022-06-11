@@ -53,6 +53,6 @@ export class ScriptString extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /^(?:".*?(?<!\\)"|'.*?(?<!\\)')/;
+		return /(?:".*?(?<!\\)"|'.*?(?<!\\)')/;
 	}
 }

@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import { ScriptProcessor } from './processor/analyser/ScriptProcessor';
 import { Lexer } from './processor/lexer/Lexer';
+import { Parser } from './processor/parser/Parser';
 
 export function provide()
 {
@@ -17,13 +18,6 @@ export function provide()
         // analyze the document and return semantic tokens
 
         const tokensBuilder = new vscode.SemanticTokensBuilder(legend);
-
-		// test
-
-		let lexer = new Lexer(document);
-		lexer.tokenize();
-
-		console.log(lexer.tokens);
 		
         // on line 1, characters 1-5 are a class declaration
         tokensBuilder.push(

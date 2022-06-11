@@ -10,10 +10,12 @@ export class ScriptDiagnostic {
     readonly location: [number, number];
     readonly message: string;
     readonly severity?: vscode.DiagnosticSeverity;
+	readonly tags?: vscode.DiagnosticTag[];
 
-    constructor(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined) {
+    constructor(location: [number, number], message: string, severity?: vscode.DiagnosticSeverity, tags?: vscode.DiagnosticTag[]) {
         this.location = location;
         this.message = message;
         this.severity = severity;
+		this.tags = tags;
     }
 }

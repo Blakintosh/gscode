@@ -2,7 +2,7 @@ import { DiagnosticSeverity } from "vscode";
 import { TokenType } from "../../../lexer/tokens/Token";
 import { PunctuationTypes } from "../../../lexer/tokens/types/Punctuation";
 import { ScriptDiagnostic } from "../../diagnostics/ScriptDiagnostic";
-import { TokenReader } from "../../logic/TokenReader";
+import { ScriptReader } from "../../logic/ScriptReader";
 import { TokenRule } from "../../logic/TokenRule";
 import { ScriptSemanticToken } from "../../ScriptSemanticToken";
 import { IASTNode } from "./IASTNode";
@@ -24,7 +24,7 @@ export class BranchNode implements IASTNode {
      * @param message The message for this diagnostic
      * @param severity The severity
      */
-     pushDiagnostic(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined = undefined) {
+    pushDiagnostic(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined = undefined) {
         this.diagnostics.push(new ScriptDiagnostic(location, message, severity));
     }
 
@@ -46,19 +46,48 @@ export class BranchNode implements IASTNode {
         return this.statements;
     }
 
+	/**
+	 * Gets whether no statements validate at this index.
+	 * @param parser Reference to the token reader.
+	 * @param allowedChildren The child nodes allowed in this branch.
+	 * @returns true if so, false otherwise
+	 */
+	private noValidNextNode(parser: ScriptReader, allowedChildren: IASTNode[]): boolean {
+		for(const child of allowedChildren) {
+			if(child.matches(parser)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
     /**
      * Parses the next statement in this branch.
      * @param parser Reference to the token reader.
      * @param allowedChildren The child nodes allowed in this branch.
      */
-    private parseNextNode(parser: TokenReader, allowedChildren: IASTNode[]): IASTNode {
+    private parseNextNode(parser: ScriptReader, allowedChildren: IASTNode[]): IASTNode | null {
         for(const child of allowedChildren) {
             if(child.matches(parser)) {
-                //child.parse(parser);
+                child.parse(parser, undefined);
                 return child;
             }
         }
-        throw new Error("Not implemented");
+
+		// No valid child found, mark as error until next valid directive found.
+		const firstFailedPosition = parser.readToken().getLocation();
+
+		// Increment the parser through unrecognised tokens until we reach the end of the file, the end of the branch, or we find a valid node
+		do {
+			parser.index++;
+		} while(!parser.atEof() && !this.atEndOfBranch(parser) && !this.noValidNextNode(parser, allowedChildren));
+
+		// Get the token before the current index to end the error on.
+		const lastFailedPosition = parser.readToken(-1).getLocation();
+
+		parser.diagnostic.pushDiagnostic([firstFailedPosition[0], lastFailedPosition[1]], "Token error: unrecognised token");
+
+		return null;
     }
 
     /**
@@ -66,7 +95,7 @@ export class BranchNode implements IASTNode {
      * @param parser Reference to the token reader.
      * @returns true if at end, false otherwise.
      */
-    private atEndOfBranch(parser: TokenReader): boolean {
+    private atEndOfBranch(parser: ScriptReader): boolean {
         const matcher = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseBrace);
         return matcher.matches(parser.readToken());
     }
@@ -76,13 +105,19 @@ export class BranchNode implements IASTNode {
      * @param parser Reference to the token reader.
      * @param allowedChildren The child nodes allowed in this branch.
      */
-    parse(parser: TokenReader, allowedChildren: IASTNode[]): void {
+    parse(parser: ScriptReader, allowedChildren: IASTNode[]): void {
         if(this.oneStatement) {
-            this.statements[0] = this.parseNextNode(parser, allowedChildren);
+			let nextChild = this.parseNextNode(parser, allowedChildren);
+			if(nextChild !== null) {
+				this.statements[0] = nextChild;
+			}
         } else {
-            while(!this.atEndOfBranch(parser)) {
+            while(!parser.atEof() && !this.atEndOfBranch(parser)) {
                 const pos = this.statements.length;
-                this.statements[pos] = this.parseNextNode(parser, allowedChildren);
+				let nextChild = this.parseNextNode(parser, allowedChildren);
+				if(nextChild !== null) {
+					this.statements[pos] = nextChild;
+				}
             }
         }
     }
@@ -90,7 +125,7 @@ export class BranchNode implements IASTNode {
     /**
      * A branch node does not get matched.
      */
-    matches(parser: TokenReader): boolean {
+    matches(parser: ScriptReader): boolean {
         return false;
     }
 }

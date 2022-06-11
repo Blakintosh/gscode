@@ -22,6 +22,7 @@ import * as vscode from 'vscode';
 import * as semantics from './semantics';
 import {ScriptCompletionItemProvider} from './languageFeatures/ScriptCompletionItemProvider';
 import { ScriptHoverProvider } from './languageFeatures/ScriptHoverProvider';
+import { ScriptProcessor } from './languageFeatures/ScriptProcessor';
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -54,6 +55,17 @@ export function activate(context: vscode.ExtensionContext) {
 	semantics.provide();
 
 	context.subscriptions.push(disposable);
+
+	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(event => {
+		if (event) {
+			ScriptProcessor.refresh(event.document);
+		}
+	}));
+	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor => {
+		if (editor) {
+			ScriptProcessor.refresh(editor.document);
+		}
+	}));
 }
 
 // this method is called when your extension is deactivated

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { TokenReader } from "../../logic/TokenReader";
+import { ScriptReader } from "../../logic/ScriptReader";
 
 export interface IASTNode {
     /**
@@ -29,5 +29,10 @@ export interface IASTNode {
      * Returns whether the sequence of tokens at this current position matches this node.
      * @param reader Reference to the token reader.
      */
-    matches(reader: TokenReader): boolean;
+    matches(reader: ScriptReader): boolean;
+
+	/**
+     * Parses the given node, which may include recursion calls.
+     */
+	parse(reader: ScriptReader, allowedChildren: IASTNode[] | undefined): void;
 }

@@ -1,5 +1,5 @@
 import { ScriptDiagnostic } from "../../diagnostics/ScriptDiagnostic";
-import { TokenReader } from "../../logic/TokenReader";
+import { ScriptReader } from "../../logic/ScriptReader";
 import * as vscode from "vscode";
 import { ScriptSemanticToken } from "../../ScriptSemanticToken";
 
@@ -9,7 +9,7 @@ export abstract class StatementContents {
     /**
      * Parses the given statement contents, which may include recursive calls.
      */
-    abstract parse(reader: TokenReader): void;
+    abstract parse(reader: ScriptReader): void;
 
     pushDiagnostic(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined = undefined) {
         this.diagnostics.push(new ScriptDiagnostic(location, message, severity));

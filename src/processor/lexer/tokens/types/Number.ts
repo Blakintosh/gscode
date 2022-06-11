@@ -53,6 +53,6 @@ export class Number extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /^\d*\.\d+|\d+/;
+		return /\d*\.\d+|\d+/;
 	}
 }

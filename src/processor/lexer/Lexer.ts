@@ -57,7 +57,7 @@ export class Lexer {
 	 */
 	private getNextToken(text: string, currOffset: number, position: number): IToken {
 		// Ordered by priority of token types
-		let potentialTokens = [new Whitespace(), new Comment(), new SpecialToken(), new Operator(), new Punctuation(), new Keyword(), new ScriptString(), new Number(), new Name()];
+		let potentialTokens = [new Whitespace(), new Comment(), new Keyword(), new SpecialToken(), new Operator(), new Punctuation(), new ScriptString(), new Number(), new Name()];
 			
 		text = text.substring(position - currOffset);
 		currOffset = position;

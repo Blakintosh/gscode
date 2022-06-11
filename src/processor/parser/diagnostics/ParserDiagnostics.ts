@@ -3,7 +3,7 @@ import { ScriptDiagnostic } from "./ScriptDiagnostic";
 
 export class ParserDiagnostics {
     document: vscode.TextDocument;
-    diagnostics: vscode.Diagnostic[] = [];
+    diagnostics: ScriptDiagnostic[] = [];
     lineLocations: number[] = [];
 
     constructor(document: vscode.TextDocument) {
@@ -57,18 +57,19 @@ export class ParserDiagnostics {
      * Pushes a given diagnostic to the diagnostics array, to later be sent to VSCode's API.
      * @param diagnostic The diagnostic to push
      */
-    pushDiagnostic(diagnostic: ScriptDiagnostic): void {
+    pushDiagnostic(location: [number, number], message: string, severity?: vscode.DiagnosticSeverity, tags?: vscode.DiagnosticTag[]): void {
         // Locate the diagnostic's position in terms of line and character index, then push to a range
-        let startPos = this.absolutePositionToLineChar(diagnostic.location[0]);
-        let endPos = this.absolutePositionToLineChar(diagnostic.location[1]);
+        /*let startPos = this.absolutePositionToLineChar(location[0]);
+        let endPos = this.absolutePositionToLineChar(location[1]);
 
-        let range = new vscode.Range(startPos, endPos);
+        let range = new vscode.Range(startPos, endPos);*/
 
         // Create the VSCode diagnostic and push it to the diagnostic array
-        this.diagnostics.push(new vscode.Diagnostic(
-            range,
-            diagnostic.message,
-            diagnostic.severity
+        this.diagnostics.push(new ScriptDiagnostic(
+            location,
+            message,
+            severity,
+			tags
         ));
     }
 }

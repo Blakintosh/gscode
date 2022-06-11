@@ -1,6 +1,6 @@
 import { DiagnosticSeverity } from "vscode";
 import { TokenType } from "../../../lexer/tokens/Token";
-import { TokenReader } from "../../logic/TokenReader";
+import { ScriptReader } from "../../logic/ScriptReader";
 import { IASTNode } from "./IASTNode";
 
 export class CommentNode implements IASTNode {
@@ -10,7 +10,7 @@ export class CommentNode implements IASTNode {
     pushSemantic(location: [number, number], tokenType: string, tokenModifiers: string[] | undefined): void {
         throw new Error("Method not implemented.");
     }
-    matches(reader: TokenReader): boolean {
+    matches(reader: ScriptReader): boolean {
         return (reader.readToken().getType() === TokenType.Comment);
     }
     /**
@@ -20,4 +20,11 @@ export class CommentNode implements IASTNode {
     getChildren(): IASTNode[] {
         return [];
     }
+
+	/**
+     * Parses the given comment, which does nothing.
+     */
+	parse(reader: ScriptReader): void {
+		return;
+	};
 }

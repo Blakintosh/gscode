@@ -18,6 +18,7 @@
 
 /* eslint-disable @typescript-eslint/naming-convention */
 import { Token, TokenType } from "../Token";
+import { Whitespace } from "./Whitespace";
 
 /**
  * Unknown GSC Token

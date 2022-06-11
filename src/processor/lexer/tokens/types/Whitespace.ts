@@ -33,6 +33,6 @@ export class Whitespace extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /^\s+/;
+		return /\s+/;
 	}
 }

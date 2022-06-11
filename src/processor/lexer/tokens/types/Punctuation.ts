@@ -41,7 +41,7 @@ export class Punctuation extends Token {
 	populate(contents: string, start: number, end: number): void {
 		super.populate(contents, start, end);
 
-		for(const keyword in PunctuationTypes) {
+		for(const keyword in Object.values(PunctuationTypes)) {
 			if(keyword === contents) {
 				this.type = keyword;
 				break;
@@ -58,6 +58,6 @@ export class Punctuation extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /^(?:{|}|\[|\]|\(|\))/;
+		return /(?:{|}|\[|\]|\(|\))/;
 	}
 }

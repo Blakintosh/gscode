@@ -33,6 +33,6 @@ export class Name extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /^[A-Za-z_](?:\w|\\|\.)*/;
+		return /[A-Za-z_\/](?:\w|\\|\/|\.)*/;
 	}
 }

@@ -22,7 +22,7 @@ import { Token, TokenType } from "../Token";
 /**
  * Special Tokens in GSC. Ordered by char count as first match will be used
  */
- enum SpecialTokenTypes {
+export enum SpecialTokenTypes {
 	Hex = "0x",
 	StartVariableFunctionCall = "[[",
 	EndVariableFunctionCall = "]]",
@@ -45,9 +45,9 @@ export class SpecialToken extends Token {
 	populate(contents: string, start: number, end: number): void {
 		super.populate(contents, start, end);
 
-		for(const keyword in SpecialTokenTypes) {
-			if(keyword === contents) {
-				this.type = keyword;
+		for(const specialToken of Object.values(SpecialTokenTypes)) {
+			if(specialToken === contents) {
+				this.type = specialToken;
 				break;
 			}
 		}
@@ -62,6 +62,6 @@ export class SpecialToken extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /^(?:0x|\[\[|\]\]|\$|#|\.|;|,|::|\\)/;
+		return /(?:0x|\[\[|\]\]|\$|#|\.|;|,|::|\\)/;
 	}
 }

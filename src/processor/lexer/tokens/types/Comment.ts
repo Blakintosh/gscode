@@ -41,6 +41,6 @@ export class Comment extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /^(\/\/.*|\/\*(?:.|\r\n)*?\*\/|\/@(?:.|\r\n)*?@\/)/m;
+		return /(\/\/.*|\/\*(?:.|\r\n)*?\*\/|\/@(?:.|\r\n)*?@\/)/m;
 	}
 }

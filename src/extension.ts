@@ -24,6 +24,7 @@ import {ScriptCompletionItemProvider} from './languageFeatures/ScriptCompletionI
 import { ScriptHoverProvider } from './languageFeatures/ScriptHoverProvider';
 import { ScriptProcessor } from './languageFeatures/ScriptProcessor';
 import { ScriptDiagnosticProvider } from './languageFeatures/ScriptDiagnosticProvider';
+import { GSCUtil } from './processor/util/GSCUtil';
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -77,6 +78,9 @@ export function activate(context: vscode.ExtensionContext) {
 			ScriptDiagnosticProvider.provideDiagnostics(editor.document, diagnosticCollection);
 		}
 	}));
+
+	// Checks the user configuration is all OK
+	GSCUtil.startupValidation();
 }
 
 // this method is called when your extension is deactivated

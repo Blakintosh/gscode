@@ -22,7 +22,7 @@ import { Token, TokenType } from "../Token";
 /**
  * Operators that GSC supports. Ordered by char count as first match will be used
  */
- enum OperatorType {
+export enum OperatorType {
 	// 3
 	AssignmentBitwiseLeftShift = "<<=",
 	AssignmentBitwiseRightShift = ">>=",
@@ -77,9 +77,9 @@ export class Operator extends Token {
 	populate(contents: string, start: number, end: number): void {
 		super.populate(contents, start, end);
 
-		for(const keyword in OperatorType) {
-			if(keyword === contents) {
-				this.type = keyword;
+		for(const operator of Object.values(OperatorType)) {
+			if(operator === contents) {
+				this.type = operator;
 				break;
 			}
 		}

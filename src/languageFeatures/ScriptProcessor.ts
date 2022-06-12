@@ -1,6 +1,7 @@
 import { Script } from "../processor/Script";
 import * as vscode from "vscode";
 import { waitUntil } from 'async-wait-until';
+import { GSCUtil } from "../processor/util/GSCUtil";
 
 export class ScriptProcessor {
 	static scripts: Map<string, Script> = new Map<string, Script>();
@@ -41,7 +42,7 @@ export class ScriptProcessor {
 	}
 
 	static async refresh(document: vscode.TextDocument): Promise<void> {
-		if(document.languageId !== "gsc" && document.languageId !== "csc" && document.languageId !== "gsh") {
+		if(!GSCUtil.isScript(document)) {
 			return;
 		}
 		

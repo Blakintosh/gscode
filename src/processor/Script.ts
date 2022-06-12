@@ -35,8 +35,6 @@ export class Script {
             index = text.indexOf(EOL, basePos);
         }
 		locations[i++ + 1] = text.length;
-
-		console.log(locations);
     }
 
 	/**
@@ -70,6 +68,7 @@ export class Script {
 				this.absolutePositionToLineChar(diagnostic.location[1])
 			), diagnostic.message, diagnostic.severity);
 			vscDiagnostic.tags = diagnostic.tags;
+			vscDiagnostic.source = "gscode";
 
 			diagnostics.push(vscDiagnostic);
 		}

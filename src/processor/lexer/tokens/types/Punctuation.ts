@@ -41,7 +41,7 @@ export class Punctuation extends Token {
 	populate(contents: string, start: number, end: number): void {
 		super.populate(contents, start, end);
 
-		for(const keyword in Object.values(PunctuationTypes)) {
+		for(const keyword of Object.values(PunctuationTypes)) {
 			if(keyword === contents) {
 				this.type = keyword;
 				break;

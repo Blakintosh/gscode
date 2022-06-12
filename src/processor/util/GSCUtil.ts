@@ -18,6 +18,7 @@
 
 /* eslint-disable @typescript-eslint/naming-convention */
 import * as fs from "fs";
+import * as fsPath from "path";
 import * as vscode from "vscode";
 
 export enum FunctionFlag {
@@ -58,7 +59,9 @@ export class GSCUtil {
             }
 
             // Now see if this script is here
-            if(fs.existsSync(workspacePath + "/" + path)) {
+			let scriptPath = fsPath.join(workspacePath, path);
+
+            if(fs.existsSync(scriptPath)) {
                 return true;
             }
         } else {
@@ -67,14 +70,56 @@ export class GSCUtil {
         }
         
         // File not found in workspace, fallback to shared path
-        const sharePath = (overrideShared !== "" ? overrideShared : process.env.TA_TOOLS_PATH + "/share/raw/");
+		let toolsPath = process.env.TA_TOOLS_PATH;
+		if(toolsPath !== undefined) {
+			const sharePath: string = <string> (overrideShared !== "" ? overrideShared : fsPath.join(toolsPath, "/share/raw/"));
 
-        // Check if it exists in shared
-        if(fs.existsSync(sharePath + path)) {
-            return true;
-        }
+			// Check if it exists in shared
+			if(fs.existsSync(fsPath.join(sharePath, path))) {
+				return true;
+			}
+		} else {
+			// No share path exists, so we can't validate
+			return true;
+		}
 
         // Not found
         return false;
     }
+
+	/**
+	 * Performs startup validation on GSCode's settings and configuration.
+	 */
+	static startupValidation(): void {
+		const workbenchConfig = vscode.workspace.getConfiguration('gsc');
+
+		// Validate that if we are checking external validity, that we have a shared path
+		const overrideShared = workbenchConfig.get('dependencies.overrideSharedScriptsPath');
+		const validateExternals = workbenchConfig.get('dependencies.validateExternals');
+
+		if(overrideShared === "" && validateExternals) {
+			let sharePath = process.env.TA_TOOLS_PATH;
+			if(sharePath === undefined) {
+				vscode.window.showErrorMessage("GSCode: No TA_TOOLS_PATH environment variable found, meaning dependency validation will not operate correctly. Please install the Black Ops III Mod Tools or set Override Shared Scripts Path in GSCode's extension settings.");
+			}
+		}
+	}
+
+	/**
+	 * Checks whether the specified document is a script file. This does not include macro GSH files.
+	 * @param document The document being checked
+	 * @returns true if so, false otherwise
+	 */
+	static isScriptFile(document: vscode.TextDocument): boolean {
+		return document.languageId === "gsc" || document.languageId === "csc";
+	}
+
+	/**
+	 * Checks whether the specified document is a script file or GSH macro.
+	 * @param document The document being checked
+	 * @returns true if so, false otherwise
+	 */
+	static isScript(document: vscode.TextDocument): boolean {
+		return this.isScriptFile(document) || document.languageId === "gsh";
+	}
 }

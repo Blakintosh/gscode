@@ -108,7 +108,8 @@ export abstract class StatementNode implements IASTNode {
 
 			if(!semicolon.matches(nextToken)) {
 				// Throw an error at the end of the last statement.
-				reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Token error: missing semicolon");
+				let lastTokenLoc = reader.readToken(-1).getLocation();
+				reader.diagnostic.pushDiagnostic([lastTokenLoc[1] - 1, lastTokenLoc[1]], "Token error: missing semicolon");
 			} else {
 				reader.index++;
 			}

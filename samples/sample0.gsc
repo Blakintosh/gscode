@@ -16,3 +16,7 @@
 #using scripts\shared\trigger_shared;
 #using scripts\shared\util_shared;
 #using scripts\shared\lui_shared;
+#using this\fails;
+
+function foo(drooling, shush = 2) {
+}

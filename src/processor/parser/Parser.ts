@@ -27,7 +27,7 @@ export class Parser {
 		// Check uses of dependencies
 		for(let dependency of this.dependencies) {
 			if(dependency.uses === 0) {
-				this.diagnostic.pushDiagnostic(dependency.location, "Using directive is unnecessary.", vscode.DiagnosticSeverity.Information, [vscode.DiagnosticTag.Unnecessary]);
+				this.diagnostic.pushDiagnostic(dependency.location, "Using directive is unnecessary.", vscode.DiagnosticSeverity.Hint, [vscode.DiagnosticTag.Unnecessary]);
 			}
 		}
 	}

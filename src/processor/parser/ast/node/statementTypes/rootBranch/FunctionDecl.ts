@@ -7,16 +7,24 @@ import { StatementContents } from "../../../expression/StatementContents";
 import { FilePathExpression } from "../../../expression/types/FilePathExpression";
 import { StatementNode } from "../../StatementNode";
 
-export class UsingDirective extends StatementNode {
-    file: FilePathExpression = new FilePathExpression();
+export class FunctionDecl extends StatementNode {
+    //file: FilePathExpression = new FilePathExpression();
+
+	constructor() {
+		super();
+		// A function declaration is a branching statement node
+		super.expectsBranch = true;
+		super.expectedChildren = [];
+	}
 
     getContents(): StatementContents {
-        return this.file;
+        throw new Error("Method not implemented.");
     }
 
     getRule(): TokenRule[] {
         return [
-            new TokenRule(TokenType.Keyword, KeywordTypes.Using)
+            new TokenRule(TokenType.Keyword, KeywordTypes.Function),
+			new TokenRule(TokenType.Name)
         ];
     }
 

@@ -61,9 +61,7 @@ export abstract class StatementNode implements IASTNode {
      */
     matches(parser: ScriptReader): boolean {
         const rule = this.getRule();
-		console.log(rule);
         for(let i = 0; i < rule.length; i++) {
-			console.log(parser.readToken(i));
             if(!rule[i].matches(parser.readToken(i))) {
                 return false;
             }

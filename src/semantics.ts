@@ -1,7 +1,6 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { ScriptProcessor } from './processor/analyser/ScriptProcessor';
 import { Lexer } from './processor/lexer/Lexer';
 import { Parser } from './processor/parser/Parser';
 
@@ -20,11 +19,11 @@ export function provide()
         const tokensBuilder = new vscode.SemanticTokensBuilder(legend);
 		
         // on line 1, characters 1-5 are a class declaration
-        tokensBuilder.push(
+        /*tokensBuilder.push(
         new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 5)),
         'parameter',
         ['declaration']
-        );
+        );*/
         return tokensBuilder.build();
     }
     };

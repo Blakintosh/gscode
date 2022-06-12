@@ -5,16 +5,21 @@ import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
 import { FilePathExpression } from "../../../expression/types/FilePathExpression";
+import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
 import { StatementNode } from "../../StatementNode";
+import { VariableAssignment } from "../function/VariableAssignment";
 
 export class FunctionDecl extends StatementNode {
     //file: FilePathExpression = new FilePathExpression();
+	arguments: FunctionDeclArgsExpression = new FunctionDeclArgsExpression();
 
 	constructor() {
 		super();
 		// A function declaration is a branching statement node
 		super.expectsBranch = true;
-		super.expectedChildren = [];
+		super.expectedChildren = [
+			new VariableAssignment()
+		];
 	}
 
     getContents(): StatementContents {
@@ -35,13 +40,19 @@ export class FunctionDecl extends StatementNode {
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
 
+		// Validate the function name and add it to the function names list.
+		reader.index++;
+
+		// Parse the function arguments expression.
+		this.arguments.parse(reader); 
+
 		// Parse the file path expression.
-		this.file.parse(reader);
+		//this.file.parse(reader);
 
 		// Add this as a dependency
-		if(this.file.filePath && this.file.location) {
-			reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], this.file.location[1]]));
-		}
+		//if(this.file.filePath && this.file.location) {
+		//	reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], this.file.location[1]]));
+		//}
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

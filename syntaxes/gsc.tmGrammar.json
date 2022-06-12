@@ -21,7 +21,7 @@
         },
         {
             "name": "meta.preprocessor.file-directives.gsc",
-            "match": "(#(?:using|insert))\\s([^ ]*)(;)",
+            "match": "(#(?:using|insert))\\s([^ ;]*)(;)?",
             "captures": {
                 "1": { "name": "keyword.control.directive.using.gsc" },
                 "2": { "name": "string.quoted.other.blank.using.gsc" },

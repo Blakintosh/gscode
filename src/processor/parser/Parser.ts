@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { Lexer } from "../lexer/Lexer";
 import { BranchNode } from "./ast/node/BranchNode";
 import { UsingDirective } from "./ast/node/statementTypes/preprocessor/UsingDirective";
+import { FunctionDecl } from "./ast/node/statementTypes/rootBranch/FunctionDecl";
 import { ScriptDependency } from "./data/ScriptDependency";
 import { ParserDiagnostics } from "./diagnostics/ParserDiagnostics";
 import { ScriptReader } from "./logic/ScriptReader";
@@ -34,7 +35,8 @@ export class Parser {
 
     parse(): void {
         this.rootNode.parse(this.reader, [
-			new UsingDirective()
+			new UsingDirective(),
+			new FunctionDecl()
 		]);
 
 		this.postParse();

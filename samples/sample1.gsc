@@ -1,3 +1,6 @@
+#using scripts\codescripts\struct;
+#using scripts\shared\ai_shared;
+
 function test() {
 	if(true) {
 		e = 3 * 6;

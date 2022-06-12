@@ -29,9 +29,9 @@ export class FilePathExpression extends StatementContents {
 
         // Check if this path is valid
         const path = (<Token> token).contents;
-        if(!GSCUtil.validateScriptPath(path)) {
+        if(!GSCUtil.validateScriptPath(path + ".gsc")) {
             // We only want to warn if a path is not found, as maybe they have it elsewhere
-            reader.diagnostic.pushDiagnostic(this.location, "Path warning: unable to locate script "+path, vscode.DiagnosticSeverity.Warning);
+            reader.diagnostic.pushDiagnostic(this.location, "Path warning: unable to locate script "+path+".gsc", vscode.DiagnosticSeverity.Warning);
         }
 
         this.filePath = path;

@@ -51,7 +51,9 @@ export class ScriptProcessor {
 			ScriptProcessor.clear(document);
 			await ScriptProcessor.addScript(document);
 		} catch(e) {
-			console.error(`Could not parse ${document.fileName}: ${e}`);
+			console.error(`Could not parse ${document.fileName}:`);
+			console.error(e);
+			console.error("Please report the file used and the full error message to the GitHub issue tracker, at: https://github.com/Blakintosh/gscode.");
 		}
 	}
 }

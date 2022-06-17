@@ -38,6 +38,7 @@ export class FunctionDeclArgExpression extends StatementContents {
 
 			// Parse the default value expression
 			// (TODO)
+			reader.index++;
 		}
 
 		// Done

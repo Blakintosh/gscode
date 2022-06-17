@@ -18,5 +18,5 @@
 #using scripts\shared\lui_shared;
 #using this\fails;
 
-function foo(drooling, shush = 2) {
+function foo(bar = true, mallard = 2) {
 }

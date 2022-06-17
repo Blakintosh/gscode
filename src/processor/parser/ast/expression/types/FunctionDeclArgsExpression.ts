@@ -1,9 +1,6 @@
 import { Token, TokenType } from "../../../../lexer/tokens/Token";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { StatementContents } from "../StatementContents";
-import * as vscode from "vscode";
-import { GSCUtil } from "../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../data/ScriptDependency";
 import { PunctuationTypes } from "../../../../lexer/tokens/types/Punctuation";
 import { TokenRule } from "../../../logic/TokenRule";
 import { FunctionDeclArgExpression } from "./FunctionDeclArgExpression";

@@ -19,4 +19,11 @@
 #using this\fails;
 
 function foo(bar = true, mallard = 2) {
+	afuck = 3;
+	boo = 12984712984721984129847128947124892174981274192847219847;
+	afuck = 20;
+}
+
+function cheese(board) {
+	afuck = 5;
 }

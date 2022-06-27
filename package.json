@@ -110,6 +110,7 @@
 	"dependencies": {
 		"async-wait-until": "^2.0.12",
 		"functional-red-black-tree": "^1.0.1",
+		"stack-typescript": "^1.0.4",
 		"vscode-nls": "^5.0.0",
 		"vscode-textmate": "^6.0.0"
 	}

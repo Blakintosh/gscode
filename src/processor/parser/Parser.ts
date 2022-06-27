@@ -1,3 +1,4 @@
+import { Stack } from "stack-typescript";
 import * as vscode from "vscode";
 import { Lexer } from "../lexer/Lexer";
 import { BranchNode } from "./ast/node/BranchNode";

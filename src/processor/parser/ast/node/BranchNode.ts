@@ -106,6 +106,7 @@ export class BranchNode implements IASTNode {
      * @param allowedChildren The child nodes allowed in this branch.
      */
     parse(parser: ScriptReader, allowedChildren: IASTNode[]): void {
+		parser.increaseScope();
         if(this.oneStatement) {
 			let nextChild = this.parseNextNode(parser, allowedChildren);
 			if(nextChild !== null) {
@@ -119,7 +120,12 @@ export class BranchNode implements IASTNode {
 					this.statements[pos] = nextChild;
 				}
             }
+			// Advance by one token if we haven't reached the end of the file
+			if(!parser.atEof()) {
+				parser.index++;
+			}
         }
+		parser.decreaseScope();
     }
 
     /**

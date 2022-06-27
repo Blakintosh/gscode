@@ -10,6 +10,7 @@ import { PunctuationTypes } from "../../../lexer/tokens/types/Punctuation";
 import { TokenType } from "../../../lexer/tokens/Token";
 import { BranchNode } from "./BranchNode";
 import { SpecialTokenTypes } from "../../../lexer/tokens/types/SpecialToken";
+import { IToken } from "../../../lexer/tokens/IToken";
 
 /**
  * Abstract class that all statements are derived from.
@@ -81,6 +82,21 @@ export abstract class StatementNode implements IASTNode {
     abstract getRule(): TokenRule[];
 
 	/**
+	 * After parsing a statement, gets the next token if it's a semicolon for location purposes.
+	 * @param reader Reference to the token reader
+	 * @returns An IToken corresponding to this statement's semi colon if it exists, undefined otherwise.
+	 */
+	getSemicolonToken(reader: ScriptReader): IToken | undefined {
+		const nextToken = reader.readToken();
+		const semiColon = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
+
+		if(semiColon.matches(nextToken)) {
+			return nextToken;
+		}
+		return undefined;
+	}
+
+	/**
      * Parses the given statement, which may include recursion calls.
 	 * The Superclass parse handles branching
      */
@@ -103,10 +119,9 @@ export abstract class StatementNode implements IASTNode {
 			this.child.parse(reader, this.expectedChildren);
 		} else {
 			// Check and verify a semicolon has been used
-			let nextToken = reader.readToken();
-			let semicolon = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
+			const semicolon = this.getSemicolonToken(reader);
 
-			if(!semicolon.matches(nextToken)) {
+			if(!semicolon) {
 				// Throw an error at the end of the last statement.
 				let lastTokenLoc = reader.readToken(-1).getLocation();
 				reader.diagnostic.pushDiagnostic([lastTokenLoc[1] - 1, lastTokenLoc[1]], "Token error: missing semicolon");

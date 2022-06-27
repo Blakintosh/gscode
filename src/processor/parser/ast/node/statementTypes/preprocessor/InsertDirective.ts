@@ -7,7 +7,7 @@ import { StatementContents } from "../../../expression/StatementContents";
 import { FilePathExpression } from "../../../expression/types/FilePathExpression";
 import { StatementNode } from "../../StatementNode";
 
-export class UsingDirective extends StatementNode {
+export class InsertDirective extends StatementNode {
     file: FilePathExpression = new FilePathExpression();
 
     getContents(): StatementContents {
@@ -16,7 +16,7 @@ export class UsingDirective extends StatementNode {
 
     getRule(): TokenRule[] {
         return [
-            new TokenRule(TokenType.Keyword, KeywordTypes.Using)
+            new TokenRule(TokenType.Keyword, KeywordTypes.Insert)
         ];
     }
 
@@ -28,17 +28,16 @@ export class UsingDirective extends StatementNode {
 		reader.index++;
 
 		// Parse the file path expression.
-		this.file.appendExtension = reader.format;
 		this.file.parse(reader);
 
 		// Get semicolon if it exists.
 		const semicolon = super.getSemicolonToken(reader);
 
-		// Add this as a dependency
+		// Add this as an insertion (TODO)
 		if(this.file.filePath && this.file.location) {
 			const endLoc = (semicolon ? semicolon.getLocation()[1] : this.file.location[1]);
 
-			reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], endLoc]));
+			//reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], endLoc]));
 		}
 
 		// Use at the end of every subclass of a statement node.

@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { Lexer } from "../lexer/Lexer";
 import { BranchNode } from "./ast/node/BranchNode";
+import { InsertDirective } from "./ast/node/statementTypes/preprocessor/InsertDirective";
+import { NamespaceDirective } from "./ast/node/statementTypes/preprocessor/NamespaceDirective";
 import { UsingDirective } from "./ast/node/statementTypes/preprocessor/UsingDirective";
 import { FunctionDecl } from "./ast/node/statementTypes/rootBranch/FunctionDecl";
 import { ScriptDependency } from "./data/ScriptDependency";
@@ -21,7 +23,7 @@ export class Parser {
     constructor(document: vscode.TextDocument, lexer: Lexer) {
         this.lexer = lexer;
         this.diagnostic = new ParserDiagnostics(document);
-        this.reader = new ScriptReader(this.lexer.tokens, this.dependencies, this.diagnostic, this.semanticTokens);
+        this.reader = new ScriptReader(document, this.lexer.tokens, this.dependencies, this.diagnostic, this.semanticTokens);
     }
 
 	postParse(): void {
@@ -36,6 +38,8 @@ export class Parser {
     parse(): void {
         this.rootNode.parse(this.reader, [
 			new UsingDirective(),
+			new InsertDirective(),
+			new NamespaceDirective(),
 			new FunctionDecl()
 		]);
 

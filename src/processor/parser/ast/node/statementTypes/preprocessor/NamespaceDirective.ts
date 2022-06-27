@@ -4,19 +4,19 @@ import { ScriptDependency } from "../../../../data/ScriptDependency";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { FilePathExpression } from "../../../expression/types/FilePathExpression";
+import { NameExpression } from "../../../expression/types/NameExpression";
 import { StatementNode } from "../../StatementNode";
 
-export class UsingDirective extends StatementNode {
-    file: FilePathExpression = new FilePathExpression();
+export class NamespaceDirective extends StatementNode {
+    namespace: NameExpression = new NameExpression();
 
     getContents(): StatementContents {
-        return this.file;
+        return this.namespace;
     }
 
     getRule(): TokenRule[] {
         return [
-            new TokenRule(TokenType.Keyword, KeywordTypes.Using)
+            new TokenRule(TokenType.Keyword, KeywordTypes.Namespace)
         ];
     }
 
@@ -28,17 +28,14 @@ export class UsingDirective extends StatementNode {
 		reader.index++;
 
 		// Parse the file path expression.
-		this.file.appendExtension = reader.format;
-		this.file.parse(reader);
+		this.namespace.parse(reader);
 
 		// Get semicolon if it exists.
 		const semicolon = super.getSemicolonToken(reader);
 
-		// Add this as a dependency
-		if(this.file.filePath && this.file.location) {
-			const endLoc = (semicolon ? semicolon.getLocation()[1] : this.file.location[1]);
-
-			reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], endLoc]));
+		// Set reader's current namespace to this namespace
+		if(this.namespace.value) {
+			reader.currentNamespace = this.namespace.value;
 		}
 
 		// Use at the end of every subclass of a statement node.

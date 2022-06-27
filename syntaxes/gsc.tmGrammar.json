@@ -110,7 +110,7 @@
 		},
         "function-parameter-defaults": {
             "name": "meta.parameters.default.gsc",
-            "match": "(([[:alnum:]]\\w*)(\\s*=)\\s*(\\S*))",
+            "match": "(([[:alnum:]]\\w*)\\s*(=)\\s*([^,]*)(,|\\)))",
             "captures": {
                 "3": {
                     "name": "keyword.operator.parameter-default.gsc"
@@ -119,6 +119,9 @@
                     "patterns": [
                         { "include": "#expression" }
                     ]
+                },
+                "5": {
+                    "name": "keyword.operator.parameter-comma.gsc"
                 }
             }
         },

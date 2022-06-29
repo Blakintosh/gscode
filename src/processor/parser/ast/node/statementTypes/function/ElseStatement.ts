@@ -18,43 +18,45 @@
 
 import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
+import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
+import { GSCBranchNodes } from "../../../../../util/GSCUtil";
 import { ScriptDependency } from "../../../../data/ScriptDependency";
+import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { NameExpression } from "../../../expression/types/NameExpression";
+import { FilePathExpression } from "../../../expression/types/FilePathExpression";
+import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
+import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
+import { VariableAssignment } from "../function/VariableAssignment";
 
-export class NamespaceDirective extends StatementNode {
-    namespace: NameExpression = new NameExpression();
+export class ElseStatement extends StatementNode {
+	constructor() {
+		super();
+		// A function declaration is a branching statement node
+		super.expectsBranch = true;
+	}
 
     getContents(): StatementContents {
-        return this.namespace;
+        throw new Error("Method not implemented.");
     }
 
     getRule(): TokenRule[] {
         return [
-            new TokenRule(TokenType.Keyword, KeywordTypes.Namespace)
+			new TokenRule(TokenType.Keyword, KeywordTypes.Else)
         ];
     }
 
 	parse(reader: ScriptReader): void {
+		// Once at parsing stage, express expected children to avoid a call stack error
+		super.expectedChildren = GSCBranchNodes.Standard();
+		
 		// Store keyword position
 		let keywordPosition = reader.readToken().getLocation();
 
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
-
-		// Parse the file path expression.
-		this.namespace.parse(reader);
-
-		// Get semicolon if it exists.
-		const semicolon = super.getSemicolonToken(reader);
-
-		// Set reader's current namespace to this namespace
-		if(this.namespace.value) {
-			reader.currentNamespace = this.namespace.value;
-		}
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

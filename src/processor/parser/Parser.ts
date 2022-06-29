@@ -1,4 +1,21 @@
-import { Stack } from "stack-typescript";
+/**
+	GSCode Language Extension for Visual Studio Code
+    Copyright (C) 2022 Blakintosh
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import * as vscode from "vscode";
 import { Lexer } from "../lexer/Lexer";
 import { BranchNode } from "./ast/node/BranchNode";
@@ -10,6 +27,7 @@ import { ScriptDependency } from "./data/ScriptDependency";
 import { ParserDiagnostics } from "./diagnostics/ParserDiagnostics";
 import { ScriptReader } from "./logic/ScriptReader";
 import { ScriptSemanticToken } from "./ScriptSemanticToken";
+import { GSCBranchNodes } from "../util/GSCUtil";
 
 export class Parser {
     readonly lexer: Lexer;
@@ -37,12 +55,7 @@ export class Parser {
 	}
 
     parse(): void {
-        this.rootNode.parse(this.reader, [
-			new UsingDirective(),
-			new InsertDirective(),
-			new NamespaceDirective(),
-			new FunctionDecl()
-		]);
+        this.rootNode.parse(this.reader, GSCBranchNodes.Root());
 
 		this.postParse();
     }

@@ -18,45 +18,60 @@
 
 import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
+import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
+import { GSCBranchNodes } from "../../../../../util/GSCUtil";
 import { ScriptDependency } from "../../../../data/ScriptDependency";
+import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
 import { FilePathExpression } from "../../../expression/types/FilePathExpression";
+import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
+import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
+import { VariableAssignment } from "../function/VariableAssignment";
 
-export class InsertDirective extends StatementNode {
-    file: FilePathExpression = new FilePathExpression();
+export class ElseIfStatement extends StatementNode {
+	booleanExpression: ParenBooleanExpression = new ParenBooleanExpression();
+
+	constructor() {
+		super();
+		// A function declaration is a branching statement node
+		super.expectsBranch = true;
+	}
 
     getContents(): StatementContents {
-        return this.file;
+        throw new Error("Method not implemented.");
     }
 
     getRule(): TokenRule[] {
         return [
-            new TokenRule(TokenType.Keyword, KeywordTypes.Insert)
+			new TokenRule(TokenType.Keyword, KeywordTypes.Else),
+            new TokenRule(TokenType.Keyword, KeywordTypes.If)
         ];
     }
 
 	parse(reader: ScriptReader): void {
+		// Once at parsing stage, express expected children to avoid a call stack error
+		super.expectedChildren = GSCBranchNodes.Standard();
+		
 		// Store keyword position
 		let keywordPosition = reader.readToken().getLocation();
 
-		// No further validation required on the keyword, advance by one token.
+		// No further validation required on the keywords, advance by two tokens.
+		reader.index++;
 		reader.index++;
 
-		// Parse the file path expression.
-		this.file.parse(reader);
-
-		// Get semicolon if it exists.
-		const semicolon = super.getSemicolonToken(reader);
-
-		// Add this as an insertion (TODO)
-		if(this.file.filePath && this.file.location) {
-			const endLoc = (semicolon ? semicolon.getLocation()[1] : this.file.location[1]);
-
-			//reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], endLoc]));
+		// Check we have an open parenthesis
+		const openParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
+		if(!openParen.matches(reader.readToken())) {
+			this.diagnostics.push(new ScriptDiagnostic(reader.readToken(-1).getLocation(), "Syntax error: Expected '(' after 'if'."));
+		} else {
+			reader.index++;
 		}
+
+		// Parse the condition expression
+		this.booleanExpression.parse(reader);
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

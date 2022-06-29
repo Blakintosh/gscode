@@ -1,3 +1,21 @@
+/**
+	GSCode Language Extension for Visual Studio Code
+    Copyright (C) 2022 Blakintosh
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /* eslint-disable @typescript-eslint/naming-convention */
 import { Token, TokenType } from "../../../../lexer/tokens/Token";
 import { ScriptReader } from "../../../logic/ScriptReader";
@@ -10,6 +28,7 @@ import { OperatorType } from "../../../../lexer/tokens/types/Operator";
 import { SpecialTokenTypes } from "../../../../lexer/tokens/types/SpecialToken";
 import { PunctuationTypes } from "../../../../lexer/tokens/types/Punctuation";
 import { IToken } from "../../../../lexer/tokens/IToken";
+import { KeywordTypes } from "../../../../lexer/tokens/types/Keyword";
 
 // Expression types in GSC, includes data.
 /*export enum ExpressionType {
@@ -121,6 +140,9 @@ export class LogicalExpression extends StatementContents {
     operator?: OperatorType;
 	left?: LogicalExpression;
 	right?: LogicalExpression;
+	// Logical expression will evaluate between leftBound + 1 and rightBound - 1 inclusive
+	leftBound?: number;
+	rightBound?: number;
 
 	cheapParenthesisScan(reader: ScriptReader): void {
 		// Scan until parenthesis count falls to 0.
@@ -144,24 +166,30 @@ export class LogicalExpression extends StatementContents {
 	scan(reader: ScriptReader): Token[] {
 		let expressionTokens: Token[] = [];
 
-		let endExpressionToken = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseParen);
-		let nestedExpressionToken = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
+		const endExpressionToken = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseParen);
+		const nestedExpressionToken = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
+		const commaToken = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.Comma);
+
+		const keywordTrue = new TokenRule(TokenType.Keyword, KeywordTypes.True);
+		const keywordFalse = new TokenRule(TokenType.Keyword, KeywordTypes.False);
 
 		let token;
-		while(!reader.atEof() && (
-			reader.readToken().getType() === TokenType.Name ||
-			reader.readToken().getType() === TokenType.Number ||
-			reader.readToken().getType() === TokenType.ScriptString ||
-			reader.readToken().getType() === TokenType.Operator ||
-			reader.readToken().getType() === TokenType.Punctuation
+		while(!reader.atEof() && (token = reader.readToken()) && (
+			token.getType() === TokenType.Name || // Names such as var references, func. references
+			token.getType() === TokenType.Number || // Numbers
+			token.getType() === TokenType.ScriptString || // Strings
+			token.getType() === TokenType.Operator || // Operators (+, - etc.)
+			token.getType() === TokenType.Punctuation || // Punctuation (, ) etc.
+			keywordTrue.matches(token) || // Boolean true
+			keywordFalse.matches(token) // Boolean false
 		)) {
-			token = reader.readToken();
-			reader.index++;
-
-			if(endExpressionToken.matches(token)) {
+			
+			if(endExpressionToken.matches(token) || commaToken.matches(token)) {
 				return expressionTokens;
 			}
+			reader.index++;
 
+			// This won't work for function calls (TODO) - maybe it doesn't need to?
 			if(nestedExpressionToken.matches(token)) {
 				this.cheapParenthesisScan(reader);
 				continue;
@@ -173,7 +201,10 @@ export class LogicalExpression extends StatementContents {
 			expressionTokens.push(<Token> token);
 		}
 
-		if(token) {
+		const endStatementToken = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
+
+		// If there's a token remaining and it doesn't match the end of a statement, then there's a syntax error.
+		if(token && !endStatementToken.matches(token) && !commaToken.matches(token)) {
 			reader.diagnostic.pushDiagnostic(token.getLocation(), "Unexpected token in logical expression.");
 		}
 

@@ -16,37 +16,33 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Token, TokenType } from "../../../../lexer/tokens/Token";
+import { TokenType } from "../../../../lexer/tokens/Token";
+import { PunctuationTypes } from "../../../../lexer/tokens/types/Punctuation";
 import { ScriptReader } from "../../../logic/ScriptReader";
+import { TokenRule } from "../../../logic/TokenRule";
 import { StatementContents } from "../StatementContents";
-import * as vscode from "vscode";
-import { GSCUtil } from "../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../data/ScriptDependency";
+import { LogicalExpression } from "./LogicalExpression";
 
-export class NameExpression extends StatementContents {
-	value?: string;
-	location?: [number, number];
-
-    /**
+export class ParenBooleanExpression extends StatementContents {
+	expression: LogicalExpression = new LogicalExpression();
+	
+	/**
      * Parses the given statement contents, which may include recursive calls.
-     * For a name there are no nested calls.
+     * Boolean expressions recurse through the logical expression to obtain the LHS (and the operator and RHS is always == 1).
      */
-    parse(reader: ScriptReader): void {
-        let token = reader.readToken();
+	 parse(reader: ScriptReader): void {
+		// Parse the LHS
+		this.expression.parse(reader);
 
-        // Check token could be a path
-        if(token.getType() !== TokenType.Name) {
-            // This token can't be a name, abort parsing
-            reader.diagnostic.pushDiagnostic(token.getLocation(), "Token error: expected name");
-            reader.index++;
-            return;
-        }
+		// Parse the close paren.
+		const closeParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseParen);
 
-		this.value = (<Token> token).contents;
-		
-		// Store the location as it validates
-        this.location = token.getLocation();
+		if(!closeParen.matches(reader.readToken())) {
+			reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Expected ')'.");
+		} else {
+			reader.index++;
+		}
 
-        reader.index++; // Done
+		// done
     }
 }

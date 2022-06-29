@@ -18,12 +18,28 @@
 #using scripts\shared\lui_shared;
 #using this\fails;
 
-function foo(bar = true, mallard = 2) {
-	afuck = 3;
-	boo = 12984712984721984129847128947124892174981274192847219847;
-	afuck = 20;
+function foo(bar = 5, fuckedOff = 5) {
+	afuck = 3 + "Smoky" - 2 - 5;
 }
 
-function cheese(board) {
+function cheese(board = 2, fucked = (3 * 2) + 5, drooling = true) {
 	afuck = 5;
+	cheddar = 3;
+ 
+	if(true & 23 == 40)
+	{
+		afuck = 6;
+		bar = 3;
+	} else if(true) {
+		
+	} else {
+
+	}
+
+	if(board + (2 + ;[]'''''') == 3 && 1 == true)
+	{
+
+	}
+
+	return board + fucked;
 }

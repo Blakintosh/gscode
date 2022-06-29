@@ -16,9 +16,34 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/* eslint-disable @typescript-eslint/naming-convention */
 import { ScriptValue } from "./ScriptValue";
 
-export class ScriptVariable {
+// Valid precache types in GSC/CSC. This may not be the full collection, especially not for CSC
+// (If a reverse engineer wants to help here, that'd be nice!)
+export const PrecacheTypes = {
+	"gsc": {
+		String: "string",
+		TriggerString: "triggerstring",
+		Objective: "objective",
+		FX: "fx",
+		Menu: "menu",
+		Material: "material",
+		Model: "model",
+		StatusIcon: "statusicon",
+		EventString: "eventstring",
+		LocationSelector: "locatorselector",
+		XModel: "xmodel",
+		LuiMenu: "lui_menu",
+		LuiMenuData: "lui_menu_data"
+	},
+	"csc": {
+		ClientFX: "client_fx",
+		ClientTagFXSet: "client_tagfxset",
+	}
+};
+
+export class ScriptPrecache {
 	// The name of this variable
 	name: string;
 	// Whether it is a constant

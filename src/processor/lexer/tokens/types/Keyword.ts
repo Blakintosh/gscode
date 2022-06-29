@@ -106,6 +106,6 @@ export class Keyword extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /classes|function|var|return|thread|undefined|self|world|class|level|game|anim|#if|#elif|#else|if|else|do|while|foreach|for|in|new|waittillframeend|waittillmatch|waitrealtime|waittill|wait|switch|case|default|break|continue|false|true|notify|endon|assertmsg|assert|constructor|destructor|autoexec|private|const|isdefined|vectorscale|gettime|profilestart|profilestop|#using_animtree|#animtree|#using|#insert|#namespace|#precache|#define|size/;
+		return /(classes|function|var|return|thread|undefined|self|world|class|level|game|anim|#if|#elif|#else|if|else|do|while|foreach|for|in|new|waittillframeend|waittillmatch|waitrealtime|waittill|wait|switch|case|default|break|continue|false|true|notify|endon|assertmsg|assert|constructor|destructor|autoexec|private|const|isdefined|vectorscale|gettime|profilestart|profilestop|#using_animtree|#animtree|#using|#insert|#namespace|#precache|#define|size)(?=\W)/;
 	}
 }

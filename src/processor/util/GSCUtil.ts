@@ -20,6 +20,17 @@
 import * as fs from "fs";
 import * as fsPath from "path";
 import * as vscode from "vscode";
+import { ElseIfStatement } from "../parser/ast/node/statementTypes/function/ElseIfStatement";
+import { ElseStatement } from "../parser/ast/node/statementTypes/function/ElseStatement";
+import { IfStatement } from "../parser/ast/node/statementTypes/function/IfStatement";
+import { ReturnStatement } from "../parser/ast/node/statementTypes/function/ReturnStatement";
+import { VariableAssignment } from "../parser/ast/node/statementTypes/function/VariableAssignment";
+
+// Globals
+import { InsertDirective } from "../parser/ast/node/statementTypes/preprocessor/InsertDirective";
+import { NamespaceDirective } from "../parser/ast/node/statementTypes/preprocessor/NamespaceDirective";
+import { UsingDirective } from "../parser/ast/node/statementTypes/preprocessor/UsingDirective";
+import { FunctionDecl } from "../parser/ast/node/statementTypes/rootBranch/FunctionDecl";
 
 export enum FunctionFlag {
 	None = 0, // All OK
@@ -28,6 +39,26 @@ export enum FunctionFlag {
 	Broken = 3, // The function is not the above but is broken anyway
 	Useless = 4, // This function serves no use in a *modding* context
 }
+
+export const GSCBranchNodes = {
+	Root: function() {
+		return [
+			new UsingDirective(),
+			new InsertDirective(),
+			new NamespaceDirective(),
+			new FunctionDecl()
+		];
+	},
+	Standard: function() {
+		return [
+			new VariableAssignment(),
+			new IfStatement(),
+			new ElseIfStatement(),
+			new ElseStatement(),
+			new ReturnStatement()
+		];
+	}
+};
 
 export class GSCUtil {
     /**
@@ -50,12 +81,12 @@ export class GSCUtil {
         const workspace = vscode.workspace.workspaceFolders;
         if(workspace !== undefined) {
             let wsFolder = workspace[0];
-            let workspacePath = wsFolder.uri.path;
+            let workspacePath = fsPath.normalize(wsFolder.uri.fsPath);
 
             // If we're not at the base folder, navigate to it
-            const base = "/scripts/";
+            const base = "\\scripts";
             if(workspacePath.lastIndexOf(base) !== -1) {
-                workspacePath = workspacePath.substring(workspacePath.lastIndexOf(base) + base.length);
+                workspacePath = workspacePath.substring(0, workspacePath.lastIndexOf(base));
             }
 
             // Now see if this script is here
@@ -75,7 +106,7 @@ export class GSCUtil {
 			const sharePath: string = <string> (overrideShared !== "" ? overrideShared : fsPath.join(toolsPath, "/share/raw/"));
 
 			// Check if it exists in shared
-			if(fs.existsSync(fsPath.join(sharePath, path))) {
+			if(fs.existsSync(fsPath.normalize(fsPath.join(sharePath, path)))) {
 				return true;
 			}
 		} else {

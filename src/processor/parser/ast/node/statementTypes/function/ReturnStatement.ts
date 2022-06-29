@@ -16,25 +16,24 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Token, TokenType } from "../../../../../lexer/tokens/Token";
-import { OperatorType } from "../../../../../lexer/tokens/types/Operator";
-import { ScriptVariable } from "../../../../data/ScriptVariable";
+import { TokenType } from "../../../../../lexer/tokens/Token";
+import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
+import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
+import { GSCBranchNodes } from "../../../../../util/GSCUtil";
+import { ScriptDependency } from "../../../../data/ScriptDependency";
+import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
+import { FilePathExpression } from "../../../expression/types/FilePathExpression";
 import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
 import { LogicalExpression } from "../../../expression/types/LogicalExpression";
+import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
+import { VariableAssignment } from "../function/VariableAssignment";
 
-/**
- * AST Class for Variable Assignments
- * As GSC has no keyword for variable declaration, we need to treat both declaration and assignment in the same class,
- * even though expressions can also handle variable assignment
- */
-export class VariableAssignment extends StatementNode {
+export class ReturnStatement extends StatementNode {
 	valueExpression: LogicalExpression = new LogicalExpression();
-	name?: string;
-	isDeclaration: boolean = false;
 
     getContents(): StatementContents {
         throw new Error("Method not implemented.");
@@ -42,34 +41,21 @@ export class VariableAssignment extends StatementNode {
 
     getRule(): TokenRule[] {
         return [
-			new TokenRule(TokenType.Name),
-            new TokenRule(TokenType.Operator, OperatorType.Assignment)
+			new TokenRule(TokenType.Keyword, KeywordTypes.Return)
         ];
     }
 
 	parse(reader: ScriptReader): void {
-		// Get variable name and validate it
-		this.name = (<Token> reader.readToken()).contents;
+		// Store keyword position
+		let keywordPosition = reader.readToken().getLocation();
 
-		// Get if this variable is a new declaration
-		this.isDeclaration = reader.getVar(this.name) === undefined;
-
+		// No further validation required on the keyword, advance by one token.
 		reader.index++;
 
-		// no validation needed on =
-		reader.index++;
-
-		// Parse the variable assignment expression
+		// Parse the value expression
 		this.valueExpression.parse(reader);
 
-		// Push to the variable stack
-		if(this.isDeclaration) {
-			reader.pushVar(new ScriptVariable(this.name));
-		}
-
-		console.log("Is variable "+this.name+" new? "+this.isDeclaration);
-
-		// As with every statement
+		// Use at the end of every subclass of a statement node.
 		super.parse(reader);
 	}
 }

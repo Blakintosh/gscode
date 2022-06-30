@@ -18,17 +18,14 @@
 
 /* eslint-disable @typescript-eslint/naming-convention */
 import { Token, TokenType } from "../../../../lexer/tokens/Token";
-import { ScriptReader } from "../../../logic/ScriptReader";
-import { StatementContents } from "../StatementContents";
-import * as vscode from "vscode";
-import { GSCUtil } from "../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../data/ScriptDependency";
-import { TokenRule } from "../../../logic/TokenRule";
-import { OperatorType } from "../../../../lexer/tokens/types/Operator";
-import { SpecialTokenTypes } from "../../../../lexer/tokens/types/SpecialToken";
-import { PunctuationTypes } from "../../../../lexer/tokens/types/Punctuation";
-import { IToken } from "../../../../lexer/tokens/IToken";
 import { KeywordTypes } from "../../../../lexer/tokens/types/Keyword";
+import { OperatorType } from "../../../../lexer/tokens/types/Operator";
+import { PunctuationTypes } from "../../../../lexer/tokens/types/Punctuation";
+import { SpecialTokenTypes } from "../../../../lexer/tokens/types/SpecialToken";
+import { GSCProcessNames } from "../../../../util/GSCUtil";
+import { ScriptReader } from "../../../logic/ScriptReader";
+import { TokenRule } from "../../../logic/TokenRule";
+import { StatementContents } from "../StatementContents";
 
 // Expression types in GSC, includes data.
 /*export enum ExpressionType {
@@ -205,7 +202,7 @@ export class LogicalExpression extends StatementContents {
 
 		// If there's a token remaining and it doesn't match the end of a statement, then there's a syntax error.
 		if(token && !endStatementToken.matches(token) && !commaToken.matches(token)) {
-			reader.diagnostic.pushDiagnostic(token.getLocation(), "Unexpected token in logical expression.");
+			reader.diagnostic.pushDiagnostic(token.getLocation(), "Unexpected token in logical expression.", GSCProcessNames.Parser);
 		}
 
 		return expressionTokens;

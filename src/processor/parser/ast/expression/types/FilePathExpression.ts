@@ -17,11 +17,9 @@
  */
 
 import { Token, TokenType } from "../../../../lexer/tokens/Token";
+import { GSCProcessNames, GSCUtil } from "../../../../util/GSCUtil";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { StatementContents } from "../StatementContents";
-import * as vscode from "vscode";
-import { GSCUtil } from "../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../data/ScriptDependency";
 
 export class FilePathExpression extends StatementContents {
     filePath?: string;
@@ -38,7 +36,7 @@ export class FilePathExpression extends StatementContents {
         // Check token could be a path
         if(token.getType() !== TokenType.Name) {
             // This token can't be a file path, abort parsing
-            reader.diagnostic.pushDiagnostic(token.getLocation(), "Token error: expected file path");
+            reader.diagnostic.pushDiagnostic(token.getLocation(), "Expected file path.", GSCProcessNames.Parser);
             reader.index++;
             return;
         }
@@ -55,7 +53,8 @@ export class FilePathExpression extends StatementContents {
 
         if(!GSCUtil.validateScriptPath(path)) {
             // We only want to warn if a path is not found, as maybe they have it elsewhere
-            reader.diagnostic.pushDiagnostic(this.location, "Path warning: unable to locate "+path, vscode.DiagnosticSeverity.Warning);
+			// TODO: move to simulator
+            //reader.diagnostic.pushDiagnostic(this.location, "Path warning: unable to locate "+path, vscode.DiagnosticSeverity.Warning);
         }
 
         this.filePath = path;

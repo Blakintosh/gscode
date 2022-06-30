@@ -29,6 +29,7 @@ import { TokenType } from "../../../lexer/tokens/Token";
 import { BranchNode } from "./BranchNode";
 import { SpecialTokenTypes } from "../../../lexer/tokens/types/SpecialToken";
 import { IToken } from "../../../lexer/tokens/IToken";
+import { GSCProcessNames } from "../../../util/GSCUtil";
 
 /**
  * Abstract class that all statements are derived from.
@@ -60,7 +61,7 @@ export abstract class StatementNode implements IASTNode {
      * @param severity The severity
      */
     pushDiagnostic(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined = undefined) {
-        this.diagnostics.push(new ScriptDiagnostic(location, message, severity));
+        this.diagnostics.push(new ScriptDiagnostic(location, message, GSCProcessNames.Parser, severity));
     }
 
     /**
@@ -142,7 +143,7 @@ export abstract class StatementNode implements IASTNode {
 			if(!semicolon) {
 				// Throw an error at the end of the last statement.
 				let lastTokenLoc = reader.readToken(-1).getLocation();
-				reader.diagnostic.pushDiagnostic([lastTokenLoc[1] - 1, lastTokenLoc[1]], "Token error: missing semicolon");
+				reader.diagnostic.pushDiagnostic([lastTokenLoc[1] - 1, lastTokenLoc[1]], "Expected ';'", GSCProcessNames.Parser);
 			} else {
 				reader.index++;
 			}

@@ -25,6 +25,7 @@ import { TokenRule } from "../../logic/TokenRule";
 import { ScriptSemanticToken } from "../../ScriptSemanticToken";
 import { IASTNode } from "./IASTNode";
 import * as vscode from "vscode";
+import { GSCProcessNames } from "../../../util/GSCUtil";
 
 export class BranchNode implements IASTNode {
     diagnostics: ScriptDiagnostic[] = [];
@@ -43,7 +44,7 @@ export class BranchNode implements IASTNode {
      * @param severity The severity
      */
     pushDiagnostic(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined = undefined) {
-        this.diagnostics.push(new ScriptDiagnostic(location, message, severity));
+        this.diagnostics.push(new ScriptDiagnostic(location, message, GSCProcessNames.Parser, severity));
     }
 
     /**
@@ -98,12 +99,13 @@ export class BranchNode implements IASTNode {
 		// Increment the parser through unrecognised tokens until we reach the end of the file, the end of the branch, or we find a valid node
 		do {
 			parser.index++;
-		} while(!parser.atEof() && !this.atEndOfBranch(parser) && !this.noValidNextNode(parser, allowedChildren));
+		} while(!parser.atEof() && !this.atEndOfBranch(parser) && this.noValidNextNode(parser, allowedChildren));
 
 		// Get the token before the current index to end the error on.
 		const lastFailedPosition = parser.readToken(-1).getLocation();
 
-		parser.diagnostic.pushDiagnostic([firstFailedPosition[0], lastFailedPosition[1]], "Token error: unrecognised token");
+		// Altho. evaluated at parser stage, this is an error where the lexer couldn't resolve this token
+		parser.diagnostic.pushDiagnostic([firstFailedPosition[0], lastFailedPosition[1]], "Unrecognised token.", GSCProcessNames.Lexer);
 
 		return null;
     }
@@ -124,7 +126,6 @@ export class BranchNode implements IASTNode {
      * @param allowedChildren The child nodes allowed in this branch.
      */
     parse(parser: ScriptReader, allowedChildren: IASTNode[]): void {
-		parser.increaseScope();
         if(this.oneStatement) {
 			let nextChild = this.parseNextNode(parser, allowedChildren);
 			if(nextChild !== null) {
@@ -143,7 +144,6 @@ export class BranchNode implements IASTNode {
 				parser.index++;
 			}
         }
-		parser.decreaseScope();
     }
 
     /**

@@ -18,6 +18,7 @@
 
 import { TokenType } from "../../../../lexer/tokens/Token";
 import { PunctuationTypes } from "../../../../lexer/tokens/types/Punctuation";
+import { GSCProcessNames } from "../../../../util/GSCUtil";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { TokenRule } from "../../../logic/TokenRule";
 import { StatementContents } from "../StatementContents";
@@ -38,7 +39,7 @@ export class ParenBooleanExpression extends StatementContents {
 		const closeParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseParen);
 
 		if(!closeParen.matches(reader.readToken())) {
-			reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Expected ')'.");
+			reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Expected ')'", GSCProcessNames.Parser);
 		} else {
 			reader.index++;
 		}

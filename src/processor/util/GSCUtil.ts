@@ -29,6 +29,7 @@ import { VariableAssignment } from "../parser/ast/node/statementTypes/function/V
 // Globals
 import { InsertDirective } from "../parser/ast/node/statementTypes/preprocessor/InsertDirective";
 import { NamespaceDirective } from "../parser/ast/node/statementTypes/preprocessor/NamespaceDirective";
+import { PrecacheDirective } from "../parser/ast/node/statementTypes/preprocessor/PrecacheDirective";
 import { UsingDirective } from "../parser/ast/node/statementTypes/preprocessor/UsingDirective";
 import { FunctionDecl } from "../parser/ast/node/statementTypes/rootBranch/FunctionDecl";
 
@@ -40,12 +41,19 @@ export enum FunctionFlag {
 	Useless = 4, // This function serves no use in a *modding* context
 }
 
+export enum GSCProcessNames {
+	Lexer = "gscode-lex",
+	Parser = "gscode-ast",
+	Simulator = "gscode-sim"
+}
+
 export const GSCBranchNodes = {
 	Root: function() {
 		return [
 			new UsingDirective(),
 			new InsertDirective(),
 			new NamespaceDirective(),
+			new PrecacheDirective(),
 			new FunctionDecl()
 		];
 	},

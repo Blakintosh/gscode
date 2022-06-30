@@ -20,7 +20,6 @@ import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
 import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
 import { GSCBranchNodes } from "../../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../../data/ScriptDependency";
 import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";

@@ -23,11 +23,11 @@ import { InsertDirective } from "./ast/node/statementTypes/preprocessor/InsertDi
 import { NamespaceDirective } from "./ast/node/statementTypes/preprocessor/NamespaceDirective";
 import { UsingDirective } from "./ast/node/statementTypes/preprocessor/UsingDirective";
 import { FunctionDecl } from "./ast/node/statementTypes/rootBranch/FunctionDecl";
-import { ScriptDependency } from "./data/ScriptDependency";
 import { ParserDiagnostics } from "./diagnostics/ParserDiagnostics";
 import { ScriptReader } from "./logic/ScriptReader";
 import { ScriptSemanticToken } from "./ScriptSemanticToken";
-import { GSCBranchNodes } from "../util/GSCUtil";
+import { GSCBranchNodes, GSCProcessNames } from "../util/GSCUtil";
+import { performance } from "perf_hooks";
 
 export class Parser {
     readonly lexer: Lexer;
@@ -36,27 +36,32 @@ export class Parser {
     reader: ScriptReader;
 	// Associated file data
     readonly diagnostic: ParserDiagnostics;
-	private dependencies: ScriptDependency[] = [];
+	// May not be necessary to have it here
 	private semanticTokens: ScriptSemanticToken[] = [];
 
     constructor(document: vscode.TextDocument, lexer: Lexer) {
         this.lexer = lexer;
         this.diagnostic = new ParserDiagnostics(document);
-        this.reader = new ScriptReader(document, this.lexer.tokens, this.dependencies, this.diagnostic, this.semanticTokens);
+        this.reader = new ScriptReader(document, this.lexer.tokens, this.diagnostic, this.semanticTokens);
     }
 
 	postParse(): void {
 		// Check uses of dependencies
-		for(let dependency of this.dependencies) {
+		// TODO: Move this to the Simulator class
+		/*for(let dependency of this.dependencies) {
 			if(dependency.uses === 0) {
-				this.diagnostic.pushDiagnostic(dependency.location, "Using directive is unnecessary.", vscode.DiagnosticSeverity.Hint, [vscode.DiagnosticTag.Unnecessary]);
+				this.diagnostic.pushDiagnostic(dependency.location, "Using directive is unnecessary.", GSCProcessNames.Simulator, vscode.DiagnosticSeverity.Hint, [vscode.DiagnosticTag.Unnecessary]);
 			}
-		}
+		}*/
 	}
 
     parse(): void {
+		const start = performance.now();
         this.rootNode.parse(this.reader, GSCBranchNodes.Root());
 
 		this.postParse();
+
+		const end = performance.now();
+		console.log(`Successfully parsed ${this.lexer.file.fileName} in ${end - start}ms`);
     }
 }

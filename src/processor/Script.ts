@@ -86,7 +86,7 @@ export class Script {
 				this.absolutePositionToLineChar(diagnostic.location[1])
 			), diagnostic.message, diagnostic.severity);
 			vscDiagnostic.tags = diagnostic.tags;
-			vscDiagnostic.source = "gscode";
+			vscDiagnostic.source = diagnostic.source;
 
 			diagnostics.push(vscDiagnostic);
 		}

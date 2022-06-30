@@ -28,9 +28,9 @@ import { FilePathExpression } from "../../../expression/types/FilePathExpression
 import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
 import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
-import { VariableAssignment } from "../function/VariableAssignment";
+import { VariableAssignment } from "./VariableAssignment";
 
-export class ElseIfStatement extends StatementNode {
+export class IfStatement extends StatementNode {
 	booleanExpression: ParenBooleanExpression = new ParenBooleanExpression();
 
 	constructor() {
@@ -45,7 +45,6 @@ export class ElseIfStatement extends StatementNode {
 
     getRule(): TokenRule[] {
         return [
-			new TokenRule(TokenType.Keyword, KeywordTypes.Else),
             new TokenRule(TokenType.Keyword, KeywordTypes.If)
         ];
     }
@@ -57,14 +56,13 @@ export class ElseIfStatement extends StatementNode {
 		// Store keyword position
 		let keywordPosition = reader.readToken().getLocation();
 
-		// No further validation required on the keywords, advance by two tokens.
-		reader.index++;
+		// No further validation required on the keyword, advance by one token.
 		reader.index++;
 
 		// Check we have an open parenthesis
 		const openParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
 		if(!openParen.matches(reader.readToken())) {
-			this.diagnostics.push(new ScriptDiagnostic(reader.readToken(-1).getLocation(), "Expected '('", GSCProcessNames.Parser));
+			reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Expected '('", GSCProcessNames.Parser);
 		} else {
 			reader.index++;
 		}

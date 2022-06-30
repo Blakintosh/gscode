@@ -28,7 +28,7 @@ import { FilePathExpression } from "../../../expression/types/FilePathExpression
 import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
 import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
-import { VariableAssignment } from "../function/VariableAssignment";
+import { VariableAssignment } from "./VariableAssignment";
 
 export class ElseStatement extends StatementNode {
 	constructor() {

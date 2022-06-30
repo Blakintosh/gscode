@@ -17,19 +17,16 @@
  */
 
 /* eslint-disable @typescript-eslint/naming-convention */
-import { ScriptDiagnostic } from "../../diagnostics/ScriptDiagnostic";
-import { TokenRule } from "../../logic/TokenRule";
-import { ScriptSemanticToken } from "../../ScriptSemanticToken";
-import { StatementContents } from "../expression/StatementContents";
-import { IASTNode } from "./IASTNode";
-import * as vscode from "vscode";
-import { ScriptReader } from "../../logic/ScriptReader";
-import { PunctuationTypes } from "../../../lexer/tokens/types/Punctuation";
-import { TokenType } from "../../../lexer/tokens/Token";
-import { BranchNode } from "./BranchNode";
-import { SpecialTokenTypes } from "../../../lexer/tokens/types/SpecialToken";
 import { IToken } from "../../../lexer/tokens/IToken";
+import { TokenType } from "../../../lexer/tokens/Token";
+import { PunctuationTypes } from "../../../lexer/tokens/types/Punctuation";
+import { SpecialTokenTypes } from "../../../lexer/tokens/types/SpecialToken";
 import { GSCProcessNames } from "../../../util/GSCUtil";
+import { ScriptReader } from "../../logic/ScriptReader";
+import { TokenRule } from "../../logic/TokenRule";
+import { StatementContents } from "../expression/StatementContents";
+import { BranchNode } from "./BranchNode";
+import { IASTNode } from "./IASTNode";
 
 /**
  * Abstract class that all statements are derived from.
@@ -39,8 +36,6 @@ import { GSCProcessNames } from "../../../util/GSCUtil";
  * (Contents) is not necessarily in parenthesis, and this depends on the choice of Expression for the contents.
  */
 export abstract class StatementNode implements IASTNode {
-    diagnostics: ScriptDiagnostic[] = [];
-    semantics: ScriptSemanticToken[] = [];
     child?: IASTNode;
 	// For subclasses that open branches: these should be defined in their constructor
     expectsBranch: boolean = false;
@@ -52,26 +47,6 @@ export abstract class StatementNode implements IASTNode {
      */
     getChildren(): IASTNode[] {
         return (this.child ? [this.child] : []);
-    }
-
-    /**
-     * Pushes a diagnostic to the statement's diagnostic array.
-     * @param location The location of the token/diagnostic
-     * @param message The message for this diagnostic
-     * @param severity The severity
-     */
-    pushDiagnostic(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined = undefined) {
-        this.diagnostics.push(new ScriptDiagnostic(location, message, GSCProcessNames.Parser, severity));
-    }
-
-    /**
-     * Pushes this token onto the statement's semantic array.
-     * @param location The location of the token/semantic
-     * @param tokenType The type of token
-     * @param tokenModifiers An array of modifiers for the semantic
-     */
-    pushSemantic(location: [number, number], tokenType: string, tokenModifiers: string[] | undefined = undefined): void {
-        this.semantics.push(new ScriptSemanticToken(location, tokenType, tokenModifiers));
     }
 
     /**

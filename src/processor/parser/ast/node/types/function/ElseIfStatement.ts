@@ -24,13 +24,10 @@ import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { FilePathExpression } from "../../../expression/types/FilePathExpression";
-import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
 import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
-import { VariableAssignment } from "../function/VariableAssignment";
 
-export class IfStatement extends StatementNode {
+export class ElseIfStatement extends StatementNode {
 	booleanExpression: ParenBooleanExpression = new ParenBooleanExpression();
 
 	constructor() {
@@ -45,6 +42,7 @@ export class IfStatement extends StatementNode {
 
     getRule(): TokenRule[] {
         return [
+			new TokenRule(TokenType.Keyword, KeywordTypes.Else),
             new TokenRule(TokenType.Keyword, KeywordTypes.If)
         ];
     }
@@ -56,13 +54,14 @@ export class IfStatement extends StatementNode {
 		// Store keyword position
 		let keywordPosition = reader.readToken().getLocation();
 
-		// No further validation required on the keyword, advance by one token.
+		// No further validation required on the keywords, advance by two tokens.
+		reader.index++;
 		reader.index++;
 
 		// Check we have an open parenthesis
 		const openParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
 		if(!openParen.matches(reader.readToken())) {
-			this.diagnostics.push(new ScriptDiagnostic(reader.readToken(-1).getLocation(), "Expected '('", GSCProcessNames.Parser));
+			reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Expected '('", GSCProcessNames.Parser);
 		} else {
 			reader.index++;
 		}

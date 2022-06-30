@@ -16,45 +16,19 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { DiagnosticSeverity } from "vscode";
 import { TokenType } from "../../../lexer/tokens/Token";
 import { PunctuationTypes } from "../../../lexer/tokens/types/Punctuation";
-import { ScriptDiagnostic } from "../../diagnostics/ScriptDiagnostic";
+import { GSCProcessNames } from "../../../util/GSCUtil";
 import { ScriptReader } from "../../logic/ScriptReader";
 import { TokenRule } from "../../logic/TokenRule";
-import { ScriptSemanticToken } from "../../ScriptSemanticToken";
 import { IASTNode } from "./IASTNode";
-import * as vscode from "vscode";
-import { GSCProcessNames } from "../../../util/GSCUtil";
 
 export class BranchNode implements IASTNode {
-    diagnostics: ScriptDiagnostic[] = [];
-    semantics: ScriptSemanticToken[] = [];
     statements: IASTNode[] = [];
     oneStatement: boolean;
 
     constructor(oneStatement: boolean = false) {
         this.oneStatement = oneStatement;
-    }
-
-    /**
-     * Pushes a diagnostic to the branch's diagnostic array.
-     * @param location The location of the token/diagnostic
-     * @param message The message for this diagnostic
-     * @param severity The severity
-     */
-    pushDiagnostic(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined = undefined) {
-        this.diagnostics.push(new ScriptDiagnostic(location, message, GSCProcessNames.Parser, severity));
-    }
-
-    /**
-     * Pushes this token onto the branch's semantic array.
-     * @param location The location of the token/semantic
-     * @param tokenType The type of token
-     * @param tokenModifiers An array of modifiers for the semantic
-     */
-    pushSemantic(location: [number, number], tokenType: string, tokenModifiers: string[] | undefined = undefined): void {
-        this.semantics.push(new ScriptSemanticToken(location, tokenType, tokenModifiers));
     }
 
     /**

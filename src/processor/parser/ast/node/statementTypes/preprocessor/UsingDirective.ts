@@ -18,7 +18,6 @@
 
 import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
-import { ScriptDependency } from "../../../../data/ScriptDependency";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
@@ -56,7 +55,7 @@ export class UsingDirective extends StatementNode {
 		if(this.file.filePath && this.file.location) {
 			const endLoc = (semicolon ? semicolon.getLocation()[1] : this.file.location[1]);
 
-			reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], endLoc]));
+			//reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], endLoc]));
 		}
 
 		// Use at the end of every subclass of a statement node.

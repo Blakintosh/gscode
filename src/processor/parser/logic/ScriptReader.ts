@@ -17,32 +17,25 @@
  */
 
 import { IToken } from "../../lexer/tokens/IToken";
-import { ScriptDependency } from "../data/ScriptDependency";
 import { ScriptSemanticToken } from "../ScriptSemanticToken";
 import { ParserDiagnostics } from "../diagnostics/ParserDiagnostics";
 import * as vscode from "vscode";
 import path = require("path");
-import { ScriptScope } from "../data/ScriptScope";
-import { ScriptVariable } from "../data/ScriptVariable";
 import { TokenType } from "../../lexer/tokens/Token";
 
 export class ScriptReader {
     index: number = 0;
     readonly tokens: IToken[];
 	readonly diagnostic: ParserDiagnostics;
-	dependencies: ScriptDependency[];
-	//precaches: 
 	semanticTokens: ScriptSemanticToken[];
 	readonly format: string;
 	currentNamespace: string;
-	scopeStack: Array<ScriptScope> = new Array<ScriptScope>();
 
-    constructor(document: vscode.TextDocument, tokens: IToken[], dependencies: ScriptDependency[], diagnostic: ParserDiagnostics, semanticTokens: ScriptSemanticToken[]) {
+    constructor(document: vscode.TextDocument, tokens: IToken[], diagnostic: ParserDiagnostics, semanticTokens: ScriptSemanticToken[]) {
         this.tokens = tokens;
 		this.format = document.languageId;
 		const fileName = path.basename(document.fileName);
 		this.currentNamespace = fileName.substring(fileName.lastIndexOf("."));
-		this.dependencies = dependencies;
 		this.diagnostic = diagnostic;
 		this.semanticTokens = semanticTokens;
     }
@@ -70,7 +63,7 @@ export class ScriptReader {
 		return this.index >= this.tokens.length;
 	}
 
-	getVar(name: string): ScriptVariable | undefined {
+	/*getVar(name: string): ScriptVariable | undefined {
 		for(const scope of this.scopeStack) {
 			let variable = scope.vars.find(v => v.name === name);
 			if(variable) {
@@ -90,5 +83,5 @@ export class ScriptReader {
 
 	decreaseScope(): void {
 		this.scopeStack.pop();
-	}
+	}*/
 }

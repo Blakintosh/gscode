@@ -18,6 +18,9 @@
 #using scripts\shared\lui_shared;
 #using this\fails;
 
+#precache( "fx", "weapon/bullet/fx_flesh_gib_fatal_01" );
+#precache( "obesity", "MERV" );
+
 function foo(bar = 5, fuckedOff = 5) {
 	afuck = 3 + "Smoky" - 2 - 5;
 }
@@ -31,15 +34,16 @@ function cheese(board = 2, fucked = (3 * 2) + 5, drooling = true) {
 		afuck = 6;
 		bar = 3;
 	} else if(true) {
-		
+		kwoq[cjwopfdk]
 	} else {
-
+		-fw-pclw-c
 	}
 
 	if(board + (2 + ;[]'''''') == 3 && 1 == true)
 	{
-
+		viwviowfj
 	}
+	fwqfkwqf0
 
 	return board + fucked;
 }

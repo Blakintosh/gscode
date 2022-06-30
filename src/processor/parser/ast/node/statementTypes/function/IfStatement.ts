@@ -19,8 +19,7 @@
 import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
 import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
-import { GSCBranchNodes } from "../../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../../data/ScriptDependency";
+import { GSCBranchNodes, GSCProcessNames } from "../../../../../util/GSCUtil";
 import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
@@ -63,7 +62,7 @@ export class IfStatement extends StatementNode {
 		// Check we have an open parenthesis
 		const openParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
 		if(!openParen.matches(reader.readToken())) {
-			this.diagnostics.push(new ScriptDiagnostic(reader.readToken(-1).getLocation(), "Syntax error: Expected '(' after 'if'."));
+			this.diagnostics.push(new ScriptDiagnostic(reader.readToken(-1).getLocation(), "Expected '('", GSCProcessNames.Parser));
 		} else {
 			reader.index++;
 		}

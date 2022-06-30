@@ -18,19 +18,11 @@
 
 import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
-import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
-import { GSCBranchNodes } from "../../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../../data/ScriptDependency";
-import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { FilePathExpression } from "../../../expression/types/FilePathExpression";
-import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
 import { LogicalExpression } from "../../../expression/types/LogicalExpression";
-import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
-import { VariableAssignment } from "../function/VariableAssignment";
 
 export class ReturnStatement extends StatementNode {
 	valueExpression: LogicalExpression = new LogicalExpression();

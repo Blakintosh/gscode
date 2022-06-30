@@ -20,6 +20,7 @@ import { ScriptDiagnostic } from "../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../logic/ScriptReader";
 import * as vscode from "vscode";
 import { ScriptSemanticToken } from "../../ScriptSemanticToken";
+import { GSCProcessNames } from "../../../util/GSCUtil";
 
 export abstract class StatementContents {
     diagnostics: ScriptDiagnostic[] = [];
@@ -30,7 +31,7 @@ export abstract class StatementContents {
     abstract parse(reader: ScriptReader): void;
 
     pushDiagnostic(location: [number, number], message: string, severity: vscode.DiagnosticSeverity | undefined = undefined) {
-        this.diagnostics.push(new ScriptDiagnostic(location, message, severity));
+        this.diagnostics.push(new ScriptDiagnostic(location, message, GSCProcessNames.Parser, severity));
     }
 
     pushSemantic(location: [number, number], tokenType: string, tokenModifiers: string[] | undefined = undefined): void {

@@ -18,57 +18,34 @@
 
 import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
-import { GSCBranchNodes } from "../../../../../util/GSCUtil";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
+import { PrecacheExpression } from "../../../expression/types/PrecacheExpression";
 import { StatementNode } from "../../StatementNode";
 
-export class FunctionDecl extends StatementNode {
-    //file: FilePathExpression = new FilePathExpression();
-	arguments: FunctionDeclArgsExpression = new FunctionDeclArgsExpression();
+export class PrecacheDirective extends StatementNode {
+	precache: PrecacheExpression = new PrecacheExpression();
 
-	constructor() {
-		super();
-		// A function declaration is a branching statement node
-		super.expectsBranch = true;
+	getContents(): StatementContents {
+		return this.precache;
 	}
 
-    getContents(): StatementContents {
-        throw new Error("Method not implemented.");
-    }
-
-    getRule(): TokenRule[] {
-        return [
-            new TokenRule(TokenType.Keyword, KeywordTypes.Function),
-			new TokenRule(TokenType.Name)
-        ];
-    }
+	getRule(): TokenRule[] {
+		return [
+			new TokenRule(TokenType.Keyword, KeywordTypes.Precache)
+		];
+	}
 
 	parse(reader: ScriptReader): void {
-		// Once parsing, specify expected children to avoid callstack error
-		super.expectedChildren = GSCBranchNodes.Standard();
-
 		// Store keyword position
 		let keywordPosition = reader.readToken().getLocation();
 
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
 
-		// Validate the function name and add it to the function names list.
-		reader.index++;
-
-		// Parse the function arguments expression.
-		this.arguments.parse(reader); 
-
 		// Parse the file path expression.
-		//this.file.parse(reader);
-
-		// Add this as a dependency
-		//if(this.file.filePath && this.file.location) {
-		//	reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], this.file.location[1]]));
-		//}
+		this.precache.parse(reader);
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

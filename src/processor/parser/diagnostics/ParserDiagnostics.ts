@@ -75,7 +75,7 @@ export class ParserDiagnostics {
      * Pushes a given diagnostic to the diagnostics array, to later be sent to VSCode's API.
      * @param diagnostic The diagnostic to push
      */
-    pushDiagnostic(location: [number, number], message: string, severity?: vscode.DiagnosticSeverity, tags?: vscode.DiagnosticTag[]): void {
+    pushDiagnostic(location: [number, number], message: string, source: string, severity?: vscode.DiagnosticSeverity, tags?: vscode.DiagnosticTag[]): void {
         // Locate the diagnostic's position in terms of line and character index, then push to a range
         /*let startPos = this.absolutePositionToLineChar(location[0]);
         let endPos = this.absolutePositionToLineChar(location[1]);
@@ -86,6 +86,7 @@ export class ParserDiagnostics {
         this.diagnostics.push(new ScriptDiagnostic(
             location,
             message,
+			source,
             severity,
 			tags
         ));

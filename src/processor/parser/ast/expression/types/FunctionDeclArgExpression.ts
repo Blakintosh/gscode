@@ -17,14 +17,11 @@
  */
 
 import { Token, TokenType } from "../../../../lexer/tokens/Token";
-import { ScriptReader } from "../../../logic/ScriptReader";
-import { StatementContents } from "../StatementContents";
-import * as vscode from "vscode";
-import { GSCUtil } from "../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../data/ScriptDependency";
-import { TokenRule } from "../../../logic/TokenRule";
 import { OperatorType } from "../../../../lexer/tokens/types/Operator";
-import { SpecialTokenTypes } from "../../../../lexer/tokens/types/SpecialToken";
+import { GSCProcessNames } from "../../../../util/GSCUtil";
+import { ScriptReader } from "../../../logic/ScriptReader";
+import { TokenRule } from "../../../logic/TokenRule";
+import { StatementContents } from "../StatementContents";
 import { LogicalExpression } from "./LogicalExpression";
 
 export class FunctionDeclArgExpression extends StatementContents {
@@ -43,7 +40,7 @@ export class FunctionDeclArgExpression extends StatementContents {
 		if(nameToken.getType() === TokenType.Name) {
 			this.name = (<Token> nameToken).contents;
 		} else {
-			reader.diagnostic.pushDiagnostic(nameToken.getLocation(), "Token error: expected argument name");
+			reader.diagnostic.pushDiagnostic(nameToken.getLocation(), "Expected argument name.", GSCProcessNames.Parser);
 			return;
 		}
 

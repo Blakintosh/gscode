@@ -17,11 +17,9 @@
  */
 
 import { Token, TokenType } from "../../../../lexer/tokens/Token";
+import { GSCProcessNames } from "../../../../util/GSCUtil";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { StatementContents } from "../StatementContents";
-import * as vscode from "vscode";
-import { GSCUtil } from "../../../../util/GSCUtil";
-import { ScriptDependency } from "../../../data/ScriptDependency";
 
 export class NameExpression extends StatementContents {
 	value?: string;
@@ -37,7 +35,7 @@ export class NameExpression extends StatementContents {
         // Check token could be a path
         if(token.getType() !== TokenType.Name) {
             // This token can't be a name, abort parsing
-            reader.diagnostic.pushDiagnostic(token.getLocation(), "Token error: expected name");
+            reader.diagnostic.pushDiagnostic(token.getLocation(), "Expected name.", GSCProcessNames.Parser);
             reader.index++;
             return;
         }

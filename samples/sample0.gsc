@@ -1,49 +1,29 @@
-#using scripts\codescripts\struct;
+/**
 
-#using scripts\shared\ai_shared;
-#using scripts\shared\animation_shared;
-#using scripts\shared\array_shared;
-#using scripts\shared\callbacks_shared;
-#using scripts\shared\clientfield_shared;
-#using scripts\shared\flag_shared;
-#using scripts\shared\flagsys_shared;
-#using scripts\shared\laststand_shared;
-#using scripts\shared\player_shared;
-#using scripts\shared\scene_debug_shared;
-#using scripts\shared\scriptbundle_shared;
-#using scripts\shared\spawner_shared;
-#using scripts\shared\system_shared;
-#using scripts\shared\trigger_shared;
-#using scripts\shared\util_shared;
-#using scripts\shared\lui_shared;
-#using this\fails;
+	level.marv_pooed_himself = true;
+	swan.foo = 2;
+	fuck[1].yes = true;
+	gosling(self, undefined).fucked = 200;
+	test = 2;
+	marvin[test + 3] = 20;
+*/
 
-#precache( "fx", "weapon/bullet/fx_flesh_gib_fatal_01" );
-#precache( "obesity", "MERV" );
+function test(fucked = true) {
+	fu::bar(true, false);
+	marv::getObesityLevel(true, false);
+	foo::bar(true);
 
-function foo(bar = 5, fuckedOff = 5) {
-	afuck = 3 + "Smoky" - 2 - 5;
-}
+	marv = 2;
 
-function cheese(board = 2, fucked = (3 * 2) + 5, drooling = true) {
-	afuck = 5;
-	cheddar = 3;
- 
-	if(true & 23 == 40)
-	{
-		afuck = 6;
-		bar = 3;
-	} else if(true) {
-		kwoq[cjwopfdk]
-	} else {
-		-fw-pclw-c
+	for(i = 0; i < 10; i++) {
+		marv = marv + 3;
+		break;
 	}
 
-	if(board + (2 + ;[]'''''') == 3 && 1 == true)
-	{
-		viwviowfj
+	foreach(duck in ducks) {
+		marv = marv + 10;
+		continue;
 	}
-	fwqfkwqf0
 
-	return board + fucked;
+	return 1;
 }

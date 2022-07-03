@@ -22,7 +22,8 @@ import { GSCProcessNames } from "../../../../util/GSCUtil";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { TokenRule } from "../../../logic/TokenRule";
 import { StatementContents } from "../StatementContents";
-import { LogicalExpression } from "./LogicalExpression";
+import { LogicalExpression } from "../logical/LogicalExpression";
+import { ScriptError } from "../../../diagnostics/ScriptError";
 
 export class FunctionDeclArgExpression extends StatementContents {
     name?: string;
@@ -40,8 +41,7 @@ export class FunctionDeclArgExpression extends StatementContents {
 		if(nameToken.getType() === TokenType.Name) {
 			this.name = (<Token> nameToken).contents;
 		} else {
-			reader.diagnostic.pushDiagnostic(nameToken.getLocation(), "Expected argument name.", GSCProcessNames.Parser);
-			return;
+			throw new ScriptError(nameToken.getLocation(), "Expected argument name.", GSCProcessNames.Parser);
 		}
 
 		// Check if there is a default value

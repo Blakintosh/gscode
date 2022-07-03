@@ -20,18 +20,27 @@
 import * as fs from "fs";
 import * as fsPath from "path";
 import * as vscode from "vscode";
-import { ElseIfStatement } from "../parser/ast/node/statementTypes/function/ElseIfStatement";
-import { ElseStatement } from "../parser/ast/node/statementTypes/function/ElseStatement";
-import { IfStatement } from "../parser/ast/node/statementTypes/function/IfStatement";
-import { ReturnStatement } from "../parser/ast/node/statementTypes/function/ReturnStatement";
-import { VariableAssignment } from "../parser/ast/node/statementTypes/function/VariableAssignment";
+import { ElseIfStatement } from "../parser/ast/node/types/function/ElseIfStatement";
+import { ElseStatement } from "../parser/ast/node/types/function/ElseStatement";
+import { IfStatement } from "../parser/ast/node/types/function/IfStatement";
+import { ReturnStatement } from "../parser/ast/node/types/function/ReturnStatement";
 
 // Globals
-import { InsertDirective } from "../parser/ast/node/statementTypes/preprocessor/InsertDirective";
-import { NamespaceDirective } from "../parser/ast/node/statementTypes/preprocessor/NamespaceDirective";
-import { PrecacheDirective } from "../parser/ast/node/statementTypes/preprocessor/PrecacheDirective";
-import { UsingDirective } from "../parser/ast/node/statementTypes/preprocessor/UsingDirective";
-import { FunctionDecl } from "../parser/ast/node/statementTypes/rootBranch/FunctionDecl";
+import { InsertDirective } from "../parser/ast/node/types/preprocessor/InsertDirective";
+import { MacroFunctionCall } from "../parser/ast/node/types/preprocessor/MacroFunctionCall";
+import { NamespaceDirective } from "../parser/ast/node/types/preprocessor/NamespaceDirective";
+import { PrecacheDirective } from "../parser/ast/node/types/preprocessor/PrecacheDirective";
+import { UsingDirective } from "../parser/ast/node/types/preprocessor/UsingDirective";
+import { FunctionDecl } from "../parser/ast/node/types/rootBranch/FunctionDecl";
+import { VariableAssignment } from "../parser/ast/node/types/function/VariableAssignment";
+import { DirectFunctionCall } from "../parser/ast/node/types/function/DirectFunctionCall";
+import { IASTNode } from "../parser/ast/node/IASTNode";
+import { DoStatement } from "../parser/ast/node/types/function/DoStatement";
+import { WhileStatement } from "../parser/ast/node/types/function/WhileStatement";
+import { ForStatement } from "../parser/ast/node/types/function/ForStatement";
+import { ForeachStatement } from "../parser/ast/node/types/function/ForeachStatement";
+import { BreakStatement } from "../parser/ast/node/types/loop/BreakStatement";
+import { ContinueStatement } from "../parser/ast/node/types/loop/ContinueStatement";
 
 export enum FunctionFlag {
 	None = 0, // All OK
@@ -49,22 +58,36 @@ export enum GSCProcessNames {
 
 export const GSCBranchNodes = {
 	Root: function() {
-		return [
+		return new Array<IASTNode>(
 			new UsingDirective(),
 			new InsertDirective(),
 			new NamespaceDirective(),
 			new PrecacheDirective(),
-			new FunctionDecl()
-		];
+			new FunctionDecl(),
+			new MacroFunctionCall()
+		);
 	},
 	Standard: function() {
-		return [
+		return new Array<IASTNode>(
 			new VariableAssignment(),
 			new IfStatement(),
 			new ElseIfStatement(),
 			new ElseStatement(),
-			new ReturnStatement()
-		];
+			new DoStatement(),
+			new WhileStatement(),
+			new ForStatement(),
+			new ForeachStatement(),
+			new ReturnStatement(),
+			new DirectFunctionCall()
+		);
+	},
+	Loop: function() {
+		const loopStatements = new Array<IASTNode>(
+			new BreakStatement(),
+			new ContinueStatement()
+		);
+
+		return loopStatements.concat(GSCBranchNodes.Standard());
 	}
 };
 

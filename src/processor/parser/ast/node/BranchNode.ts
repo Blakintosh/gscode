@@ -45,7 +45,8 @@ export class BranchNode implements IASTNode {
 	 * @param allowedChildren The child nodes allowed in this branch.
 	 * @returns true if so, false otherwise
 	 */
-	private noValidNextNode(parser: ScriptReader, allowedChildren: IASTNode[]): boolean {
+	private noValidNextNode(parser: ScriptReader, allowedChildrenFunc: () => IASTNode[]): boolean {
+		const allowedChildren = allowedChildrenFunc();
 		for(const child of allowedChildren) {
 			if(child.matches(parser)) {
 				return false;
@@ -59,7 +60,9 @@ export class BranchNode implements IASTNode {
      * @param parser Reference to the token reader.
      * @param allowedChildren The child nodes allowed in this branch.
      */
-    private parseNextNode(parser: ScriptReader, allowedChildren: IASTNode[]): IASTNode | null {
+    private parseNextNode(parser: ScriptReader, allowedChildrenFunc: () => IASTNode[]): IASTNode | null {
+		const allowedChildren = allowedChildrenFunc();
+
         for(const child of allowedChildren) {
             if(child.matches(parser)) {
                 child.parse(parser, undefined);
@@ -73,7 +76,7 @@ export class BranchNode implements IASTNode {
 		// Increment the parser through unrecognised tokens until we reach the end of the file, the end of the branch, or we find a valid node
 		do {
 			parser.index++;
-		} while(!parser.atEof() && !this.atEndOfBranch(parser) && this.noValidNextNode(parser, allowedChildren));
+		} while(!parser.atEof() && !this.atEndOfBranch(parser) && this.noValidNextNode(parser, allowedChildrenFunc));
 
 		// Get the token before the current index to end the error on.
 		const lastFailedPosition = parser.readToken(-1).getLocation();
@@ -99,16 +102,16 @@ export class BranchNode implements IASTNode {
      * @param parser Reference to the token reader.
      * @param allowedChildren The child nodes allowed in this branch.
      */
-    parse(parser: ScriptReader, allowedChildren: IASTNode[]): void {
+    parse(parser: ScriptReader, allowedChildrenFunc: () => IASTNode[]): void {
         if(this.oneStatement) {
-			let nextChild = this.parseNextNode(parser, allowedChildren);
+			let nextChild = this.parseNextNode(parser, allowedChildrenFunc);
 			if(nextChild !== null) {
 				this.statements[0] = nextChild;
 			}
         } else {
             while(!parser.atEof() && !this.atEndOfBranch(parser)) {
                 const pos = this.statements.length;
-				let nextChild = this.parseNextNode(parser, allowedChildren);
+				let nextChild = this.parseNextNode(parser, allowedChildrenFunc);
 				if(nextChild !== null) {
 					this.statements[pos] = nextChild;
 				}

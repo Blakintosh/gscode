@@ -16,18 +16,16 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { performance } from "perf_hooks";
 import * as vscode from "vscode";
 import { Lexer } from "../lexer/Lexer";
+import { GSCBranchNodes, GSCProcessNames } from "../util/GSCUtil";
 import { BranchNode } from "./ast/node/BranchNode";
-import { InsertDirective } from "./ast/node/statementTypes/preprocessor/InsertDirective";
-import { NamespaceDirective } from "./ast/node/statementTypes/preprocessor/NamespaceDirective";
-import { UsingDirective } from "./ast/node/statementTypes/preprocessor/UsingDirective";
-import { FunctionDecl } from "./ast/node/statementTypes/rootBranch/FunctionDecl";
 import { ParserDiagnostics } from "./diagnostics/ParserDiagnostics";
+import { ScriptEofError } from "./diagnostics/ScriptEofError";
+import { ScriptError } from "./diagnostics/ScriptError";
 import { ScriptReader } from "./logic/ScriptReader";
 import { ScriptSemanticToken } from "./ScriptSemanticToken";
-import { GSCBranchNodes, GSCProcessNames } from "../util/GSCUtil";
-import { performance } from "perf_hooks";
 
 export class Parser {
     readonly lexer: Lexer;
@@ -57,8 +55,20 @@ export class Parser {
 
     parse(): void {
 		const start = performance.now();
-        this.rootNode.parse(this.reader, GSCBranchNodes.Root());
 
+		try {
+			this.rootNode.parse(this.reader, GSCBranchNodes.Root);
+		} catch(e) {
+			if(e instanceof ScriptEofError) {
+				this.diagnostic.pushDiagnostic(e.location, "Unrecognised token.", GSCProcessNames.Parser, vscode.DiagnosticSeverity.Error);
+			} else {
+				vscode.window.showErrorMessage(`GSCode: Unhandled error during parsing: ${e}`);
+				console.error(e);
+				if(e instanceof ScriptError) {
+					this.reader.diagnostic.pushDiagnostic(e.errorData.location, e.errorData.message, e.errorData.source);
+				}
+			}
+		}
 		this.postParse();
 
 		const end = performance.now();

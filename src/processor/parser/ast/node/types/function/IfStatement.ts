@@ -20,15 +20,11 @@ import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
 import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
 import { GSCBranchNodes, GSCProcessNames } from "../../../../../util/GSCUtil";
-import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { FilePathExpression } from "../../../expression/types/FilePathExpression";
-import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
 import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
-import { VariableAssignment } from "./VariableAssignment";
 
 export class IfStatement extends StatementNode {
 	booleanExpression: ParenBooleanExpression = new ParenBooleanExpression();
@@ -37,6 +33,7 @@ export class IfStatement extends StatementNode {
 		super();
 		// A function declaration is a branching statement node
 		super.expectsBranch = true;
+		super.expectedChildren = GSCBranchNodes.Standard;
 	}
 
     getContents(): StatementContents {
@@ -50,11 +47,6 @@ export class IfStatement extends StatementNode {
     }
 
 	parse(reader: ScriptReader): void {
-		// Once at parsing stage, express expected children to avoid a call stack error
-		super.expectedChildren = GSCBranchNodes.Standard();
-		
-		// Store keyword position
-		let keywordPosition = reader.readToken().getLocation();
 
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
@@ -68,7 +60,11 @@ export class IfStatement extends StatementNode {
 		}
 
 		// Parse the condition expression
-		this.booleanExpression.parse(reader);
+		try {
+			this.booleanExpression.parse(reader);
+		} catch(e) {
+			reader.diagnostic.pushFromError(e);
+		}
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

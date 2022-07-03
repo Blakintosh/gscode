@@ -45,7 +45,11 @@ export class PrecacheDirective extends StatementNode {
 		reader.index++;
 
 		// Parse the file path expression.
-		this.precache.parse(reader);
+		try {
+			this.precache.parse(reader);
+		} catch(e) {
+			reader.diagnostic.pushFromError(e);
+		}
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

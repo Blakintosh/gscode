@@ -22,7 +22,8 @@ import { GSCProcessNames } from "../../../../util/GSCUtil";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { TokenRule } from "../../../logic/TokenRule";
 import { StatementContents } from "../StatementContents";
-import { LogicalExpression } from "./LogicalExpression";
+import { LogicalExpression } from "../logical/LogicalExpression";
+import { ScriptError } from "../../../diagnostics/ScriptError";
 
 export class ParenBooleanExpression extends StatementContents {
 	expression: LogicalExpression = new LogicalExpression();
@@ -39,7 +40,7 @@ export class ParenBooleanExpression extends StatementContents {
 		const closeParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseParen);
 
 		if(!closeParen.matches(reader.readToken())) {
-			reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Expected ')'", GSCProcessNames.Parser);
+			throw new ScriptError(reader.readToken(-1).getLocation(), "Expected ')'", GSCProcessNames.Parser);
 		} else {
 			reader.index++;
 		}

@@ -18,6 +18,7 @@
 
 import { Token, TokenType } from "../../../../lexer/tokens/Token";
 import { GSCProcessNames, GSCUtil } from "../../../../util/GSCUtil";
+import { ScriptError } from "../../../diagnostics/ScriptError";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { StatementContents } from "../StatementContents";
 
@@ -32,13 +33,12 @@ export class FilePathExpression extends StatementContents {
      */
     parse(reader: ScriptReader): void {
         let token = reader.readToken();
+		reader.index++;
 
         // Check token could be a path
         if(token.getType() !== TokenType.Name) {
             // This token can't be a file path, abort parsing
-            reader.diagnostic.pushDiagnostic(token.getLocation(), "Expected file path.", GSCProcessNames.Parser);
-            reader.index++;
-            return;
+			throw new ScriptError(token.getLocation(), "Expected file path.", GSCProcessNames.Parser);
         }
 		
 		// Store the location as it validates
@@ -59,6 +59,6 @@ export class FilePathExpression extends StatementContents {
 
         this.filePath = path;
 
-        reader.index++; // Done
+        // Done
     }
 }

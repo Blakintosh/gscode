@@ -16,53 +16,56 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Token, TokenType } from "../../../../../lexer/tokens/Token";
-import { OperatorType } from "../../../../../lexer/tokens/types/Operator";
+import { TokenType } from "../../../../../lexer/tokens/Token";
+import { SpecialTokenTypes } from "../../../../../lexer/tokens/types/SpecialToken";
+import { GSCProcessNames } from "../../../../../util/GSCUtil";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
-import { StatementContents } from "../../../expression/StatementContents";
-import { LogicalExpression } from "../../../expression/types/LogicalExpression";
-import { StatementNode } from "../../StatementNode";
+import { LogicalExpression } from "../../../expression/logical/LogicalExpression";
+import { AssignmentExpression } from "../../../expression/types/AssignmentExpression";
+import { IASTNode } from "../../IASTNode";
 
 /**
- * AST Class for Variable Assignments
- * As GSC has no keyword for variable declaration, we need to treat both declaration and assignment in the same class,
- * even though expressions can also handle variable assignment
+ * Variable Assignment Syntax
+ * First token can be a Name or a Function call, possibly indexed with [String/Integer]
+ * after any sequence of Name, possibly indexed with [String/Integer]
+ * Each split by a .
  */
 
-// TODO: This needs to be removed from StatementNode and made into its own component
-export class VariableAssignment extends StatementNode {
+export class VariableAssignment implements IASTNode {
+	assignmentExpression: AssignmentExpression = new AssignmentExpression();
 	valueExpression: LogicalExpression = new LogicalExpression();
-	name?: string;
 
-    getContents(): StatementContents {
-        throw new Error("Method not implemented.");
-    }
+	getChildren(): IASTNode[] {
+		throw new Error("Method not implemented.");
+	}
 
-    getRule(): TokenRule[] {
-        return [
-			new TokenRule(TokenType.Name),
-            new TokenRule(TokenType.Operator, OperatorType.Assignment)
-        ];
-    }
+	/**
+	 * Attempts to parse the next tokens as a variable assignment - if it fails, then there is no match
+	 * @param reader Reference to the reader
+	 * @returns true if matches, false otherwise
+	 */
+	matches(reader: ScriptReader): boolean {
+		const baseIndex = reader.index;
 
-	parse(reader: ScriptReader): void {
-		// Get variable name and validate it
-		this.name = (<Token> reader.readToken()).contents;
+		try {
+			this.assignmentExpression.parse(reader);
+		} catch(e) {
+			reader.index = baseIndex;
+			return false;
+		}
+		return true;
+	}
 
-		// Get if this variable is a new declaration
-		// TODO: Change this to a Simulator step
-		//this.isDeclaration = reader.getVar(this.name) === undefined;
+	parse(reader: ScriptReader, allowedChildrenFunc: (() => IASTNode[]) | undefined): void {
+		// Expression already parsed, Check for semicolon
+		const semiColon = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
 
+		if(!semiColon.matches(reader.readToken())) {
+			reader.diagnostic.pushDiagnostic(reader.getLastTokenLocation(), "Expected ';'", GSCProcessNames.Parser);
+		}
 		reader.index++;
 
-		// no validation needed on =
-		reader.index++;
-
-		// Parse the variable assignment expression
-		this.valueExpression.parse(reader);
-
-		// As with every statement
-		super.parse(reader);
+		// Done
 	}
 }

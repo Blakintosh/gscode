@@ -21,45 +21,28 @@ import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { FilePathExpression } from "../../../expression/types/FilePathExpression";
+import { LogicalExpression } from "../../../expression/logical/LogicalExpression";
 import { StatementNode } from "../../StatementNode";
 
-export class InsertDirective extends StatementNode {
-    file: FilePathExpression = new FilePathExpression();
+/**
+ * Continue: continue;
+ */
+export class ContinueStatement extends StatementNode {
+	valueExpression: LogicalExpression = new LogicalExpression();
 
-    getContents(): StatementContents {
-        return this.file;
-    }
+	getContents(): StatementContents {
+		throw new Error("Method not implemented.");
+	}
 
-    getRule(): TokenRule[] {
-        return [
-            new TokenRule(TokenType.Keyword, KeywordTypes.Insert)
-        ];
-    }
+	getRule(): TokenRule[] {
+		return [
+			new TokenRule(TokenType.Keyword, KeywordTypes.Continue)
+		];
+	}
 
 	parse(reader: ScriptReader): void {
-		// Store keyword position
-		let keywordPosition = reader.readToken().getLocation();
-
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
-
-		// Parse the file path expression.
-		try {
-			this.file.parse(reader);
-		} catch(e) {
-			reader.diagnostic.pushFromError(e);
-		}
-
-		// Get semicolon if it exists.
-		const semicolon = super.getSemicolonToken(reader);
-
-		// Add this as an insertion (TODO)
-		if(this.file.filePath && this.file.location) {
-			const endLoc = (semicolon ? semicolon.getLocation()[1] : this.file.location[1]);
-
-			//reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], endLoc]));
-		}
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

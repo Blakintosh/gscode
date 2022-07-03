@@ -18,47 +18,42 @@
 
 import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
+import { GSCBranchNodes } from "../../../../../util/GSCUtil";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
+import { ForeachLoopExpression } from "../../../expression/loop/ForeachLoopExpression";
 import { StatementContents } from "../../../expression/StatementContents";
-import { FilePathExpression } from "../../../expression/types/FilePathExpression";
 import { StatementNode } from "../../StatementNode";
 
-export class InsertDirective extends StatementNode {
-    file: FilePathExpression = new FilePathExpression();
+export class ForeachStatement extends StatementNode {
+	loopExpression: ForeachLoopExpression = new ForeachLoopExpression();
 
-    getContents(): StatementContents {
-        return this.file;
-    }
+	constructor() {
+		super();
+		// A foreach loop statement is a branching statement node
+		super.expectsBranch = true;
+		super.expectedChildren = GSCBranchNodes.Loop;
+	}
 
-    getRule(): TokenRule[] {
-        return [
-            new TokenRule(TokenType.Keyword, KeywordTypes.Insert)
-        ];
-    }
+	getContents(): StatementContents {
+		throw new Error("Method not implemented.");
+	}
+
+	getRule(): TokenRule[] {
+		return [
+			new TokenRule(TokenType.Keyword, KeywordTypes.Foreach)
+		];
+	}
 
 	parse(reader: ScriptReader): void {
-		// Store keyword position
-		let keywordPosition = reader.readToken().getLocation();
-
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
 
-		// Parse the file path expression.
+		// Parse the loop expression
 		try {
-			this.file.parse(reader);
+			this.loopExpression.parse(reader);
 		} catch(e) {
 			reader.diagnostic.pushFromError(e);
-		}
-
-		// Get semicolon if it exists.
-		const semicolon = super.getSemicolonToken(reader);
-
-		// Add this as an insertion (TODO)
-		if(this.file.filePath && this.file.location) {
-			const endLoc = (semicolon ? semicolon.getLocation()[1] : this.file.location[1]);
-
-			//reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], endLoc]));
 		}
 
 		// Use at the end of every subclass of a statement node.

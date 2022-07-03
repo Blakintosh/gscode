@@ -18,6 +18,7 @@
 
 import * as vscode from "vscode";
 import { ScriptDiagnostic } from "./ScriptDiagnostic";
+import { ScriptError } from "./ScriptError";
 
 export class ParserDiagnostics {
     document: vscode.TextDocument;
@@ -76,13 +77,7 @@ export class ParserDiagnostics {
      * @param diagnostic The diagnostic to push
      */
     pushDiagnostic(location: [number, number], message: string, source: string, severity?: vscode.DiagnosticSeverity, tags?: vscode.DiagnosticTag[]): void {
-        // Locate the diagnostic's position in terms of line and character index, then push to a range
-        /*let startPos = this.absolutePositionToLineChar(location[0]);
-        let endPos = this.absolutePositionToLineChar(location[1]);
-
-        let range = new vscode.Range(startPos, endPos);*/
-
-        // Create the VSCode diagnostic and push it to the diagnostic array
+		// Push new to array
         this.diagnostics.push(new ScriptDiagnostic(
             location,
             message,
@@ -91,4 +86,12 @@ export class ParserDiagnostics {
 			tags
         ));
     }
+
+	pushFromError(e: unknown): void {
+		if(e instanceof ScriptError) {
+			this.diagnostics.push(e.errorData);
+		} else {
+			throw e;
+		}
+	}
 }

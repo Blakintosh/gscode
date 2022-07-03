@@ -20,6 +20,7 @@ import { Token, TokenType } from "../../../../lexer/tokens/Token";
 import { PunctuationTypes } from "../../../../lexer/tokens/types/Punctuation";
 import { SpecialTokenTypes } from "../../../../lexer/tokens/types/SpecialToken";
 import { GSCProcessNames } from "../../../../util/GSCUtil";
+import { ScriptError } from "../../../diagnostics/ScriptError";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { TokenRule } from "../../../logic/TokenRule";
 import { StatementContents } from "../StatementContents";
@@ -36,8 +37,7 @@ export class PrecacheExpression extends StatementContents {
 		reader.index++;
 
 		if(!openParenMatch.matches(openParenthesis)) {
-			reader.diagnostic.pushDiagnostic(openParenthesis.getLocation(), "Expected '('", GSCProcessNames.Parser);
-			return;
+			throw new ScriptError(openParenthesis.getLocation(), "Expected '('", GSCProcessNames.Parser);
 		}
 
 		// Read the Type
@@ -45,8 +45,7 @@ export class PrecacheExpression extends StatementContents {
 		reader.index++;
 
 		if(type.getType() !== TokenType.ScriptString) {
-			reader.diagnostic.pushDiagnostic(type.getLocation(), "Expected precache type", GSCProcessNames.Parser);
-			return;
+			throw new ScriptError(type.getLocation(), "Expected precache type", GSCProcessNames.Parser);
 		}
 
 		// Read the comma
@@ -56,8 +55,7 @@ export class PrecacheExpression extends StatementContents {
 		const commaMatch = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.Comma);
 
 		if(!commaMatch.matches(comma)) {
-			reader.diagnostic.pushDiagnostic(comma.getLocation(), "Expected ','", GSCProcessNames.Parser);
-			return;
+			throw new ScriptError(comma.getLocation(), "Expected ','", GSCProcessNames.Parser);
 		}
 
 		// Read the Asset
@@ -65,8 +63,7 @@ export class PrecacheExpression extends StatementContents {
 		reader.index++;
 
 		if(asset.getType() !== TokenType.ScriptString) {
-			reader.diagnostic.pushDiagnostic(asset.getLocation(), "Expected precache path", GSCProcessNames.Parser);
-			return;
+			throw new ScriptError(asset.getLocation(), "Expected precache path", GSCProcessNames.Parser);
 		}
 
 		// Read the close parenthesis
@@ -75,8 +72,7 @@ export class PrecacheExpression extends StatementContents {
 		reader.index++;
 
 		if(!closeParenMatch.matches(closeParenthesis)) {
-			reader.diagnostic.pushDiagnostic(closeParenthesis.getLocation(), "Expected ')'", GSCProcessNames.Parser);
-			return;
+			throw new ScriptError(closeParenthesis.getLocation(), "Expected ')'", GSCProcessNames.Parser);
 		}
 
 		// Finally, validate the precache
@@ -84,7 +80,7 @@ export class PrecacheExpression extends StatementContents {
 
 		/*if(!success) {
 			// TODO: Move to simulator
-			//reader.diagnostic.pushDiagnostic(type.getLocation(), "Unknown precache type", GSCProcessNames.Parser);
+			//throw new ScriptError(type.getLocation(), "Unknown precache type", GSCProcessNames.Parser);
 		} else if(this.value) {
 			//reader.precaches.push(this.value);
 		}*/

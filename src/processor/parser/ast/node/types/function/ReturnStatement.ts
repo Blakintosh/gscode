@@ -21,7 +21,7 @@ import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { LogicalExpression } from "../../../expression/types/LogicalExpression";
+import { LogicalExpression } from "../../../expression/logical/LogicalExpression";
 import { StatementNode } from "../../StatementNode";
 
 export class ReturnStatement extends StatementNode {
@@ -38,14 +38,15 @@ export class ReturnStatement extends StatementNode {
     }
 
 	parse(reader: ScriptReader): void {
-		// Store keyword position
-		let keywordPosition = reader.readToken().getLocation();
-
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
 
 		// Parse the value expression
-		this.valueExpression.parse(reader);
+		try {
+			this.valueExpression.parse(reader);
+		} catch(e) {
+			reader.diagnostic.pushFromError(e);
+		}
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

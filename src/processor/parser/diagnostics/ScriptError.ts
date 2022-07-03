@@ -16,43 +16,17 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/* eslint-disable @typescript-eslint/naming-convention */
-import { Token, TokenType } from "../Token";
+import { GSCProcessNames } from "../../util/GSCUtil";
+import { ScriptDiagnostic } from "./ScriptDiagnostic";
 
 /**
- * String types in GSC.
+ * Script Error class, for use in try-catch calls.
  */
-export enum NumberTypes {
-	Integer = "0",
-	Float = "0.0",
-}
+export class ScriptError extends Error {
+	errorData: ScriptDiagnostic;
 
-/**
- * Punctuation GSC Token
- * For code branches, [], ().
- */
-export class Number extends Token {
-	type: NumberTypes = NumberTypes.Integer;
-
-	populate(contents: string, start: number, end: number): void {
-		super.populate(contents, start, end);
-
-		if(!contents.includes(".")) {
-			this.type = NumberTypes.Integer;
-		} else {
-			this.type = NumberTypes.Float;
-		}
-	}
-
-	getType(): TokenType {
-		return TokenType.Number;
-	}
-
-	getSpecificType(): NumberTypes {
-		return this.type;
-	}
-
-	getRegex(): RegExp {
-		return /\d*\.\d+|\d+/;
+	constructor(location: [number, number], message: string, source: GSCProcessNames) {
+		super(message);
+		this.errorData = new ScriptDiagnostic(location, message, source);
 	}
 }

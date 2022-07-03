@@ -24,6 +24,7 @@ import { TokenRule } from "../../../logic/TokenRule";
 import { FunctionDeclArgExpression } from "./FunctionDeclArgExpression";
 import { SpecialTokenTypes } from "../../../../lexer/tokens/types/SpecialToken";
 import { GSCProcessNames } from "../../../../util/GSCUtil";
+import { ScriptError } from "../../../diagnostics/ScriptError";
 
 export class FunctionDeclArgsExpression extends StatementContents {
     arguments: FunctionDeclArgExpression[] = [];
@@ -47,9 +48,7 @@ export class FunctionDeclArgsExpression extends StatementContents {
 				let comma = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.Comma);
 				let nextToken = reader.readToken();
 				if(!comma.matches(nextToken) && !endOfArgs.matches(nextToken)) {
-					reader.diagnostic.pushDiagnostic(nextToken.getLocation(), "Expected comma or closing parenthesis.", GSCProcessNames.Parser);
-					reader.index++;
-					return;
+					throw new ScriptError(nextToken.getLocation(), "Expected comma or closing parenthesis.", GSCProcessNames.Parser);
 				} else if(comma.matches(nextToken)) {
 					reader.index++;
 				}

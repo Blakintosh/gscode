@@ -45,7 +45,11 @@ export class NamespaceDirective extends StatementNode {
 		reader.index++;
 
 		// Parse the file path expression.
-		this.namespace.parse(reader);
+		try {
+			this.namespace.parse(reader);
+		} catch(e) {
+			reader.diagnostic.pushFromError(e);
+		}
 
 		// Get semicolon if it exists.
 		const semicolon = super.getSemicolonToken(reader);

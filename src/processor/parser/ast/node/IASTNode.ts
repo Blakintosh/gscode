@@ -23,9 +23,9 @@ export interface IASTNode {
     /**
      * Gets the children of this node. This could be a sequence of statements,
      * or just a single branch, depending on context.
+	 * An empty array signals no children.
      */
     getChildren(): IASTNode[];
-
 
     /**
      * Returns whether the sequence of tokens at this current position matches this node.
@@ -36,5 +36,5 @@ export interface IASTNode {
 	/**
      * Parses the given node, which may include recursion calls.
      */
-	parse(reader: ScriptReader, allowedChildren: IASTNode[] | undefined): void;
+	parse(reader: ScriptReader, allowedChildrenFunc: (() => IASTNode[]) | undefined): void;
 }

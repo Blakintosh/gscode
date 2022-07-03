@@ -22,6 +22,7 @@ import { ParserDiagnostics } from "../diagnostics/ParserDiagnostics";
 import * as vscode from "vscode";
 import path = require("path");
 import { TokenType } from "../../lexer/tokens/Token";
+import { ScriptEofError } from "../diagnostics/ScriptEofError";
 
 export class ScriptReader {
     index: number = 0;
@@ -41,8 +42,30 @@ export class ScriptReader {
     }
 
     readToken(offset: number = 0): IToken {
-		if(this.atEof()) {
-			throw new Error("Attempt to read beyond the end of the script file.");
+		if(this.wouldBeAtEof(offset)) {
+			if(!this.atEof()) {
+				console.error(this.readToken());
+			}
+			let start = 0;
+			let end = 0;
+			if(offset > 0 && !this.atEof()) {
+				while(!this.wouldBeAtEof(end)) {
+					end++;
+				}
+			} else {
+				while(this.wouldBeAtEof(start)) {
+					start--;
+					end--;
+				}
+			}
+
+			if(this.tokens[this.index + start] && this.tokens[this.index + end]) {
+				const startTokenLoc = this.tokens[this.index + start].getLocation();
+				const endTokenLoc = this.tokens[this.index + end].getLocation();
+				throw new ScriptEofError("Attempt to read beyond the end of the script file.", [startTokenLoc[0], endTokenLoc[1]]);
+			} else {
+				throw new ScriptEofError("Attempt to read beyond the end of the script file.", [0, 1]);
+			}
 		}
 
 		if(this.tokens[this.index + offset].getType() === TokenType.Comment) {
@@ -59,8 +82,20 @@ export class ScriptReader {
 		return this.readToken(1);
 	}
 
+	readBehind(): IToken {
+		return this.readToken(-1);
+	}
+
+	getLastTokenLocation(): [number, number] {
+		return this.readBehind().getLocation();
+	}
+
 	atEof(): boolean {
 		return this.index >= this.tokens.length;
+	}
+
+	wouldBeAtEof(offset: number): boolean {
+		return this.index + offset >= this.tokens.length;
 	}
 
 	/*getVar(name: string): ScriptVariable | undefined {

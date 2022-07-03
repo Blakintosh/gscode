@@ -23,6 +23,7 @@ import { OperatorType } from "../../../../lexer/tokens/types/Operator";
 import { PunctuationTypes } from "../../../../lexer/tokens/types/Punctuation";
 import { SpecialTokenTypes } from "../../../../lexer/tokens/types/SpecialToken";
 import { GSCProcessNames } from "../../../../util/GSCUtil";
+import { ScriptError } from "../../../diagnostics/ScriptError";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { TokenRule } from "../../../logic/TokenRule";
 import { StatementContents } from "../StatementContents";
@@ -141,20 +142,20 @@ export class LogicalExpression extends StatementContents {
 	leftBound?: number;
 	rightBound?: number;
 
-	cheapParenthesisScan(reader: ScriptReader): void {
+	cheapPunctuationScan(reader: ScriptReader, openType: PunctuationTypes, closeType: PunctuationTypes): void {
 		// Scan until parenthesis count falls to 0.
-		let parenthesisCount = 1;
+		let puncCount = 1;
 
-		let open = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
-		let close = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseParen);
+		let open = new TokenRule(TokenType.Punctuation, openType);
+		let close = new TokenRule(TokenType.Punctuation, closeType);
 
-		while (!reader.atEof() && parenthesisCount > 0) {
+		while (!reader.atEof() && puncCount > 0) {
 			let token = reader.readToken();
 
 			if(open.matches(token)) {
-				parenthesisCount++;
+				puncCount++;
 			} else if(close.matches(token)) {
-				parenthesisCount--;
+				puncCount--;
 			}
 			reader.index++;
 		}
@@ -166,9 +167,14 @@ export class LogicalExpression extends StatementContents {
 		const endExpressionToken = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseParen);
 		const nestedExpressionToken = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
 		const commaToken = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.Comma);
+		const endStatementToken = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
+
+		const enterBrackets = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenBracket);
+		const exitBrackets = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseBracket);
 
 		const keywordTrue = new TokenRule(TokenType.Keyword, KeywordTypes.True);
 		const keywordFalse = new TokenRule(TokenType.Keyword, KeywordTypes.False);
+		const keywordUndefined = new TokenRule(TokenType.Keyword, KeywordTypes.Undefined);
 
 		let token;
 		while(!reader.atEof() && (token = reader.readToken()) && (
@@ -178,17 +184,21 @@ export class LogicalExpression extends StatementContents {
 			token.getType() === TokenType.Operator || // Operators (+, - etc.)
 			token.getType() === TokenType.Punctuation || // Punctuation (, ) etc.
 			keywordTrue.matches(token) || // Boolean true
-			keywordFalse.matches(token) // Boolean false
+			keywordFalse.matches(token) || // Boolean false
+			keywordUndefined.matches(token) // Undefined
 		)) {
 			
-			if(endExpressionToken.matches(token) || commaToken.matches(token)) {
+			if(endExpressionToken.matches(token) || exitBrackets.matches(token) || commaToken.matches(token) || endStatementToken.matches(token)) {
 				return expressionTokens;
 			}
 			reader.index++;
 
 			// This won't work for function calls (TODO) - maybe it doesn't need to?
 			if(nestedExpressionToken.matches(token)) {
-				this.cheapParenthesisScan(reader);
+				this.cheapPunctuationScan(reader, PunctuationTypes.OpenParen, PunctuationTypes.CloseParen);
+				continue;
+			} else if(enterBrackets.matches(token)) {
+				this.cheapPunctuationScan(reader, PunctuationTypes.OpenBracket, PunctuationTypes.CloseBracket);
 				continue;
 			}
 
@@ -198,11 +208,9 @@ export class LogicalExpression extends StatementContents {
 			expressionTokens.push(<Token> token);
 		}
 
-		const endStatementToken = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
-
 		// If there's a token remaining and it doesn't match the end of a statement, then there's a syntax error.
 		if(token && !endStatementToken.matches(token) && !commaToken.matches(token)) {
-			reader.diagnostic.pushDiagnostic(token.getLocation(), "Unexpected token in logical expression.", GSCProcessNames.Parser);
+			throw new ScriptError(token.getLocation(), "Unexpected token in logical expression.", GSCProcessNames.Parser);
 		}
 
 		return expressionTokens;

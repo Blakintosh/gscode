@@ -16,23 +16,28 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { TokenType } from "../../../../../lexer/tokens/Token";
+import { Token, TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
-import { GSCBranchNodes } from "../../../../../util/GSCUtil";
+import { GSCBranchNodes, GSCProcessNames } from "../../../../../util/GSCUtil";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
+import { ArgumentsExpression } from "../../../expression/args/ArgumentsExpression";
 import { StatementContents } from "../../../expression/StatementContents";
+import { FunctionDeclArgExpression } from "../../../expression/types/FunctionDeclArgExpression";
 import { FunctionDeclArgsExpression } from "../../../expression/types/FunctionDeclArgsExpression";
 import { StatementNode } from "../../StatementNode";
 
 export class FunctionDecl extends StatementNode {
-    //file: FilePathExpression = new FilePathExpression();
-	arguments: FunctionDeclArgsExpression = new FunctionDeclArgsExpression();
+	arguments: ArgumentsExpression = new ArgumentsExpression();
+	autoexec: boolean = false;
+	private: boolean = false;
+	name: string = "";
 
 	constructor() {
 		super();
 		// A function declaration is a branching statement node
 		super.expectsBranch = true;
+		super.expectedChildren = GSCBranchNodes.Standard;
 	}
 
     getContents(): StatementContents {
@@ -42,13 +47,13 @@ export class FunctionDecl extends StatementNode {
     getRule(): TokenRule[] {
         return [
             new TokenRule(TokenType.Keyword, KeywordTypes.Function),
+			new TokenRule(TokenType.Keyword, KeywordTypes.Autoexec, true),
+			new TokenRule(TokenType.Keyword, KeywordTypes.Private, true),
 			new TokenRule(TokenType.Name)
         ];
     }
 
 	parse(reader: ScriptReader): void {
-		// Once parsing, specify expected children to avoid callstack error
-		super.expectedChildren = GSCBranchNodes.Standard();
 
 		// Store keyword position
 		let keywordPosition = reader.readToken().getLocation();
@@ -56,19 +61,53 @@ export class FunctionDecl extends StatementNode {
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
 
+		// Check for autoexec, private, or both
+		const autoexecRule = new TokenRule(TokenType.Keyword, KeywordTypes.Autoexec);
+		const privateRule = new TokenRule(TokenType.Keyword, KeywordTypes.Private);
+
+		let token = reader.readToken();
+
+		if(autoexecRule.matches(token)) {
+			this.autoexec = true;
+			reader.index++;
+		} else if(privateRule.matches(token)) {
+			this.private = true;
+			reader.index++;
+		} else if(reader.readAhead().getType() === TokenType.Name) {
+			reader.diagnostic.pushDiagnostic(token.getLocation(), "Invalid modifier.", GSCProcessNames.Parser);
+			reader.index++;
+		}
+
+		token = reader.readToken();
+
+		if(privateRule.matches(token) && !this.private) {
+			this.private = true;
+			reader.index++;
+		}
+
 		// Validate the function name and add it to the function names list.
+		token = reader.readToken();
+
+		this.name = (<Token> token).contents;
 		reader.index++;
 
 		// Parse the function arguments expression.
-		this.arguments.parse(reader); 
+		try {
+			// Parse arguments
+			// Initialise
+			this.arguments.parse(reader);
 
-		// Parse the file path expression.
-		//this.file.parse(reader);
+			// Read argument by argument
+			while(!this.arguments.ended) {
+				const arg = new FunctionDeclArgExpression();
+				arg.parse(reader);
 
-		// Add this as a dependency
-		//if(this.file.filePath && this.file.location) {
-		//	reader.dependencies.push(new ScriptDependency(this.file.filePath, [keywordPosition[0], this.file.location[1]]));
-		//}
+				this.arguments.arguments.push(arg);
+				this.arguments.advance(reader);
+			}
+		} catch(e) {
+			reader.diagnostic.pushFromError(e);
+		}
 
 		// Use at the end of every subclass of a statement node.
 		super.parse(reader);

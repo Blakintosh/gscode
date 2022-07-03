@@ -17,21 +17,29 @@
  */
 
 import { DiagnosticSeverity } from "vscode";
-import { TokenType } from "../../../../../lexer/tokens/Token";
+import { Token, TokenType } from "../../../../../lexer/tokens/Token";
 import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
+import { SpecialTokenTypes } from "../../../../../lexer/tokens/types/SpecialToken";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
+import { ArgumentsExpression } from "../../../expression/args/ArgumentsExpression";
+import { LogicalExpression } from "../../../expression/logical/LogicalExpression";
 import { IASTNode } from "../../IASTNode";
 
 /**
  * This Macro Function Call class will only be used in the root branch of the AST.
  * The Function Call class will handle Macro & Script calls in nested branches.
  * 
+ * Macro functions ideally need to be inserted before parse - this is a bad solution
+ * 
  * Rule: {Name}(
  */
 export class MacroFunctionCall implements IASTNode {
+	functionName?: string;
+	argsExpression: ArgumentsExpression = new ArgumentsExpression();
+
 	getChildren(): IASTNode[] {
-		throw new Error("Method not implemented.");
+		return [];
 	}
 
 	matches(reader: ScriptReader): boolean {
@@ -43,8 +51,35 @@ export class MacroFunctionCall implements IASTNode {
 		);
 	}
 
-	parse(reader: ScriptReader, allowedChildren: IASTNode[] | undefined): void {
-		throw new Error("Method not implemented.");
+	parse(reader: ScriptReader, allowedChildrenFunc: (() => IASTNode[]) | undefined): void {
+		// Save function name
+		this.functionName = (<Token> reader.readToken()).contents;
+		reader.index++;
+
+		// Parse arguments
+		try {
+			// Initialise
+			this.argsExpression.parse(reader);
+	
+			// Read argument by argument
+			while(!this.argsExpression.ended) {
+				const arg = new LogicalExpression();
+				arg.parse(reader);
+	
+				this.argsExpression.arguments.push(arg);
+				this.argsExpression.advance(reader);
+			}
+		} catch(e) {
+			reader.diagnostic.pushFromError(e);
+		}
+
+		// Read a semicolon if it's there, otherwise we're done
+		const semiColon = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
+		if(semiColon.matches(reader.readToken())) {
+			reader.index++;
+		}
+
+		// Done
 	}
 
 }

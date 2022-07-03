@@ -46,7 +46,11 @@ export class UsingDirective extends StatementNode {
 
 		// Parse the file path expression.
 		this.file.appendExtension = reader.format;
-		this.file.parse(reader);
+		try {
+			this.file.parse(reader);
+		} catch(e) {
+			reader.diagnostic.pushFromError(e);
+		}
 
 		// Get semicolon if it exists.
 		const semicolon = super.getSemicolonToken(reader);

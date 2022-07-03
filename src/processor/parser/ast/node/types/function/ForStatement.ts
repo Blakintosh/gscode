@@ -19,51 +19,41 @@
 import { TokenType } from "../../../../../lexer/tokens/Token";
 import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
 import { PunctuationTypes } from "../../../../../lexer/tokens/types/Punctuation";
+import { SpecialTokenTypes } from "../../../../../lexer/tokens/types/SpecialToken";
 import { GSCBranchNodes, GSCProcessNames } from "../../../../../util/GSCUtil";
-import { ScriptDiagnostic } from "../../../../diagnostics/ScriptDiagnostic";
-import { ScriptError } from "../../../../diagnostics/ScriptError";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
+import { ForLoopExpression } from "../../../expression/loop/ForLoopExpression";
 import { StatementContents } from "../../../expression/StatementContents";
-import { ParenBooleanExpression } from "../../../expression/types/ParenBooleanExpression";
 import { StatementNode } from "../../StatementNode";
 
-export class ElseIfStatement extends StatementNode {
-	booleanExpression: ParenBooleanExpression = new ParenBooleanExpression();
+export class ForStatement extends StatementNode {
+	loopExpression: ForLoopExpression = new ForLoopExpression();
 
 	constructor() {
 		super();
-		// A function declaration is a branching statement node
+		// A for loop statement is a branching statement node
 		super.expectsBranch = true;
-		super.expectedChildren = GSCBranchNodes.Standard;
+		super.expectedChildren = GSCBranchNodes.Loop;
 	}
 
-    getContents(): StatementContents {
-        throw new Error("Method not implemented.");
-    }
+	getContents(): StatementContents {
+		throw new Error("Method not implemented.");
+	}
 
-    getRule(): TokenRule[] {
-        return [
-			new TokenRule(TokenType.Keyword, KeywordTypes.Else),
-            new TokenRule(TokenType.Keyword, KeywordTypes.If)
-        ];
-    }
+	getRule(): TokenRule[] {
+		return [
+			new TokenRule(TokenType.Keyword, KeywordTypes.For)
+		];
+	}
 
 	parse(reader: ScriptReader): void {
-		// No further validation required on the keywords, advance by two tokens.
-		reader.index += 2;
+		// No further validation required on the keyword, advance by one token.
+		reader.index++;
 
-		// Check we have an open parenthesis
-		const openParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
-		if(!openParen.matches(reader.readToken())) {
-			reader.diagnostic.pushDiagnostic(reader.readToken(-1).getLocation(), "Expected '('", GSCProcessNames.Parser);
-		} else {
-			reader.index++;
-		}
-
-		// Parse the condition expression
+		// Parse the loop expression
 		try {
-			this.booleanExpression.parse(reader);
+			this.loopExpression.parse(reader);
 		} catch(e) {
 			reader.diagnostic.pushFromError(e);
 		}

@@ -18,6 +18,7 @@
 
 import { Token, TokenType } from "../../../../lexer/tokens/Token";
 import { GSCProcessNames } from "../../../../util/GSCUtil";
+import { ScriptError } from "../../../diagnostics/ScriptError";
 import { ScriptReader } from "../../../logic/ScriptReader";
 import { StatementContents } from "../StatementContents";
 
@@ -31,13 +32,12 @@ export class NameExpression extends StatementContents {
      */
     parse(reader: ScriptReader): void {
         let token = reader.readToken();
+		reader.index++;
 
         // Check token could be a path
         if(token.getType() !== TokenType.Name) {
             // This token can't be a name, abort parsing
-            reader.diagnostic.pushDiagnostic(token.getLocation(), "Expected name.", GSCProcessNames.Parser);
-            reader.index++;
-            return;
+			throw new ScriptError(token.getLocation(), "Expected name.", GSCProcessNames.Parser);
         }
 
 		this.value = (<Token> token).contents;
@@ -45,6 +45,6 @@ export class NameExpression extends StatementContents {
 		// Store the location as it validates
         this.location = token.getLocation();
 
-        reader.index++; // Done
+        // Done
     }
 }

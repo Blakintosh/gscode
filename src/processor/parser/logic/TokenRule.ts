@@ -20,13 +20,15 @@ import { IToken } from "../../lexer/tokens/IToken";
 import { TokenType } from "../../lexer/tokens/Token";
 
 export class TokenRule {
-    type: TokenType;
+    readonly type: TokenType;
     // Here the "string" should actually be a string enum
-    specificType?: string;
+    readonly specificType?: string;
+	readonly optional: boolean;
 
-    constructor(type: TokenType, specificType: string | undefined = undefined) {
+    constructor(type: TokenType, specificType: string | undefined = undefined, optional: boolean = false) {
         this.type = type;
         this.specificType = specificType;
+		this.optional = optional;
     }
 
     matches(token: IToken): boolean {

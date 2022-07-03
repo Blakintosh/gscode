@@ -22,6 +22,7 @@ import { TokenType } from "../../../lexer/tokens/Token";
 import { PunctuationTypes } from "../../../lexer/tokens/types/Punctuation";
 import { SpecialTokenTypes } from "../../../lexer/tokens/types/SpecialToken";
 import { GSCProcessNames } from "../../../util/GSCUtil";
+import { ScriptError } from "../../diagnostics/ScriptError";
 import { ScriptReader } from "../../logic/ScriptReader";
 import { TokenRule } from "../../logic/TokenRule";
 import { StatementContents } from "../expression/StatementContents";
@@ -39,7 +40,7 @@ export abstract class StatementNode implements IASTNode {
     child?: IASTNode;
 	// For subclasses that open branches: these should be defined in their constructor
     expectsBranch: boolean = false;
-    expectedChildren?: IASTNode[];
+    expectedChildren?: () => IASTNode[];
 
     /**
      * Gets the child Branch of this statement if it exists.
@@ -56,10 +57,13 @@ export abstract class StatementNode implements IASTNode {
      */
     matches(parser: ScriptReader): boolean {
         const rule = this.getRule();
+		let offset = 0;
         for(let i = 0; i < rule.length; i++) {
-            if(!rule[i].matches(parser.readToken(i))) {
+            if(!rule[i].matches(parser.readToken(i - offset)) && !rule[i].optional) {
                 return false;
-            }
+            } else if(!rule[i].matches(parser.readToken(i - offset))) {
+				offset++;
+			}
         }
         return true;
     }

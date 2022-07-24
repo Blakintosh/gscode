@@ -41,6 +41,7 @@ import { ForStatement } from "../parser/ast/node/types/function/ForStatement";
 import { ForeachStatement } from "../parser/ast/node/types/function/ForeachStatement";
 import { BreakStatement } from "../parser/ast/node/types/loop/BreakStatement";
 import { ContinueStatement } from "../parser/ast/node/types/loop/ContinueStatement";
+import { WaitStatement } from "../parser/ast/node/types/function/WaitStatement";
 
 export enum FunctionFlag {
 	None = 0, // All OK
@@ -78,6 +79,7 @@ export const GSCBranchNodes = {
 			new ForStatement(),
 			new ForeachStatement(),
 			new ReturnStatement(),
+			new WaitStatement(),
 			new DirectFunctionCall()
 		);
 	},

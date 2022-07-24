@@ -119,10 +119,6 @@ export class DirectFunctionCall implements IASTNode {
 	 * @returns true if matches, false otherwise
 	 */
 	matches(reader: ScriptReader): boolean {
-		if(reader.wouldBeAtEof(2)) {
-			return false;
-		}
-
 		const baseIndex = reader.index;
 		
 		let token = reader.readToken();

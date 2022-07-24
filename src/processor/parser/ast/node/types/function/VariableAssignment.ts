@@ -34,7 +34,6 @@ import { IASTNode } from "../../IASTNode";
 
 export class VariableAssignment implements IASTNode {
 	assignmentExpression: AssignmentExpression = new AssignmentExpression();
-	valueExpression: LogicalExpression = new LogicalExpression();
 
 	getChildren(): IASTNode[] {
 		throw new Error("Method not implemented.");

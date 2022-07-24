@@ -65,20 +65,12 @@ export class VariableExpression extends StatementContents {
 	namespace?: string;
 	// Each VariableProperty in this sequence
 	components: VariableProperty[] = [];
+	// Target entity
+	target?: Token;
 
 	private nextTokenIsAccessor(reader: ScriptReader): boolean {
 		const dot = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.Accessor);
 		return dot.matches(reader.readToken());
-	}
-
-	private nextTokenIsAssignment(reader: ScriptReader): boolean {
-		const equals = new TokenRule(TokenType.Operator, OperatorType.Assignment);
-		return equals.matches(reader.readToken());
-	}
-
-	private nextTokenIsCloseParen(reader: ScriptReader): boolean {
-		const closeParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.CloseParen);
-		return closeParen.matches(reader.readToken());
 	}
 
 	private parseFunctionCall(reader: ScriptReader, args: ArgumentsExpression): void {
@@ -126,18 +118,31 @@ export class VariableExpression extends StatementContents {
 		const openParen = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenParen);
 		const openBracket = new TokenRule(TokenType.Punctuation, PunctuationTypes.OpenBracket);
 
-		// Check for a namespace
-		const firstToken = reader.readToken();
+		// See what the first token is doing
+		let currToken = reader.readToken();
 		const namespaceCall = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.NamespaceCall);
 
-		if(firstToken.getType() === TokenType.Name && namespaceCall.matches(reader.readAhead())) {
-			this.namespace = (<Token> firstToken).contents;
+		// Check for a called on name
+		if(currToken.getType() === TokenType.Name && reader.readAhead().getType() === TokenType.Name && !namespaceCall.matches(reader.readAhead())) {
+			this.target = <Token> currToken;
+			console.log("target found");
+			reader.index++;
+		}
+
+
+		// Check for a namespace
+		currToken = reader.readToken();
+
+		if(currToken.getType() === TokenType.Name && namespaceCall.matches(reader.readAhead())) {
+			this.namespace = (<Token> currToken).contents;
+			console.log("namespace found");
 			reader.index += 2;
 		}
 
 		do {
 			// Attempt to parse a name
 			const componentName = <Token> reader.readToken();
+			console.log(componentName.contents);
 			reader.index++;
 
 			if(componentName.getType() !== TokenType.Name) {
@@ -146,17 +151,18 @@ export class VariableExpression extends StatementContents {
 			}
 
 			// Now look for an array key or function call
-			if(!this.nextTokenIsAccessor(reader) && !this.nextTokenIsAssignment(reader) && !this.nextTokenIsCloseParen(reader)) {
-				const puncToken = reader.readToken();
-				if(openParen.matches(puncToken)) {
+			const nextToken = reader.readToken();
+			if(openParen.matches(nextToken) || openBracket.matches(nextToken)) {
+				if(openParen.matches(nextToken)) {
 					// Function call
+
 					const args = new ArgumentsExpression();
 
 					this.parseFunctionCall(reader, args);
 
 					// Push this to the component array
 					this.components.push(new VariableProperty(componentName.contents, args));
-				} else if(openBracket.matches(puncToken)) {
+				} else if(openBracket.matches(nextToken)) {
 					// Array key
 					const key = this.parseArrayKey(reader);
 

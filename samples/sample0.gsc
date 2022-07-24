@@ -1,4 +1,7 @@
-/**
+function test(fucked) {
+	fu::bar(true, false);
+	marv::getObesityLevel(true, false);
+	foo::bar(true);
 
 	level.marv_pooed_himself = true;
 	swan.foo = 2;
@@ -6,12 +9,6 @@
 	gosling(self, undefined).fucked = 200;
 	test = 2;
 	marvin[test + 3] = 20;
-*/
-
-function test(fucked = true) {
-	fu::bar(true, false);
-	marv::getObesityLevel(true, false);
-	foo::bar(true);
 
 	marv = 2;
 
@@ -25,5 +22,29 @@ function test(fucked = true) {
 		continue;
 	}
 
+	duck = duck++;
+
+	foo = ++duck;
+
+	fucked = true;
+	shitted = !fucked;
+
+	dread = (i + 5)++ ^ foo << 5;
+
+	self zm_foo::smoke();
+	self smoke(1);
+	self zm_foo::take_a_dump(10);
+	foo();
+	zm_foo::foo();
+	types = array::randomize(level.zombie_types);
+	types = duck::randomize();
+	types = self randomize(foo);
+	types = self duck::randomize(foo);
+
+	array::randomize(level.zombie_types);
+	zm_foo::smoke();
+	smoke();
+	
 	return 1;
 }
+

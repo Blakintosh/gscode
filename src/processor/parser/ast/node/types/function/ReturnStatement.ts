@@ -23,6 +23,7 @@ import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
 import { LogicalExpression } from "../../../expression/logical/LogicalExpression";
 import { StatementNode } from "../../StatementNode";
+import { SpecialTokenTypes } from "../../../../../lexer/tokens/types/SpecialToken";
 
 export class ReturnStatement extends StatementNode {
 	valueExpression: LogicalExpression = new LogicalExpression();
@@ -41,11 +42,16 @@ export class ReturnStatement extends StatementNode {
 		// No further validation required on the keyword, advance by one token.
 		reader.index++;
 
-		// Parse the value expression
-		try {
-			this.valueExpression.parse(reader);
-		} catch(e) {
-			reader.diagnostic.pushFromError(e);
+		const semiColonMatcher = new TokenRule(TokenType.SpecialToken, SpecialTokenTypes.EndStatement);
+
+		if(!semiColonMatcher.matches(reader.readToken()))
+		{
+			// Parse the value expression
+			try {
+				this.valueExpression.parse(reader);
+			} catch(e) {
+				reader.diagnostic.pushFromError(e);
+			}
 		}
 
 		// Use at the end of every subclass of a statement node.

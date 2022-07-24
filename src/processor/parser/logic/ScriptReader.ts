@@ -91,32 +91,14 @@ export class ScriptReader {
 	}
 
 	atEof(): boolean {
-		return this.index >= this.tokens.length;
+		let i = this.index;
+		while(this.tokens[i] && this.tokens[i].getType() === TokenType.Comment) {
+			i++;
+		}
+		return i >= this.tokens.length;
 	}
 
 	wouldBeAtEof(offset: number): boolean {
 		return this.index + offset >= this.tokens.length;
 	}
-
-	/*getVar(name: string): ScriptVariable | undefined {
-		for(const scope of this.scopeStack) {
-			let variable = scope.vars.find(v => v.name === name);
-			if(variable) {
-				return variable;
-			}
-		}
-		return undefined;
-	}
-
-	pushVar(variable: ScriptVariable): void {
-		this.scopeStack[this.scopeStack.length - 1].vars.push(variable);
-	}
-
-	increaseScope(): void {
-		this.scopeStack.push(new ScriptScope());
-	}
-
-	decreaseScope(): void {
-		this.scopeStack.pop();
-	}*/
 }

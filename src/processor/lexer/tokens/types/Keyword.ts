@@ -43,7 +43,6 @@ export enum KeywordTypes {
 	WaittillFrameEnd = "waittillframeend",
 	WaittillMatch = "waittillmatch",
 	WaitRealTime = "waitrealtime",
-	Waittill = "waittill",
 	Wait = "wait",
 	Switch = "switch",
 	Case = "case",
@@ -52,8 +51,6 @@ export enum KeywordTypes {
 	Continue = "continue",
 	False = "false",
 	True = "true",
-	Notify = "notify",
-	Endon = "endon",
 	AssertMsg = "assertmsg",
 	Assert = "assert",
 	Constructor = "constructor",
@@ -61,7 +58,6 @@ export enum KeywordTypes {
 	Autoexec = "autoexec",
 	Private = "private",
 	Const = "const",
-	IsDefined = "isdefined",
 	VectorScale = "vectorscale",
 	GetTime = "gettime",
 	ProfileStart = "profilestart",
@@ -103,6 +99,6 @@ export class Keyword extends Token {
 	}
 
 	getRegex(): RegExp {
-		return /(classes|function|var|return|thread|undefined|class|anim|#if|#elif|#else|if|else|do|while|foreach|for|in|new|waittillframeend|waittillmatch|waitrealtime|waittill|wait|switch|case|default|break|continue|false|true|notify|endon|assertmsg|assert|constructor|destructor|autoexec|private|const|isdefined|vectorscale|gettime|profilestart|profilestop|#using_animtree|#animtree|#using|#insert|#namespace|#precache|#define|size)(?=\W)/;
+		return /(classes|function|var|return|thread|undefined|class|anim|#if|#elif|#else|if|else|do|while|foreach|for|in|new|waittillframeend|waittillmatch|waitrealtime|wait|switch|case|default|break|continue|false|true|assertmsg|assert|constructor|destructor|autoexec|private|const|vectorscale|gettime|profilestart|profilestop|#using_animtree|#animtree|#using|#insert|#namespace|#precache|#define|size)(?=\W)/;
 	}
 }

@@ -27,7 +27,7 @@ import { TokenRule } from "../../../logic/TokenRule";
 import { LogicalExpression } from "../logical/LogicalExpression";
 import { StatementContents } from "../StatementContents";
 import { AssignmentExpression } from "../types/AssignmentExpression";
-import { NameExpression } from "../types/NameExpression";
+import { NameExpression } from "../data/NameExpression";
 import { VariableExpression } from "../types/VariableExpression";
 
 export class ForeachLoopExpression extends StatementContents {

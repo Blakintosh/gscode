@@ -21,7 +21,7 @@ import { KeywordTypes } from "../../../../../lexer/tokens/types/Keyword";
 import { ScriptReader } from "../../../../logic/ScriptReader";
 import { TokenRule } from "../../../../logic/TokenRule";
 import { StatementContents } from "../../../expression/StatementContents";
-import { NameExpression } from "../../../expression/types/NameExpression";
+import { NameExpression } from "../../../expression/data/NameExpression";
 import { StatementNode } from "../../StatementNode";
 
 export class NamespaceDirective extends StatementNode {

@@ -1,0 +1,3 @@
+[submodule "src/lsp"]
+	path = src/lsp
+	url = https://github.com/Blakintosh/GSCode.NET

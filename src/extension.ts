@@ -48,34 +48,34 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	// Register the completion providers
-	vscode.languages.registerCompletionItemProvider("gsc", new ScriptCompletionItemProvider());
-	vscode.languages.registerCompletionItemProvider("csc", new ScriptCompletionItemProvider());
+	//vscode.languages.registerCompletionItemProvider("gsc", new ScriptCompletionItemProvider());
+	//vscode.languages.registerCompletionItemProvider("csc", new ScriptCompletionItemProvider());
 
 	// Register the hover providers
-	vscode.languages.registerHoverProvider('gsc', new ScriptHoverProvider());
-	vscode.languages.registerHoverProvider('csc', new ScriptHoverProvider());
+	//vscode.languages.registerHoverProvider('gsc', new ScriptHoverProvider());
+	//vscode.languages.registerHoverProvider('csc', new ScriptHoverProvider());
 	
 	// Diagnostic provider for GSCode
-	let diagnosticCollection: vscode.DiagnosticCollection = vscode.languages.createDiagnosticCollection('gsc');
+	//let diagnosticCollection: vscode.DiagnosticCollection = vscode.languages.createDiagnosticCollection('gsc');
 	
 
-	semantics.provide();
+	//semantics.provide();
 
 	context.subscriptions.push(disposable);
 
-	context.subscriptions.push(diagnosticCollection);
+	//context.subscriptions.push(diagnosticCollection);
 
 	// Refresh the loaded script every time it's edited or active editor changes
 	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(event => {
 		if (event) {
-			ScriptProcessor.refresh(event.document);
-			ScriptDiagnosticProvider.provideDiagnostics(event.document, diagnosticCollection);
+			//ScriptProcessor.refresh(event.document);
+			//ScriptDiagnosticProvider.provideDiagnostics(event.document, diagnosticCollection);
 		}
 	}));
 	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor => {
 		if (editor) {
-			ScriptProcessor.refresh(editor.document);
-			ScriptDiagnosticProvider.provideDiagnostics(editor.document, diagnosticCollection);
+			//ScriptProcessor.refresh(editor.document);
+			//ScriptDiagnosticProvider.provideDiagnostics(editor.document, diagnosticCollection);
 		}
 	}));
 

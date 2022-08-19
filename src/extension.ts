@@ -26,6 +26,13 @@ import { ScriptProcessor } from './languageFeatures/ScriptProcessor';
 import { ScriptDiagnosticProvider } from './languageFeatures/ScriptDiagnosticProvider';
 import { GSCUtil } from './processor/util/GSCUtil';
 
+import {
+	LanguageClient,
+	LanguageClientOptions,
+	ServerOptions,
+	TransportKind
+} from 'vscode-languageclient/node';
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -46,6 +53,10 @@ export function activate(context: vscode.ExtensionContext) {
 			
 		}
 	});
+
+	/*let serverOptions: ServerOptions = {
+		//run: { command: "dotnet", }
+	};*/
 
 	// Register the completion providers
 	//vscode.languages.registerCompletionItemProvider("gsc", new ScriptCompletionItemProvider());

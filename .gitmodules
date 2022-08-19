@@ -1,6 +1,3 @@
-[submodule "src/lsp"]
-	path = lsp
-	url = https://github.com/Blakintosh/GSCode.NET
-[submodule "lsp"]
+[submodule "server"]
 	path = lsp
 	url = https://github.com/Blakintosh/GSCode.NET.git

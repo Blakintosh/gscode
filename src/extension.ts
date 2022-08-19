@@ -19,12 +19,6 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import * as semantics from './semantics';
-import {ScriptCompletionItemProvider} from './languageFeatures/ScriptCompletionItemProvider';
-import { ScriptHoverProvider } from './languageFeatures/ScriptHoverProvider';
-import { ScriptProcessor } from './languageFeatures/ScriptProcessor';
-import { ScriptDiagnosticProvider } from './languageFeatures/ScriptDiagnosticProvider';
-import { GSCUtil } from './processor/util/GSCUtil';
 
 import {
 	LanguageClient,
@@ -89,9 +83,6 @@ export function activate(context: vscode.ExtensionContext) {
 			//ScriptDiagnosticProvider.provideDiagnostics(editor.document, diagnosticCollection);
 		}
 	}));
-
-	// Checks the user configuration is all OK
-	GSCUtil.startupValidation();
 }
 
 // this method is called when your extension is deactivated

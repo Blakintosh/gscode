@@ -108,8 +108,6 @@
 		"typescript": "^4.5.5"
 	},
 	"dependencies": {
-		"async-wait-until": "^2.0.12",
-		"functional-red-black-tree": "^1.0.1",
 		"stack-typescript": "^1.0.4",
 		"vscode-languageclient": "^8.0.2",
 		"vscode-languageserver": "^8.0.2",

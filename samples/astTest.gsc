@@ -1,6 +1,21 @@
-#define FOO(_a) return !_a
 
-function foo(bar = true)
+
+#namespace example;
+
+function main()
 {
-	return !1;
+	i = 0;
+
+	while(i < 10)
+	{
+		iprintlnbold("yes!");
+		if(RandomIntRange(2, 5) == 3)
+		{
+			i++;
+		}
+		else
+		{
+			i--;
+		}
+	}
 }

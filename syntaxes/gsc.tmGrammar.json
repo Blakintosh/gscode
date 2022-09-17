@@ -222,9 +222,10 @@
         },
         "function-pointer": {
             "name": "entity.name.function.pointer.gsc",
-            "match": "\\&(?:((?:[[:alpha:]]|_)\\w+)(::))?(?:[[:alnum:]]|_)+?\\b",
+            "match": "(\\&)(?:((?:[[:alpha:]]|_)\\w+)(::))?(?:[[:alnum:]]|_)+?\\b",
             "captures": {
-                "1": { "name": "entity.name.scope-resolution.gsc" }
+				"1": { "name": "keyword.operator.function-pointer.gsc" },
+                "2": { "name": "entity.name.scope-resolution.gsc" }
             }
         },
         "inbuilt-function":
@@ -246,8 +247,9 @@
         "function": {	
             "name": "meta.function.gsc",
 			"comment": "match regular function like: function myFunc(arg) { É }",
-			"match": "\\b(function)(\\s[a-zA-Z_$]\\w*)?\\s+([a-zA-Z_$]\\w*)?\\s*(\\()(.*?)(\\))",
-			"captures": {
+			"begin": "\\b(function)(\\s[a-zA-Z_$]\\w*)?\\s+([a-zA-Z_$]\\w*)?\\s*(\\()",
+			"end": "(?!\\G)(?<=\\))",
+			"beginCaptures": {
                 "1": { "name": "storage.type.function.gsc" },
                 "2": {
                     "patterns": [
@@ -258,27 +260,26 @@
                     ]
                 },
                 "3": { "name": "entity.name.function.gsc" },
-                "4": { "name": "punctuation.definition.parameters.begin.gsc" },
-                "5": { 
-                    "name": "variable.parameter.function.gsc",
-                    "patterns": [
-                        {
-                            "include": "#function-parameter-defaults"
-                        },
-                        {
-                            "include": "#expression"
-                        },
-                        {
-                            "include": "#function-vararg"
-                        },
-                        {
-                            "name": "keyword.operator.parameter-comma.gsc",
-                            "match": ","
-                        }
-                    ]
-                },
-                "6": { "name": "punctuation.definition.parameters.end.gsc" }
-            }
+                "4": { "name": "punctuation.definition.parameters.begin.gsc" }
+            },
+			"endCaptures": {
+				"1": { "name": "punctuation.definition.parameters.end.gsc" }
+			},
+			"patterns": [
+				{
+					"include": "#function-parameter-defaults"
+				},
+				{
+					"include": "#expression"
+				},
+				{
+					"include": "#function-vararg"
+				},
+				{
+					"name": "keyword.operator.parameter-comma.gsc",
+					"match": ","
+				}
+			]
         },
         "line-comment": 
         {

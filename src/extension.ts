@@ -1,89 +1,75 @@
-/**
-	GSCode Language Extension for Visual Studio Code
-    Copyright (C) 2022 Blakintosh
+/* --------------------------------------------------------------------------------------------
+ * Copyright (c) Microsoft Corporation. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ * ------------------------------------------------------------------------------------------ */
+// tslint:disable
+"use strict";
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+import * as path from "path";
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
-import * as vscode from 'vscode';
-
+import { workspace, Disposable, ExtensionContext } from "vscode";
 import {
-	LanguageClient,
-	LanguageClientOptions,
-	ServerOptions,
-	TransportKind
-} from 'vscode-languageclient/node';
+    LanguageClient,
+    LanguageClientOptions,
+    SettingMonitor,
+    ServerOptions,
+    TransportKind,
+    InitializeParams,
+    StreamInfo,
+    createServerPipeTransport,
+} from "vscode-languageclient/node";
+import { Trace, createClientPipeTransport } from "vscode-jsonrpc/node";
+import { createConnection } from "net";
 
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-	
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "gsc" is now active!');
+let client: LanguageClient;
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('gsc.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		let env = process.env["TA_TOOLS_PATH"];
-		if(env !== undefined) {
-			vscode.window.showInformationMessage("test "+env);
-			
-		}
-	});
+export function activate(context: ExtensionContext) {
+    // The server is implemented in node
+    let serverExe = "dotnet";
 
-	/*let serverOptions: ServerOptions = {
-		//run: { command: "dotnet", }
-	};*/
+    // If the extension is launched in debug mode then the debug server options are used
+    // Otherwise the run options are used
+    let serverOptions: ServerOptions = {
+        // run: { command: serverExe, args: ['-lsp', '-d'] },
+        run: {
+            command: serverExe,
+            args: ["C:/Users/Blak/source/repos/GSCode.NET/GSCode.NET/bin/Debug/net6.0/GSCode.NET.dll"],
+        },
+        // debug: { command: serverExe, args: ['-lsp', '-d'] }
+        debug: {
+            command: serverExe,
+            args: ["C:/Users/Blak/source/repos/GSCode.NET/GSCode.NET/bin/Debug/net6.0/GSCode.NET.dll"],
+        },
+    };
 
-	// Register the completion providers
-	//vscode.languages.registerCompletionItemProvider("gsc", new ScriptCompletionItemProvider());
-	//vscode.languages.registerCompletionItemProvider("csc", new ScriptCompletionItemProvider());
+    // Options to control the language client
+    let clientOptions: LanguageClientOptions = {
+        // Register the server for plain text documents
+        documentSelector: [
+            {
+                pattern: "**/*.gsc",
+            },
+        ],
+        progressOnInitialization: true,
+        synchronize: {
+            // Synchronize the setting section 'languageServerExample' to the server
+            configurationSection: "gsc",
+            fileEvents: workspace.createFileSystemWatcher("**/*.gsc"),
+        },
+    };
 
-	// Register the hover providers
-	//vscode.languages.registerHoverProvider('gsc', new ScriptHoverProvider());
-	//vscode.languages.registerHoverProvider('csc', new ScriptHoverProvider());
-	
-	// Diagnostic provider for GSCode
-	//let diagnosticCollection: vscode.DiagnosticCollection = vscode.languages.createDiagnosticCollection('gsc');
-	
+    // Create the language client and start the client.
+    client = new LanguageClient("gsc", "GSCode.NET Language Server", serverOptions, clientOptions);
 
-	//semantics.provide();
-
-	context.subscriptions.push(disposable);
-
-	//context.subscriptions.push(diagnosticCollection);
-
-	// Refresh the loaded script every time it's edited or active editor changes
-	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(event => {
-		if (event) {
-			//ScriptProcessor.refresh(event.document);
-			//ScriptDiagnosticProvider.provideDiagnostics(event.document, diagnosticCollection);
-		}
-	}));
-	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor => {
-		if (editor) {
-			//ScriptProcessor.refresh(editor.document);
-			//ScriptDiagnosticProvider.provideDiagnostics(editor.document, diagnosticCollection);
-		}
-	}));
+    // Push the disposable to the context's subscriptions so that the
+    // client can be deactivated on extension deactivation
+    client.start();
 }
 
-// this method is called when your extension is deactivated
-export function deactivate() {}
+
+export function deactivate(): Thenable<void> | undefined {
+	if (!client) {
+		return undefined;
+	}
+	return client.stop();
+}

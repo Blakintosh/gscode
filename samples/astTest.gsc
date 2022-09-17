@@ -5,6 +5,7 @@
 function main()
 {
 	i = 0;
+	self.foobar = 39;
 
 	while(i < 10)
 	{
@@ -16,6 +17,9 @@ function main()
 		else
 		{
 			i--;
+			foo += 5;
+			self thread foo();
+			thread mallard();
 		}
 	}
 }

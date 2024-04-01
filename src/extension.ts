@@ -21,11 +21,18 @@ import {
 import { Trace, createClientPipeTransport } from "vscode-jsonrpc/node";
 import { createConnection } from "net";
 
+require("dotenv").config();
+
 let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
     // The server is implemented in node
     let serverExe = "dotnet";
+
+	const serverLocation = process.env.LSP_LOCATION;
+	if (!serverLocation) {
+		throw new Error("LSP_LOCATION environment variable is not set. Please set it to the location of the GSCode.NET Language Server in .env.");
+	}
 
     // If the extension is launched in debug mode then the debug server options are used
     // Otherwise the run options are used
@@ -33,12 +40,12 @@ export function activate(context: ExtensionContext) {
         // run: { command: serverExe, args: ['-lsp', '-d'] },
         run: {
             command: serverExe,
-            args: ["C:/Users/Blak/source/repos/GSCode.NET/GSCode.NET/bin/Debug/net6.0/GSCode.NET.dll"],
+            args: [serverLocation],
         },
         // debug: { command: serverExe, args: ['-lsp', '-d'] }
         debug: {
             command: serverExe,
-            args: ["C:/Users/Blak/source/repos/GSCode.NET/GSCode.NET/bin/Debug/net6.0/GSCode.NET.dll"],
+            args: [serverLocation],
         },
     };
 

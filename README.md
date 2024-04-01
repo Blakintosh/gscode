@@ -2,8 +2,6 @@
 
 A language extension that provides full support for Call of Duty: Black Ops III's GSC scripting language in Visual Studio Code, including IntelliSense.
 
-This is the README for your extension "gsc". After writing up a brief description, we recommend including the following sections.
-
 ## TODO
 ### Syntax Highlighting
 * `#if`, `#elif`, `#else`, `#endif` etc.

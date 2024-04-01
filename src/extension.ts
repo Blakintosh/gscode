@@ -7,7 +7,7 @@
 
 import * as path from "path";
 
-import { workspace, Disposable, ExtensionContext } from "vscode";
+import { workspace, Disposable, ExtensionContext, window } from "vscode";
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -27,18 +27,24 @@ export function activate(context: ExtensionContext) {
     // The server is implemented in node
     let serverExe = "dotnet";
 
+	const serverModule = context.asAbsolutePath(
+		path.join('resources', 'GSCode.NET.dll')
+	);
+
     // If the extension is launched in debug mode then the debug server options are used
     // Otherwise the run options are used
     let serverOptions: ServerOptions = {
         // run: { command: serverExe, args: ['-lsp', '-d'] },
         run: {
             command: serverExe,
-            args: ["C:/Users/Blak/source/repos/GSCode.NET/GSCode.NET/bin/Debug/net6.0/GSCode.NET.dll"],
+			//args: [serverModule],
+            args: ["C:/Users/Blak/source/repos/GSCode.NET/GSCode.NET/bin/Debug/net7.0/GSCode.NET.dll"],
         },
         // debug: { command: serverExe, args: ['-lsp', '-d'] }
         debug: {
             command: serverExe,
-            args: ["C:/Users/Blak/source/repos/GSCode.NET/GSCode.NET/bin/Debug/net6.0/GSCode.NET.dll"],
+			//args: [serverModule],
+            args: ["C:/Users/Blak/source/repos/GSCode.NET/GSCode.NET/bin/Debug/net7.0/GSCode.NET.dll"],
         },
     };
 
@@ -47,19 +53,34 @@ export function activate(context: ExtensionContext) {
         // Register the server for plain text documents
         documentSelector: [
             {
-                pattern: "**/*.gsc",
+                pattern: "**/*.{gsc,csc}",
             },
         ],
         progressOnInitialization: true,
         synchronize: {
             // Synchronize the setting section 'languageServerExample' to the server
             configurationSection: "gsc",
-            fileEvents: workspace.createFileSystemWatcher("**/*.gsc"),
+            fileEvents: workspace.createFileSystemWatcher("**/*.{gsc,csc}"),
         },
     };
 
     // Create the language client and start the client.
     client = new LanguageClient("gsc", "GSCode.NET Language Server", serverOptions, clientOptions);
+
+    let x = { c: false };
+    let a = { b: x };
+
+    // if(a.b.c) {
+    //     a.b.c = false;
+    // }
+
+    if(a.b.c) {
+        console.log("a.b.c is true");
+        return false;
+    }
+
+    
+    console.log(a.b);
 
     // Push the disposable to the context's subscriptions so that the
     // client can be deactivated on extension deactivation

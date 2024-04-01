@@ -1,8 +1,14 @@
 {
 	"name": "gsc",
-	"displayName": "GSCode",
-	"description": "",
+	"displayName": "GSCode alpha",
+	"description": "closed alpha",
+	"icon": "icons/gscode-alpha.png",
 	"version": "0.0.1",
+	"publisher": "blakintosh",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Blakintosh/gscode"
+	},
 	"engines": {
 		"vscode": "^1.65.0"
 	},
@@ -15,6 +21,15 @@
 	],
 	"main": "./out/extension.js",
 	"contributes": {
+        "semanticTokenScopes": [
+            {
+                "language": "gsc",
+                "scopes": {
+                    "parameter.defaultLibrary": ["variable.language"],
+                    "variable.defaultLibrary": ["variable.language"]
+                }
+            }
+        ],
 		"languages": [
 			{
 				"id": "gsc",
@@ -24,7 +39,11 @@
 				"extensions": [
 					".gsc"
 				],
-				"configuration": "./language-configuration.json"
+				"configuration": "./language-configuration.json",
+				"icon": {
+					"dark": "./icons/file-gsc.png",
+					"light": "./icons/file-gsc.png"
+				}
 			},
 			{
 				"id": "csc",
@@ -34,7 +53,11 @@
 				"extensions": [
 					".csc"
 				],
-				"configuration": "./language-configuration.json"
+				"configuration": "./language-configuration.json",
+				"icon": {
+					"dark": "./icons/file-csc.png",
+					"light": "./icons/file-csc.png"
+				}
 			},
 			{
 				"id": "gsh",
@@ -44,7 +67,11 @@
 				"extensions": [
 					".gsh"
 				],
-				"configuration": "./language-configuration.json"
+				"configuration": "./language-configuration.json",
+				"icon": {
+					"dark": "./icons/file-gsh.png",
+					"light": "./icons/file-gsh.png"
+				}
 			}
 		],
 		"commands": [

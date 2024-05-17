@@ -21,15 +21,19 @@
 	],
 	"main": "./out/extension.js",
 	"contributes": {
-        "semanticTokenScopes": [
-            {
-                "language": "gsc",
-                "scopes": {
-                    "parameter.defaultLibrary": ["variable.language"],
-                    "variable.defaultLibrary": ["variable.language"]
-                }
-            }
-        ],
+		"semanticTokenScopes": [
+			{
+				"language": "gsc",
+				"scopes": {
+					"parameter.defaultLibrary": [
+						"variable.language"
+					],
+					"variable.defaultLibrary": [
+						"variable.language"
+					]
+				}
+			}
+		],
 		"languages": [
 			{
 				"id": "gsc",

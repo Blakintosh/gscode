@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "GSCode.CLI": {
+      "commandName": "Project",
+      "commandLineArgs": "-p \"I:\\SteamLibrary\\steamapps\\common\\Call of Duty Black Ops III\\usermaps\\zm_karelia\\scripts\\shared\\scene_shared.gsc\""
+    }
+  }
+}

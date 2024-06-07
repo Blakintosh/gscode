@@ -20,7 +20,7 @@ import {
 } from "vscode-languageclient/node";
 import { Trace, createClientPipeTransport } from "vscode-jsonrpc/node";
 import { createConnection } from "net";
-const dotenv = require("dotenv");
+import dotenv = require("dotenv");
 
 let client: LanguageClient;
 
@@ -45,14 +45,15 @@ export function activate(context: ExtensionContext) {
         // run: { command: serverExe, args: ['-lsp', '-d'] },
         run: {
             command: serverExe,
-			//args: [serverModule],
-            args: [serverLocation],
+			// args: [serverModule],
+            // args: [serverLocation],
+            // args: [path.join(serverLocation, 'GSCode.NET.dll')],
         },
         // debug: { command: serverExe, args: ['-lsp', '-d'] }
         debug: {
             command: serverExe,
-			//args: [serverModule],
-            args: [serverLocation],
+			// args: [serverModule],
+            args: [path.join(serverLocation, 'GSCode.NET.exe')],
         },
     };
 
@@ -69,26 +70,11 @@ export function activate(context: ExtensionContext) {
             // Synchronize the setting section 'languageServerExample' to the server
             configurationSection: "gsc",
             fileEvents: workspace.createFileSystemWatcher("**/*.{gsc,csc}"),
-        },
+        }, 
     };
 
     // Create the language client and start the client.
     client = new LanguageClient("gsc", "GSCode.NET Language Server", serverOptions, clientOptions);
-
-    let x = { c: false };
-    let a = { b: x };
-
-    // if(a.b.c) {
-    //     a.b.c = false;
-    // }
-
-    if(a.b.c) {
-        console.log("a.b.c is true");
-        return false;
-    }
-
-    
-    console.log(a.b);
 
     // Push the disposable to the context's subscriptions so that the
     // client can be deactivated on extension deactivation

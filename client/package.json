@@ -113,7 +113,17 @@
 					"type": "string",
 					"default": "",
 					"markdownDescription": "Specify an alternative folder path for shared scripts. This will override the default setting of using Black Ops III's mod tools path plus `share/raw/scripts`."
-				}
+				},
+				"gsc.trace.server": {
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "messages",
+                        "verbose"
+                    ],
+                    "default": "verbose",
+                    "description": "Traces the communication between VSCode and the GSCode service."
+                }
 			}
 		}
 	},
@@ -145,5 +155,8 @@
 		"vscode-languageserver": "^8.0.2",
 		"vscode-nls": "^5.0.0",
 		"vscode-textmate": "^6.0.0"
+	},
+	"gsc.trace.server": {
+		"default": "verbose"
 	}
 }

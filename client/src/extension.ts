@@ -31,7 +31,7 @@ export function activate(context: ExtensionContext) {
     dotenv.config({ path: path.join(context.extensionPath, ".env") });
 
 	const serverModule = context.asAbsolutePath(
-		path.join('resources', 'GSCode.NET.dll')
+		path.join('..\\server\\GSCode.NET\\bin\\Debug\\net8.0', 'GSCode.NET.dll')
 	);
 
 	const serverLocation = process.env.LSP_LOCATION;
@@ -45,15 +45,15 @@ export function activate(context: ExtensionContext) {
         // run: { command: serverExe, args: ['-lsp', '-d'] },
         run: {
             command: serverExe,
-			// args: [serverModule],
+			args: [serverModule],
             // args: [serverLocation],
             // args: [path.join(serverLocation, 'GSCode.NET.dll')],
         },
         // debug: { command: serverExe, args: ['-lsp', '-d'] }
         debug: {
             command: serverExe,
-			// args: [serverModule],
-            args: [path.join(serverLocation, 'GSCode.NET.exe')],
+			args: [serverModule],
+            // args: [path.join(serverLocation, 'GSCode.NET.exe')],
         },
     };
 

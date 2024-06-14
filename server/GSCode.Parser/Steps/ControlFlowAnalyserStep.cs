@@ -9,8 +9,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using GSCode.Parser.CFA.Nodes;
 using System.Runtime.InteropServices;
+using GSCode.Parser.CFA;
 
 namespace GSCode.Parser.Steps;
 
@@ -20,7 +20,7 @@ internal class ControlFlowAnalyserStep : IParserStep, ISenseProvider
     public ParserIntelliSense Sense { get; }
     public DefinitionsTable DefinitionsTable { get; }
 
-    public List<Tuple<ScrFunction, ControlFlowNode>> FunctionGraphs { get; } = new();
+    public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = new();
 
     public ControlFlowAnalyserStep(ParserIntelliSense sense, DefinitionsTable definitionsTable)
     {
@@ -36,11 +36,10 @@ internal class ControlFlowAnalyserStep : IParserStep, ISenseProvider
             foreach(Tuple<ScrFunction, ASTBranch> pair in DefinitionsTable.LocalScopedFunctions)
             {
                 // Produce a CFG for the function
-                Span<ASTNode> nodeStream = CollectionsMarshal.AsSpan(pair.Item2.Children);
-                ControlFlowNode cfg = ControlFlowNode.Construct_Standard(nodeStream, new(default, default), default, Sense);
+                ControlFlowGraph functionGraph = ControlFlowGraph.ConstructFunctionGraph(pair.Item2, Sense);
 
                 // Add the CFG to the list
-                FunctionGraphs.Add(new(pair.Item1, cfg));
+                FunctionGraphs.Add(new(pair.Item1, functionGraph));
             }
         });
     }

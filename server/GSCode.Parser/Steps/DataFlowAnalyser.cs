@@ -1,5 +1,5 @@
 ﻿using GSCode.Parser.AST.Nodes;
-using GSCode.Parser.CFA.Nodes;
+using GSCode.Parser.CFA;
 using GSCode.Parser.Data;
 using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.SPA.Logic.Components;
@@ -17,17 +17,17 @@ namespace GSCode.Parser.Steps;
 internal readonly ref struct DataFlowContext
 {
 
-    public ControlFlowNode ContinuationNode { get; init; }
-    public ControlFlowNode LoopBackNode { get; init; }
+    public BasicBlock ContinuationNode { get; init; }
+    public BasicBlock LoopBackNode { get; init; }
 }
 
 internal class DataFlowAnalyser : IParserStep, ISenseProvider
 {
-    public List<Tuple<ScrFunction, ControlFlowNode>> FunctionGraphs { get; } = new();
+    public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = new();
     public ParserIntelliSense Sense { get; }
     public SymbolTable RootSymbolTable { get; }
 
-    public DataFlowAnalyser(ParserIntelliSense sense, IEnumerable<IExportedSymbol> exportedSymbols, List<Tuple<ScrFunction, ControlFlowNode>> functionGraphs)
+    public DataFlowAnalyser(ParserIntelliSense sense, IEnumerable<IExportedSymbol> exportedSymbols, List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs)
     {
         Sense = sense;
         FunctionGraphs = functionGraphs;
@@ -39,19 +39,19 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
     {
         await Task.Run(() =>
         {
-            foreach (Tuple<ScrFunction, ControlFlowNode> pair in FunctionGraphs)
+            foreach (Tuple<ScrFunction, ControlFlowGraph> pair in FunctionGraphs)
             {
                 // Analyse the CFG
-                ControlFlowNode cfg = pair.Item2;
+                BasicBlock entryPoint = pair.Item2.Start;
 
-                Analyse(cfg, RootSymbolTable, new(), new(), Sense);
+                Analyse(entryPoint, RootSymbolTable, new(), new(), Sense);
             }
         });
     }
 
 
 
-    public static void Analyse(ControlFlowNode node, Dictionary<ControlFlowNode, SymbolTable> deferredNodes,
+    public static void Analyse(BasicBlock node, Dictionary<BasicBlock, SymbolTable> deferredNodes,
         DataFlowContext context, ParserIntelliSense sense)
     {
         // This is a deferred node, we're now analysing it.
@@ -60,14 +60,14 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
         Analyse(node, symbolTable, deferredNodes, context, sense);
     }
 
-    public static void Analyse(ControlFlowNode node, SymbolTable symbolTable,
+    public static void Analyse(BasicBlock node, SymbolTable symbolTable,
                DataFlowContext context, ParserIntelliSense sense)
     {
-        Analyse(node, symbolTable, new Dictionary<ControlFlowNode, SymbolTable>(), context, sense);
+        Analyse(node, symbolTable, new Dictionary<BasicBlock, SymbolTable>(), context, sense);
     }
 
-    public static void Analyse(ControlFlowNode node, SymbolTable symbolTable,
-               Dictionary<ControlFlowNode, SymbolTable> deferredNodes,
+    public static void Analyse(BasicBlock node, SymbolTable symbolTable,
+               Dictionary<BasicBlock, SymbolTable> deferredNodes,
                       DataFlowContext context, ParserIntelliSense sense)
     {
         switch (node.Type)
@@ -87,8 +87,8 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
         }
     }
 
-    private static void Analyse_Logic(ControlFlowNode node, SymbolTable symbolTable,
-        Dictionary<ControlFlowNode, SymbolTable> deferredNodes,
+    private static void Analyse_Logic(BasicBlock node, SymbolTable symbolTable,
+        Dictionary<BasicBlock, SymbolTable> deferredNodes,
         DataFlowContext context, ParserIntelliSense sense)
     {
         for (int i = 0; i < node.Logic.Count; i++)
@@ -103,10 +103,10 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
             }
         }
 
-        bool hasNextNode = node.Successors.Count > 0;
+        bool hasNextNode = node.Outgoing.Count > 0;
         if (hasNextNode)
         {
-            ControlFlowNode nextNode = node.Successors[0];
+            BasicBlock nextNode = node.Outgoing[0];
 
             if (context.ContinuationNode == nextNode || context.LoopBackNode == nextNode)
             {
@@ -119,25 +119,25 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
         }
     }
 
-    private static void Analyse_If(ControlFlowNode node, SymbolTable symbolTable,
-        Dictionary<ControlFlowNode, SymbolTable> deferredNodes,
+    private static void Analyse_If(BasicBlock node, SymbolTable symbolTable,
+        Dictionary<BasicBlock, SymbolTable> deferredNodes,
         DataFlowContext context, ParserIntelliSense sense)
     {
-        if(node.Successors.Count == 3)
+        if(node.Outgoing.Count == 3)
         {
             symbolTable.MarkSymbolsAsSplit();
 
             // Label the continuation, so that none of the other branches enter it
-            ControlFlowNode continuation = node.Successors[2];
+            BasicBlock continuation = node.Outgoing[2];
             DataFlowContext newContext = context with { ContinuationNode = continuation };
             deferredNodes[continuation] = new(symbolTable, symbolTable.Depth);
 
             // Enter then
-            ControlFlowNode then = node.Successors[0];
+            BasicBlock then = node.Outgoing[0];
             Analyse(then, symbolTable.Clone(), deferredNodes, newContext, sense);
 
             // Enter else
-            ControlFlowNode _else = node.Successors[1];
+            BasicBlock _else = node.Outgoing[1];
             Analyse(_else, symbolTable.Clone(), deferredNodes, newContext, sense);
 
             symbolTable.UnmarkSymbolsAsSplit();
@@ -149,23 +149,23 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
         }
 
         // Enter then
-        ControlFlowNode thenNode = node.Successors[0];
+        BasicBlock thenNode = node.Outgoing[0];
         Analyse(thenNode, symbolTable.Clone(), deferredNodes, context, sense);
 
         // Enter else
-        ControlFlowNode elseNode = node.Successors[1];
+        BasicBlock elseNode = node.Outgoing[1];
         Analyse(elseNode, symbolTable.Clone(), deferredNodes, context, sense);
     }
 
-    private static void Analyse_Loop(ControlFlowNode node, SymbolTable symbolTable,
-        Dictionary<ControlFlowNode, SymbolTable> deferredNodes,
+    private static void Analyse_Loop(BasicBlock node, SymbolTable symbolTable,
+        Dictionary<BasicBlock, SymbolTable> deferredNodes,
         DataFlowContext context, ParserIntelliSense sense)
     {
         symbolTable.MarkSymbolsAsSplit();
 
         // Label the loop back & continuations, so that none of the other branches enter them
-        ControlFlowNode loopBack = node;
-        ControlFlowNode continuation = node.Successors[1];
+        BasicBlock loopBack = node;
+        BasicBlock continuation = node.Outgoing[1];
 
         DataFlowContext newContext = context with { LoopBackNode = loopBack, ContinuationNode = continuation };
         if (!deferredNodes.ContainsKey(loopBack))
@@ -175,7 +175,7 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
         deferredNodes[continuation] = new(symbolTable, symbolTable.Depth);
 
         // Enter body
-        ControlFlowNode body = node.Successors[0];
+        BasicBlock body = node.Outgoing[0];
         Analyse(body, symbolTable.Clone(symbolTable.Depth + 1), deferredNodes, newContext, sense);
 
         symbolTable.UnmarkSymbolsAsSplit();
@@ -185,8 +185,8 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
         Analyse(continuation, nodeSymbolTable, deferredNodes, context, sense);
     }
 
-    private static void Analyse_Switch(ControlFlowNode node, SymbolTable symbolTable,
-        Dictionary<ControlFlowNode, SymbolTable> deferredNodes,
+    private static void Analyse_Switch(BasicBlock node, SymbolTable symbolTable,
+        Dictionary<BasicBlock, SymbolTable> deferredNodes,
         DataFlowContext context, ParserIntelliSense sense)
     {
 

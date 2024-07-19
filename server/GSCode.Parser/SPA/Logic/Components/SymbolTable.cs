@@ -1,5 +1,5 @@
-﻿using GSCode.Parser.DSA.Types;
-using GSCode.Parser.SPA.Sense;
+﻿using GSCode.Parser.DFA;
+using GSCode.Parser.DSA.Types;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using System;
@@ -14,113 +14,15 @@ namespace GSCode.Parser.SPA.Logic.Components;
 internal class SymbolTable
 {
     private Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = new();
-    private Dictionary<string, ScrVariable> GlobalTable { get; } = new();
-    private Dictionary<string, ScrVariable> LocalTable { get; } = new();
-    public int Depth { get; } = 0;
+    public Dictionary<string, ScrVariable> VariableSymbols { get; } = new();
 
+    public int LexicalScope { get; } = 0;
 
-    public SymbolTable(IEnumerable<IExportedSymbol> symbols)
+    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope)
     {
-        // TODO: Should be a dictionary, and checked for duplicates.
-        // Does it need to be checked for duplicates? I don't think so.
-        foreach(IExportedSymbol symbol in symbols)
-        {
-            if(ExportedSymbolTable.ContainsKey(symbol.Name))
-            {
-                //throw new Exception($"Duplicate symbol {symbol.Name} found in symbol table.");
-                //Log.Warning($"Duplicate symbol {symbol.Name}");
-                continue;
-            }
-            ExportedSymbolTable.Add(symbol.Name, symbol);
-        }
-    }
-
-    public SymbolTable(Dictionary<string, IExportedSymbol> symbols, int depth)
-    {
-        ExportedSymbolTable = symbols;
-        Depth = depth;
-    }
-    public SymbolTable(SymbolTable symbolTable, int depth) : this(symbolTable.ExportedSymbolTable, depth) { }
-
-    public SymbolTable Clone(int? depth = default)
-    {
-        SymbolTable symbolTable = new(ExportedSymbolTable, depth ?? 0);
-
-        foreach(KeyValuePair<string, ScrVariable> symbol in GlobalTable)
-        {
-            symbolTable.GlobalTable.Add(symbol.Key, symbol.Value);
-        }
-
-        foreach(KeyValuePair<string, ScrVariable> symbol in LocalTable)
-        {
-            symbolTable.LocalTable.Add(symbol.Key, symbol.Value);
-        }
-
-        return symbolTable;
-    }
-
-    public void MarkSymbolsAsSplit()
-    {
-        foreach(KeyValuePair<string, ScrVariable> symbol in GlobalTable)
-        {
-            symbol.Value.MarkSplit();
-        }
-
-        foreach(KeyValuePair<string, ScrVariable> symbol in LocalTable)
-        {
-            symbol.Value.MarkSplit();
-        }
-    }
-
-    public void UnmarkSymbolsAsSplit()
-    {
-        foreach(KeyValuePair<string, ScrVariable> symbol in GlobalTable)
-        {
-            symbol.Value.UnmarkSplit();
-        }
-
-        foreach(KeyValuePair<string, ScrVariable> symbol in LocalTable)
-        {
-            symbol.Value.UnmarkSplit();
-        }
-    }
-
-    public void AddIncomingSymbols(SymbolTable symbolTable, bool isSplit = false)
-    {
-        foreach (KeyValuePair<string, ScrVariable> symbol in symbolTable.GlobalTable)
-        {
-            if(GlobalTable.ContainsKey(symbol.Key))
-            {
-                // Union, merge the two symbols
-                ScrVariable globalSymbol = GlobalTable[symbol.Key];
-
-                ScrVariable newSymbol = ScrVariable.Merge(globalSymbol, symbol.Value);
-
-                GlobalTable[symbol.Key] = newSymbol;
-                continue;
-            }
-            GlobalTable.Add(symbol.Key, symbol.Value);
-        }
-
-        foreach(KeyValuePair<string, ScrVariable> symbol in symbolTable.LocalTable)
-        {
-            ScrVariable scrSymbol = symbol.Value;
-            // Only add symbols that are at the same scope or higher
-            if(scrSymbol.Depth <= Depth)
-            {
-                if(LocalTable.ContainsKey(symbol.Key))
-                {
-                    // Union, merge the two symbols
-                    ScrVariable localSymbol = LocalTable[symbol.Key];
-
-                    ScrVariable newSymbol = ScrVariable.Merge(localSymbol, symbol.Value);
-
-                    LocalTable[symbol.Key] = newSymbol;
-                    continue;
-                }
-                LocalTable.Add(symbol.Key, scrSymbol);
-            }
-        }
+        ExportedSymbolTable = exportedSymbolTable;
+        VariableSymbols = inSet;
+        LexicalScope = lexicalScope;
     }
 
     /// <summary>
@@ -129,7 +31,7 @@ internal class SymbolTable
     /// <param name="symbol">The symbol name</param>
     /// <param name="data">The value</param>
     /// <returns>true if new, false if not, null if assignment to a constant</returns>
-    public bool AddOrSetSymbol(string symbol, ScrData data, bool isConstant = false)
+    public bool AddOrSetSymbol(string symbol, ScrData data)
     {
         if(ContainsSymbol(symbol))
         {
@@ -143,7 +45,7 @@ internal class SymbolTable
             SetSymbol(symbol, data);
             return false;
         }
-        return TryAddSymbol(symbol, data, isConstant);
+        return TryAddSymbol(symbol, data);
     }
 
     public bool ContainsConstant(string symbol)
@@ -158,14 +60,8 @@ internal class SymbolTable
 
     public bool ContainsSymbol(string symbol)
     {
-        // Check if the symbol exists in the global table
-        if (GlobalTable.ContainsKey(symbol))
-        {
-            return true;
-        }
-
-        // Check if the symbol exists in the local table
-        if (LocalTable.ContainsKey(symbol))
+        // Check if the symbol exists in the table
+        if (VariableSymbols.ContainsKey(symbol))
         {
             return true;
         }
@@ -174,27 +70,21 @@ internal class SymbolTable
     }
 
     /// <summary>
-    /// Tries to add a symbol to the top-level scope. Returns true if the symbol was added successfully.
+    /// Tries to add a symbol, by copying it, to the top-level scope. Returns true if the symbol was added successfully.
     /// </summary>
     /// <param name="symbol">The symbol to add</param>
     /// <param name="data">The associated ScrData for the symbol</param>
     /// <returns>true if the symbol was added, false if it already exists</returns>
-    public bool TryAddSymbol(string symbol, ScrData data, bool isConstant = false)
+    public bool TryAddSymbol(string symbol, ScrData data)
     {
-        // Check if the symbol exists in the global table
-        if (GlobalTable.ContainsKey(symbol))
-        {
-            return false;
-        }
-
-        // Check if the symbol exists in the local table
-        if (LocalTable.ContainsKey(symbol))
+        // Check if the symbol exists in the table
+        if (VariableSymbols.ContainsKey(symbol))
         {
             return false;
         }
 
         // If the symbol doesn't exist, add it to the top-level scope
-        LocalTable.Add(symbol, new ScrVariable(symbol, data, Depth, isConstant));
+        VariableSymbols.Add(symbol, new ScrVariable(symbol, data.Copy(), LexicalScope));
         return true;
     }
 
@@ -203,58 +93,44 @@ internal class SymbolTable
     /// </summary>
     /// <param name="symbol">The symbol to look for</param>
     /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
-    public ScrData? TryGetSymbol(string symbol)
+    public ScrData? TryGetSymbol(string symbol, out bool isGlobal)
     {
-        // Check if the symbol exists in the global table
-        if (GlobalTable.TryGetValue(symbol, out ScrVariable? globalData))
-        {
-            return globalData!;
-        }
+        isGlobal = false;
 
-        // Check if the symbol exists in the local table
-        if (LocalTable.TryGetValue(symbol, out ScrVariable? localData))
+        // Check if the symbol exists in the global table
+        if (VariableSymbols.TryGetValue(symbol, out ScrVariable? globalData))
         {
-            return localData!;
+            isGlobal = globalData.Global;
+            return globalData.Data!;
         }
 
         // If the symbol doesn't exist, return undefined.
-        return ScrVariable.Undefined(symbol);
+        return ScrData.Undefined();
     }
 
     /// <summary>
-    /// Sets the value for the symbol.
+    /// Sets the value for the symbol to a copy of the provided ScrData.
     /// </summary>
     /// <param name="symbol">The symbol to look for</param>
     /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
     public void SetSymbol(string symbol, ScrData value)
     {
-        // Check if the symbol exists in the global table, set it there if so
-        if (GlobalTable.TryGetValue(symbol, out ScrVariable? existing))
-        {
-            GlobalTable[symbol] = new ScrVariable(symbol, value, existing!.Depth);
-            return;
-        }
+        ScrData scrData = value.Copy();
 
-        // Check if the symbol exists in the local table, set it there if so
-        if (LocalTable.TryGetValue(symbol, out ScrVariable? existing2))
+        // Check if the symbol exists in the table, set it there if so
+        if (VariableSymbols.TryGetValue(symbol, out ScrVariable? existing))
         {
-            LocalTable[symbol] = new ScrVariable(symbol, value, existing2.Depth);
+            VariableSymbols[symbol] = new ScrVariable(symbol, scrData, existing!.LexicalScope);
             return;
         }
     }
 
     public bool SymbolIsConstant(string symbol)
     {
-        // Check if the symbol exists in the global table
-        if (GlobalTable.ContainsKey(symbol))
+        // Check if the symbol exists in the table
+        if (VariableSymbols.ContainsKey(symbol))
         {
-            return GlobalTable[symbol].ReadOnly;
-        }
-
-        // Check if the symbol exists in the local table
-        if (LocalTable.ContainsKey(symbol))
-        {
-            return LocalTable[symbol].ReadOnly;
+            return VariableSymbols[symbol].Data.ReadOnly;
         }
         return false;
     }

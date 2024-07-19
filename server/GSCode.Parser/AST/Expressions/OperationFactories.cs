@@ -1,7 +1,7 @@
 ﻿using GSCode.Lexer.Types;
 using GSCode.Parser.Data;
+using GSCode.Parser.DFA;
 using GSCode.Parser.SPA.Logic.Components;
-using GSCode.Parser.SPA.Sense;
 
 namespace GSCode.Parser.AST.Expressions;
 

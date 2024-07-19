@@ -2,8 +2,9 @@
 using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.AST.Nodes;
 using GSCode.Parser.Data;
+using GSCode.Parser.DFA;
+using GSCode.Parser.SPA.Data;
 using GSCode.Parser.SPA.Logic.Components;
-using GSCode.Parser.SPA.Sense;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -37,7 +38,6 @@ internal static class ExpressionAnalyzer
     /// Recursive analysis function to translate any node type into a ScrData value.
     /// </summary>
     /// <param name="node">The node to analyse</param>
-    /// <param name="left">If applicable, corresponds to the left-hand value of the parent expression.</param>
     /// <param name="symbolTable">Reference to the symbol table</param>
     /// <param name="sense">The IntelliSense visitor</param>
     /// <returns></returns>
@@ -62,9 +62,9 @@ internal static class ExpressionAnalyzer
 
         return sourceToken.Type switch
         {
-            TokenType.Number => new ScrConstant(sourceToken),
-            TokenType.ScriptString => new ScrConstant(sourceToken),
-            TokenType.Keyword => new ScrConstant(sourceToken),
+            TokenType.Number => ScrData.FromLiteral(sourceToken),
+            TokenType.ScriptString => ScrData.FromLiteral(sourceToken),
+            TokenType.Keyword => ScrData.FromLiteral(sourceToken),
             _ => ScrData.Default,
         };
     }
@@ -85,28 +85,28 @@ internal static class ExpressionAnalyzer
         }
 
         // Analyze and return the corresponding ScrData for the field
-        ScrData? value = symbolTable.TryGetSymbol(node.SourceToken.Contents);
-        if(value is null)
+        ScrData? value = symbolTable.TryGetSymbol(node.SourceToken.Contents, out bool isGlobal);
+        if(value is not ScrData data)
         {
             return ScrData.Default;
         }
 
-        if(value.Type != ScrDataTypes.Undefined)
+        if(data.Type != ScrDataTypes.Undefined)
         {
-            if(value.Value is ScrReservedStruct)
+            if(isGlobal)
             {
-                sense.AddSenseToken(ScrVariableSymbol.LanguageSymbol(node, value));
-                return value;
+                sense.AddSenseToken(ScrVariableSymbol.LanguageSymbol(node, data));
+                return data;
             }
-            sense.AddSenseToken(ScrVariableSymbol.Usage(node, value));
+            sense.AddSenseToken(ScrVariableSymbol.Usage(node, data));
         }
-        return value;
+        return data;
     }
 
     private static ScrData AnalyseProperty(TokenNode node, ParserIntelliSense sense, ScrData left)
     {
         // Gets the member that corresponds to the property, or undefined if the member doesn't exist
-        ScrData member = left.GetMember(node.SourceToken.Contents);
+        ScrData member = left.GetField(node.SourceToken.Contents);
 
         if(member.IsVoid())
         {
@@ -165,7 +165,7 @@ internal static class ExpressionAnalyzer
                 return ScrData.Default;
             }
 
-            return new ScrConstant(ScrDataTypes.Array);
+            return new ScrData(ScrDataTypes.Array);
         }
 
         if (lhsContext is not null)

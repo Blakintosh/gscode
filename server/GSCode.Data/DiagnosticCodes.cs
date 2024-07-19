@@ -64,6 +64,7 @@ namespace GSCode.Data
         IndexerExpected = 2029,
         NotDefined = 2030,
         NoEnclosingLoop = 2031,
+        CannotAssignToReadOnlyProperty = 2032,
     }
 
     public static class DiagnosticCodes
@@ -117,6 +118,7 @@ namespace GSCode.Data
             { GSCErrorCodes.IndexerExpected, new("Expected an indexer.", DiagnosticSeverity.Error) },
             { GSCErrorCodes.NotDefined, new("The name '{0}' does not exist in the current context.", DiagnosticSeverity.Error) },
             { GSCErrorCodes.NoEnclosingLoop, new("No enclosing loop out of which to break or continue.", DiagnosticSeverity.Error) },
+            { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
         };
 
         public static Diagnostic GetDiagnostic(Range range, string source, GSCErrorCodes key, params object?[] arguments)

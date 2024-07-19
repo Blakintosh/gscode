@@ -1,7 +1,7 @@
 ﻿using GSCode.Data;
 using GSCode.Parser.Data;
+using GSCode.Parser.DFA;
 using GSCode.Parser.SPA.Logic.Components;
-using GSCode.Parser.SPA.Sense;
 
 namespace GSCode.Parser.AST.Expressions
 {
@@ -68,6 +68,21 @@ namespace GSCode.Parser.AST.Expressions
                 return rightRange!;
             }
         }
+        public TokenNode FarRightTokenLeaf
+        {
+            get
+            {
+                if (Right is TokenNode tokenNode)
+                {
+                    return tokenNode;
+                }
+                else if(Right is OperationNode operationNode)
+                {
+                    return operationNode.FarRightTokenLeaf;
+                }
+                throw new NotSupportedException("RightmostNode cannot be called on operations where the right-hand operands are not of token-like type.");
+            }
+        }
 
         public ExpressionNodeType NodeType { get; } = ExpressionNodeType.Operation;
     }
@@ -76,5 +91,6 @@ namespace GSCode.Parser.AST.Expressions
     {
         public ExpressionNodeType NodeType { get; } = ExpressionNodeType.Empty;
         public Range Range => throw new NotSupportedException();
+        public IExpressionNode RightmostNode => throw new NotSupportedException();
     }
 }

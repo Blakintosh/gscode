@@ -1,4 +1,4 @@
-﻿using GSCode.Parser.SPA.Sense;
+﻿using GSCode.Parser.DFA;
 using System;
 using System.Collections.Generic;
 using System.Linq;

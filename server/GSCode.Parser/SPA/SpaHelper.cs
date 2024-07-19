@@ -1,6 +1,7 @@
 ﻿using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Data;
-using GSCode.Parser.SPA.Sense;
+using GSCode.Parser.DFA;
+using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.Util;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
 using System;

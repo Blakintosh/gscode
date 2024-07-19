@@ -2,8 +2,8 @@
 using GSCode.Lexer.Types;
 using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Data;
+using GSCode.Parser.DFA;
 using GSCode.Parser.SPA.Logic.Components;
-using GSCode.Parser.SPA.Sense;
 using Serilog.Context;
 using System;
 using System.Collections.Generic;
@@ -13,9 +13,9 @@ using System.Threading.Tasks;
 
 namespace GSCode.Parser.SPA.Logic.Analysers;
 
-internal class FunctionSignatureAnalyzer
+internal class FunctionSignatureAnalyser
 {
-    public static List<ScrParameter>? Analyze(Expression expression, ParserIntelliSense sense)
+    public static List<ScrParameter>? Analyse(Expression expression, ParserIntelliSense sense)
     {
         // No data if failed
         if(expression.Failed)
@@ -26,7 +26,7 @@ internal class FunctionSignatureAnalyzer
         // If empty
         if(expression.Empty)
         {
-            return new();
+            return [];
         }
 
         return AnalyseNode(expression.Root!, sense);
@@ -61,25 +61,25 @@ internal class FunctionSignatureAnalyzer
         {
             ScrParameter? result = AnalyseParameterWithDefault(node, sense);
 
-            if (result != null)
+            if (result is ScrParameter param)
             {
-                return new()
-                {
-                    result
-                };
+                return
+                [
+                    param
+                ];
             }
         }
         // Another base case is a passed by reference value.
         else if(node.Operation == OperatorOps.AddressOf &&
-            node.Right is TokenNode)
+            node.Right is TokenNode node1)
         {
-            ScrParameter? result = AnalyseParameter((TokenNode)node.Right, sense);
-            if (result != null)
+            ScrParameter? result = AnalyseParameter(node1, sense);
+            if (result is ScrParameter param)
             {
-                return new()
-                {
-                    result
-                };
+                return
+                [
+                    param
+                ];
             }
         }
         // TODO: This is currently O(n), could be better by using a LL
@@ -111,13 +111,7 @@ internal class FunctionSignatureAnalyzer
         {
             return new()
             {
-                new ScrParameter
-                {
-                    // only vararg can legally have this name
-                    Name = "vararg",
-                    Type = ScrDataTypes.Array,
-                    Range = node.SourceToken.TextRange
-                }
+                new ScrParameter("vararg", new ScrData(ScrDataTypes.Array), node.SourceToken.TextRange)
             };
         }
 
@@ -128,12 +122,12 @@ internal class FunctionSignatureAnalyzer
     {
         ScrParameter? result = AnalyseParameter(node, sense);
 
-        if (result != null)
+        if (result is ScrParameter param)
         {
-            return new()
-            {
-                result
-            };
+            return
+            [
+                param
+            ];
         }
         return null;
     }
@@ -155,14 +149,8 @@ internal class FunctionSignatureAnalyzer
             return null;
         }
 
-        return new ScrParameter()
-        {
-            Name = tokenNode.SourceToken.Contents,
-            Type = ScrDataTypes.Unknown,
-            // We don't evaluate defaults here, but do record where they are.
-            DefaultNode = node.Right,
-            Range = tokenNode.SourceToken.TextRange
-        };
+        // We don't evaluate defaults here, but do record where they are. TODO: this might change, as it should be a compile-time constant. Could use VOID to proxy for this.
+        return new ScrParameter(tokenNode.SourceToken.Contents, new ScrData(ScrDataTypes.Any), tokenNode.SourceToken.TextRange, node.Right);
     }
 
     public static ScrParameter? AnalyseParameter(TokenNode node, ParserIntelliSense sense)
@@ -181,12 +169,7 @@ internal class FunctionSignatureAnalyzer
             return null;
         }
 
-        return new ScrParameter()
-        {
-            Name = node.SourceToken.Contents,
-            Type = ScrDataTypes.Unknown,
-            Range = node.SourceToken.TextRange
-        };
+        return new ScrParameter(node.SourceToken.Contents, new ScrData(ScrDataTypes.Any), node.SourceToken.TextRange);
     }
 
     private static List<ScrParameter>? IssueBadParameterError(IExpressionNode node, ParserIntelliSense sense)

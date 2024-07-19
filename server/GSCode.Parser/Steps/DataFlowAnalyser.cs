@@ -1,6 +1,7 @@
 ﻿using GSCode.Parser.AST.Nodes;
 using GSCode.Parser.CFA;
 using GSCode.Parser.Data;
+using GSCode.Parser.DFA;
 using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.SPA.Logic.Components;
 using GSCode.Parser.SPA.Sense;
@@ -8,30 +9,36 @@ using GSCode.Parser.Steps.Interfaces;
 using GSCode.Parser.Util;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace GSCode.Parser.Steps;
 
-internal readonly ref struct DataFlowContext
-{
-
-    public BasicBlock ContinuationNode { get; init; }
-    public BasicBlock LoopBackNode { get; init; }
-}
-
 internal class DataFlowAnalyser : IParserStep, ISenseProvider
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = new();
     public ParserIntelliSense Sense { get; }
-    public SymbolTable RootSymbolTable { get; }
+    private Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = new();
 
     public DataFlowAnalyser(ParserIntelliSense sense, IEnumerable<IExportedSymbol> exportedSymbols, List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs)
     {
         Sense = sense;
         FunctionGraphs = functionGraphs;
-        RootSymbolTable = new(exportedSymbols);
+        
+        // TODO: and checked for duplicates.
+        // Does it need to be checked for duplicates? I don't think so. Dependent-level analysis should automatically sift thru duplicates.
+        foreach (IExportedSymbol symbol in exportedSymbols)
+        {
+            if (ExportedSymbolTable.ContainsKey(symbol.Name))
+            {
+                //throw new Exception($"Duplicate symbol {symbol.Name} found in symbol table.");
+                //Log.Warning($"Duplicate symbol {symbol.Name}");
+                continue;
+            }
+            ExportedSymbolTable.Add(symbol.Name, symbol);
+        }
     }
 
 
@@ -41,154 +48,140 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
         {
             foreach (Tuple<ScrFunction, ControlFlowGraph> pair in FunctionGraphs)
             {
-                // Analyse the CFG
-                BasicBlock entryPoint = pair.Item2.Start;
-
-                Analyse(entryPoint, RootSymbolTable, new(), new(), Sense);
+                ForwardAnalyse(pair.Item1, pair.Item2);
             }
         });
     }
 
-
-
-    public static void Analyse(BasicBlock node, Dictionary<BasicBlock, SymbolTable> deferredNodes,
-        DataFlowContext context, ParserIntelliSense sense)
+    public void ForwardAnalyse(ScrFunction function, ControlFlowGraph functionGraph)
     {
-        // This is a deferred node, we're now analysing it.
-        SymbolTable symbolTable = deferredNodes.Pop(node);
+        Dictionary<BasicBlock, Dictionary<string, ScrVariable>> inSets = new();
+        Dictionary<BasicBlock, Dictionary<string, ScrVariable>> outSets = new();
 
-        Analyse(node, symbolTable, deferredNodes, context, sense);
-    }
+        Stack<BasicBlock> worklist = new();
+        worklist.Push(functionGraph.Start);
 
-    public static void Analyse(BasicBlock node, SymbolTable symbolTable,
-               DataFlowContext context, ParserIntelliSense sense)
-    {
-        Analyse(node, symbolTable, new Dictionary<BasicBlock, SymbolTable>(), context, sense);
-    }
-
-    public static void Analyse(BasicBlock node, SymbolTable symbolTable,
-               Dictionary<BasicBlock, SymbolTable> deferredNodes,
-                      DataFlowContext context, ParserIntelliSense sense)
-    {
-        switch (node.Type)
+        while (worklist.Count > 0)
         {
-            case ControlFlowType.Logic:
-                Analyse_Logic(node, symbolTable, deferredNodes, context, sense);
-                break;
-            case ControlFlowType.If:
-                Analyse_If(node, symbolTable, deferredNodes, context, sense);
-                break;
-            case ControlFlowType.Loop:
-                Analyse_Loop(node, symbolTable, deferredNodes, context, sense);
-                break;
-            case ControlFlowType.Switch:
-                Analyse_Switch(node, symbolTable, deferredNodes, context, sense);
-                break;
+            BasicBlock node = worklist.Pop();
+
+            // Calculate the in set
+            Dictionary<string, ScrVariable> inSet = new();
+            foreach (BasicBlock incoming in node.Incoming)
+            {
+                if (outSets.TryGetValue(incoming, out Dictionary<string, ScrVariable>? value))
+                {
+                    inSet.MergeTables(value, node.Scope);
+                }
+            }
+
+            // Check if the in set has changed, if not, then we can skip this node.
+            if(inSets.TryGetValue(node, out Dictionary<string, ScrVariable>? currentInSet) && currentInSet.VariableTableEquals(inSet))
+            {
+                continue;
+            }
+
+            // Update the in & out sets
+            inSets[node] = inSet;
+
+            // Calculate the out set
+            if (node.Type == ControlFlowType.FunctionEntry)
+            {
+                outSets[node].MergeTables(inSet, node.Scope); 
+            }
+            else
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope);
+
+                // TODO: Unioning of sets is not ideal, better to merge the ScrDatas of common key across multiple dictionaries. Easier to use with the symbol tables.
+                // TODO: Analyse statement-by-statement, using the analysers already created, and get the out set.
+                //Analyse(node, symbolTable, inSets, outSets, Sense);
+                //outSet.UnionWith(symbolTable.GetOutgoingSymbols());
+                AnalyseBasicBlock(node, symbolTable);
+
+                outSets[node] = symbolTable.VariableSymbols;
+            }
+
+            // Add the successors to the worklist
+            foreach (BasicBlock successor in node.Outgoing)
+            {
+                worklist.Push(successor);
+            }
         }
     }
 
-    private static void Analyse_Logic(BasicBlock node, SymbolTable symbolTable,
-        Dictionary<BasicBlock, SymbolTable> deferredNodes,
-        DataFlowContext context, ParserIntelliSense sense)
+    public void AnalyseBasicBlock(BasicBlock block, SymbolTable symbolTable)
     {
-        for (int i = 0; i < node.Logic.Count; i++)
-        {
-            ASTNode currentNode = node.Logic[i];
-            if (currentNode.Analyser is DataFlowNodeAnalyser analyser)
-            {
-                ASTNode? previous = i - 1 > 0 ? node.Logic[i - 1] : null;
-                ASTNode? next = i + 1 < node.Logic.Count ? node.Logic[i + 1] : null;
+        ReadOnlyCollection<ASTNode> logic = block.Logic;
 
-                analyser.Analyze(currentNode, previous, next, symbolTable, sense);
+
+        for (int i = 0; i < logic.Count; i++)
+        {
+            ASTNode child = logic[i];
+
+            ASTNode? last = i - 1 >= 0 ? logic[i - 1] : null;
+            ASTNode? next = i + 1 < logic.Count ? logic[i + 1] : null;
+
+            // Analyse the child for a signature
+            if (child.Analyser is DataFlowNodeAnalyser analyser)
+            {
+                analyser.Analyse(child, last, next, symbolTable, Sense);
+            }
+        }
+    }
+}
+
+file static class DataFlowAnalyserExtensions
+{
+    public static void MergeTables(this Dictionary<string, ScrVariable> target, Dictionary<string, ScrVariable> source, int maxScope)
+    {
+        // Get keys that are present in either
+        HashSet<string> fields = new();
+
+        fields.UnionWith(target.Keys);
+        fields.UnionWith(source.Keys);
+
+        foreach (string field in fields)
+        {
+            // Shouldn't carry over anything that's not higher than this in scope, it's not accessible
+            if (source.TryGetValue(field, out ScrVariable? sourceData) && sourceData.LexicalScope <= maxScope)
+            {
+                // Also present in target, and are different. Merge them
+                if(target.TryGetValue(field, out ScrVariable? targetData))
+                {
+                    if(sourceData != targetData)
+                    {
+                        target[field] = new(sourceData.Name, ScrData.Merge(targetData.Data, sourceData.Data), sourceData.LexicalScope, sourceData.Global);
+                    }
+                    continue;
+                }
+
+                // Otherwise just copy one
+                target[field] = new(sourceData.Name, sourceData.Data.Copy(), sourceData.LexicalScope, sourceData.Global);
+            }
+        }
+    }
+
+    public static bool VariableTableEquals(this Dictionary<string, ScrVariable> target, Dictionary<string, ScrVariable> source)
+    {
+        if (target.Count != source.Count)
+        {
+            return false;
+        }
+
+        foreach (KeyValuePair<string, ScrVariable> pair in target)
+        {
+            if (!source.TryGetValue(pair.Key, out ScrVariable? value))
+            {
+                return false;
+            }
+
+            if (pair.Value != value)
+            {
+                return false;
             }
         }
 
-        bool hasNextNode = node.Outgoing.Count > 0;
-        if (hasNextNode)
-        {
-            BasicBlock nextNode = node.Outgoing[0];
-
-            if (context.ContinuationNode == nextNode || context.LoopBackNode == nextNode)
-            {
-                SymbolTable nodeSymbolTable = deferredNodes[nextNode];
-                nodeSymbolTable.AddIncomingSymbols(symbolTable);
-
-                return;
-            }
-            Analyse(nextNode, symbolTable, deferredNodes, context, sense);
-        }
-    }
-
-    private static void Analyse_If(BasicBlock node, SymbolTable symbolTable,
-        Dictionary<BasicBlock, SymbolTable> deferredNodes,
-        DataFlowContext context, ParserIntelliSense sense)
-    {
-        if(node.Outgoing.Count == 3)
-        {
-            symbolTable.MarkSymbolsAsSplit();
-
-            // Label the continuation, so that none of the other branches enter it
-            BasicBlock continuation = node.Outgoing[2];
-            DataFlowContext newContext = context with { ContinuationNode = continuation };
-            deferredNodes[continuation] = new(symbolTable, symbolTable.Depth);
-
-            // Enter then
-            BasicBlock then = node.Outgoing[0];
-            Analyse(then, symbolTable.Clone(), deferredNodes, newContext, sense);
-
-            // Enter else
-            BasicBlock _else = node.Outgoing[1];
-            Analyse(_else, symbolTable.Clone(), deferredNodes, newContext, sense);
-
-            symbolTable.UnmarkSymbolsAsSplit();
-
-            // Enter continuation
-            SymbolTable nodeSymbolTable = deferredNodes.Pop(continuation);
-            Analyse(continuation, nodeSymbolTable, deferredNodes, context, sense);
-            return;
-        }
-
-        // Enter then
-        BasicBlock thenNode = node.Outgoing[0];
-        Analyse(thenNode, symbolTable.Clone(), deferredNodes, context, sense);
-
-        // Enter else
-        BasicBlock elseNode = node.Outgoing[1];
-        Analyse(elseNode, symbolTable.Clone(), deferredNodes, context, sense);
-    }
-
-    private static void Analyse_Loop(BasicBlock node, SymbolTable symbolTable,
-        Dictionary<BasicBlock, SymbolTable> deferredNodes,
-        DataFlowContext context, ParserIntelliSense sense)
-    {
-        symbolTable.MarkSymbolsAsSplit();
-
-        // Label the loop back & continuations, so that none of the other branches enter them
-        BasicBlock loopBack = node;
-        BasicBlock continuation = node.Outgoing[1];
-
-        DataFlowContext newContext = context with { LoopBackNode = loopBack, ContinuationNode = continuation };
-        if (!deferredNodes.ContainsKey(loopBack))
-        {
-            deferredNodes[loopBack] = new(symbolTable, symbolTable.Depth);
-        }
-        deferredNodes[continuation] = new(symbolTable, symbolTable.Depth);
-
-        // Enter body
-        BasicBlock body = node.Outgoing[0];
-        Analyse(body, symbolTable.Clone(symbolTable.Depth + 1), deferredNodes, newContext, sense);
-
-        symbolTable.UnmarkSymbolsAsSplit();
-
-        // Enter continuation
-        SymbolTable nodeSymbolTable = deferredNodes.Pop(continuation);
-        Analyse(continuation, nodeSymbolTable, deferredNodes, context, sense);
-    }
-
-    private static void Analyse_Switch(BasicBlock node, SymbolTable symbolTable,
-        Dictionary<BasicBlock, SymbolTable> deferredNodes,
-        DataFlowContext context, ParserIntelliSense sense)
-    {
-
+        return true;
     }
 }

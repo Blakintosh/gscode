@@ -50,7 +50,7 @@ internal class SignatureAnalyserStep : IParserStep, ISenseProvider
             // Analyse the child for a signature
             if (child.SignatureAnalyzer is SignatureNodeAnalyser analyser)
             {
-                analyser.Analyze(child, last, next, DefinitionsTable, Sense);
+                analyser.Analyse(child, last, next, DefinitionsTable, Sense);
             }
         }
     }

@@ -3,9 +3,9 @@ using GSCode.Data.Models;
 using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.AST.Nodes;
 using GSCode.Parser.Data;
+using GSCode.Parser.DFA;
 using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.SPA.Logic.Components;
-using GSCode.Parser.SPA.Sense;
 using GSCode.Parser.Util;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
 using System.Collections.Generic;
@@ -17,7 +17,7 @@ namespace GSCode.Parser.SPA.Logic.Analysers;
 
 internal class FileAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation
     }
@@ -25,7 +25,7 @@ internal class FileAnalyser : DataFlowNodeAnalyser
 
 internal class ConstDeclarationAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Extract the expression component
         ExpressionComponent expression = (ExpressionComponent)currentNode.Components[1];
@@ -50,8 +50,9 @@ internal class ConstDeclarationAnalyser : DataFlowNodeAnalyser
                 // Otherwise, analyse the RHS, and use the result to assign a constant with value of the RHS
                 // Analyze the expression, which will evaluate & add the symbol to the symbol table.
                 ScrData value = ExpressionAnalyzer.AnalyseNode(operationNode.Right!, symbolTable, sense);
+                value.ReadOnly = true;
 
-                symbolTable.AddOrSetSymbol(symbolName, value, true);
+                symbolTable.AddOrSetSymbol(symbolName, value);
                 sense.AddSenseToken(ScrVariableSymbol.Declaration(tokenNode, value, true));
 
                 return;
@@ -70,7 +71,7 @@ internal class ConstDeclarationAnalyser : DataFlowNodeAnalyser
 
 internal class ClassConstructorAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense) 
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense) 
     {
         // TODO: Might need to unique check the constructor, not sure if gsc allows overloads.
     }
@@ -78,7 +79,7 @@ internal class ClassConstructorAnalyser : DataFlowNodeAnalyser
 
 internal class ClassDestructorAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // TODO: Might need to unique check the destructor, not sure if gsc allows overloads.
     }
@@ -86,7 +87,7 @@ internal class ClassDestructorAnalyser : DataFlowNodeAnalyser
 
 internal class ClassDeclarationAnalyser : SignatureNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
     {
         // Implementation for ClassDeclaration
     }
@@ -94,7 +95,7 @@ internal class ClassDeclarationAnalyser : SignatureNodeAnalyser
 
 internal class CaseStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for CaseStatement
     }
@@ -102,7 +103,7 @@ internal class CaseStatementAnalyser : DataFlowNodeAnalyser
 
 internal class DefaultStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for DefaultStatement
     }
@@ -110,7 +111,7 @@ internal class DefaultStatementAnalyser : DataFlowNodeAnalyser
 
 internal class UsingDirectiveAnalyser : SignatureNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
     {
         // Implementation for UsingDirective
         FilePathComponent filePathComponent = (FilePathComponent)currentNode.Components[1];
@@ -127,7 +128,7 @@ internal class UsingDirectiveAnalyser : SignatureNodeAnalyser
 
 internal class IfStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for IfStatement
 
@@ -151,7 +152,7 @@ internal class IfStatementAnalyser : DataFlowNodeAnalyser
         }
 
         // Check if it came out to a constant value
-        if(result is not null && result.CanEvaluateToBoolean())
+        if(result.CanEvaluateToBoolean())
         {
             bool? truthyValue = result.IsTruthy();
             if(truthyValue is not bool truthy)
@@ -187,7 +188,7 @@ internal class IfStatementAnalyser : DataFlowNodeAnalyser
 
 internal class ElseIfStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Check that this has been preceded by an else-if or an if.
         if(previousNode is ASTNode)
@@ -219,7 +220,7 @@ internal class ElseIfStatementAnalyser : DataFlowNodeAnalyser
         }
 
         // Check if it came out to a constant value
-        if (result is not null && result.CanEvaluateToBoolean())
+        if (result.CanEvaluateToBoolean())
         {
             bool? truthyValue = result.IsTruthy();
             if (truthyValue is not bool truthy)
@@ -254,7 +255,7 @@ internal class ElseIfStatementAnalyser : DataFlowNodeAnalyser
 
 internal class ElseStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Check that this has been preceded by an else-if or an if.
         if (previousNode is ASTNode)
@@ -270,14 +271,14 @@ internal class ElseStatementAnalyser : DataFlowNodeAnalyser
 
 internal class FunctionDeclarationSignatureAnalyser : SignatureNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
     {
         // Extract the expression component
         NameComponent functionName = (NameComponent)currentNode.Components.First(component => component is NameComponent nameComponent && nameComponent.Type == TokenType.Name);
         ExpressionComponent expression = (ExpressionComponent)currentNode.Components.First(component => component as ExpressionComponent != null);
 
         // Analyze the parameter list
-        List<ScrParameter>? parameters = FunctionSignatureAnalyzer.Analyze(expression.Expression, sense);
+        List<ScrParameter>? parameters = FunctionSignatureAnalyser.Analyse(expression.Expression, sense);
 
         // Produce a definition for our function
         definitionsTable.AddFunction(new ScrFunction()
@@ -416,7 +417,7 @@ internal class FunctionDeclarationSignatureAnalyser : SignatureNodeAnalyser
 
 internal class FunctionDeclarationStaticAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
 
         throw new NotImplementedException();
@@ -425,7 +426,7 @@ internal class FunctionDeclarationStaticAnalyser : DataFlowNodeAnalyser
 
 internal class WhileLoopAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for WhileLoop
 
@@ -470,7 +471,7 @@ internal class WhileLoopAnalyser : DataFlowNodeAnalyser
 
 internal class PrecacheDirectiveAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for PrecacheDirective
     }
@@ -478,7 +479,7 @@ internal class PrecacheDirectiveAnalyser : DataFlowNodeAnalyser
 
 internal class NamespaceDirectiveAnalyser : SignatureNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
     {
         // Extract the new namespace
         NameComponent newNamespace = (NameComponent)currentNode.Components.First(component => component is NameComponent nameComponent && nameComponent.Type == TokenType.Name);
@@ -489,7 +490,7 @@ internal class NamespaceDirectiveAnalyser : SignatureNodeAnalyser
 
 internal class UsingAnimTreeDirectiveAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for UsingAnimTreeDirective
     }
@@ -497,7 +498,7 @@ internal class UsingAnimTreeDirectiveAnalyser : DataFlowNodeAnalyser
 
 internal class ReturnStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for ReturnStatement
 
@@ -526,7 +527,7 @@ internal class ReturnStatementAnalyser : DataFlowNodeAnalyser
 
 internal class WaitStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for WaitStatement
 
@@ -574,7 +575,7 @@ internal class WaitStatementAnalyser : DataFlowNodeAnalyser
 
 internal class WaitRealTimeStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for WaitRealTimeStatement
     }
@@ -582,7 +583,7 @@ internal class WaitRealTimeStatementAnalyser : DataFlowNodeAnalyser
 
 internal class SwitchStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for SwitchStatement
     }
@@ -590,7 +591,7 @@ internal class SwitchStatementAnalyser : DataFlowNodeAnalyser
 
 internal class ExpressionStatementAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Extract the expression component
         ExpressionComponent expression = (ExpressionComponent)currentNode.Components[0];
@@ -629,7 +630,7 @@ internal class ExpressionStatementAnalyser : DataFlowNodeAnalyser
 
 internal class ForeachLoopAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for ForeachLoop
         // TODO: if source isn't Unknown, check that it's an array
@@ -638,7 +639,7 @@ internal class ForeachLoopAnalyser : DataFlowNodeAnalyser
 
 internal class ForLoopAnalyser : DataFlowNodeAnalyser
 {
-    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
+    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         // Implementation for ForLoop
     }

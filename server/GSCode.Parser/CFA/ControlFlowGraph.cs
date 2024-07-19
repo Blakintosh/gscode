@@ -159,12 +159,15 @@ internal readonly record struct ControlFlowGraph(BasicBlock Start, BasicBlock En
             thenGraphs.Add(then);
         }
 
+        bool endsWithElse = false;
+
         // Check for an else statement
         if (i < nodesStream.Length && nodesStream[i].Type == NodeTypes.ElseStatement)
         {
             // Construct the else body and connect it to the last condition
             ControlFlowGraph elseGraph = ConstructFromBranchingNode(nodesStream[i], sense, localHelper.IncreaseScope());
             condition.ConnectTo(elseGraph.Start);
+            endsWithElse = true;
 
             // Add the else graph to the list
             thenGraphs.Add(elseGraph);
@@ -179,6 +182,11 @@ internal readonly record struct ControlFlowGraph(BasicBlock Start, BasicBlock En
         foreach (ControlFlowGraph then in thenGraphs)
         {
             then.End.ConnectNonJumpTo(continuationGraph.Start);
+        }
+        // And the continuation to the end of the final condition if it has no else
+        if(!endsWithElse)
+        {
+            condition.ConnectTo(continuationGraph.Start);
         }
 
         // A graph that spans from the first if condition to the end of the continuation graph.

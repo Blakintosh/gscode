@@ -1,10 +1,10 @@
 ﻿using GSCode.Data;
 using GSCode.Lexer.Types;
 using GSCode.Parser.Data;
+using GSCode.Parser.DFA;
 using GSCode.Parser.SPA;
 using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.SPA.Logic.Components;
-using GSCode.Parser.SPA.Sense;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -212,7 +212,7 @@ internal static class OperatorData
                         {
                             ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense, lhsContext);
 
-                            return new ScrConstant(ScrDataTypes.Undefined);
+                            return new ScrData(ScrDataTypes.Undefined);
                         }),
                     new KeywordOperationFactory(KeywordTypes.New, OperatorOps.NewObject,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -221,7 +221,7 @@ internal static class OperatorData
 
                             // TODO: in a future implementation, this will instantiate the relevant object type.
                             // ... is the right a function call?
-                            return new ScrConstant(ScrDataTypes.Object);
+                            return new ScrData(ScrDataTypes.Object);
                         }),
                     new CalledOnFactory(
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -254,15 +254,15 @@ internal static class OperatorData
                             {
                                 if (value.Type == ScrDataTypes.Int)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Int, value.Get<int>() + 1);
+                                    return new ScrData(ScrDataTypes.Int, value.Get<int>() + 1);
                                 }
                                 else // Float
                                 {
-                                    return new ScrConstant(ScrDataTypes.Float, value.Get<double>() + 1.0);
+                                    return new ScrData(ScrDataTypes.Float, value.Get<double>() + 1.0);
                                 }
                             }
 
-                            return new ScrConstant(value.Type);
+                            return new ScrData(value.Type);
                         }),
                     new PrefixOperationFactory(OperatorTypes.Decrement, OperatorOps.PreDecrement,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -280,15 +280,15 @@ internal static class OperatorData
                             {
                                 if (value.Type == ScrDataTypes.Int)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Int, value.Get<int>() - 1);
+                                    return new ScrData(ScrDataTypes.Int, value.Get<int>() - 1);
                                 }
                                 else // Float
                                 {
-                                    return new ScrConstant(ScrDataTypes.Float, value.Get<float>() - 1.0);
+                                    return new ScrData(ScrDataTypes.Float, value.Get<float>() - 1.0);
                                 }
                             }
 
-                            return new ScrConstant(value.Type);
+                            return new ScrData(value.Type);
                         }),
                     new PrefixOperationFactory(OperatorTypes.Not, OperatorOps.Not,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -297,7 +297,7 @@ internal static class OperatorData
 
                             if(nodeValue.ValueUnknown())
                             {
-                                return new ScrConstant(ScrDataTypes.Bool);
+                                return new ScrData(ScrDataTypes.Bool);
                             }
 
                             if(nodeValue.Type != ScrDataTypes.Bool)
@@ -306,7 +306,7 @@ internal static class OperatorData
                             }
 
 
-                            return new ScrConstant(ScrDataTypes.Bool, !(bool)nodeValue.Value!);
+                            return new ScrData(ScrDataTypes.Bool, !(bool)nodeValue.Value!);
                         }),
                     new PrefixOperationFactory(OperatorTypes.BitwiseNot, OperatorOps.BitNot),
                     new StrictPrefixOperationFactory(OperatorTypes.Ampersand, OperatorOps.AddressOf),
@@ -316,7 +316,7 @@ internal static class OperatorData
                             ScrData value = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense, default);
 
                             if (!value.TypeUnknown() &&
-                                (value.Type != ScrDataTypes.Int && value.Type != ScrDataTypes.Float && value.Type != ScrDataTypes.Vector3d))
+                                (value.Type != ScrDataTypes.Int && value.Type != ScrDataTypes.Float && value.Type != ScrDataTypes.Vec3))
                             {
                                 // ERROR: Operator '-' cannot be applied on operand of type ...
                                 sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOn, "-", value.TypeToString());
@@ -327,20 +327,20 @@ internal static class OperatorData
                             {
                                 if (value.Type == ScrDataTypes.Int)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Int, -value.Get<int>());
+                                    return new ScrData(ScrDataTypes.Int, -value.Get<int>());
                                 }
                                 else if(value.Type == ScrDataTypes.Float) // Float
                                 {
-                                    return new ScrConstant(ScrDataTypes.Float, -value.Get<float>());
+                                    return new ScrData(ScrDataTypes.Float, -value.Get<float>());
                                 }
-                                else if(value.Type == ScrDataTypes.Vector3d)
+                                else if(value.Type == ScrDataTypes.Vec3)
                                 {
                                     // todo
                                     return ScrData.Default;
                                 }
                             }
 
-                            return new ScrConstant(value.Type);
+                            return new ScrData(value.Type);
                         }),
                     new StrictPrefixOperationFactory(OperatorTypes.Plus, OperatorOps.UnaryPlus,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -348,7 +348,7 @@ internal static class OperatorData
                             ScrData value = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense, default);
 
                             if (!value.TypeUnknown() &&
-                                (value.Type != ScrDataTypes.Int && value.Type != ScrDataTypes.Float && value.Type != ScrDataTypes.Vector3d))
+                                (value.Type != ScrDataTypes.Int && value.Type != ScrDataTypes.Float && value.Type != ScrDataTypes.Vec3))
                             {
                                 // ERROR: Operator '+' cannot be applied on operand of type ...
                                 sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOn, "+", value.TypeToString());
@@ -358,10 +358,10 @@ internal static class OperatorData
                             if (!value.TypeUnknown())
                             {
                                 // For unary plus, we simply return the value as it is because it doesn't change
-                                return new ScrConstant(value.Type, value.Value);
+                                return new ScrData(value.Type, value.Value);
                             }
 
-                            return new ScrConstant(value.Type);
+                            return new ScrData(value.Type);
                         }),
                 })
             },
@@ -400,14 +400,14 @@ internal static class OperatorData
                                 // If both are integers and result is a whole number, return as integer
                                 if (lhsValue.Type == ScrDataTypes.Int && rhsValue.Type == ScrDataTypes.Int && Math.Abs(result % 1) <= double.Epsilon)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Int, (int)result);
+                                    return new ScrData(ScrDataTypes.Int, (int)result);
                                 }
 
-                                return new ScrConstant(ScrDataTypes.Float, result);
+                                return new ScrData(ScrDataTypes.Float, result);
                             }
 
-                            return new ScrConstant(
-                                (lhsValue.Type == ScrDataTypes.Float || rhsValue.Type == ScrDataTypes.Float) ? ScrDataTypes.Float : ScrDataTypes.Unknown
+                            return new ScrData(
+                                (lhsValue.Type == ScrDataTypes.Float || rhsValue.Type == ScrDataTypes.Float) ? ScrDataTypes.Float : ScrDataTypes.Any
                             );
                         }),
                     new BinaryOperationFactory(OperatorTypes.Multiply, OperatorOps.Multiply,
@@ -429,15 +429,15 @@ internal static class OperatorData
                             {
                                 if (lhsValue.Type == ScrDataTypes.Float || rhsValue.Type == ScrDataTypes.Float)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Float, lhsValue.GetNumericValue() * rhsValue.GetNumericValue());
+                                    return new ScrData(ScrDataTypes.Float, lhsValue.GetNumericValue() * rhsValue.GetNumericValue());
                                 }
                                 else if (lhsValue.Type == ScrDataTypes.Int && rhsValue.Type == ScrDataTypes.Int)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Int, lhsValue.Get<int>() * rhsValue.Get<int>());
+                                    return new ScrData(ScrDataTypes.Int, lhsValue.Get<int>() * rhsValue.Get<int>());
                                 }
                             }
 
-                            return new ScrConstant((lhsValue.Type == ScrDataTypes.Float || rhsValue.Type == ScrDataTypes.Float) ? ScrDataTypes.Float : ScrDataTypes.Unknown);
+                            return new ScrData((lhsValue.Type == ScrDataTypes.Float || rhsValue.Type == ScrDataTypes.Float) ? ScrDataTypes.Float : ScrDataTypes.Any);
                         }),
                     new BinaryOperationFactory(OperatorTypes.Remainder, OperatorOps.Remainder,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -455,10 +455,10 @@ internal static class OperatorData
 
                             if(!lhsValue.ValueUnknown() && !rhsValue.ValueUnknown())
                             {
-                                return new ScrConstant(ScrDataTypes.Int, lhsValue.Get<int>() % rhsValue.Get<int>());
+                                return new ScrData(ScrDataTypes.Int, lhsValue.Get<int>() % rhsValue.Get<int>());
                             }
 
-                            return new ScrConstant(ScrDataTypes.Int);
+                            return new ScrData(ScrDataTypes.Int);
                         }),
                 })
             },
@@ -471,8 +471,8 @@ internal static class OperatorData
                             ScrData lhsValue = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense, default);
                             ScrData rhsValue = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense, default);
 
-                            if((!lhsValue.TypeUnknown() && (lhsValue.Type != ScrDataTypes.Int && lhsValue.Type != ScrDataTypes.Float && lhsValue.Type != ScrDataTypes.Vector3d && lhsValue.Type != ScrDataTypes.String)) ||
-                                (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float && rhsValue.Type != ScrDataTypes.Vector3d && rhsValue.Type != ScrDataTypes.String)))
+                            if((!lhsValue.TypeUnknown() && (lhsValue.Type != ScrDataTypes.Int && lhsValue.Type != ScrDataTypes.Float && lhsValue.Type != ScrDataTypes.Vec3 && lhsValue.Type != ScrDataTypes.String)) ||
+                                (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float && rhsValue.Type != ScrDataTypes.Vec3 && rhsValue.Type != ScrDataTypes.String)))
                             {
                                 // ERROR: Operator '+' cannot be applied on operands of type ...
                                 sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", lhsValue.TypeToString(), rhsValue.TypeToString()));
@@ -483,26 +483,26 @@ internal static class OperatorData
                             {
                                 if (lhsValue.Type == ScrDataTypes.Int && rhsValue.Type == ScrDataTypes.Int)
                                 {
-                                    return new ScrConstant (ScrDataTypes.Int, lhsValue.Get<int>() + rhsValue.Get<int>());
+                                    return new ScrData (ScrDataTypes.Int, lhsValue.Get<int>() + rhsValue.Get<int>());
                                 }
                                 else if (lhsValue.Type == ScrDataTypes.String || rhsValue.Type == ScrDataTypes.String)
                                 {
-                                    return new ScrConstant(ScrDataTypes.String, lhsValue.ToString() + rhsValue.ToString());
+                                    return new ScrData(ScrDataTypes.String, lhsValue.ToString() + rhsValue.ToString());
                                 }
-                                else if (lhsValue.Type == ScrDataTypes.Vector3d || rhsValue.Type == ScrDataTypes.Vector3d)
+                                else if (lhsValue.Type == ScrDataTypes.Vec3 || rhsValue.Type == ScrDataTypes.Vec3)
                                 {
                                     // TODO: Actual computation when Vector3d is implemented.
-                                    return new ScrConstant (ScrDataTypes.Vector3d);
+                                    return new ScrData (ScrDataTypes.Vec3);
                                 }
                                 else
                                 {
                                     float lhsAsFloat = (lhsValue.Type == ScrDataTypes.Int) ? lhsValue.Get<int>() : lhsValue.Get<float>();
                                     float rhsAsFloat = (rhsValue.Type == ScrDataTypes.Int) ? rhsValue.Get<int>() : rhsValue.Get<float>();
-                                    return new ScrConstant(ScrDataTypes.Float, lhsAsFloat + rhsAsFloat);
+                                    return new ScrData(ScrDataTypes.Float, lhsAsFloat + rhsAsFloat);
                                 }
                             }
 
-                            return new ScrConstant (ScrDataTypes.Float);
+                            return new ScrData (ScrDataTypes.Float);
                         }),
                     new BinaryOperationFactory(OperatorTypes.Minus, OperatorOps.Minus,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -510,8 +510,8 @@ internal static class OperatorData
                             ScrData lhsValue = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense, default);
                             ScrData rhsValue = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense, default);
 
-                            if((!lhsValue.TypeUnknown() && (lhsValue.Type != ScrDataTypes.Int && lhsValue.Type != ScrDataTypes.Float && lhsValue.Type != ScrDataTypes.Vector3d)) ||
-                                (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float && rhsValue.Type != ScrDataTypes.Vector3d)))
+                            if((!lhsValue.TypeUnknown() && (lhsValue.Type != ScrDataTypes.Int && lhsValue.Type != ScrDataTypes.Float && lhsValue.Type != ScrDataTypes.Vec3)) ||
+                                (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float && rhsValue.Type != ScrDataTypes.Vec3)))
                             {
                                 // ERROR: Operator '-' cannot be applied on operands of type ...
                                 sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "-", lhsValue.TypeToString(), rhsValue.TypeToString()));
@@ -522,22 +522,22 @@ internal static class OperatorData
                             {
                                 if (lhsValue.Type == ScrDataTypes.Int && rhsValue.Type == ScrDataTypes.Int)
                                 {
-                                    return new ScrConstant (ScrDataTypes.Int, lhsValue.Get < int >() - rhsValue.Get < int >());
+                                    return new ScrData (ScrDataTypes.Int, lhsValue.Get < int >() - rhsValue.Get < int >());
                                 }
-                                else if (lhsValue.Type == ScrDataTypes.Vector3d || rhsValue.Type == ScrDataTypes.Vector3d)
+                                else if (lhsValue.Type == ScrDataTypes.Vec3 || rhsValue.Type == ScrDataTypes.Vec3)
                                 {
                                     // TODO: Actual computation when Vector3d is implemented.
-                                    return new ScrConstant (ScrDataTypes.Vector3d);
+                                    return new ScrData (ScrDataTypes.Vec3);
                                 }
                                 else
                                 {
                                     double lhsAsDouble = (lhsValue.Type == ScrDataTypes.Int) ? lhsValue.Get<int>() : lhsValue.Get<double>();
                                     double rhsAsDouble = (rhsValue.Type == ScrDataTypes.Int) ? rhsValue.Get<int>() : rhsValue.Get<double>();
-                                    return new ScrConstant (ScrDataTypes.Float, lhsAsDouble - rhsAsDouble);
+                                    return new ScrData (ScrDataTypes.Float, lhsAsDouble - rhsAsDouble);
                                 }
                             }
 
-                            return new ScrConstant (ScrDataTypes.Float);
+                            return new ScrData (ScrDataTypes.Float);
                         }),
                 })
             },
@@ -560,10 +560,10 @@ internal static class OperatorData
 
                             if(!lhsValue.ValueUnknown() && !rhsValue.ValueUnknown())
                             {
-                                return new ScrConstant (ScrDataTypes.Int, lhsValue.Get < int >() <<(int) rhsValue.Get < int >());
+                                return new ScrData (ScrDataTypes.Int, lhsValue.Get < int >() <<(int) rhsValue.Get < int >());
                             }
 
-                            return new ScrConstant (ScrDataTypes.Int);
+                            return new ScrData (ScrDataTypes.Int);
                         }),
                     new BinaryOperationFactory(OperatorTypes.BitRightShift, OperatorOps.BitRightShift,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -581,10 +581,10 @@ internal static class OperatorData
 
                             if(!lhsValue.ValueUnknown() && !rhsValue.ValueUnknown())
                             {
-                                return new ScrConstant (ScrDataTypes.Int, lhsValue.Get < int >() >>(int) rhsValue.Get < int >());
+                                return new ScrData (ScrDataTypes.Int, lhsValue.Get < int >() >>(int) rhsValue.Get < int >());
                             }
 
-                            return new ScrConstant (ScrDataTypes.Int);
+                            return new ScrData (ScrDataTypes.Int);
                         }),
                 })
             },
@@ -610,10 +610,10 @@ internal static class OperatorData
                                 double lhsAsDouble = (lhsValue.Type == ScrDataTypes.Int) ? lhsValue.Get<int>() : lhsValue.Get<double>();
                                 double rhsAsDouble = (rhsValue.Type == ScrDataTypes.Int) ? rhsValue.Get<int>() : rhsValue.Get<double>();
 
-                                return new ScrConstant (ScrDataTypes.Bool, lhsAsDouble > rhsAsDouble);
+                                return new ScrData (ScrDataTypes.Bool, lhsAsDouble > rhsAsDouble);
                             }
 
-                            return new ScrConstant (ScrDataTypes.Bool);
+                            return new ScrData (ScrDataTypes.Bool);
                         }),
                     new BinaryOperationFactory(OperatorTypes.GreaterThanEquals, OperatorOps.GreaterThanOrEqual,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -634,10 +634,10 @@ internal static class OperatorData
                                 double lhsAsDouble = (lhsValue.Type == ScrDataTypes.Int) ? lhsValue.Get<int>() : lhsValue.Get<double>();
                                 double rhsAsDouble = (rhsValue.Type == ScrDataTypes.Int) ? rhsValue.Get<int>() : rhsValue.Get<double>();
 
-                                return new ScrConstant (ScrDataTypes.Bool, lhsAsDouble >= rhsAsDouble);
+                                return new ScrData (ScrDataTypes.Bool, lhsAsDouble >= rhsAsDouble);
                             }
 
-                            return new ScrConstant (ScrDataTypes.Bool);
+                            return new ScrData (ScrDataTypes.Bool);
                         }),
                     new BinaryOperationFactory(OperatorTypes.LessThan, OperatorOps.LessThan,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -658,10 +658,10 @@ internal static class OperatorData
                                 double lhsAsDouble = (lhsValue.Type == ScrDataTypes.Int) ? lhsValue.Get<int>() : lhsValue.Get<double>();
                                 double rhsAsDouble = (rhsValue.Type == ScrDataTypes.Int) ? rhsValue.Get<int>() : rhsValue.Get<double>();
 
-                                return new ScrConstant (ScrDataTypes.Bool, lhsAsDouble < rhsAsDouble);
+                                return new ScrData (ScrDataTypes.Bool, lhsAsDouble < rhsAsDouble);
                             }
 
-                            return new ScrConstant (ScrDataTypes.Bool);
+                            return new ScrData (ScrDataTypes.Bool);
                         }),
                     new BinaryOperationFactory(OperatorTypes.LessThanEquals, OperatorOps.LessThanOrEqual,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -682,10 +682,10 @@ internal static class OperatorData
                                 double lhsAsDouble = (lhsValue.Type == ScrDataTypes.Int) ? lhsValue.Get<int>() : lhsValue.Get<double>();
                                 double rhsAsDouble = (rhsValue.Type == ScrDataTypes.Int) ? rhsValue.Get<int>() : rhsValue.Get<double>();
 
-                                return new ScrConstant (ScrDataTypes.Bool, lhsAsDouble <= rhsAsDouble);
+                                return new ScrData (ScrDataTypes.Bool, lhsAsDouble <= rhsAsDouble);
                             }
 
-                            return new ScrConstant (ScrDataTypes.Bool);
+                            return new ScrData (ScrDataTypes.Bool);
                         }),
                 })
             },
@@ -700,13 +700,13 @@ internal static class OperatorData
 
                             if(!left.ValueUnknown() && !right.ValueUnknown())
                             {
-                                return new ScrConstant(ScrDataTypes.Bool,
+                                return new ScrData(ScrDataTypes.Bool,
                                     (left.Value is not null && right.Value is not null)
                                         ? left.Value == right.Value : null);
                             }
 
 
-                            return new ScrConstant(ScrDataTypes.Bool);
+                            return new ScrData(ScrDataTypes.Bool);
                         }),
                     new BinaryOperationFactory(OperatorTypes.NotEquals, OperatorOps.NotEqual,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -716,11 +716,11 @@ internal static class OperatorData
 
                             if(!left.ValueUnknown() && !right.ValueUnknown())
                             {
-                                return new ScrConstant(ScrDataTypes.Bool, left.Value != right.Value);
+                                return new ScrData(ScrDataTypes.Bool, left.Value != right.Value);
                             }
 
 
-                            return new ScrConstant(ScrDataTypes.Bool);
+                            return new ScrData(ScrDataTypes.Bool);
                         }),
                     new BinaryOperationFactory(OperatorTypes.TypeEquals, OperatorOps.TypeEquals),
                     new BinaryOperationFactory(OperatorTypes.NotTypeEquals, OperatorOps.NotTypeEquals),
@@ -735,7 +735,7 @@ internal static class OperatorData
                             ScrData left = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense);
                             ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense);
 
-                            if(left.Type != ScrDataTypes.Unknown && right.Type != ScrDataTypes.Unknown)
+                            if(left.Type != ScrDataTypes.Any && right.Type != ScrDataTypes.Any)
                             {
                                 if(left.Type != ScrDataTypes.Int)
                                 {
@@ -750,10 +750,10 @@ internal static class OperatorData
 
                                 if(!left.ValueUnknown() && !right.ValueUnknown())
                                 {
-                                    return new ScrConstant(ScrDataTypes.Int, left.Get<int>() & right.Get<int>());
+                                    return new ScrData(ScrDataTypes.Int, left.Get<int>() & right.Get<int>());
                                 }
 
-                                return new ScrConstant(ScrDataTypes.Int);
+                                return new ScrData(ScrDataTypes.Int);
                             }
                             return ScrData.Default;
                         }),
@@ -763,7 +763,7 @@ internal static class OperatorData
                             ScrData left = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense);
                             ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense);
 
-                            if (left.Type != ScrDataTypes.Unknown && right.Type != ScrDataTypes.Unknown)
+                            if (left.Type != ScrDataTypes.Any && right.Type != ScrDataTypes.Any)
                             {
                                 if(left.Type != ScrDataTypes.Int || right.Type != ScrDataTypes.Int)
                                 {
@@ -775,10 +775,10 @@ internal static class OperatorData
 
                                 if(!left.ValueUnknown() && !right.ValueUnknown())
                                 {
-                                    return new ScrConstant(ScrDataTypes.Int, left.Get<int>() ^ right.Get<int>());
+                                    return new ScrData(ScrDataTypes.Int, left.Get<int>() ^ right.Get<int>());
                                 }
 
-                                return new ScrConstant(ScrDataTypes.Int);
+                                return new ScrData(ScrDataTypes.Int);
                             }
                             return ScrData.Default;
                         }),
@@ -788,7 +788,7 @@ internal static class OperatorData
                             ScrData left = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense);
                             ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense);
 
-                            if(left.Type != ScrDataTypes.Unknown && right.Type != ScrDataTypes.Unknown)
+                            if(left.Type != ScrDataTypes.Any && right.Type != ScrDataTypes.Any)
                             {
                                 if(left.Type != ScrDataTypes.Int || right.Type != ScrDataTypes.Int)
                                 {
@@ -799,10 +799,10 @@ internal static class OperatorData
 
                                 if(!left.ValueUnknown() && !right.ValueUnknown())
                                 {
-                                    return new ScrConstant(ScrDataTypes.Int, left.Get<int>() | right.Get<int>());
+                                    return new ScrData(ScrDataTypes.Int, left.Get<int>() | right.Get<int>());
                                 }
 
-                                return new ScrConstant(ScrDataTypes.Int);
+                                return new ScrData(ScrDataTypes.Int);
                             }
                             return ScrData.Default;
                         }),
@@ -817,7 +817,7 @@ internal static class OperatorData
                             ScrData left = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense);
                             ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense);
 
-                            if(left.Type != ScrDataTypes.Unknown && right.Type != ScrDataTypes.Unknown)
+                            if(left.Type != ScrDataTypes.Any && right.Type != ScrDataTypes.Any)
                             {
                                 if(!left.CanEvaluateToBoolean() || !right.CanEvaluateToBoolean())
                                 {
@@ -831,10 +831,10 @@ internal static class OperatorData
 
                                 if(leftValue is bool leftBool && rightValue is bool rightBool)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Bool, leftBool && rightBool);
+                                    return new ScrData(ScrDataTypes.Bool, leftBool && rightBool);
                                 }
 
-                                return new ScrConstant(ScrDataTypes.Bool);
+                                return new ScrData(ScrDataTypes.Bool);
                             }
                             return ScrData.Default;
                         }),
@@ -844,7 +844,7 @@ internal static class OperatorData
                             ScrData left = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense);
                             ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense);
 
-                            if (left.Type != ScrDataTypes.Unknown && right.Type != ScrDataTypes.Unknown)
+                            if (left.Type != ScrDataTypes.Any && right.Type != ScrDataTypes.Any)
                             {
                                 if (!left.CanEvaluateToBoolean() ||
                                     !right.CanEvaluateToBoolean())
@@ -859,10 +859,10 @@ internal static class OperatorData
 
                                 if (leftValue is bool leftBool && rightValue is bool rightBool)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Bool, leftBool || rightBool);
+                                    return new ScrData(ScrDataTypes.Bool, leftBool || rightBool);
                                 }
 
-                                return new ScrConstant(ScrDataTypes.Bool);
+                                return new ScrData(ScrDataTypes.Bool);
                             }
                             return ScrData.Default;
                         }),
@@ -882,7 +882,7 @@ internal static class OperatorData
                                 //int test = 2 ? 3 : 4;
                             }
 
-                            if(left.Type != ScrDataTypes.Unknown && right.Type != ScrDataTypes.Unknown)
+                            if(left.Type != ScrDataTypes.Any && right.Type != ScrDataTypes.Any)
                             {
                                 if(!left.CanEvaluateToBoolean() || !right.CanEvaluateToBoolean())
                                 {
@@ -896,10 +896,10 @@ internal static class OperatorData
 
                                 if(leftValue is bool leftBool && rightValue is bool rightBool)
                                 {
-                                    return new ScrConstant(ScrDataTypes.Bool, leftBool && rightBool);
+                                    return new ScrData(ScrDataTypes.Bool, leftBool && rightBool);
                                 }
 
-                                return new ScrConstant(ScrDataTypes.Bool);
+                                return new ScrData(ScrDataTypes.Bool);
                             }
                             return ScrData.Default;
                         }),
@@ -915,40 +915,45 @@ internal static class OperatorData
                             ScrData left = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense);
                             ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense);
 
-                            // Handle assigning to a variable
-                            if(left is ScrVariable scrVariable)
+                            // Assigning to a local variable
+                            if(node.Left is TokenNode variableOperand)
                             {
-                                TokenNode leftNode = (TokenNode) node.Left!;
+                                string symbolName = variableOperand.SourceToken.Contents;
 
-                                if(scrVariable.ReadOnly)
+                                if(left.ReadOnly)
                                 {
-                                    sense.AddSpaDiagnostic(leftNode.Range, GSCErrorCodes.CannotAssignToConstant, leftNode.SourceToken.Contents);
+                                    sense.AddSpaDiagnostic(variableOperand.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
                                     return ScrData.Default;
                                 }
 
-                                string symbolName = leftNode.SourceToken.Contents;
                                 bool isNew = symbolTable.AddOrSetSymbol(symbolName, right);
 
                                 if(isNew && right.Type != ScrDataTypes.Undefined)
                                 {
-                                    sense.AddSenseToken(ScrVariableSymbol.Declaration(leftNode, right));
+                                    sense.AddSenseToken(ScrVariableSymbol.Declaration(variableOperand, right));
                                 }
-                            }
-                            // Handle assigning to a property
-                            else if(left is ScrProperty scrProperty)
-                            {
-                                TokenNode leftNode = (TokenNode) node.Left!;
 
-                                if(scrProperty.ReadOnly)
+                                return right;
+                            }
+
+                            // Assigning to a property on a struct
+                            if(node.Left is OperationNode operationNode && operationNode.Operation == OperatorOps.MemberAccess && left.Owner is ScrStruct destination)
+                            {
+                                TokenNode leafNode = operationNode.FarRightTokenLeaf;
+                                string propertyName = leafNode.SourceToken.Contents;
+
+                                if(left.ReadOnly)
                                 {
-                                    sense.AddSpaDiagnostic(leftNode.Range, GSCErrorCodes.CannotAssignToConstant, leftNode.SourceToken.Contents);
+                                    sense.AddSpaDiagnostic(leafNode.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, propertyName);
                                     return ScrData.Default;
                                 }
 
-                                // TODO: perform assignment, check for CoW, etc.
+                                destination.Set(propertyName, right);
+                                return right;
                             }
 
-                            return right;
+                            sense.AddSpaDiagnostic(node.Left!.Range, GSCErrorCodes.InvalidAssignmentTarget);
+                            return ScrData.Default;
                         }),
                     new BinaryOperationFactory(OperatorTypes.AssignmentPlus, OperatorOps.AssignPlus),
                     new BinaryOperationFactory(OperatorTypes.AssignmentMinus, OperatorOps.AssignSubtract),
@@ -968,10 +973,10 @@ internal static class OperatorData
                             {
                                 if(!left.ValueUnknown() && !right.ValueUnknown())
                                 {
-                                    return new ScrConstant (ScrDataTypes.Int, left.Get < int >() | right.Get < int >());
+                                    return new ScrData (ScrDataTypes.Int, left.Get < int >() | right.Get < int >());
                                 }
 
-                                return new ScrConstant (ScrDataTypes.Int);
+                                return new ScrData (ScrDataTypes.Int);
                             }
 
                             sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(new Range(), DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes,

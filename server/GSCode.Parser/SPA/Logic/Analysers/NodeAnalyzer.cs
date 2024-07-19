@@ -13,12 +13,12 @@ namespace GSCode.Parser.SPA.Logic.Analysers;
 
 internal abstract class DataFlowNodeAnalyser
 {
-    public abstract void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense);
+    public abstract void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense);
 }
 
 internal abstract class SignatureNodeAnalyser
 {
-    public abstract void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense);
+    public abstract void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense);
 
     protected static Token? GetDocComment(ASTNode currentNode)
     {

@@ -86,15 +86,6 @@ export function activate(context: ExtensionContext) {
     // Push the disposable to the context's subscriptions so that the
     // client can be deactivated on extension deactivation
     client.start();
-
-
-    workspace.onDidOpenTextDocument((document) => {
-        const fsPath = document.uri.fsPath;
-        console.log(`Document opened: ${fsPath}`);
-        if (fsPath.toLowerCase().endsWith('.gsc') || fsPath.toLowerCase().endsWith('.csc')) {
-            console.log(`GSC/CSC document opened: ${fsPath}`);
-        }
-    });
 }
 
 

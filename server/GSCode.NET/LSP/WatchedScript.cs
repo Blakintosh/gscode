@@ -59,7 +59,7 @@ public class WatchedEditor : WatchedScript
             PrimaryProcessingTask = Task.Run(async () =>
             {
                 await Lexer.TokenizeAsync(documentText);
-                await Parser.ParseAsync();
+                await Parser.Parse();
             });
 
             await PrimaryProcessingTask;
@@ -70,7 +70,7 @@ public class WatchedEditor : WatchedScript
 
             // Now bring that together with the local file symbols, to give the static analyser a full library to work with.
 
-            await Parser.FinishParsingAsync(dependencySymbols);
+            await Parser.FinishParsing(dependencySymbols);
 
 
             Log.Information("Added and parsed dependency {uri}", DocumentUri);
@@ -139,7 +139,7 @@ public class WatchedDependency : WatchedScript
         PrimaryProcessingTask = Task.Run(async () =>
         {
             await Lexer.TokenizeAsync(documentText);
-            await Parser.ParseAsync();
+            await Parser.Parse();
 
             ExportedSymbols = Parser.DefinitionsTable!.ExportedFunctions;
         });

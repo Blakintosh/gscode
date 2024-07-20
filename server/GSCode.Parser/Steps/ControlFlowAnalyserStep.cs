@@ -28,19 +28,16 @@ internal class ControlFlowAnalyserStep : IParserStep, ISenseProvider
         DefinitionsTable = definitionsTable;
     }
 
-    public async Task RunAsync()
+    public void Run()
     {
         // Evaluate & analyse all bodies
-        await Task.Run(() =>
+        foreach(Tuple<ScrFunction, ASTBranch> pair in DefinitionsTable.LocalScopedFunctions)
         {
-            foreach(Tuple<ScrFunction, ASTBranch> pair in DefinitionsTable.LocalScopedFunctions)
-            {
-                // Produce a CFG for the function
-                ControlFlowGraph functionGraph = ControlFlowGraph.ConstructFunctionGraph(pair.Item2, Sense);
+            // Produce a CFG for the function
+            ControlFlowGraph functionGraph = ControlFlowGraph.ConstructFunctionGraph(pair.Item2, Sense);
 
-                // Add the CFG to the list
-                FunctionGraphs.Add(new(pair.Item1, functionGraph));
-            }
-        });
+            // Add the CFG to the list
+            FunctionGraphs.Add(new(pair.Item1, functionGraph));
+        }
     }
 }

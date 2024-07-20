@@ -43,7 +43,7 @@ namespace GSCode.Parser.Steps
             Tokens = tokens;
         }
 
-        public async Task RunAsync()
+        public void Run()
         {
             Token currentToken = Tokens.First!.NextAny();
             while (!currentToken.IsEof())

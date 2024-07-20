@@ -42,15 +42,12 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
     }
 
 
-    public async Task RunAsync()
+    public void Run()
     {
-        await Task.Run(() =>
+        foreach (Tuple<ScrFunction, ControlFlowGraph> pair in FunctionGraphs)
         {
-            foreach (Tuple<ScrFunction, ControlFlowGraph> pair in FunctionGraphs)
-            {
-                ForwardAnalyse(pair.Item1, pair.Item2);
-            }
-        });
+            ForwardAnalyse(pair.Item1, pair.Item2);
+        }
     }
 
     public void ForwardAnalyse(ScrFunction function, ControlFlowGraph functionGraph)

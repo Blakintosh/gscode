@@ -21,6 +21,7 @@ using GSCode.Parser.AST.Nodes;
 using GSCode.Parser.Data;
 using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.Steps.Interfaces;
+using Serilog;
 
 namespace GSCode.Parser.Steps;
 
@@ -38,12 +39,9 @@ internal sealed class ASTGenerationStep : IParserStep, ISenseProvider
         Tokens = tokens;
     }
 
-    public async Task RunAsync()
+    public void Run()
     {
-        await Task.Run(() =>
-        {
-            ParseFromRoot(Tokens);
-        });
+        ParseFromRoot(Tokens);
     }
 
     private void ParseFromRoot(ScriptTokenLinkedList tokens)
@@ -145,6 +143,7 @@ internal sealed class ASTGenerationStep : IParserStep, ISenseProvider
         } while (!branch.Close(ref currentToken) && 
             !currentToken.Is(TokenType.Eof));
 
+        Log.Error("No valid child found for branch {0} at token {1}", branch.GetType().Name, currentToken.Contents);
         return null;
     }
 

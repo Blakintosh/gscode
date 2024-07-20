@@ -46,7 +46,7 @@ public class DependencyParser : IScriptParser
     /// <summary>
     /// Parses the script file.
     /// </summary>
-    public async Task ParseAsync()
+    public Task Parse()
     {
         Stopwatch sw = Stopwatch.StartNew();
 
@@ -54,23 +54,24 @@ public class DependencyParser : IScriptParser
         ScriptTokenLinkedList tokens = Lexer.Tokens;
 
         PreprocessorStep preprocessorStep = new(IntelliSense, Lexer.RootFileUri.LocalPath, tokens);
-        await preprocessorStep.RunAsync();
+        preprocessorStep.Run();
 
         WhitespaceRemovalStep whitespaceRemovalStep = new WhitespaceRemovalStep(tokens);
-        await whitespaceRemovalStep.RunAsync();
+        whitespaceRemovalStep.Run();
 
         ASTGenerationStep astStep = new(IntelliSense, Lexer.RootFileUri.LocalPath, tokens);
-        await astStep.RunAsync();
+        astStep.Run();
         _astStep = astStep;
 
         DefinitionsTable = new(Path.GetFileNameWithoutExtension(Lexer.RootFileUri.LocalPath));
         SignatureAnalyserStep saStep = new(IntelliSense, DefinitionsTable, _astStep.RootNode);
-        await saStep.RunAsync();
+        saStep.Run();
         _saStep = saStep;
 
         sw.Stop();
 
         Log.Information("Primary parsing completed in {0}ms.", sw.Elapsed.TotalMilliseconds);
+        return Task.CompletedTask;
     }
 }
 
@@ -81,23 +82,24 @@ public class ScriptParser : DependencyParser
     /// <summary>
     /// Performs the final static analysis & evaluation on the script file, after dependencies have been gathered.
     /// </summary>
-    public async Task FinishParsingAsync(IEnumerable<IExportedSymbol> exportedSymbols)
+    public Task FinishParsing(IEnumerable<IExportedSymbol> exportedSymbols)
     {
         if(IntelliSense is null || _astStep is null || _saStep is null)
         {
-            return;
+            throw new InvalidOperationException("Cannot finish parsing before primary parsing is complete.");
         }
 
         Stopwatch sw = Stopwatch.StartNew();
 
         ControlFlowAnalyserStep cfaStep = new ControlFlowAnalyserStep(IntelliSense, _saStep.DefinitionsTable);
-        await cfaStep.RunAsync();
+        cfaStep.Run();
 
         DataFlowAnalyser dfaStep = new DataFlowAnalyser(IntelliSense, exportedSymbols, cfaStep.FunctionGraphs);
-        await dfaStep.RunAsync();
+        dfaStep.Run();
 
         sw.Stop();
 
         Log.Information("Secondary parsing completed in {0}ms.", sw.Elapsed.TotalMilliseconds);
+        return Task.CompletedTask;
     }
 }

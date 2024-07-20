@@ -29,13 +29,10 @@ internal class SignatureAnalyserStep : IParserStep, ISenseProvider
         DefinitionsTable = definitionsTable;
     }
 
-    public async Task RunAsync()
+    public void Run()
     {
         // Analyse all class, method & function signatures
-        await Task.Run(() =>
-        {
-            AnalyzeSignatures(ASTRoot.Branch!);
-        });
+        AnalyzeSignatures(ASTRoot.Branch!);
     }
 
     public void AnalyzeSignatures(ASTBranch branch)

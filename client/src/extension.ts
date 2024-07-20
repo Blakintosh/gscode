@@ -30,9 +30,10 @@ export function activate(context: ExtensionContext) {
 
     dotenv.config({ path: path.join(context.extensionPath, ".env") });
 
-	const serverModule = context.asAbsolutePath(
-		path.join('..\\server\\GSCode.NET\\bin\\Debug\\net8.0', 'GSCode.NET.dll')
-	);
+	const serverModulePath = path.join('..', 'server', 'GSCode.NET', 'bin', 'Debug', 'net8.0', 'GSCode.NET.dll');
+    const serverModule = context.asAbsolutePath(path.normalize(serverModulePath));
+
+    console.log(serverModule);
 
 	const serverLocation = process.env.LSP_LOCATION;
 	if (!serverLocation) {
@@ -57,21 +58,27 @@ export function activate(context: ExtensionContext) {
         },
     };
 
+    const watcher = workspace.createFileSystemWatcher("**/*.gsc");
+
     // Options to control the language client
     let clientOptions: LanguageClientOptions = {
         // Register the server for plain text documents
         documentSelector: [
             {
-                pattern: "**/*.{gsc,csc}",
+                pattern: "**/*.gsc",
             },
         ],
         progressOnInitialization: true,
         synchronize: {
             // Synchronize the setting section 'languageServerExample' to the server
             configurationSection: "gsc",
-            fileEvents: workspace.createFileSystemWatcher("**/*.{gsc,csc}"),
+            fileEvents: watcher,
         }, 
     };
+
+    watcher.onDidChange((e) => {
+        console.log(`File changed: ${e.fsPath}`);
+    });
 
     // Create the language client and start the client.
     client = new LanguageClient("gsc", "GSCode.NET Language Server", serverOptions, clientOptions);
@@ -79,6 +86,15 @@ export function activate(context: ExtensionContext) {
     // Push the disposable to the context's subscriptions so that the
     // client can be deactivated on extension deactivation
     client.start();
+
+
+    workspace.onDidOpenTextDocument((document) => {
+        const fsPath = document.uri.fsPath;
+        console.log(`Document opened: ${fsPath}`);
+        if (fsPath.toLowerCase().endsWith('.gsc') || fsPath.toLowerCase().endsWith('.csc')) {
+            console.log(`GSC/CSC document opened: ${fsPath}`);
+        }
+    });
 }
 
 

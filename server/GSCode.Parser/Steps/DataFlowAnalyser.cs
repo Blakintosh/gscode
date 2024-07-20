@@ -84,6 +84,11 @@ internal class DataFlowAnalyser : IParserStep, ISenseProvider
             // Update the in & out sets
             inSets[node] = inSet;
 
+            if (!outSets.ContainsKey(node))
+            {
+                outSets[node] = new Dictionary<string, ScrVariable>();
+            }
+
             // Calculate the out set
             if (node.Type == ControlFlowType.FunctionEntry)
             {

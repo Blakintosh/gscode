@@ -114,7 +114,7 @@ internal static class OperatorData
     public static List<OperatorCategory> OperationPrecedencesList { get; } = new()
         {
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.ScopeResolution, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.ScopeResolution, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.ScopeResolution, OperatorOps.ScopeResolution,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -129,7 +129,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.Postfix, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.Postfix, new List<IOperationFactory>
                 {
                     new PostfixOperationFactory(OperatorTypes.Increment, OperatorOps.PostIncrement),
                     new PostfixOperationFactory(OperatorTypes.Decrement, OperatorOps.PostDecrement),
@@ -235,7 +235,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.RightToLeft, OperatorPrecedences.Prefix, new()
+                new OperatorCategory(OperatorAssociativity.RightToLeft, OperatorPrecedences.Prefix, new List<IOperationFactory>
                 {
                     new PrefixOperationFactory(OperatorTypes.Increment, OperatorOps.PreIncrement,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -366,7 +366,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.MulDivRem, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.MulDivRem, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.Divide, OperatorOps.Divide,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -463,7 +463,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.Additive, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.Additive, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.Plus, OperatorOps.Plus,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -542,7 +542,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.BitShifts, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.BitShifts, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.BitLeftShift, OperatorOps.BitLeftShift,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -589,7 +589,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.Relational, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.Relational, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.GreaterThan, OperatorOps.GreaterThan,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -690,7 +690,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.Equalities, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.Equalities, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.Equals, OperatorOps.Equal,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -727,7 +727,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.Bitwise, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.Bitwise, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.Ampersand, OperatorOps.BitAnd,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -809,7 +809,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.Logical, new()
+                new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.Logical, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.And, OperatorOps.And,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -869,7 +869,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.RightToLeft, OperatorPrecedences.Ternary, new()
+                new OperatorCategory(OperatorAssociativity.RightToLeft, OperatorPrecedences.Ternary, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.TernaryStart, OperatorOps.Ternary, (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
                         {
@@ -907,7 +907,7 @@ internal static class OperatorData
                 })
             },
             {
-                new(OperatorAssociativity.RightToLeft, OperatorPrecedences.Assignment, new()
+                new OperatorCategory(OperatorAssociativity.RightToLeft, OperatorPrecedences.Assignment, new List<IOperationFactory>
                 {
                     new BinaryOperationFactory(OperatorTypes.Assignment, OperatorOps.Assign,
                         (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
@@ -988,34 +988,35 @@ internal static class OperatorData
                     new BinaryOperationFactory(OperatorTypes.AssignmentBitwiseRightShift, OperatorOps.AssignBitRightShift),
                 })
             },
-            {
-                new(OperatorAssociativity.LeftToRight, OperatorPrecedences.Comma, new()
-                {
-                    new BinaryOperationFactory(OperatorTypes.Comma, OperatorOps.Comma,
-                        (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
-                        {
-                            ScrData left = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense);
-
-                            ScrArguments argumentsNode = (left as ScrArguments) ?? new ScrArguments
-                            {
-                                Value = left.Value,
-                                Type = left.Type,
-                                Arguments = new()
-                                {
-                                    node.Left!
-                                }
-                            };
-
-                            ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense);
-                            if(right is not ScrArguments)
-                            {
-                                argumentsNode.Arguments.Add(node.Right!);
-                            }
-
-                            return argumentsNode;
-                        }),
-                })
-            },
+            // TODO - may get undone, we want to handle comma elsewhere as it doesn't return values in the same way
+            // {
+            //     new OperatorCategory(OperatorAssociativity.LeftToRight, OperatorPrecedences.Comma, new List<IOperationFactory>
+            //     {
+            //         new BinaryOperationFactory(OperatorTypes.Comma, OperatorOps.Comma,
+            //             (OperationNode node, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? lhsContext) =>
+            //             {
+            //                 ScrData left = ExpressionAnalyzer.AnalyseNode(node.Left!, symbolTable, sense);
+            //
+            //                 ScrArguments argumentsNode = (left as ScrArguments) ?? new ScrArguments
+            //                 {
+            //                     Value = left.Value,
+            //                     Type = left.Type,
+            //                     Arguments = new List<IExpressionNode>
+            //                     {
+            //                         node.Left!
+            //                     }
+            //                 };
+            //
+            //                 ScrData right = ExpressionAnalyzer.AnalyseNode(node.Right!, symbolTable, sense);
+            //                 if(right is not ScrArguments)
+            //                 {
+            //                     argumentsNode.Arguments.Add(node.Right!);
+            //                 }
+            //
+            //                 return argumentsNode;
+            //             }),
+            //     })
+            // },
         };
     public static bool IsOperand(IExpressionNode node)
     {

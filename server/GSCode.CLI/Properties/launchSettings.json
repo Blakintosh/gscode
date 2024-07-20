@@ -2,7 +2,7 @@
   "profiles": {
     "GSCode.CLI": {
       "commandName": "Project",
-      "commandLineArgs": "-p \"I:\\SteamLibrary\\steamapps\\common\\Call of Duty Black Ops III\\usermaps\\zm_karelia\\scripts\\zm\\test.gsc\""
+      "commandLineArgs": "-p \"/home/ashton/Documents/gscodetest/scripts/zm/zm_kawellya.gsc\""
     }
   }
 }

@@ -148,7 +148,7 @@ namespace GSCode.Parser.Preprocessor.Directives
                 // Advance to what should be the next comma
                 currentToken = currentToken.NextNotLinespace();
             }
-            while (currentToken.Is(TokenType.Operator, OperatorTypes.Comma));
+            while (currentToken.Is(TokenType.SpecialToken, SpecialTokenTypes.Comma));
 
             // Check for )
             if (!currentToken.Is(TokenType.Punctuation, PunctuationTypes.CloseParen))

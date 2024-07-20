@@ -11,5 +11,5 @@ public interface IScriptParser
 {
     public DefinitionsTable? DefinitionsTable { get; protected set; }
 
-    public Task ParseAsync();
+    public Task Parse();
 }

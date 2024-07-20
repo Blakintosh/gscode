@@ -22,6 +22,6 @@ namespace GSCode.Parser.Steps.Interfaces
 {
     internal interface IParserStep
     {
-        public Task RunAsync();
+        public void Run();
     }
 }

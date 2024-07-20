@@ -29,21 +29,17 @@ internal class WhitespaceRemovalStep : IParserStep
         Tokens = tokens;
     }
 
-    public async Task RunAsync()
+    public void Run()
     {
-        // TODO: Might be able to straight up remove this step now as whitespace is skipped by new token LL
-        await Task.Run(() =>
+        Token current = Tokens.First!.NextAny();
+        while (!current.IsEof())
         {
-            Token current = Tokens.First!.NextAny();
-            while (!current.IsEof())
+            Token token = current;
+            if (token.Is(TokenType.Whitespace) || token.Is(TokenType.NewLine))
             {
-                Token token = current;
-                if (token.Is(TokenType.Whitespace) || token.Is(TokenType.NewLine))
-                {
-                    Tokens.Remove(current);
-                }
-                current = current.NextAny();
+                Tokens.Remove(current);
             }
-        });
+            current = current.NextAny();
+        }
     }
 }

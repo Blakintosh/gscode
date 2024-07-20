@@ -488,7 +488,7 @@ namespace GSCode.Lexer.Types
             return false;
         }
 
-        [GeneratedRegex("===|!==|>>=|<<=|::|&&|&=|\\|=|\\^=|/=|-=|%=|\\*=|\\+=|<<|>>|--|==|>=|\\+\\+|<=|!=|\\|\\||->|=|&|~|\\||/|>|<|-|%|\\*|!|\\+|\\^|\\?|:|,|\\.", RegexOptions.Compiled | RegexOptions.Singleline)]
+        [GeneratedRegex("===|!==|>>=|<<=|::|&&|&=|\\|=|\\^=|/=|-=|%=|\\*=|\\+=|<<|>>|--|==|>=|\\+\\+|<=|!=|\\|\\||->|=|&|~|\\||/|>|<|-|%|\\*|!|\\+|\\^|\\?|:|\\.", RegexOptions.Compiled | RegexOptions.Singleline)]
         private static partial Regex OperatorRegex();
     }
     #endregion

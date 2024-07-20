@@ -325,7 +325,7 @@ internal sealed class Expression
     /// <summary>
     /// Converts the entire expression that follows from the reader's index to a series of expression nodes used for parsing.
     /// </summary>
-    /// <param name="reader">Reference to the token reader.</param>
+    /// <param name="baseToken">The current token that the parser is looking at.</param>
     /// <returns>A list of expression nodes for parsing</returns>
     private static List<IExpressionNode> ConvertTokensToExpressionNodes(ref Token baseToken)
     {
@@ -404,6 +404,7 @@ internal sealed class Expression
         // Name, Number, ScriptString, Operator: any
         // Keywords: false, true, thread, undefined
         // Punctuation: parentheses, brackets
+        // TODO: yikes
 
         // Contextual operators: Ternary Else (can only occur if Ternary Then has been encountered)
         if(token.SubType is OperatorTypes operatorType)
@@ -441,6 +442,7 @@ internal sealed class Expression
             token.Is(TokenType.Number) ||
             token.Is(TokenType.Operator) ||
             token.Is(TokenType.ScriptString) ||
+            // Keyword operands
             token.Is(TokenType.Keyword, KeywordTypes.True) ||
             token.Is(TokenType.Keyword, KeywordTypes.False) ||
             token.Is(TokenType.Keyword, KeywordTypes.Thread) ||
@@ -449,6 +451,7 @@ internal sealed class Expression
             token.Is(TokenType.Keyword, KeywordTypes.Anim) ||
             token.Is(TokenType.Keyword, KeywordTypes.New) ||
             token.Is(TokenType.Keyword, KeywordTypes.Vararg) ||
+            // Punctuation
             token.Is(TokenType.Punctuation, PunctuationTypes.OpenParen) ||
             token.Is(TokenType.Punctuation, PunctuationTypes.CloseParen) ||
             token.Is(TokenType.Punctuation, PunctuationTypes.OpenBracket) ||

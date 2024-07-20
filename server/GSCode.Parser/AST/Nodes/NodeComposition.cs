@@ -121,6 +121,36 @@ namespace GSCode.Parser.AST.Nodes
             };
         }
     }
+    
+    internal sealed class ArgumentListComponent : INodeComponent
+    {
+        public List<Expression> ArgumentExpressions { get; } = [];
+        public bool Optional { get; init; } = false;
+
+        public bool Parse(ref Token currentToken, ASTHelper data)
+        {
+            // return Expression.Parse(ref currentToken, data);
+            bool success = true;
+
+            do
+            {
+                Expression argument = new();
+                success = argument.Parse(ref currentToken, data);
+
+                ArgumentExpressions.Add(argument);
+            } while (success && currentToken.Is(TokenType.SpecialToken, SpecialTokenTypes.Comma));
+            
+            return success;
+        }
+
+        public INodeComponent Clone()
+        {
+            return new ExpressionComponent
+            {
+                Optional = Optional
+            };
+        }
+    }
 
     internal sealed class FilePathComponent : INodeComponent
     {

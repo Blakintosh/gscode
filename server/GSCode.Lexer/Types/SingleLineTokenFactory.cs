@@ -416,8 +416,7 @@ namespace GSCode.Lexer.Types
         Plus,
         Xor,
         TernaryStart,
-        Colon,
-        Comma
+        Colon
     }
 
     internal sealed partial class OperatorFactory : ISingleLineFactory
@@ -463,7 +462,6 @@ namespace GSCode.Lexer.Types
             { "^", OperatorTypes.Xor },
             { "?", OperatorTypes.TernaryStart },
             { ":", OperatorTypes.Colon },
-            { ",", OperatorTypes.Comma },
             { ".", OperatorTypes.MemberAccess }
         };
 
@@ -688,6 +686,7 @@ namespace GSCode.Lexer.Types
     public enum SpecialTokenTypes
     {
         SemiColon,
+        Comma,
         Backslash
     }
 
@@ -701,6 +700,7 @@ namespace GSCode.Lexer.Types
             Enum? type = lineSpan[currentIndex] switch
             {
                 ';' => SpecialTokenTypes.SemiColon,
+                ',' => SpecialTokenTypes.Comma,
                 '\\' => SpecialTokenTypes.Backslash,
                 _ => null,
             };

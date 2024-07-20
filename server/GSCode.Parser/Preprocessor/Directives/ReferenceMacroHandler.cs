@@ -148,7 +148,7 @@ namespace GSCode.Parser.Preprocessor.Directives
 
         private static Token StepOverIfComma(Token currentToken)
         {
-            if (currentToken.Is(TokenType.Operator, OperatorTypes.Comma))
+            if (currentToken.Is(TokenType.SpecialToken, SpecialTokenTypes.Comma))
             {
                 return currentToken.NextNotWhitespace();
             }
@@ -168,7 +168,7 @@ namespace GSCode.Parser.Preprocessor.Directives
 
         private static bool ArgumentEnded(Token addToken, int nestedParenCount)
         {
-            return nestedParenCount == 0 && (addToken.Is(TokenType.Operator, OperatorTypes.Comma) || 
+            return nestedParenCount == 0 && (addToken.Is(TokenType.SpecialToken, SpecialTokenTypes.Comma) || 
                 addToken.Is(TokenType.Punctuation, PunctuationTypes.CloseParen));
         }
 

@@ -254,7 +254,7 @@ namespace GSCode.Parser.AST.Nodes
                         Optional = true
                     },
                     new NameComponent(),
-                    new ExpressionComponent()
+                    new ArgumentListComponent()
                 },
                 BodyFactories,
                 null,
@@ -290,7 +290,7 @@ namespace GSCode.Parser.AST.Nodes
                         Type = TokenType.Punctuation,
                         SubType = PunctuationTypes.OpenParen
                     },
-                    new ExpressionComponent(),
+                    new ArgumentListComponent(),
                     new SingletonComponent()
                     {
                         Type = TokenType.Punctuation,

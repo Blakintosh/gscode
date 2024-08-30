@@ -18,7 +18,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GSCode.Lexer\GSCode.Lexer.csproj" />
     <ProjectReference Include="..\GSCode.Parser\GSCode.Parser.csproj" />
   </ItemGroup>
 

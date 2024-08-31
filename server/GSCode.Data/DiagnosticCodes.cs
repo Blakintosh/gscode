@@ -47,6 +47,8 @@ public enum GSCErrorCodes
     ExpectedFunctionIdentifier = 2009,
     UnexpectedFunctionModifier = 2010,
     ExpectedParameterIdentifier = 2011,
+    ExpectedConstantIdentifier = 2012,
+    ExpectedForeachIdentifier = 2013,
 
     // 3xxx errors are issued by static analysis
     ObjectTokenNotValid = 3000,
@@ -118,6 +120,8 @@ public static class DiagnosticCodes
         { GSCErrorCodes.ExpectedFunctionIdentifier, new("Expected an identifier corresponding to a function name, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnexpectedFunctionModifier, new("Unexpected function modifier '{0}'. When used, modifiers must appear after the function keyword.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedParameterIdentifier, new("Expected an identifier corresponding to a parameter name, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedConstantIdentifier, new("Expected an identifier corresponding to a constant name, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedForeachIdentifier, new("Expected an identifier corresponding to a foreach variable name, but instead got '{0}'.", DiagnosticSeverity.Error) },
 
         // 3xxx
         { GSCErrorCodes.ObjectTokenNotValid, new("The operator '{0}' is not valid on non-object type '{1}'.", DiagnosticSeverity.Error) },

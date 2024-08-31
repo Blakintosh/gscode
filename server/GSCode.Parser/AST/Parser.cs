@@ -19,6 +19,16 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
 
     public TokenType CurrentTokenType => CurrentToken.Type;
     public Range CurrentTokenRange => CurrentToken.Range;
+    
+    [Flags]
+    private enum ParserContextFlags {
+        None = 0,
+        InFunctionBody = 1,
+        InSwitchBody = 2,
+        InLoopBody = 4,
+    }
+    
+    private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
 
     public ParserIntelliSense Sense { get; } = sense;
 
@@ -46,7 +56,6 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// <remarks>
     /// Script := DependenciesList ScriptDefnList
     /// </remarks>
-    /// <param name="currentToken"></param>
     /// <returns></returns>
     private ScriptNode Script()
     {
@@ -493,7 +502,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// Parses and outputs a brace block in a function.
     /// </summary>
     /// <remarks>
-    /// FunBraceBlock := OPENBRACE FunStmtList CLOSEBRACE
+    /// FunBraceBlock := OPENBRACE StmtList CLOSEBRACE
     /// </remarks>
     /// <returns></returns>
     private StmtListNode FunBraceBlock()
@@ -502,7 +511,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         Advance();
 
         // Parse the statements in the block
-        StmtListNode stmtListNode = FunStmtList();
+        StmtListNode stmtListNode = StmtList();
 
         if(!AdvanceIfType(TokenType.CloseBrace))
         {
@@ -515,10 +524,10 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// Parses a (possibly empty) list of statements in a function brace block.
     /// </summary>
     /// <remarks>
-    /// FunStmtList := FunStmt FunStmtList | ε
+    /// StmtList := Stmt StmtList | ε
     /// </remarks>
     /// <returns></returns>
-    private StmtListNode FunStmtList()
+    private StmtListNode StmtList()
     {
         switch(CurrentTokenType)
         {
@@ -539,11 +548,14 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             case TokenType.OpenDevBlock:
             case TokenType.OpenBrace:
             case TokenType.Semicolon:
+            // Contextual
+            case TokenType.Break when InLoopOrSwitch():
+            case TokenType.Continue when InLoop():
             // Expressions
             case TokenType.Identifier:
-                ASTNode? statement = FunStmt();
+                ASTNode? statement = Stmt();
 
-                StmtListNode rest = FunStmtList();
+                StmtListNode rest = StmtList();
                 rest.Statements.AddFirst(statement);
 
                 return rest;
@@ -554,59 +566,73 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     }
 
     /// <summary>
-    /// Parses a single statement in a function brace block.
+    /// Parses a single statement in a function.
     /// </summary>
     /// <remarks>
-    /// FunStmt := IfElseStmt | DoWhileStmt | WhileStmt | ForStmt | ForeachStmt | SwitchStmt | ReturnStmt | WaittillFrameEndStmt | WaitStmt | WaitRealTimeStmt | ConstStmt | DevBlock | BraceBlock | ExprStmt
+    /// Stmt := IfElseStmt | DoWhileStmt | WhileStmt | ForStmt | ForeachStmt | SwitchStmt | ReturnStmt | WaittillFrameEndStmt | WaitStmt | WaitRealTimeStmt | ConstStmt | DevBlock | BraceBlock | ExprStmt
     /// </remarks>
     /// <returns></returns>
-    private ASTNode? FunStmt()
+    private ASTNode? Stmt(ParserContextFlags newContext = ParserContextFlags.None)
     {
-        switch (CurrentTokenType)
+        bool isNewContext = false;
+        if(newContext != ParserContextFlags.None)
         {
-            case TokenType.If:
-                return IfElseStmt();
-            case TokenType.Do:
-                return DoWhileStmt();
-            case TokenType.While:
-                return WhileStmt();
-            case TokenType.For:
-                return ForStmt();
-            case TokenType.Foreach:
-                return ForeachStmt();
-            case TokenType.Switch:
-                return SwitchStmt();
-            case TokenType.Return:
-                return ReturnStmt();
-            case TokenType.WaittillFrameEnd:
-                return WaittillFrameEndStmt();
-            case TokenType.Wait:
-                return WaitStmt();
-            case TokenType.WaitRealTime:
-                return WaitRealTimeStmt();
-            case TokenType.Const:
-                return ConstStmt();
-            case TokenType.OpenDevBlock:
-                return DevBlock();
-            case TokenType.OpenBrace:
-                return BraceBlock();
-            case TokenType.Semicolon:
-                Advance();
-                return new EmptyStmtNode();
-            case TokenType.Identifier:
-                return ExprStmt();
+            isNewContext = EnterContextIfNewly(newContext);
         }
-
-        return null;
+        
+        ASTNode? result = CurrentTokenType switch
+        {
+            TokenType.If => IfElseStmt(),
+            TokenType.Do => DoWhileStmt(),
+            TokenType.While => WhileStmt(),
+            TokenType.For => ForStmt(),
+            TokenType.Foreach => ForeachStmt(),
+            TokenType.Switch => SwitchStmt(),
+            TokenType.Return => ReturnStmt(),
+            TokenType.WaittillFrameEnd => ControlFlowActionStmt(ASTNodeType.WaittillFrameEndStmt),
+            TokenType.Wait => ReservedFuncStmt(ASTNodeType.WaitStmt),
+            TokenType.WaitRealTime => ReservedFuncStmt(ASTNodeType.WaitRealTimeStmt),
+            TokenType.Const => ConstStmt(),
+            TokenType.OpenDevBlock => DevBlock(),
+            TokenType.OpenBrace => FunBraceBlock(),
+            TokenType.Break when InLoopOrSwitch() => ControlFlowActionStmt(ASTNodeType.BreakStmt),
+            TokenType.Continue when InLoop() => ControlFlowActionStmt(ASTNodeType.ContinueStmt),
+            TokenType.Semicolon => EmptyStmt(),
+            TokenType.Identifier => ExprStmt(),
+            _ => null
+        };
+        
+        ExitContextIfWasNewly(newContext, isNewContext);
+        return result;
     }
 
-    private IfElseStmtNode IfElseStmt()
+    /// <summary>
+    /// Parses an if-else statement in a function block.
+    /// </summary>
+    /// <remarks>
+    /// IfElseStmt := IfClause ElseOrEndClause
+    /// </remarks>
+    /// <returns></returns>
+    private IfStmtNode IfElseStmt()
     {
-        IfElseStmtNode firstBranch = IfStmt();
+        IfStmtNode firstClause = IfClause();
+            
+        // May go into another clause
+        firstClause.Else = ElseOrEndClause();
+
+        return firstClause;
     }
 
-    private IfElseStmtNode IfStmt()
+    /// <summary>
+    /// Parses a single if-clause and its then statement.
+    /// </summary>
+    /// <remarks>
+    /// IfClause := IF OPENPAREN Expr CLOSEPAREN Stmt
+    /// </remarks>
+    /// <returns></returns>
+    private IfStmtNode IfClause()
     {
+        // TODO: Fault tolerant logic
         // Pass IF
         Advance();
 
@@ -626,12 +652,436 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         }
 
         // Parse the then branch
-        ASTNode? then = FunStmt();
+        ASTNode? then = Stmt();
+        
+        return new()
+        {
+            Condition = condition,
+            Then = then
+        };
+    }
 
-        // Parse the false branch, if present
-        // TODO: ElseStmt production
+    /// <summary>
+    /// Parses an else or else-if clause if provided, or otherwise ends the if statement.
+    /// </summary>
+    /// <remarks>
+    /// ElseOrEndClause := ELSE ElseClause | ε
+    /// </remarks>
+    /// <returns></returns>
+    private IfStmtNode? ElseOrEndClause()
+    {
+        // Empty production
+        if (!AdvanceIfType(TokenType.Else))
+        {
+            return null;
+        }
+        
+        // Otherwise, seek an else or else-if
+        return ElseClause();
+    }
 
-        return new IfStmtNode(condition, then, falseBranch);
+    /// <summary>
+    /// Parses an else or else-if clause, including its then statement and any further clauses.
+    /// </summary>
+    /// <remarks>
+    /// ElseClause := IfClause ElseOrEndClause | Stmt
+    /// </remarks>
+    /// <returns></returns>
+    private IfStmtNode? ElseClause()
+    {
+        // Case 1: another if-clause
+        if (CurrentTokenType == TokenType.If)
+        {
+            IfStmtNode clause = IfClause();
+            
+            // May go into another clause
+            clause.Else = ElseOrEndClause();
+
+            return clause;
+        }
+        
+        // Case 2: just an else clause
+        ASTNode? then = Stmt();
+
+        return new()
+        {
+            Then = then
+        };
+    }
+
+    /// <summary>
+    /// Parses a do-while statement, including its then clause and condition.
+    /// </summary>
+    /// <remarks>
+    /// DoWhileStmt := DO Stmt WHILE OPENPAREN Expr CLOSEPAREN SEMICOLON
+    /// </remarks>
+    /// <returns></returns>
+    private DoWhileStmtNode DoWhileStmt()
+    {
+        // TODO: Fault tolerant logic
+        // Pass over DO
+        Advance();
+        
+        // Parse the loop's body
+        ASTNode then = Stmt(ParserContextFlags.InLoopBody);
+        
+        // Check for WHILE
+        if (!AdvanceIfType(TokenType.While))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, "while", CurrentToken.Lexeme);
+        }
+        
+        // Check for OPENPAREN
+        if (!AdvanceIfType(TokenType.OpenParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+        }
+        
+        // Parse the loop's condition
+        ExprNode condition = Expr();
+        
+        // Check for CLOSEPAREN
+        if (!AdvanceIfType(TokenType.CloseParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+        }
+        
+        // Check for SEMICOLON
+        if (!AdvanceIfType(TokenType.Semicolon))
+        {
+            AddError(GSCErrorCodes.ExpectedSemiColon, "do-while loop");
+        }
+        
+        return new DoWhileStmtNode(condition, then);
+    }
+
+    /// <summary>
+    /// Parses a while statement, including its condition and then clause.
+    /// </summary>
+    /// <remarks>
+    /// WhileStmt := WHILE OPENPAREN Expr CLOSEPAREN Stmt
+    /// </remarks>
+    /// <returns></returns>
+    private WhileStmtNode WhileStmt()
+    {
+        // TODO: Fault tolerant logic
+        // Pass over WHILE
+        Advance();
+        
+        // Check for OPENPAREN
+        if (!AdvanceIfType(TokenType.OpenParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+        }
+        
+        // Parse the loop's condition
+        ExprNode condition = Expr();
+        
+        // Check for CLOSEPAREN
+        if (!AdvanceIfType(TokenType.CloseParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+        }
+        
+        // Parse the loop's body, update context.
+        ASTNode then = Stmt(ParserContextFlags.InLoopBody);
+        
+        return new WhileStmtNode(condition, then);
+    }
+
+    /// <summary>
+    /// Parses a for statement, including its then clause and any initialization, condition, and increment clauses.
+    /// </summary>
+    /// <remarks>
+    /// ForStmt := FOR OPENPAREN AssignableExpr SEMICOLON Expr SEMICOLON AssignableExpr CLOSEPAREN Stmt
+    /// </remarks>
+    /// <returns></returns>
+    private ForStmtNode ForStmt()
+    {
+        // TODO: Fault tolerant logic
+        // Pass over FOR
+        Advance();
+        
+        // Check for OPENPAREN
+        if (!AdvanceIfType(TokenType.OpenParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+        }
+        
+        // Parse the loop's initialization
+        AssignableExprNode? init = AssignableExpr();
+        
+        // Check for SEMICOLON
+        if (!AdvanceIfType(TokenType.Semicolon))
+        {
+            AddError(GSCErrorCodes.ExpectedSemiColon, "for loop");
+        }
+        
+        // Parse the loop's condition
+        ExprNode? condition = Expr();
+        
+        // Check for SEMICOLON
+        if (!AdvanceIfType(TokenType.Semicolon))
+        {
+            AddError(GSCErrorCodes.ExpectedSemiColon, "for loop");
+        }
+        
+        // Parse the loop's increment
+        AssignableExprNode? increment = AssignableExpr();
+        
+        // Check for CLOSEPAREN
+        if (!AdvanceIfType(TokenType.CloseParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+        }
+        
+        // Parse the loop's body, update context.
+        ASTNode then = Stmt(ParserContextFlags.InLoopBody);
+        
+        return new(init, condition, increment, then);
+    }
+
+    /// <summary>
+    /// Parses a foreach statement, including its then clause and collection.
+    /// </summary>
+    /// <remarks>
+    /// ForeachStmt := FOREACH OPENPAREN IDENTIFIER IN Expr CLOSEPAREN Stmt
+    /// </remarks>
+    /// <returns></returns>
+    private ForeachStmtNode ForeachStmt()
+    {
+        // TODO: Fault tolerant logic
+        // Pass over FOREACH
+        Advance();
+        
+        // Check for OPENPAREN
+        if (!AdvanceIfType(TokenType.OpenParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+        }
+        
+        // Parse the loop's identifier
+        Token identifierToken = CurrentToken;
+        if (!AdvanceIfType(TokenType.Identifier))
+        {
+            AddError(GSCErrorCodes.ExpectedForeachIdentifier, CurrentToken.Lexeme);
+        }
+        
+        // Check for IN
+        if (!AdvanceIfType(TokenType.In))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, "in", CurrentToken.Lexeme);
+        }
+        
+        // Parse the loop's collection
+        ExprNode collection = Expr();
+        
+        // Check for CLOSEPAREN
+        if (!AdvanceIfType(TokenType.CloseParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+        }
+        
+        // Parse the loop's body, update context.
+        ASTNode then = Stmt(ParserContextFlags.InLoopBody);
+        
+        return new ForeachStmtNode(identifierToken, collection, then);
+    }
+    
+    /// <summary>
+    /// Parses a return statement.
+    /// </summary>
+    /// <remarks>
+    /// Adaptation of: ReturnStmt := RETURN ReturnValue SEMICOLON
+    /// where ReturnValue := Expr | ε
+    /// <returns></returns>
+    private ReturnStmtNode ReturnStmt()
+    {
+        // Pass over RETURN
+        Advance();
+
+        // No return value
+        if (AdvanceIfType(TokenType.Semicolon))
+        {
+            return new();
+        }
+        
+        // Parse the return value
+        ExprNode? value = Expr();
+        
+        // Check for SEMICOLON
+        if (!AdvanceIfType(TokenType.Semicolon))
+        {
+            AddError(GSCErrorCodes.ExpectedSemiColon, "return statement");
+        }
+        
+        return new(value);
+    }
+
+    /// <summary>
+    /// Parses and outputs any control-flow specific action using the same method.
+    /// </summary>
+    /// <param name="type"></param>
+    /// <remarks>
+    /// WaittillFrameEndStmt := WAITTILLFRAMEEND SEMICOLON
+    /// BreakStmt := BREAK SEMICOLON
+    /// ContinueStmt := CONTINUE SEMICOLON
+    /// </remarks>
+    /// <returns></returns>
+    private ControlFlowActionNode ControlFlowActionStmt(ASTNodeType type)
+    {
+        // Pass over the control flow keyword
+        Token actionToken = CurrentToken;
+        Advance();
+        
+        // Check for SEMICOLON
+        if (AdvanceIfType(TokenType.Semicolon))
+        {
+            return new(type, actionToken);
+        }
+
+        string statementName = type switch
+        {
+            ASTNodeType.WaittillFrameEndStmt => "waittillframeend statement",
+            ASTNodeType.BreakStmt => "break statement",
+            ASTNodeType.ContinueStmt => "continue statement",
+            _ => throw new ArgumentOutOfRangeException(nameof(type), "Invalid control flow action type")
+        };
+        AddError(GSCErrorCodes.ExpectedSemiColon, statementName);
+
+        return new(type, actionToken);
+    }
+
+    /// <summary>
+    /// Parses and outputs any reserved function using the same method.
+    /// </summary>
+    /// <param name="type"></param>
+    /// <remarks>
+    /// WaitStmt := WAIT Expr SEMICOLON
+    /// WaitRealTimeStmt := WAITREALTIME Expr SEMICOLON
+    /// </remarks>
+    /// <returns></returns>
+    private ReservedFuncStmtNode ReservedFuncStmt(ASTNodeType type)
+    {
+        // Pass over WAIT, WAITREALTIME, etc.
+        Advance();
+        
+        // Get the function's expression
+        ExprNode expr = Expr();
+        
+        // Check for SEMICOLON
+        if (AdvanceIfType(TokenType.Semicolon))
+        {
+            return new(type, expr);
+        }
+
+        string statementName = type switch
+        {
+            ASTNodeType.WaitStmt => "wait statement",
+            ASTNodeType.WaitRealTimeStmt => "waitrealtime statement",
+            _ => throw new ArgumentOutOfRangeException(nameof(type), "Invalid reserved function type")
+        };
+        AddError(GSCErrorCodes.ExpectedSemiColon, statementName);
+        
+        return new(type, expr);
+    }
+    
+    /// <summary>
+    /// Parses and outputs a constant declaration statement.
+    /// </summary>
+    /// <remarks>
+    /// ConstStmt := CONST IDENTIFIER ASSIGN Expr SEMICOLON
+    /// </remarks>
+    /// <returns></returns>
+    private ConstStmtNode ConstStmt()
+    {
+        // TODO: Fault tolerant logic
+        // Pass over CONST
+        Advance();
+        
+        // Parse the constant's identifier
+        Token identifierToken = CurrentToken;
+        if (!AdvanceIfType(TokenType.Identifier))
+        {
+            AddError(GSCErrorCodes.ExpectedConstantIdentifier, CurrentToken.Lexeme);
+        }
+        
+        // Check for ASSIGN
+        if (!AdvanceIfType(TokenType.Assign))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '=', CurrentToken.Lexeme);
+        }
+        
+        // Parse the constant's value
+        ExprNode value = Expr();
+        
+        // Check for SEMICOLON
+        if (!AdvanceIfType(TokenType.Semicolon))
+        {
+            AddError(GSCErrorCodes.ExpectedSemiColon, "constant declaration");
+        }
+
+        return new ConstStmtNode(identifierToken, value);
+    }
+
+    /// <summary>
+    /// Parses and outputs a dev block.
+    /// </summary>
+    /// <remarks>
+    /// DevBlock := OPENDEVBLOCK StmtList CLOSEDEVBLOCK
+    /// </remarks>
+    /// <returns></returns>
+    private DevBlockNode DevBlock()
+    {
+        // Pass over OPENDEVBLOCK
+        Advance();
+        
+        // Parse the statements in the block
+        StmtListNode stmtListNode = StmtList();
+        
+        // Check for CLOSEDEVBLOCK
+        if (!AdvanceIfType(TokenType.CloseDevBlock))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, "#/", CurrentToken.Lexeme);
+        }
+        
+        return new DevBlockNode(stmtListNode);
+    }
+
+    /// <summary>
+    /// Parses an expression statement.
+    /// </summary>
+    /// <remarks>
+    /// ExprStmt := AssignableExpr SEMICOLON
+    /// </remarks>
+    /// <returns></returns>
+    private ExprStmtNode ExprStmt()
+    {
+        // Parse the expression
+        AssignableExprNode expr = AssignableExpr();
+        
+        // Check for SEMICOLON
+        if (!AdvanceIfType(TokenType.Semicolon))
+        {
+            AddError(GSCErrorCodes.ExpectedSemiColon, "expression statement");
+        }
+        
+        return new ExprStmtNode(expr);
+    }
+
+    /// <summary>
+    /// Parses an empty statement (ie just a semicolon.)
+    /// </summary>
+    /// <remarks>
+    /// EmptyStmt := SEMICOLON
+    /// </remarks>
+    /// <returns></returns>
+    private EmptyStmtNode EmptyStmt()
+    {
+        // Pass over SEMICOLON
+        Advance();
+        
+        return new();
     }
 
     /// <summary>
@@ -643,21 +1093,20 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// <returns></returns>
     private FunKeywordsNode FunKeywords()
     {
-        // Got a keyword, prepend it to our keyword list
-        if (CurrentTokenType == TokenType.Private || CurrentTokenType == TokenType.Autoexec)
-        {
-            Token keywordToken = CurrentToken;
-            Advance();
-
-            FunKeywordsNode node = FunKeywords();
-            node.Keywords.AddFirst(keywordToken);
-
-            return node;
-        }
-
-
         // Empty production - base case
-        return new();
+        if (CurrentTokenType != TokenType.Private && CurrentTokenType != TokenType.Autoexec)
+        {
+            return new();
+        }
+        
+        // Got a keyword, prepend it to our keyword list
+        Token keywordToken = CurrentToken;
+        Advance();
+
+        FunKeywordsNode node = FunKeywords();
+        node.Keywords.AddFirst(keywordToken);
+
+        return node;
     }
 
     /// <summary>
@@ -783,6 +1232,38 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
 
         return Expr();
     }
+
+    private bool InLoopOrSwitch()
+    {
+        return (ContextFlags & ParserContextFlags.InLoopBody) != 0 || (ContextFlags & ParserContextFlags.InSwitchBody) != 0;
+    }
+
+    private bool InLoop()
+    {
+        return (ContextFlags & ParserContextFlags.InLoopBody) != 0;
+    }
+    
+    private bool EnterContextIfNewly(ParserContextFlags context)
+    {
+        // Already in this context further down.
+        if ((ContextFlags & context) != 0)
+        {
+            return false;
+        }
+        
+        ContextFlags |= context;
+        return true;
+    }
+    
+    private bool ExitContextIfWasNewly(ParserContextFlags context, bool wasNewly)
+    {
+        if (wasNewly)
+        {
+            ContextFlags ^= context;
+        }
+        return wasNewly;
+    }
+    
 
     private void EnterRecovery()
     {

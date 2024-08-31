@@ -23,7 +23,23 @@ internal enum ASTNodeType
     BraceBlock,
     EmptyStmt,
     IfStmt,
-    ElseStmt
+    WaitStmt,
+    WaitRealTimeStmt,
+    ConstStmt,
+    ExprStmt,
+    DoWhileStmt,
+    WhileStmt,
+    ForStmt,
+    ForeachStmt,
+    WaittillFrameEndStmt,
+    BreakStmt,
+    ContinueStmt,
+    ReturnStmt,
+    DevBlock,
+    SwitchStmt,
+    CaseList,
+    CaseLabel, 
+    DefaultLabel,
 }
 
 internal abstract class ASTNode(ASTNodeType nodeType)
@@ -114,16 +130,68 @@ internal sealed class StmtListNode(LinkedList<ASTNode>? statements = null) : AST
 
 internal sealed class EmptyStmtNode() : ASTNode(ASTNodeType.EmptyStmt) {}
 
-internal sealed class IfElseStmtNode() : ASTNode(ASTNodeType.IfStmt)
-{
-    public ExprNode Condition { get; init; }
-    public ASTNode Then { get; init; }
-    public ElseStmtNode? Else { get; init; }
-}
-
-internal sealed class ElseStmtNode() : ASTNode(ASTNodeType.ElseStmt)
+internal sealed class IfStmtNode() : ASTNode(ASTNodeType.IfStmt)
 {
     public ExprNode? Condition { get; init; }
     public ASTNode Then { get; init; }
-    public ElseStmtNode? Else { get; init; }
+    public IfStmtNode? Else { get; set; }
+}
+
+internal sealed class ReservedFuncStmtNode(ASTNodeType type, ExprNode expr) : ASTNode(type)
+{
+    public ExprNode? Expr { get; } = expr;
+}
+
+internal sealed class ConstStmtNode(Token identifierToken, ExprNode value) : ASTNode(ASTNodeType.ConstStmt)
+{
+    public string Identifier { get; } = identifierToken.Lexeme;
+    public Range Range { get; } = RangeHelper.From(identifierToken.Range.Start, value.Range.End);
+    public ExprNode Value { get; } = value;
+}
+
+internal sealed class ExprStmtNode(ExprNode expr) : ASTNode(ASTNodeType.ExprStmt)
+{
+    public ExprNode Expr { get; } = expr;
+}
+
+internal sealed class DoWhileStmtNode(ExprNode condition, ASTNode then) : ASTNode(ASTNodeType.DoWhileStmt)
+{
+    public ExprNode Condition { get; } = condition;
+    public ASTNode Then { get; } = then;
+}
+
+internal sealed class WhileStmtNode(ExprNode condition, ASTNode then) : ASTNode(ASTNodeType.WhileStmt)
+{
+    public ExprNode Condition { get; } = condition;
+    public ASTNode Then { get; } = then;
+}
+
+internal sealed class ForStmtNode(ASTNode? init, ExprNode? condition, ASTNode? increment, ASTNode then) : ASTNode(ASTNodeType.ForStmt)
+{
+    public ASTNode? Init { get; } = init;
+    public ExprNode? Condition { get; } = condition;
+    public ASTNode? Increment { get; } = increment;
+    public ASTNode Then { get; } = then;
+}
+
+internal sealed class ForeachStmtNode(Token identifier, ExprNode collection, ASTNode then) : ASTNode(ASTNodeType.ForeachStmt)
+{
+    public string Identifier { get; } = identifier.Lexeme;
+    public ExprNode Collection { get; } = collection;
+    public ASTNode Then { get; } = then;
+}
+
+internal sealed class ControlFlowActionNode(ASTNodeType type, Token actionToken) : ASTNode(type)
+{
+    public Range Range { get; } = actionToken.Range;
+}
+
+internal sealed class ReturnStmtNode(ExprNode? value = default) : ASTNode(ASTNodeType.ReturnStmt)
+{
+    public ExprNode? Value { get; } = value;
+}
+
+internal sealed class DevBlockNode(StmtListNode body) : ASTNode(ASTNodeType.DevBlock)
+{
+    public StmtListNode Body { get; } = body;
 }

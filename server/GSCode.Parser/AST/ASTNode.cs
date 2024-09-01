@@ -38,8 +38,15 @@ internal enum ASTNodeType
     DevBlock,
     SwitchStmt,
     CaseList,
+    CaseStmt,
     CaseLabel, 
     DefaultLabel,
+    Expr
+}
+
+internal enum ExprOperatorType
+{
+    Operand
 }
 
 internal abstract class ASTNode(ASTNodeType nodeType)
@@ -194,4 +201,39 @@ internal sealed class ReturnStmtNode(ExprNode? value = default) : ASTNode(ASTNod
 internal sealed class DevBlockNode(StmtListNode body) : ASTNode(ASTNodeType.DevBlock)
 {
     public StmtListNode Body { get; } = body;
+}
+
+internal sealed class SwitchStmtNode() : ASTNode(ASTNodeType.SwitchStmt)
+{
+    public ExprNode? Expression { get; init; }
+    public CaseListNode Cases { get; init; }
+}
+
+internal sealed class CaseListNode() : ASTNode(ASTNodeType.CaseList)
+{
+    public LinkedList<CaseStmtNode> Cases { get; } = new();
+}
+
+internal sealed class CaseStmtNode() : ASTNode(ASTNodeType.CaseStmt)
+{
+    public LinkedList<CaseLabelNode> Labels { get; } = new();
+    public required StmtListNode Body { get; init; }
+}
+
+internal sealed class CaseLabelNode(ASTNodeType labelType, ExprNode? value = default) : ASTNode(labelType)
+{
+    public ExprNode? Value { get; } = value;
+}
+
+internal abstract class ExprNode(ExprOperatorType operatorType, Range range) : ASTNode(ASTNodeType.Expr)
+{
+    public Range Range { get; } = range;
+    
+    public ExprOperatorType OperatorType { get; } = operatorType;
+}
+
+internal sealed class AssignmentExprNode(ExprOperatorType operatorType, Token identifier) 
+    : ExprNode(operatorType, identifier.Range)
+{
+    public string Identifier { get; } = identifier.Lexeme;
 }

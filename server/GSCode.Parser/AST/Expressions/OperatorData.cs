@@ -421,7 +421,7 @@ internal static class OperatorData
                                  (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float)))
                             {
                                 // ERROR: Operator '*' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "*", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "*", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -449,7 +449,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && rhsValue.Type != ScrDataTypes.Int))
                             {
                                 // ERROR: Operator '%' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "%", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "%", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -475,7 +475,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float && rhsValue.Type != ScrDataTypes.Vec3 && rhsValue.Type != ScrDataTypes.String)))
                             {
                                 // ERROR: Operator '+' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -514,7 +514,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float && rhsValue.Type != ScrDataTypes.Vec3)))
                             {
                                 // ERROR: Operator '-' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "-", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "-", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -554,7 +554,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && rhsValue.Type != ScrDataTypes.Int))
                             {
                                 // ERROR: Operator '<<' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "<<", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "<<", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -575,7 +575,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && rhsValue.Type != ScrDataTypes.Int))
                             {
                                 // ERROR: Operator '>>' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, ">>", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, ">>", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -601,7 +601,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float)))
                             {
                                 // ERROR: Operator '>' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, ">", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, ">", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -625,7 +625,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float)))
                             {
                                 // ERROR: Operator '>=' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, ">=", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, ">=", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -649,7 +649,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float)))
                             {
                                 // ERROR: Operator '<' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "<", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "<", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -673,7 +673,7 @@ internal static class OperatorData
                                 (!rhsValue.TypeUnknown() && (rhsValue.Type != ScrDataTypes.Int && rhsValue.Type != ScrDataTypes.Float)))
                             {
                                 // ERROR: Operator '<=' cannot be applied on operands of type ...
-                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "<=", lhsValue.TypeToString(), rhsValue.TypeToString()));
+                                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "<=", lhsValue.TypeToString(), rhsValue.TypeToString()));
                                 return ScrData.Default;
                             }
 
@@ -768,7 +768,7 @@ internal static class OperatorData
                                 if(left.Type != ScrDataTypes.Int || right.Type != ScrDataTypes.Int)
                                 {
                                     // ERROR: Operator ^ cannot be applied to operands of type '??' and '??'
-                                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Right!.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "^", left.TypeToString(), right.TypeToString()));
+                                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Right!.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "^", left.TypeToString(), right.TypeToString()));
                                     return ScrData.Default;
                                 }
                                 // ERROR: The left-hand side of an arithmetic operation must be of type 'int' or 'float'.
@@ -793,7 +793,7 @@ internal static class OperatorData
                                 if(left.Type != ScrDataTypes.Int || right.Type != ScrDataTypes.Int)
                                 {
                                     // ERROR: Operator | cannot be applied to operands of type '??' and '??'
-                                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Right!.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "|", left.TypeToString(), right.TypeToString()));
+                                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Right!.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "|", left.TypeToString(), right.TypeToString()));
                                     return ScrData.Default;
                                 }
 
@@ -850,7 +850,7 @@ internal static class OperatorData
                                     !right.CanEvaluateToBoolean())
                                 {
                                     // ERROR: The operator '||' is not valid on operands of type '??' and '??'.
-                                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(new Range(), DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "||", left.TypeToString(), right.TypeToString()));
+                                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(new Range(), DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "||", left.TypeToString(), right.TypeToString()));
                                     return ScrData.Default;
                                 }
 
@@ -887,7 +887,7 @@ internal static class OperatorData
                                 if(!left.CanEvaluateToBoolean() || !right.CanEvaluateToBoolean())
                                 {
                                     // ERROR: Operator '&&' cannot be applied to operands of type '??' and '??'
-                                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Right!.Range, DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes, "&&", left.TypeToString(), right.TypeToString()));
+                                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Right!.Range, DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes, "&&", left.TypeToString(), right.TypeToString()));
                                     return ScrData.Default;
                                 }
 
@@ -979,7 +979,7 @@ internal static class OperatorData
                                 return new ScrData (ScrDataTypes.Int);
                             }
 
-                            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(new Range(), DiagnosticSources.SPA, GSCErrorCodes.OperatorNotSupportedOnTypes,
+                            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(new Range(), DiagnosticSources.Spa, GSCErrorCodes.OperatorNotSupportedOnTypes,
                                 "|=", left.TypeToString(), right.TypeToString()));
                             return ScrData.Default;
                         }),

@@ -54,12 +54,12 @@ public sealed class ParserIntelliSense
 
     public void AddSpaDiagnostic(Range range, GSCErrorCodes code, params object?[] args)
     {
-        Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.SPA, code, args));
+        Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.Spa, code, args));
     }
 
     public void AddAstDiagnostic(Range range, GSCErrorCodes code, params object?[] args)
     {
-        Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.AST, code, args));
+        Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.Ast, code, args));
     }
 
     public void AddDependency(string scriptPath)

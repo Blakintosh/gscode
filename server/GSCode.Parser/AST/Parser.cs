@@ -527,8 +527,14 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// StmtList := Stmt StmtList | ε
     /// </remarks>
     /// <returns></returns>
-    private StmtListNode StmtList()
+    private StmtListNode StmtList(ParserContextFlags newContext = ParserContextFlags.None)
     {
+        bool isNewContext = false;
+        if(newContext != ParserContextFlags.None)
+        {
+            isNewContext = EnterContextIfNewly(newContext);
+        }
+        
         switch(CurrentTokenType)
         {
             // Control flow
@@ -558,9 +564,11 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
                 StmtListNode rest = StmtList();
                 rest.Statements.AddFirst(statement);
 
+                ExitContextIfWasNewly(newContext, isNewContext);
                 return rest;
             // Everything else - empty case
             default:
+                ExitContextIfWasNewly(newContext, isNewContext);
                 return new();
         }
     }
@@ -809,7 +817,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         }
         
         // Parse the loop's initialization
-        AssignableExprNode? init = AssignableExpr();
+        AssignmentExprNode? init = AssignmentExpr();
         
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
@@ -827,7 +835,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         }
         
         // Parse the loop's increment
-        AssignableExprNode? increment = AssignableExpr();
+        AssignmentExprNode? increment = AssignmentExpr();
         
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
@@ -887,6 +895,164 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         
         return new ForeachStmtNode(identifierToken, collection, then);
     }
+
+    /// <summary>
+    /// Parses and outputs a full switch statement.
+    /// </summary>
+    /// <remarks>
+    /// SwitchStmt := SWITCH OPENPAREN Expr CLOSEPAREN OPENBRACE CaseList CLOSEBRACE
+    /// </remarks>
+    /// <returns></returns>
+    private SwitchStmtNode SwitchStmt()
+    {
+        // TODO: Fault tolerant logic
+        // Pass over SWITCH
+        Advance();
+        
+        // Check for OPENPAREN
+        if (!AdvanceIfType(TokenType.OpenParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+        }
+        
+        // Parse the switch's expression
+        ExprNode expression = Expr();
+        
+        // Check for CLOSEPAREN
+        if (!AdvanceIfType(TokenType.CloseParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+        }
+        
+        // Check for OPENBRACE
+        if (!AdvanceIfType(TokenType.OpenBrace))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
+        }
+        
+        // Parse the cases
+        CaseListNode cases = CaseList();
+        
+        // Check for CLOSEBRACE
+        if (!AdvanceIfType(TokenType.CloseBrace))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '}', CurrentToken.Lexeme);
+        }
+        
+        return new SwitchStmtNode()
+        {
+            Expression = expression,
+            Cases = cases
+        };
+    }
+
+    /// <summary>
+    /// Parses and outputs a series of case labels and their associated statements.
+    /// </summary>
+    /// <remarks>
+    /// CaseList := CaseStmt CaseList | ε
+    /// </remarks>
+    /// <returns></returns>
+    private CaseListNode CaseList()
+    {
+        // Empty case
+        if (CurrentTokenType != TokenType.Case && CurrentTokenType != TokenType.Default)
+        {
+            return new();
+        }
+        
+        // Parse the current case, then prepend it to the rest of the cases.
+        CaseStmtNode caseStmt = CaseStmt();
+        CaseListNode rest = CaseList();
+        
+        rest.Cases.AddFirst(caseStmt);
+        
+        return rest;
+    }
+
+    /// <summary>
+    /// Parses and outputs a case statement, which includes one or more case labels and their associated statements.
+    /// </summary>
+    /// <remarks>
+    /// CaseStmt := CaseOrDefaultLabel CaseStmtRhs
+    /// </remarks>
+    /// <returns></returns>
+    private CaseStmtNode CaseStmt()
+    {
+        CaseLabelNode label = CaseOrDefaultLabel();
+        
+        // Now go to the RHS
+        CaseStmtNode rhs = CaseStmtRhs();
+        rhs.Labels.AddFirst(label);
+
+        return rhs;
+    }
+
+    /// <summary>
+    /// Parses and outputs the right-hand result of a case statement, which includes more labels or the case's
+    /// statement list.
+    /// </summary>
+    /// <remarks>
+    /// CaseStmtRhs := CaseOrDefaultLabel CaseStmtRhs | StmtList
+    /// </remarks>
+    /// <returns></returns>
+    private CaseStmtNode CaseStmtRhs()
+    {
+        if(CurrentTokenType == TokenType.Case || CurrentTokenType == TokenType.Default)
+        {
+            CaseLabelNode label = CaseOrDefaultLabel();
+            
+            // Self-recurse to exhaust all cases
+            CaseStmtNode rhs = CaseStmtRhs();
+            rhs.Labels.AddFirst(label);
+            return rhs;
+        }
+
+        StmtListNode production = StmtList(ParserContextFlags.InSwitchBody);
+        
+        return new()
+        {
+            Body = production
+        };
+    }
+
+    /// <summary>
+    /// Parses and outputs a case label or default label.
+    /// </summary>
+    /// <remarks>
+    /// CaseOrDefaultLabel := CASE Expr COLON | DEFAULT COLON
+    /// </remarks>
+    /// <returns></returns>
+    private CaseLabelNode CaseOrDefaultLabel()
+    {
+        // Default label
+        if (AdvanceIfType(TokenType.Default))
+        {
+            // Check for COLON
+            if (!AdvanceIfType(TokenType.Colon))
+            {
+                AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
+            }
+            return new(ASTNodeType.DefaultLabel);
+        }
+        
+        // Case label
+        if (!AdvanceIfType(TokenType.Case))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, "case", CurrentToken.Lexeme);
+        }
+        
+        // Parse the case's expression
+        ExprNode expression = Expr();
+        
+        // Check for COLON
+        if (!AdvanceIfType(TokenType.Colon))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
+        }
+        
+        return new(ASTNodeType.CaseLabel, expression);
+    }
     
     /// <summary>
     /// Parses a return statement.
@@ -894,6 +1060,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// <remarks>
     /// Adaptation of: ReturnStmt := RETURN ReturnValue SEMICOLON
     /// where ReturnValue := Expr | ε
+    /// </remarks>
     /// <returns></returns>
     private ReturnStmtNode ReturnStmt()
     {
@@ -1058,7 +1225,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     private ExprStmtNode ExprStmt()
     {
         // Parse the expression
-        AssignableExprNode expr = AssignableExpr();
+        AssignmentExprNode expr = AssignmentExpr();
         
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
@@ -1231,6 +1398,41 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         }
 
         return Expr();
+    }
+
+    /// <summary>
+    /// Parses and outputs a full assignment expression.
+    /// </summary>
+    /// <remarks>
+    /// AssignmentExpr := Operand AssignOp
+    /// </remarks>
+    /// <returns></returns>
+    private AssignmentExprNode? AssignmentExpr()
+    {
+        // TODO: Fault tolerant logic
+        // Parse the left-hand side of the assignment
+        ExprNode left = Operand();
+        
+        // Parse the assignment operator
+        AssignOpNode? op = AssignOp();
+    }
+
+    private ExprNode Expr()
+    {
+        
+    }
+
+    /// <summary>
+    /// Parses and outputs an operand within the context of an expression.
+    /// </summary>
+    /// <remarks>
+    /// Operand :=  Number | String | Bool | OPENPAREN ParenExpr CLOSEPAREN | OPENBRACKET ArrayOrDeref | IDENTIFIER |
+    ///             HASHSTRING | ANIMNAME | ANIMTREE
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode Operand()
+    {
+        // TODO: doesn't handle accessor..?
     }
 
     private bool InLoopOrSwitch()

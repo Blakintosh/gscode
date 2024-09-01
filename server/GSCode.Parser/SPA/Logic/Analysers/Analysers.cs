@@ -43,7 +43,7 @@ internal class ConstDeclarationAnalyser : DataFlowNodeAnalyser
                 // Check for redefinition
                 if (symbolTable.ContainsSymbol(symbolName))
                 {
-                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(tokenNode.Range, DiagnosticSources.SPA, GSCErrorCodes.RedefinitionOfSymbol, symbolName));
+                    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(tokenNode.Range, DiagnosticSources.Spa, GSCErrorCodes.RedefinitionOfSymbol, symbolName));
                     return;
                 }
 
@@ -59,12 +59,12 @@ internal class ConstDeclarationAnalyser : DataFlowNodeAnalyser
             }
 
             // ERROR: Variable declaration expected.
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(operationNode.Left!.Range, DiagnosticSources.SPA, GSCErrorCodes.VariableDeclarationExpected));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(operationNode.Left!.Range, DiagnosticSources.Spa, GSCErrorCodes.VariableDeclarationExpected));
         }
         else if (firstNode is not null)
         {
             // ERROR: The expression following a constant declaration must be an assignment.
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(firstNode.Range, DiagnosticSources.SPA, GSCErrorCodes.InvalidExpressionFollowingConstDeclaration));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(firstNode.Range, DiagnosticSources.Spa, GSCErrorCodes.InvalidExpressionFollowingConstDeclaration));
         }
     }
 }
@@ -141,14 +141,14 @@ internal class IfStatementAnalyser : DataFlowNodeAnalyser
         // Empty expression - which isn't valid for if
         if(result.IsVoid())
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.TextRange, DiagnosticSources.SPA, GSCErrorCodes.ExpressionExpected));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.TextRange, DiagnosticSources.Spa, GSCErrorCodes.ExpressionExpected));
             return;
         }
 
         // Check that it can resolve to a bool
         if(!result.TypeUnknown() && !result.CanEvaluateToBoolean())
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.SPA, GSCErrorCodes.NoImplicitConversionExists, result.TypeToString(), "bool"));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.Spa, GSCErrorCodes.NoImplicitConversionExists, result.TypeToString(), "bool"));
         }
 
         // Check if it came out to a constant value
@@ -196,7 +196,7 @@ internal class ElseIfStatementAnalyser : DataFlowNodeAnalyser
             if(previousNode.Type != NodeTypes.ElseIfStatement &&
                 previousNode.Type != NodeTypes.IfStatement)
             {
-                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.StartToken.TextRange, DiagnosticSources.SPA, GSCErrorCodes.MissingAccompanyingConditional));
+                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.StartToken.TextRange, DiagnosticSources.Spa, GSCErrorCodes.MissingAccompanyingConditional));
             }
         }
 
@@ -209,14 +209,14 @@ internal class ElseIfStatementAnalyser : DataFlowNodeAnalyser
         // Empty expression - which isn't valid for if
         if (result.IsVoid())
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.TextRange, DiagnosticSources.SPA, GSCErrorCodes.ExpressionExpected));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.TextRange, DiagnosticSources.Spa, GSCErrorCodes.ExpressionExpected));
             return;
         }
 
         // Check that it can resolve to a bool
         if (!result.TypeUnknown() && !result.CanEvaluateToBoolean())
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.SPA, GSCErrorCodes.NoImplicitConversionExists, result.TypeToString(), "bool"));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.Spa, GSCErrorCodes.NoImplicitConversionExists, result.TypeToString(), "bool"));
         }
 
         // Check if it came out to a constant value
@@ -247,7 +247,7 @@ internal class ElseIfStatementAnalyser : DataFlowNodeAnalyser
                 {
                     Start = start,
                     End = end
-                }, DiagnosticSources.SPA, GSCErrorCodes.UnreachableCodeDetected));
+                }, DiagnosticSources.Spa, GSCErrorCodes.UnreachableCodeDetected));
             }
         }
     }
@@ -263,7 +263,7 @@ internal class ElseStatementAnalyser : DataFlowNodeAnalyser
             if (previousNode.Type != NodeTypes.ElseIfStatement &&
                 previousNode.Type != NodeTypes.IfStatement)
             {
-                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.StartToken.TextRange, DiagnosticSources.SPA, GSCErrorCodes.MissingAccompanyingConditional));
+                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.StartToken.TextRange, DiagnosticSources.Spa, GSCErrorCodes.MissingAccompanyingConditional));
             }
         }
     }
@@ -435,7 +435,7 @@ internal class WhileLoopAnalyser : DataFlowNodeAnalyser
             (previousNode is not ASTNode ||
             previousNode.Type != NodeTypes.DoLoop))
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.StartToken.TextRange, DiagnosticSources.SPA, GSCErrorCodes.MissingDoLoop));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.StartToken.TextRange, DiagnosticSources.Spa, GSCErrorCodes.MissingDoLoop));
         }
 
         // Extract the expression component
@@ -447,14 +447,14 @@ internal class WhileLoopAnalyser : DataFlowNodeAnalyser
         // Empty expression - which isn't valid for if
         if (result.IsVoid())
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.TextRange, DiagnosticSources.SPA, GSCErrorCodes.ExpressionExpected));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(currentNode.TextRange, DiagnosticSources.Spa, GSCErrorCodes.ExpressionExpected));
             return;
         }
 
         // Check that it can resolve to a bool
         if (!result.TypeUnknown() && !result.CanEvaluateToBoolean())
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.SPA, GSCErrorCodes.NoImplicitConversionExists, result.TypeToString(), "bool"));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.Spa, GSCErrorCodes.NoImplicitConversionExists, result.TypeToString(), "bool"));
         }
     }
 }
@@ -539,7 +539,7 @@ internal class WaitStatementAnalyser : DataFlowNodeAnalyser
         
         if(!value.IsOfTypes(ScrDataTypes.Int, ScrDataTypes.Float))
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.SPA, GSCErrorCodes.NoImplicitConversionExists, value.TypeToString(), "int | float"));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.Spa, GSCErrorCodes.NoImplicitConversionExists, value.TypeToString(), "int | float"));
             return;
         }
 
@@ -550,7 +550,7 @@ internal class WaitStatementAnalyser : DataFlowNodeAnalyser
             // Check if the value is less than or equal to 0
             if (number <= 0)
             {
-                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.SPA, GSCErrorCodes.CannotWaitNegativeDuration));
+                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.Spa, GSCErrorCodes.CannotWaitNegativeDuration));
                 return;
             }
 
@@ -567,7 +567,7 @@ internal class WaitStatementAnalyser : DataFlowNodeAnalyser
                 double rounded = Math.Ceiling(number / 0.05) * 0.05;
 
                 // Add the diagnostic message
-                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.SPA, GSCErrorCodes.BelowVmRefreshRate, "GSC", "20", number, rounded));
+                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.Spa, GSCErrorCodes.BelowVmRefreshRate, "GSC", "20", number, rounded));
             }
         }
     }
@@ -623,7 +623,7 @@ internal class ExpressionStatementAnalyser : DataFlowNodeAnalyser
             operationNode.Operation != OperatorOps.NewObject &&
             operationNode.Operation != OperatorOps.CalledOnEntity))
         {
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(firstNode!.Range, DiagnosticSources.SPA, GSCErrorCodes.InvalidExpressionStatement));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(firstNode!.Range, DiagnosticSources.Spa, GSCErrorCodes.InvalidExpressionStatement));
         }
     }
 }

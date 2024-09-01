@@ -10,9 +10,9 @@ public static class DiagnosticSources
 {
     public const string Lexer = "gscode-lex"; // Lexical token creation
     public const string Preprocessor = "gscode-mac"; // Preprocessor transformations
-    public const string AST = "gscode-ast"; // Syntax tree generation
-    public const string SPA = "gscode-spa"; // Static program analysis
-    public const string IDE = "gscode-ide"; // IDE enforced conventions
+    public const string Ast = "gscode-ast"; // Syntax tree generation
+    public const string Spa = "gscode-spa"; // Static program analysis
+    public const string Ide = "gscode-ide"; // IDE enforced conventions
 }
 
 public enum GSCErrorCodes

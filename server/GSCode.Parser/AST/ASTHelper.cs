@@ -28,8 +28,8 @@ namespace GSCode.Parser.AST
                 Message: {5}
                 """, 
             range.Start.Line, range.Start.Character, range.End.Line, range.End.Character, code,
-                DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.AST, code, arguments).Message, ScriptFile);
-            Sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.AST, code, arguments));
+                DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.Ast, code, arguments).Message, ScriptFile);
+            Sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.Ast, code, arguments));
         }
     }
 }

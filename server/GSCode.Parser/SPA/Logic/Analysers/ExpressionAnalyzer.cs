@@ -115,7 +115,7 @@ internal static class ExpressionAnalyzer
             //{
             //    sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.NotDefined, node.SourceToken.Contents));
             //}
-            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.DoesNotContainMember, node.SourceToken.Contents, left.TypeToString()));
+            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.DoesNotContainMember, node.SourceToken.Contents, left.TypeToString()));
             return ScrData.Default;
         }
 
@@ -161,7 +161,7 @@ internal static class ExpressionAnalyzer
         {
             if (lhsContext is not null)
             {
-                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.IndexerExpected));
+                sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.IndexerExpected));
                 return ScrData.Default;
             }
 
@@ -174,7 +174,7 @@ internal static class ExpressionAnalyzer
         }
 
         // ERROR: Square bracket collection initialisation is not supported in GSC. Use array() instead.
-        sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.SPA, GSCErrorCodes.SquareBracketInitialisationNotSupported));
+        sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(node.Range, DiagnosticSources.Spa, GSCErrorCodes.SquareBracketInitialisationNotSupported));
 
         return ScrData.Default;
     }

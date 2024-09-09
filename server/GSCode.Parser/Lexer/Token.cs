@@ -151,6 +151,7 @@ internal enum TokenType
     False, // false
     True, // true
     String, // "string"
+    // ReSharper disable once InconsistentNaming
     IString, // &"string"
     CompilerHash, // #"string"
     Integer, // 123

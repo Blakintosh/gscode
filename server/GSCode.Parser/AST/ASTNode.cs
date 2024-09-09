@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using GSCode.Parser.DFA;
 
 namespace GSCode.Parser.AST;
 
@@ -41,12 +42,16 @@ internal enum ASTNodeType
     CaseStmt,
     CaseLabel, 
     DefaultLabel,
-    Expr
+    Expr,
+    Primitive
 }
 
 internal enum ExprOperatorType
 {
-    Operand
+    Operand,
+    Ternary,
+    Binary,
+    Vector,
 }
 
 internal abstract class ASTNode(ASTNodeType nodeType)
@@ -234,6 +239,84 @@ internal abstract class ExprNode(ExprOperatorType operatorType, Range range) : A
 
 internal sealed class AssignmentExprNode(ExprOperatorType operatorType, Token identifier) 
     : ExprNode(operatorType, identifier.Range)
+{
+    public string Identifier { get; } = identifier.Lexeme;
+}
+
+internal sealed class DataExprNode : ExprNode
+{
+    public object? Value { get; }
+    public ScrDataTypes Type { get; }
+
+    private DataExprNode(object? value, ScrDataTypes dataType, Range range) : base(ExprOperatorType.Operand, range)
+    {
+        Value = value;
+        Type = dataType;
+    }
+
+    public static DataExprNode From(Token token)
+    {
+        try
+        {
+            return token.Type switch
+            {
+                // Numbers
+                TokenType.Float => new(float.Parse(token.Lexeme), ScrDataTypes.Float, token.Range),
+                TokenType.Integer => new(int.Parse(token.Lexeme), ScrDataTypes.Int, token.Range),
+                TokenType.Hex => new(int.Parse(token.Lexeme[2..], System.Globalization.NumberStyles.HexNumber),
+                    ScrDataTypes.Int, token.Range),
+                // Strings - remove quotes
+                TokenType.String => new(token.Lexeme[1..^1], ScrDataTypes.String, token.Range),
+                TokenType.IString => new(token.Lexeme[2..^1], ScrDataTypes.IString, token.Range),
+                TokenType.CompilerHash => new(token.Lexeme[2..^1], ScrDataTypes.Hash, token.Range),
+                // Booleans and undefined
+                TokenType.True => new(true, ScrDataTypes.Bool, token.Range),
+                TokenType.False => new(false, ScrDataTypes.Bool, token.Range),
+                TokenType.Undefined => new(null, ScrDataTypes.Undefined, token.Range),
+                // AnimTree
+                TokenType.AnimTree => new(token.Lexeme, ScrDataTypes.AnimTree, token.Range),
+                // ...
+                _ => throw new ArgumentOutOfRangeException(nameof(token.Type), token.Type, null)
+            };
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception(
+                "Failed to parse primitive token, which suggests that the lexer is not producing valid tokens.",
+                ex);
+        }
+    }
+
+    public static DataExprNode EmptyArray(Token openBracket, Token closeBracket)
+    {
+        return new(new List<object>(), ScrDataTypes.Array, RangeHelper.From(openBracket.Range.Start, closeBracket.Range.End));
+    }
+}
+
+// TODO: this is not ideal because it doesn't include the parentheses in the range.
+internal sealed class VectorExprNode(ExprNode x, ExprNode y, ExprNode z)
+    : ExprNode(ExprOperatorType.Vector, RangeHelper.From(x.Range.Start, z.Range.End))
+{
+    public ExprNode X { get; } = x;
+    public ExprNode Y { get; } = y;
+    public ExprNode Z { get; } = z;
+
+}
+
+// TODO: this is not ideal because it doesn't include the parentheses in the range.
+internal sealed class TernaryExprNode(ExprNode condition, ExprNode then, ExprNode @else)
+    : ExprNode(ExprOperatorType.Ternary, RangeHelper.From(condition.Range.Start, @else.Range.End))
+{
+    public ExprNode Condition { get; } = condition;
+    public ExprNode Then { get; } = then;
+    public ExprNode Else { get; } = @else;
+}
+
+internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.Operand, identifier.Range)
 {
     public string Identifier { get; } = identifier.Lexeme;
 }

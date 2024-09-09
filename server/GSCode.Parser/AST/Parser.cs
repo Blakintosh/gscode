@@ -1,6 +1,7 @@
 ﻿using GSCode.Parser.Lexer;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -1427,12 +1428,145 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// </summary>
     /// <remarks>
     /// Operand :=  Number | String | Bool | OPENPAREN ParenExpr CLOSEPAREN | OPENBRACKET ArrayOrDeref | IDENTIFIER |
-    ///             HASHSTRING | ANIMNAME | ANIMTREE
+    ///             COMPILERHASH | ANIMIDENTIFIER | ANIMTREE
     /// </remarks>
     /// <returns></returns>
     private ExprNode Operand()
     {
-        // TODO: doesn't handle accessor..?
+        // TODO: Fault tolerant logic
+        switch (CurrentTokenType)
+        {
+            // All the primitives
+            case TokenType.Integer:
+            case TokenType.Float:
+            case TokenType.Hex:
+            case TokenType.String:
+            case TokenType.IString:
+            case TokenType.True:
+            case TokenType.False:
+            case TokenType.Undefined:
+            case TokenType.CompilerHash:
+            case TokenType.AnimTree:
+                Token primitiveToken = CurrentToken;
+                Advance();
+                return DataExprNode.From(primitiveToken);
+            // Could be a ternary expression, parenthesised expression, or a vector.
+            case TokenType.OpenParen:
+                Advance();
+                ExprNode parenExpr = ParenExpr();
+                
+                // Check for CLOSEPAREN
+                if (!AdvanceIfType(TokenType.CloseParen))
+                {
+                    AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+                }
+
+                return parenExpr;
+            // Could be an array definition, or a dereference over an object or function ptr.
+            case TokenType.OpenBracket:
+                return ArrayOrDeref();
+            // Identifier
+            case TokenType.Identifier:
+                Token identifierToken = CurrentToken;
+                Advance();
+                return new IdentifierExprNode(identifierToken);
+        }
+    }
+
+    /// <summary>
+    /// Parses and outputs a parenthesised sub-expression, which could also be a ternary or vector expression.
+    /// </summary>
+    /// <remarks>
+    /// ParenExpr := Expr ConditionalOrVector
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode ParenExpr()
+    {
+        ExprNode expr = Expr();
+        
+        // Could be a ternary expression or a vector
+        return ConditionalOrVector(expr);
+    }
+
+    /// <summary>
+    /// Parses and outputs a ternary or vector expression if present.
+    /// </summary>
+    /// <param name="leftmostExpr">The leftmost subexpression of this node.</param>
+    /// <remarks>
+    /// ConditionalOrVector := QUESTIONMARK Expr COLON Expr | COMMA Expr COMMA Expr | ε
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode ConditionalOrVector(ExprNode leftmostExpr)
+    {
+        // Ternary expression
+        if (AdvanceIfType(TokenType.QuestionMark))
+        {
+            ExprNode trueExpr = Expr();
+            
+            // Check for COLON
+            if (!AdvanceIfType(TokenType.Colon))
+            {
+                AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
+            }
+            
+            ExprNode falseExpr = Expr();
+            
+            return new TernaryExprNode(leftmostExpr, trueExpr, falseExpr);
+        }
+        
+        // Not a vector expression, just a parenthesised sub-expression
+        if (!AdvanceIfType(TokenType.Comma))
+        {
+            return leftmostExpr;
+        }
+        
+        // Vector expression
+        
+        ExprNode secondExpr = Expr();
+            
+        // Check for COMMA
+        if (!AdvanceIfType(TokenType.Comma))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ',', CurrentToken.Lexeme);
+        }
+            
+        ExprNode thirdExpr = Expr();
+            
+        return new VectorExprNode(leftmostExpr, secondExpr, thirdExpr);
+    }
+    
+    /// <summary>
+    /// Parses and outputs either an array definition or a dereference expression.
+    /// </summary>
+    /// <remarks>
+    /// ArrayOrDeref := CLOSEBRACKET | OPENBRACKET Expr CLOSEBRACKET CLOSEBRACKET
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode ArrayOrDeref()
+    {
+        // Advance over OPENBRACKET
+        Token openBracket = Consume();
+        
+        // This is an empty array
+        if (ConsumeIfType(TokenType.CloseBracket, out Token? closeBracket))
+        {
+            return DataExprNode.EmptyArray(openBracket, closeBracket);
+        }
+        
+        // This is a dereference expression
+        if (AdvanceIfType(TokenType.OpenBracket))
+        {
+            // Parse the dereference expression
+            ExprNode derefExpr = Expr();
+            
+            // Check for CLOSEBRACKET, twice
+            if (!AdvanceIfType(TokenType.CloseBracket) && !AdvanceIfType(TokenType.CloseBracket))
+            {
+                AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
+            }
+
+            return DereferenceExprNode(derefExpr);
+        }
     }
 
     private bool InLoopOrSwitch()
@@ -1483,6 +1617,14 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         CurrentToken = CurrentToken.Next;
     }
 
+    private Token Consume()
+    {
+        Token consumed = CurrentToken;
+        Advance();
+        
+        return consumed;
+    }
+
     private bool AdvanceIfType(TokenType type)
     {
         if(CurrentTokenType == type)
@@ -1494,6 +1636,19 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         return false;
     }
 
+    private bool ConsumeIfType(TokenType type, [NotNullWhen(true)] out Token? consumed)
+    {
+        Token current = CurrentToken;
+        if(AdvanceIfType(type))
+        {
+            consumed = current;
+            return true;
+        }
+
+        consumed = default;
+        return false;
+    }
+    
     private void AddError(GSCErrorCodes errorCode, params object[]? args)
     {
         // We're in a fault recovery state

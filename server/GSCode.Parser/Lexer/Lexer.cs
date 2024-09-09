@@ -283,6 +283,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
             return CharMatch(TokenType.Precache, "#precache");
         }
 
+        // TODO: Why do we have this, does GSC have a use case for #?
         return CharMatch(TokenType.Hash, "#");
     }
 

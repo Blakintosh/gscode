@@ -22,6 +22,7 @@ namespace GSCode.Parser.DFA;
 /// float       -   Floating point number value
 /// number      -   Number. Equivalent to int | float, but used to indicate that any number is expected.
 /// string      -   Strings
+/// istring     -   (probably a) Interned string, used for special strings like localisation.
 /// array       -   Arrays of ScrData - how these will be handled rn is not 100% certain. Need to consider Dictionary of ScrData
 ///                 ... may become its own data structure (need to see how GSC enumerates mixed usage, if it even allows that)
 /// vec3        -   3-value tuple
@@ -48,14 +49,21 @@ internal enum ScrDataTypes : uint
 
     // Reference types
     String = 1 << 3,
-    Array = 1 << 4,
-    Vec3 = 1 << 5,
-    Struct = 1 << 6,
-    Entity = (1 << 7) | Struct, // extension of the struct type
-    Object = 1 << 8,
+    // ReSharper disable once InconsistentNaming
+    IString = (1 << 4) | String, // falls back to being a regular string if not found
+    Array = 1 << 5,
+    Vec3 = 1 << 6,
+    Struct = 1 << 7,
+    Entity = (1 << 8) | Struct, // extension of the struct type
+    Object = 1 << 9,
+    
+    // Misc types
+    Hash = 1 << 10,
+    AnimTree = 1 << 11,
+    Anim = 1 << 12,
 
     // Undefined
-    Undefined = 1 << 9,
+    Undefined = 1 << 13,
 }
 
 internal enum ScrInstanceTypes

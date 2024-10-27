@@ -58,6 +58,7 @@ internal enum ExprOperatorType
     Postfix,
     MethodCall,
     FunctionCall,
+    Indexer
 }
 
 internal abstract class ASTNode(ASTNodeType nodeType)
@@ -328,7 +329,7 @@ internal sealed class BinaryExprNode(ExprNode left, Token operatorToken, ExprNod
     public Token Operator { get; } = operatorToken;
     public ExprNode Right { get; } = right;
     
-    public TokenType Operation => operatorToken.Type;
+    public TokenType Operation => Operator.Type;
 }
 
 internal sealed class PrefixExprNode(Token operatorToken, ExprNode operand)
@@ -337,7 +338,7 @@ internal sealed class PrefixExprNode(Token operatorToken, ExprNode operand)
     public Token Operator { get; } = operatorToken;
     public ExprNode Operand { get; } = operand;
     
-    public TokenType Operation => operatorToken.Type;
+    public TokenType Operation => Operator.Type;
 }
 
 internal sealed class PostfixExprNode(ExprNode operand, Token operatorToken)
@@ -346,7 +347,7 @@ internal sealed class PostfixExprNode(ExprNode operand, Token operatorToken)
     public ExprNode Operand { get; } = operand;
     public Token Operator { get; } = operatorToken;
     
-    public TokenType Operation => operatorToken.Type;
+    public TokenType Operation => Operator.Type;
 }
 
 // TODO: might need to include the whole range (ie new + the brackets)
@@ -385,4 +386,10 @@ internal sealed class ArgsListNode(Range range, LinkedList<ParamNode>? arguments
 {
     public LinkedList<ParamNode> Arguments { get; } = arguments ?? [];
     public Range Range { get; } = range;
+}
+
+internal sealed class ArrayIndexNode(Range range, ExprNode array, ExprNode index) : ExprNode(ExprOperatorType.Indexer, range)
+{
+    public ExprNode Array { get; } = array;
+    public ExprNode Index { get; } = index;
 }

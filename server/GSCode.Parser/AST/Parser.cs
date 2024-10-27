@@ -1913,6 +1913,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
                 
                 return new PrefixExprNode(operatorToken, operand);
             case TokenType.Thread:
+                // TODO: this might need to be moved further down into CallOrAccessOp
                 Advance();
                 
                 return ThreadedCallOp();
@@ -1949,7 +1950,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// Parses and outputs function call, accessor and higher precedence operations.
     /// </summary>
     /// <remarks>
-    /// CallOrAccessOp := OPENBRACKET DerefOrArrayOp | Operand CallOrAccessOpRhs
+    /// CallOrAccessOp := OPENBRACKET DerefOrArrayOp | Operand CallOrAccessOpRhs | THREAD Operand CallOpRhs
     /// </remarks>
     /// <returns></returns>
     private ExprNode? CallOrAccessOp()
@@ -1958,6 +1959,13 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         if (ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
         {
             return DerefOrArrayOp(openBracket);
+        }
+
+        // Threaded call
+        if (ConsumeIfType(TokenType.Thread, out Token? threadToken))
+        {
+            ExprNode? leftQualifier = Operand();
+            return new PrefixExprNode(threadToken, CallOpRhs(leftQualifier));
         }
         
         // Could be a function call, operand, accessor, etc.
@@ -2041,25 +2049,50 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     }
 
     /// <summary>
-    /// Parses the right-hand side of a function call or accessor operation.
+    /// Parses the right-hand side of a function call, accessor operation, or called-on threaded/function calls.
     /// </summary>
     /// <remarks>
-    /// CallOrAccessOpRhs := SCOPERESOLUTION Operand FunCall | FunCall | AccessOpRhs
+    /// CallOrAccessOpRhs := CallOpRhs | AccessOpRhs | CallOrAccessOp
+    /// 
+    /// TODO TODO TODO: not sure CallOrAccessOp here (for parsing patterns like self foo::bar()) is correct - this might be a left-recursive loop
     /// </remarks>
     /// <param name="left"></param>
     /// <returns></returns>
     private ExprNode? CallOrAccessOpRhs(ExprNode left)
     {
         // TODO: current grammar won't handle self thread ... but we can bolt this on later
-        
+        if(CurrentTokenType == TokenType.ScopeResolution || CurrentTokenType == TokenType.OpenParen)
+        {
+            return CallOpRhs(left);
+        }
+
+        // TODO: self foo::bar() is a thing, but we don't handle it yet
+        // TODO TODO TODO: not sure CallOrAccessOp here (for parsing patterns like self foo::bar()) is correct - this is a left-recursive loop
+        // we can take advantage of the fact that self foo.bar() is not valid syntax - it's self [[foo.bar]]() so just discriminate based on whether
+        // the next token is openbracket (for deref) or otherwise go for an Operand and then CallOpRhs
+
+        // Otherwise - accessor or array index
+        return AccessOpRhs(left);
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a function call operation.
+    /// </summary>
+    /// <remarks>
+    /// CallOpRhs := SCOPERESOLUTION Operand FunCall | FunCall
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode? CallOpRhs(ExprNode left)
+    {
         if (AdvanceIfType(TokenType.ScopeResolution))
         {
             // TODO: fault tolerance
             ExprNode memberOfNamespace = Operand();
-            
+
             NamespacedMemberRefNode namespacedMember = new(left, memberOfNamespace);
             ArgsListNode? functionArgs = FunCall();
-            
+
             return new FunCallNode(namespacedMember, functionArgs);
         }
 
@@ -2070,11 +2103,16 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             ArgsListNode? functionArgs = FunCall();
             return new FunCallNode(left, functionArgs);
         }
-        
-        // Otherwise - accessor or array index
-        return AccessOpRhs(left);
     }
 
+    /// <summary>
+    /// Parses and outputs the right-hand side of an accessor operation.
+    /// </summary>
+    /// <remarks>
+    /// AccessOpRhs := DOT Operand AccessOpRhs | OPENBRACKET Expr CLOSEBRACKET AccessOpRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
     private ExprNode? AccessOpRhs(ExprNode left)
     {
         // Accessor
@@ -2091,13 +2129,16 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             ExprNode index = Expr();
             
             // Check for CLOSEBRACKET
-            if (!AdvanceIfType(TokenType.CloseBracket))
+            if (!ConsumeIfType(TokenType.CloseBracket, out Token? closeBracket))
             {
                 AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
             }
 
-            return AccessOpRhs(new ArrayIndexExprNode(left, openBracket, index));
+            return AccessOpRhs(new ArrayIndexNode(RangeHelper.From(left.Range.Start, closeBracket.Range.End), left, index));
         }
+
+        // Empty - just an operand further up
+        return left;
     }
 
     /// <summary>

@@ -49,6 +49,9 @@ public enum GSCErrorCodes
     ExpectedParameterIdentifier = 2011,
     ExpectedConstantIdentifier = 2012,
     ExpectedForeachIdentifier = 2013,
+    ExpectedAssignmentOperator = 2014,
+    ExpectedClassIdentifier = 2015,
+    ExpectedMethodIdentifier = 2016,
 
     // 3xxx errors are issued by static analysis
     ObjectTokenNotValid = 3000,
@@ -83,7 +86,7 @@ public enum GSCErrorCodes
     IndexerExpected = 3029,
     NotDefined = 3030,
     NoEnclosingLoop = 3031,
-    CannotAssignToReadOnlyProperty = 3032,
+    CannotAssignToReadOnlyProperty = 3032
 }
 
 public static class DiagnosticCodes
@@ -122,6 +125,9 @@ public static class DiagnosticCodes
         { GSCErrorCodes.ExpectedParameterIdentifier, new("Expected an identifier corresponding to a parameter name, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedConstantIdentifier, new("Expected an identifier corresponding to a constant name, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedForeachIdentifier, new("Expected an identifier corresponding to a foreach variable name, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedAssignmentOperator, new("Expected an assignment operator, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedClassIdentifier, new("Expected an identifier corresponding to a class name, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedMethodIdentifier, new("Expected an identifier corresponding to a method name, but instead got '{0}'.", DiagnosticSeverity.Error) },
 
         // 3xxx
         { GSCErrorCodes.ObjectTokenNotValid, new("The operator '{0}' is not valid on non-object type '{1}'.", DiagnosticSeverity.Error) },

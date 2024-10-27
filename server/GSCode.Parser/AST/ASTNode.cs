@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GSCode.Parser.DFA;
+using Microsoft.VisualStudio.LanguageServer.Protocol;
 
 namespace GSCode.Parser.AST;
 
@@ -43,6 +44,7 @@ internal enum ASTNodeType
     CaseLabel, 
     DefaultLabel,
     Expr,
+    ArgsList,
     Primitive
 }
 
@@ -52,6 +54,10 @@ internal enum ExprOperatorType
     Ternary,
     Binary,
     Vector,
+    Prefix,
+    Postfix,
+    MethodCall,
+    FunctionCall,
 }
 
 internal abstract class ASTNode(ASTNodeType nodeType)
@@ -237,12 +243,6 @@ internal abstract class ExprNode(ExprOperatorType operatorType, Range range) : A
     public ExprOperatorType OperatorType { get; } = operatorType;
 }
 
-internal sealed class AssignmentExprNode(ExprOperatorType operatorType, Token identifier) 
-    : ExprNode(operatorType, identifier.Range)
-{
-    public string Identifier { get; } = identifier.Lexeme;
-}
-
 internal sealed class DataExprNode : ExprNode
 {
     public object? Value { get; }
@@ -319,4 +319,70 @@ internal sealed class TernaryExprNode(ExprNode condition, ExprNode then, ExprNod
 internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.Operand, identifier.Range)
 {
     public string Identifier { get; } = identifier.Lexeme;
+}
+
+internal sealed class BinaryExprNode(ExprNode left, Token operatorToken, ExprNode right)
+    : ExprNode(ExprOperatorType.Binary, RangeHelper.From(left.Range.Start, right.Range.End))
+{
+    public ExprNode Left { get; } = left;
+    public Token Operator { get; } = operatorToken;
+    public ExprNode Right { get; } = right;
+    
+    public TokenType Operation => operatorToken.Type;
+}
+
+internal sealed class PrefixExprNode(Token operatorToken, ExprNode operand)
+    : ExprNode(ExprOperatorType.Prefix, RangeHelper.From(operatorToken.Range.Start, operand.Range.End))
+{
+    public Token Operator { get; } = operatorToken;
+    public ExprNode Operand { get; } = operand;
+    
+    public TokenType Operation => operatorToken.Type;
+}
+
+internal sealed class PostfixExprNode(ExprNode operand, Token operatorToken)
+    : ExprNode(ExprOperatorType.Postfix, RangeHelper.From(operand.Range.Start, operatorToken.Range.End))
+{
+    public ExprNode Operand { get; } = operand;
+    public Token Operator { get; } = operatorToken;
+    
+    public TokenType Operation => operatorToken.Type;
+}
+
+// TODO: might need to include the whole range (ie new + the brackets)
+internal sealed class ConstructorExprNode(Token identifierToken)
+    : ExprNode(ExprOperatorType.FunctionCall, identifierToken.Range)
+{
+    public Token Identifier { get; } = identifierToken;
+}
+
+internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode objectTarget, Token methodToken, ArgsListNode arguments)
+    : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(firstTokenPosition, arguments.Range.End))
+{
+    public ExprNode Target { get; } = objectTarget;
+    public Token Method { get; } = methodToken;
+    public ArgsListNode Arguments { get; } = arguments;
+}
+
+internal sealed class FunCallNode(Position startPosition, ExprNode target, ArgsListNode arguments)
+    : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(startPosition, arguments.Range.End))
+{
+    public ExprNode Target { get; } = target;
+    public ArgsListNode Arguments { get; } = arguments;
+
+    public FunCallNode(ExprNode target, ArgsListNode arguments)
+        : this(target.Range.Start, target, arguments) {}
+}
+
+internal sealed class NamespacedMemberRefNode(ExprNode @namespace, ExprNode member)
+    : ExprNode(ExprOperatorType.Binary, RangeHelper.From(@namespace.Range.Start, member.Range.End))
+{
+    public ExprNode Namespace { get; } = @namespace;
+    public ExprNode Member { get; } = member;
+}
+
+internal sealed class ArgsListNode(Range range, LinkedList<ParamNode>? arguments = null) : ASTNode(ASTNodeType.ArgsList)
+{
+    public LinkedList<ParamNode> Arguments { get; } = arguments ?? [];
+    public Range Range { get; } = range;
 }

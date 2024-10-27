@@ -1408,26 +1408,703 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// AssignmentExpr := Operand AssignOp
     /// </remarks>
     /// <returns></returns>
-    private AssignmentExprNode? AssignmentExpr()
+    private ExprNode? AssignmentExpr()
     {
         // TODO: Fault tolerant logic
         // Parse the left-hand side of the assignment
+        // TODO: in practice, this could return null.
         ExprNode left = Operand();
         
         // Parse the assignment operator
-        AssignOpNode? op = AssignOp();
+        return AssignOp(left);
     }
 
+    /// <summary>
+    /// Parses and outputs an assignment operator.
+    /// </summary>
+    /// <remarks>
+    /// AssignOp := (ASSIGN | PLUSASSIGN | MULTIPLYASSIGN | MODULOASSIGN | MINUSASSIGN | DIVIDEASSIGN | BITORASSIGN |
+    ///             BITXORASSIGN | BITANDASSIGN | BITLEFTSHIFTASSIGN | BITRIGHTSHIFTASSIGN) Expr | INCREMENT | DECREMENT
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? AssignOp(ExprNode left)
+    {
+        switch (CurrentTokenType)
+        {
+            case TokenType.Increment:
+            case TokenType.Decrement:
+                return new PostfixExprNode(left, Consume());
+            case TokenType.Assign:
+            case TokenType.PlusAssign:
+            case TokenType.MultiplyAssign:
+            case TokenType.ModuloAssign:
+            case TokenType.MinusAssign:
+            case TokenType.DivideAssign:
+            case TokenType.BitOrAssign:
+            case TokenType.BitXorAssign:
+            case TokenType.BitAndAssign:
+            case TokenType.BitLeftShiftAssign:
+            case TokenType.BitRightShiftAssign:
+                Token operatorToken = Consume();
+                
+                // TODO: in practice, this could return null.
+                ExprNode right = Expr();
+                return new BinaryExprNode(left, operatorToken, right);
+            default:
+                // ERROR: Expected an assignment operator
+                AddError(GSCErrorCodes.ExpectedAssignmentOperator, CurrentToken.Lexeme);
+                return null;
+        };
+    }
+
+    /// <summary>
+    /// Parses and outputs a full arithmetic or logical expression.
+    /// </summary>
+    /// <remarks>
+    /// Expr := LogAnd LogOrRhs
+    /// </remarks>
+    /// <returns></returns>
     private ExprNode Expr()
     {
+        ExprNode? left = LogAnd();
+
+        return LogOrRhs(left);
+    }
+
+    /// <summary>
+    /// Parses and outputs a logical OR expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// LogOrRhs := OR LogAnd LogOrRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode LogOrRhs(ExprNode left)
+    {
+        if (!ConsumeIfType(TokenType.Or, out Token? orToken))
+        {
+            return left;
+        }
         
+        // Parse the right-hand side of the OR expression
+        ExprNode? right = LogAnd();
+
+        // TODO: maybe we check for OR lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next OR expression
+        return LogOrRhs(new BinaryExprNode(left, orToken, right));
+    }
+
+    /// <summary>
+    /// Parses and outputs logical AND expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// LogAnd := BitOr LogAndRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? LogAnd()
+    {
+        ExprNode? left = BitOr();
+        
+        return LogAndRhs(left);
+    }
+
+    /// <summary>
+    /// Parses and outputs a logical AND expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// LogAndRhs := AND BitOr LogAndRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode LogAndRhs(ExprNode left)
+    {
+        if (!ConsumeIfType(TokenType.And, out Token? andToken))
+        {
+            return left;
+        }
+
+        // Parse the right-hand side of the AND expression
+        ExprNode? right = BitOr();
+
+        // TODO: as above, maybe we check for AND lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next AND expression
+        return LogAndRhs(new BinaryExprNode(left, andToken, right));
+    }
+    
+    /// <summary>
+    /// Parses and outputs bitwise OR expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// BitOr := BitXor BitOrRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? BitOr()
+    {
+        ExprNode? left = BitXor();
+        
+        return BitOrRhs(left);
+    }
+
+    /// <summary>
+    /// Parses and outputs a bitwise OR expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// BitOrRhs := BITOR BitXor BitOrRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode BitOrRhs(ExprNode left)
+    {
+        if(!ConsumeIfType(TokenType.BitOr, out Token? bitOrToken))
+        {
+            return left;
+        }
+        
+        // Parse the right-hand side of the BITOR expression
+        ExprNode? right = BitXor();
+        
+        // TODO: as above, maybe we check for BITOR lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next BITOR expression
+        return BitOrRhs(new BinaryExprNode(left, bitOrToken, right));
+    }
+
+    /// <summary>
+    /// Parses and outputs bitwise XOR expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// BitXor := BitAnd BitXorRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? BitXor()
+    {
+        ExprNode? left = BitAnd();
+        
+        return BitXorRhs(left);
+    }
+    
+    /// <summary>
+    /// Parses and outputs a bitwise XOR expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// BitXorRhs := BITXOR BitAnd BitXorRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode BitXorRhs(ExprNode left)
+    {
+        if(!ConsumeIfType(TokenType.BitXor, out Token? bitXorToken))
+        {
+            return left;
+        }
+        
+        // Parse the right-hand side of the BITXOR expression
+        ExprNode? right = BitAnd();
+        
+        // TODO: as above, maybe we check for BITXOR lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next BITXOR expression
+        return BitXorRhs(new BinaryExprNode(left, bitXorToken, right));
+    }
+    
+    /// <summary>
+    /// Parses and outputs bitwise AND expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// BitAnd := EqOp BitAndRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? BitAnd()
+    {
+        ExprNode? left = EqOp();
+        
+        return BitAndRhs(left);
+    }
+    
+    /// <summary>
+    /// Parses and outputs a bitwise AND expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// BitAndRhs := BITAND EqOp BitAndRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode BitAndRhs(ExprNode left)
+    {
+        if(!ConsumeIfType(TokenType.BitAnd, out Token? bitAndToken))
+        {
+            return left;
+        }
+        
+        // Parse the right-hand side of the BITAND expression
+        ExprNode? right = EqOp();
+        
+        // TODO: as above, maybe we check for BITAND lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next BITAND expression
+        return BitAndRhs(new BinaryExprNode(left, bitAndToken, right));
+    }
+
+    /// <summary>
+    /// Parses and outputs equality expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// EqOp := RelOp EqOpRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? EqOp()
+    {
+        ExprNode? left = RelOp();
+        
+        return EqOpRhs(left);
+    }
+    
+    /// <summary>
+    /// Parses and outputs an equality expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// EqOpRhs := (EQUALS | NOTEQUALS | IDENTITYEQUALS | IDENTITYNOTEQUALS) RelOp EqOpRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode EqOpRhs(ExprNode left)
+    {
+        if (CurrentTokenType != TokenType.Equals && CurrentTokenType != TokenType.NotEquals &&
+            CurrentTokenType != TokenType.IdentityEquals && CurrentTokenType != TokenType.IdentityNotEquals)
+        {
+            return left;
+        }
+        
+        Token operatorToken = Consume();
+        
+        // Parse the right-hand side of the equality expression
+        ExprNode? right = RelOp();
+        
+        // TODO: as above, maybe we check for EqOp lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next equality expression
+        return EqOpRhs(new BinaryExprNode(left, operatorToken, right));
+    }
+
+    /// <summary>
+    /// Parses and outputs relational expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// RelOp := BitShiftOp RelOpRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? RelOp()
+    {
+        ExprNode? left = BitShiftOp();
+        
+        return RelOpRhs(left);
+    }
+
+    /// <summary>
+    /// Parses and outputs a relational expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// RelOpRhs := (LESSTHAN | LESSTHANEQUALS | GREATERTHAN | GREATERTHANEQUALS) BitShiftOp RelOpRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode RelOpRhs(ExprNode left)
+    {
+        if (CurrentTokenType != TokenType.LessThan && CurrentTokenType != TokenType.LessThanEquals &&
+            CurrentTokenType != TokenType.GreaterThan && CurrentTokenType != TokenType.GreaterThanEquals)
+        {
+            return left;
+        }
+
+        Token operatorToken = Consume();
+
+        // Parse the right-hand side of the relational expression
+        ExprNode? right = BitShiftOp();
+
+        // TODO: as above, maybe we check for RelOp lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+
+        // Recurse to the next relational expression
+        return RelOpRhs(new BinaryExprNode(left, operatorToken, right));
+    }
+
+    /// <summary>
+    /// Parses and outputs bit shift expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// BitShiftOp := AddiOp BitShiftOpRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? BitShiftOp()
+    {
+        ExprNode? left = AddiOp();
+        
+        return BitShiftOpRhs(left);
+    }
+
+    /// <summary>
+    /// Parses and outputs a bit shift expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// BitShiftOpRhs := (BITLEFTSHIFT | BITRIGHTSHIFT) AddiOp BitShiftOpRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode BitShiftOpRhs(ExprNode left)
+    {
+        if(CurrentTokenType != TokenType.BitLeftShift && CurrentTokenType != TokenType.BitRightShift)
+        {
+            return left;
+        }
+        
+        Token operatorToken = Consume();
+        
+        // Parse the right-hand side of the bit shift expression
+        ExprNode? right = AddiOp();
+        
+        // TODO: as above, maybe we check for BitShiftOp lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next bit shift expression
+        return BitShiftOpRhs(new BinaryExprNode(left, operatorToken, right));
+    }
+
+    /// <summary>
+    /// Parses and outputs additive expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// AddiOp := MulOp AddiOpRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? AddiOp()
+    {
+        ExprNode? left = MulOp();
+        
+        return AddiOpRhs(left);
+    }
+    
+    /// <summary>
+    /// Parses and outputs an additive expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// AddiOpRhs := (PLUS | MINUS) MulOp AddiOpRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode AddiOpRhs(ExprNode left)
+    {
+        if(CurrentTokenType != TokenType.Plus && CurrentTokenType != TokenType.Minus)
+        {
+            return left;
+        }
+        
+        Token operatorToken = Consume();
+        
+        // Parse the right-hand side of the additive expression
+        ExprNode? right = MulOp();
+        
+        // TODO: as above, maybe we check for AddiOp lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next additive expression
+        return AddiOpRhs(new BinaryExprNode(left, operatorToken, right));
+    }
+
+    /// <summary>
+    /// Parses and outputs multiplicative expressions and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// MulOp := PrefixOp MulOpRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? MulOp()
+    {
+        ExprNode? left = PrefixOp();
+        
+        return MulOpRhs(left);
+    }
+    
+    /// <summary>
+    /// Parses and outputs a multiplicative expression, if present.
+    /// </summary>
+    /// <remarks>
+    /// MulOpRhs := (MULTIPLY | DIVIDE | MODULO) PrefixOp MulOpRhs | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode MulOpRhs(ExprNode left)
+    {
+        if(CurrentTokenType != TokenType.Multiply && CurrentTokenType != TokenType.Divide && CurrentTokenType != TokenType.Modulo)
+        {
+            return left;
+        }
+        
+        Token operatorToken = Consume();
+        
+        // Parse the right-hand side of the multiplicative expression
+        ExprNode? right = PrefixOp();
+        
+        // TODO: as above, maybe we check for MulOp lookahead, then try construct with unknown RHS/LHS
+        if (right is null)
+        {
+            return left;
+        }
+        
+        // Recurse to the next multiplicative expression
+        return MulOpRhs(new BinaryExprNode(left, operatorToken, right));
+    }
+
+    /// <summary>
+    /// Parses and outputs prefix operators and higher in precedence, if present.
+    /// </summary>
+    /// <remarks>
+    /// PrefixOp := (PLUS | MINUS | BITNOT | NOT | BITAND) PrefixOp | CallOrAccessOp | THREAD ThreadedCallOp |
+    ///             NEW Identifier LPAR RPAR
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? PrefixOp()
+    {
+        switch (CurrentTokenType)
+        {
+            case TokenType.Plus:
+            case TokenType.Minus:
+            case TokenType.BitNot:
+            case TokenType.Not:
+            case TokenType.BitAnd:
+                Token operatorToken = Consume();
+                
+                // Parse the right-hand side of the prefix expression
+                ExprNode? operand = PrefixOp();
+                
+                return new PrefixExprNode(operatorToken, operand);
+            case TokenType.Thread:
+                Advance();
+                
+                return ThreadedCallOp();
+            case TokenType.New:
+                Advance();
+                
+                // No need to do scope res, etc. as GSC strictly only looks for an identifier.
+                
+                if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+                {
+                    AddError(GSCErrorCodes.ExpectedClassIdentifier, "identifier", CurrentToken.Lexeme);
+                }
+                
+                // GSC doesn't let you pass arguments to constructors, which is hilarious
+                
+                // Check for LPAR - TODO: handle these more elegantly
+                if (!AdvanceIfType(TokenType.OpenParen))
+                {
+                    AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+                }
+                // Check for RPAR
+                if (!AdvanceIfType(TokenType.CloseParen))
+                {
+                    AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+                }
+                
+                return new ConstructorExprNode(identifierToken);
+            default:
+                return CallOrAccessOp();
+        }
+    }
+
+    /// <summary>
+    /// Parses and outputs function call, accessor and higher precedence operations.
+    /// </summary>
+    /// <remarks>
+    /// CallOrAccessOp := OPENBRACKET DerefOrArrayOp | Operand CallOrAccessOpRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? CallOrAccessOp()
+    {
+        // Dereferenced operation or an array declaration
+        if (ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
+        {
+            return DerefOrArrayOp(openBracket);
+        }
+        
+        // Could be a function call, operand, accessor, etc.
+        ExprNode? left = Operand();
+
+        return CallOrAccessOpRhs(left);
+    }
+
+    /// <summary>
+    /// Parses a dereference-related operation or an array declaration.
+    /// </summary>
+    /// <remarks>
+    /// DerefOrArrayOp := CLOSEBRACKET | DerefOp
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? DerefOrArrayOp(Token openBracket)
+    {
+        // Empty array
+        if (ConsumeIfType(TokenType.CloseBracket, out Token? closeBracket))
+        {
+            return DataExprNode.EmptyArray(openBracket, closeBracket);
+        }
+        
+        // Must be a dereference
+        return DerefOp(openBracket);
+    }
+
+    /// <summary>
+    /// Parses a dereference call operation.
+    /// </summary>
+    /// <remarks>
+    /// DerefOp := OPENBRACKET Expr CLOSEBRACKET CLOSEBRACKET DerefCallOp
+    /// </remarks>
+    /// <param name="openBracket"></param>
+    /// <returns></returns>
+    private ExprNode? DerefOp(Token openBracket)
+    {
+        // TODO: fault tolerance
+        if(!AdvanceIfType(TokenType.OpenBracket))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '[', CurrentToken.Lexeme);
+        }
+        
+        // Parse the dereference expression
+        ExprNode derefExpr = Expr();
+            
+        // Check for CLOSEBRACKET, twice
+        if (!AdvanceIfType(TokenType.CloseBracket) && !AdvanceIfType(TokenType.CloseBracket))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
+        }
+
+        return DerefCallOp(openBracket, derefExpr);
+    }
+
+    /// <summary>
+    /// Parses the end of a dereference call operation.
+    /// </summary>
+    /// <remarks>
+    /// DerefCallOp := ARROW IDENTIFIER FunCall | FunCall
+    /// </remarks>
+    /// <param name="openBracket"></param>
+    /// <param name="derefExpr"></param>
+    /// <returns></returns>
+    private ExprNode? DerefCallOp(Token openBracket, ExprNode derefExpr)
+    {
+        if (AdvanceIfType(TokenType.Arrow))
+        {
+            if (!ConsumeIfType(TokenType.Identifier, out Token? methodToken))
+            {
+                AddError(GSCErrorCodes.ExpectedMethodIdentifier, CurrentToken.Lexeme);
+            }
+            
+            ArgsListNode? methodArgs = FunCall();
+            
+            return new MethodCallNode(openBracket.Range.Start, derefExpr, methodToken, methodArgs);
+        }
+            
+        ArgsListNode? funArgs = FunCall();
+        return new FunCallNode(openBracket.Range.Start, derefExpr, funArgs);
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a function call or accessor operation.
+    /// </summary>
+    /// <remarks>
+    /// CallOrAccessOpRhs := SCOPERESOLUTION Operand FunCall | FunCall | AccessOpRhs
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode? CallOrAccessOpRhs(ExprNode left)
+    {
+        // TODO: current grammar won't handle self thread ... but we can bolt this on later
+        
+        if (AdvanceIfType(TokenType.ScopeResolution))
+        {
+            // TODO: fault tolerance
+            ExprNode memberOfNamespace = Operand();
+            
+            NamespacedMemberRefNode namespacedMember = new(left, memberOfNamespace);
+            ArgsListNode? functionArgs = FunCall();
+            
+            return new FunCallNode(namespacedMember, functionArgs);
+        }
+
+        // No namespace, just a function call
+        if (CurrentTokenType == TokenType.OpenParen)
+        {
+            // TODO: fault tolerance
+            ArgsListNode? functionArgs = FunCall();
+            return new FunCallNode(left, functionArgs);
+        }
+        
+        // Otherwise - accessor or array index
+        return AccessOpRhs(left);
+    }
+
+    private ExprNode? AccessOpRhs(ExprNode left)
+    {
+        // Accessor
+        if (ConsumeIfType(TokenType.Dot, out Token? dotToken))
+        {
+            ExprNode? right = Operand();
+
+            return AccessOpRhs(new BinaryExprNode(left, dotToken, right));
+        }
+        
+        // Array index
+        if (ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
+        {
+            ExprNode index = Expr();
+            
+            // Check for CLOSEBRACKET
+            if (!AdvanceIfType(TokenType.CloseBracket))
+            {
+                AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
+            }
+
+            return AccessOpRhs(new ArrayIndexExprNode(left, openBracket, index));
+        }
     }
 
     /// <summary>
     /// Parses and outputs an operand within the context of an expression.
     /// </summary>
     /// <remarks>
-    /// Operand :=  Number | String | Bool | OPENPAREN ParenExpr CLOSEPAREN | OPENBRACKET ArrayOrDeref | IDENTIFIER |
+    /// Operand :=  Number | String | Bool | OPENPAREN ParenExpr CLOSEPAREN | IDENTIFIER |
     ///             COMPILERHASH | ANIMIDENTIFIER | ANIMTREE
     /// </remarks>
     /// <returns></returns>
@@ -1462,15 +2139,14 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
                 }
 
                 return parenExpr;
-            // Could be an array definition, or a dereference over an object or function ptr.
-            case TokenType.OpenBracket:
-                return ArrayOrDeref();
             // Identifier
             case TokenType.Identifier:
                 Token identifierToken = CurrentToken;
                 Advance();
                 return new IdentifierExprNode(identifierToken);
         }
+        
+        // ERROR
     }
 
     /// <summary>
@@ -1533,40 +2209,6 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         ExprNode thirdExpr = Expr();
             
         return new VectorExprNode(leftmostExpr, secondExpr, thirdExpr);
-    }
-    
-    /// <summary>
-    /// Parses and outputs either an array definition or a dereference expression.
-    /// </summary>
-    /// <remarks>
-    /// ArrayOrDeref := CLOSEBRACKET | OPENBRACKET Expr CLOSEBRACKET CLOSEBRACKET
-    /// </remarks>
-    /// <returns></returns>
-    private ExprNode ArrayOrDeref()
-    {
-        // Advance over OPENBRACKET
-        Token openBracket = Consume();
-        
-        // This is an empty array
-        if (ConsumeIfType(TokenType.CloseBracket, out Token? closeBracket))
-        {
-            return DataExprNode.EmptyArray(openBracket, closeBracket);
-        }
-        
-        // This is a dereference expression
-        if (AdvanceIfType(TokenType.OpenBracket))
-        {
-            // Parse the dereference expression
-            ExprNode derefExpr = Expr();
-            
-            // Check for CLOSEBRACKET, twice
-            if (!AdvanceIfType(TokenType.CloseBracket) && !AdvanceIfType(TokenType.CloseBracket))
-            {
-                AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
-            }
-
-            return DereferenceExprNode(derefExpr);
-        }
     }
 
     private bool InLoopOrSwitch()

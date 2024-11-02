@@ -1,13 +1,8 @@
-﻿using Antlr4.Runtime;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using static System.Text.RegularExpressions.Regex;
 
-namespace GSCode.Parser.Lexer;
+namespace GSCode.Parser.Lexical;
 
 internal ref partial struct Lexer(ReadOnlySpan<char> input)
 {
@@ -15,15 +10,19 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
     private int _line = 0;
     private int _linePosition = 0;
 
-    public Token Transform()
+    public TokenList Transform()
     {
         Token first = new Token(TokenType.Sof, Helper.RangeFrom(0, 0, 0, 0), string.Empty);
 
         Token current = first;
         while (!_input.IsEmpty)
         {
-            if(AdvanceAtLineBreak())
+            if(AdvanceAtLineBreak(out Token? lineBreakToken))
             {
+                current.Next = lineBreakToken;
+                lineBreakToken.Previous = current;
+
+                current = lineBreakToken;
                 continue;
             }
 
@@ -50,7 +49,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         eof.Previous = current;
         eof.Next = eof;
 
-        return first;
+        return new TokenList(first, eof);
     }
 
     [GeneratedRegex(@"^/\*.*?\*/", RegexOptions.Multiline)]
@@ -59,7 +58,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
     [GeneratedRegex(@"^/\@.*?\@/", RegexOptions.Multiline)]
     private static partial Regex DocCommentRegex();
 
-    [GeneratedRegex(@"^//.*", RegexOptions.Singleline)]
+    [GeneratedRegex(@"^//.*$", RegexOptions.Multiline)]
     private static partial Regex SinglelineCommentRegex();
     //[GeneratedRegex(@"\s+", RegexOptions.Singleline)]
     //private static partial Regex DoubleQuoteStringRegex();
@@ -170,19 +169,24 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
     /// Increments the line index and resets position if the input at the base index matches a line break.
     /// </summary>
     /// <returns>True if the line was advanced</returns>
-    private bool AdvanceAtLineBreak()
+    private bool AdvanceAtLineBreak([NotNullWhen(true)] out Token? lineBreakToken)
     {
         if(AtNewLine(0))
         {
+            // Advance two positions if it's carriage return + newline, otherwise 1
+            int offset = _input[0] == '\r' ? 2 : 1;
+
+            // Like whitespace, we probably don't need to preserve the exact line break, so show it as <EOL>
+            lineBreakToken = new Token(TokenType.LineBreak, Helper.RangeFrom(_line, _linePosition, _line + 1, 0), "<EOL>");
+
             _line++;
             _linePosition = 0;
 
-            // Advance two positions if on Windows, otherwise 1
-            int offset = _input[0] == '\r' ? 2 : 1;
             _input = _input[offset..];
 
             return true;
         }
+        lineBreakToken = null;
         return false;
     }
 
@@ -281,6 +285,22 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         else if(_input.StartsWith("#precache"))
         {
             return CharMatch(TokenType.Precache, "#precache");
+        }
+        else if(_input.StartsWith("#if"))
+        {
+            return CharMatch(TokenType.PreIf, "#if");
+        }
+        else if(_input.StartsWith("#elif"))
+        {
+            return CharMatch(TokenType.PreElIf, "#elif");
+        }
+        else if(_input.StartsWith("#else"))
+        {
+            return CharMatch(TokenType.PreElse, "#else");
+        }
+        else if(_input.StartsWith("#endif"))
+        {
+            return CharMatch(TokenType.PreEndIf, "#endif");
         }
 
         // TODO: Why do we have this, does GSC have a use case for #?
@@ -613,7 +633,8 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
             current = InputAt(++length);
         }
 
-        return new Token(TokenType.Whitespace, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
+        // Don't worry about preserving the exact whitespace, it's easier for us to represent it in IntelliSense by just one space
+        return new Token(TokenType.Whitespace, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + length), " ");
     }
 
     private int GetLengthOfNumberSequence(int startOffset)

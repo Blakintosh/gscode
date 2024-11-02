@@ -16,66 +16,66 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-using GSCode.Data;
-using GSCode.Lexer;
-using GSCode.Lexer.Types;
-using GSCode.Parser.Util;
+//using GSCode.Data;
+//using GSCode.Lexer;
+//using GSCode.Lexer.Types;
+//using GSCode.Parser.Util;
 
-namespace GSCode.Parser.Preprocessor.Directives
-{
-    internal sealed class InsertFileHandler : IPreprocessorHandler
-    {
-        public PreprocessorMutation CreateMutation(Token currentToken, PreprocessorHelper data)
-        {
-            Token pathToken = currentToken.NextNotLinespace();
+//namespace GSCode.Parser.Preprocessor.Directives
+//{
+//    internal sealed class InsertFileHandler : IPreprocessorHandler
+//    {
+//        public PreprocessorMutation CreateMutation(Token currentToken, PreprocessorHelper data)
+//        {
+//            Token pathToken = currentToken.NextNotLinespace();
 
-            // Parse import sequence
-            string importPath = ParserUtil.ConvertImportSequenceToString(pathToken, true, out Token lastPathToken)!;
-            string? path = ParserUtil.GetScriptFilePath(data.ScriptFile, importPath, null);
+//            // Parse import sequence
+//            string importPath = ParserUtil.ConvertImportSequenceToString(pathToken, true, out Token lastPathToken)!;
+//            string? path = ParserUtil.GetScriptFilePath(data.ScriptFile, importPath, null);
 
-            // Remove the semicolon if it was provided
-            Token lastToken = CheckSemiColonProvided(lastPathToken, data);
+//            // Remove the semicolon if it was provided
+//            Token lastToken = CheckSemiColonProvided(lastPathToken, data);
 
-            Range pathRange = Token.RangeBetweenTokens(pathToken, lastPathToken);
+//            Range pathRange = Token.RangeBetweenTokens(pathToken, lastPathToken);
 
-            if (string.IsNullOrEmpty(path))
-            {
-                data.AddSenseDiagnostic(pathRange, GSCErrorCodes.MissingScript, importPath);
-                return new(lastToken);
-            }
+//            if (string.IsNullOrEmpty(path))
+//            {
+//                data.AddSenseDiagnostic(pathRange, GSCErrorCodes.MissingScript, importPath);
+//                return new(lastToken);
+//            }
 
-            // Tokenize the destination file & add it
-            return InsertTokenizedScriptFromPath(path, pathRange, lastToken);
-        }
+//            // Tokenize the destination file & add it
+//            return InsertTokenizedScriptFromPath(path, pathRange, lastToken);
+//        }
 
-        private static PreprocessorMutation InsertTokenizedScriptFromPath(string path, Range pathRange, Token oldEndToken)
-        {
-            string script = File.ReadAllText(path);
-            ScriptTokenLinkedList tokens = ScriptLexer.TokenizeScriptContent(script, pathRange, out _);
+//        private static PreprocessorMutation InsertTokenizedScriptFromPath(string path, Range pathRange, Token oldEndToken)
+//        {
+//            string script = File.ReadAllText(path);
+//            ScriptTokenLinkedList tokens = ScriptLexer.TokenizeScriptContent(script, pathRange, out _);
 
-            return new(oldEndToken, tokens.First, tokens.Last);
-        }
+//            return new(oldEndToken, tokens.First, tokens.Last);
+//        }
 
-        private static Token CheckSemiColonProvided(Token lastPathNode, PreprocessorHelper data)
-        {
-            Token semiColonNode = lastPathNode.NextNotWhitespace();
-            if (!semiColonNode.Is(TokenType.SpecialToken, SpecialTokenTypes.SemiColon))
-            {
-                data.AddSenseDiagnostic(semiColonNode.CharacterRangeAfterToken(), GSCErrorCodes.MissingToken, ";");
-                return lastPathNode;
-            }
-            return semiColonNode;
-        }
+//        private static Token CheckSemiColonProvided(Token lastPathNode, PreprocessorHelper data)
+//        {
+//            Token semiColonNode = lastPathNode.NextNotWhitespace();
+//            if (!semiColonNode.Is(TokenType.SpecialToken, SpecialTokenTypes.SemiColon))
+//            {
+//                data.AddSenseDiagnostic(semiColonNode.CharacterRangeAfterToken(), GSCErrorCodes.MissingToken, ";");
+//                return lastPathNode;
+//            }
+//            return semiColonNode;
+//        }
 
-        public bool Matches(Token currentToken, PreprocessorHelper data)
-        {
-            // Checks format matches: #insert [path sequence]
-            if(currentToken.Is(TokenType.Keyword, KeywordTypes.Insert) &&
-                currentToken.NextNotLinespace().Is(TokenType.Name))
-            {
-                return true;
-            }
-            return false;
-        }
-    }
-}
+//        public bool Matches(Token currentToken, PreprocessorHelper data)
+//        {
+//            // Checks format matches: #insert [path sequence]
+//            if(currentToken.Is(TokenType.Keyword, KeywordTypes.Insert) &&
+//                currentToken.NextNotLinespace().Is(TokenType.Name))
+//            {
+//                return true;
+//            }
+//            return false;
+//        }
+//    }
+//}

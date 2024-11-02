@@ -1,6 +1,5 @@
 ﻿using BenchmarkDotNet.Running;
 using CommandLine;
-using GSCode.Lexer;
 using GSCode.NET.LSP;
 using GSCode.Parser;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
@@ -36,7 +35,7 @@ class Program
                         };
 
                         // Adding to ScriptManager's cache and getting diagnostics
-                        List<Diagnostic> diagnostics = scriptManager.AddEditorAsync(documentItem).Result;
+                        IEnumerable<Diagnostic> diagnostics = scriptManager.AddEditorAsync(documentItem).Result;
 
                         Console.WriteLine("Diagnostics:");
                         foreach (var diagnosticsItem in diagnostics)
@@ -45,10 +44,10 @@ class Program
                         }
                     }
 
-                    if (o.Benchmark)
-                    {
-                        var summary = BenchmarkRunner.Run<Benchmarks>();
-                    }
+                    //if (o.Benchmark)
+                    //{
+                    //    var summary = BenchmarkRunner.Run<Benchmarks>();
+                    //}
                });
     }
 }

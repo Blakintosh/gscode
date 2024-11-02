@@ -15,91 +15,87 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-using GSCode.Lexer;
 using GSCode.Parser.Data;
 using GSCode.Parser.SPA.Logic.Components;
 using GSCode.Parser.Steps;
-using GSCode.Parser.Steps.Interfaces;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
-using Serilog;
 using System.Diagnostics;
 
-namespace GSCode.Parser;
+//namespace GSCode.Parser;
 
-public class DependencyParser : IScriptParser
-{
-    public ScriptLexer Lexer { get; }
-    public ParserIntelliSense? IntelliSense { get; private set; }
-    public DefinitionsTable? DefinitionsTable { get; set; }
+//public class DependencyParser : IScriptParser
+//{
+//    public ScriptLexer Lexer { get; }
+//    public ParserIntelliSense? IntelliSense { get; private set; }
+//    public DefinitionsTable? DefinitionsTable { get; set; }
 
-    public Uri RootFileUri { get; }
+//    public Uri RootFileUri { get; }
 
-    internal ASTGenerationStep? _astStep = null;
-    internal SignatureAnalyserStep? _saStep = null;
+//    internal ASTGenerationStep? _astStep = null;
+//    internal SignatureAnalyserStep? _saStep = null;
 
-    public DependencyParser(ScriptLexer lexer)
-    {
-        Lexer = lexer;
-        RootFileUri = lexer.RootFileUri;
-    }
+//    public DependencyParser(ScriptLexer lexer)
+//    {
+//        Lexer = lexer;
+//        RootFileUri = lexer.RootFileUri;
+//    }
 
-    /// <summary>
-    /// Parses the script file.
-    /// </summary>
-    public Task Parse()
-    {
-        Stopwatch sw = Stopwatch.StartNew();
+//    /// <summary>
+//    /// Parses the script file.
+//    /// </summary>
+//    public Task Parse()
+//    {
+//        Stopwatch sw = Stopwatch.StartNew();
 
-        IntelliSense = new(Lexer.EndLine);
-        ScriptTokenLinkedList tokens = Lexer.Tokens;
+//        IntelliSense = new(Lexer.EndLine);
+//        ScriptTokenLinkedList tokens = Lexer.Tokens;
 
-        PreprocessorStep preprocessorStep = new(IntelliSense, Lexer.RootFileUri.LocalPath, tokens);
-        preprocessorStep.Run();
+//        PreprocessorStep preprocessorStep = new(IntelliSense, Lexer.RootFileUri.LocalPath, tokens);
+//        preprocessorStep.Run();
 
-        WhitespaceRemovalStep whitespaceRemovalStep = new WhitespaceRemovalStep(tokens);
-        whitespaceRemovalStep.Run();
+//        WhitespaceRemovalStep whitespaceRemovalStep = new WhitespaceRemovalStep(tokens);
+//        whitespaceRemovalStep.Run();
 
-        ASTGenerationStep astStep = new(IntelliSense, Lexer.RootFileUri.LocalPath, tokens);
-        astStep.Run();
-        _astStep = astStep;
+//        ASTGenerationStep astStep = new(IntelliSense, Lexer.RootFileUri.LocalPath, tokens);
+//        astStep.Run();
+//        _astStep = astStep;
 
-        DefinitionsTable = new(Path.GetFileNameWithoutExtension(Lexer.RootFileUri.LocalPath));
-        SignatureAnalyserStep saStep = new(IntelliSense, DefinitionsTable, _astStep.RootNode);
-        saStep.Run();
-        _saStep = saStep;
+//        DefinitionsTable = new(Path.GetFileNameWithoutExtension(Lexer.RootFileUri.LocalPath));
+//        SignatureAnalyserStep saStep = new(IntelliSense, DefinitionsTable, _astStep.RootNode);
+//        saStep.Run();
+//        _saStep = saStep;
 
-        sw.Stop();
+//        sw.Stop();
 
-        Log.Information("Primary parsing completed in {0}ms.", sw.Elapsed.TotalMilliseconds);
-        return Task.CompletedTask;
-    }
-}
+//        Log.Information("Primary parsing completed in {0}ms.", sw.Elapsed.TotalMilliseconds);
+//        return Task.CompletedTask;
+//    }
+//}
 
-public class ScriptParser : DependencyParser
-{
-    public ScriptParser(ScriptLexer lexer) : base(lexer) { }
+//public class ScriptParser : DependencyParser
+//{
+//    public ScriptParser(ScriptLexer lexer) : base(lexer) { }
 
-    /// <summary>
-    /// Performs the final static analysis & evaluation on the script file, after dependencies have been gathered.
-    /// </summary>
-    public Task FinishParsing(IEnumerable<IExportedSymbol> exportedSymbols)
-    {
-        if(IntelliSense is null || _astStep is null || _saStep is null)
-        {
-            throw new InvalidOperationException("Cannot finish parsing before primary parsing is complete.");
-        }
+//    /// <summary>
+//    /// Performs the final static analysis & evaluation on the script file, after dependencies have been gathered.
+//    /// </summary>
+//    public Task FinishParsing(IEnumerable<IExportedSymbol> exportedSymbols)
+//    {
+//        if(IntelliSense is null || _astStep is null || _saStep is null)
+//        {
+//            throw new InvalidOperationException("Cannot finish parsing before primary parsing is complete.");
+//        }
 
-        Stopwatch sw = Stopwatch.StartNew();
+//        Stopwatch sw = Stopwatch.StartNew();
 
-        ControlFlowAnalyserStep cfaStep = new ControlFlowAnalyserStep(IntelliSense, _saStep.DefinitionsTable);
-        cfaStep.Run();
+//        ControlFlowAnalyserStep cfaStep = new ControlFlowAnalyserStep(IntelliSense, _saStep.DefinitionsTable);
+//        cfaStep.Run();
 
-        DataFlowAnalyser dfaStep = new DataFlowAnalyser(IntelliSense, exportedSymbols, cfaStep.FunctionGraphs);
-        dfaStep.Run();
+//        DataFlowAnalyser dfaStep = new DataFlowAnalyser(IntelliSense, exportedSymbols, cfaStep.FunctionGraphs);
+//        dfaStep.Run();
 
-        sw.Stop();
+//        sw.Stop();
 
-        Log.Information("Secondary parsing completed in {0}ms.", sw.Elapsed.TotalMilliseconds);
-        return Task.CompletedTask;
-    }
-}
+//        Log.Information("Secondary parsing completed in {0}ms.", sw.Elapsed.TotalMilliseconds);
+//        return Task.CompletedTask;
+//    }
+//}

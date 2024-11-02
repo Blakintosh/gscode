@@ -1,18 +1,9 @@
-﻿using GSCode.Parser.AST.Nodes;
-using GSCode.Parser.Data;
-using GSCode.Parser.SPA.Logic.Analysers;
-using GSCode.Parser.SPA.Logic.Components;
-using GSCode.Parser.SPA;
+﻿using GSCode.Parser.Data;
 using GSCode.Parser.Steps.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Runtime.InteropServices;
-using GSCode.Parser.CFA;
 
 namespace GSCode.Parser.Steps;
+
+#if PREVIEW
 
 internal class ControlFlowAnalyserStep : IParserStep, ISenseProvider
 {
@@ -41,3 +32,5 @@ internal class ControlFlowAnalyserStep : IParserStep, ISenseProvider
         }
     }
 }
+
+#endif

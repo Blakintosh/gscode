@@ -18,21 +18,21 @@ public static class DiagnosticSources
 public enum GSCErrorCodes
 {
     // 1xxx errors are issued by the preprocessor
-    MissingToken = 1000,
+    ExpectedPreprocessorToken = 1000,
     UnexpectedCharacter = 1001,
     TokenNotValidInContext = 1002,
-    MissingData = 1003,
+    ExpectedMacroParameter = 1003,
     MissingIdentifier = 1004,
     MissingScript = 1005,
     TooManyMacroArguments = 1006,
     TooFewMacroArguments = 1007,
-    UnknownStatement = 1008,
+    MisplacedPreprocessorDirective = 1008,
     MultilineStringLiteral = 1009,
-    InvalidFilePath = 1010,
+    ExpectedMacroIdentifier = 1010,
     UnexpectedEof = 1011,
     CommentLineContinuation = 1012,
     InvalidLineContinuation = 1013,
-    InvalidExpressionTerm = 1014,
+    UserDefinedMacroIgnored = 1014,
 
     // 2xxx errors are issued by the parser
     ExpectedPathSegment = 2000,
@@ -52,6 +52,12 @@ public enum GSCErrorCodes
     ExpectedAssignmentOperator = 2014,
     ExpectedClassIdentifier = 2015,
     ExpectedMethodIdentifier = 2016,
+    ExpectedFunctionQualification = 2017,
+    ExpectedExpressionTerm = 2018,
+    ExpectedConstructorParenthesis = 2019,
+    UnexpectedConstructorParameter = 2020,
+    ExpectedClassBodyDefinition = 2021,
+    ExpectedMemberIdentifier = 2022,
 
     // 3xxx errors are issued by static analysis
     ObjectTokenNotValid = 3000,
@@ -94,21 +100,21 @@ public static class DiagnosticCodes
     private static readonly Dictionary<GSCErrorCodes, DiagnosticCode> diagnosticsDictionary = new()
     {
         // 1xxx
-        { GSCErrorCodes.MissingToken, new("'{0}' expected.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedPreprocessorToken, new("'{0}' expected, but instead got '{1}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnexpectedCharacter, new("Unexpected character '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.TokenNotValidInContext, new("The token '{0}' is not valid in this context.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.MissingData, new("Expected data or reference.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedMacroParameter, new("Expected an identifier corresponding to a macro parameter name, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingIdentifier, new("Expected an identifier.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingScript, new("Unable to locate script '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.TooManyMacroArguments, new("Too many arguments in invocation of macro '{0}', expected {1} arguments.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.TooFewMacroArguments, new("Too few arguments in invocation of macro '{0}', expected {1} arguments.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.UnknownStatement, new("Unknown token sequence.", DiagnosticSeverity.Error) }, // an ideal parser will never need to use this code
+        { GSCErrorCodes.MisplacedPreprocessorDirective, new("The preprocessor directive '{0}' is not valid in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MultilineStringLiteral, new("Carriage return embedded in string literal.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.InvalidFilePath, new("Not a valid script file path.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedMacroIdentifier, new("Expected an identifier corresponding to a macro name, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnexpectedEof, new("Unexpected end of file reached.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CommentLineContinuation, new("Line continuation use following a comment is not supported.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidLineContinuation, new("A line continuation character must immediately precede a line break.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.InvalidExpressionTerm, new("Expression is not valid.", DiagnosticSeverity.Error) }, // TODO: want this error to be unused as soon as possible
+        { GSCErrorCodes.UserDefinedMacroIgnored, new("Due to script engine limitations, the reference to user-defined macro '{0}' will not be recognised in this preprocessor-if statement.", DiagnosticSeverity.Warning) },
 
         // 2xxx
         { GSCErrorCodes.ExpectedPathSegment, new("Expected a file or directory path segment, but instead got '{0}'.", DiagnosticSeverity.Error) },
@@ -128,7 +134,13 @@ public static class DiagnosticCodes
         { GSCErrorCodes.ExpectedAssignmentOperator, new("Expected an assignment operator, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedClassIdentifier, new("Expected an identifier corresponding to a class name, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedMethodIdentifier, new("Expected an identifier corresponding to a method name, but instead got '{0}'.", DiagnosticSeverity.Error) },
-
+        { GSCErrorCodes.ExpectedFunctionQualification, new("Expected '::' or a function arguments list, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedExpressionTerm, new("Expected an expression term, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedConstructorParenthesis, new("Expected ')' to complete constructor definition, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnexpectedConstructorParameter, new("Expected ')' to complete constructor definition, but instead got '{0}'. If this was intentional, constructor parameters are not supported by GSC.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedClassBodyDefinition, new("Expected a member, method or constructor definition, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedMemberIdentifier, new("Expected an identifier corresponding to a member name, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        
         // 3xxx
         { GSCErrorCodes.ObjectTokenNotValid, new("The operator '{0}' is not valid on non-object type '{1}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidDereference, new("The dereference of '{0}' is not valid as it is not a variable of type '{1}'.", DiagnosticSeverity.Error) },

@@ -1,4 +1,5 @@
 ﻿using GSCode.Data.Models.Interfaces;
+using GSCode.Parser;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
 using Serilog;
 using System.Collections.Concurrent;
@@ -82,8 +83,8 @@ public enum CachedScriptType
 public class CachedScript
 {
     public CachedScriptType Type { get; set; }
-    public List<Uri> Dependents { get; } = new();
-    public WatchedScript Script { get; set; }
+    public HashSet<Uri> Dependents { get; } = new();
+    public Script Script { get; set; }
 }
 
 public class ScriptManager
@@ -97,24 +98,24 @@ public class ScriptManager
         _cache = new();
     }
 
-    public async Task<List<Diagnostic>> AddEditorAsync(TextDocumentItem document)
+    public async Task<IEnumerable<Diagnostic>> AddEditorAsync(TextDocumentItem document)
     {
         string content = _cache.AddToCache(document);
-        WatchedEditor script = GetEditor(document);
+        Script script = GetEditor(document);
 
         await script.ParseAsync(content);
 
-        return await script.GetDiagnosticsAsync();
+        return script.GetDiagnostics();
     }
 
-    public async Task<List<Diagnostic>> UpdateEditorAsync(VersionedTextDocumentIdentifier document, TextDocumentContentChangeEvent[] changes)
+    public async Task<IEnumerable<Diagnostic>> UpdateEditorAsync(VersionedTextDocumentIdentifier document, TextDocumentContentChangeEvent[] changes)
     {
         string updatedContent = _cache.UpdateCache(document, changes);
-        WatchedEditor script = GetEditor(document);
+        Script script = GetEditor(document);
 
         await script.ParseAsync(updatedContent);
 
-        return await script.GetDiagnosticsAsync();
+        return script.GetDiagnostics();
     }
 
     public void RemoveEditor(TextDocumentIdentifier document)
@@ -125,7 +126,7 @@ public class ScriptManager
         RemoveDependent(documentUri);
     }
 
-    public WatchedEditor? GetParsedEditor(TextDocumentIdentifier document)
+    public Script? GetParsedEditor(TextDocumentIdentifier document)
     {
         Uri uri = document.Uri;
         if (!Scripts.ContainsKey(uri))
@@ -135,9 +136,10 @@ public class ScriptManager
 
         CachedScript script = Scripts[uri];
 
-        return script.Script as WatchedEditor;
+        return script.Script;
     }
 
+#if PREVIEW
     private async Task<IEnumerable<IExportedSymbol>> AddEditorDependenciesAsync(Uri editorUri, List<Uri> dependencyUris)
     {
         List<Task<IEnumerable<IExportedSymbol>>> scriptTasks = new(dependencyUris.Count);
@@ -145,7 +147,7 @@ public class ScriptManager
         // Wait for all dependencies to finish processing if they haven't already, then get their exported symbols.
         foreach (Uri dependency in dependencyUris)
         {
-            WatchedScript script = AddDependency(editorUri, dependency);
+            Script script = AddDependency(editorUri, dependency);
 
             scriptTasks.Add(script.IssueExportedSymbolsAsync());
         }
@@ -166,17 +168,18 @@ public class ScriptManager
 
         return merged;
     }
+#endif
 
-    private WatchedScript AddDependency(Uri dependentUri, Uri uri)
+    private async Task<Script> AddDependencyAsync(Uri dependentUri, Uri uri)
     {
-        if (!Scripts.TryGetValue(uri, out CachedScript script))
+        if (!Scripts.TryGetValue(uri, out CachedScript? script))
         {
             script = Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Dependency,
-                Script = new WatchedDependency(uri)
+                Script = new Script()
             };
-            script.Script.ParseAsync(File.ReadAllText(uri.LocalPath));
+            await script.Script.ParseAsync(File.ReadAllText(uri.LocalPath));
         }
 
         script.Dependents.Add(dependentUri);
@@ -188,7 +191,7 @@ public class ScriptManager
     {
         foreach (KeyValuePair<Uri, CachedScript> script in Scripts)
         {
-            List<Uri> dependents = script.Value.Dependents;
+            HashSet<Uri> dependents = script.Value.Dependents;
             if (dependents.Contains(dependentUri))
             {
                 dependents.Remove(dependentUri);
@@ -202,24 +205,25 @@ public class ScriptManager
         }
     }
 
-    private WatchedEditor GetEditor(TextDocumentIdentifier document)
+    private Script GetEditor(TextDocumentIdentifier document)
     {
         return GetEditorByUri(document.Uri);
     }
 
-    private WatchedEditor GetEditor(TextDocumentItem document)
+    private Script GetEditor(TextDocumentItem document)
     {
         return GetEditorByUri(document.Uri);
     }
 
-    private WatchedEditor GetEditorByUri(Uri uri)
+    private Script GetEditorByUri(Uri uri)
     {
         if (!Scripts.ContainsKey(uri))
         {
             Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
-                Script = new WatchedEditor(uri, AddEditorDependenciesAsync)
+                Script = new Script()
+                // uri, add editor dependencies async
             };
         }
 
@@ -230,10 +234,10 @@ public class ScriptManager
             script = Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
-                Script = new WatchedEditor(uri, AddEditorDependenciesAsync)
+                Script = new Script()
             };
         }
 
-        return (WatchedEditor)script.Script;
+        return script.Script;
     }
 }

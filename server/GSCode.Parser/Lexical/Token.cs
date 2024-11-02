@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GSCode.Parser.Lexer;
+namespace GSCode.Parser.Lexical;
 
 internal record class Token(TokenType type, Range range, string lexeme)
 {
@@ -23,6 +24,87 @@ internal record class Token(TokenType type, Range range, string lexeme)
     public Token Previous { get; set; } = default!;
 
     public int Length => Lexeme.Length;
+
+    public bool IsWhitespacey()
+    {
+        return Type == TokenType.Whitespace
+            || Type == TokenType.LineBreak
+            || Type == TokenType.Backslash
+            || Type == TokenType.LineComment
+            || Type == TokenType.MultilineComment
+            || Type == TokenType.DocComment;
+    }
+
+    public bool IsComment()
+    {
+        return Type == TokenType.LineComment
+            || Type == TokenType.MultilineComment
+            || Type == TokenType.DocComment;
+    }
+}
+
+/// <summary>
+/// Container to represent a sequence of tokens that are ultimately linked.
+/// </summary>
+/// <param name="Start">The beginning token of the sequence.</param>
+/// <param name="End">The ending token of the sequence.</param>
+internal record struct TokenList(Token Start, Token End)
+{
+    /// <summary>
+    /// Produces a string of the snippet of raw code this token list represents.
+    /// </summary>
+    /// <returns></returns>
+    public readonly string ToSnippetString()
+    {
+        StringBuilder sb = new();
+
+        Token current = FirstNonWhitespaceToken();
+        Token last = LastNonWhitespaceToken();
+        bool lastAddedWhitespace = false;
+
+        do
+        {
+            // Only ever add one whitespace token in a chain of them, so we don't get snippets with multiple spaces
+            if(!lastAddedWhitespace || !current.IsWhitespacey())
+            {
+                lastAddedWhitespace = current.IsWhitespacey();
+                // If we've reached whitespace, just emit a single space and don't do this repeatedly
+                sb.Append(lastAddedWhitespace ? ' ' : current.Lexeme);
+            }
+
+            // Go to next
+            if (current != last)
+            {
+                current = current.Next;
+            }
+        } while (current != last);
+
+        return sb.ToString();
+    }
+
+    public readonly Token FirstNonWhitespaceToken()
+    {
+        // Get the first non-whitespace token, otherwise the last if they're all whitespace
+        Token current = Start;
+        while (current.Type == TokenType.Whitespace && current != End)
+        {
+            current = current.Next;
+        }
+
+        return current;
+    }
+
+    public readonly Token LastNonWhitespaceToken()
+    {
+        // Get the last non-whitespace token, otherwise the first if they're all whitespace
+        Token current = End;
+        while (current.Type == TokenType.Whitespace && current != Start)
+        {
+            current = current.Previous;
+        }
+
+        return current;
+    }
 }
 
 internal enum TokenType
@@ -31,6 +113,7 @@ internal enum TokenType
     Sof,
     Eof,
     Whitespace,
+    LineBreak,
     Unknown,
 
     // Error types
@@ -134,6 +217,11 @@ internal enum TokenType
     Define, // #define
     Namespace, // #namespace
     Precache, // #precache
+    PreIf, // #if
+    PreElIf, // #elif
+    PreElse, // #else
+    PreEndIf, // #endif
+
 
     // Reserved functions (case-insensitive) TODO
     WaittillFrameEnd, // waittillframeend

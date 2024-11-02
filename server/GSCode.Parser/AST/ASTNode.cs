@@ -1,5 +1,5 @@
 ﻿using GSCode.Data;
-using GSCode.Parser.Lexer;
+using GSCode.Parser.Lexical;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -45,7 +45,11 @@ internal enum ASTNodeType
     DefaultLabel,
     Expr,
     ArgsList,
-    Primitive
+    Primitive,
+    ClassDefinition,
+    ClassMember,
+    Constructor,
+    Destructor,
 }
 
 internal enum ExprOperatorType
@@ -58,7 +62,8 @@ internal enum ExprOperatorType
     Postfix,
     MethodCall,
     FunctionCall,
-    Indexer
+    Indexer,
+    CallOn
 }
 
 internal abstract class ASTNode(ASTNodeType nodeType)
@@ -123,10 +128,10 @@ internal sealed class FunKeywordsNode() : ASTNode(ASTNodeType.Temporary)
 
 internal sealed class FunDefnNode() : ASTNode(ASTNodeType.FunctionDefinition)
 {
-    public required Token Name { get; init; }
+    public required Token? Name { get; init; }
     public required FunKeywordsNode Keywords { get; init; }
     public required ParamListNode Parameters { get; init; }
-    public required BlockNode Body { get; init; }
+    public required StmtListNode Body { get; init; }
 }
 
 internal sealed class ParamListNode(LinkedList<ParamNode>? parameters = null, bool vararg = false) : ASTNode(ASTNodeType.ParameterList)
@@ -140,6 +145,11 @@ internal sealed class ParamNode(Token? name, bool byRef, ExprNode? defaultNode =
     public Token? Name { get; } = name;
     public bool ByRef { get; } = byRef;
     public ExprNode? Default { get; } = defaultNode;
+}
+
+internal sealed class ClassBodyListNode(LinkedList<ASTNode>? definitions = null) : ASTNode(ASTNodeType.BraceBlock)
+{
+    public LinkedList<ASTNode> Definitions { get; } = definitions ?? new();
 }
 
 internal sealed class StmtListNode(LinkedList<ASTNode>? statements = null) : ASTNode(ASTNodeType.BraceBlock)
@@ -375,21 +385,47 @@ internal sealed class FunCallNode(Position startPosition, ExprNode target, ArgsL
         : this(target.Range.Start, target, arguments) {}
 }
 
-internal sealed class NamespacedMemberRefNode(ExprNode @namespace, ExprNode member)
+internal sealed class NamespacedMemberNode(ExprNode @namespace, ExprNode member)
     : ExprNode(ExprOperatorType.Binary, RangeHelper.From(@namespace.Range.Start, member.Range.End))
 {
     public ExprNode Namespace { get; } = @namespace;
     public ExprNode Member { get; } = member;
 }
 
-internal sealed class ArgsListNode(Range range, LinkedList<ParamNode>? arguments = null) : ASTNode(ASTNodeType.ArgsList)
+internal sealed class ArgsListNode(LinkedList<ExprNode?>? arguments = null) : ASTNode(ASTNodeType.ArgsList)
 {
-    public LinkedList<ParamNode> Arguments { get; } = arguments ?? [];
-    public Range Range { get; } = range;
+    public LinkedList<ExprNode?> Arguments { get; } = arguments ?? [];
+    public Range Range { get; set; } = default!;
 }
 
 internal sealed class ArrayIndexNode(Range range, ExprNode array, ExprNode index) : ExprNode(ExprOperatorType.Indexer, range)
 {
     public ExprNode Array { get; } = array;
     public ExprNode Index { get; } = index;
+}
+
+internal sealed class CalledOnNode(ExprNode on, ExprNode call) : ExprNode(ExprOperatorType.CallOn, RangeHelper.From(on.Range.Start, call.Range.End))
+{
+    public ExprNode On { get; } = on;
+    public ExprNode Call { get; } = call;
+}
+
+internal class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBodyListNode body) : ASTNode(ASTNodeType.ClassDefinition)
+{
+    public Token? NameToken { get; } = nameToken;
+    public Token? InheritsFromToken { get; } = inheritsFromToken;
+
+    public ClassBodyListNode Body { get; } = body;
+}
+
+internal class MemberDeclNode(Token? nameToken) : ASTNode(ASTNodeType.ClassMember)
+{
+    public Token? NameToken { get; } = nameToken;
+}
+
+internal class StructorDefnNode(Token keywordToken, StmtListNode body) 
+    : ASTNode(keywordToken.Type == TokenType.Constructor ? ASTNodeType.Constructor : ASTNodeType.Destructor)
+{
+    public Token KeywordToken { get; } = keywordToken;
+    public StmtListNode Body { get; } = body;
 }

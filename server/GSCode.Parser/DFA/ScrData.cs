@@ -1,5 +1,4 @@
-﻿using GSCode.Lexer.Types;
-using GSCode.Parser.AST.Expressions;
+﻿using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.SPA.Sense;
 using System;
 using System.Collections.Generic;
@@ -8,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace GSCode.Parser.DFA;
+
 
 /// <summary>
 /// Specification:
@@ -74,6 +74,7 @@ internal enum ScrInstanceTypes
     None
 }
 
+#if PREVIEW
 /// <summary>
 /// Boxed container for all data types in GSC, used for data flow analysis
 /// </summary>
@@ -1012,6 +1013,8 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 //}
 
 
-internal record ScrParameter(string Name, ScrData Data, Range Range, IExpressionNode? DefaultNode = null);
-internal record ScrVariable(string Name, ScrData Data, int LexicalScope, bool Global = false);
-internal record ScrArguments(List<IExpressionNode> Arguments);
+//internal record ScrParameter(string Name, ScrData Data, Range Range, IExpressionNode? DefaultNode = null);
+//internal record ScrVariable(string Name, ScrData Data, int LexicalScope, bool Global = false);
+//internal record ScrArguments(List<IExpressionNode> Arguments);
+
+#endif

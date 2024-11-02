@@ -1,4 +1,4 @@
-﻿using GSCode.Parser.AST.Nodes;
+﻿using GSCode.Parser.AST;
 using GSCode.Parser.Data;
 using System;
 using System.Collections.Generic;
@@ -7,6 +7,8 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Threading.Tasks;
+
+#if PREVIEW
 
 namespace GSCode.Parser.CFA;
 
@@ -100,22 +102,15 @@ internal readonly record struct ControlFlowGraph(BasicBlock Start, BasicBlock En
     {
         ASTNode controlFlowNode = nodesStream[0];
 
-        switch (controlFlowNode.Type)
+        return controlFlowNode.NodeType switch
         {
-            case NodeTypes.IfStatement:
-                return Construct_IfStatement(nodesStream, sense, localHelper);
-            case NodeTypes.WhileLoop:
-                return Construct_WhileLoop(nodesStream, sense, localHelper);
-            case NodeTypes.DoLoop:
-                return Construct_DoWhileLoop(nodesStream, sense, localHelper);
-            case NodeTypes.ForLoop:
-                return Construct_ForLoop(nodesStream, sense, localHelper);
-            case NodeTypes.ForeachLoop:
-                return Construct_ForeachLoop(nodesStream, sense, localHelper);
-            case NodeTypes.SwitchStatement:
-                return Construct_SwitchStatement(nodesStream, sense, localHelper);
-            default:
-                throw new NotSupportedException("Invalid control flow node type. Got "+controlFlowNode.Type);
+            ASTNodeType.IfStmt => Construct_IfStatement(nodesStream, sense, localHelper), // TODO: this one will do some weird crap with else-if
+            ASTNodeType.WhileStmt => Construct_WhileLoop(nodesStream, sense, localHelper),
+            ASTNodeType.DoWhileStmt => Construct_DoWhileLoop(nodesStream, sense, localHelper), // TODO: check this - it was originally just looking for do
+            ASTNodeType.ForStmt => Construct_ForLoop(nodesStream, sense, localHelper),
+            ASTNodeType.ForeachStmt => Construct_ForeachLoop(nodesStream, sense, localHelper),
+            ASTNodeType.SwitchStmt => Construct_SwitchStatement(nodesStream, sense, localHelper),
+            _ => throw new NotSupportedException("Invalid control flow node type. Got " + controlFlowNode.NodeType),
         };
     }
 
@@ -127,6 +122,8 @@ internal readonly record struct ControlFlowGraph(BasicBlock Start, BasicBlock En
     private static ControlFlowGraph Construct_IfStatement(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
         // Handle our first if
+        IfStmtNode ifNode = (IfStmtNode)nodesStream[0];
+
         BasicBlock firstCondition = new(nodesStream[0], localHelper.Scope, ControlFlowType.If);
 
         ControlFlowGraph firstThen = ConstructFromBranchingNode(nodesStream[0], sense, localHelper.IncreaseScope());
@@ -226,13 +223,6 @@ internal readonly record struct ControlFlowGraph(BasicBlock Start, BasicBlock En
         // Create the do body
         ControlFlowGraph body = ConstructFromBranchingNode(nodesStream[0], sense, loopHelper);
 
-        // Should probably be checked elsewhere.
-        // TODO: make this better.
-        if (nodesStream.Length < 2 || nodesStream[1].Type != NodeTypes.WhileLoop)
-        {
-            throw new InvalidOperationException("Do loop statement is missing the 'while' condition.");
-        }
-
         // Handle the while condition
         BasicBlock condition = new(nodesStream[1], localHelper.Scope, ControlFlowType.Loop);
 
@@ -308,20 +298,20 @@ internal readonly record struct ControlFlowGraph(BasicBlock Start, BasicBlock En
 
     private static bool IsControlFlowNode(ASTNode node)
     {
-        return node.Type == NodeTypes.IfStatement ||
-            node.Type == NodeTypes.ElseIfStatement ||
-            node.Type == NodeTypes.ElseStatement ||
-            node.Type == NodeTypes.WhileLoop ||
-            node.Type == NodeTypes.DoLoop ||
-            node.Type == NodeTypes.ForLoop ||
-            node.Type == NodeTypes.ForeachLoop ||
-            node.Type == NodeTypes.SwitchStatement;
+        return node.NodeType == ASTNodeType.IfStmt ||
+            node.NodeType == ASTNodeType.WhileStmt ||
+            node.NodeType == ASTNodeType.DoWhileStmt ||
+            node.NodeType == ASTNodeType.ForStmt ||
+            node.NodeType == ASTNodeType.ForeachStmt ||
+            node.NodeType == ASTNodeType.SwitchStmt;
     }
 
     private static bool IsJumpNode(ASTNode node)
     {
-        return node.Type == NodeTypes.BreakStatement ||
-            node.Type == NodeTypes.ContinueStatement ||
-            node.Type == NodeTypes.ReturnStatement;
+        return node.NodeType == ASTNodeType.BreakStmt ||
+            node.NodeType == ASTNodeType.ContinueStmt ||
+            node.NodeType == ASTNodeType.ReturnStmt;
     }
 }
+
+#endif

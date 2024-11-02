@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace GSCode.Parser.DFA;
 
+#if PREVIEW
 internal enum ScrDataRecordKind
 {
     LocalVariable,
@@ -49,3 +50,5 @@ internal class DataFlowRecord
         return true;
     }
 }
+
+#endif

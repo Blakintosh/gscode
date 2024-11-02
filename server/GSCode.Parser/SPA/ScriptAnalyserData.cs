@@ -1,7 +1,6 @@
 ﻿using GSCode.Parser.SPA.Models;
 using GSCode.Parser.SPA.Sense;
 using Newtonsoft.Json;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -48,12 +47,12 @@ namespace GSCode.Parser.SPA
                 }
 
                 _languageLibraries[library.LanguageId] = library;
-                Log.Information("Loaded API library for {0}.", library.LanguageId);
+                //Log.Information("Loaded API library for {0}.", library.LanguageId);
                 return true;
             }
             catch(Exception e)
             {
-                Log.Warning(e, "Failed to deserialize API library.");
+                //Log.Warning(e, "Failed to deserialize API library.");
             }
             return false;
         }

@@ -16,28 +16,27 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-namespace GSCode.Parser.Preprocessor.Directives
-{
-    internal record struct PreprocessorMutation(Token EndOld,
-        Token? StartNew = null, Token? EndNew = null);
+//namespace GSCode.Parser.Preprocessor.Directives;
 
-    internal interface IPreprocessorHandler
-    {
-        /// <summary>
-        /// Generates mutation parameters for the token list to replace nodes from the current node to an end node (inclusive)
-        /// with a new sequence governed by a start and end node.
-        /// </summary>
-        /// <param name="baseToken">The base token</param>
-        /// <param name="data">Reference to the data class</param>
-        /// <returns>A PreprocessorMutation instance specifying old end node and start and end new nodes</returns>
-        public PreprocessorMutation CreateMutation(Token baseToken, PreprocessorHelper data);
+//internal record struct PreprocessorMutation(Token EndOld,
+//    Token? StartNew = null, Token? EndNew = null);
 
-        /// <summary>
-        /// Determines whether the current location's nodes match a preprocessor sequence
-        /// </summary>
-        /// <param name="currentToken">The current token</param>
-        /// <param name="data">Reference to the data class for contextual based matching</param>
-        /// <returns>true if a match, false otherwise</returns>
-        public bool Matches(Token currentToken, PreprocessorHelper data);
-    }
-}
+//internal interface IPreprocessorHandler
+//{
+//    /// <summary>
+//    /// Generates mutation parameters for the token list to replace nodes from the current node to an end node (inclusive)
+//    /// with a new sequence governed by a start and end node.
+//    /// </summary>
+//    /// <param name="baseToken">The base token</param>
+//    /// <param name="data">Reference to the data class</param>
+//    /// <returns>A PreprocessorMutation instance specifying old end node and start and end new nodes</returns>
+//    public PreprocessorMutation CreateMutation(Token baseToken, PreprocessorHelper data);
+
+//    /// <summary>
+//    /// Determines whether the current location's nodes match a preprocessor sequence
+//    /// </summary>
+//    /// <param name="currentToken">The current token</param>
+//    /// <param name="data">Reference to the data class for contextual based matching</param>
+//    /// <returns>true if a match, false otherwise</returns>
+//    public bool Matches(Token currentToken, PreprocessorHelper data);
+//}

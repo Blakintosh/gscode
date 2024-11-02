@@ -1,11 +1,11 @@
 ﻿using BenchmarkDotNet.Attributes;
-using GSCode.Lexer;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+#if PREVIEW
 namespace GSCode.CLI
 {
     public class Benchmarks
@@ -23,3 +23,5 @@ namespace GSCode.CLI
         }
     }
 }
+
+#endif

@@ -1,4 +1,4 @@
-﻿using GSCode.Parser.AST.Nodes;
+﻿
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace GSCode.Parser.SPA.Logic.Components;
 
+#if PREVIEW
 public class DefinitionsTable
 {
     public string CurrentNamespace { get; set; }
@@ -33,3 +34,5 @@ public class DefinitionsTable
         Dependencies.Add(new Uri(scriptPath));
     }
 }
+
+#endif

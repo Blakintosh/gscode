@@ -1,5 +1,5 @@
 ﻿using GSCode.Data;
-using GSCode.Parser.AST.Nodes;
+using GSCode.Parser.AST;
 using GSCode.Parser.Data;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
 using System;

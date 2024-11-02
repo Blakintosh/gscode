@@ -12,6 +12,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
+#if PREVIEW
+
 namespace GSCode.Parser.SPA;
 
 public class ScrVariableSymbol : ISenseToken
@@ -161,3 +163,5 @@ public class ScrPropertySymbol : ISenseToken
         };
     }
 }
+
+#endif

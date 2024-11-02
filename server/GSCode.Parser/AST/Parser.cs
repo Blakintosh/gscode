@@ -1,5 +1,4 @@
-﻿using GSCode.Parser.Lexer;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -8,18 +7,19 @@ using System.Threading.Tasks;
 using GSCode.Data;
 using GSCode.Parser.Data;
 using System.Xml.XPath;
+using GSCode.Parser.Lexical;
 
 namespace GSCode.Parser.AST;
 
 /// <summary>
 /// An implementation of an LL(1) recursive descent parser for the GSC & CSC languages.
 /// </summary>
-internal class Parser(Token startToken, ParserIntelliSense sense)
+internal ref struct Parser(Token startToken, ParserIntelliSense sense)
 {
     public Token CurrentToken { get; private set; } = startToken;
 
-    public TokenType CurrentTokenType => CurrentToken.Type;
-    public Range CurrentTokenRange => CurrentToken.Range;
+    public readonly TokenType CurrentTokenType => CurrentToken.Type;
+    public readonly Range CurrentTokenRange => CurrentToken.Range;
     
     [Flags]
     private enum ParserContextFlags {
@@ -61,7 +61,13 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     private ScriptNode Script()
     {
         List<DependencyNode> dependencies = DependenciesList();
-        List<ScriptDefnNode> scriptDefns = ScriptList();
+        List<ASTNode> scriptDefns = ScriptList();
+
+        return new ScriptNode
+        {
+            Dependencies = dependencies,
+            ScriptDefns = scriptDefns
+        };
     }
 
     /// <summary>
@@ -230,7 +236,12 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             if(next is not null)
             {
                 scriptDefns.Add(next);
-                continue;
+
+                // We're not in recovery mode, so we can continue parsing as normal.
+                if(!InRecovery())
+                {
+                    continue;
+                }
             }
 
             // Unsuccessful parse - attempt to recover
@@ -444,13 +455,225 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     }
 
     /// <summary>
+    /// Parses and outputs a class definition.
+    /// </summary>
+    /// <remarks>
+    /// ClassDefn := CLASS IDENTIFIER InheritsFrom LBRACE ClassDefnList RBRACE
+    /// </remarks>
+    /// <returns></returns>
+    private ClassDefnNode? ClassDefn()
+    {
+        // Pass CLASS
+        Advance();
+
+        // Parse the class's identifier
+        if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+        {
+            AddError(GSCErrorCodes.ExpectedClassIdentifier, CurrentToken.Lexeme);
+            EnterRecovery();
+        }
+
+        // Check if we've got an inheritance clause
+        Token? inheritedClassToken = InheritsFrom();
+
+        // Check for LBRACE
+        if (!AdvanceIfType(TokenType.OpenBrace))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
+
+            return new ClassDefnNode(identifierToken, inheritedClassToken, new ClassBodyListNode());
+        }
+        ExitRecovery();
+
+        // Parse the class's body
+        ClassBodyListNode classBody = ClassBodyDefnList();
+
+        // Check for RBRACE
+        if (!AdvanceIfType(TokenType.CloseBrace))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '}', CurrentToken.Lexeme);
+            EnterRecovery();
+        }
+
+        return new ClassDefnNode(identifierToken, inheritedClassToken, classBody);
+    }
+
+    /// <summary>
+    /// Parses and outputs an inheritance clause, if present.
+    /// </summary>
+    /// <remarks>
+    /// InheritsFrom := COLON IDENTIFIER | ε
+    /// </remarks>
+    /// <returns></returns>
+    private Token? InheritsFrom()
+    {
+        if(!AdvanceIfType(TokenType.Colon))
+        {
+            return null;
+        }
+
+        ExitRecovery();
+
+        if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+        {
+            AddError(GSCErrorCodes.ExpectedClassIdentifier, CurrentToken.Lexeme);
+            EnterRecovery();
+        }
+        return identifierToken;
+    }
+
+    /// <summary>
+    /// Parses and outputs zero or more class body definitions.
+    /// </summary>
+    /// <remarks>
+    /// ClassDefnList := ClassDefn ClassDefnList | ε
+    /// </remarks>
+    /// <returns></returns>
+    private ClassBodyListNode ClassBodyDefnList()
+    {
+        // Empty case
+        if(CurrentTokenType != TokenType.Var && CurrentTokenType != TokenType.Constructor && CurrentTokenType != TokenType.Destructor && CurrentTokenType != TokenType.Function)
+        {
+            return new();
+        }
+
+        ASTNode? classDefn = ClassDefn();
+
+        if(classDefn is null && 
+            // No chance of recovery
+            CurrentTokenType != TokenType.Var && CurrentTokenType != TokenType.Constructor && CurrentTokenType != TokenType.Destructor && CurrentTokenType != TokenType.Function)
+        {
+            return new();
+        }
+
+        ClassBodyListNode rest = ClassBodyDefnList();
+
+        // Only add our first definition if it was successfully parsed
+        if(classDefn is not null)
+        {
+            rest.Definitions.AddFirst(classDefn);
+        }
+
+        return rest;
+    }
+
+    /// <summary>
+    /// Parses and outputs a class body definition.
+    /// </summary>
+    /// <remarks>
+    /// ClassBodyDefn := MemberDecl | CONSTRUCTOR StructorDefn | DESTRUCTOR StructorDefn | FunDefn
+    /// </remarks>
+    /// <returns></returns>
+    private ASTNode? ClassBodyDefn()
+    {
+        switch(CurrentTokenType)
+        {
+            case TokenType.Var:
+                return MemberDecl();
+            case TokenType.Constructor:
+            case TokenType.Destructor:
+                Token keywordToken = Consume();
+
+                return StructorDefn(keywordToken);
+            case TokenType.Function:
+                return FunDefn(isMethod: true);
+            default:
+                AddError(GSCErrorCodes.ExpectedClassBodyDefinition, CurrentToken.Lexeme);
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Parses a class field declaration.
+    /// </summary>
+    /// <remarks>
+    /// MemberDecl := VAR IDENTIFIER SEMICOLON
+    /// </remarks>
+    /// <returns></returns>
+    private MemberDeclNode? MemberDecl()
+    {
+        // Pass VAR
+        Advance();
+
+        // Get the field name
+        if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+        {
+            AddError(GSCErrorCodes.ExpectedMemberIdentifier, CurrentToken.Lexeme);
+            EnterRecovery();
+            return null;
+        }
+
+        // Check for SEMICOLON
+        if (!AdvanceIfType(TokenType.Semicolon))
+        {
+            AddError(GSCErrorCodes.ExpectedSemiColon, "member declaration");
+        }
+
+        return new MemberDeclNode(identifierToken);
+    }
+
+    /// <summary>
+    /// Parses a constructor or destructor definition.
+    /// </summary>
+    /// <remarks>
+    /// StructorDefn := OPENPAREN CLOSEPAREN OPENBRACE FunBraceBlock CLOSEBRACE
+    /// </remarks>
+    /// <param name="keywordToken"></param>
+    /// <returns></returns>
+    private StructorDefnNode? StructorDefn(Token keywordToken)
+    {
+        // Keyword has already been consumed
+
+        // Check for OPENPAREN
+        if (!AdvanceIfType(TokenType.OpenParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+            EnterRecovery();
+        }
+
+        // Check for CLOSEPAREN
+        if (!AdvanceIfType(TokenType.CloseParen))
+        {
+            // Were they trying to define a constructor with parameters?
+            if(CurrentTokenType == TokenType.Identifier)
+            {
+                AddError(GSCErrorCodes.UnexpectedConstructorParameter, CurrentToken.Lexeme);
+            }
+            else
+            {
+                AddError(GSCErrorCodes.ExpectedConstructorParenthesis, CurrentToken.Lexeme);
+            }
+            EnterRecovery();
+        }
+        else
+        {
+            ExitRecovery();
+        }
+
+        // Check for OPENBRACE
+        if (!AdvanceIfType(TokenType.OpenBrace))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
+            return null;
+        }
+
+        ExitRecovery();
+
+        StmtListNode block = FunBraceBlock();
+
+        // FunBraceBlock should have consumed the closing brace
+
+        return new StructorDefnNode(keywordToken, block);
+    }
+
+    /// <summary>
     /// Parses and outputs a function definition node.
     /// </summary>
     /// <remarks>
     /// FunDefn := FUNCTION FunKeywords IDENTIFIER OPENPAREN ParamList CLOSEPAREN FunBraceBlock
     /// </remarks>
     /// <returns></returns>
-    private FunDefnNode? FunDefn()
+    private FunDefnNode? FunDefn(bool isMethod = false)
     {
         // Pass FUNCTION
         Advance();
@@ -466,11 +689,12 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         }
         else
         {
-            AddError(GSCErrorCodes.ExpectedFunctionIdentifier, CurrentToken.Lexeme);
+            AddError(isMethod ? GSCErrorCodes.ExpectedMethodIdentifier : GSCErrorCodes.ExpectedFunctionIdentifier, CurrentToken.Lexeme);
             EnterRecovery();
         }
 
         // Check for OPENPAREN
+        ParamListNode? parameters = null;
         if (!AdvanceIfType(TokenType.OpenParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
@@ -480,23 +704,52 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             ExitRecovery();
 
             // Parse the argument list.
-            ParamListNode parameters = ParamList();
+            parameters = ParamList();
         }
+        parameters ??= new ParamListNode();
 
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
         }
+        else
+        {
+            ExitRecovery();
+        }
 
         // Check for the brace block, then parse it.
         if(CurrentTokenType != TokenType.OpenBrace)
         {
             AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
+            ExitRecovery();
+
+            // No use in doing a placeholder without a body, unless it's got a name.
+            if(identifierToken is null)
+            {
+                return null;
+            }
+
+            // @next: Look at the FIRST set of Stmt and make a decision there on whether to enter the body despite the open brace not being there.
+            return new FunDefnNode
+            {
+                Name = identifierToken,
+                Keywords = keywords,
+                Parameters = parameters,
+                Body = new StmtListNode()
+            };
         }
 
         ExitRecovery();
         StmtListNode block = FunBraceBlock();
+
+        return new FunDefnNode
+        {
+            Name = identifierToken,
+            Keywords = keywords,
+            Parameters = parameters,
+            Body = block
+        };
     }
 
     /// <summary>
@@ -816,9 +1069,9 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         {
             AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
         }
-        
+
         // Parse the loop's initialization
-        AssignmentExprNode? init = AssignmentExpr();
+        ExprNode? init = AssignableExpr();
         
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
@@ -836,7 +1089,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         }
         
         // Parse the loop's increment
-        AssignmentExprNode? increment = AssignmentExpr();
+        ExprNode? increment = AssignableExpr();
         
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
@@ -1226,7 +1479,13 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     private ExprStmtNode ExprStmt()
     {
         // Parse the expression
-        AssignmentExprNode expr = AssignmentExpr();
+        ExprNode? expr = AssignableExpr();
+
+        // The expression failed to parse - try to recover from this.
+        if(expr is null)
+        {
+            EnterRecovery();
+        }
         
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
@@ -1402,18 +1661,18 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     }
 
     /// <summary>
-    /// Parses and outputs a full assignment expression.
+    /// Parses and outputs a full expression that allows assignment.
     /// </summary>
     /// <remarks>
-    /// AssignmentExpr := Operand AssignOp
+    /// AssignmentExpr := Expr AssignOp
     /// </remarks>
     /// <returns></returns>
-    private ExprNode? AssignmentExpr()
+    private ExprNode? AssignableExpr()
     {
         // TODO: Fault tolerant logic
         // Parse the left-hand side of the assignment
         // TODO: in practice, this could return null.
-        ExprNode left = Operand();
+        ExprNode? left = Expr();
         
         // Parse the assignment operator
         return AssignOp(left);
@@ -1450,10 +1709,9 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
                 // TODO: in practice, this could return null.
                 ExprNode right = Expr();
                 return new BinaryExprNode(left, operatorToken, right);
+            // No assignment - go with whatever LHS yielded
             default:
-                // ERROR: Expected an assignment operator
-                AddError(GSCErrorCodes.ExpectedAssignmentOperator, CurrentToken.Lexeme);
-                return null;
+                return left;
         };
     }
 
@@ -1893,7 +2151,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// Parses and outputs prefix operators and higher in precedence, if present.
     /// </summary>
     /// <remarks>
-    /// PrefixOp := (PLUS | MINUS | BITNOT | NOT | BITAND) PrefixOp | CallOrAccessOp | THREAD ThreadedCallOp |
+    /// PrefixOp := (PLUS | MINUS | BITNOT | NOT | BITAND) PrefixOp | CallOrAccessOp |
     ///             NEW Identifier LPAR RPAR
     /// </remarks>
     /// <returns></returns>
@@ -1912,11 +2170,6 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
                 ExprNode? operand = PrefixOp();
                 
                 return new PrefixExprNode(operatorToken, operand);
-            case TokenType.Thread:
-                // TODO: this might need to be moved further down into CallOrAccessOp
-                Advance();
-                
-                return ThreadedCallOp();
             case TokenType.New:
                 Advance();
                 
@@ -1961,7 +2214,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             return DerefOrArrayOp(openBracket);
         }
 
-        // Threaded call
+        // Threaded call without called-on
         if (ConsumeIfType(TokenType.Thread, out Token? threadToken))
         {
             ExprNode? leftQualifier = Operand();
@@ -1994,6 +2247,42 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     }
 
     /// <summary>
+    /// Parses a called-on dereference call operation or an array indexer.
+    /// </summary>
+    /// <remarks>
+    /// CalledOnDerefOrIndexerOp := Expr CLOSEBRACKET AccessOpRhs | DerefOp
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <param name="openBracket"></param>
+    /// <returns></returns>
+    private ExprNode? CalledOnDerefOrIndexerOp(ExprNode left, Token openBracket)
+    {
+        if (CurrentTokenType == TokenType.OpenBracket)
+        {
+            ExprNode? derefCall = DerefOp(openBracket);
+
+            if(derefCall is null)
+            {
+                return null;
+            }
+
+            return new CalledOnNode(left, derefCall);
+        }
+
+        ExprNode? index = Expr();
+
+        // TODO: we should probably attempt a recovery mechanism if close bracket is encountered here, even if we can't provide info on what the array index is.
+
+        // Check for CLOSEBRACKET
+        if (!ConsumeIfType(TokenType.CloseBracket, out Token? closeBracket))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
+        }
+
+        return AccessOpRhs(new ArrayIndexNode(RangeHelper.From(left.Range.Start, closeBracket?.Range.End ?? index.Range.End), left, index));
+    }
+
+    /// <summary>
     /// Parses a dereference call operation.
     /// </summary>
     /// <remarks>
@@ -2013,7 +2302,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         ExprNode derefExpr = Expr();
             
         // Check for CLOSEBRACKET, twice
-        if (!AdvanceIfType(TokenType.CloseBracket) && !AdvanceIfType(TokenType.CloseBracket))
+        if (!AdvanceIfType(TokenType.CloseBracket) || !AdvanceIfType(TokenType.CloseBracket))
         {
             AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
         }
@@ -2052,7 +2341,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     /// Parses the right-hand side of a function call, accessor operation, or called-on threaded/function calls.
     /// </summary>
     /// <remarks>
-    /// CallOrAccessOpRhs := CallOpRhs | AccessOpRhs | CallOrAccessOp
+    /// CallOrAccessOpRhs := CallOpRhs | THREAD CalledOnCallOpRhs | CalledOnCallOpRhs | AccessOpRhs
     /// 
     /// TODO TODO TODO: not sure CallOrAccessOp here (for parsing patterns like self foo::bar()) is correct - this might be a left-recursive loop
     /// </remarks>
@@ -2066,13 +2355,116 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             return CallOpRhs(left);
         }
 
-        // TODO: self foo::bar() is a thing, but we don't handle it yet
-        // TODO TODO TODO: not sure CallOrAccessOp here (for parsing patterns like self foo::bar()) is correct - this is a left-recursive loop
-        // we can take advantage of the fact that self foo.bar() is not valid syntax - it's self [[foo.bar]]() so just discriminate based on whether
-        // the next token is openbracket (for deref) or otherwise go for an Operand and then CallOpRhs
+        // Threaded called-on ent call
+        if(ConsumeIfType(TokenType.Thread, out Token? threadToken))
+        {
+            ExprNode? call = ThreadedCalledOnRhs(threadToken);
+            if(call is null)
+            {
+                return null;
+            }
 
-        // Otherwise - accessor or array index
+            return new CalledOnNode(left, call);
+        }
+        
+        // Called-on ent call
+        if(CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
+        {
+            // TODO: this has a defect, because self[foo] is indistinguishable from self [[ foo here ]]();
+            ExprNode? call = CalledOnRhs(left);
+            if(call is null)
+            {
+                return null;
+            }
+
+            return new CalledOnNode(left, call);
+        }
+
+        // Else, array index or accessor
         return AccessOpRhs(left);
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a called-on function call or an array indexer.
+    /// </summary>
+    /// <remarks>
+    /// CalledOnRhs := IDENTIFIER CallOpRhs | OPENBRACKET CalledOnDerefOrIndexerOp
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode? CalledOnRhs(ExprNode left)
+    {
+        // Called-on with identifier, so it's self foo::bar() or self foo()
+        if (ConsumeIfType(TokenType.Identifier, out Token? functionQualifier))
+        {
+            IdentifierExprNode identifierExprNode = new(functionQualifier);
+            if (CurrentTokenType != TokenType.ScopeResolution && CurrentTokenType != TokenType.OpenParen)
+            {
+                AddError(GSCErrorCodes.ExpectedFunctionQualification, CurrentToken.Lexeme);
+                return null;
+            }
+
+            ExprNode? call = CallOpRhs(identifierExprNode);
+            if(call is null)
+            {
+                return null;
+            }
+            return new CalledOnNode(left, call);
+        }
+
+        // Called on with dereference e.g. self [[ foo.bar ]](); OR an array indexer self[foo]
+        if (ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
+        {
+            return CalledOnDerefOrIndexerOp(left, openBracket);
+        }
+
+        AddError(GSCErrorCodes.ExpectedFunctionIdentifier, CurrentToken.Lexeme);
+        return null;
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a called-on threaded/function call operation.
+    /// </summary>
+    /// <remarks>
+    /// ThreadedCalledOnRhs := IDENTIFIER CallOpRhs | OPENBRACKET DerefOp
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? ThreadedCalledOnRhs(Token threadToken)
+    {
+        // Neither matches
+        if(CurrentTokenType != TokenType.Identifier && CurrentTokenType != TokenType.OpenBracket)
+        {
+            AddError(GSCErrorCodes.ExpectedFunctionIdentifier, CurrentToken.Lexeme);
+            return null;
+        }
+
+        ExprNode? call = null;
+
+        // Called-on with identifier, so it's self foo::bar() or self foo()
+        if (ConsumeIfType(TokenType.Identifier, out Token? functionQualifier))
+        {
+            IdentifierExprNode identifierExprNode = new(functionQualifier);
+            if (CurrentTokenType != TokenType.ScopeResolution && CurrentTokenType != TokenType.OpenParen)
+            {
+                AddError(GSCErrorCodes.ExpectedFunctionQualification, CurrentToken.Lexeme);
+                return null;
+            }
+
+            call = CallOpRhs(identifierExprNode);
+        }
+
+        // Called on with dereference e.g. self [[ foo.bar ]]();
+        else if (ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
+        {
+            call = DerefOp(openBracket);
+        }
+
+        if (call is null)
+        {
+            return null;
+        }
+
+        return new PrefixExprNode(threadToken, call);
     }
 
     /// <summary>
@@ -2090,7 +2482,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             // TODO: fault tolerance
             ExprNode memberOfNamespace = Operand();
 
-            NamespacedMemberRefNode namespacedMember = new(left, memberOfNamespace);
+            NamespacedMemberNode namespacedMember = new(left, memberOfNamespace);
             ArgsListNode? functionArgs = FunCall();
 
             return new FunCallNode(namespacedMember, functionArgs);
@@ -2103,6 +2495,87 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
             ArgsListNode? functionArgs = FunCall();
             return new FunCallNode(left, functionArgs);
         }
+
+        AddError(GSCErrorCodes.ExpectedFunctionQualification, CurrentToken.Lexeme);
+        return null;
+    }
+
+    /// <summary>
+    /// Parses and outputs a function call argument list node.
+    /// </summary>
+    /// <remarks>
+    /// FunCall := OPENPAREN ArgsList CLOSEPAREN | OPENPAREN CLOSEPAREN
+    /// </remarks>
+    /// <returns></returns>
+    private ArgsListNode? FunCall()
+    {
+        if(!ConsumeIfType(TokenType.OpenParen, out Token? openParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+            return null;
+        }
+
+        // Empty argument list
+        if (ConsumeIfType(TokenType.CloseParen, out Token? closeParen))
+        {
+            return new ArgsListNode
+            {
+                Range = RangeHelper.From(openParen.Range.Start, closeParen.Range.End)
+            };
+        }
+
+        // Parse the argument list
+        ArgsListNode argsList = ArgsList();
+
+        // Check for CLOSEPAREN
+        if (!ConsumeIfType(TokenType.CloseParen, out Token? lastToken))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+            lastToken = CurrentToken.Previous;
+        }
+
+        argsList.Range = RangeHelper.From(openParen.Range.Start, lastToken.Range.End);
+        return argsList;
+    }
+
+    /// <summary>
+    /// Parses and outputs a 1-or-more argument list node.
+    /// </summary>
+    /// <remarks>
+    /// ArgsList := Expr ArgsListRhs
+    /// </remarks>
+    /// <returns></returns>
+    private ArgsListNode ArgsList()
+    {
+        ExprNode? firstArgument = Expr();
+
+        ArgsListNode rest = ArgsListRhs();
+        rest.Arguments.AddFirst(firstArgument);
+
+        return rest;
+    }
+
+    /// <summary>
+    /// Parses and outputs additional arguments in an argument list node.
+    /// </summary>
+    /// <remarks>
+    /// ArgsListRhs := COMMA Expr ArgsListRhs | ε
+    /// </remarks>
+    /// <returns></returns>
+    private ArgsListNode ArgsListRhs()
+    {
+        // No more arguments
+        if (!AdvanceIfType(TokenType.Comma))
+        {
+            return new();
+        }
+
+        ExprNode? nextArgument = Expr();
+
+        ArgsListNode rest = ArgsListRhs();
+        rest.Arguments.AddFirst(nextArgument);
+
+        return rest;
     }
 
     /// <summary>
@@ -2134,7 +2607,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
                 AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
             }
 
-            return AccessOpRhs(new ArrayIndexNode(RangeHelper.From(left.Range.Start, closeBracket.Range.End), left, index));
+            return AccessOpRhs(new ArrayIndexNode(RangeHelper.From(left.Range.Start, closeBracket?.Range.End ?? index.Range.End), left, index));
         }
 
         // Empty - just an operand further up
@@ -2149,9 +2622,8 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
     ///             COMPILERHASH | ANIMIDENTIFIER | ANIMTREE
     /// </remarks>
     /// <returns></returns>
-    private ExprNode Operand()
+    private ExprNode? Operand()
     {
-        // TODO: Fault tolerant logic
         switch (CurrentTokenType)
         {
             // All the primitives
@@ -2186,8 +2658,10 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
                 Advance();
                 return new IdentifierExprNode(identifierToken);
         }
-        
-        // ERROR
+
+        // Expected an operand
+        AddError(GSCErrorCodes.ExpectedExpressionTerm, CurrentToken.Lexeme);
+        return null;
     }
 
     /// <summary>
@@ -2295,9 +2769,21 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         Silent = false;
     }
 
+    private bool InRecovery() => Silent;
+
     private void Advance()
     {
-        CurrentToken = CurrentToken.Next;
+        do
+        {
+            CurrentToken = CurrentToken.Next;
+        }
+        // Ignore all whitespace and comments.
+        while (
+            CurrentTokenType == TokenType.Whitespace || 
+            CurrentTokenType == TokenType.LineComment ||
+            CurrentTokenType == TokenType.MultilineComment ||
+            CurrentTokenType == TokenType.DocComment ||
+            CurrentTokenType == TokenType.LineBreak);
     }
 
     private Token Consume()
@@ -2332,7 +2818,7 @@ internal class Parser(Token startToken, ParserIntelliSense sense)
         return false;
     }
     
-    private void AddError(GSCErrorCodes errorCode, params object[]? args)
+    private void AddError(GSCErrorCodes errorCode, params object?[] args)
     {
         // We're in a fault recovery state
         if(Silent)

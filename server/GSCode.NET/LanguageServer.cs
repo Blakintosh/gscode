@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GSCode.NET.LSP;
 using GSCode.NET.LSP.Utility;
+using GSCode.Parser;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -69,7 +70,7 @@ public class LanguageServer : INotifyPropertyChanged
         }
 
         // Parse the script
-        List<Diagnostic> results = await _scriptManager.AddEditorAsync(openParams.TextDocument);
+        IEnumerable<Diagnostic> results = await _scriptManager.AddEditorAsync(openParams.TextDocument);
 
         _ = PublishDiagnosticsAsync(new PublishDiagnosticParams
         {
@@ -90,7 +91,7 @@ public class LanguageServer : INotifyPropertyChanged
             return;
         }
 
-        List<Diagnostic> results = await _scriptManager.UpdateEditorAsync(changeParams.TextDocument, changeParams.ContentChanges);
+        IEnumerable<Diagnostic> results = await _scriptManager.UpdateEditorAsync(changeParams.TextDocument, changeParams.ContentChanges);
 
         _ = PublishDiagnosticsAsync(new PublishDiagnosticParams
         {
@@ -119,6 +120,7 @@ public class LanguageServer : INotifyPropertyChanged
         });
     }
 
+#if PREVIEW
     [JsonRpcMethod(Methods.TextDocumentSemanticTokensFullName)]
     public async Task<SemanticTokens> GetSemanticTokensAsync(JToken arg)
     {
@@ -127,7 +129,7 @@ public class LanguageServer : INotifyPropertyChanged
 
         SemanticTokensBuilder tokens = new();
 
-        WatchedEditor? script = _scriptManager.GetParsedEditor(semanticTokensParams.TextDocument);
+        Script? script = _scriptManager.GetParsedEditor(semanticTokensParams.TextDocument);
 
         if (script is not null)
         {
@@ -154,7 +156,7 @@ public class LanguageServer : INotifyPropertyChanged
         TextDocumentPositionParams hoverParams = arg.ToObject<TextDocumentPositionParams>()!;
 
         Hover? result = null;
-        WatchedEditor? script = _scriptManager.GetParsedEditor(hoverParams.TextDocument);
+        Script? script = _scriptManager.GetParsedEditor(hoverParams.TextDocument);
 
         if (script is not null)
         {
@@ -164,6 +166,7 @@ public class LanguageServer : INotifyPropertyChanged
         Log.Information("Hover request processed. Hover being sent: {result}", result);
         return result;
     }
+#endif
 
     [JsonRpcMethod(Methods.TextDocumentPublishDiagnosticsName)]
     public async Task PublishDiagnosticsAsync(PublishDiagnosticParams publishParams)

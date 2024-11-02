@@ -1,7 +1,6 @@
 ﻿using GSCode.Parser.DFA;
 using GSCode.Parser.DSA.Types;
 using Newtonsoft.Json.Linq;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,6 +9,8 @@ using System.Threading.Tasks;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace GSCode.Parser.SPA.Logic.Components;
+
+#if PREVIEW
 
 internal class SymbolTable
 {
@@ -135,3 +136,5 @@ internal class SymbolTable
         return false;
     }
 }
+
+#endif

@@ -52,15 +52,9 @@ public sealed class ParserIntelliSense
         Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, source, code, args));
     }
 
-    public void AddSpaDiagnostic(Range range, GSCErrorCodes code, params object?[] args)
-    {
-        Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.Spa, code, args));
-    }
-
-    public void AddAstDiagnostic(Range range, GSCErrorCodes code, params object?[] args)
-    {
-        Diagnostics.Add(DiagnosticCodes.GetDiagnostic(range, DiagnosticSources.Ast, code, args));
-    }
+    public void AddSpaDiagnostic(Range range, GSCErrorCodes code, params object?[] args) => AddDiagnostic(range, DiagnosticSources.Spa, code, args);
+    public void AddAstDiagnostic(Range range, GSCErrorCodes code, params object?[] args) => AddDiagnostic(range, DiagnosticSources.Ast, code, args);
+    public void AddPreDiagnostic(Range range, GSCErrorCodes code, params object?[] args) => AddDiagnostic(range, DiagnosticSources.Preprocessor, code, args);
 
     public void AddDependency(string scriptPath)
     {

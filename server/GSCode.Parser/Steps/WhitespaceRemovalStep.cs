@@ -16,30 +16,30 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-using GSCode.Parser.Steps.Interfaces;
+//using GSCode.Parser.Steps.Interfaces;
 
-namespace GSCode.Parser.Steps;
+//namespace GSCode.Parser.Steps;
 
-internal class WhitespaceRemovalStep : IParserStep
-{
-    public ScriptTokenLinkedList Tokens { get; }
+//internal class WhitespaceRemovalStep : IParserStep
+//{
+//    public ScriptTokenLinkedList Tokens { get; }
 
-    public WhitespaceRemovalStep(ScriptTokenLinkedList tokens)
-    {
-        Tokens = tokens;
-    }
+//    public WhitespaceRemovalStep(ScriptTokenLinkedList tokens)
+//    {
+//        Tokens = tokens;
+//    }
 
-    public void Run()
-    {
-        Token current = Tokens.First!.NextAny();
-        while (!current.IsEof())
-        {
-            Token token = current;
-            if (token.Is(TokenType.Whitespace) || token.Is(TokenType.NewLine))
-            {
-                Tokens.Remove(current);
-            }
-            current = current.NextAny();
-        }
-    }
-}
+//    public void Run()
+//    {
+//        Token current = Tokens.First!.NextAny();
+//        while (!current.IsEof())
+//        {
+//            Token token = current;
+//            if (token.Is(TokenType.Whitespace) || token.Is(TokenType.NewLine))
+//            {
+//                Tokens.Remove(current);
+//            }
+//            current = current.NextAny();
+//        }
+//    }
+//}

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace GSCode.Parser.Util;
 
+#if PREVIEW
 internal static class AnalyserExtensions
 {
     public static string GetFunctionDeclArgName(this IExpressionNode expression)
@@ -31,3 +32,5 @@ internal static class AnalyserExtensions
         throw new InvalidOperationException("The expression node passed does not fit the function declaration format.");
     }
 }
+
+#endif

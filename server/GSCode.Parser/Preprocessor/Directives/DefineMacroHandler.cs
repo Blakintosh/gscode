@@ -3,7 +3,6 @@
 using GSCode.Data;
 using GSCode.Data.Models;
 using GSCode.Data.Models.Interfaces;
-using GSCode.Lexer.Types;
 using GSCode.Parser.Util;
 /**
     GSCode.NET Language Server
@@ -22,154 +21,153 @@ using GSCode.Parser.Util;
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-namespace GSCode.Parser.Preprocessor.Directives
-{
-    internal sealed class DefineMacroHandler : IPreprocessorHandler
-    {
-        public PreprocessorMutation CreateMutation(Token baseToken, PreprocessorHelper data)
-        {
-            Token nameToken = baseToken.NextNotLinespace();
+//namespace GSCode.Parser.Preprocessor.Directives;
 
-            List<Token> parameters = ReadParametersIfSpecified(nameToken, data, out Token expansionBaseLocation);
-            List<Token> expandedList = ParseExpansion(expansionBaseLocation, out Token lastExpansionNode, out Token? documentationToken);
-            List<Token> rawDefineTokens = GetDefineRawTokens(baseToken, expansionBaseLocation, expandedList);
+//internal sealed class DefineMacroHandler : IPreprocessorHandler
+//{
+//    public PreprocessorMutation CreateMutation(Token baseToken, PreprocessorHelper data)
+//    {
+//        Token nameToken = baseToken.NextNotLinespace();
 
-            // Set as a define
-            // TODO: Standard token linked list that the one for script files inherits from
-            ScriptDefine result = new ScriptDefine(nameToken, rawDefineTokens,
-                expandedList, parameters, ParserUtil.GetCommentContents(documentationToken?.Contents, (CommentTypes?)documentationToken?.SubType));
-            data.Defines[nameToken.Contents] = result;
+//        List<Token> parameters = ReadParametersIfSpecified(nameToken, data, out Token expansionBaseLocation);
+//        List<Token> expandedList = ParseExpansion(expansionBaseLocation, out Token lastExpansionNode, out Token? documentationToken);
+//        List<Token> rawDefineTokens = GetDefineRawTokens(baseToken, expansionBaseLocation, expandedList);
 
-            if(!nameToken.BelowSurfaceLevel)
-            {
-                data.Sense.AddSenseToken(result);
-            }
+//        // Set as a define
+//        // TODO: Standard token linked list that the one for script files inherits from
+//        ScriptDefine result = new ScriptDefine(nameToken, rawDefineTokens,
+//            expandedList, parameters, ParserUtil.GetCommentContents(documentationToken?.Contents, (CommentTypes?)documentationToken?.SubType));
+//        data.Defines[nameToken.Contents] = result;
 
-            // Remove the entire define line from the token list
-            return new PreprocessorMutation(lastExpansionNode);
-        }
+//        if(!nameToken.BelowSurfaceLevel)
+//        {
+//            data.Sense.AddSenseToken(result);
+//        }
 
-        private static List<Token> GetDefineRawTokens(Token currentToken, Token expansionBaseLocation, List<Token> expandedList)
-        {
-            List<Token> rawDefineTokens = currentToken.GetTokenListUpToToken(expansionBaseLocation);
-            rawDefineTokens.AddRange(expandedList);
-            return rawDefineTokens;
-        }
+//        // Remove the entire define line from the token list
+//        return new PreprocessorMutation(lastExpansionNode);
+//    }
 
-        private static List<Token> ParseExpansion(Token baseToken,
-            out Token lastExpansionToken, out Token? documentationToken)
-        {
-            List<Token> expandedList = new();
+//    private static List<Token> GetDefineRawTokens(Token currentToken, Token expansionBaseLocation, List<Token> expandedList)
+//    {
+//        List<Token> rawDefineTokens = currentToken.GetTokenListUpToToken(expansionBaseLocation);
+//        rawDefineTokens.AddRange(expandedList);
+//        return rawDefineTokens;
+//    }
 
-            Token previousToken = baseToken;
-            Token currentToken = baseToken.NextAny();
-            while (!currentToken.IsEof())
-            {
-                if (AtLineContinuation(currentToken))
-                {
-                    currentToken = currentToken.NextNotNewline();
-                    continue;
-                }
+//    private static List<Token> ParseExpansion(Token baseToken,
+//        out Token lastExpansionToken, out Token? documentationToken)
+//    {
+//        List<Token> expandedList = new();
 
-                if(currentToken.Is(TokenType.NewLine))
-                {
-                    break;
-                }
+//        Token previousToken = baseToken;
+//        Token currentToken = baseToken.NextAny();
+//        while (!currentToken.IsEof())
+//        {
+//            if (AtLineContinuation(currentToken))
+//            {
+//                currentToken = currentToken.NextNotNewline();
+//                continue;
+//            }
 
-                if(!currentToken.Is(TokenType.Comment) && !AtAdjacentWhitespaceToken(expandedList, currentToken))
-                {
-                    expandedList.Add(currentToken);
-                }
+//            if(currentToken.Is(TokenType.NewLine))
+//            {
+//                break;
+//            }
 
-                if(!currentToken.Is(TokenType.Whitespace))
-                {
-                    previousToken = currentToken;
-                }
-                currentToken = currentToken.NextAny();
-            }
+//            if(!currentToken.Is(TokenType.Comment) && !AtAdjacentWhitespaceToken(expandedList, currentToken))
+//            {
+//                expandedList.Add(currentToken);
+//            }
 
-            documentationToken = GetDocumentationIfProvided(previousToken);
-            lastExpansionToken = currentToken.IsEof() ? currentToken.Previous! : currentToken;
-            return expandedList;
-        }
+//            if(!currentToken.Is(TokenType.Whitespace))
+//            {
+//                previousToken = currentToken;
+//            }
+//            currentToken = currentToken.NextAny();
+//        }
 
-        private static bool AtLineContinuation(Token currentToken)
-        {
-            return currentToken.Is(TokenType.SpecialToken, SpecialTokenTypes.Backslash) &&
-                currentToken.NextAny().Is(TokenType.NewLine);
-        }
+//        documentationToken = GetDocumentationIfProvided(previousToken);
+//        lastExpansionToken = currentToken.IsEof() ? currentToken.Previous! : currentToken;
+//        return expandedList;
+//    }
 
-        private static bool AtAdjacentWhitespaceToken(List<Token> expandedList, Token token)
-        {
-            if (expandedList.Count == 0)
-            {
-                return false;
-            }
+//    private static bool AtLineContinuation(Token currentToken)
+//    {
+//        return currentToken.Is(TokenType.SpecialToken, SpecialTokenTypes.Backslash) &&
+//            currentToken.NextAny().Is(TokenType.NewLine);
+//    }
 
-            Token lastAddedToken = expandedList[^1];
-            return lastAddedToken.Is(TokenType.Whitespace) && token.Is(TokenType.Whitespace);
-        }
+//    private static bool AtAdjacentWhitespaceToken(List<Token> expandedList, Token token)
+//    {
+//        if (expandedList.Count == 0)
+//        {
+//            return false;
+//        }
 
-        private static Token? GetDocumentationIfProvided(Token previousToken)
-        {
-            return previousToken.Is(TokenType.Comment) ?
-                previousToken : null;
-        }
+//        Token lastAddedToken = expandedList[^1];
+//        return lastAddedToken.Is(TokenType.Whitespace) && token.Is(TokenType.Whitespace);
+//    }
 
-        public bool Matches(Token currentToken, PreprocessorHelper data)
-        {
-            return currentToken.Is(TokenType.Keyword, KeywordTypes.Define) &&
-                currentToken.NextNotLinespace().Is(TokenType.Name);
-        }
+//    private static Token? GetDocumentationIfProvided(Token previousToken)
+//    {
+//        return previousToken.Is(TokenType.Comment) ?
+//            previousToken : null;
+//    }
 
-        private static List<Token> ReadParametersIfSpecified(Token baseToken, PreprocessorHelper data, out Token newNodeLocation)
-        {
-            List<Token> parameters = new();
-            // Check for (
-            Token currentToken = baseToken.NextAny();
-            if (!currentToken.Is(TokenType.Punctuation, PunctuationTypes.OpenParen))
-            {
-                newNodeLocation = baseToken;
-                return parameters;
-            }
+//    public bool Matches(Token currentToken, PreprocessorHelper data)
+//    {
+//        return currentToken.Is(TokenType.Keyword, KeywordTypes.Define) &&
+//            currentToken.NextNotLinespace().Is(TokenType.Name);
+//    }
 
-            newNodeLocation = ProcessThroughDefineParameters(data, parameters, currentToken);
-            return parameters;
-        }
+//    private static List<Token> ReadParametersIfSpecified(Token baseToken, PreprocessorHelper data, out Token newNodeLocation)
+//    {
+//        List<Token> parameters = new();
+//        // Check for (
+//        Token currentToken = baseToken.NextAny();
+//        if (!currentToken.Is(TokenType.Punctuation, PunctuationTypes.OpenParen))
+//        {
+//            newNodeLocation = baseToken;
+//            return parameters;
+//        }
 
-        private static Token ProcessThroughDefineParameters(PreprocessorHelper data, List<Token> parameters, Token currentToken)
-        {
-            Token newNodeLocation;
-            do
-            {
-                currentToken = currentToken.NextNotLinespace();
-                AddDefineParameter(data, parameters, currentToken);
+//        newNodeLocation = ProcessThroughDefineParameters(data, parameters, currentToken);
+//        return parameters;
+//    }
 
-                // Advance to what should be the next comma
-                currentToken = currentToken.NextNotLinespace();
-            }
-            while (currentToken.Is(TokenType.SpecialToken, SpecialTokenTypes.Comma));
+//    private static Token ProcessThroughDefineParameters(PreprocessorHelper data, List<Token> parameters, Token currentToken)
+//    {
+//        Token newNodeLocation;
+//        do
+//        {
+//            currentToken = currentToken.NextNotLinespace();
+//            AddDefineParameter(data, parameters, currentToken);
 
-            // Check for )
-            if (!currentToken.Is(TokenType.Punctuation, PunctuationTypes.CloseParen))
-            {
-                data.AddSenseDiagnostic(currentToken.TextRange, GSCErrorCodes.MissingToken, ")");
-            }
+//            // Advance to what should be the next comma
+//            currentToken = currentToken.NextNotLinespace();
+//        }
+//        while (currentToken.Is(TokenType.SpecialToken, SpecialTokenTypes.Comma));
 
-            newNodeLocation = currentToken;
-            return newNodeLocation;
-        }
+//        // Check for )
+//        if (!currentToken.Is(TokenType.Punctuation, PunctuationTypes.CloseParen))
+//        {
+//            data.AddSenseDiagnostic(currentToken.TextRange, GSCErrorCodes.MissingToken, ")");
+//        }
 
-        private static void AddDefineParameter(PreprocessorHelper data, List<Token> parameters, Token token)
-        {
-            if (token.Is(TokenType.Name))
-            {
-                parameters.Add(token);
-            }
-            else
-            {
-                data.AddSenseDiagnostic(token.TextRange, GSCErrorCodes.MissingIdentifier);
-            }
-        }
-    }
-}
+//        newNodeLocation = currentToken;
+//        return newNodeLocation;
+//    }
+
+//    private static void AddDefineParameter(PreprocessorHelper data, List<Token> parameters, Token token)
+//    {
+//        if (token.Is(TokenType.Name))
+//        {
+//            parameters.Add(token);
+//        }
+//        else
+//        {
+//            data.AddSenseDiagnostic(token.TextRange, GSCErrorCodes.MissingIdentifier);
+//        }
+//    }
+//}

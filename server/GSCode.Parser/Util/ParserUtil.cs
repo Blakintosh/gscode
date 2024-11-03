@@ -1,11 +1,13 @@
 ﻿using GSCode.Data.Models;
 using GSCode.Parser.Lexical;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace GSCode.Parser.Util;
 
-internal static class ParserUtil
+internal static partial class ParserUtil
 {
     /// <summary>
     /// Converts a series of tokens into a script path string, if it matches.
@@ -65,52 +67,83 @@ internal static class ParserUtil
     /// <summary>
     /// Attempts to find the script file relative to the current path, or otherwise from TA_TOOLS_PATH.
     /// </summary>
-    /// <param name="currentScriptPath">Current script file's path</param>
-    /// <param name="desiredScriptPath">Script path to determine location of</param>
-    /// <param name="extension">Extension to append if applicable</param>
-    /// <returns>A file path string if found, or null otherwise</returns>
-    public static string? GetScriptFilePath(string currentScriptPath, string desiredScriptPath, string? extension = null)
+    /// <param name="currentScriptPath">The path of the current script file.</param>
+    /// <param name="desiredScriptPath">The script path to locate.</param>
+    /// <returns>A file path string if found, or null if the file doesn't exist.</returns>
+    public static string? GetScriptFilePath(string currentScriptPath, string desiredScriptPath)
     {
-        string baseDir = @"/scripts/";
+        const string baseDir = "/scripts/";
+        string scriptPath = NormalisePath(desiredScriptPath);
+        string? basePath = ExtractBasePath(currentScriptPath, baseDir);
 
-        string scriptPath = desiredScriptPath.Replace("\\", "/");
-        if(!string.IsNullOrEmpty(extension))
-        {
-            scriptPath += $".{extension}";
-        }
-
-        string normalisedCurrentScriptPath = currentScriptPath.Replace("\\", "/");
-
-        string? basePath = null;
-        if (normalisedCurrentScriptPath.Contains(baseDir))
-        {
-            basePath = normalisedCurrentScriptPath[..normalisedCurrentScriptPath.LastIndexOf(baseDir)];
-        }
-
-        // TODO: this is stupid because what if it's /f: etc.
-        // If basePath starts with /c:, remove the leading /
-        if (basePath != null && basePath.StartsWith("/c:"))
-        {
-            basePath = basePath[1..];
-        }
-
+        // Check within the base path
         if (!string.IsNullOrEmpty(basePath) && ScriptFileExists(basePath, scriptPath))
         {
             return Path.Combine(basePath, scriptPath);
         }
 
+        // Check within the TA_TOOLS_PATH environment variable path
         string? toolsPath = Environment.GetEnvironmentVariable("TA_TOOLS_PATH");
-
         if (!string.IsNullOrEmpty(toolsPath))
         {
-            string sharedPath = Path.Combine(toolsPath, @"share\raw");
-            if(ScriptFileExists(sharedPath, scriptPath))
+            string sharedPath = Path.Combine(toolsPath, "share", "raw");
+            if (ScriptFileExists(sharedPath, scriptPath))
             {
                 return Path.Combine(sharedPath, scriptPath);
             }
         }
+
+        // Return null if the script file is not found
         return null;
     }
+
+    /// <summary>
+    /// Normalises the desired script path by replacing backslashes with forward slashes.
+    /// </summary>
+    /// <param name="path">The original desired script path.</param>
+    /// <returns>A normalised script path with forward slashes.</returns>
+    private static string NormalisePath(string path)
+    {
+        return path.Replace("\\", "/");
+    }
+
+    /// <summary>
+    /// Extracts the base path up to the specified base directory within the current script path.
+    /// </summary>
+    /// <param name="currentPath">The full path of the current script file.</param>
+    /// <param name="baseDir">The base directory to locate.</param>
+    /// <returns>The base path up to the base directory, or null if the directory is not found.</returns>
+    private static string? ExtractBasePath(string currentPath, string baseDir)
+    {
+        string normalisedPath = currentPath.Replace("\\", "/");
+        int baseIndex = normalisedPath.LastIndexOf(baseDir, StringComparison.OrdinalIgnoreCase);
+
+        if (baseIndex >= 0)
+        {
+            string basePath = normalisedPath.Substring(0, baseIndex);
+
+            // Remove leading slash on drive letter if applicable.
+            if (OperatingSystem.IsWindows() && DrivePrefixRegex().IsMatch(basePath))
+            {
+                return basePath[1..];
+            }
+            return basePath;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks if the script file exists in the specified base path combined with the script path.
+    /// </summary>
+    /// <param name="basePath">The base directory to search within.</param>
+    /// <param name="scriptPath">The relative script path.</param>
+    /// <returns>True if the file exists, otherwise false.</returns>
+    private static bool ScriptFileExists(string basePath, string scriptPath)
+    {
+        return File.Exists(Path.Combine(basePath, scriptPath));
+    }
+
 
     public static string? GetCommentContents(string? commentContents, TokenType tokenType)
     {
@@ -172,13 +205,6 @@ internal static class ParserUtil
         return contentSpan.Length;
     }
 
-    private static bool ScriptFileExists(string basePath, string scriptPath)
-    {
-        //Log.Information("{0}", Path.Combine(basePath, scriptPath));
-        //Log.Information("{0}", File.Exists(Path.Combine(basePath, scriptPath)));
-        return File.Exists(Path.Combine(basePath, scriptPath));
-    }
-
     /// <summary>
     /// Produces a human-readable standard formatted code snippet corresponding to the list of tokens provided.
     /// </summary>
@@ -202,4 +228,7 @@ internal static class ParserUtil
 
         return sb.ToString();
     }
+
+    [GeneratedRegex(@"^/[a-zA-Z]:")]
+    private static partial Regex DrivePrefixRegex();
 }

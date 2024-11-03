@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GSCode.Data;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -10,7 +11,7 @@ namespace GSCode.Parser.Lexical;
 internal record class Token(TokenType type, Range range, string lexeme)
 {
     public TokenType Type { get; } = type;
-    public Range Range { get; } = range;
+    public Range Range { get; init; } = range;
     public string Lexeme { get; } = lexeme;
 
     /// <summary>
@@ -50,8 +51,35 @@ internal record class Token(TokenType type, Range range, string lexeme)
 /// <param name="End">The ending token of the sequence.</param>
 internal record struct TokenList(Token Start, Token End)
 {
+    public readonly Range Range { get; } = RangeHelper.From(Start.Range.Start, End.Range.End);
+
+    public TokenList CloneWithRange(Range range)
+    {
+        Token currentTokenFromExpansion = Start;
+        // Populate the first token.
+        Token firstToken = currentTokenFromExpansion with { Range = range };
+        Token lastToken = firstToken;
+
+        while (currentTokenFromExpansion != End)
+        {
+            currentTokenFromExpansion = currentTokenFromExpansion.Next;
+
+            // Clone the current token with the updated range
+            Token currentToken = currentTokenFromExpansion with { Range = range };
+
+            // Connect the cloned token to the previous one in the output chain
+            lastToken.Next = currentToken;
+            currentToken.Previous = lastToken;
+
+            // Update the previous token reference and move to the next token
+            lastToken = currentToken;
+        }
+
+        return new(firstToken, lastToken);
+    }
+
     /// <summary>
-    /// Produces a string of the snippet of raw code this token list represents.
+    /// Produces a clean string of the snippet of raw code this token list represents.
     /// </summary>
     /// <returns></returns>
     public readonly string ToSnippetString()
@@ -73,11 +101,38 @@ internal record struct TokenList(Token Start, Token End)
             }
 
             // Go to next
-            if (current != last)
+            if (current == last)
             {
-                current = current.Next;
+                break;
             }
-        } while (current != last);
+            current = current.Next;
+        } while (current is not null);
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Produces a source-exact string of the snippet of raw code this token list represents.
+    /// </summary>
+    /// <returns></returns>
+    public readonly string ToRawString()
+    {
+        StringBuilder sb = new();
+
+        Token current = Start;
+        Token last = End;
+
+        do
+        {
+            sb.Append(current.Lexeme);
+
+            // Go to next
+            if (current == last)
+            {
+                break;
+            }
+            current = current.Next;
+        } while (current is not null);
 
         return sb.ToString();
     }

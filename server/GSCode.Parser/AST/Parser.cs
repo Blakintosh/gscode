@@ -139,7 +139,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
 
         // Check for SEMICOLON
-        if (CurrentTokenType != TokenType.Semicolon)
+        if (!AdvanceIfType(TokenType.Semicolon))
         {
             AddError(GSCErrorCodes.ExpectedSemiColon, "using directive");
         }
@@ -163,6 +163,9 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             AddError(GSCErrorCodes.ExpectedPathSegment, CurrentToken.Lexeme);
             return null;
         }
+
+        // Path is whitespace-sensitive, so we'll advance manually.
+        CurrentToken = CurrentToken.Next;
 
         PathNode? partial = PathPartial();
 
@@ -190,7 +193,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             return new PathNode();
         }
 
-        Advance();
+        // Path is whitespace-sensitive, so we'll advance manually.
+        CurrentToken = CurrentToken.Next;
 
         Token segmentToken = CurrentToken;
         if (CurrentTokenType != TokenType.Identifier)
@@ -201,7 +205,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             return null;
         }
 
-        Advance();
+        // Path is whitespace-sensitive, so we'll advance manually.
+        CurrentToken = CurrentToken.Next;
 
         // Get any further segments, then we'll prepend the current one.
         PathNode? partial = PathPartial();
@@ -537,7 +542,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             return new();
         }
 
-        ASTNode? classDefn = ClassDefn();
+        ASTNode? classDefn = ClassBodyDefn();
 
         if(classDefn is null && 
             // No chance of recovery
@@ -651,7 +656,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
 
         // Check for OPENBRACE
-        if (!AdvanceIfType(TokenType.OpenBrace))
+        if (CurrentTokenType != TokenType.OpenBrace)
         {
             AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
             return null;
@@ -813,6 +818,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             case TokenType.Continue when InLoop():
             // Expressions
             case TokenType.Identifier:
+            case TokenType.OpenBracket:
+            case TokenType.Thread:
                 ASTNode? statement = Stmt();
 
                 StmtListNode rest = StmtList();
@@ -860,7 +867,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             TokenType.Break when InLoopOrSwitch() => ControlFlowActionStmt(ASTNodeType.BreakStmt),
             TokenType.Continue when InLoop() => ControlFlowActionStmt(ASTNodeType.ContinueStmt),
             TokenType.Semicolon => EmptyStmt(),
-            TokenType.Identifier => ExprStmt(),
+            TokenType.Identifier or TokenType.Thread or TokenType.OpenBracket => ExprStmt(),
             _ => null
         };
         
@@ -2203,7 +2210,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     /// Parses and outputs function call, accessor and higher precedence operations.
     /// </summary>
     /// <remarks>
-    /// CallOrAccessOp := OPENBRACKET DerefOrArrayOp | Operand CallOrAccessOpRhs | THREAD Operand CallOpRhs
+    /// CallOrAccessOp := OPENBRACKET DerefOrArrayOp | Operand CallOrAccessOpRhs | THREAD DerefOrOperand CallOpRhs
     /// </remarks>
     /// <returns></returns>
     private ExprNode? CallOrAccessOp()
@@ -2217,14 +2224,41 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Threaded call without called-on
         if (ConsumeIfType(TokenType.Thread, out Token? threadToken))
         {
-            ExprNode? leftQualifier = Operand();
-            return new PrefixExprNode(threadToken, CallOpRhs(leftQualifier));
+            ExprNode? call = DerefOpOrOperandFunCall();
+            if(call is null)
+            {
+                return null;
+            }
+            return new PrefixExprNode(threadToken, call);
         }
         
         // Could be a function call, operand, accessor, etc.
         ExprNode? left = Operand();
+        if (left is null)
+        {
+            return null;
+        }
 
         return CallOrAccessOpRhs(left);
+    }
+
+    /// <summary>
+    /// Parses and outputs a dereference function call or a standard function call.
+    /// </summary>
+    /// <returns></returns>
+    private ExprNode? DerefOpOrOperandFunCall()
+    {
+        if(ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
+        {
+            return DerefOp(openBracket);
+        }
+
+        ExprNode? left = Operand();
+        if(left is null)
+        {
+            return null;
+        }
+        return CallOpRhs(left);
     }
 
     /// <summary>
@@ -2370,18 +2404,23 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Called-on ent call
         if(CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
         {
-            // TODO: this has a defect, because self[foo] is indistinguishable from self [[ foo here ]]();
-            ExprNode? call = CalledOnRhs(left);
-            if(call is null)
-            {
-                return null;
-            }
-
-            return new CalledOnNode(left, call);
+            return CalledOnRhs(left);
         }
 
         // Else, array index or accessor
-        return AccessOpRhs(left);
+        ExprNode? newLeft = AccessOpRhs(left);
+
+        if(newLeft is null)
+        {
+            return null;
+        }
+
+        // Which itself could still be a called-on target
+        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
+        {
+            return CalledOnRhs(newLeft);
+        }
+        return newLeft;
     }
 
     /// <summary>

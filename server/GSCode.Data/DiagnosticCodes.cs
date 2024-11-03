@@ -12,7 +12,7 @@ public static class DiagnosticSources
     public const string Preprocessor = "gscode-mac"; // Preprocessor transformations
     public const string Ast = "gscode-ast"; // Syntax tree generation
     public const string Spa = "gscode-spa"; // Static program analysis
-    public const string Ide = "gscode-ide"; // IDE enforced conventions
+    public const string Ide = "gscode-ide"; // IDE/Language Server enforced conventions
 }
 
 public enum GSCErrorCodes
@@ -20,19 +20,20 @@ public enum GSCErrorCodes
     // 1xxx errors are issued by the preprocessor
     ExpectedPreprocessorToken = 1000,
     UnexpectedCharacter = 1001,
-    TokenNotValidInContext = 1002,
+    ExpectedInsertPath = 1002,
     ExpectedMacroParameter = 1003,
-    MissingIdentifier = 1004,
-    MissingScript = 1005,
+    DuplicateMacroParameter = 1004,
+    MissingInsertFile = 1005,
     TooManyMacroArguments = 1006,
     TooFewMacroArguments = 1007,
     MisplacedPreprocessorDirective = 1008,
     MultilineStringLiteral = 1009,
     ExpectedMacroIdentifier = 1010,
     UnexpectedEof = 1011,
-    CommentLineContinuation = 1012,
+    InvalidInsertPath = 1012,
     InvalidLineContinuation = 1013,
     UserDefinedMacroIgnored = 1014,
+    MissingMacroParameterList = 1015,
 
     // 2xxx errors are issued by the parser
     ExpectedPathSegment = 2000,
@@ -92,7 +93,17 @@ public enum GSCErrorCodes
     IndexerExpected = 3029,
     NotDefined = 3030,
     NoEnclosingLoop = 3031,
-    CannotAssignToReadOnlyProperty = 3032
+    CannotAssignToReadOnlyProperty = 3032,
+
+    // 8xxx errors are issued by the IDE for conventions
+
+    // 9xxx errors are issued by the IDE for GSCode.NET faults
+    UnhandledLexError = 9000,
+    UnhandledMacError = 9001,
+    UnhandledAstError = 9002,
+    UnhandledSpaError = 9003,
+    UnhandledIdeError = 9004,
+    FailedToReadInsertFile = 9005,
 }
 
 public static class DiagnosticCodes
@@ -102,20 +113,21 @@ public static class DiagnosticCodes
         // 1xxx
         { GSCErrorCodes.ExpectedPreprocessorToken, new("'{0}' expected, but instead got '{1}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnexpectedCharacter, new("Unexpected character '{0}'.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.TokenNotValidInContext, new("The token '{0}' is not valid in this context.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedInsertPath, new("Expected a file path for insert directive.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedMacroParameter, new("Expected an identifier corresponding to a macro parameter name, but instead got '{0}'.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.MissingIdentifier, new("Expected an identifier.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.MissingScript, new("Unable to locate script '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.DuplicateMacroParameter, new("A macro parameter named '{0}' already exists on this definition.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.MissingInsertFile, new("Unable to locate file '{0}' for insert directive.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.TooManyMacroArguments, new("Too many arguments in invocation of macro '{0}', expected {1} arguments.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.TooFewMacroArguments, new("Too few arguments in invocation of macro '{0}', expected {1} arguments.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MisplacedPreprocessorDirective, new("The preprocessor directive '{0}' is not valid in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MultilineStringLiteral, new("Carriage return embedded in string literal.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedMacroIdentifier, new("Expected an identifier corresponding to a macro name, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnexpectedEof, new("Unexpected end of file reached.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.CommentLineContinuation, new("Line continuation use following a comment is not supported.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.InvalidInsertPath, new("The insert path '{0}' is not valid. The path must be relative and point to a file inside the project directory.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidLineContinuation, new("A line continuation character must immediately precede a line break.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UserDefinedMacroIgnored, new("Due to script engine limitations, the reference to user-defined macro '{0}' will not be recognised in this preprocessor-if statement.", DiagnosticSeverity.Warning) },
-
+        { GSCErrorCodes.MissingMacroParameterList, new("'{0}' is a recognised macro but will be ignored here because it requires arguments.", DiagnosticSeverity.Warning) },
+        
         // 2xxx
         { GSCErrorCodes.ExpectedPathSegment, new("Expected a file or directory path segment, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedSemiColon, new("';' expected to end {0}.", DiagnosticSeverity.Error) },
@@ -175,6 +187,14 @@ public static class DiagnosticCodes
         { GSCErrorCodes.NotDefined, new("The name '{0}' does not exist in the current context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.NoEnclosingLoop, new("No enclosing loop out of which to break or continue.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
+
+        // 9xxx
+        { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledMacError, new("An unhandled exception '{0}' caused preprocessing (gscode-mac) to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledAstError, new("An unhandled exception '{0}' caused syntax tree generation (gscode-ast) to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledSpaError, new("An unhandled exception '{0}' caused static program analysis (gscode-spa) to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledIdeError, new("An unhandled exception '{0}' caused GSCode IDE analysis (gscode-ide) to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.FailedToReadInsertFile, new("Failed to read contents of insert-directive file '{0}' due to exception '{1}'. Check the file is accessible, then try again.", DiagnosticSeverity.Error) }
     };
 
     public static Diagnostic GetDiagnostic(Range range, string source, GSCErrorCodes key, params object?[] arguments)

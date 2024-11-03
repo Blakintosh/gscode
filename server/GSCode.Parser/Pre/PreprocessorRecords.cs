@@ -19,7 +19,7 @@ namespace GSCode.Parser.Pre;
 /// <param name="Parameters">List of parameters</param>
 /// <param name="Documentation">Documentation for the define if it ends in a comment</param>
 internal record MacroDefinition(Token Source, TokenList DefineTokens, TokenList ExpansionTokens,
-    IEnumerable<Token> Parameters, string? Documentation = null) : ISenseToken
+   LinkedList<Token>? Parameters, string? Documentation = null) : ISenseToken
 {
     public Range Range { get; } = Source.Range;
 
@@ -56,7 +56,7 @@ internal record MacroDefinition(Token Source, TokenList DefineTokens, TokenList 
 /// <param name="Source">The macro token source</param>
 /// <param name="DefineSource">The define this macro is from</param>
 /// <param name="ExpansionTokens">The expansion of this macro</param>
-internal record ScriptMacro(Token Source, MacroDefinition DefineSource, List<Token> ExpansionTokens) : ISenseToken
+internal record ScriptMacro(Token Source, MacroDefinition DefineSource, TokenList ExpansionTokens) : ISenseToken
 {
     public Range Range { get; } = Source.Range;
 
@@ -66,8 +66,8 @@ internal record ScriptMacro(Token Source, MacroDefinition DefineSource, List<Tok
 
     public Hover GetHover()
     {
-        string defineSnippet = ParserUtil.ProduceSnippetString(DefineSource.RawDefineTokens);
-        string expansionSnippet = ParserUtil.ProduceSnippetString(ExpansionTokens);
+        string defineSnippet = DefineSource.DefineTokens.ToSnippetString();
+        string expansionSnippet = ExpansionTokens.ToSnippetString();
 
         Hover hover = new()
         {

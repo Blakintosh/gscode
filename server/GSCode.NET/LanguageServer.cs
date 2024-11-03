@@ -120,7 +120,6 @@ public class LanguageServer : INotifyPropertyChanged
         });
     }
 
-#if PREVIEW
     [JsonRpcMethod(Methods.TextDocumentSemanticTokensFullName)]
     public async Task<SemanticTokens> GetSemanticTokensAsync(JToken arg)
     {
@@ -133,7 +132,7 @@ public class LanguageServer : INotifyPropertyChanged
 
         if (script is not null)
         {
-            await script.PushSemanticTokensAsync(tokens);
+            tokens.SemanticTokens = await script.GetSemanticTokensAsync();
         }
 
         int[] result = tokens.Encode();
@@ -166,7 +165,6 @@ public class LanguageServer : INotifyPropertyChanged
         Log.Information("Hover request processed. Hover being sent: {result}", result);
         return result;
     }
-#endif
 
     [JsonRpcMethod(Methods.TextDocumentPublishDiagnosticsName)]
     public async Task PublishDiagnosticsAsync(PublishDiagnosticParams publishParams)

@@ -7,11 +7,12 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace GSCode.Parser.Pre;
 
-internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
+internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense sense)
 {
     public Token CurrentToken { get; private set; } = startToken;
 
@@ -25,7 +26,7 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
     /// <summary>
     /// Performs preprocessor transformations on the script token sequence.
     /// </summary>
-    public void Transform()
+    public void Process()
     {
         while(CurrentTokenType != TokenType.Eof)
         {
@@ -38,7 +39,8 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
                     Insert();
                     break;
                 case TokenType.PreIf:
-                    If();
+                    //If();
+                    Advance();
                     break;
                 case TokenType.PreElIf:
                     // TODO: try to consume an expression for better fault tolerance
@@ -53,6 +55,13 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
                     ConnectTokens(CurrentToken.Previous, CurrentToken.Next);
                     Advance();
                     break;
+                case TokenType.Identifier:
+                    if(Defines.TryGetValue(CurrentToken.Lexeme, out MacroDefinition? macro))
+                    {
+                        Macro(macro);
+                        break;
+                    }
+                    goto default;
                 default:
                     Advance();
                     break;
@@ -78,7 +87,7 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
         string macroName = macroNameToken.Lexeme;
 
         // Get its parameter list, if it has one.
-        IEnumerable<Token> parameters = ParamList();
+        LinkedList<Token>? parameters = ParamList();
 
         // Consume its expansion continuously until we get to a final line break
         Token start = CurrentToken;
@@ -114,28 +123,31 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
         }
 
         // Create the macro
-        Defines[macroName] = new MacroDefinition(
+        MacroDefinition definition = new(
             macroNameToken,
             DefineTokens: new TokenList(defineToken, last),
             ExpansionTokens: new TokenList(start, last),
             Parameters: parameters,
             Documentation: documentation
             );
+
+        Defines[macroName] = definition;
+        Sense.AddSenseToken(definition);
     }
 
     /// <summary>
     /// Parses a macro definition's parameter list, if it exists.
     /// </summary>
     /// <returns></returns>
-    private LinkedList<Token> ParamList()
+    private LinkedList<Token>? ParamList()
     {
         // No parameters
         if(!AdvanceIfType(TokenType.OpenParen))
         {
-            return [];
+            return null;
         }
 
-        LinkedList<Token> parameters = Params();
+        LinkedList<Token> result = Params();
 
         // Check for CLOSEPAREN
         if(!AdvanceIfType(TokenType.CloseParen))
@@ -143,7 +155,7 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
             AddError(GSCErrorCodes.ExpectedPreprocessorToken, ")", CurrentToken.Lexeme);
         }
 
-        return parameters;
+        return result;
     }
 
     /// <summary>
@@ -152,14 +164,16 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
     /// <returns></returns>
     private LinkedList<Token> Params()
     {
+        // Used to duplicate check
+        HashSet<string> set = [];
+
         // Zero parameters
-        if(!ConsumeIfType(TokenType.Identifier, out Token? parameterToken))
+        if (!ConsumeIfType(TokenType.Identifier, out Token? parameterToken))
         {
             return [];
         }
 
-        // One or more parameters
-        LinkedList<Token> rest = ParamsRhs();
+        LinkedList<Token> rest = ParamsRhs(set);
         rest.AddFirst(parameterToken);
 
         return rest;
@@ -169,34 +183,364 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
     /// Parses the right-hand side of a macro definition's parameters.
     /// </summary>
     /// <returns></returns>
-    private LinkedList<Token> ParamsRhs()
+    private LinkedList<Token> ParamsRhs(HashSet<string> set)
     {
         // End of parameter list
         if (!ConsumeIfType(TokenType.Comma, out Token? commaToken))
         {
-            return new();
+            return [];
         }
 
         // Get the next parameter's name
         if (!ConsumeIfType(TokenType.Identifier, out Token? parameterToken))
         {
             AddError(GSCErrorCodes.ExpectedMacroParameter, CurrentToken.Lexeme);
-            return new();
+            return [];
+        }
+
+        // Duplicate parameter
+        bool isDuplicate = !set.Add(parameterToken.Lexeme);
+        if(isDuplicate)
+        {
+            AddErrorAtToken(GSCErrorCodes.DuplicateMacroParameter, parameterToken, parameterToken.Lexeme);
         }
 
         // Recurse
-        LinkedList<Token> rest = ParamsRhs();
-        rest.AddFirst(parameterToken);
+        LinkedList<Token> rest = ParamsRhs(set);
+        if(!isDuplicate)
+        {
+            rest.AddFirst(parameterToken);
+        }
 
         return rest;
     }
 
+    [GeneratedRegex(@"(^[\\/])|(^[a-zA-Z]:)|(\.\.)")]
+    private static partial Regex InvalidPathRegex();
+
+    /// <summary>
+    /// Transforms an insert directive into the file's contents.
+    /// </summary>
     private void Insert()
     {
         // Pass over INSERT
         Token insertToken = Consume();
 
+        // Continously consume tokens until we get to a semicolon or line break.
+        TokenList? pathResult = Path(out Token? terminatorToken);
 
+        if(pathResult is not TokenList path)
+        {
+            // Pass over semicolon so we can remove it too - if it's the others, we don't want to remove those.
+            AdvanceIfType(TokenType.Semicolon);
+
+            ConnectTokens(insertToken.Previous, CurrentToken);
+            return;
+        }
+
+        // Check the path is relative and doesn't exit the project directory
+        string filePath = path.ToRawString();
+        if(InvalidPathRegex().IsMatch(filePath))
+        {
+            AddErrorAtRange(GSCErrorCodes.InvalidInsertPath, path.Range, filePath);
+
+            if(terminatorToken!.Type == TokenType.Semicolon)
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken.Next);
+                return;
+            }
+            ConnectTokens(insertToken.Previous, terminatorToken!.Previous);
+            return;
+        }
+
+        // Get the file contents
+        TokenList? insertTokensResult;
+        try
+        {
+            insertTokensResult = Sense.GetFileTokens(filePath, path.Range);
+        }
+        catch(Exception ex)
+        {
+            Sense.AddIdeDiagnostic(path.Range, GSCErrorCodes.FailedToReadInsertFile, filePath, ex.GetType().Name);
+            return;
+        }
+
+        // If we got null back then the file doesn't exist
+        if(insertTokensResult is not TokenList insertTokens)
+        {
+            AddErrorAtRange(GSCErrorCodes.MissingInsertFile, path.Range, filePath);
+            return;
+        }
+
+        // Otherwise, it's a unique instance so connect its boundaries (exc. the SOF and EOF) to the insert directive
+        ConnectTokens(insertToken.Previous, insertTokens.Start.Next);
+
+        // Connect past semicolon - otherwise directly to the terminator
+        if (terminatorToken!.Type == TokenType.Semicolon)
+        {
+            ConnectTokens(insertToken.Previous, terminatorToken.Next);
+            return;
+        }
+        ConnectTokens(insertToken.Previous, terminatorToken);
+    }
+
+    private TokenList? Path(out Token? terminatorIfMatched)
+    {
+        // Empty path
+        if(CurrentTokenType == TokenType.Semicolon || CurrentTokenType == TokenType.LineBreak || CurrentTokenType == TokenType.Eof)
+        {
+            terminatorIfMatched = null;
+            AddError(GSCErrorCodes.ExpectedInsertPath);
+            return null;
+        }
+
+        Token start = Consume();
+        Token current = start;
+
+        while(CurrentTokenType != TokenType.Semicolon && CurrentTokenType != TokenType.LineBreak && CurrentTokenType != TokenType.Eof)
+        {
+            current = Consume();
+        }
+
+        // Consume one more time so we can get the terminator and go back one from it for the full, whitespace-included path.
+        terminatorIfMatched = Consume();
+
+        if(terminatorIfMatched.Type == TokenType.LineBreak || terminatorIfMatched.Type == TokenType.Eof)
+        {
+            AddErrorAtToken(GSCErrorCodes.ExpectedPreprocessorToken, terminatorIfMatched, ';', terminatorIfMatched.Lexeme);
+        }
+
+        return new TokenList(start, terminatorIfMatched.Previous);
+    }
+
+    private void Macro(MacroDefinition macroDefinition)
+    {
+        if(macroDefinition.Parameters is null)
+        {
+            MacroWithoutArgs(macroDefinition);
+            return;
+        }
+        MacroWithArgs(macroDefinition);
+    }
+
+    private void MacroWithoutArgs(MacroDefinition macroDefinition)
+    {
+        Token macroToken = Consume();
+
+        // Clone the expansion, adding them with the macro token's range
+        TokenList expansion = macroDefinition.ExpansionTokens.CloneWithRange(macroToken.Range);
+
+        // Connect them to the surrounding tokens
+        ConnectTokens(macroToken.Previous, expansion.Start);
+        ConnectTokens(expansion.End, macroToken.Next);
+
+        // Finally, add the macro reference to IntelliSense
+        Sense.AddSenseToken(new ScriptMacro(macroToken, macroDefinition, expansion));
+    }
+
+    private void MacroWithArgs(MacroDefinition macroDefinition)
+    {
+        // Get the macro token
+        Token macroToken = Consume();
+
+        // The macro should have an arguments list but doesn't, so it'll be ignored.
+        if (!AdvanceIfType(TokenType.OpenParen))
+        {
+            AddErrorAtToken(GSCErrorCodes.MissingMacroParameterList, macroToken, macroToken.Lexeme);
+            return;
+        }
+
+        // Get the arguments
+        LinkedList<TokenList?> arguments = MacroArgs(macroToken, macroDefinition.Parameters!);
+
+        // Check for )
+        if(!AdvanceIfType(TokenType.CloseParen))
+        {
+            AddError(GSCErrorCodes.ExpectedPreprocessorToken, ")", CurrentToken.Lexeme);
+        }
+
+        // Start with a cloned expansion, then replace references to parameters with the argument expansions.
+        TokenList expansion = macroDefinition.ExpansionTokens.CloneWithRange(macroToken.Range);
+
+        // To do this, we'll need to map identifier names to their argument expansions.
+        Dictionary<string, TokenList?> argumentMappings = new();
+
+        LinkedListNode<Token>? parameter = macroDefinition.Parameters!.First;
+        LinkedListNode<TokenList?>? argument = arguments.First;
+
+        while(parameter is not null && argument is not null)
+        {
+            argumentMappings[parameter.Value.Lexeme] = argument.Value;
+
+            parameter = parameter.Next;
+            argument = argument.Next;
+        }
+
+        // Replace parameter references with their argument expansions.
+        Token current = expansion.Start;
+        while(current is not null)
+        {
+            // Curren token is a ref
+            if(current.Type == TokenType.Identifier && argumentMappings.TryGetValue(current.Lexeme, out TokenList? parameterExpansionResult))
+            {
+                // It's left blank, so just remove the identifier
+                if(parameterExpansionResult is not TokenList parameterExpansion)
+                {
+                    ConnectTokens(current.Previous, current.Next);
+                    current = current.Next;
+                    continue;
+                }
+
+                // Otherwise, clone the expansion then connect it to where the identifier formerly was
+                TokenList clonedExpansion = parameterExpansion.CloneWithRange(current.Range);
+
+                ConnectTokens(current.Previous, clonedExpansion.Start);
+                ConnectTokens(clonedExpansion.End, current.Next);
+
+                // Going to current.Next is fine as it's still one-way connected to beyond the end of the expansion
+                if (current == expansion.Start)
+                {
+                    expansion.Start = clonedExpansion.Start;
+                }
+                if (current == expansion.End)
+                {
+                    expansion.End = clonedExpansion.End;
+                    break;
+                }
+            }
+
+
+            current = current.Next;
+        }
+
+        // TODO: something in here is making DefineSource go demon mode and cause an infinite loop  DefineSource.DefineTokens.ToSnippetString();
+
+        // Then finally, connect the macro token to the expansion
+        ConnectTokens(macroToken.Previous, expansion.Start);
+        ConnectTokens(expansion.End, macroToken.Next);
+
+        // Job done (who knew with args would be so much more complex!)
+        // Finally, add the macro reference to IntelliSense
+        Sense.AddSenseToken(new ScriptMacro(macroToken, macroDefinition, expansion));
+    }
+
+    /// <summary>
+    /// Parses one or more macro expansion arguments.
+    /// </summary>
+    /// <param name="macroToken"></param>
+    /// <param name="parameters"></param>
+    /// <returns></returns>
+    private LinkedList<TokenList?> MacroArgs(Token macroToken, IEnumerable<Token> parameters)
+    {
+        // Get the first argument
+        TokenList? argument = MacroArgExpansion();
+
+        // Get the rest of the arguments
+        LinkedList<TokenList?> rest = MacroArgsRhs(macroToken, parameters, 1);
+        rest.AddFirst(argument);
+
+        return rest;
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a macro expansion's arguments.
+    /// </summary>
+    /// <param name="macroToken"></param>
+    /// <param name="parameters"></param>
+    /// <param name="index"></param>
+    /// <param name="alreadyErroredAboutArgumentCount"></param>
+    /// <returns></returns>
+    private LinkedList<TokenList?> MacroArgsRhs(Token macroToken, IEnumerable<Token> parameters, int index, bool alreadyErroredAboutArgumentCount = false)
+    {
+        int expectedParameterCount = parameters.Count();
+
+        // At the end of the argument list
+        if (!ConsumeIfType(TokenType.Comma, out Token? commaToken))
+        {
+            // But we didn't get enough arguments
+            if(expectedParameterCount != index)
+            {
+                AddError(GSCErrorCodes.TooFewMacroArguments, macroToken.Lexeme, expectedParameterCount);
+            }
+            return [];
+        }
+
+        // Check we're not about to go above the expected parameter count, continue parsing even if we are though.
+        if(index + 1 > expectedParameterCount && !alreadyErroredAboutArgumentCount)
+        {
+            alreadyErroredAboutArgumentCount = true;
+            AddErrorAtToken(GSCErrorCodes.TooManyMacroArguments, commaToken!, macroToken.Lexeme, expectedParameterCount);
+        }
+
+        // Get the next argument
+        TokenList? argument = MacroArgExpansion();
+
+        // Get the rest of the arguments
+        LinkedList<TokenList?> rest = MacroArgsRhs(macroToken, parameters, index + 1, alreadyErroredAboutArgumentCount);
+        rest.AddFirst(argument);
+
+        return rest;
+    }
+
+    /// <summary>
+    /// Parses a macro argument's expansion.
+    /// </summary>
+    /// <returns></returns>
+    private TokenList? MacroArgExpansion()
+    {
+        int parenIndex = 0;
+        int braceIndex = 0;
+        int bracketIndex = 0;
+
+        // Nothing to do, it's an empty expansion
+        if(CurrentTokenType == TokenType.Comma || CurrentTokenType == TokenType.CloseParen || CurrentTokenType == TokenType.Eof)
+        {
+            return null;
+        }
+
+        Token start = Consume();
+        Token current = start;
+
+        while(
+            // Don't terminate if we're inside punctuation
+            (parenIndex > 0 || braceIndex > 0 || bracketIndex > 0
+            // Otherwise these are our terminators
+            || (CurrentTokenType != TokenType.Comma && CurrentTokenType != TokenType.CloseParen))
+            // Always terminate on EOF
+            && CurrentTokenType != TokenType.Eof
+            )
+        {
+            // Maintain the indexes looking ahead at the token we're about to consume
+            switch (CurrentTokenType)
+            {
+                // Parentheses
+                case TokenType.OpenParen:
+                    parenIndex++;
+                    break;
+                case TokenType.CloseParen when parenIndex > 0:
+                    parenIndex--;
+                    break;
+                // Brackets
+                case TokenType.OpenBracket:
+                    bracketIndex++;
+                    break;
+                case TokenType.CloseBracket when bracketIndex > 0:
+                    bracketIndex--;
+                    break;
+                // Braces
+                case TokenType.OpenBrace:
+                    braceIndex++;
+                    break;
+                case TokenType.CloseBrace when braceIndex > 0:
+                    braceIndex--;
+                    break;
+            }
+
+            // Go to the next token, consuming our current one
+            current = Consume();
+        }
+
+        return new TokenList(start, current);
     }
 
     private void ConnectTokens(Token left, Token right)
@@ -209,6 +553,15 @@ internal ref struct Preprocessor(Token startToken, ParserIntelliSense sense)
     private void AddError(GSCErrorCodes errorCode, params object?[] args)
     {
         Sense.AddPreDiagnostic(CurrentTokenRange, errorCode, args);
+    }
+
+    private void AddErrorAtToken(GSCErrorCodes errorCode, Token token, params object?[] args)
+    {
+        Sense.AddPreDiagnostic(token.Range, errorCode, args);
+    }
+    private void AddErrorAtRange(GSCErrorCodes errorCode, Range range, params object?[] args)
+    {
+        Sense.AddPreDiagnostic(range, errorCode, args);
     }
 
     private void Advance()

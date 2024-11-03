@@ -105,7 +105,9 @@ public class ScriptManager
 
         await script.ParseAsync(content);
 
-        return script.GetDiagnostics();
+        await script.GetHoverAsync(new Position(16, 10));
+
+        return await script.GetDiagnosticsAsync();
     }
 
     public async Task<IEnumerable<Diagnostic>> UpdateEditorAsync(VersionedTextDocumentIdentifier document, TextDocumentContentChangeEvent[] changes)
@@ -115,7 +117,7 @@ public class ScriptManager
 
         await script.ParseAsync(updatedContent);
 
-        return script.GetDiagnostics();
+        return await script.GetDiagnosticsAsync();
     }
 
     public void RemoveEditor(TextDocumentIdentifier document)
@@ -177,7 +179,7 @@ public class ScriptManager
             script = Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Dependency,
-                Script = new Script()
+                Script = new Script(uri)
             };
             await script.Script.ParseAsync(File.ReadAllText(uri.LocalPath));
         }
@@ -222,7 +224,7 @@ public class ScriptManager
             Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
-                Script = new Script()
+                Script = new Script(uri)
                 // uri, add editor dependencies async
             };
         }
@@ -234,7 +236,7 @@ public class ScriptManager
             script = Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
-                Script = new Script()
+                Script = new Script(uri)
             };
         }
 

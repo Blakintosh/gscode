@@ -1,18 +1,21 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using GSCode.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using static System.Text.RegularExpressions.Regex;
 
 namespace GSCode.Parser.Lexical;
 
-internal ref partial struct Lexer(ReadOnlySpan<char> input)
+internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange = null)
 {
     private ReadOnlySpan<char> _input = input;
     private int _line = 0;
     private int _linePosition = 0;
 
+    private readonly Range? _forcedRange = forcedRange;
+
     public TokenList Transform()
     {
-        Token first = new Token(TokenType.Sof, Helper.RangeFrom(0, 0, 0, 0), string.Empty);
+        Token first = new Token(TokenType.Sof, GetTokenRange(0, 0, 0, 0), string.Empty);
 
         Token current = first;
         while (!_input.IsEmpty)
@@ -43,7 +46,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         }
 
         // Done - add EOF
-        Token eof = new Token(TokenType.Eof, Helper.RangeFrom(_line, _linePosition, _line, _linePosition), string.Empty);
+        Token eof = new Token(TokenType.Eof, GetTokenRange(_line, _linePosition, _line, _linePosition), string.Empty);
 
         current.Next = eof;
         eof.Previous = current;
@@ -52,10 +55,10 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         return new TokenList(first, eof);
     }
 
-    [GeneratedRegex(@"^/\*.*?\*/", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^/\*.*?\*/", RegexOptions.Singleline)]
     private static partial Regex MultilineCommentRegex();
 
-    [GeneratedRegex(@"^/\@.*?\@/", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^/\@.*?\@/", RegexOptions.Singleline)]
     private static partial Regex DocCommentRegex();
 
     [GeneratedRegex(@"^//.*$", RegexOptions.Multiline)]
@@ -137,6 +140,9 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
             // p or P
             'p' when StartsWithKeyword("private") => DoCharMatchIfWordBoundary(TokenType.Private, "private"),
             'P' when StartsWithKeyword("private") => DoCharMatchIfWordBoundary(TokenType.Private, "private"),
+            // t or T
+            't' when StartsWithKeyword("thread") => DoCharMatchIfWordBoundary(TokenType.Thread, "thread"),
+            'T' when StartsWithKeyword("thread") => DoCharMatchIfWordBoundary(TokenType.Thread, "thread"),
             // Strings
             '"' => MatchString(TokenType.String),
             // No match
@@ -177,7 +183,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
             int offset = _input[0] == '\r' ? 2 : 1;
 
             // Like whitespace, we probably don't need to preserve the exact line break, so show it as <EOL>
-            lineBreakToken = new Token(TokenType.LineBreak, Helper.RangeFrom(_line, _linePosition, _line + 1, 0), "<EOL>");
+            lineBreakToken = new Token(TokenType.LineBreak, GetTokenRange(_line, _linePosition, _line + 1, 0), "<EOL>");
 
             _line++;
             _linePosition = 0;
@@ -238,7 +244,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         else if(char.IsDigit(second))
         {
             int totalLength = 1 + GetLengthOfNumberSequence(1);
-            return new Token(TokenType.Float, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + totalLength), _input[..totalLength].ToString());
+            return new Token(TokenType.Float, GetTokenRange(_line, _linePosition, _line, _linePosition + totalLength), _input[..totalLength].ToString());
         }
         return CharMatch(TokenType.Dot, ".");
     }
@@ -425,7 +431,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
                 length++;
             }
 
-            return new Token(TokenType.AnimIdentifier, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
+            return new Token(TokenType.AnimIdentifier, GetTokenRange(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
         }
 
         // Otherwise an operator
@@ -578,13 +584,13 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         {
             if(!inEscape && InputAt(offset) == '"')
             {
-                return new Token(stringType, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + offset + 1), _input[..(offset + 1)].ToString());
+                return new Token(stringType, GetTokenRange(_line, _linePosition, _line, _linePosition + offset + 1), _input[..(offset + 1)].ToString());
             }
             inEscape = !inEscape && InputAt(offset) == '\\';
             offset++;
         }
 
-        return new Token(TokenType.ErrorString, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + offset), _input[..offset].ToString());
+        return new Token(TokenType.ErrorString, GetTokenRange(_line, _linePosition, _line, _linePosition + offset), _input[..offset].ToString());
     }
 
     private Token MatchNumber()
@@ -593,7 +599,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         if(InputAt(0) == '0' && InputAt(1) == 'x')
         {
             int hexaLength = 2 + GetLengthOfHexNumberSequence(2);
-            return new Token(TokenType.Hex, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + hexaLength), _input[..hexaLength].ToString());
+            return new Token(TokenType.Hex, GetTokenRange(_line, _linePosition, _line, _linePosition + hexaLength), _input[..hexaLength].ToString());
         }
 
         int deciLength = GetLengthOfNumberSequence(0);
@@ -604,11 +610,11 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
             int fracLength = GetLengthOfNumberSequence(deciLength + 1);
 
             int totalLength = deciLength + 1 + fracLength;
-            return new Token(TokenType.Float, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + totalLength), _input[..(totalLength)].ToString());
+            return new Token(TokenType.Float, GetTokenRange(_line, _linePosition, _line, _linePosition + totalLength), _input[..(totalLength)].ToString());
         }
 
         // 20
-        return new Token(TokenType.Integer, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + deciLength), _input[..deciLength].ToString());
+        return new Token(TokenType.Integer, GetTokenRange(_line, _linePosition, _line, _linePosition + deciLength), _input[..deciLength].ToString());
     }
 
     private Token MatchIdentifier()
@@ -619,12 +625,11 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         {
             length++;
         }
-        return new Token(TokenType.Identifier, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
+        return new Token(TokenType.Identifier, GetTokenRange(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
     }
 
     private Token MatchWhitespace()
     {
-        // TODO; whitespace is probably skippable, but newlines are relevant to the preprocessor
         int length = 1;
 
         char current = InputAt(length);
@@ -633,8 +638,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
             current = InputAt(++length);
         }
 
-        // Don't worry about preserving the exact whitespace, it's easier for us to represent it in IntelliSense by just one space
-        return new Token(TokenType.Whitespace, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + length), " ");
+        return new Token(TokenType.Whitespace, GetTokenRange(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
     }
 
     private int GetLengthOfNumberSequence(int startOffset)
@@ -662,14 +666,14 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         int lines = contents.Count('\n');
         int endOffset = contents.Length - contents.LastIndexOf('\n');
 
-        return new Token(tokenType, Helper.RangeFrom(_line, _linePosition, _line + lines, _linePosition + endOffset), contents.ToString());
+        return new Token(tokenType, GetTokenRange(_line, _linePosition, _line + lines, _linePosition + endOffset), contents.ToString());
     }
 
     private Token SinglelineRegexMatch(TokenType tokenType, int length)
     {
         ReadOnlySpan<char> contents = _input[..length];
 
-        return new Token(tokenType, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + length), contents.ToString());
+        return new Token(tokenType, GetTokenRange(_line, _linePosition, _line, _linePosition + length), contents.ToString());
     }
 
     private Token? DoCharMatchIfWordBoundary(TokenType tokenType, string lexeme)
@@ -684,7 +688,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
 
     private Token CharMatch(TokenType tokenType, string lexeme)
     {
-        return new Token(tokenType, Helper.RangeFrom(_line, _linePosition, _line, _linePosition + lexeme.Length), lexeme);
+        return new Token(tokenType, GetTokenRange(_line, _linePosition, _line, _linePosition + lexeme.Length), lexeme);
     }
 
     private bool IsWordChar(char c)
@@ -732,5 +736,10 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input)
         // No match found
         length = default;
         return false;
+    }
+
+    private Range GetTokenRange(int startLine, int startChar, int endLine, int endChar)
+    {
+        return _forcedRange ?? RangeHelper.From(startLine, startChar, endLine, endChar);
     }
 }

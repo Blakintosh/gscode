@@ -1,5 +1,7 @@
 ﻿using GSCode.Data;
 using GSCode.Parser.AST.Expressions;
+using GSCode.Parser.Lexical;
+using GSCode.Parser.Util;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
 
 namespace GSCode.Parser.Data;
@@ -13,7 +15,7 @@ public enum DeferredSymbolType
 }
 public sealed record class DeferredSymbol(Range Range, string? Namespace, string Value);
 
-public sealed class ParserIntelliSense
+internal sealed class ParserIntelliSense
 {
 
     /// <summary>
@@ -36,9 +38,12 @@ public sealed class ParserIntelliSense
     /// </summary>
     public List<Uri> Dependencies { get; } = new();
 
-    public ParserIntelliSense(int endLine)
+    private readonly string _scriptPath;
+
+    public ParserIntelliSense(int endLine, Uri scriptUri)
     {
         HoverLibrary = new(endLine + 1);
+        _scriptPath = scriptUri.LocalPath;
     }
 
     public void AddSenseToken(ISenseToken token)
@@ -55,10 +60,28 @@ public sealed class ParserIntelliSense
     public void AddSpaDiagnostic(Range range, GSCErrorCodes code, params object?[] args) => AddDiagnostic(range, DiagnosticSources.Spa, code, args);
     public void AddAstDiagnostic(Range range, GSCErrorCodes code, params object?[] args) => AddDiagnostic(range, DiagnosticSources.Ast, code, args);
     public void AddPreDiagnostic(Range range, GSCErrorCodes code, params object?[] args) => AddDiagnostic(range, DiagnosticSources.Preprocessor, code, args);
+    public void AddIdeDiagnostic(Range range, GSCErrorCodes code, params object?[] args) => AddDiagnostic(range, DiagnosticSources.Ide, code, args);
 
     public void AddDependency(string scriptPath)
     {
         Dependencies.Add(new Uri(scriptPath));
+    }
+
+    public TokenList? GetFileTokens(string dependencyPath, Range? belongToRange = null)
+    {
+        string? resolvedPath = ParserUtil.GetScriptFilePath(_scriptPath, dependencyPath);
+
+        // Sanity check the result
+        if(resolvedPath is null || !File.Exists(resolvedPath))
+        {
+            return null;
+        }
+
+        string contents = File.ReadAllText(resolvedPath);
+
+        // Use the lexer to transform the contents into a token list, with their range being the one specified.
+        Lexer lexer = new(contents.AsSpan(), belongToRange);
+        return lexer.Transform();
     }
 
     /* Others to support:

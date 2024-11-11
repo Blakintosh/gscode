@@ -1,0 +1,52 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32228.430
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GSCode.NET", "GSCode.NET\GSCode.NET.csproj", "{312E4FB3-E542-4E65-A55B-D68F7CB3720D}"
+	ProjectSection(ProjectDependencies) = postProject
+		{61432E94-9ADD-40BA-B58C-B16D9BA927DE} = {61432E94-9ADD-40BA-B58C-B16D9BA927DE}
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GSCode.Parser", "GSCode.Parser\GSCode.Parser.csproj", "{61432E94-9ADD-40BA-B58C-B16D9BA927DE}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GSCode.Data", "GSCode.Data\GSCode.Data.csproj", "{956D8AFE-C046-4537-94A4-72C5416F1092}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GSCode.CLI", "GSCode.CLI\GSCode.CLI.csproj", "{F6875B9A-E1E0-40E9-BF0A-FA1B37EA69A8}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GSCode.Tests", "GSCode.Tests\GSCode.Tests.csproj", "{C7462EE2-9256-4442-83C4-C98009FA080F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{312E4FB3-E542-4E65-A55B-D68F7CB3720D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{312E4FB3-E542-4E65-A55B-D68F7CB3720D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{312E4FB3-E542-4E65-A55B-D68F7CB3720D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{312E4FB3-E542-4E65-A55B-D68F7CB3720D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{61432E94-9ADD-40BA-B58C-B16D9BA927DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{61432E94-9ADD-40BA-B58C-B16D9BA927DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{61432E94-9ADD-40BA-B58C-B16D9BA927DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{61432E94-9ADD-40BA-B58C-B16D9BA927DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{956D8AFE-C046-4537-94A4-72C5416F1092}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{956D8AFE-C046-4537-94A4-72C5416F1092}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{956D8AFE-C046-4537-94A4-72C5416F1092}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{956D8AFE-C046-4537-94A4-72C5416F1092}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F6875B9A-E1E0-40E9-BF0A-FA1B37EA69A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F6875B9A-E1E0-40E9-BF0A-FA1B37EA69A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F6875B9A-E1E0-40E9-BF0A-FA1B37EA69A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F6875B9A-E1E0-40E9-BF0A-FA1B37EA69A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7462EE2-9256-4442-83C4-C98009FA080F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7462EE2-9256-4442-83C4-C98009FA080F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7462EE2-9256-4442-83C4-C98009FA080F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7462EE2-9256-4442-83C4-C98009FA080F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C3CD1136-CB98-4B83-9335-A21CC7203787}
+	EndGlobalSection
+EndGlobal

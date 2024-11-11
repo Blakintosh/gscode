@@ -98,6 +98,12 @@
 		"configuration": {
 			"title": "GSCode",
 			"properties": {
+				"gsc.trace.server": {
+                    "scope": "window",
+                    "type": "string",
+                    "enum": ["off","messages","verbose"],
+                    "default": "off"
+				}
 			}
 		}
 	},

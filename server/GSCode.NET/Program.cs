@@ -21,6 +21,8 @@ using GSCode.Parser.SPA;
 using Serilog;
 using StreamJsonRpc;
 using System.IO.Pipes;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()

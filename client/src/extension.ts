@@ -30,15 +30,17 @@ export function activate(context: ExtensionContext) {
 
     dotenv.config({ path: path.join(context.extensionPath, ".env") });
 
-	const serverModulePath = path.join('..', 'server', 'GSCode.NET', 'bin', 'Debug', 'net8.0', 'GSCode.NET.dll');
-    const serverModule = context.asAbsolutePath(path.normalize(serverModulePath));
+	// const serverModulePath = path.join('..', 'server', 'GSCode.NET', 'bin', 'Debug', 'net8.0', 'GSCode.NET.dll');
+    // const serverModule = context.asAbsolutePath(path.normalize(serverModulePath));
 
-    console.log(serverModule);
+    // console.log(serverModule);
 
-	const serverLocation = process.env.LSP_LOCATION;
+	const serverLocation = process.env.VSCODE_DEBUG ? process.env.DEBUG_SERVER_LOCATION : process.env.SERVER_LOCATION;
 	if (!serverLocation) {
-		throw new Error("LSP_LOCATION environment variable is not set. Please set it to the location of the GSCode.NET Language Server in .env");
+		throw new Error("SERVER_LOCATION environment variable is not set. Please set it to the location of the GSCode.NET Language Server in .env");
 	}
+
+    console.log(context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll'))));
 
     // If the extension is launched in debug mode then the debug server options are used
     // Otherwise the run options are used
@@ -46,14 +48,15 @@ export function activate(context: ExtensionContext) {
         // run: { command: serverExe, args: ['-lsp', '-d'] },
         run: {
             command: serverExe,
-			args: [serverModule],
-            // args: [serverLocation],
+			// args: [serverModule],
+            args: [context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll')))],
             // args: [path.join(serverLocation, 'GSCode.NET.dll')],
         },
         // debug: { command: serverExe, args: ['-lsp', '-d'] }
         debug: {
             command: serverExe,
-			args: [serverModule],
+			// args: [serverModule],
+            args: [context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll')))],
             // args: [path.join(serverLocation, 'GSCode.NET.exe')],
         },
     };

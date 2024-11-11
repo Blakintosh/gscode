@@ -823,7 +823,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 ASTNode? statement = Stmt();
 
                 StmtListNode rest = StmtList();
-                rest.Statements.AddFirst(statement);
+                if(statement is not null)
+                {
+                    rest.Statements.AddFirst(statement);
+                }
 
                 ExitContextIfWasNewly(newContext, isNewContext);
                 return rest;
@@ -912,7 +915,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
 
         // Parse the condition
-        ExprNode condition = Expr();
+        ExprNode? condition = Expr();
 
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
@@ -992,7 +995,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         Advance();
         
         // Parse the loop's body
-        ASTNode then = Stmt(ParserContextFlags.InLoopBody);
+        ASTNode? then = Stmt(ParserContextFlags.InLoopBody);
         
         // Check for WHILE
         if (!AdvanceIfType(TokenType.While))
@@ -1053,7 +1056,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
         
         // Parse the loop's body, update context.
-        ASTNode then = Stmt(ParserContextFlags.InLoopBody);
+        ASTNode? then = Stmt(ParserContextFlags.InLoopBody);
         
         return new WhileStmtNode(condition, then);
     }
@@ -1078,26 +1081,38 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
 
         // Parse the loop's initialization
-        ExprNode? init = AssignableExpr();
-        
+        ExprNode? init = null;
+        if (CurrentTokenType != TokenType.Semicolon)
+        {
+            init = AssignableExpr();
+        }
+
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
             AddError(GSCErrorCodes.ExpectedSemiColon, "for loop");
         }
-        
+
         // Parse the loop's condition
-        ExprNode? condition = Expr();
-        
+        ExprNode? condition = null;
+        if (CurrentTokenType != TokenType.Semicolon)
+        {
+            condition = Expr();
+        }
+
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
             AddError(GSCErrorCodes.ExpectedSemiColon, "for loop");
         }
-        
+
         // Parse the loop's increment
-        ExprNode? increment = AssignableExpr();
-        
+        ExprNode? increment = null;
+        if (CurrentTokenType != TokenType.CloseParen)
+        {
+            increment = AssignableExpr();
+        }
+
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {
@@ -1105,7 +1120,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
         
         // Parse the loop's body, update context.
-        ASTNode then = Stmt(ParserContextFlags.InLoopBody);
+        ASTNode? then = Stmt(ParserContextFlags.InLoopBody);
         
         return new(init, condition, increment, then);
     }
@@ -1114,7 +1129,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     /// Parses a foreach statement, including its then clause and collection.
     /// </summary>
     /// <remarks>
-    /// ForeachStmt := FOREACH OPENPAREN IDENTIFIER IN Expr CLOSEPAREN Stmt
+    /// ForeachStmt := FOREACH OPENPAREN IDENTIFIER ForeachValueIdentifier IN Expr CLOSEPAREN Stmt
     /// </remarks>
     /// <returns></returns>
     private ForeachStmtNode ForeachStmt()
@@ -1130,11 +1145,14 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
         
         // Parse the loop's identifier
-        Token identifierToken = CurrentToken;
+        Token firstIdentifierToken = CurrentToken;
         if (!AdvanceIfType(TokenType.Identifier))
         {
             AddError(GSCErrorCodes.ExpectedForeachIdentifier, CurrentToken.Lexeme);
         }
+
+        // Check for COMMA and another identifier, which would indicate that we're iterating over key-value pairs.
+        Token? valueIdentifierToken = ForeachValueIdentifier();
         
         // Check for IN
         if (!AdvanceIfType(TokenType.In))
@@ -1143,7 +1161,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
         
         // Parse the loop's collection
-        ExprNode collection = Expr();
+        ExprNode? collection = Expr();
         
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
@@ -1152,9 +1170,36 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
         
         // Parse the loop's body, update context.
-        ASTNode then = Stmt(ParserContextFlags.InLoopBody);
-        
-        return new ForeachStmtNode(identifierToken, collection, then);
+        ASTNode? then = Stmt(ParserContextFlags.InLoopBody);
+
+        if(valueIdentifierToken is not null)
+        {
+            return new ForeachStmtNode(valueIdentifierToken, firstIdentifierToken, collection, then);
+        }
+        return new ForeachStmtNode(firstIdentifierToken, null, collection, then);
+    }
+
+    /// <summary>
+    /// Parses and outputs a foreach value token, if given. For key, value pairs.
+    /// </summary>
+    /// <remarks>
+    /// ForeachValueIdentifier := COMMA IDENTIFIER | ε
+    /// </remarks>
+    /// <returns></returns>
+    private Token? ForeachValueIdentifier()
+    {
+        if (!AdvanceIfType(TokenType.Comma))
+        {
+            return null;
+        }
+
+        if (!ConsumeIfType(TokenType.Identifier, out Token? valueToken))
+        {
+            AddError(GSCErrorCodes.ExpectedForeachIdentifier, CurrentToken.Lexeme);
+            EnterRecovery();
+            return null;
+        }
+        return valueToken;
     }
 
     /// <summary>
@@ -1491,6 +1536,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // The expression failed to parse - try to recover from this.
         if(expr is null)
         {
+            // @next - make Stmt more fault tolerant / better at recovery
             EnterRecovery();
         }
         
@@ -1680,6 +1726,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Parse the left-hand side of the assignment
         // TODO: in practice, this could return null.
         ExprNode? left = Expr();
+        if(left is null)
+        {
+            return null;
+        }
         
         // Parse the assignment operator
         return AssignOp(left);
@@ -1714,7 +1764,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 Token operatorToken = Consume();
                 
                 // TODO: in practice, this could return null.
-                ExprNode right = Expr();
+                ExprNode? right = Expr();
                 return new BinaryExprNode(left, operatorToken, right);
             // No assignment - go with whatever LHS yielded
             default:
@@ -1729,9 +1779,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     /// Expr := LogAnd LogOrRhs
     /// </remarks>
     /// <returns></returns>
-    private ExprNode Expr()
+    private ExprNode? Expr()
     {
         ExprNode? left = LogAnd();
+        if (left is null)
+        {
+            return null;
+        }
 
         return LogOrRhs(left);
     }
@@ -1774,7 +1828,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? LogAnd()
     {
         ExprNode? left = BitOr();
-        
+        if (left is null)
+        {
+            return null;
+        }
+
         return LogAndRhs(left);
     }
 
@@ -1816,7 +1874,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? BitOr()
     {
         ExprNode? left = BitXor();
-        
+        if (left is null)
+        {
+            return null;
+        }
+
         return BitOrRhs(left);
     }
 
@@ -1858,7 +1920,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? BitXor()
     {
         ExprNode? left = BitAnd();
-        
+        if (left is null)
+        {
+            return null;
+        }
+
         return BitXorRhs(left);
     }
     
@@ -1900,7 +1966,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? BitAnd()
     {
         ExprNode? left = EqOp();
-        
+        if (left is null)
+        {
+            return null;
+        }
+
         return BitAndRhs(left);
     }
     
@@ -1942,6 +2012,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? EqOp()
     {
         ExprNode? left = RelOp();
+        if(left is null)
+        {
+            return null;
+        }
         
         return EqOpRhs(left);
     }
@@ -1987,7 +2061,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? RelOp()
     {
         ExprNode? left = BitShiftOp();
-        
+        if (left is null)
+        {
+            return null;
+        }
+
         return RelOpRhs(left);
     }
 
@@ -2032,7 +2110,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? BitShiftOp()
     {
         ExprNode? left = AddiOp();
-        
+        if (left is null)
+        {
+            return null;
+        }
+
         return BitShiftOpRhs(left);
     }
 
@@ -2076,7 +2158,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? AddiOp()
     {
         ExprNode? left = MulOp();
-        
+        if (left is null)
+        {
+            return null;
+        }
+
         return AddiOpRhs(left);
     }
     
@@ -2120,7 +2206,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     private ExprNode? MulOp()
     {
         ExprNode? left = PrefixOp();
-        
+        if (left is null)
+        {
+            return null;
+        }
+
         return MulOpRhs(left);
     }
     
@@ -2175,7 +2265,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 
                 // Parse the right-hand side of the prefix expression
                 ExprNode? operand = PrefixOp();
-                
+                if (operand is null)
+                {
+                    return null;
+                }
+
                 return new PrefixExprNode(operatorToken, operand);
             case TokenType.New:
                 Advance();
@@ -2185,6 +2279,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
                 {
                     AddError(GSCErrorCodes.ExpectedClassIdentifier, "identifier", CurrentToken.Lexeme);
+                    return null;
                 }
                 
                 // GSC doesn't let you pass arguments to constructors, which is hilarious
@@ -2284,7 +2379,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     /// Parses a called-on dereference call operation or an array indexer.
     /// </summary>
     /// <remarks>
-    /// CalledOnDerefOrIndexerOp := Expr CLOSEBRACKET AccessOpRhs | DerefOp
+    /// CalledOnDerefOrIndexerOp := Expr CLOSEBRACKET CallOrAccessOpRhs | DerefOp
     /// </remarks>
     /// <param name="left"></param>
     /// <param name="openBracket"></param>
@@ -2313,7 +2408,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
         }
 
-        return AccessOpRhs(new ArrayIndexNode(RangeHelper.From(left.Range.Start, closeBracket?.Range.End ?? index.Range.End), left, index));
+        return CallOrAccessOpRhs(new ArrayIndexNode(RangeHelper.From(left.Range.Start, closeBracket?.Range.End ?? index.Range.End), left, index));
     }
 
     /// <summary>
@@ -2360,15 +2455,27 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             if (!ConsumeIfType(TokenType.Identifier, out Token? methodToken))
             {
                 AddError(GSCErrorCodes.ExpectedMethodIdentifier, CurrentToken.Lexeme);
+                return null;
             }
             
             ArgsListNode? methodArgs = FunCall();
-            
-            return new MethodCallNode(openBracket.Range.Start, derefExpr, methodToken, methodArgs);
+            if (methodArgs is null)
+            {
+                return null;
+            }
+
+            MethodCallNode methodCall = new(openBracket.Range.Start, derefExpr, methodToken, methodArgs);
+            return CallOrAccessOpRhs(methodCall);
         }
             
         ArgsListNode? funArgs = FunCall();
-        return new FunCallNode(openBracket.Range.Start, derefExpr, funArgs);
+        if (funArgs is null)
+        {
+            return null;
+        }
+
+        FunCallNode call = new FunCallNode(openBracket.Range.Start, derefExpr, funArgs);
+        return CallOrAccessOpRhs(call);
     }
 
     /// <summary>
@@ -2510,7 +2617,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     /// Parses the right-hand side of a function call operation.
     /// </summary>
     /// <remarks>
-    /// CallOpRhs := SCOPERESOLUTION Operand FunCall | FunCall
+    /// CallOpRhs := SCOPERESOLUTION Operand NamespacedFunctionRefOrCall CallOrAccessOpRhs | FunCall CallOrAccessOpRhs
     /// </remarks>
     /// <param name="left"></param>
     /// <returns></returns>
@@ -2518,13 +2625,22 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     {
         if (AdvanceIfType(TokenType.ScopeResolution))
         {
-            // TODO: fault tolerance
-            ExprNode memberOfNamespace = Operand();
+            ExprNode? memberOfNamespace = Operand();
+            if (memberOfNamespace is null)
+            {
+                return null;
+            }
 
             NamespacedMemberNode namespacedMember = new(left, memberOfNamespace);
-            ArgsListNode? functionArgs = FunCall();
 
-            return new FunCallNode(namespacedMember, functionArgs);
+            // Could be a reference or a function call
+            ExprNode? refOrCall = NamespacedFunctionRefOrCall(namespacedMember);
+            if(refOrCall is null)
+            {
+                return null;
+            }
+
+            return CallOrAccessOpRhs(refOrCall);
         }
 
         // No namespace, just a function call
@@ -2532,11 +2648,42 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         {
             // TODO: fault tolerance
             ArgsListNode? functionArgs = FunCall();
-            return new FunCallNode(left, functionArgs);
+            if (functionArgs is null)
+            {
+                return null;
+            }
+            FunCallNode call = new FunCallNode(left, functionArgs);
+            return CallOrAccessOpRhs(call);
         }
 
         AddError(GSCErrorCodes.ExpectedFunctionQualification, CurrentToken.Lexeme);
         return null;
+    }
+
+    /// <summary>
+    /// Parses and outputs either a referenced to a namespaced function, or otherwise a call to that function.
+    /// </summary>
+    /// <remarks>
+    /// NamespacedFunctionRefOrCall := FunCall | ε
+    /// </remarks>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private ExprNode? NamespacedFunctionRefOrCall(NamespacedMemberNode left)
+    {
+        // Not a call, just a reference.
+        if (CurrentTokenType != TokenType.OpenParen)
+        {
+            return left;
+        }
+
+        // Call
+        ArgsListNode? functionArgs = FunCall();
+        if (functionArgs is null)
+        {
+            return null;
+        }
+
+        return new FunCallNode(left, functionArgs);
     }
 
     /// <summary>
@@ -2621,7 +2768,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     /// Parses and outputs the right-hand side of an accessor operation.
     /// </summary>
     /// <remarks>
-    /// AccessOpRhs := DOT Operand AccessOpRhs | OPENBRACKET Expr CLOSEBRACKET AccessOpRhs | ε
+    /// AccessOpRhs := DOT Operand CallOrAccessOpRhs | OPENBRACKET Expr CLOSEBRACKET CallOrAccessOpRhs | ε
     /// </remarks>
     /// <param name="left"></param>
     /// <returns></returns>
@@ -2632,7 +2779,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         {
             ExprNode? right = Operand();
 
-            return AccessOpRhs(new BinaryExprNode(left, dotToken, right));
+            return CallOrAccessOpRhs(new BinaryExprNode(left, dotToken, right));
         }
         
         // Array index
@@ -2646,7 +2793,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
             }
 
-            return AccessOpRhs(new ArrayIndexNode(RangeHelper.From(left.Range.Start, closeBracket?.Range.End ?? index.Range.End), left, index));
+            return CallOrAccessOpRhs(new ArrayIndexNode(RangeHelper.From(left.Range.Start, closeBracket?.Range.End ?? index.Range.End), left, index));
         }
 
         // Empty - just an operand further up
@@ -2726,20 +2873,28 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     /// ConditionalOrVector := QUESTIONMARK Expr COLON Expr | COMMA Expr COMMA Expr | ε
     /// </remarks>
     /// <returns></returns>
-    private ExprNode ConditionalOrVector(ExprNode leftmostExpr)
+    private ExprNode? ConditionalOrVector(ExprNode leftmostExpr)
     {
         // Ternary expression
         if (AdvanceIfType(TokenType.QuestionMark))
         {
-            ExprNode trueExpr = Expr();
+            ExprNode? trueExpr = Expr();
+
+            if(trueExpr is null)
+            {
+                EnterRecovery();
+            }
             
             // Check for COLON
             if (!AdvanceIfType(TokenType.Colon))
             {
                 AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
+                ExitRecovery();
+                return null;
             }
+            ExitRecovery();
             
-            ExprNode falseExpr = Expr();
+            ExprNode? falseExpr = Expr();
             
             return new TernaryExprNode(leftmostExpr, trueExpr, falseExpr);
         }

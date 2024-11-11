@@ -105,7 +105,7 @@ public class ScriptManager
 
         await script.ParseAsync(content);
 
-        await script.GetHoverAsync(new Position(16, 10));
+        await script.GetHoverAsync(new Position(13, 15));
 
         return await script.GetDiagnosticsAsync();
     }

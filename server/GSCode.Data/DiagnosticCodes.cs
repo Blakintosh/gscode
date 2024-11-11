@@ -32,8 +32,11 @@ public enum GSCErrorCodes
     UnexpectedEof = 1011,
     InvalidInsertPath = 1012,
     InvalidLineContinuation = 1013,
-    UserDefinedMacroIgnored = 1014,
-    MissingMacroParameterList = 1015,
+    DuplicateMacroDefinition = 1014,
+    UserDefinedMacroIgnored = 1015,
+    MissingMacroParameterList = 1016,
+
+    PreprocessorIfAnalysisUnsupported = 1999,
 
     // 2xxx errors are issued by the parser
     ExpectedPathSegment = 2000,
@@ -125,8 +128,10 @@ public static class DiagnosticCodes
         { GSCErrorCodes.UnexpectedEof, new("Unexpected end of file reached.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidInsertPath, new("The insert path '{0}' is not valid. The path must be relative and point to a file inside the project directory.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidLineContinuation, new("A line continuation character must immediately precede a line break.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.DuplicateMacroDefinition, new("A macro named '{0}' already exists in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UserDefinedMacroIgnored, new("Due to script engine limitations, the reference to user-defined macro '{0}' will not be recognised in this preprocessor-if statement.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.MissingMacroParameterList, new("'{0}' is a recognised macro but will be ignored here because it requires arguments.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.PreprocessorIfAnalysisUnsupported, new("Preprocessor-if analysis is not currently supported.", DiagnosticSeverity.Information) },
         
         // 2xxx
         { GSCErrorCodes.ExpectedPathSegment, new("Expected a file or directory path segment, but instead got '{0}'.", DiagnosticSeverity.Error) },
@@ -189,11 +194,11 @@ public static class DiagnosticCodes
         { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
 
         // 9xxx
-        { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.UnhandledMacError, new("An unhandled exception '{0}' caused preprocessing (gscode-mac) to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.UnhandledAstError, new("An unhandled exception '{0}' caused syntax tree generation (gscode-ast) to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.UnhandledSpaError, new("An unhandled exception '{0}' caused static program analysis (gscode-spa) to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.UnhandledIdeError, new("An unhandled exception '{0}' caused GSCode IDE analysis (gscode-ide) to fail. File an issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledMacError, new("An unhandled exception '{0}' caused preprocessing (gscode-mac) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledAstError, new("An unhandled exception '{0}' caused syntax tree generation (gscode-ast) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledSpaError, new("An unhandled exception '{0}' caused static program analysis (gscode-spa) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledIdeError, new("An unhandled exception '{0}' caused GSCode IDE analysis (gscode-ide) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.FailedToReadInsertFile, new("Failed to read contents of insert-directive file '{0}' due to exception '{1}'. Check the file is accessible, then try again.", DiagnosticSeverity.Error) }
     };
 

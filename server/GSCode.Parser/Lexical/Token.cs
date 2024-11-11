@@ -8,11 +8,19 @@ using System.Threading.Tasks;
 
 namespace GSCode.Parser.Lexical;
 
-internal record class Token(TokenType type, Range range, string lexeme)
+internal record class Token(TokenType Type, Range Range, string Lexeme)
 {
-    public TokenType Type { get; } = type;
-    public Range Range { get; init; } = range;
-    public string Lexeme { get; } = lexeme;
+    /// <summary>
+    /// Whether this token is from a preprocessor expansion, which suppresses some IntelliSense
+    /// features like hovers and semantic highlighting.
+    /// </summary>
+    public bool IsFromPreprocessor { get; init; }
+
+    /// <summary>
+    /// If the token is from the preprocessor, this stores the range that the token occurs
+    /// in the original document.
+    /// </summary>
+    public Range? SourceRange { get; init; }
 
     /// <summary>
     /// Stores reference to the next token in the sequence.
@@ -42,6 +50,35 @@ internal record class Token(TokenType type, Range range, string lexeme)
             || Type == TokenType.MultilineComment
             || Type == TokenType.DocComment;
     }
+
+    public bool IsKeyword()
+    {
+        return Type == TokenType.Classes ||
+               Type == TokenType.Function ||
+               Type == TokenType.Var ||
+               Type == TokenType.Return ||
+               Type == TokenType.Thread ||
+               Type == TokenType.Class ||
+               Type == TokenType.Anim ||
+               Type == TokenType.If ||
+               Type == TokenType.Else ||
+               Type == TokenType.Do ||
+               Type == TokenType.While ||
+               Type == TokenType.Foreach ||
+               Type == TokenType.For ||
+               Type == TokenType.In ||
+               Type == TokenType.New ||
+               Type == TokenType.Switch ||
+               Type == TokenType.Case ||
+               Type == TokenType.Default ||
+               Type == TokenType.Break ||
+               Type == TokenType.Continue ||
+               Type == TokenType.Constructor ||
+               Type == TokenType.Destructor ||
+               Type == TokenType.Autoexec ||
+               Type == TokenType.Private ||
+               Type == TokenType.Const;
+    }
 }
 
 /// <summary>
@@ -49,12 +86,65 @@ internal record class Token(TokenType type, Range range, string lexeme)
 /// </summary>
 /// <param name="Start">The beginning token of the sequence.</param>
 /// <param name="End">The ending token of the sequence.</param>
-internal record struct TokenList(Token Start, Token End)
+internal record struct TokenList(Token? Start, Token? End)
 {
-    public readonly Range Range { get; } = RangeHelper.From(Start.Range.Start, End.Range.End);
+    public readonly Range? Range { get; } = Start != null && End != null ? RangeHelper.From(Start.Range.Start, End.Range.End) : default;
+
+    public static TokenList Empty => new(null, null);
+
+    public readonly bool IsEmpty => Start == null || End == null;
+
+    public static TokenList From(params Token[] tokens)
+    {
+        if(tokens.Length == 0)
+        {
+            return Empty;
+        }
+
+        // Fully clone the tokens so we have no shared references
+        Token[] clonedTokens = new Token[tokens.Length];
+        
+        for(int i = 0; i < clonedTokens.Length; i++)
+        {
+            clonedTokens[i] = tokens[i] with { Range = RangeHelper.Empty };
+
+            clonedTokens[i].Previous = i > 0 ? clonedTokens[i - 1] : null!;
+            if(i - 1 >= 0)
+            {
+                clonedTokens[i - 1].Next = clonedTokens[i];
+            }
+        }
+        Token start = clonedTokens[0];
+        Token end = clonedTokens[^1];
+
+        return new TokenList(start, end);
+    }
+
+    public readonly void ConnectToTokens(Token before, Token after)
+    {
+        // Nothing to connect
+        if (Start == null || End == null)
+        {
+            before.Next = after;
+            after.Previous = before;
+            return;
+        }
+
+        // Otherwise connect our list
+        before.Next = Start;
+        Start.Previous = before;
+
+        End.Next = after;
+        after.Previous = End;
+    }
 
     public TokenList CloneWithRange(Range range)
     {
+        if (Start == null || End == null)
+        {
+            return Empty;
+        }
+
         Token currentTokenFromExpansion = Start;
         // Populate the first token.
         Token firstToken = currentTokenFromExpansion with { Range = range };
@@ -75,7 +165,7 @@ internal record struct TokenList(Token Start, Token End)
             lastToken = currentToken;
         }
 
-        return new(firstToken, lastToken);
+        return new TokenList(firstToken, lastToken);
     }
 
     /// <summary>
@@ -84,16 +174,21 @@ internal record struct TokenList(Token Start, Token End)
     /// <returns></returns>
     public readonly string ToSnippetString()
     {
+        if (Start == null || End == null)
+        {
+            return string.Empty;
+        }
+
         StringBuilder sb = new();
 
-        Token current = FirstNonWhitespaceToken();
-        Token last = LastNonWhitespaceToken();
+        Token current = FirstNonWhitespaceToken()!;
+        Token last = LastNonWhitespaceToken()!;
         bool lastAddedWhitespace = false;
 
         do
         {
             // Only ever add one whitespace token in a chain of them, so we don't get snippets with multiple spaces
-            if(!lastAddedWhitespace || !current.IsWhitespacey())
+            if (!lastAddedWhitespace || !current.IsWhitespacey())
             {
                 lastAddedWhitespace = current.IsWhitespacey();
                 // If we've reached whitespace, just emit a single space and don't do this repeatedly
@@ -106,7 +201,12 @@ internal record struct TokenList(Token Start, Token End)
                 break;
             }
             current = current.Next;
-        } while (current is not null);
+        } while (current is not null && current.Type != TokenType.Eof);
+
+        if(current.Type == TokenType.Eof)
+        {
+            Console.Error.WriteLine("sanity check failed");
+        }
 
         return sb.ToString();
     }
@@ -117,6 +217,11 @@ internal record struct TokenList(Token Start, Token End)
     /// <returns></returns>
     public readonly string ToRawString()
     {
+        if (Start == null || End == null)
+        {
+            return string.Empty;
+        }
+
         StringBuilder sb = new();
 
         Token current = Start;
@@ -137,8 +242,13 @@ internal record struct TokenList(Token Start, Token End)
         return sb.ToString();
     }
 
-    public readonly Token FirstNonWhitespaceToken()
+    public readonly Token? FirstNonWhitespaceToken()
     {
+        if (Start == null || End == null)
+        {
+            return null;
+        }
+
         // Get the first non-whitespace token, otherwise the last if they're all whitespace
         Token current = Start;
         while (current.Type == TokenType.Whitespace && current != End)
@@ -149,8 +259,13 @@ internal record struct TokenList(Token Start, Token End)
         return current;
     }
 
-    public readonly Token LastNonWhitespaceToken()
+    public readonly Token? LastNonWhitespaceToken()
     {
+        if (Start == null || End == null)
+        {
+            return null;
+        }
+
         // Get the last non-whitespace token, otherwise the first if they're all whitespace
         Token current = End;
         while (current.Type == TokenType.Whitespace && current != Start)

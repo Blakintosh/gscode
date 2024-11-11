@@ -7,7 +7,10 @@ using System.Threading.Tasks;
 
 namespace GSCode.Parser.Data
 {
-    public interface ISenseToken : ISemanticToken, IHoverable {}
+    public interface ISenseToken : ISemanticToken, IHoverable 
+    {
+        public bool IsFromPreprocessor { get; }
+    }
 
     public interface ISemanticToken
     {

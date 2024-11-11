@@ -162,7 +162,7 @@ internal sealed class EmptyStmtNode() : ASTNode(ASTNodeType.EmptyStmt) {}
 internal sealed class IfStmtNode() : ASTNode(ASTNodeType.IfStmt)
 {
     public ExprNode? Condition { get; init; }
-    public ASTNode Then { get; init; }
+    public ASTNode? Then { get; init; }
     public IfStmtNode? Else { get; set; }
 }
 
@@ -178,36 +178,37 @@ internal sealed class ConstStmtNode(Token identifierToken, ExprNode value) : AST
     public ExprNode Value { get; } = value;
 }
 
-internal sealed class ExprStmtNode(ExprNode expr) : ASTNode(ASTNodeType.ExprStmt)
+internal sealed class ExprStmtNode(ExprNode? expr) : ASTNode(ASTNodeType.ExprStmt)
 {
-    public ExprNode Expr { get; } = expr;
+    public ExprNode? Expr { get; } = expr;
 }
 
-internal sealed class DoWhileStmtNode(ExprNode condition, ASTNode then) : ASTNode(ASTNodeType.DoWhileStmt)
-{
-    public ExprNode Condition { get; } = condition;
-    public ASTNode Then { get; } = then;
-}
-
-internal sealed class WhileStmtNode(ExprNode condition, ASTNode then) : ASTNode(ASTNodeType.WhileStmt)
+internal sealed class DoWhileStmtNode(ExprNode condition, ASTNode? then) : ASTNode(ASTNodeType.DoWhileStmt)
 {
     public ExprNode Condition { get; } = condition;
-    public ASTNode Then { get; } = then;
+    public ASTNode? Then { get; } = then;
 }
 
-internal sealed class ForStmtNode(ASTNode? init, ExprNode? condition, ASTNode? increment, ASTNode then) : ASTNode(ASTNodeType.ForStmt)
+internal sealed class WhileStmtNode(ExprNode condition, ASTNode? then) : ASTNode(ASTNodeType.WhileStmt)
+{
+    public ExprNode Condition { get; } = condition;
+    public ASTNode? Then { get; } = then;
+}
+
+internal sealed class ForStmtNode(ASTNode? init, ExprNode? condition, ASTNode? increment, ASTNode? then) : ASTNode(ASTNodeType.ForStmt)
 {
     public ASTNode? Init { get; } = init;
     public ExprNode? Condition { get; } = condition;
     public ASTNode? Increment { get; } = increment;
-    public ASTNode Then { get; } = then;
+    public ASTNode? Then { get; } = then;
 }
 
-internal sealed class ForeachStmtNode(Token identifier, ExprNode collection, ASTNode then) : ASTNode(ASTNodeType.ForeachStmt)
+internal sealed class ForeachStmtNode(Token valueIdentifier, Token? keyIdentifier, ExprNode? collection, ASTNode? then) : ASTNode(ASTNodeType.ForeachStmt)
 {
-    public string Identifier { get; } = identifier.Lexeme;
-    public ExprNode Collection { get; } = collection;
-    public ASTNode Then { get; } = then;
+    public Token? KeyIdentifier { get; } = keyIdentifier;
+    public Token ValueIdentifier { get; } = valueIdentifier;
+    public ExprNode? Collection { get; } = collection;
+    public ASTNode? Then { get; } = then;
 }
 
 internal sealed class ControlFlowActionNode(ASTNodeType type, Token actionToken) : ASTNode(type)
@@ -332,12 +333,14 @@ internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperat
     public string Identifier { get; } = identifier.Lexeme;
 }
 
-internal sealed class BinaryExprNode(ExprNode left, Token operatorToken, ExprNode right)
-    : ExprNode(ExprOperatorType.Binary, RangeHelper.From(left.Range.Start, right.Range.End))
+internal sealed class BinaryExprNode(ExprNode? left, Token operatorToken, ExprNode? right)
+    : ExprNode(
+        ExprOperatorType.Binary, 
+        RangeHelper.From(left?.Range.Start ?? operatorToken.Range.Start, right?.Range.End ?? operatorToken.Range.End))
 {
-    public ExprNode Left { get; } = left;
+    public ExprNode? Left { get; } = left;
     public Token Operator { get; } = operatorToken;
-    public ExprNode Right { get; } = right;
+    public ExprNode? Right { get; } = right;
     
     public TokenType Operation => Operator.Type;
 }

@@ -25,4 +25,6 @@ public static class RangeHelper
             End = end
         };
     }
+
+    public static Range Empty => From(0, 0, 0, 0);
 }

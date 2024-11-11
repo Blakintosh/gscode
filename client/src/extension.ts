@@ -61,25 +61,42 @@ export function activate(context: ExtensionContext) {
         },
     };
 
-    const watcher = workspace.createFileSystemWatcher("**/*.gsc");
+    const gscWatcher = workspace.createFileSystemWatcher("**/*.gsc");
+    const cscWatcher = workspace.createFileSystemWatcher("**/*.csc");
 
     // Options to control the language client
     let clientOptions: LanguageClientOptions = {
         // Register the server for plain text documents
         documentSelector: [
             {
+                scheme: "file",
+                language: "gsc",
                 pattern: "**/*.gsc",
             },
+            {
+                scheme: "file",
+                language: "csc",
+                pattern: "**/*.csc",
+            }
         ],
         progressOnInitialization: true,
         synchronize: {
             // Synchronize the setting section 'languageServerExample' to the server
             configurationSection: "gsc",
-            fileEvents: watcher,
+            fileEvents: [
+                gscWatcher,
+                cscWatcher,
+            ],
         }, 
+        middleware: {
+            didOpen: (document, next) => {
+                console.log("didOpen");
+                return next(document);
+            },
+        }
     };
 
-    watcher.onDidChange((e) => {
+    gscWatcher.onDidChange((e) => {
         console.log(`File changed: ${e.fsPath}`);
     });
 

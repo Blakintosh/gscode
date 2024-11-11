@@ -48,8 +48,11 @@ internal sealed class ParserIntelliSense
 
     public void AddSenseToken(ISenseToken token)
     {
-        SemanticTokens.Add(token);
-        HoverLibrary.Add(token);
+        if(!token.IsFromPreprocessor)
+        {
+            SemanticTokens.Add(token);
+            HoverLibrary.Add(token);
+        }
     }
 
     public void AddDiagnostic(Range range, string source, GSCErrorCodes code, params object?[] args)

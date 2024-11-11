@@ -16,6 +16,9 @@
 				"${workspaceFolder}/out/**/*.js"
 			],
 			"preLaunchTask": "${defaultBuildTask}",
+			"env": {
+				"VSCODE_DEBUG": "true"
+			}
 		},
 		{
 			"name": "Extension Tests",

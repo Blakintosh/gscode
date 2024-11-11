@@ -1,4 +1,5 @@
-﻿using GSCode.Parser.Data;
+﻿using GSCode.Data;
+using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.Util;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
@@ -21,6 +22,7 @@ namespace GSCode.Parser.Pre;
 internal record MacroDefinition(Token Source, TokenList DefineTokens, TokenList ExpansionTokens,
    LinkedList<Token>? Parameters, string? Documentation = null) : ISenseToken
 {
+    public bool IsFromPreprocessor { get; } = Source.IsFromPreprocessor;
     public Range Range { get; } = Source.Range;
 
     public string SemanticTokenType { get; } = "macro";
@@ -48,6 +50,28 @@ internal record MacroDefinition(Token Source, TokenList DefineTokens, TokenList 
         }
         return string.Empty;
     }
+
+    public static MacroDefinition BuiltInMacroDefinition(string source, params Token[] expansion)
+    {
+        Token sourceToken = new(TokenType.Identifier, RangeHelper.Empty, source)
+        {
+            IsFromPreprocessor = true
+        };
+
+        // Create a combined array of all tokens for the define source
+        Token[] defineTokens = [
+            new Token(TokenType.Define, RangeHelper.Empty, "#define"),
+            new Token(TokenType.Whitespace, RangeHelper.Empty, " "),
+            sourceToken,
+            new Token(TokenType.Whitespace, RangeHelper.Empty, " "),
+            .. expansion,
+        ];
+
+        TokenList defineSource = TokenList.From(defineTokens);
+        TokenList expansionSource = TokenList.From(expansion);
+
+        return new(sourceToken, defineSource, expansionSource, null);
+    }
 }
 
 /// <summary>
@@ -58,6 +82,7 @@ internal record MacroDefinition(Token Source, TokenList DefineTokens, TokenList 
 /// <param name="ExpansionTokens">The expansion of this macro</param>
 internal record ScriptMacro(Token Source, MacroDefinition DefineSource, TokenList ExpansionTokens) : ISenseToken
 {
+    public bool IsFromPreprocessor { get; } = Source.IsFromPreprocessor;
     public Range Range { get; } = Source.Range;
 
     public string SemanticTokenType { get; } = SemanticTokenTypes.Macro;

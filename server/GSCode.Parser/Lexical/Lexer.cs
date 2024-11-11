@@ -15,7 +15,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
 
     public TokenList Transform()
     {
-        Token first = new Token(TokenType.Sof, GetTokenRange(0, 0, 0, 0), string.Empty);
+        Token first = CreateToken(TokenType.Sof, string.Empty, 0, 0, 0, 0);
 
         Token current = first;
         while (!_input.IsEmpty)
@@ -46,7 +46,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         }
 
         // Done - add EOF
-        Token eof = new Token(TokenType.Eof, GetTokenRange(_line, _linePosition, _line, _linePosition), string.Empty);
+        Token eof = CreateToken(TokenType.Eof, string.Empty, _line, _linePosition, _line, _linePosition);
 
         current.Next = eof;
         eof.Previous = current;
@@ -143,6 +143,9 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             // t or T
             't' when StartsWithKeyword("thread") => DoCharMatchIfWordBoundary(TokenType.Thread, "thread"),
             'T' when StartsWithKeyword("thread") => DoCharMatchIfWordBoundary(TokenType.Thread, "thread"),
+            // w or W
+            'w' when StartsWithKeyword("wait") => DoCharMatchIfWordBoundary(TokenType.Wait, "wait"),
+            'W' when StartsWithKeyword("wait") => DoCharMatchIfWordBoundary(TokenType.Wait, "wait"),
             // Strings
             '"' => MatchString(TokenType.String),
             // No match
@@ -183,7 +186,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             int offset = _input[0] == '\r' ? 2 : 1;
 
             // Like whitespace, we probably don't need to preserve the exact line break, so show it as <EOL>
-            lineBreakToken = new Token(TokenType.LineBreak, GetTokenRange(_line, _linePosition, _line + 1, 0), "<EOL>");
+            lineBreakToken = CreateToken(TokenType.LineBreak, "<EOL>", _line, _linePosition, _line + 1, 0);
 
             _line++;
             _linePosition = 0;
@@ -244,7 +247,8 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         else if(char.IsDigit(second))
         {
             int totalLength = 1 + GetLengthOfNumberSequence(1);
-            return new Token(TokenType.Float, GetTokenRange(_line, _linePosition, _line, _linePosition + totalLength), _input[..totalLength].ToString());
+
+            return CreateToken(TokenType.Float, _input[..totalLength].ToString(), _line, _linePosition, _line, _linePosition + totalLength);
         }
         return CharMatch(TokenType.Dot, ".");
     }
@@ -431,7 +435,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
                 length++;
             }
 
-            return new Token(TokenType.AnimIdentifier, GetTokenRange(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
+            return CreateToken(TokenType.AnimIdentifier, _input[..length].ToString(), _line, _linePosition, _line, _linePosition + length);
         }
 
         // Otherwise an operator
@@ -584,13 +588,13 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         {
             if(!inEscape && InputAt(offset) == '"')
             {
-                return new Token(stringType, GetTokenRange(_line, _linePosition, _line, _linePosition + offset + 1), _input[..(offset + 1)].ToString());
+                return CreateToken(stringType, _input[..(offset + 1)].ToString(), _line, _linePosition, _line, _linePosition + offset + 1);
             }
             inEscape = !inEscape && InputAt(offset) == '\\';
             offset++;
         }
 
-        return new Token(TokenType.ErrorString, GetTokenRange(_line, _linePosition, _line, _linePosition + offset), _input[..offset].ToString());
+        return CreateToken(TokenType.ErrorString, _input[..offset].ToString(), _line, _linePosition, _line, _linePosition + offset);
     }
 
     private Token MatchNumber()
@@ -599,7 +603,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         if(InputAt(0) == '0' && InputAt(1) == 'x')
         {
             int hexaLength = 2 + GetLengthOfHexNumberSequence(2);
-            return new Token(TokenType.Hex, GetTokenRange(_line, _linePosition, _line, _linePosition + hexaLength), _input[..hexaLength].ToString());
+            return CreateToken(TokenType.Hex, _input[..hexaLength].ToString(), _line, _linePosition, _line, _linePosition + hexaLength);
         }
 
         int deciLength = GetLengthOfNumberSequence(0);
@@ -610,11 +614,11 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             int fracLength = GetLengthOfNumberSequence(deciLength + 1);
 
             int totalLength = deciLength + 1 + fracLength;
-            return new Token(TokenType.Float, GetTokenRange(_line, _linePosition, _line, _linePosition + totalLength), _input[..(totalLength)].ToString());
+            return CreateToken(TokenType.Float, _input[..totalLength].ToString(), _line, _linePosition, _line, _linePosition + totalLength);
         }
 
         // 20
-        return new Token(TokenType.Integer, GetTokenRange(_line, _linePosition, _line, _linePosition + deciLength), _input[..deciLength].ToString());
+        return CreateToken(TokenType.Integer, _input[..deciLength].ToString(), _line, _linePosition, _line, _linePosition + deciLength);
     }
 
     private Token MatchIdentifier()
@@ -625,7 +629,8 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         {
             length++;
         }
-        return new Token(TokenType.Identifier, GetTokenRange(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
+
+        return CreateToken(TokenType.Identifier, _input[..length].ToString(), _line, _linePosition, _line, _linePosition + length);
     }
 
     private Token MatchWhitespace()
@@ -638,7 +643,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             current = InputAt(++length);
         }
 
-        return new Token(TokenType.Whitespace, GetTokenRange(_line, _linePosition, _line, _linePosition + length), _input[..length].ToString());
+        return CreateToken(TokenType.Whitespace, _input[..length].ToString(), _line, _linePosition, _line, _linePosition + length);
     }
 
     private int GetLengthOfNumberSequence(int startOffset)
@@ -666,14 +671,14 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         int lines = contents.Count('\n');
         int endOffset = contents.Length - contents.LastIndexOf('\n');
 
-        return new Token(tokenType, GetTokenRange(_line, _linePosition, _line + lines, _linePosition + endOffset), contents.ToString());
+        return CreateToken(tokenType, contents.ToString(), _line, _linePosition, _line + lines, endOffset);
     }
 
     private Token SinglelineRegexMatch(TokenType tokenType, int length)
     {
         ReadOnlySpan<char> contents = _input[..length];
 
-        return new Token(tokenType, GetTokenRange(_line, _linePosition, _line, _linePosition + length), contents.ToString());
+        return CreateToken(tokenType, contents.ToString(), _line, _linePosition, _line, _linePosition + length);
     }
 
     private Token? DoCharMatchIfWordBoundary(TokenType tokenType, string lexeme)
@@ -681,14 +686,14 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         char boundary = InputAt(lexeme.Length);
         if (!IsWordChar(boundary))
         {
-            return CharMatch(tokenType, lexeme);
+            return CharMatch(tokenType, _input[..lexeme.Length].ToString());
         }
         return default;
     }
 
     private Token CharMatch(TokenType tokenType, string lexeme)
     {
-        return new Token(tokenType, GetTokenRange(_line, _linePosition, _line, _linePosition + lexeme.Length), lexeme);
+        return CreateToken(tokenType, lexeme, _line, _linePosition, _line, _linePosition + lexeme.Length);
     }
 
     private bool IsWordChar(char c)
@@ -738,8 +743,20 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         return false;
     }
 
-    private Range GetTokenRange(int startLine, int startChar, int endLine, int endChar)
+    private Token CreateToken(TokenType type, string lexeme, int startLine, int startPosition, int endLine, int endPosition)
     {
-        return _forcedRange ?? RangeHelper.From(startLine, startChar, endLine, endChar);
+        Range range = RangeHelper.From(startLine, startPosition, endLine, endPosition);
+
+        // If this lexer task is for a preprocessor insert, keep track of this & the original range even though we spoof the range otherwise.
+        if(_forcedRange is not null)
+        {
+            return new Token(type, _forcedRange, lexeme)
+            {
+                IsFromPreprocessor = true,
+                SourceRange = range
+            };
+        }
+
+        return new Token(type, range, lexeme);
     }
 }

@@ -181,7 +181,7 @@
         "control": {
             "name": "keyword.control.gsc",
             "comment": "Reserved control keywords in GSC/CSC",
-            "match": "\\b(class|return|wait|thread|classes|anim|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|isdefined)\\b"
+            "match": "(?i)\\b(class|return|wait|thread|classes|anim|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|isdefined)\\b"
         },
         "escape": {
             "name": "constant.character.escape",

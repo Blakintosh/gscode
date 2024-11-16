@@ -35,24 +35,24 @@ Log.Logger = new LoggerConfiguration()
 Log.Information("GSCode Language Server");
 
 // Load GSC API into the SPA
-try
-{
-    if (File.Exists(@"api/t7_api_gsc.json"))
-    {
-        ScriptAnalyserData.LoadLanguageApiLibrary(File.ReadAllText(@"api/t7_api_gsc.json"));
-    }
-}
-catch(Exception) { }
-
-// Load CSC API into the SPA
-try
-{
-    if (File.Exists(@"api/t7_api_csc.json"))
-    {
-        ScriptAnalyserData.LoadLanguageApiLibrary(File.ReadAllText(@"api/t7_api_csc.json"));
-    }
-}
-catch (Exception) { }
+// try
+// {
+//     if (File.Exists(@"api/t7_api_gsc.json"))
+//     {
+//         ScriptAnalyserData.LoadLanguageApiLibrary(File.ReadAllText(@"api/t7_api_gsc.json"));
+//     }
+// }
+// catch(Exception) { }
+//
+// // Load CSC API into the SPA
+// try
+// {
+//     if (File.Exists(@"api/t7_api_csc.json"))
+//     {
+//         ScriptAnalyserData.LoadLanguageApiLibrary(File.ReadAllText(@"api/t7_api_csc.json"));
+//     }
+// }
+// catch (Exception) { }
 
 // Get the standard input and output streams.
 Stream stdin = Console.OpenStandardInput();

@@ -89,9 +89,9 @@ public class Script(Uri ScriptUri)
         return Task.CompletedTask;
     }
 
-    public void Analyse()
+    public async Task AnalyseAsync()
     {
-        WaitUntilParsedAsync();
+        await WaitUntilParsedAsync();
     }
 
     public async Task<List<Diagnostic>> GetDiagnosticsAsync()

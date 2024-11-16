@@ -1,17 +1,12 @@
 ﻿using GSCode.Data;
 using GSCode.Parser.Lexical;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using GSCode.Parser.DFA;
 using Microsoft.VisualStudio.LanguageServer.Protocol;
 
 namespace GSCode.Parser.AST;
 
-internal enum ASTNodeType
+internal enum AstNodeType
 {
     Script,
     Dependency,
@@ -33,7 +28,7 @@ internal enum ASTNodeType
     WhileStmt,
     ForStmt,
     ForeachStmt,
-    WaittillFrameEndStmt,
+    WaitTillFrameEndStmt,
     BreakStmt,
     ContinueStmt,
     ReturnStmt,
@@ -66,25 +61,25 @@ internal enum ExprOperatorType
     CallOn
 }
 
-internal abstract class ASTNode(ASTNodeType nodeType)
+internal abstract class AstNode(AstNodeType nodeType)
 {
-    public ASTNodeType NodeType { get; } = nodeType;
+    public AstNodeType NodeType { get; } = nodeType;
 }
 
-internal sealed class ScriptNode() : ASTNode(ASTNodeType.Script)
+internal sealed class ScriptNode() : AstNode(AstNodeType.Script)
 {
     public required List<DependencyNode> Dependencies { get; init; }
-    public required List<ASTNode> ScriptDefns { get; init; }
+    public required List<AstNode> ScriptDefns { get; init; }
 }
 
 [method: SetsRequiredMembers]
-internal sealed class DependencyNode(PathNode input) : ASTNode(ASTNodeType.Dependency)
+internal sealed class DependencyNode(PathNode input) : AstNode(AstNodeType.Dependency)
 {
     public required string Path { get; init; } = string.Join(System.IO.Path.DirectorySeparatorChar, input.Segments);
     public Range Range { get; init; } = RangeHelper.From(input.First!.Range.Start, input.Last!.Range.End);
 }
 
-internal sealed class PathNode(Token? last = null) : ASTNode(ASTNodeType.Temporary)
+internal sealed class PathNode(Token? last = null) : AstNode(AstNodeType.Temporary)
 {
     public LinkedList<string> Segments { get; } = new();
 
@@ -100,7 +95,7 @@ internal sealed class PathNode(Token? last = null) : ASTNode(ASTNodeType.Tempora
     }
 }
 
-internal sealed class PrecacheNode() : ASTNode(ASTNodeType.Precache)
+internal sealed class PrecacheNode() : AstNode(AstNodeType.Precache)
 {
     public required string Type { get; init; }
     public required Range TypeRange { get; init; }
@@ -109,24 +104,24 @@ internal sealed class PrecacheNode() : ASTNode(ASTNodeType.Precache)
     public required Range PathRange { get; init; }
 }
 
-internal sealed class UsingAnimTreeNode(Token nameToken) : ASTNode(ASTNodeType.UsingAnimTree)
+internal sealed class UsingAnimTreeNode(Token nameToken) : AstNode(AstNodeType.UsingAnimTree)
 {
     public string Name { get; } = nameToken.Lexeme;
     public Range Range { get; } = nameToken.Range;
 }
 
-internal sealed class NamespaceNode(Token namespaceToken) : ASTNode(ASTNodeType.Namespace)
+internal sealed class NamespaceNode(Token namespaceToken) : AstNode(AstNodeType.Namespace)
 {
     public string NamespaceIdentifier { get; } = namespaceToken.Lexeme;
     public Range Range { get; } = namespaceToken.Range;
 }
 
-internal sealed class FunKeywordsNode() : ASTNode(ASTNodeType.Temporary)
+internal sealed class FunKeywordsNode() : AstNode(AstNodeType.Temporary)
 {
     public LinkedList<Token> Keywords { get; } = new();
 }
 
-internal sealed class FunDefnNode() : ASTNode(ASTNodeType.FunctionDefinition)
+internal sealed class FunDefnNode() : AstNode(AstNodeType.FunctionDefinition)
 {
     public required Token? Name { get; init; }
     public required FunKeywordsNode Keywords { get; init; }
@@ -134,121 +129,121 @@ internal sealed class FunDefnNode() : ASTNode(ASTNodeType.FunctionDefinition)
     public required StmtListNode Body { get; init; }
 }
 
-internal sealed class ParamListNode(LinkedList<ParamNode>? parameters = null, bool vararg = false) : ASTNode(ASTNodeType.ParameterList)
+internal sealed class ParamListNode(LinkedList<ParamNode>? parameters = null, bool vararg = false) : AstNode(AstNodeType.ParameterList)
 {
     public LinkedList<ParamNode> Parameters { get; } = parameters ?? [];
     public bool Vararg { get; set; } = vararg;
 }
 
-internal sealed class ParamNode(Token? name, bool byRef, ExprNode? defaultNode = null) : ASTNode(ASTNodeType.Parameter)
+internal sealed class ParamNode(Token? name, bool byRef, ExprNode? defaultNode = null) : AstNode(AstNodeType.Parameter)
 {
     public Token? Name { get; } = name;
     public bool ByRef { get; } = byRef;
     public ExprNode? Default { get; } = defaultNode;
 }
 
-internal sealed class ClassBodyListNode(LinkedList<ASTNode>? definitions = null) : ASTNode(ASTNodeType.BraceBlock)
+internal sealed class ClassBodyListNode(LinkedList<AstNode>? definitions = null) : AstNode(AstNodeType.BraceBlock)
 {
-    public LinkedList<ASTNode> Definitions { get; } = definitions ?? new();
+    public LinkedList<AstNode> Definitions { get; } = definitions ?? new();
 }
 
-internal sealed class StmtListNode(LinkedList<ASTNode>? statements = null) : ASTNode(ASTNodeType.BraceBlock)
+internal sealed class StmtListNode(LinkedList<AstNode>? statements = null) : AstNode(AstNodeType.BraceBlock)
 {
-    public LinkedList<ASTNode> Statements { get; } = statements ?? new();
+    public LinkedList<AstNode> Statements { get; } = statements ?? new();
 }
 
-internal sealed class EmptyStmtNode() : ASTNode(ASTNodeType.EmptyStmt) {}
+internal sealed class EmptyStmtNode() : AstNode(AstNodeType.EmptyStmt) {}
 
-internal sealed class IfStmtNode() : ASTNode(ASTNodeType.IfStmt)
+internal sealed class IfStmtNode() : AstNode(AstNodeType.IfStmt)
 {
     public ExprNode? Condition { get; init; }
-    public ASTNode? Then { get; init; }
+    public AstNode? Then { get; init; }
     public IfStmtNode? Else { get; set; }
 }
 
-internal sealed class ReservedFuncStmtNode(ASTNodeType type, ExprNode expr) : ASTNode(type)
+internal sealed class ReservedFuncStmtNode(AstNodeType type, ExprNode? expr) : AstNode(type)
 {
     public ExprNode? Expr { get; } = expr;
 }
 
-internal sealed class ConstStmtNode(Token identifierToken, ExprNode value) : ASTNode(ASTNodeType.ConstStmt)
+internal sealed class ConstStmtNode(Token identifierToken, ExprNode? value) : AstNode(AstNodeType.ConstStmt)
 {
     public string Identifier { get; } = identifierToken.Lexeme;
     public Range Range { get; } = RangeHelper.From(identifierToken.Range.Start, value.Range.End);
-    public ExprNode Value { get; } = value;
+    public ExprNode? Value { get; } = value;
 }
 
-internal sealed class ExprStmtNode(ExprNode? expr) : ASTNode(ASTNodeType.ExprStmt)
+internal sealed class ExprStmtNode(ExprNode? expr) : AstNode(AstNodeType.ExprStmt)
 {
     public ExprNode? Expr { get; } = expr;
 }
 
-internal sealed class DoWhileStmtNode(ExprNode condition, ASTNode? then) : ASTNode(ASTNodeType.DoWhileStmt)
+internal sealed class DoWhileStmtNode(ExprNode? condition, AstNode? then) : AstNode(AstNodeType.DoWhileStmt)
 {
-    public ExprNode Condition { get; } = condition;
-    public ASTNode? Then { get; } = then;
-}
-
-internal sealed class WhileStmtNode(ExprNode condition, ASTNode? then) : ASTNode(ASTNodeType.WhileStmt)
-{
-    public ExprNode Condition { get; } = condition;
-    public ASTNode? Then { get; } = then;
-}
-
-internal sealed class ForStmtNode(ASTNode? init, ExprNode? condition, ASTNode? increment, ASTNode? then) : ASTNode(ASTNodeType.ForStmt)
-{
-    public ASTNode? Init { get; } = init;
     public ExprNode? Condition { get; } = condition;
-    public ASTNode? Increment { get; } = increment;
-    public ASTNode? Then { get; } = then;
+    public AstNode? Then { get; } = then;
 }
 
-internal sealed class ForeachStmtNode(Token valueIdentifier, Token? keyIdentifier, ExprNode? collection, ASTNode? then) : ASTNode(ASTNodeType.ForeachStmt)
+internal sealed class WhileStmtNode(ExprNode? condition, AstNode? then) : AstNode(AstNodeType.WhileStmt)
+{
+    public ExprNode? Condition { get; } = condition;
+    public AstNode? Then { get; } = then;
+}
+
+internal sealed class ForStmtNode(AstNode? init, ExprNode? condition, AstNode? increment, AstNode? then) : AstNode(AstNodeType.ForStmt)
+{
+    public AstNode? Init { get; } = init;
+    public ExprNode? Condition { get; } = condition;
+    public AstNode? Increment { get; } = increment;
+    public AstNode? Then { get; } = then;
+}
+
+internal sealed class ForeachStmtNode(Token valueIdentifier, Token? keyIdentifier, ExprNode? collection, AstNode? then) : AstNode(AstNodeType.ForeachStmt)
 {
     public Token? KeyIdentifier { get; } = keyIdentifier;
     public Token ValueIdentifier { get; } = valueIdentifier;
     public ExprNode? Collection { get; } = collection;
-    public ASTNode? Then { get; } = then;
+    public AstNode? Then { get; } = then;
 }
 
-internal sealed class ControlFlowActionNode(ASTNodeType type, Token actionToken) : ASTNode(type)
+internal sealed class ControlFlowActionNode(AstNodeType type, Token actionToken) : AstNode(type)
 {
     public Range Range { get; } = actionToken.Range;
 }
 
-internal sealed class ReturnStmtNode(ExprNode? value = default) : ASTNode(ASTNodeType.ReturnStmt)
+internal sealed class ReturnStmtNode(ExprNode? value = default) : AstNode(AstNodeType.ReturnStmt)
 {
     public ExprNode? Value { get; } = value;
 }
 
-internal sealed class DevBlockNode(StmtListNode body) : ASTNode(ASTNodeType.DevBlock)
+internal sealed class DevBlockNode(StmtListNode body) : AstNode(AstNodeType.DevBlock)
 {
     public StmtListNode Body { get; } = body;
 }
 
-internal sealed class SwitchStmtNode() : ASTNode(ASTNodeType.SwitchStmt)
+internal sealed class SwitchStmtNode() : AstNode(AstNodeType.SwitchStmt)
 {
     public ExprNode? Expression { get; init; }
-    public CaseListNode Cases { get; init; }
+    public required CaseListNode Cases { get; init; }
 }
 
-internal sealed class CaseListNode() : ASTNode(ASTNodeType.CaseList)
+internal sealed class CaseListNode() : AstNode(AstNodeType.CaseList)
 {
     public LinkedList<CaseStmtNode> Cases { get; } = new();
 }
 
-internal sealed class CaseStmtNode() : ASTNode(ASTNodeType.CaseStmt)
+internal sealed class CaseStmtNode() : AstNode(AstNodeType.CaseStmt)
 {
     public LinkedList<CaseLabelNode> Labels { get; } = new();
     public required StmtListNode Body { get; init; }
 }
 
-internal sealed class CaseLabelNode(ASTNodeType labelType, ExprNode? value = default) : ASTNode(labelType)
+internal sealed class CaseLabelNode(AstNodeType labelType, ExprNode? value = default) : AstNode(labelType)
 {
     public ExprNode? Value { get; } = value;
 }
 
-internal abstract class ExprNode(ExprOperatorType operatorType, Range range) : ASTNode(ASTNodeType.Expr)
+internal abstract class ExprNode(ExprOperatorType operatorType, Range range) : AstNode(AstNodeType.Expr)
 {
     public Range Range { get; } = range;
     
@@ -310,22 +305,22 @@ internal sealed class DataExprNode : ExprNode
 }
 
 // TODO: this is not ideal because it doesn't include the parentheses in the range.
-internal sealed class VectorExprNode(ExprNode x, ExprNode y, ExprNode z)
-    : ExprNode(ExprOperatorType.Vector, RangeHelper.From(x.Range.Start, z.Range.End))
+internal sealed class VectorExprNode(ExprNode x, ExprNode? y, ExprNode? z)
+    : ExprNode(ExprOperatorType.Vector, RangeHelper.From(x.Range.Start, z?.Range.End ?? y?.Range.End ?? x.Range.End))
 {
     public ExprNode X { get; } = x;
-    public ExprNode Y { get; } = y;
-    public ExprNode Z { get; } = z;
+    public ExprNode? Y { get; } = y;
+    public ExprNode? Z { get; } = z;
 
 }
 
 // TODO: this is not ideal because it doesn't include the parentheses in the range.
-internal sealed class TernaryExprNode(ExprNode condition, ExprNode then, ExprNode @else)
-    : ExprNode(ExprOperatorType.Ternary, RangeHelper.From(condition.Range.Start, @else.Range.End))
+internal sealed class TernaryExprNode(ExprNode condition, ExprNode? then, ExprNode? @else)
+    : ExprNode(ExprOperatorType.Ternary, RangeHelper.From(condition.Range.Start, @else?.Range.End ?? then?.Range.End ?? condition.Range.End))
 {
     public ExprNode Condition { get; } = condition;
-    public ExprNode Then { get; } = then;
-    public ExprNode Else { get; } = @else;
+    public ExprNode? Then { get; } = then;
+    public ExprNode? Else { get; } = @else;
 }
 
 internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.Operand, identifier.Range)
@@ -370,18 +365,18 @@ internal sealed class ConstructorExprNode(Token identifierToken)
     public Token Identifier { get; } = identifierToken;
 }
 
-internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode objectTarget, Token methodToken, ArgsListNode arguments)
+internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode? objectTarget, Token methodToken, ArgsListNode arguments)
     : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(firstTokenPosition, arguments.Range.End))
 {
-    public ExprNode Target { get; } = objectTarget;
+    public ExprNode? Target { get; } = objectTarget;
     public Token Method { get; } = methodToken;
     public ArgsListNode Arguments { get; } = arguments;
 }
 
-internal sealed class FunCallNode(Position startPosition, ExprNode target, ArgsListNode arguments)
+internal sealed class FunCallNode(Position startPosition, ExprNode? target, ArgsListNode arguments)
     : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(startPosition, arguments.Range.End))
 {
-    public ExprNode Target { get; } = target;
+    public ExprNode? Target { get; } = target;
     public ArgsListNode Arguments { get; } = arguments;
 
     public FunCallNode(ExprNode target, ArgsListNode arguments)
@@ -395,16 +390,16 @@ internal sealed class NamespacedMemberNode(ExprNode @namespace, ExprNode member)
     public ExprNode Member { get; } = member;
 }
 
-internal sealed class ArgsListNode(LinkedList<ExprNode?>? arguments = null) : ASTNode(ASTNodeType.ArgsList)
+internal sealed class ArgsListNode(LinkedList<ExprNode?>? arguments = null) : AstNode(AstNodeType.ArgsList)
 {
     public LinkedList<ExprNode?> Arguments { get; } = arguments ?? [];
     public Range Range { get; set; } = default!;
 }
 
-internal sealed class ArrayIndexNode(Range range, ExprNode array, ExprNode index) : ExprNode(ExprOperatorType.Indexer, range)
+internal sealed class ArrayIndexNode(Range range, ExprNode array, ExprNode? index) : ExprNode(ExprOperatorType.Indexer, range)
 {
     public ExprNode Array { get; } = array;
-    public ExprNode Index { get; } = index;
+    public ExprNode? Index { get; } = index;
 }
 
 internal sealed class CalledOnNode(ExprNode on, ExprNode call) : ExprNode(ExprOperatorType.CallOn, RangeHelper.From(on.Range.Start, call.Range.End))
@@ -413,7 +408,7 @@ internal sealed class CalledOnNode(ExprNode on, ExprNode call) : ExprNode(ExprOp
     public ExprNode Call { get; } = call;
 }
 
-internal class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBodyListNode body) : ASTNode(ASTNodeType.ClassDefinition)
+internal class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBodyListNode body) : AstNode(AstNodeType.ClassDefinition)
 {
     public Token? NameToken { get; } = nameToken;
     public Token? InheritsFromToken { get; } = inheritsFromToken;
@@ -421,13 +416,13 @@ internal class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBo
     public ClassBodyListNode Body { get; } = body;
 }
 
-internal class MemberDeclNode(Token? nameToken) : ASTNode(ASTNodeType.ClassMember)
+internal class MemberDeclNode(Token? nameToken) : AstNode(AstNodeType.ClassMember)
 {
     public Token? NameToken { get; } = nameToken;
 }
 
 internal class StructorDefnNode(Token keywordToken, StmtListNode body) 
-    : ASTNode(keywordToken.Type == TokenType.Constructor ? ASTNodeType.Constructor : ASTNodeType.Destructor)
+    : AstNode(keywordToken.Type == TokenType.Constructor ? AstNodeType.Constructor : AstNodeType.Destructor)
 {
     public Token KeywordToken { get; } = keywordToken;
     public StmtListNode Body { get; } = body;

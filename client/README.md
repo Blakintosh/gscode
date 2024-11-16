@@ -25,7 +25,27 @@ With that in mind, if you encounter any situations where the GSC compiler (Linke
 ## Known Issues
 
 * Preprocessor-if directives (`#if, #elif, #else, #endif`) are currently ignored.
+* Macro hoverables only show nested macro expansions if nested macros are not at the start or end of the expansion.
 * GSCode's language server currently only works for certain on Windows. While the reason for it not working on other OSes appears to be related to the language server library it uses, the exact cause is unknown. A fix will be attempted down the line but this is not currently considered high-priority.
 
 ## Licence
-GSCode is open-source software licenced under the GNU General Public License v3.0. Please see [LICENCE.md](https://github.com/Blakintosh/gscode/blob/main/LICENSE.md) for details.
+GSCode is open-source software licenced under the GNU General Public License v3.0. 
+
+```
+GSCode - Black Ops III GSC Language Extension
+Copyright (C) 2024 Blakintosh
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+```
+Please see [LICENSE.md](https://github.com/Blakintosh/gscode/blob/main/LICENSE.md) for details.

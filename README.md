@@ -25,6 +25,7 @@ With that in mind, if you encounter any situations where the GSC compiler (Linke
 ## Known Issues
 
 * Preprocessor-if directives (`#if, #elif, #else, #endif`) are currently ignored.
+* Macro hoverables only show nested macro expansions if nested macros are not at the start or end of the expansion.
 * GSCode's language server currently only works for certain on Windows. While the reason for it not working on other OSes appears to be related to the language server library it uses, the exact cause is unknown. A fix will be attempted down the line but this is not currently considered high-priority.
 
 ## Licence

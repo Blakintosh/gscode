@@ -132,7 +132,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.DuplicateMacroDefinition, new("A macro named '{0}' already exists in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UserDefinedMacroIgnored, new("Due to script engine limitations, the reference to user-defined macro '{0}' will not be recognised in this preprocessor-if statement.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.MissingMacroParameterList, new("'{0}' is a recognised macro but will be ignored here because it requires arguments.", DiagnosticSeverity.Warning) },
-        { GSCErrorCodes.InactivePreprocessorBranch, new(string.Empty, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary]) },
+        { GSCErrorCodes.InactivePreprocessorBranch, new("This code is not included in compilation as its preprocessor condition is not met.", DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary]) },
 
         // 2xxx
         { GSCErrorCodes.ExpectedPathSegment, new("Expected a file or directory path segment, but instead got '{0}'.", DiagnosticSeverity.Error) },

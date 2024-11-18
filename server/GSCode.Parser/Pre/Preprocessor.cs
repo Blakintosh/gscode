@@ -739,7 +739,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         // If the condition was not met, delete the whole branch.
         if(!conditionMet)
         {
-            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Range.End));
+            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Previous.Range.End));
             ConnectTokens(startAnchorToken.Previous, CurrentToken);
         }
 
@@ -825,7 +825,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         // If the condition was not met, delete the whole branch.
         if(!conditionMet)
         {
-            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Range.End));
+            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Previous.Range.End));
             ConnectTokens(startAnchorToken.Previous, CurrentToken);
         }
 
@@ -888,8 +888,9 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         // Delete the whole branch if a previous condition was met
         if(conditionAlreadyMet)
         {
-            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Range.End));
+            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Previous.Range.End));
             ConnectTokens(startAnchorToken.Previous, CurrentToken.Next);
+            Advance();
             return;
         }
 
@@ -1004,6 +1005,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         {
             return left;
         }
+        Advance();
 
         int? rightResult = RelationalOp();
         if(rightResult is not int right)
@@ -1047,6 +1049,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         {
             return target;
         }
+        Advance();
 
         int? rightResult = OpTarget();
         if(rightResult is not int right)

@@ -58,8 +58,10 @@ Log.Information("GSCode Language Server");
 Stream stdin = Console.OpenStandardInput();
 Stream stdout = Console.OpenStandardOutput();
 
+StreamWriter stdoutWriter = new StreamWriter(stdout) { AutoFlush = true };
+
 // Create a JSON RPC message handler with these streams.
-var handler = new HeaderDelimitedMessageHandler(stdout, stdin);
+var handler = new HeaderDelimitedMessageHandler(stdoutWriter.BaseStream, stdin);
 var server = new LanguageServer(stdin, stdout);
 
 // Link the server to the message handler, and start handling messages.

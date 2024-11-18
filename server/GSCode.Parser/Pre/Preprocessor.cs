@@ -23,10 +23,27 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
 
     public Dictionary<string, MacroDefinition> Defines { get; } = new();
 
+    public void Process()
+    {
+        Token startToken = CurrentToken;
+
+        // TODO:
+        // pass 1 - expand all system-defined macros, track all defines and apply inserts.
+        // pass 2 - evaluate all #if/#elif directives.
+        // pass 3 - expand all user-defined macros and system-defined macros as a result of those (if necessary).
+        FirstPass();
+        CurrentToken = startToken;
+
+        SecondPass();
+        CurrentToken = startToken;
+
+        ThirdPass();
+    }
+
     /// <summary>
     /// Performs preprocessor transformations on the script token sequence.
     /// </summary>
-    public void Process()
+    public void FirstPass()
     {
         while(CurrentTokenType != TokenType.Eof)
         {
@@ -38,23 +55,6 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 case TokenType.Insert:
                     Insert();
                     break;
-                case TokenType.PreIf:
-                    //If();
-                    Advance();
-                    break;
-                case TokenType.PreElIf:
-                    // TODO: try to consume an expression for better fault tolerance
-                    AddError(GSCErrorCodes.MisplacedPreprocessorDirective, CurrentToken.Lexeme);
-                    Advance();
-                    break;
-                case TokenType.PreElse:
-                case TokenType.PreEndIf:
-                    AddError(GSCErrorCodes.MisplacedPreprocessorDirective, CurrentToken.Lexeme);
-
-                    // Delete the directive so it doesn't cause further issues
-                    ConnectTokens(CurrentToken.Previous, CurrentToken.Next);
-                    Advance();
-                    break;
                 default:
                     // is it a macro reference?
                     if((CurrentTokenType == TokenType.Identifier || CurrentToken.IsKeyword()) &&
@@ -63,6 +63,36 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                         Macro(macro);
                         break;
                     }
+                    Advance();
+                    break;
+            }
+        }
+    }
+
+    public void SecondPass()
+    {
+        while (CurrentTokenType != TokenType.Eof)
+        {
+            switch (CurrentTokenType)
+            {
+                case TokenType.PreIf:
+                    SkipIfOrElifDirective();
+                    break;
+                case TokenType.PreElIf:
+                    // TODO: try to consume an expression for better fault tolerance
+                    // AddError(GSCErrorCodes.MisplacedPreprocessorDirective, CurrentToken.Lexeme);
+                    SkipIfOrElifDirective();
+                    break;
+                case TokenType.PreElse:
+                case TokenType.PreEndIf:
+                    // AddError(GSCErrorCodes.MisplacedPreprocessorDirective, CurrentToken.Lexeme);
+                    Sense.AddIdeDiagnostic(CurrentTokenRange, GSCErrorCodes.PreprocessorIfAnalysisUnsupported);
+
+                    // Delete the directive so it doesn't cause further issues
+                    ConnectTokens(CurrentToken.Previous, CurrentToken.Next);
+                    Advance();
+                    break;
+                default:
                     Advance();
                     break;
             }
@@ -171,6 +201,30 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             Defines.Add(macroName, definition);
         }
         Sense.AddSenseToken(definition);
+    }
+
+    /// <summary>
+    /// Temporary solution for #if and #elif directives that removes the directive and condition tokens.
+    /// </summary>
+    private void SkipIfOrElifDirective()
+    {
+        Token startToken = CurrentToken;
+        Token current = CurrentToken;
+
+        Sense.AddIdeDiagnostic(CurrentTokenRange, GSCErrorCodes.PreprocessorIfAnalysisUnsupported);
+
+        // Scan until newline or EOF
+        while (current.Next is not null && current.Next.Type != TokenType.LineBreak && current.Next.Type != TokenType.Eof)
+        {
+            current = current.Next;
+        }
+
+        // Remove the directive and condition tokens but preserve the newline/EOF
+        Token endToken = current;
+        ConnectTokens(startToken.Previous, endToken.Next!);
+
+        // Update current token to point after the removed section
+        CurrentToken = endToken.Next!;
     }
 
     /// <summary>

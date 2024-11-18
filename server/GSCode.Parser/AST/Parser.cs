@@ -2,6 +2,7 @@
 using GSCode.Data;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
+using Microsoft.VisualStudio.LanguageServer.Protocol;
 
 namespace GSCode.Parser.AST;
 
@@ -10,6 +11,7 @@ namespace GSCode.Parser.AST;
 /// </summary>
 internal ref struct Parser(Token startToken, ParserIntelliSense sense)
 {
+    public Token PreviousToken { get; private set; } = startToken;
     public Token CurrentToken { get; private set; } = startToken;
 
     public readonly TokenType CurrentTokenType => CurrentToken.Type;
@@ -135,7 +137,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "using directive");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "using directive");
         }
 
         return new DependencyNode(path);
@@ -366,7 +368,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "precache directive");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "precache directive");
         }
 
         // TODO: strip the quotes from the strings
@@ -418,7 +420,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "using animation tree directive");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "using animation tree directive");
         }
 
         return new UsingAnimTreeNode(nameToken);
@@ -447,7 +449,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "namespace directive");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "namespace directive");
         }
 
         return new NamespaceNode(namespaceToken);
@@ -605,7 +607,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "member declaration");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "member declaration");
         }
 
         return new MemberDeclNode(identifierToken);
@@ -1019,7 +1021,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "do-while loop");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "do-while loop");
             EnterRecovery();
         }
         
@@ -1090,7 +1092,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "for loop");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "for loop");
         }
 
         // Parse the loop's condition
@@ -1103,7 +1105,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "for loop");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "for loop");
         }
 
         // Parse the loop's increment
@@ -1385,7 +1387,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "return statement");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "return statement");
         }
         
         return new(value);
@@ -1420,7 +1422,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             AstNodeType.ContinueStmt => "continue statement",
             _ => throw new ArgumentOutOfRangeException(nameof(type), "Invalid control flow action type")
         };
-        AddError(GSCErrorCodes.ExpectedSemiColon, statementName);
+        AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, statementName);
 
         return new(type, actionToken);
     }
@@ -1454,7 +1456,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             AstNodeType.WaitRealTimeStmt => "waitrealtime statement",
             _ => throw new ArgumentOutOfRangeException(nameof(type), "Invalid reserved function type")
         };
-        AddError(GSCErrorCodes.ExpectedSemiColon, statementName);
+        AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, statementName);
         
         return new(type, expr);
     }
@@ -1491,7 +1493,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "constant declaration");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "constant declaration");
         }
 
         return new ConstStmtNode(identifierToken, value);
@@ -1543,7 +1545,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
-            AddError(GSCErrorCodes.ExpectedSemiColon, "expression statement");
+            AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "expression statement");
         }
         
         return new ExprStmtNode(expr);
@@ -2976,6 +2978,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
 
     private void Advance()
     {
+        PreviousToken = CurrentToken;
         do
         {
             CurrentToken = CurrentToken.Next;
@@ -3030,5 +3033,16 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
 
         Sense.AddAstDiagnostic(CurrentTokenRange, errorCode, args);
+    }
+
+    private void AddErrorAtEndOfPrevious(GSCErrorCodes errorCode, params object?[] args)
+    {
+        // We're in a fault recovery state
+        if (Silent)
+        {
+            return;
+        }
+
+        Sense.AddAstDiagnostic(RangeHelper.From(new Position(PreviousToken.Range.End.Line, Math.Max(0, PreviousToken.Range.End.Character - 1)), PreviousToken.Range.End), errorCode, args);
     }
 }

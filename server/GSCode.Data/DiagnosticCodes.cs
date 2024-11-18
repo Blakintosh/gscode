@@ -36,8 +36,6 @@ public enum GSCErrorCodes
     UserDefinedMacroIgnored = 1015,
     MissingMacroParameterList = 1016,
 
-    PreprocessorIfAnalysisUnsupported = 1999,
-
     // 2xxx errors are issued by the parser
     ExpectedPathSegment = 2000,
     ExpectedSemiColon = 2001,
@@ -107,6 +105,8 @@ public enum GSCErrorCodes
     UnhandledSpaError = 9003,
     UnhandledIdeError = 9004,
     FailedToReadInsertFile = 9005,
+
+    PreprocessorIfAnalysisUnsupported = 9900,
 }
 
 public static class DiagnosticCodes
@@ -131,7 +131,6 @@ public static class DiagnosticCodes
         { GSCErrorCodes.DuplicateMacroDefinition, new("A macro named '{0}' already exists in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UserDefinedMacroIgnored, new("Due to script engine limitations, the reference to user-defined macro '{0}' will not be recognised in this preprocessor-if statement.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.MissingMacroParameterList, new("'{0}' is a recognised macro but will be ignored here because it requires arguments.", DiagnosticSeverity.Warning) },
-        { GSCErrorCodes.PreprocessorIfAnalysisUnsupported, new("Preprocessor-if analysis is not currently supported.", DiagnosticSeverity.Information) },
         
         // 2xxx
         { GSCErrorCodes.ExpectedPathSegment, new("Expected a file or directory path segment, but instead got '{0}'.", DiagnosticSeverity.Error) },
@@ -199,7 +198,9 @@ public static class DiagnosticCodes
         { GSCErrorCodes.UnhandledAstError, new("An unhandled exception '{0}' caused syntax tree generation (gscode-ast) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledSpaError, new("An unhandled exception '{0}' caused static program analysis (gscode-spa) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledIdeError, new("An unhandled exception '{0}' caused GSCode IDE analysis (gscode-ide) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.FailedToReadInsertFile, new("Failed to read contents of insert-directive file '{0}' due to exception '{1}'. Check the file is accessible, then try again.", DiagnosticSeverity.Error) }
+        { GSCErrorCodes.FailedToReadInsertFile, new("Failed to read contents of insert-directive file '{0}' due to exception '{1}'. Check the file is accessible, then try again.", DiagnosticSeverity.Error) },
+
+        { GSCErrorCodes.PreprocessorIfAnalysisUnsupported, new("Preprocessor-if analysis is not currently supported. This might lead to incorrect labelling of syntax errors.", DiagnosticSeverity.Information) },
     };
 
     public static Diagnostic GetDiagnostic(Range range, string source, GSCErrorCodes key, params object?[] arguments)

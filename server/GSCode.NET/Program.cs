@@ -27,7 +27,7 @@ using Newtonsoft.Json.Linq;
 Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
                 .WriteTo.Console()
-                .WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
+                //.WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
                 .CreateLogger();
 
 //IObserver<WorkDoneProgressReport> workDone = null!;

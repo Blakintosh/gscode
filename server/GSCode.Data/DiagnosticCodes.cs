@@ -29,12 +29,13 @@ public enum GSCErrorCodes
     MisplacedPreprocessorDirective = 1008,
     MultilineStringLiteral = 1009,
     ExpectedMacroIdentifier = 1010,
-    UnexpectedEof = 1011,
+    UnterminatedPreprocessorDirective = 1011,
     InvalidInsertPath = 1012,
     InvalidLineContinuation = 1013,
     DuplicateMacroDefinition = 1014,
     UserDefinedMacroIgnored = 1015,
     MissingMacroParameterList = 1016,
+    InactivePreprocessorBranch = 1017,
 
     // 2xxx errors are issued by the parser
     ExpectedPathSegment = 2000,
@@ -125,13 +126,14 @@ public static class DiagnosticCodes
         { GSCErrorCodes.MisplacedPreprocessorDirective, new("The preprocessor directive '{0}' is not valid in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MultilineStringLiteral, new("Carriage return embedded in string literal.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedMacroIdentifier, new("Expected an identifier corresponding to a macro name, but instead got '{0}'.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.UnexpectedEof, new("Unexpected end of file reached.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnterminatedPreprocessorDirective, new("Expected an '#endif' to terminate '{0}' directive.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidInsertPath, new("The insert path '{0}' is not valid. The path must be relative and point to a file inside the project directory.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidLineContinuation, new("A line continuation character must immediately precede a line break.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.DuplicateMacroDefinition, new("A macro named '{0}' already exists in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UserDefinedMacroIgnored, new("Due to script engine limitations, the reference to user-defined macro '{0}' will not be recognised in this preprocessor-if statement.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.MissingMacroParameterList, new("'{0}' is a recognised macro but will be ignored here because it requires arguments.", DiagnosticSeverity.Warning) },
-        
+        { GSCErrorCodes.InactivePreprocessorBranch, new(string.Empty, DiagnosticSeverity.Hint, [DiagnosticTag.Unnecessary]) },
+
         // 2xxx
         { GSCErrorCodes.ExpectedPathSegment, new("Expected a file or directory path segment, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedSemiColon, new("';' expected to end {0}.", DiagnosticSeverity.Error) },

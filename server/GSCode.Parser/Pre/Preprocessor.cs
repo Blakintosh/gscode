@@ -56,9 +56,9 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                     Insert();
                     break;
                 default:
-                    // is it a macro reference?
+                    // is it a system macro reference?
                     if((CurrentTokenType == TokenType.Identifier || CurrentToken.IsKeyword()) &&
-                        TryGetMacroDefinition(CurrentToken, out MacroDefinition? macro))
+                        TryGetSystemDefinedMacroDefinition(CurrentToken, out MacroDefinition? macro))
                     {
                         Macro(macro);
                         break;
@@ -96,6 +96,21 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                     Advance();
                     break;
             }
+        }
+    }
+
+    public void ThirdPass()
+    {
+        // Now expand user-defined macros and any system-defined macros that weren't expanded in the first pass.
+        while(CurrentTokenType != TokenType.Eof)
+        {
+            if((CurrentTokenType == TokenType.Identifier || CurrentToken.IsKeyword()) &&
+                TryGetMacroDefinition(CurrentToken, out MacroDefinition? macro))
+            {
+                Macro(macro);
+                continue;
+            }
+            Advance();
         }
     }
 
@@ -729,7 +744,14 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
 
     private readonly bool TryGetMacroDefinition(Token token, [NotNullWhen(true)] out MacroDefinition? definition)
     {
+        // Only expand user-defined macros in the third pass.
         // Lookup built-in macros first, because they exist in user-defined space only as placeholders.
+        return TryGetSystemDefinedMacroDefinition(token, out definition) || Defines.TryGetValue(token.Lexeme, out definition);
+    }
+
+    private readonly bool TryGetSystemDefinedMacroDefinition(Token token, [NotNullWhen(true)] out MacroDefinition? definition)
+    {
+        // Built-in macros are expanded first and third passes.
         switch (token.Lexeme)
         {
             case "__LINE__":
@@ -746,13 +768,6 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 definition = FastFileMacro;
                 return true;
         }
-
-        // Otherwise, check the user-defined macros
-        if (Defines.TryGetValue(token.Lexeme, out definition))
-        {
-            return true;
-        }
-
         definition = default;
         return false;
     }

@@ -2837,8 +2837,9 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 }
 
                 return parenExpr;
-            // Identifier
+            // Identifier & anim identifier
             case TokenType.Identifier:
+            case TokenType.AnimIdentifier:
                 Token identifierToken = CurrentToken;
                 Advance();
                 return new IdentifierExprNode(identifierToken);

@@ -1,27 +1,10 @@
-﻿/**
-	GSCode.NET Language Server
-    Copyright (C) 2022 Blakintosh
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-using GSCode.NET;
+﻿using GSCode.NET;
 using GSCode.Parser.SPA;
 using Serilog;
 using StreamJsonRpc;
 using System.IO.Pipes;
 using System.Text;
+using CommandLine;
 using GSCode.NET.LSP;
 using GSCode.NET.LSP.Handlers;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +13,7 @@ using OmniSharp.Extensions.LanguageServer.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
 
 Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
@@ -63,10 +47,16 @@ Log.Information("GSCode Language Server");
 
 Log.Information("GSCode Language Server");
 
-var server = await LanguageServer.From(options =>
+ServerOptions serverOptions = new();
+Parser.Default.ParseArguments<ServerOptions>(args).WithParsed(o => serverOptions = o);
+
+(Stream input, Stream output, IDisposable? disposable) = await StreamResolver.ResolveAsync(serverOptions, CancellationToken.None);
+
+LanguageServer server = await LanguageServer.From(options =>
+{
 	options
-		.WithInput(Console.OpenStandardInput())
-		.WithOutput(Console.OpenStandardOutput())
+		.WithInput(input)
+		.WithOutput(output)
 		.ConfigureLogging(
 			x => x
 				.AddSerilog(Log.Logger)
@@ -90,8 +80,16 @@ var server = await LanguageServer.From(options =>
 		})
 		.AddHandler<TextDocumentSyncHandler>()
 		.AddHandler<SemanticTokensHandler>()
-		.AddHandler<HoverHandler>()
-).ConfigureAwait(false);
+		.AddHandler<HoverHandler>();
+	
+	// Allow disposal of the stream if required.
+	if(disposable is not null)
+	{
+		options.RegisterForDisposal(disposable);
+	}
+}).ConfigureAwait(false);
 
 
 Log.Information("Language server connected successfully!");
+
+await server.WaitForExit;

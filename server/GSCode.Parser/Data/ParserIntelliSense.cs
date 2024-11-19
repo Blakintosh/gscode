@@ -2,7 +2,8 @@
 using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.Util;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.Data;
 
@@ -36,14 +37,14 @@ internal sealed class ParserIntelliSense
     /// <summary>
     /// List of dependencies to request from the Language Server.
     /// </summary>
-    public List<Uri> Dependencies { get; } = new();
+    public List<DocumentUri> Dependencies { get; } = new();
 
     private readonly string _scriptPath;
 
-    public ParserIntelliSense(int endLine, Uri scriptUri)
+    public ParserIntelliSense(int endLine, DocumentUri scriptUri)
     {
         HoverLibrary = new(endLine + 1);
-        _scriptPath = scriptUri.LocalPath;
+        _scriptPath = scriptUri.Path;
     }
 
     public void AddSenseToken(ISenseToken token)

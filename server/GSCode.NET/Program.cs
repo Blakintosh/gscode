@@ -21,6 +21,13 @@ using GSCode.Parser.SPA;
 using Serilog;
 using StreamJsonRpc;
 using System.IO.Pipes;
+using System.Text;
+using GSCode.NET.LSP;
+using GSCode.NET.LSP.Handlers;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using OmniSharp.Extensions.LanguageServer.Server;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -54,21 +61,37 @@ Log.Information("GSCode Language Server");
 // }
 // catch (Exception) { }
 
-// Get the standard input and output streams.
-Stream stdin = Console.OpenStandardInput();
-Stream stdout = Console.OpenStandardOutput();
+Log.Information("GSCode Language Server");
 
-StreamWriter stdoutWriter = new StreamWriter(stdout) { AutoFlush = true };
+var server = await LanguageServer.From(options =>
+	options
+		.WithInput(Console.OpenStandardInput())
+		.WithOutput(Console.OpenStandardOutput())
+		.ConfigureLogging(
+			x => x
+				.AddSerilog(Log.Logger)
+				.AddLanguageProtocolLogging()
+				.SetMinimumLevel(LogLevel.Debug)
+		)
+		.WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Trace)))
+		.WithServices(services =>
+		{
+			services.AddSingleton<ScriptManager>();
+			services.AddSingleton(new TextDocumentSelector(
+				new TextDocumentFilter()
+				{
+					Pattern = "**/*.gsc"
+				},
+				new TextDocumentFilter()
+				{ 
+					Pattern = "**/*.csc"
+				}
+			));
+		})
+		.AddHandler<TextDocumentSyncHandler>()
+		.AddHandler<SemanticTokensHandler>()
+		.AddHandler<HoverHandler>()
+).ConfigureAwait(false);
 
-// Create a JSON RPC message handler with these streams.
-var handler = new HeaderDelimitedMessageHandler(stdoutWriter.BaseStream, stdin);
-var server = new LanguageServer(stdin, stdout);
 
-// Link the server to the message handler, and start handling messages.
-var rpc = server.Rpc;
-
-Log.Information("Listening has started");
-
-await rpc.Completion;
-
-Log.Information("Stopped");
+Log.Information("Language server connected successfully!");

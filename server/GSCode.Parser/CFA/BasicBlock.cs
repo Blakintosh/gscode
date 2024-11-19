@@ -1,7 +1,6 @@
 ﻿using GSCode.Data;
 using GSCode.Parser.AST;
 using GSCode.Parser.Data;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

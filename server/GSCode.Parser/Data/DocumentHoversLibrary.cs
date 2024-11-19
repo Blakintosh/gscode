@@ -1,4 +1,5 @@
-﻿using Microsoft.VisualStudio.LanguageServer.Protocol;
+﻿
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.Data;
 

@@ -83,9 +83,9 @@ public enum CachedScriptType
 
 public class CachedScript
 {
-    public CachedScriptType Type { get; set; }
-    public HashSet<DocumentUri> Dependents { get; } = new();
-    public Script Script { get; set; }
+    public CachedScriptType Type { get; init; }
+    public HashSet<DocumentUri> Dependents { get; } = [];
+    public required Script Script { get; init; }
 }
 
 public class ScriptManager

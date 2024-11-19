@@ -325,6 +325,8 @@ internal sealed class TernaryExprNode(ExprNode condition, ExprNode? then, ExprNo
 
 internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.Operand, identifier.Range)
 {
+    public bool IsAnim { get; } = identifier.Type == TokenType.AnimIdentifier;
+    
     public string Identifier { get; } = identifier.Lexeme;
 }
 

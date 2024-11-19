@@ -1,28 +1,29 @@
 ﻿using GSCode.Data.Models.Interfaces;
 using GSCode.Parser;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
 using Serilog;
 using System.Collections.Concurrent;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.NET.LSP; 
 
 public class ScriptCache
 {
-    private ConcurrentDictionary<Uri, StringBuilder> Scripts { get; } = new();
+    private ConcurrentDictionary<DocumentUri, StringBuilder> Scripts { get; } = new();
 
     public string AddToCache(TextDocumentItem document)
     {
-        Uri documentUri = document.Uri;
+        DocumentUri documentUri = document.Uri;
         Scripts[documentUri] = new(document.Text);
 
         return document.Text;
     }
 
-    public string UpdateCache(TextDocumentIdentifier document, TextDocumentContentChangeEvent[] changes)
+    public string UpdateCache(TextDocumentIdentifier document, IEnumerable<TextDocumentContentChangeEvent> changes)
     {
-        Uri documentUri = document.Uri;
+        DocumentUri documentUri = document.Uri;
         StringBuilder cachedVersion = Scripts[documentUri];
 
         foreach (TextDocumentContentChangeEvent change in changes)
@@ -69,7 +70,7 @@ public class ScriptCache
 
     public void RemoveFromCache(TextDocumentIdentifier document)
     {
-        Uri documentUri = document.Uri;
+        DocumentUri documentUri = document.Uri;
         Scripts.Remove(documentUri, out StringBuilder? value);
     }
 }
@@ -83,7 +84,7 @@ public enum CachedScriptType
 public class CachedScript
 {
     public CachedScriptType Type { get; set; }
-    public HashSet<Uri> Dependents { get; } = new();
+    public HashSet<DocumentUri> Dependents { get; } = new();
     public Script Script { get; set; }
 }
 
@@ -91,38 +92,38 @@ public class ScriptManager
 {
     private readonly ScriptCache _cache;
 
-    private ConcurrentDictionary<Uri, CachedScript> Scripts { get; } = new();
+    private ConcurrentDictionary<DocumentUri, CachedScript> Scripts { get; } = new();
 
     public ScriptManager()
     {
         _cache = new();
     }
 
-    public async Task<IEnumerable<Diagnostic>> AddEditorAsync(TextDocumentItem document)
+    public async Task<IEnumerable<Diagnostic>> AddEditorAsync(TextDocumentItem document, CancellationToken cancellationToken = default)
     {
         string content = _cache.AddToCache(document);
         Script script = GetEditor(document);
 
         await script.ParseAsync(content);
 
-        await script.GetHoverAsync(new Position(13, 15));
+        // await script.GetHoverAsync(new Position(13, 15), cancellationToken);
 
-        return await script.GetDiagnosticsAsync();
+        return await script.GetDiagnosticsAsync(cancellationToken);
     }
 
-    public async Task<IEnumerable<Diagnostic>> UpdateEditorAsync(VersionedTextDocumentIdentifier document, TextDocumentContentChangeEvent[] changes)
+    public async Task<IEnumerable<Diagnostic>> UpdateEditorAsync(OptionalVersionedTextDocumentIdentifier document, IEnumerable<TextDocumentContentChangeEvent> changes, CancellationToken cancellationToken = default)
     {
         string updatedContent = _cache.UpdateCache(document, changes);
         Script script = GetEditor(document);
 
         await script.ParseAsync(updatedContent);
 
-        return await script.GetDiagnosticsAsync();
+        return await script.GetDiagnosticsAsync(cancellationToken);
     }
 
     public void RemoveEditor(TextDocumentIdentifier document)
     {
-        Uri documentUri = document.Uri;
+        DocumentUri documentUri = document.Uri;
         Scripts.Remove(documentUri, out _);
 
         RemoveDependent(documentUri);
@@ -130,7 +131,7 @@ public class ScriptManager
 
     public Script? GetParsedEditor(TextDocumentIdentifier document)
     {
-        Uri uri = document.Uri;
+        DocumentUri uri = document.Uri;
         if (!Scripts.ContainsKey(uri))
         {
             return null;
@@ -189,11 +190,11 @@ public class ScriptManager
         return script.Script;
     }
 
-    private void RemoveDependent(Uri dependentUri)
+    private void RemoveDependent(DocumentUri dependentUri)
     {
-        foreach (KeyValuePair<Uri, CachedScript> script in Scripts)
+        foreach (KeyValuePair<DocumentUri, CachedScript> script in Scripts)
         {
-            HashSet<Uri> dependents = script.Value.Dependents;
+            HashSet<DocumentUri> dependents = script.Value.Dependents;
             if (dependents.Contains(dependentUri))
             {
                 dependents.Remove(dependentUri);
@@ -217,7 +218,7 @@ public class ScriptManager
         return GetEditorByUri(document.Uri);
     }
 
-    private Script GetEditorByUri(Uri uri)
+    private Script GetEditorByUri(DocumentUri uri)
     {
         if (!Scripts.ContainsKey(uri))
         {

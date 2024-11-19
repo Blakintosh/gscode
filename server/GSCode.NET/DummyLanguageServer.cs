@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using GSCode.NET.LSP;
 using GSCode.NET.LSP.Utility;
 using GSCode.Parser;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -14,14 +13,15 @@ using StreamJsonRpc;
 
 namespace GSCode.NET;
 
-public class LanguageServer : INotifyPropertyChanged
+#if LEGACY
+public class DummyLanguageServer : INotifyPropertyChanged
 {
     public JsonRpc Rpc { get; }
     private readonly ScriptManager _scriptManager;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public LanguageServer(Stream inputStream, Stream outputStream)
+    public DummyLanguageServer(Stream inputStream, Stream outputStream)
     {
         Rpc = JsonRpc.Attach(outputStream, inputStream, this);
         Rpc.Disconnected += (s, e) => Environment.Exit(0);
@@ -187,3 +187,5 @@ public class LanguageServer : INotifyPropertyChanged
             Path.GetExtension(documentUri.AbsolutePath) == ".csc";
     }
 }
+
+#endif

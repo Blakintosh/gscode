@@ -96,6 +96,13 @@
                 { "include": "#line-comment" }
             ]
         },
+        {
+            "name": "meta.preprocessor.conditional.gsc",
+            "match": "(#(?:if|elif|else|endif))",
+            "captures": {
+                "1": { "name": "keyword.control.directive.conditional.gsc" }
+            }
+        },
         { "include": "#function-call" }
     ],
     "repository": {

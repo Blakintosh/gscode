@@ -23,10 +23,26 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
 
     public Dictionary<string, MacroDefinition> Defines { get; } = new();
 
+    public void Process()
+    {
+        Token startToken = CurrentToken;
+
+        // pass 1 - expand all system-defined macros, track all defines and apply inserts.
+        // pass 2 - evaluate all #if/#elif directives.
+        // pass 3 - expand all user-defined macros and system-defined macros as a result of those (if necessary).
+        FirstPass();
+        CurrentToken = startToken;
+
+        SecondPass();
+        CurrentToken = startToken;
+
+        ThirdPass();
+    }
+
     /// <summary>
     /// Performs preprocessor transformations on the script token sequence.
     /// </summary>
-    public void Process()
+    public void FirstPass()
     {
         while(CurrentTokenType != TokenType.Eof)
         {
@@ -38,14 +54,34 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 case TokenType.Insert:
                     Insert();
                     break;
-                case TokenType.PreIf:
-                    //If();
+                default:
+                    // is it a system macro reference?
+                    if((CurrentTokenType == TokenType.Identifier || CurrentToken.IsKeyword()) &&
+                        TryGetSystemDefinedMacroDefinition(CurrentToken, out MacroDefinition? macro))
+                    {
+                        Macro(macro);
+                        break;
+                    }
                     Advance();
                     break;
+            }
+        }
+    }
+
+    public void SecondPass()
+    {
+        while (CurrentTokenType != TokenType.Eof)
+        {
+            switch (CurrentTokenType)
+            {
+                case TokenType.PreIf:
+                    IfDirective();
+                    break;
                 case TokenType.PreElIf:
-                    // TODO: try to consume an expression for better fault tolerance
                     AddError(GSCErrorCodes.MisplacedPreprocessorDirective, CurrentToken.Lexeme);
-                    Advance();
+                    // Consume the directive so it doesn't cause further issues
+                    SkipMisplacedDirective();
+
                     break;
                 case TokenType.PreElse:
                 case TokenType.PreEndIf:
@@ -56,16 +92,24 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                     Advance();
                     break;
                 default:
-                    // is it a macro reference?
-                    if((CurrentTokenType == TokenType.Identifier || CurrentToken.IsKeyword()) &&
-                        TryGetMacroDefinition(CurrentToken, out MacroDefinition? macro))
-                    {
-                        Macro(macro);
-                        break;
-                    }
                     Advance();
                     break;
             }
+        }
+    }
+
+    public void ThirdPass()
+    {
+        // Now expand user-defined macros and any system-defined macros that weren't expanded in the first pass.
+        while(CurrentTokenType != TokenType.Eof)
+        {
+            if((CurrentTokenType == TokenType.Identifier || CurrentToken.IsKeyword()) &&
+                TryGetMacroDefinition(CurrentToken, out MacroDefinition? macro))
+            {
+                Macro(macro);
+                continue;
+            }
+            Advance();
         }
     }
 
@@ -174,6 +218,28 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
     }
 
     /// <summary>
+    /// Temporary solution for #if and #elif directives that removes the directive and condition tokens.
+    /// </summary>
+    private void SkipMisplacedDirective()
+    {
+        Token startToken = CurrentToken;
+        Token current = CurrentToken;
+
+        // Scan until newline or EOF
+        while (current.Next is not null && current.Next.Type != TokenType.LineBreak && current.Next.Type != TokenType.Eof)
+        {
+            current = current.Next;
+        }
+
+        // Remove the directive and condition tokens but preserve the newline/EOF
+        Token endToken = current;
+        ConnectTokens(startToken.Previous, endToken.Next!);
+
+        // Update current token to point after the removed section
+        CurrentToken = endToken.Next!;
+    }
+
+    /// <summary>
     /// Parses a macro definition's parameter list, if it exists.
     /// </summary>
     /// <returns></returns>
@@ -232,11 +298,12 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         }
 
         // Get the next parameter's name
-        if (!ConsumeIfType(TokenType.Identifier, out Token? parameterToken))
+        if (CurrentTokenType != TokenType.Identifier && !CurrentToken.IsKeyword())
         {
             AddError(GSCErrorCodes.ExpectedMacroParameter, CurrentToken.Lexeme);
             return [];
         }
+        Token parameterToken = Consume();
 
         // Duplicate parameter
         bool isDuplicate = !set.Add(parameterToken.Lexeme);
@@ -428,7 +495,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         while(current is not null)
         {
             // Curren token is a ref
-            if(current.Type == TokenType.Identifier && argumentMappings.TryGetValue(current.Lexeme, out TokenList? parameterExpansionResult))
+            if((current.Type == TokenType.Identifier || current.IsKeyword()) && argumentMappings.TryGetValue(current.Lexeme, out TokenList? parameterExpansionResult))
             {
                 // It's left blank, so just remove the identifier
                 if(parameterExpansionResult is not TokenList parameterExpansion)
@@ -606,6 +673,433 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         return new TokenList(start, current);
     }
 
+    /// <summary>
+    /// Transforms a preprocessor if directive, emitting the tokens that meet the condition or any else tokens.
+    /// </summary>
+    private void IfDirective()
+    {
+        // The #if, expand to the right of it
+        Token startAnchorToken = CurrentToken;
+        Advance();
+
+        // The condition
+        int? condition = IfCondition();
+
+        // For this branch to be taken, the condition must have parsed and resolved to a non-zero integer.
+        bool conditionMet = condition is int conditionInt && conditionInt != 0;
+
+        // Go till we've definitely reached the end of the directive line
+        while(CurrentTokenType != TokenType.LineBreak && CurrentTokenType != TokenType.Eof)
+        {
+            Advance();
+        }
+
+        Token endAnchorToken = CurrentToken;
+
+        // We can now "delete" the if directive entirely.
+        ConnectTokens(startAnchorToken.Previous, endAnchorToken);
+
+        // Track nesting level of #if directives
+        int nestingLevel = 1;
+
+        // Now get the whole branch.
+        while(CurrentTokenType != TokenType.Eof)
+        {
+            // Entering nested if
+            if(CurrentTokenType == TokenType.PreIf)
+            {
+                nestingLevel++;
+            }
+            // Exiting nested if
+            else if(CurrentTokenType == TokenType.PreEndIf)
+            {
+                nestingLevel--;
+                if(nestingLevel == 0)
+                {
+                    break;
+                }
+            }
+            // If we're at the top level, we're done
+            else if(nestingLevel == 1)
+            {
+                if(CurrentTokenType == TokenType.PreElIf || CurrentTokenType == TokenType.PreElse)
+                {
+                    break;
+                }
+            }
+            Advance();
+        }
+
+        // If we're at the end of the file, we've got an error.
+        if(CurrentTokenType == TokenType.Eof)
+        {
+            AddErrorAtToken(GSCErrorCodes.UnterminatedPreprocessorDirective, CurrentToken.Previous, "#if");
+            return;
+        }
+
+        // If the condition was not met, delete the whole branch.
+        if(!conditionMet)
+        {
+            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Previous.Range.End));
+            ConnectTokens(startAnchorToken.Previous, CurrentToken);
+        }
+
+        // If we're at #endif, we're done and need to delete it.
+        if(CurrentTokenType == TokenType.PreEndIf)
+        {
+            ConnectTokens(startAnchorToken.Previous, CurrentToken.Next);
+            Advance();
+            return;
+        }
+
+        // Otherwise, we're at an #elif or #else, so we need to continue parsing.
+        if(CurrentTokenType == TokenType.PreElse)
+        {
+            ElseDirective(conditionMet);
+            return;
+        }
+        ElifDirective(conditionMet);
+
+        // Finally, go back to the start of the directive so nested ones can be processed.
+        CurrentToken = startAnchorToken.Previous;
+    }
+
+    private void ElifDirective(bool conditionAlreadyMet)
+    {
+        // Store the elif token to delete it later.
+        Token startAnchorToken = CurrentToken;
+        Advance();
+
+        // Parse the condition.
+        int? conditionResult = IfCondition();
+        bool conditionMet = !conditionAlreadyMet && conditionResult is int result && result != 0;
+
+        // Go till we've definitely reached the end of the directive line
+        while(CurrentTokenType != TokenType.LineBreak && CurrentTokenType != TokenType.Eof)
+        {
+            Advance();
+        }
+
+        Token endAnchorToken = CurrentToken;
+
+        // We can now "delete" the elif directive entirely.
+        ConnectTokens(startAnchorToken.Previous, endAnchorToken);
+
+        // Track nesting level of #if directives
+        int nestingLevel = 1;
+
+        // Now get the whole branch.
+        while(CurrentTokenType != TokenType.Eof)
+        {
+            // Entering nested if
+            if(CurrentTokenType == TokenType.PreIf)
+            {
+                nestingLevel++;
+            }
+            // Exiting nested if
+            else if(CurrentTokenType == TokenType.PreEndIf)
+            {
+                nestingLevel--;
+                if(nestingLevel == 0)
+                {
+                    break;
+                }
+            }
+            // If we're at the top level, we're done
+            else if(nestingLevel == 1)
+            {
+                if(CurrentTokenType == TokenType.PreElIf || CurrentTokenType == TokenType.PreElse)
+                {
+                    break;
+                }
+            }
+            Advance();
+        }
+
+        // If we're at the end of the file, we've got an error.
+        if(CurrentTokenType == TokenType.Eof)
+        {
+            AddErrorAtToken(GSCErrorCodes.UnterminatedPreprocessorDirective, CurrentToken.Previous, "#elif");
+            return;
+        }
+
+        // If the condition was not met, delete the whole branch.
+        if(!conditionMet)
+        {
+            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Previous.Range.End));
+            ConnectTokens(startAnchorToken.Previous, CurrentToken);
+        }
+
+        // If we're at #endif, we're done and need to delete it.
+        if(CurrentTokenType == TokenType.PreEndIf)
+        {
+            ConnectTokens(startAnchorToken.Previous, CurrentToken.Next);
+            Advance();
+            return;
+        }
+
+        // Otherwise, we're at another #elif or #else, so we need to continue parsing.
+        if(CurrentTokenType == TokenType.PreElse)
+        {
+            ElseDirective(conditionAlreadyMet || conditionMet);
+            return;
+        }
+        ElifDirective(conditionAlreadyMet || conditionMet);
+    }
+
+    private void ElseDirective(bool conditionAlreadyMet)
+    {
+        // Store the else token to delete it later.
+        Token startAnchorToken = CurrentToken;
+        Advance();
+
+        Token endAnchorToken = CurrentToken;
+
+        // Track nesting level of #if directives
+        int nestingLevel = 1;
+
+        // Now get the whole branch.
+        while(CurrentTokenType != TokenType.Eof)
+        {
+            // Entering nested if
+            if(CurrentTokenType == TokenType.PreIf)
+            {
+                nestingLevel++;
+            }
+            // Exiting nested if
+            else if(CurrentTokenType == TokenType.PreEndIf)
+            {
+                nestingLevel--;
+                if(nestingLevel == 0)
+                {
+                    break;
+                }
+            }
+            Advance();
+        }
+
+        // If we're at the end of the file, we've got an error.
+        if(CurrentTokenType == TokenType.Eof)
+        {
+            AddErrorAtToken(GSCErrorCodes.UnterminatedPreprocessorDirective, CurrentToken.Previous, "#else");
+        }
+
+        // Otherwise we're at the #endif
+
+        // Delete the whole branch if a previous condition was met
+        if(conditionAlreadyMet)
+        {
+            AddErrorAtRange(GSCErrorCodes.InactivePreprocessorBranch, RangeHelper.From(endAnchorToken.Next.Range.Start, CurrentToken.Previous.Range.End));
+            ConnectTokens(startAnchorToken.Previous, CurrentToken.Next);
+            Advance();
+            return;
+        }
+
+        // Otherwise, delete the #else and the #endif but keep the rest.
+        ConnectTokens(startAnchorToken.Previous, startAnchorToken.Next);
+
+        if(CurrentTokenType == TokenType.PreEndIf)
+        {
+            ConnectTokens(CurrentToken.Previous, CurrentToken.Next);
+            Advance();
+        }
+    }
+
+    /// <summary>
+    /// Parses an if directive's condition, starting with a logical OR operation.
+    /// </summary>
+    /// <returns></returns>
+    private int? IfCondition()
+    {
+        int? leftResult = LogicalAndOp();
+        if(leftResult is not int left)
+        {
+            return null;
+        }
+
+        return LogicalOrRhsOp(left);
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of an if directive's condition, starting with a logical OR operation.
+    /// </summary>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private int? LogicalOrRhsOp(int left)
+    {
+        if(!AdvanceIfType(TokenType.Or))
+        {
+            return left;
+        }
+
+        int? rightResult = LogicalAndOp();
+        if(rightResult is not int right)
+        {
+            return null;
+        }
+
+        int localResult = (left != 0 || right != 0) ? 1 : 0;
+        return LogicalOrRhsOp(localResult);
+    }
+
+    /// <summary>
+    /// Parses the left-hand side of a logical AND operation in an if directive's condition.
+    /// </summary>
+    /// <returns></returns>
+    private int? LogicalAndOp()
+    {
+        int? leftResult = EqualityOp();
+        if(leftResult is not int left)
+        {
+            return null;
+        }
+
+        return LogicalAndRhsOp(left);
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a logical AND operation in an if directive's condition.
+    /// </summary>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private int? LogicalAndRhsOp(int left)
+    {
+        if(!AdvanceIfType(TokenType.And))
+        {
+            return left;
+        }
+
+        int? rightResult = EqualityOp();
+        if(rightResult is not int right)
+        {
+            return null;
+        }
+
+        int localResult = (left != 0 && right != 0) ? 1 : 0;
+        return LogicalAndRhsOp(localResult);
+    }
+
+    /// <summary>
+    /// Parses a logical equality operation in an if directive's condition.
+    /// </summary>
+    /// <returns></returns>
+    private int? EqualityOp()
+    {
+        int? leftResult = RelationalOp();
+        if(leftResult is not int left)
+        {
+            return null;
+        }
+
+        return EqualityRhsOp(left);
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a logical equality operation in an if directive's condition.
+    /// </summary>
+    /// <param name="left"></param>
+    /// <returns></returns>
+    private int? EqualityRhsOp(int left)
+    {
+        TokenType operatorType = CurrentTokenType;
+        if(operatorType != TokenType.Equals && operatorType != TokenType.NotEquals)
+        {
+            return left;
+        }
+        Advance();
+
+        int? rightResult = RelationalOp();
+        if(rightResult is not int right)
+        {
+            return null;
+        }
+
+        // Equality
+        if(operatorType == TokenType.Equals)
+        {
+            return (left == right) ? 1 : 0;
+        }
+        // Inequality
+        return (left != right) ? 1 : 0;
+    }
+
+    /// <summary>
+    /// Parses a relational operation in an if directive's condition.
+    /// </summary>
+    /// <returns></returns>
+    private int? RelationalOp()
+    {
+        int? targetResult = OpTarget();
+        if(targetResult is not int target)
+        {
+            return null;
+        }
+
+        return RelationalRhsOp(target);
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a relational operation in an if directive's condition.
+    /// </summary>
+    /// <param name="target"></param>
+    /// <returns></returns>
+    private int? RelationalRhsOp(int target)
+    {
+        TokenType operatorType = CurrentTokenType;
+        if(operatorType != TokenType.LessThan && operatorType != TokenType.LessThanEquals && operatorType != TokenType.GreaterThan && operatorType != TokenType.GreaterThanEquals)
+        {
+            return target;
+        }
+        Advance();
+
+        int? rightResult = OpTarget();
+        if(rightResult is not int right)
+        {
+            return null;
+        }
+
+        return operatorType switch
+        {
+            TokenType.LessThan => (target < right) ? 1 : 0,
+            TokenType.LessThanEquals => (target <= right) ? 1 : 0,
+            TokenType.GreaterThan => (target > right) ? 1 : 0,
+            TokenType.GreaterThanEquals => (target >= right) ? 1 : 0,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Parses a target of an operation in an if directive's condition.
+    /// </summary>
+    /// <returns></returns>
+    private int? OpTarget()
+    {
+        // Parenthesised sub-expression
+        if(AdvanceIfType(TokenType.OpenParen))
+        {
+            int? result = IfCondition();
+            if(result is not int resultInt)
+            {
+                return null;
+            }
+
+            if(!AdvanceIfType(TokenType.CloseParen))
+            {
+                return null;
+            }
+            return resultInt;
+        }
+
+        // Got an integer we can work with
+        if(ConsumeIfType(TokenType.Integer, out Token? integerToken))
+        {
+            return int.Parse(integerToken.Lexeme);
+        }
+
+        // Token isn't supported - whole expression fails.
+        return null;
+    }
+
     private void ConnectTokens(Token left, Token right)
     {
         left.Next = right;
@@ -675,7 +1169,14 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
 
     private readonly bool TryGetMacroDefinition(Token token, [NotNullWhen(true)] out MacroDefinition? definition)
     {
+        // Only expand user-defined macros in the third pass.
         // Lookup built-in macros first, because they exist in user-defined space only as placeholders.
+        return TryGetSystemDefinedMacroDefinition(token, out definition) || Defines.TryGetValue(token.Lexeme, out definition);
+    }
+
+    private readonly bool TryGetSystemDefinedMacroDefinition(Token token, [NotNullWhen(true)] out MacroDefinition? definition)
+    {
+        // Built-in macros are expanded first and third passes.
         switch (token.Lexeme)
         {
             case "__LINE__":
@@ -692,13 +1193,6 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 definition = FastFileMacro;
                 return true;
         }
-
-        // Otherwise, check the user-defined macros
-        if (Defines.TryGetValue(token.Lexeme, out definition))
-        {
-            return true;
-        }
-
         definition = default;
         return false;
     }

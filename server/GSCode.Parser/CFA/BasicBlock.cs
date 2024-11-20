@@ -1,7 +1,6 @@
 ﻿using GSCode.Data;
 using GSCode.Parser.AST;
 using GSCode.Parser.Data;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -35,7 +34,7 @@ internal class BasicBlock
     /// </summary>
     public List<BasicBlock> Outgoing { get; } = new();
 
-    public ASTNode? Decision { get; }
+    public AstNode? Decision { get; }
 
     public ControlFlowType Type { get; }
 
@@ -44,7 +43,7 @@ internal class BasicBlock
     /// <summary>
     /// The AST nodes that form the logic of this branch.
     /// </summary>
-    public ReadOnlyCollection<ASTNode> Logic { get; } = ReadOnlyCollection<ASTNode>.Empty;
+    public ReadOnlyCollection<AstNode> Logic { get; } = ReadOnlyCollection<AstNode>.Empty;
 
     /// <summary>
     /// Whether this logic block has a jump instruction and should not connect to control flow.
@@ -57,13 +56,13 @@ internal class BasicBlock
         Type = type;
     }
 
-    public BasicBlock(List<ASTNode> logic, int scope, bool jumps = false) : this(scope, ControlFlowType.Logic)
+    public BasicBlock(List<AstNode> logic, int scope, bool jumps = false) : this(scope, ControlFlowType.Logic)
     {
         Logic = logic.AsReadOnly();
         Jumps = jumps;
     }
 
-    public BasicBlock(ASTNode decisionNode, int scope, ControlFlowType type) : this(scope, type)
+    public BasicBlock(AstNode decisionNode, int scope, ControlFlowType type) : this(scope, type)
     {
         Decision = decisionNode;
     }

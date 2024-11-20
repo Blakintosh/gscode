@@ -1,25 +1,27 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using GSCode.NET.LSP;
 using GSCode.NET.LSP.Utility;
 using GSCode.Parser;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using StreamJsonRpc;
 
 namespace GSCode.NET;
 
-public class LanguageServer : INotifyPropertyChanged
+#if LEGACY
+public class DummyLanguageServer : INotifyPropertyChanged
 {
     public JsonRpc Rpc { get; }
     private readonly ScriptManager _scriptManager;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public LanguageServer(Stream inputStream, Stream outputStream)
+    public DummyLanguageServer(Stream inputStream, Stream outputStream)
     {
         Rpc = JsonRpc.Attach(outputStream, inputStream, this);
         Rpc.Disconnected += (s, e) => Environment.Exit(0);
@@ -34,7 +36,10 @@ public class LanguageServer : INotifyPropertyChanged
 
         Log.Information("TokenTypes: {0}", SemanticTokensBuilder.SemanticTokenTypes);
         Log.Information("SemanticTokenModifiers: {0}", SemanticTokensBuilder.SemanticTokenModifiers);
-        return Task.FromResult(new InitializeResult
+        
+        Log.Information("DONE - INITIALIZE response will be sent");
+
+        var initialiseResult = new InitializeResult
         {
             Capabilities = new ServerCapabilities
             {
@@ -55,7 +60,10 @@ public class LanguageServer : INotifyPropertyChanged
                 HoverProvider = true,
                 //DocumentSymbolProvider = true,
             },
-        });
+        };
+        Log.Information("DONE - thinking...");
+
+        return Task.FromResult(initialiseResult);
     }
 
     [JsonRpcMethod(Methods.TextDocumentDidOpenName)]
@@ -179,3 +187,5 @@ public class LanguageServer : INotifyPropertyChanged
             Path.GetExtension(documentUri.AbsolutePath) == ".csc";
     }
 }
+
+#endif

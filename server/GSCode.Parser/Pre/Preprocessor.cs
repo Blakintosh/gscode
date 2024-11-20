@@ -298,11 +298,12 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         }
 
         // Get the next parameter's name
-        if (!ConsumeIfType(TokenType.Identifier, out Token? parameterToken))
+        if (CurrentTokenType != TokenType.Identifier && !CurrentToken.IsKeyword())
         {
             AddError(GSCErrorCodes.ExpectedMacroParameter, CurrentToken.Lexeme);
             return [];
         }
+        Token parameterToken = Consume();
 
         // Duplicate parameter
         bool isDuplicate = !set.Add(parameterToken.Lexeme);
@@ -494,7 +495,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         while(current is not null)
         {
             // Curren token is a ref
-            if(current.Type == TokenType.Identifier && argumentMappings.TryGetValue(current.Lexeme, out TokenList? parameterExpansionResult))
+            if((current.Type == TokenType.Identifier || current.IsKeyword()) && argumentMappings.TryGetValue(current.Lexeme, out TokenList? parameterExpansionResult))
             {
                 // It's left blank, so just remove the identifier
                 if(parameterExpansionResult is not TokenList parameterExpansion)

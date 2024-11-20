@@ -1,28 +1,19 @@
-﻿/**
-	GSCode.NET Language Server
-    Copyright (C) 2022 Blakintosh
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-using GSCode.NET;
+﻿using GSCode.NET;
 using GSCode.Parser.SPA;
 using Serilog;
 using StreamJsonRpc;
 using System.IO.Pipes;
+using System.Text;
+using CommandLine;
+using GSCode.NET.LSP;
+using GSCode.NET.LSP.Handlers;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using OmniSharp.Extensions.LanguageServer.Server;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
 
 Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
@@ -54,21 +45,51 @@ Log.Information("GSCode Language Server");
 // }
 // catch (Exception) { }
 
-// Get the standard input and output streams.
-Stream stdin = Console.OpenStandardInput();
-Stream stdout = Console.OpenStandardOutput();
+Log.Information("GSCode Language Server");
 
-StreamWriter stdoutWriter = new StreamWriter(stdout) { AutoFlush = true };
+ServerOptions serverOptions = new();
+Parser.Default.ParseArguments<ServerOptions>(args).WithParsed(o => serverOptions = o);
 
-// Create a JSON RPC message handler with these streams.
-var handler = new HeaderDelimitedMessageHandler(stdoutWriter.BaseStream, stdin);
-var server = new LanguageServer(stdin, stdout);
+(Stream input, Stream output, IDisposable? disposable) = await StreamResolver.ResolveAsync(serverOptions, CancellationToken.None);
 
-// Link the server to the message handler, and start handling messages.
-var rpc = server.Rpc;
+LanguageServer server = await LanguageServer.From(options =>
+{
+	options
+		.WithInput(input)
+		.WithOutput(output)
+		.ConfigureLogging(
+			x => x
+				.AddSerilog(Log.Logger)
+				.AddLanguageProtocolLogging()
+				.SetMinimumLevel(LogLevel.Debug)
+		)
+		.WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Trace)))
+		.WithServices(services =>
+		{
+			services.AddSingleton<ScriptManager>();
+			services.AddSingleton(new TextDocumentSelector(
+				new TextDocumentFilter()
+				{
+					Pattern = "**/*.gsc"
+				},
+				new TextDocumentFilter()
+				{ 
+					Pattern = "**/*.csc"
+				}
+			));
+		})
+		.AddHandler<TextDocumentSyncHandler>()
+		.AddHandler<SemanticTokensHandler>()
+		.AddHandler<HoverHandler>();
+	
+	// Allow disposal of the stream if required.
+	if(disposable is not null)
+	{
+		options.RegisterForDisposal(disposable);
+	}
+}).ConfigureAwait(false);
 
-Log.Information("Listening has started");
 
-await rpc.Completion;
+Log.Information("Language server connected successfully!");
 
-Log.Information("Stopped");
+await server.WaitForExit;

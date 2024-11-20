@@ -2,7 +2,7 @@
 using GSCode.Data;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.AST;
 
@@ -2837,8 +2837,9 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 }
 
                 return parenExpr;
-            // Identifier
+            // Identifier & anim identifier
             case TokenType.Identifier:
+            case TokenType.AnimIdentifier:
                 Token identifierToken = CurrentToken;
                 Advance();
                 return new IdentifierExprNode(identifierToken);

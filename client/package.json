@@ -1,5 +1,5 @@
 {
-	"name": "gsc",
+	"name": "gscode",
 	"displayName": "GSCode",
 	"description": "IntelliSense for Call of Duty: Black Ops III's GSC & CSC languages.",
 	"icon": "icons/gscode-beta.png",

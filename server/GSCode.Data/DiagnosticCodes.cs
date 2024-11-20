@@ -1,6 +1,6 @@
-﻿using Microsoft.VisualStudio.LanguageServer.Protocol;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Data;
 

@@ -19,8 +19,4 @@
     <ProjectReference Include="..\GSCode.Parser\GSCode.Parser.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="SPA\" />
-  </ItemGroup>
-
 </Project>

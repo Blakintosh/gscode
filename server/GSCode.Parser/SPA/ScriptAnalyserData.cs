@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+#if PREVIEW
 namespace GSCode.Parser.SPA
 {
     /// <summary>
@@ -58,3 +59,5 @@ namespace GSCode.Parser.SPA
         }
     }
 }
+
+#endif

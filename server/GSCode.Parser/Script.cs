@@ -3,16 +3,18 @@ using GSCode.Parser.AST;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.Pre;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser;
 
-public class Script(Uri ScriptUri)
+public class Script(DocumentUri ScriptUri)
 {
     public bool Failed { get; private set; } = false;
     public bool Parsed { get; private set; } = false;
@@ -94,24 +96,28 @@ public class Script(Uri ScriptUri)
         await WaitUntilParsedAsync();
     }
 
-    public async Task<List<Diagnostic>> GetDiagnosticsAsync()
+    public async Task<List<Diagnostic>> GetDiagnosticsAsync(CancellationToken cancellationToken)
     {
         // TODO: maybe a mechanism to check if analysed if that's a requirement
 
         // We still expose diagnostics even if the script failed to parse
-        await WaitUntilParsedAsync();
+        await WaitUntilParsedAsync(cancellationToken);
         return Sense.Diagnostics;
     }
 
-    public async Task<List<ISemanticToken>> GetSemanticTokensAsync()
+    public async Task PushSemanticTokensAsync(SemanticTokensBuilder builder, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync();
-        return Sense.SemanticTokens;
+        await WaitUntilParsedAsync(cancellationToken);
+        
+        foreach(ISemanticToken token in Sense.SemanticTokens)
+        {
+            builder.Push(token.Range, token.SemanticTokenType, token.SemanticTokenModifiers);
+        }
     }
 
-    public async Task<Hover?> GetHoverAsync(Position position)
+    public async Task<Hover?> GetHoverAsync(Position position, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync();
+        await WaitUntilParsedAsync(cancellationToken);
 
         IHoverable? result = Sense.HoverLibrary.Get(position);
         if (result is not null)
@@ -121,13 +127,16 @@ public class Script(Uri ScriptUri)
         return null;
     }
 
-    private async Task WaitUntilParsedAsync()
+    private async Task WaitUntilParsedAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        
         if (ParsingTask is null)
         {
             throw new InvalidOperationException("The script has not been parsed yet.");
         }
         await ParsingTask;
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     //private void ThrowIfNotAnalysed()

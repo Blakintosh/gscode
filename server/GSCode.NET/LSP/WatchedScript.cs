@@ -2,7 +2,6 @@
 using GSCode.NET.LSP.Utility;
 using GSCode.Parser;
 using GSCode.Parser.Data;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
 using Serilog;
 using System;
 

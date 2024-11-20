@@ -48,6 +48,7 @@ export function activate(context: ExtensionContext) {
         // run: { command: serverExe, args: ['-lsp', '-d'] },
         run: {
             command: serverExe,
+            transport: TransportKind.pipe,
 			// args: [serverModule],
             args: [context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll')))],
             // args: [path.join(serverLocation, 'GSCode.NET.dll')],
@@ -55,6 +56,7 @@ export function activate(context: ExtensionContext) {
         // debug: { command: serverExe, args: ['-lsp', '-d'] }
         debug: {
             command: serverExe,
+            transport: TransportKind.pipe,
 			// args: [serverModule],
             args: [context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll')))],
             // args: [path.join(serverLocation, 'GSCode.NET.exe')],
@@ -95,10 +97,6 @@ export function activate(context: ExtensionContext) {
             },
         }
     };
-
-    gscWatcher.onDidChange((e) => {
-        console.log(`File changed: ${e.fsPath}`);
-    });
 
     // Create the language client and start the client.
     client = new LanguageClient("gsc", "GSCode.NET Language Server", serverOptions, clientOptions);

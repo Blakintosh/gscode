@@ -2,7 +2,7 @@
 using CommandLine;
 using GSCode.NET.LSP;
 using GSCode.Parser;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.CLI;
 

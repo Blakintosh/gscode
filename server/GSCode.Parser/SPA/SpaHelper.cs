@@ -3,7 +3,6 @@ using GSCode.Parser.Data;
 using GSCode.Parser.DFA;
 using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.Util;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
 using System;
 using System.Collections.Generic;
 using System.Linq;

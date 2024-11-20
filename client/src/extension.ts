@@ -48,6 +48,7 @@ export function activate(context: ExtensionContext) {
         // run: { command: serverExe, args: ['-lsp', '-d'] },
         run: {
             command: serverExe,
+            transport: TransportKind.pipe,
 			// args: [serverModule],
             args: [context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll')))],
             // args: [path.join(serverLocation, 'GSCode.NET.dll')],
@@ -55,33 +56,47 @@ export function activate(context: ExtensionContext) {
         // debug: { command: serverExe, args: ['-lsp', '-d'] }
         debug: {
             command: serverExe,
+            transport: TransportKind.pipe,
 			// args: [serverModule],
             args: [context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll')))],
             // args: [path.join(serverLocation, 'GSCode.NET.exe')],
         },
     };
 
-    const watcher = workspace.createFileSystemWatcher("**/*.gsc");
+    const gscWatcher = workspace.createFileSystemWatcher("**/*.gsc");
+    const cscWatcher = workspace.createFileSystemWatcher("**/*.csc");
 
     // Options to control the language client
     let clientOptions: LanguageClientOptions = {
         // Register the server for plain text documents
         documentSelector: [
             {
+                scheme: "file",
+                language: "gsc",
                 pattern: "**/*.gsc",
             },
+            {
+                scheme: "file",
+                language: "csc",
+                pattern: "**/*.csc",
+            }
         ],
         progressOnInitialization: true,
         synchronize: {
             // Synchronize the setting section 'languageServerExample' to the server
             configurationSection: "gsc",
-            fileEvents: watcher,
+            fileEvents: [
+                gscWatcher,
+                cscWatcher,
+            ],
         }, 
+        middleware: {
+            didOpen: (document, next) => {
+                console.log("didOpen");
+                return next(document);
+            },
+        }
     };
-
-    watcher.onDidChange((e) => {
-        console.log(`File changed: ${e.fsPath}`);
-    });
 
     // Create the language client and start the client.
     client = new LanguageClient("gsc", "GSCode.NET Language Server", serverOptions, clientOptions);

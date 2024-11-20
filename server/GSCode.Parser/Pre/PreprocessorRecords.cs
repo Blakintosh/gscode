@@ -2,12 +2,12 @@
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.Util;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.Pre;
 
@@ -33,12 +33,12 @@ internal record MacroDefinition(Token Source, TokenList DefineTokens, TokenList 
         return new()
         {
             Range = Range,
-            Contents = new MarkupContent()
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
             {
                 Kind = MarkupKind.Markdown,
                 Value = string.Format("```gsc\n{0}\n```\n{1}",
                     DefineTokens.ToSnippetString(), GetFormattedDocumentation())
-            }
+            })
         };
     }
 
@@ -85,7 +85,7 @@ internal record ScriptMacro(Token Source, MacroDefinition DefineSource, TokenLis
     public bool IsFromPreprocessor { get; } = Source.IsFromPreprocessor;
     public Range Range { get; } = Source.Range;
 
-    public string SemanticTokenType { get; } = SemanticTokenTypes.Macro;
+    public string SemanticTokenType { get; } = OmniSharp.Extensions.LanguageServer.Protocol.Models.SemanticTokenType.Macro;
 
     public string[] SemanticTokenModifiers { get; } = Array.Empty<string>();
 
@@ -96,12 +96,12 @@ internal record ScriptMacro(Token Source, MacroDefinition DefineSource, TokenLis
 
         Hover hover = new()
         {
-            Contents = new MarkupContent()
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
             {
                 Kind = MarkupKind.Markdown,
                 Value = string.Format("```gsc\n{0}\n```\n{1}\n\n---\n{2}\n```gsc\n{3}\n```",
                     defineSnippet, GetFormattedDocumentation(), "Expands to:", expansionSnippet)
-            },
+            }),
             Range = Source.Range,
         };
 

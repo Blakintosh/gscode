@@ -2,7 +2,7 @@
 using CommandLine;
 using GSCode.NET.LSP;
 using GSCode.Parser;
-using Microsoft.VisualStudio.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.CLI;
 
@@ -17,10 +17,10 @@ class Program
         public bool Benchmark { get; set; }
     }
 
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
-        CommandLine.Parser.Default.ParseArguments<Options>(args)
-               .WithParsed<Options>(o =>
+        await CommandLine.Parser.Default.ParseArguments<Options>(args)
+               .WithParsedAsync<Options>(async o =>
                {
                    ScriptManager scriptManager = new ScriptManager();
 
@@ -35,7 +35,7 @@ class Program
                         };
 
                         // Adding to ScriptManager's cache and getting diagnostics
-                        IEnumerable<Diagnostic> diagnostics = scriptManager.AddEditorAsync(documentItem).Result;
+                        IEnumerable<Diagnostic> diagnostics = await scriptManager.AddEditorAsync(documentItem);
 
                         Console.WriteLine("Diagnostics:");
                         foreach (var diagnosticsItem in diagnostics)

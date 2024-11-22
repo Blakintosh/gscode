@@ -12,13 +12,16 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.1.1 beta (latest)
+### 0.1.2 beta (latest)
+* Fixed various syntax highlighting issues.
+* Fixed macro expansion behaviour with vector arguments.
+* Fixed an issue where dev blocks were not recognised in the top-level of a script.
 
-Minor tweaks and fixes.
+### 0.1.1 beta
+* Minor tweaks and fixes.
 
 ### 0.1.0 beta
-
-Initial public release. Adds GSC & CSC language support, providing syntax highlighting and IntelliSense for preprocessor and syntactic analysis.
+* Initial public release. Adds GSC & CSC language support, providing syntax highlighting and IntelliSense for preprocessor and syntactic analysis.
 
 ## Reporting Issues and Tweaks
 

@@ -618,59 +618,67 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
     /// <returns></returns>
     private TokenList? MacroArgExpansion()
     {
-        int parenIndex = 0;
-        int braceIndex = 0;
-        int bracketIndex = 0;
+        ExpansionState state = new();
 
-        // Nothing to do, it's an empty expansion
-        if(CurrentTokenType == TokenType.Comma || CurrentTokenType == TokenType.CloseParen || CurrentTokenType == TokenType.Eof)
-        {
-            return null;
-        }
+        Token start = CurrentToken;
+        Token? current = null;
 
-        Token start = Consume();
-        Token current = start;
-
-        while(
-            // Don't terminate if we're inside punctuation
-            (parenIndex > 0 || braceIndex > 0 || bracketIndex > 0
-            // Otherwise these are our terminators
-            || (CurrentTokenType != TokenType.Comma && CurrentTokenType != TokenType.CloseParen))
-            // Always terminate on EOF
-            && CurrentTokenType != TokenType.Eof
-            )
+        while(!state.ShouldEndExpansion(CurrentTokenType))
         {
             // Maintain the indexes looking ahead at the token we're about to consume
-            switch (CurrentTokenType)
-            {
-                // Parentheses
-                case TokenType.OpenParen:
-                    parenIndex++;
-                    break;
-                case TokenType.CloseParen when parenIndex > 0:
-                    parenIndex--;
-                    break;
-                // Brackets
-                case TokenType.OpenBracket:
-                    bracketIndex++;
-                    break;
-                case TokenType.CloseBracket when bracketIndex > 0:
-                    bracketIndex--;
-                    break;
-                // Braces
-                case TokenType.OpenBrace:
-                    braceIndex++;
-                    break;
-                case TokenType.CloseBrace when braceIndex > 0:
-                    braceIndex--;
-                    break;
-            }
+            state.TrackToken(CurrentTokenType);
 
             // Go to the next token, consuming our current one
             current = Consume();
         }
 
+        // Nothing to do, it was an empty expansion
+        if (current is null)
+        {
+            return null;
+        }
+
         return new TokenList(start, current);
+    }
+    
+    private record struct ExpansionState(int ParenIndex = 0, int BraceIndex = 0, int BracketIndex = 0)
+    {
+        private bool InPunctuation => ParenIndex > 0 || BraceIndex > 0 || BracketIndex > 0;
+
+        public void TrackToken(TokenType currentTokenType)
+        {
+            switch (currentTokenType)
+            {
+                case TokenType.OpenParen:
+                    ParenIndex++;
+                    break;
+                case TokenType.CloseParen when ParenIndex > 0:
+                    ParenIndex--;
+                    break;
+                case TokenType.OpenBracket:
+                    BracketIndex++;
+                    break;
+                case TokenType.CloseBracket when BracketIndex > 0:
+                    BracketIndex--;
+                    break;
+                case TokenType.OpenBrace:
+                    BraceIndex++;
+                    break;
+                case TokenType.CloseBrace when BraceIndex > 0:
+                    BraceIndex--;
+                    break;
+            }
+        }
+
+        public bool ShouldEndExpansion(TokenType currentTokenType)
+        {
+            if (InPunctuation)
+            {
+                return false;
+            }
+        
+            return currentTokenType == TokenType.Comma || currentTokenType == TokenType.CloseParen || currentTokenType == TokenType.Eof;
+        }
     }
 
     /// <summary>
@@ -686,7 +694,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         int? condition = IfCondition();
 
         // For this branch to be taken, the condition must have parsed and resolved to a non-zero integer.
-        bool conditionMet = condition is int conditionInt && conditionInt != 0;
+        bool conditionMet = condition is { } conditionInt && conditionInt != 0;
 
         // Go till we've definitely reached the end of the directive line
         while(CurrentTokenType != TokenType.LineBreak && CurrentTokenType != TokenType.Eof)

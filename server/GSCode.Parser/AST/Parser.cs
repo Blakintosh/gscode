@@ -23,6 +23,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         InFunctionBody = 1,
         InSwitchBody = 2,
         InLoopBody = 4,
+        InDevBlock = 8,
     }
     
     private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
@@ -229,7 +230,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         List<AstNode> scriptDefns = new List<AstNode>();
 
         // Keep parsing script definitions until we reach the end of the file, as this is our last production.
-        while(CurrentTokenType != TokenType.Eof)
+        while(CurrentTokenType != TokenType.Eof &&
+              (CurrentTokenType != TokenType.CloseDevBlock || !InDevBlock()))
         {
             AstNode? next = ScriptDefn();
 
@@ -237,6 +239,12 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             if(next is not null)
             {
                 scriptDefns.Add(next);
+                
+                // We're at the end of a dev block, so we can return the script definitions.
+                if(CurrentTokenType == TokenType.CloseDevBlock && InDevBlock())
+                {
+                    return scriptDefns;
+                }
 
                 // We're not in recovery mode, so we can continue parsing as normal.
                 if(!InRecovery())
@@ -255,13 +263,19 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 CurrentTokenType != TokenType.Function &&
                 CurrentTokenType != TokenType.Class &&
                 CurrentTokenType != TokenType.Namespace &&
+                // Can't open a dev block if we're already in one
+                (CurrentTokenType != TokenType.OpenDevBlock || InDevBlock()) &&
+                // Can't be closing a dev block if we're not in one
+                (CurrentTokenType != TokenType.CloseDevBlock || !InDevBlock()) &&
                 CurrentTokenType != TokenType.Eof
                 )
             {
                 Advance();
 
                 // We've recovered, so we can try to parse the next script definition.
-                if(CurrentTokenType == TokenType.Precache || CurrentTokenType == TokenType.UsingAnimTree || CurrentTokenType == TokenType.Function || CurrentTokenType == TokenType.Class || CurrentTokenType == TokenType.Namespace)
+                if(CurrentTokenType is TokenType.Precache or TokenType.UsingAnimTree or TokenType.Function or TokenType.Class or TokenType.Namespace ||
+                   // Newly opening a dev block
+                   (CurrentTokenType == TokenType.OpenDevBlock && !InDevBlock()))
                 {
                     ExitRecovery();
                     break;
@@ -276,7 +290,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     /// Parses and outputs a script definition node.
     /// </summary>
     /// <remarks>
-    /// ScriptDefn := PrecacheDir | UsingAnimTreeDir | NamespaceDir | FunDefn | ClassDefn
+    /// ScriptDefn := PrecacheDir | UsingAnimTreeDir | NamespaceDir | FunDefn | ClassDefn | DefnDevBlock
     /// </remarks>
     private AstNode? ScriptDefn()
     {
@@ -292,10 +306,15 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 return FunDefn();
             case TokenType.Class:
                 return ClassDefn();
+            case TokenType.OpenDevBlock when !InDevBlock():
+                return DefnDevBlock();
             case TokenType.Using:
                 // The GSC compiler doesn't allow this, but we'll still attempt to parse it to get dependency info.
                 AddError(GSCErrorCodes.UnexpectedUsing);
                 return Dependency();
+            // End of this dev block
+            case TokenType.CloseDevBlock when InDevBlock():
+                return null;
             case TokenType.Private:
             case TokenType.Autoexec:
                 // They may be attempting to define a function with its modifiers in front, which is incorrect.
@@ -453,6 +472,34 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
 
         return new NamespaceNode(namespaceToken);
+    }
+
+    /// <summary>
+    /// Parses and outputs a dev block at script root level.
+    /// </summary>
+    /// <remarks>
+    /// DefnDevBlock := OPENDEVBLOCK ScriptList CLOSEDEVBLOCK
+    /// </remarks>
+    /// <returns></returns>
+    private AstNode DefnDevBlock()
+    {
+        bool isNewly = EnterContextIfNewly(ParserContextFlags.InDevBlock);
+        
+        // Pass OPENDEVBLOCK
+        Advance();
+        
+        // Parse the script list within this dev block
+        List<AstNode> scriptDefns = ScriptList();
+        
+        // Check for CLOSEDEVBLOCK
+        if (!AdvanceIfType(TokenType.CloseDevBlock))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, "#/", CurrentToken.Lexeme);
+        }
+        
+        ExitContextIfWasNewly(ParserContextFlags.InDevBlock, isNewly);
+        
+        return new DefnDevBlockNode(scriptDefns);
     }
 
     /// <summary>
@@ -806,7 +853,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             case TokenType.WaitRealTime:
             // Misc
             case TokenType.Const:
-            case TokenType.OpenDevBlock:
+            case TokenType.OpenDevBlock when !InDevBlock():
             case TokenType.OpenBrace:
             case TokenType.Semicolon:
             // Contextual
@@ -861,7 +908,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             TokenType.Wait => ReservedFuncStmt(AstNodeType.WaitStmt),
             TokenType.WaitRealTime => ReservedFuncStmt(AstNodeType.WaitRealTimeStmt),
             TokenType.Const => ConstStmt(),
-            TokenType.OpenDevBlock => DevBlock(),
+            TokenType.OpenDevBlock => FunDevBlock(),
             TokenType.OpenBrace => FunBraceBlock(),
             TokenType.Break when InLoopOrSwitch() => ControlFlowActionStmt(AstNodeType.BreakStmt),
             TokenType.Continue when InLoop() => ControlFlowActionStmt(AstNodeType.ContinueStmt),
@@ -1500,14 +1547,16 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     }
 
     /// <summary>
-    /// Parses and outputs a dev block.
+    /// Parses and outputs a dev block in the context of a function.
     /// </summary>
     /// <remarks>
-    /// DevBlock := OPENDEVBLOCK StmtList CLOSEDEVBLOCK
+    /// FunDevBlock := OPENDEVBLOCK StmtList CLOSEDEVBLOCK
     /// </remarks>
     /// <returns></returns>
-    private DevBlockNode DevBlock()
+    private FunDevBlockNode FunDevBlock()
     {
+        bool isNewly = EnterContextIfNewly(ParserContextFlags.InDevBlock);
+        
         // Pass over OPENDEVBLOCK
         Advance();
         
@@ -1520,7 +1569,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
             AddError(GSCErrorCodes.ExpectedToken, "#/", CurrentToken.Lexeme);
         }
         
-        return new DevBlockNode(stmtListNode);
+        ExitContextIfWasNewly(ParserContextFlags.InDevBlock, isNewly);
+        return new FunDevBlockNode(stmtListNode);
     }
 
     /// <summary>
@@ -2932,6 +2982,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         return new VectorExprNode(leftmostExpr, secondExpr, thirdExpr);
     }
 
+    private bool InDevBlock()
+    {
+        return (ContextFlags & ParserContextFlags.InDevBlock) != 0;
+    }
+    
     private bool InLoopOrSwitch()
     {
         return (ContextFlags & ParserContextFlags.InLoopBody) != 0 || (ContextFlags & ParserContextFlags.InSwitchBody) != 0;

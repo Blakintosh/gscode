@@ -138,7 +138,7 @@ internal record struct TokenList(Token? Start, Token? End)
         after.Previous = End;
     }
 
-    public TokenList CloneWithRange(Range range)
+    public TokenList CloneList(Range? withRange = null)
     {
         if (Start == null || End == null)
         {
@@ -147,7 +147,7 @@ internal record struct TokenList(Token? Start, Token? End)
 
         Token currentTokenFromExpansion = Start;
         // Populate the first token.
-        Token firstToken = currentTokenFromExpansion with { Range = range };
+        Token firstToken = currentTokenFromExpansion with { Range = withRange ?? currentTokenFromExpansion.Range };
         Token lastToken = firstToken;
 
         while (currentTokenFromExpansion != End)
@@ -155,7 +155,7 @@ internal record struct TokenList(Token? Start, Token? End)
             currentTokenFromExpansion = currentTokenFromExpansion.Next;
 
             // Clone the current token with the updated range
-            Token currentToken = currentTokenFromExpansion with { Range = range };
+            Token currentToken = currentTokenFromExpansion with { Range = withRange ?? currentTokenFromExpansion.Range };
 
             // Connect the cloned token to the previous one in the output chain
             lastToken.Next = currentToken;

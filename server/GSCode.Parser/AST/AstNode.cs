@@ -216,7 +216,12 @@ internal sealed class ReturnStmtNode(ExprNode? value = default) : AstNode(AstNod
     public ExprNode? Value { get; } = value;
 }
 
-internal sealed class DevBlockNode(StmtListNode body) : AstNode(AstNodeType.DevBlock)
+internal sealed class DefnDevBlockNode(List<AstNode> definitions) : AstNode(AstNodeType.DevBlock)
+{
+    public List<AstNode> Definitions { get; } = definitions;
+}
+
+internal sealed class FunDevBlockNode(StmtListNode body) : AstNode(AstNodeType.DevBlock)
 {
     public StmtListNode Body { get; } = body;
 }

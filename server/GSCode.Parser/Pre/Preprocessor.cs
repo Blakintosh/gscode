@@ -14,14 +14,14 @@ namespace GSCode.Parser.Pre;
 
 internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense sense)
 {
-    public Token CurrentToken { get; private set; } = startToken;
+    private Token CurrentToken { get; set; } = startToken;
 
-    public readonly TokenType CurrentTokenType => CurrentToken.Type;
-    public readonly Range CurrentTokenRange => CurrentToken.Range;
+    private readonly TokenType CurrentTokenType => CurrentToken.Type;
+    private readonly Range CurrentTokenRange => CurrentToken.Range;
 
-    public ParserIntelliSense Sense { get; } = sense;
+    private ParserIntelliSense Sense { get; } = sense;
 
-    public Dictionary<string, MacroDefinition> Defines { get; } = new();
+    private Dictionary<string, MacroDefinition> Defines { get; } = new();
 
     public void Process()
     {
@@ -218,7 +218,8 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
     }
 
     /// <summary>
-    /// Temporary solution for #if and #elif directives that removes the directive and condition tokens.
+    /// Consumes an #elif directive (including its condition) in the case that it's misplaced, so it doesn't cause
+    /// AST errors.
     /// </summary>
     private void SkipMisplacedDirective()
     {

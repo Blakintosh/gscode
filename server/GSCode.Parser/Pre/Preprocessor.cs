@@ -437,7 +437,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         Token macroToken = Consume();
 
         // Clone the expansion, adding them with the macro token's range
-        TokenList expansion = macroDefinition.ExpansionTokens.CloneWithRange(macroToken.Range);
+        TokenList expansion = macroDefinition.ExpansionTokens.CloneList(macroToken.Range);
 
         // Connect them to the surrounding tokens
         expansion.ConnectToTokens(macroToken.Previous, macroToken.Next);
@@ -472,7 +472,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         Token endAnchorToken = CurrentToken;
 
         // Start with a cloned expansion, then replace references to parameters with the argument expansions.
-        TokenList expansion = macroDefinition.ExpansionTokens.CloneWithRange(macroToken.Range);
+        TokenList expansion = macroDefinition.ExpansionTokens.CloneList(macroToken.Range);
 
         // Before doing anything to it, connect it to the macro token
         expansion.ConnectToTokens(macroToken.Previous, endAnchorToken);
@@ -521,7 +521,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 }
 
                 // Otherwise, clone the expansion then connect it to where the identifier formerly was
-                TokenList clonedExpansion = parameterExpansion.CloneWithRange(current.Range);
+                TokenList clonedExpansion = parameterExpansion.CloneList();
 
                 clonedExpansion.ConnectToTokens(current.Previous, current.Next);
 

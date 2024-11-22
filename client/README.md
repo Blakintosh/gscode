@@ -2,7 +2,7 @@
 
 A Visual Studio Code language extension that provides IntelliSense support for Call of Duty: Black Ops III's scripting languages, GSC and CSC.
 
-GSCode helps you to find and fix errors before the compiler has to tell you, streamlining scripting. In its current preview version, language support is provided up to syntactic analysis, allowing you to see syntax errors in your code. It also supports the preprocessor, meaning you can see macro usages in your code and spot preprocessor errors.
+GSCode helps you to find and fix errors before the compiler has to tell you, streamlining scripting. In its current beta version, language support is provided up to syntactic analysis, allowing you to see syntax errors in your code. It also supports the preprocessor, meaning you can see macro usages in your code and spot preprocessor errors.
 
 In the future, full semantic analysis of script files is planned, allowing you to see an entire extra class of errors caught at compile-time or run-time. Additionally, this will provide richer IntelliSense to your editor.
 
@@ -12,7 +12,11 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.1.0-preview (latest preview)
+### 0.1.1 beta (latest)
+
+Minor tweaks and fixes.
+
+### 0.1.0 beta
 
 Initial public release. Adds GSC & CSC language support, providing syntax highlighting and IntelliSense for preprocessor and syntactic analysis.
 
@@ -24,9 +28,7 @@ With that in mind, if you encounter any situations where the GSC compiler (Linke
 
 ## Known Issues
 
-* Preprocessor-if directives (`#if, #elif, #else, #endif`) are currently ignored.
 * Macro hoverables only show nested macro expansions if nested macros are not at the start or end of the expansion.
-* GSCode's language server currently only works for certain on Windows. While the reason for it not working on other OSes appears to be related to the language server library it uses, the exact cause is unknown. A fix will be attempted down the line but this is not currently considered high-priority.
 
 ## Licence
 GSCode is open-source software licenced under the GNU General Public License v3.0. 

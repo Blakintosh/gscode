@@ -182,7 +182,8 @@
                 { "include": "#number" },
                 { "include": "#function-pointer" },
                 { "include": "#expression-keywords" },
-                { "include": "#operator" }
+                { "include": "#operator" },
+                { "include": "#function-call" }
             ]
         },
         "control": {

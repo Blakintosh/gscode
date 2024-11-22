@@ -111,6 +111,10 @@
             "begin": "\\/\\*",
             "end": "\\*\\/"
         },
+        "dev-block": {
+            "name": "meta.preprocessor.dev-block.gsc",
+            "match": "(?:\\/\\#|#\\/)"
+        },
         "double-quote-string": {	
             "name": "string.quoted.double.gsc",
 			"begin": "\"",
@@ -178,6 +182,7 @@
         "expression": {
             "patterns": [
                 { "include": "#block-comment" },
+                { "include": "#dev-block" },
                 { "include": "#double-quote-string" },
                 { "include": "#number" },
                 { "include": "#function-pointer" },

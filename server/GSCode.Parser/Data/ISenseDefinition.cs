@@ -7,7 +7,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.Data
 {
-    public interface ISenseToken : ISemanticToken, IHoverable 
+    public interface ISenseDefinition : ISemanticToken, IHoverable 
     {
         public bool IsFromPreprocessor { get; }
     }

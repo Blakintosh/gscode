@@ -214,7 +214,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             // Fine to add
             Defines.Add(macroName, definition);
         }
-        Sense.AddSenseToken(definition);
+        Sense.AddSenseToken(nameToken, definition);
     }
 
     /// <summary>
@@ -446,7 +446,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         CurrentToken = macroToken.Previous;
 
         // Finally, add the macro reference to IntelliSense
-        Sense.AddSenseToken(new ScriptMacro(macroToken, macroDefinition, expansion));
+        Sense.AddSenseToken(macroToken, new ScriptMacro(macroToken, macroDefinition, expansion));
     }
 
     private void MacroWithArgs(MacroDefinition macroDefinition)
@@ -552,7 +552,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
 
         // Job done (who knew with args would be so much more complex!)
         // Finally, add the macro reference to IntelliSense
-        Sense.AddSenseToken(new ScriptMacro(macroToken, macroDefinition, expansion));
+        Sense.AddSenseToken(macroToken, new ScriptMacro(macroToken, macroDefinition, expansion));
     }
 
     /// <summary>

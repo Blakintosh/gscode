@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using GSCode.Parser.Data;
 
 namespace GSCode.Parser.Lexical;
 
@@ -31,6 +32,12 @@ internal record class Token(TokenType Type, Range Range, string Lexeme)
     /// Stores reference to the previous token in the sequence.
     /// </summary>
     public Token Previous { get; set; } = default!;
+
+    /// <summary>
+    /// When specified, the token symbol has IntelliSense information associated with it,
+    /// such as a hoverable and semantic highlighting.
+    /// </summary>
+    public ISenseDefinition? SenseDefinition { get; set; } = default!;
 
     public int Length => Lexeme.Length;
 

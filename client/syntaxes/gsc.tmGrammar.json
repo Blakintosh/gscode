@@ -112,7 +112,7 @@
             "end": "\\*\\/"
         },
         "dev-block": {
-            "name": "meta.preprocessor.dev-block.gsc",
+            "name": "keyword.control.directive.dev-block.gsc",
             "match": "(?:\\/\\#|#\\/)"
         },
         "double-quote-string": {	

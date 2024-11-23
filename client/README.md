@@ -12,13 +12,18 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.1.1 beta (latest)
+### 0.1.2 beta (latest)
+* Fixed various syntax highlighting issues.
+* Fixed macro expansion behaviour with vector arguments.
+* Fixed an issue where dev blocks were not recognised in the top-level of a script.
+* Fixed macro highlighting inside of macro parameters.
+* Dev blocks are now highlighted as control directives and are collapsible regions.
 
-Minor tweaks and fixes.
+### 0.1.1 beta
+* Minor tweaks and fixes.
 
 ### 0.1.0 beta
-
-Initial public release. Adds GSC & CSC language support, providing syntax highlighting and IntelliSense for preprocessor and syntactic analysis.
+* Initial public release. Adds GSC & CSC language support, providing syntax highlighting and IntelliSense for preprocessor and syntactic analysis.
 
 ## Reporting Issues and Tweaks
 
@@ -29,6 +34,7 @@ With that in mind, if you encounter any situations where the GSC compiler (Linke
 ## Known Issues
 
 * Macro hoverables only show nested macro expansions if nested macros are not at the start or end of the expansion.
+* Sometimes, semantic tokens (like macro references) do not colour themselves in the editor. They are still parsed and can be hovered over. The cause of this is currently unknown.
 
 ## Licence
 GSCode is open-source software licenced under the GNU General Public License v3.0. 

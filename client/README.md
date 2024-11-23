@@ -17,6 +17,7 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 * Fixed macro expansion behaviour with vector arguments.
 * Fixed an issue where dev blocks were not recognised in the top-level of a script.
 * Fixed macro highlighting inside of macro parameters.
+* Dev blocks are now highlighted as control directives and are collapsible regions.
 
 ### 0.1.1 beta
 * Minor tweaks and fixes.

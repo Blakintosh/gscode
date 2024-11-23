@@ -14,14 +14,14 @@ namespace GSCode.Parser.Pre;
 
 internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense sense)
 {
-    public Token CurrentToken { get; private set; } = startToken;
+    private Token CurrentToken { get; set; } = startToken;
 
-    public readonly TokenType CurrentTokenType => CurrentToken.Type;
-    public readonly Range CurrentTokenRange => CurrentToken.Range;
+    private readonly TokenType CurrentTokenType => CurrentToken.Type;
+    private readonly Range CurrentTokenRange => CurrentToken.Range;
 
-    public ParserIntelliSense Sense { get; } = sense;
+    private ParserIntelliSense Sense { get; } = sense;
 
-    public Dictionary<string, MacroDefinition> Defines { get; } = new();
+    private Dictionary<string, MacroDefinition> Defines { get; } = new();
 
     public void Process()
     {
@@ -214,11 +214,12 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             // Fine to add
             Defines.Add(macroName, definition);
         }
-        Sense.AddSenseToken(definition);
+        Sense.AddSenseToken(nameToken, definition);
     }
 
     /// <summary>
-    /// Temporary solution for #if and #elif directives that removes the directive and condition tokens.
+    /// Consumes an #elif directive (including its condition) in the case that it's misplaced, so it doesn't cause
+    /// AST errors.
     /// </summary>
     private void SkipMisplacedDirective()
     {
@@ -436,7 +437,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         Token macroToken = Consume();
 
         // Clone the expansion, adding them with the macro token's range
-        TokenList expansion = macroDefinition.ExpansionTokens.CloneWithRange(macroToken.Range);
+        TokenList expansion = macroDefinition.ExpansionTokens.CloneList(macroToken.Range);
 
         // Connect them to the surrounding tokens
         expansion.ConnectToTokens(macroToken.Previous, macroToken.Next);
@@ -445,7 +446,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         CurrentToken = macroToken.Previous;
 
         // Finally, add the macro reference to IntelliSense
-        Sense.AddSenseToken(new ScriptMacro(macroToken, macroDefinition, expansion));
+        Sense.AddSenseToken(macroToken, new ScriptMacro(macroToken, macroDefinition, expansion));
     }
 
     private void MacroWithArgs(MacroDefinition macroDefinition)
@@ -471,7 +472,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         Token endAnchorToken = CurrentToken;
 
         // Start with a cloned expansion, then replace references to parameters with the argument expansions.
-        TokenList expansion = macroDefinition.ExpansionTokens.CloneWithRange(macroToken.Range);
+        TokenList expansion = macroDefinition.ExpansionTokens.CloneList(macroToken.Range);
 
         // Before doing anything to it, connect it to the macro token
         expansion.ConnectToTokens(macroToken.Previous, endAnchorToken);
@@ -520,7 +521,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 }
 
                 // Otherwise, clone the expansion then connect it to where the identifier formerly was
-                TokenList clonedExpansion = parameterExpansion.CloneWithRange(current.Range);
+                TokenList clonedExpansion = parameterExpansion.CloneList();
 
                 clonedExpansion.ConnectToTokens(current.Previous, current.Next);
 
@@ -551,7 +552,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
 
         // Job done (who knew with args would be so much more complex!)
         // Finally, add the macro reference to IntelliSense
-        Sense.AddSenseToken(new ScriptMacro(macroToken, macroDefinition, expansion));
+        Sense.AddSenseToken(macroToken, new ScriptMacro(macroToken, macroDefinition, expansion));
     }
 
     /// <summary>
@@ -618,59 +619,67 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
     /// <returns></returns>
     private TokenList? MacroArgExpansion()
     {
-        int parenIndex = 0;
-        int braceIndex = 0;
-        int bracketIndex = 0;
+        ExpansionState state = new();
 
-        // Nothing to do, it's an empty expansion
-        if(CurrentTokenType == TokenType.Comma || CurrentTokenType == TokenType.CloseParen || CurrentTokenType == TokenType.Eof)
-        {
-            return null;
-        }
+        Token start = CurrentToken;
+        Token? current = null;
 
-        Token start = Consume();
-        Token current = start;
-
-        while(
-            // Don't terminate if we're inside punctuation
-            (parenIndex > 0 || braceIndex > 0 || bracketIndex > 0
-            // Otherwise these are our terminators
-            || (CurrentTokenType != TokenType.Comma && CurrentTokenType != TokenType.CloseParen))
-            // Always terminate on EOF
-            && CurrentTokenType != TokenType.Eof
-            )
+        while(!state.ShouldEndExpansion(CurrentTokenType))
         {
             // Maintain the indexes looking ahead at the token we're about to consume
-            switch (CurrentTokenType)
-            {
-                // Parentheses
-                case TokenType.OpenParen:
-                    parenIndex++;
-                    break;
-                case TokenType.CloseParen when parenIndex > 0:
-                    parenIndex--;
-                    break;
-                // Brackets
-                case TokenType.OpenBracket:
-                    bracketIndex++;
-                    break;
-                case TokenType.CloseBracket when bracketIndex > 0:
-                    bracketIndex--;
-                    break;
-                // Braces
-                case TokenType.OpenBrace:
-                    braceIndex++;
-                    break;
-                case TokenType.CloseBrace when braceIndex > 0:
-                    braceIndex--;
-                    break;
-            }
+            state.TrackToken(CurrentTokenType);
 
             // Go to the next token, consuming our current one
             current = Consume();
         }
 
+        // Nothing to do, it was an empty expansion
+        if (current is null)
+        {
+            return null;
+        }
+
         return new TokenList(start, current);
+    }
+    
+    private record struct ExpansionState(int ParenIndex = 0, int BraceIndex = 0, int BracketIndex = 0)
+    {
+        private bool InPunctuation => ParenIndex > 0 || BraceIndex > 0 || BracketIndex > 0;
+
+        public void TrackToken(TokenType currentTokenType)
+        {
+            switch (currentTokenType)
+            {
+                case TokenType.OpenParen:
+                    ParenIndex++;
+                    break;
+                case TokenType.CloseParen when ParenIndex > 0:
+                    ParenIndex--;
+                    break;
+                case TokenType.OpenBracket:
+                    BracketIndex++;
+                    break;
+                case TokenType.CloseBracket when BracketIndex > 0:
+                    BracketIndex--;
+                    break;
+                case TokenType.OpenBrace:
+                    BraceIndex++;
+                    break;
+                case TokenType.CloseBrace when BraceIndex > 0:
+                    BraceIndex--;
+                    break;
+            }
+        }
+
+        public bool ShouldEndExpansion(TokenType currentTokenType)
+        {
+            if (InPunctuation)
+            {
+                return false;
+            }
+        
+            return currentTokenType == TokenType.Comma || currentTokenType == TokenType.CloseParen || currentTokenType == TokenType.Eof;
+        }
     }
 
     /// <summary>
@@ -686,7 +695,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         int? condition = IfCondition();
 
         // For this branch to be taken, the condition must have parsed and resolved to a non-zero integer.
-        bool conditionMet = condition is int conditionInt && conditionInt != 0;
+        bool conditionMet = condition is { } conditionInt && conditionInt != 0;
 
         // Go till we've definitely reached the end of the directive line
         while(CurrentTokenType != TokenType.LineBreak && CurrentTokenType != TokenType.Eof)

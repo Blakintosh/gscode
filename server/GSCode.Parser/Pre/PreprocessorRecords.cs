@@ -20,7 +20,7 @@ namespace GSCode.Parser.Pre;
 /// <param name="Parameters">List of parameters</param>
 /// <param name="Documentation">Documentation for the define if it ends in a comment</param>
 internal record MacroDefinition(Token Source, TokenList DefineTokens, TokenList ExpansionTokens,
-   LinkedList<Token>? Parameters, string? Documentation = null) : ISenseToken
+   LinkedList<Token>? Parameters, string? Documentation = null) : ISenseDefinition
 {
     public bool IsFromPreprocessor { get; } = Source.IsFromPreprocessor;
     public Range Range { get; } = Source.Range;
@@ -80,7 +80,7 @@ internal record MacroDefinition(Token Source, TokenList DefineTokens, TokenList 
 /// <param name="Source">The macro token source</param>
 /// <param name="DefineSource">The define this macro is from</param>
 /// <param name="ExpansionTokens">The expansion of this macro</param>
-internal record ScriptMacro(Token Source, MacroDefinition DefineSource, TokenList ExpansionTokens) : ISenseToken
+internal record ScriptMacro(Token Source, MacroDefinition DefineSource, TokenList ExpansionTokens) : ISenseDefinition
 {
     public bool IsFromPreprocessor { get; } = Source.IsFromPreprocessor;
     public Range Range { get; } = Source.Range;

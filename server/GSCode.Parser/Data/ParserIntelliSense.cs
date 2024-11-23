@@ -47,13 +47,20 @@ internal sealed class ParserIntelliSense
         _scriptPath = scriptUri.Path;
     }
 
-    public void AddSenseToken(ISenseToken token)
+    public void AddSenseToken(Token token, ISenseDefinition definition)
     {
-        if(!token.IsFromPreprocessor)
+        // The token is from an insert (which we don't show) or it's already had a definition pushed.
+        // In these cases, skip (for existing, the first gets precedence).
+        if (token.IsFromPreprocessor || token.SenseDefinition is not null)
         {
-            SemanticTokens.Add(token);
-            HoverLibrary.Add(token);
+            return;
         }
+        
+        // Link the definition to the token so that we don't have duplicates later on.
+        token.SenseDefinition = definition;
+        
+        SemanticTokens.Add(definition);
+        HoverLibrary.Add(definition);
     }
 
     public void AddDiagnostic(Range range, string source, GSCErrorCodes code, params object?[] args)

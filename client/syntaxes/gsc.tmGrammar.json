@@ -223,8 +223,9 @@
         "other-function": {	
             "name": "meta.function-call.gsc",
 			"comment": "match function calls like: burger('example');",
-			"match": "((?:[[:alnum:]]|_)\\w+)\\b(\\()(.*?)(\\))",
-			"captures": {
+            "begin": "((?:[[:alpha:]]|_)\\w+)\\s*(\\()",
+            "end": "\\)",
+			"beginCaptures": {
                 "1": { 
                     "name": "entity.name.function.gsc",
                     "patterns": [
@@ -233,15 +234,15 @@
                         }
                     ]
                 },
-                "3": {
-                    "patterns": [
-                        { "include": "#expression" }
-                    ]
-                }
+                "2": { "name": "punctuation.section.parens.begin.gsc" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.parens.end.gsc" }
             },
             "patterns": [
                 { "include": "#function-call" },
-                { "include": "#block-comment"}
+                { "include": "#block-comment"},
+                { "include": "#expression"}
             ]
         },
         "function-pointer": {

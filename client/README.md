@@ -12,7 +12,10 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.1.2 beta (latest)
+### 0.1.3 beta (latest)
+* Fixed various syntax highlighting issues.
+
+### 0.1.2 beta
 * Fixed various syntax highlighting issues.
 * Fixed macro expansion behaviour with vector arguments.
 * Fixed an issue where dev blocks were not recognised in the top-level of a script.

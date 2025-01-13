@@ -7,3 +7,4 @@ resources
 log*.txt
 .env
 service/
+.DS_Store

@@ -80,7 +80,8 @@ LanguageServer server = await LanguageServer.From(options =>
 		})
 		.AddHandler<TextDocumentSyncHandler>()
 		.AddHandler<SemanticTokensHandler>()
-		.AddHandler<HoverHandler>();
+		.AddHandler<HoverHandler>()
+		.AddHandler<CompletionHandler>();
 	
 	// Allow disposal of the stream if required.
 	if(disposable is not null)

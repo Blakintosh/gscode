@@ -30,7 +30,7 @@ public class Script(DocumentUri ScriptUri)
         await ParsingTask;
     }
 
-    public Task DoParseAsync(string documentText)
+    public async Task DoParseAsync(string documentText)
     {
         Token startToken;
         Token endToken;
@@ -44,7 +44,7 @@ public class Script(DocumentUri ScriptUri)
         {
             // Failed to parse the script
             Failed = true;
-            Console.Error.WriteLine($"Failed to tokenise script: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Failed to tokenise script: {ex.Message}");
 
             // Create a dummy IntelliSense container so we can provide an error to the IDE.
             Sense = new(0, ScriptUri);
@@ -64,11 +64,14 @@ public class Script(DocumentUri ScriptUri)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to preprocess script: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Failed to preprocess script: {ex.Message}");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledMacError, ex.GetType().Name);
             return Task.CompletedTask;
         }
+
+        // Build a library of tokens so IntelliSense can quickly lookup a token at a given position.
+        Sense.CommitTokens(startToken);
 
         // Build the AST.
         AST.Parser parser = new(startToken, sense);
@@ -81,7 +84,7 @@ public class Script(DocumentUri ScriptUri)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to AST-gen script: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Failed to AST-gen script: {ex.Message}");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledAstError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -125,6 +128,12 @@ public class Script(DocumentUri ScriptUri)
             return result.GetHover();
         }
         return null;
+    }
+
+    public async Task<CompletionList?> GetCompletionAsync(Position position, CancellationToken cancellationToken)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+        return Sense.GetCompletionsFromPosition(position);
     }
 
     private async Task WaitUntilParsedAsync(CancellationToken cancellationToken = default)

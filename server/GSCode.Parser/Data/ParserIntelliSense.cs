@@ -39,6 +39,11 @@ internal sealed class ParserIntelliSense
     /// </summary>
     public List<DocumentUri> Dependencies { get; } = new();
 
+    /// <summary>
+    /// Library of tokens to quickly lookup a token at a given position.
+    /// </summary>
+    public DocumentTokensLibrary Tokens { get; } = new();
+
     private readonly string _scriptPath;
 
     public ParserIntelliSense(int endLine, DocumentUri scriptUri)
@@ -93,6 +98,32 @@ internal sealed class ParserIntelliSense
         // Use the lexer to transform the contents into a token list, with their range being the one specified.
         Lexer lexer = new(contents.AsSpan(), belongToRange);
         return lexer.Transform();
+    }
+
+    public void CommitTokens(Token startToken)
+    {
+        Tokens.AddRange(startToken);
+    }
+
+    public CompletionList GetCompletionsFromPosition(Position position)
+    {
+        Token? token = Tokens.Get(position);
+
+        if(token is null)
+        {
+            return [];
+        }
+
+        // For the moment, we'll just support Identifier completions.
+        if(token.Type != TokenType.Identifier)
+        {
+            return [];
+        }
+
+        // Get the completions from the definition.
+        
+
+        return token.SenseDefinition?.GetCompletions();
     }
 
     /* Others to support:

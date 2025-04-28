@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.cs_script": "csharp",
+        "*.psql": "sql",
+        "*.ini": "c"
+    }
+}

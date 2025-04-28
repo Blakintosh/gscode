@@ -1,0 +1,39 @@
+<svg id="Design_Final" data-name="Design Final" xmlns="http://www.w3.org/2000/svg" width="454" height="224" viewBox="0 0 454 224">
+  <defs>
+    <style>
+      .cls-1 {
+        font-size: 180px;
+      }
+
+      .cls-1, .cls-4 {
+        fill: #cbd5e1;
+      }
+
+      .cls-1, .cls-4 {
+        font-family: Inter;
+        font-weight: 500;
+      }
+
+      .cls-2 {
+        font-size: 140px;
+      }
+
+      .cls-3 {
+        font-size: 200px;
+        font-family: "Cascadia Mono";
+        font-weight: 600;
+		fill: #818cf8;
+      }
+
+      .cls-4 {
+        font-size: 72px;
+      }
+    </style>
+  </defs>
+  <text id="GS" class="cls-1" x="4" y="139">G<tspan class="cls-2">S</tspan></text>
+  <text id="_" data-name="{}" class="cls-3" x="233" y="185">{}</text>
+  <text id="C" class="cls-4" x="10" y="205.5">C</text>
+  <text id="o" class="cls-4" x="78" y="205.5">o</text>
+  <text id="d" class="cls-4" x="135" y="205.5">d</text>
+  <text id="e" class="cls-4" x="195" y="205.5">e</text>
+</svg>

@@ -1,0 +1,74 @@
+Arguments: 
+  C:\Program Files\nodejs\node.exe C:\Users\black\AppData\Roaming\npm\node_modules\yarn\bin\yarn.js add @sveltejs/svelte-virtual-list
+
+PATH: 
+  C:\Program Files\Eclipse Adoptium\jdk-17.0.2.8-hotspot\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Users\black\AppData\Local\Microsoft\WindowsApps;C:\Users\black\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\black\.dotnet\tools;C:\Users\black\AppData\Local\GitHubDesktop\bin;C:\Users\black\AppData\Roaming\npm
+
+Yarn version: 
+  1.22.19
+
+Node version: 
+  16.14.2
+
+Platform: 
+  win32 x64
+
+Trace: 
+  Error: EPERM: operation not permitted, unlink 'C:\Users\black\Documents\gscode-site\node_modules\@esbuild\win32-x64\esbuild.exe'
+
+npm manifest: 
+  {
+  	"name": "gscode-site",
+  	"version": "0.0.2",
+  	"scripts": {
+  		"dev": "vite dev",
+  		"build": "vite build",
+  		"preview": "vite preview",
+  		"test": "playwright test",
+  		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+  		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+  		"test:unit": "vitest",
+  		"lint": "prettier --plugin-search-dir . --check . && eslint .",
+  		"format": "prettier --plugin-search-dir . --write ."
+  	},
+  	"devDependencies": {
+  		"@fontsource/fira-mono": "^4.5.10",
+  		"@neoconfetti/svelte": "^1.0.0",
+  		"@playwright/test": "^1.28.1",
+  		"@sveltejs/adapter-auto": "^1.0.0",
+  		"@sveltejs/adapter-netlify": "^1.0.0-next.88",
+  		"@sveltejs/kit": "^1.0.0",
+  		"@types/cookie": "^0.5.1",
+  		"@typescript-eslint/eslint-plugin": "^5.45.0",
+  		"@typescript-eslint/parser": "^5.45.0",
+  		"autoprefixer": "^10.4.13",
+  		"eslint": "^8.28.0",
+  		"eslint-config-prettier": "^8.5.0",
+  		"eslint-plugin-svelte3": "^4.0.0",
+  		"flowbite-svelte": "^0.29.13",
+  		"postcss": "^8.4.20",
+  		"prettier": "^2.8.0",
+  		"prettier-plugin-svelte": "^2.8.1",
+  		"svelte": "^3.54.0",
+  		"svelte-check": "^2.9.2",
+  		"sveltekit-adapter-aws": "^4.3.7",
+  		"tailwindcss": "^3.2.4",
+  		"tslib": "^2.4.1",
+  		"typescript": "^4.9.3",
+  		"vite": "^4.0.0",
+  		"vitest": "^0.25.3"
+  	},
+  	"type": "module",
+  	"dependencies": {
+  		"@sveltejs/adapter-static": "^1.0.0",
+  		"bootstrap-icons": "^1.10.3",
+  		"svelte-markdown": "^0.2.3",
+  		"typed.js": "^2.0.12"
+  	}
+  }
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile

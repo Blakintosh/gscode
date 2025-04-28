@@ -1,0 +1,418 @@
+{
+    "displayName": "GSC",
+    "name": "gsc",
+    "scopeName": "source.gsc",
+    "comment": "GSC grammar: based on https://gist.github.com/edfuh/2041042",
+    "fileTypes": [
+        "gsc"
+    ],
+    "foldingStartMarker": "^.*\bfunction\\s*(\\w+\\s*)?\\([^\\)]*\\)(\\s*\\{[^\\}]*)?\\s*$",
+    "foldingStopMarker": "^\\s*\\}",
+    "patterns": [
+        { "include": "#function" },
+        { "include": "#class" },
+        { "include": "#block-comment" },
+        { "include": "#expression" },
+        { "include": "#control" },
+        { "include": "#operator" },
+        { "include": "#line-comment" },
+        {
+            "name": "comment.block.documentation.gsc",
+            "begin": "/@",
+            "end": "@/",
+            "patterns": [
+                { "include": "#doc-data-types" },
+                { "include": "#doc-data-modifiers" },
+                { "include" : "#doc-comment-descriptor" },
+                { "include": "#doc-comment-gscode-directive" }
+            ]
+        },
+        {
+            "name": "meta.preprocessor.file-directives.gsc",
+            "match": "(#(?:using|insert))\\s([^ ;]*)(;)?",
+            "captures": {
+                "1": { "name": "keyword.control.directive.using.gsc" },
+                "2": { "name": "string.quoted.other.blank.using.gsc" },
+                "3": { "name": "keyword.control.directive.end.gsc" }
+            }
+        },
+        {
+            "name": "meta.preprocessor.namespace.gsc",
+            "match": "(#(?:namespace))\\s([^ ]*)(;)",
+            "captures": {
+                "1": { "name": "keyword.control.directive.using.gsc" },
+                "2": { "name": "entity.name.namespace.gsc" },
+                "3": { "name": "keyword.control.directive.end.gsc" }
+            }
+        },
+        {
+            "name": "meta.preprocessor.asset-directives.gsc",
+            "match": "(#(?:using_animtree|precache)\\()(.*)(\\);)",
+            "captures": {
+                "1": { "name": "keyword.control.directive.asset.start.gsc" },
+                "2": { 
+                    "name": "keyword.control.directive.asset.parameters.gsc",
+                    "patterns": [
+                        {
+                            "include": "#double-quote-string"
+                        }
+                    ]
+                },
+                "3": { "name": "keyword.control.directive.asset.end.gsc" }
+            }
+        },
+        {
+            "name": "meta.preprocessor.macro.gsc",
+            "begin": "(#define)\\s([^\\s\\(]+)(?:(\\()(.+?)(\\)))?\\s+",
+            "end": "(?<=\\n)(?<!\\\\\\n)",
+            "beginCaptures": {
+                "1": { "name": "keyword.control.directive.define.gsc" },
+                "2": { "name": "entity.name.function.preprocessor.gsc" },
+                "3": { "name": "punctuation.definition.parameters.begin.preprocessor.gsc" },
+                "4": { 
+                    "name": "variable.parameter.preprocessor.gsc",
+                    "patterns": [
+                        {
+                            "comment": "Not sure if this even works in GSC",
+                            "include": "#function-parameter-defaults"
+                        },
+                        {
+                            "include": "#expression"
+                        },
+                        {
+                            "name": "meta.preprocessor.separator.parameters.gsc",
+                            "match": ","
+                        }
+                    ]
+                },
+                "5": { "name": "punctuation.definition.parameters.end.preprocessor.gsc" }
+            },
+            "patterns": [
+                { "include": "#line-continuation-character" },
+                { "include": "#block-comment" },
+                { "include": "#expression" },
+                { "include": "#control" },
+                { "include": "#function-call" },
+                { "include": "#function" },
+                { "include": "#class" },
+                { "include": "#line-comment" }
+            ]
+        },
+        { "include": "#function-call" }
+    ],
+    "repository": {
+        "block-comment": {
+            "name": "comment.block.comment.gsc",
+            "begin": "\\/\\*",
+            "end": "\\*\\/"
+        },
+        "double-quote-string": {	
+            "name": "string.quoted.double.gsc",
+			"begin": "\"",
+            "end": "\"",
+			"beginCaptures": { "0": { "name": "punctuation.definition.string.begin.gsc" }},
+            "endCaptures": { "0": { "name": "punctuation.definition.string.end.gsc" }},
+            "patterns": [
+                { "include": "#escape" }
+            ]
+		},
+        "function-parameter-defaults": {
+            "name": "meta.parameters.default.gsc",
+            "match": "(([[:alnum:]]\\w*)\\s*(=)\\s*([^,]*)(,|\\)))",
+            "captures": {
+                "3": {
+                    "name": "keyword.operator.parameter-default.gsc"
+                },
+                "4": {
+                    "patterns": [
+                        { "include": "#expression" }
+                    ]
+                },
+                "5": {
+                    "name": "keyword.operator.parameter-comma.gsc"
+                }
+            }
+        },
+        "function-vararg": {
+            "name": "keyword.operator.vararg.gsc",
+            "match": "\\.\\.\\."
+        },
+        "language-reserved-variables": {
+            "name": "variable.language.gsc",
+            "match": "\\b(self|level|game|world|vararg)\\b"
+        },
+		"storage-types": {
+			"name": "storage.type.gsc",
+			"match": "\\b(var|const)\\b"
+		},
+        "boolean-true": {
+            "name": "constant.language.boolean.true.gsc",
+            "match": "\\btrue\\b"
+        },
+        "boolean-false": {
+            "name": "constant.language.boolean.false.gsc",
+            "match": "\\bfalse\\b"
+        },
+        "undefined": {
+            "name": "constant.language.undefined.gsc",
+            "match": "\\bundefined\\b"
+        },
+        "expression-keywords": {
+            "patterns": [
+                { "include": "#undefined" },
+                { "include": "#boolean-true" },
+                { "include": "#boolean-false" },
+                { "include": "#language-reserved-variables" },
+				{ "include": "#storage-types" }
+            ]
+        },
+        "number": {	
+            "name": "constant.numeric.gsc",
+			"match": "\\b((0(x|X)[0-9a-fA-F]+)|(\\d+(?:\\.\\d*)?(?:[eE][+\\-]?\\d+)?))\\b"
+		},
+        "expression": {
+            "patterns": [
+                { "include": "#block-comment" },
+                { "include": "#double-quote-string" },
+                { "include": "#number" },
+                { "include": "#function-pointer" },
+                { "include": "#expression-keywords" },
+                { "include": "#operator" }
+            ]
+        },
+        "control": {
+            "name": "keyword.control.gsc",
+            "comment": "Reserved control keywords in GSC/CSC",
+            "match": "\\b(class|return|wait|thread|classes|anim|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|isdefined)\\b"
+        },
+        "escape": {
+            "name": "constant.character.escape",
+            "match": "\\\\(r|n|t)"
+        },
+        "namespace-call": {	
+            "name": "meta.namespace-call.gsc",
+			"comment": "match function calls like: scene::play('example');",
+			"match": "\\b((?:[[:alpha:]]|_)\\w+)(::)((?:[[:alnum:]]|_)\\w+)\\b",
+			"captures": {
+                "1": { "name": "entity.name.scope-resolution.gsc" },
+                "3": { 
+                    "name": "entity.name.function.gsc",
+                    "patterns": [
+                        {
+                            "include": "#control"
+                        }
+                    ]
+                }
+            },
+            "patterns": [
+                { "include": "#function-call" },
+                { "include": "#block-comment"}
+            ]
+        },
+        "other-function": {	
+            "name": "meta.function-call.gsc",
+			"comment": "match function calls like: burger('example');",
+			"match": "((?:[[:alnum:]]|_)\\w+)\\b(\\()(.*?)(\\))",
+			"captures": {
+                "1": { 
+                    "name": "entity.name.function.gsc",
+                    "patterns": [
+                        {
+                            "include": "#control"
+                        }
+                    ]
+                },
+                "3": {
+                    "patterns": [
+                        { "include": "#expression" }
+                    ]
+                }
+            },
+            "patterns": [
+                { "include": "#function-call" },
+                { "include": "#block-comment"}
+            ]
+        },
+        "function-pointer": {
+            "name": "entity.name.function.pointer.gsc",
+            "match": "(\\&)(?:((?:[[:alpha:]]|_)\\w+)(::))?(?:[[:alnum:]]|_)+?\\b",
+            "captures": {
+				"1": { "name": "keyword.operator.function-pointer.gsc" },
+                "2": { "name": "entity.name.scope-resolution.gsc" }
+            }
+        },
+        "inbuilt-function":
+        {
+            "name": "support.function.builtin.gsc",
+            "match": "(?i)\\b(ActivateClientExploder|ActivateClientRadiantExploder|ActorIKEnabled|AddAwarenessIndicator|AddBonusCardStat|AddDemoBookmark|AddEntityInfluencer|AddFriendlyScrambler|AddInfluencer|AddOrientedInfluencer|AddSensorGrenadeArea|AddSpawnPoints|AddTestClient|AddToInterestPool|AddZombieBoxWeapon|AimAtEntityIK|AimAtPosIK|AimingAtFriendly|AllClientsPrint|AllocateSoundRandoms|AllowActionSlotInput|AllowedStances|AllowRoundAnimation|AllowScoreboard|AllowTacticalInsertion|AllWeaponAttachmentsUnlocked|AnimHasNotetrack|AnimMappingSearch|AnimRelative|AnimScripted|Announcement|ApplyBallisticTarget|AreAllMissionsAtScore|AreMeshesStreamed|ArenaGetSlot|AreTexturesLoaded|AreTexturesStreamed|ArraySort|ArraySortClosest|ArtilleryIconLocation|ASMSetAnimationRate|Attach|AttachShieldModel|AttachWeapon|BadPlace_Box|BadPlace_Cylinder|BadPlace_Delete|BallSetTarget|Ban|BloodImpact|BlurAndTint_FX|Bobbing|BonusCardActiveCount|BoundsWouldTelefrag|BulletSpread|BulletTrace|BulletTracePassed|CamAnimScripted|CameraForceDisableScriptCam|CameraSetLensId|CameraSetUpdateCallback|CanClaimNode|CanPath|ChangeAdvertisedStatus|CheckIfSongUnlocked|CheckNavMeshDirection|CleanupSpawnedDynEnts|ClearAlternateAimParams|ClearAnim|ClearAnimLimited|ClearLastUpdatedCollectibles|ClearMaterialOverride|ClearNearestEnemyScrambler|ClearPlayerCorpses|ClearPlayerGravity|ClearSpawnPoints|ClearSpawnPointsBaseWeight|ClearStepTriggerSound|ClearStowedWeapon|ClearStreamerRequest|ClearTargetEntity|ClearTopScorers|ClientAnnouncement|ClientClaimTrigger|ClientPrint|ClientReleaseTrigger|ClientSysRegister|ClientSysSetState|CloneAndRemoveEntity|CodeGetClientField|CodeGetPlayerStateClientField|CodeGetUIModelClientField|CodeGetWorldClientField|CodeIncrementClientField|CodeIncrementPlayerStateClientField|CodeIncrementUIModelClientField|CodeIncrementWorldClientField|CodeSetClientField|CodeSetPlayerStateClientField|CodeSetUIModelClientField|CodeSetWorldClientField|CollisionTestPointsInBox|CollisionTestPointsInCone|CollisionTestPointsInCylinder|CollisionTestPointsInPill|CollisionTestPointsInSphere|ConnectPaths|CountPlayers|CreateDynEntAndLaunch|CreateSoundRandom|CreateStreamerHint|CurrentSessionMode|CylinderDamage|DamageConeTrace|DeactivateClientExploder|DeactivateClientRadiantExploder|Delete|DeletePathNode|DemoIsAnyFreeMoveCamera|DemoIsDollyCamera|DemoIsEditCamera|DemoIsMovieCamera|DeployRiotShield|DepthInWater|DepthOfPlayerInWater|Detach|DetachAll|DetachShieldModel|Detonate|DirectionalHitIndicator|DisableAimAssist|DisableDestructiblePieces|DisableGrenadeSuicide|DisableGrenadeTouchDamage|DisableOnRadar|DisableSpawnPointList|DisableSpeedBlur|DisableVehicleSounds|DisconnectPaths|DoDamage|DoesWeaponReplaceSpawnWeapon|DontInterpolate|DoubleXPTimerFired|DrawNode|DropNodEToFloor|EACPathSet|Earthquake|EnableAimAssist|EnableAllDestructiblePieces|EnableGrenadeSuicide|EnableGrenadeTouchDamage|EnableInfluencer|EnableLinkTo|EnableNavMeshTrigger|EnableObstacle|EnableOccluder|EnableOnRadar|EnableSpawnPointList|EnableSpeedBlur|EnableVehicleSounds|EndCamAnimScripted|EndExtraCamAnimScripted|evSetRanges|ExitLevel|ExperimentsGetVariant|ExtraCamAnimScripted|FakeFire|FindAnimByName|FindDRFilter|FindPath|FlashbackFinish|FlashbackStart|FlushSubtitles|FootstepDoEverything|FootstepDoFootstepFX|FootstepDoNothing|FootstepDoSound|ForceAmbientRoom|ForceDelete|ForceGameModeMappings|ForcePainOn|ForceStreamBundle|ForceStreamMaterial|ForceStreamWeaponRenderOptions|ForceStreamWeapons|ForceStreamXModel|ForceTModeVisible|FXBlockSight|GadgetActivate|GadgetCharging|GadgetDeactivate|GadgetFlickering|GadgetGetSlot|GadgetIsActive|GadgetIsPrimed|GadgetIsReady|GadgetPowerChange|GadgetPowerGet|GadgetPowerReset|GadgetPowerSet|GadgetPulseGetOwner|GadgetPulseResetReveal|GadgetPulseRevealed|GadgetSetActivateTime|GadgetSetEntity|GadgetSetInfrared|GadgetStateChange|GadgetTargetResult|GameModeIsMode|GeneratePointsAroundCenter|GenerateScriptEvent|GetAbsMaxs|GetAbsMins|GetActiveLocalClients|GetActorArray|GetActorSpawnerArray|GetActorSpawnerTeamArray|GetActorTeamArray|GetActorWeaponOptions|GetAIArchetypeArray|GetAIArray|GetAICount|GetAIFxName|GetAILimit|GetAimAngles|GetAISpeciesArray|GetAITeamArray|GetAITriggerFlags|GetAllCharacterBodies|GetAllCharacterHeads|GetAllNodes|GetAmmoCount|GetAngleDelta|GetAngleFromBits|GetAngles|GetAnimCurrFrameCount|GetAnimForCharacter|GetAnimFrameCount|GetAnimLength|GetAnimStateCategory|GetAnimTime|GetAnyNodeArray|GetAssignedTeam|GetAssignedTeamName|GetAtrLoaded|GetAttachIgnoreCollision|GetAttachmentCosmeticVariantForWeapon|GetAttachmentNames|GetAttachModelName|GetAttachSize|GetAttachTagName|GetBaseWeaponItemIndex|GetBestInfluencepos|GetBestSpawnPoint|GetBitsForAngle|GetBodyAccentColorCountForHero|GetBodyRenderOptionsPacked|GetBrushModelCenter|GetBuildKitAttachmentCosmeticVariantIndexes|GetBuildKitWeapon|GetBuildKitWeaponOptions|GetCamAngles|GetCamAnglesByLocalClientNum|GetCamAnimTime|GetCamPos|GetCamPosByLocalClientNum|GetCentroid|GetCharacterAssetName|GetCharacterBodyModelColorCount|GetCharacterBodyModelCount|GetCharacterBodyStyleIndex|GetCharacterCustomizationForXUID|GetCharacterDisplayName|GetCharacterFields|GetCharacterHeadRenderOptions|GetCharacterHelmetHidesHead|GetCharacterHelmetModelColorCount|GetCharacterHelmetModelCount|GetCharacterHelmetRenderOptions|GetCharacterIndex|GetCharacterModeRenderOptions|GetClassIndexFromName|GetClientFieldVersion|GetClientTime|GetClones|GetClosestPointOnNavMesh|GetClosestPointOnNavVolume|GetContractName|GetContractRequiredCount|GetContractRequirements|GetContractResetConditions|GetControllerPosition|GetControllerType|GetCorpseAnim|GetCorpseArray|GetCounterTotal|GetCoverNodeArray|GetCrateHeadObjective|GetCurrentAnimScriptedName|GetCurrentEventId|GetCurrentEventName|GetCurrentEventOriginator|GetCurrentEventType|GetCurrentEventTypeName|GetCurrentGunRank|GetCurrentWeaponIncludingMelee|GetCustomTeamName|GetCyberComAbilityName|getCybercomType|GetCyberComWeapon|GetDamageableEntArray|GetDebugEye|GetDecorations|GetDefaultClassSlot|GetDemoVersion|GetDistanceFromScreenCenter|GetDroppedWeapons|getdynent|getdynentarray|GetEnemies|GetEnemyScramblerAmount|GetEnt|GetEntArray|GetEntArrayByType|GetEntArrayFromArray|GetEntByNum|getEnterButton|GetEntityAnimRate|GetEntityNumber|GetEntityType|GetEntNavMaterial|GetEntNum|GetEquipmentHeadObjective|GetEquippedBodyAccentColorForHero|GetEquippedBodyForHero|GetEquippedBodyIndexForHero|GetEquippedCharacterIndexForLobbyClientHero|GetEquippedHeadIndexForHero|GetEquippedHelmetAccentColorForHero|GetEquippedHelmetForHero|GetEquippedHelmetIndexForHero|GetEquippedHeroIndex|GetEquippedHeroMode|GetEquippedLoadoutItemForHero|GetEquippedShowcaseWeaponForHero|GetEventPointOfInterest|GetEye|GetEyeApprox|GetFirstHeadOfGender|GetFirstHeroOfGender|GetFirstTouchFraction|GetFogSettings|GetFootstepStrings|GetFreeActorCount|GetFreerunTrackIndex|GetFriendlyScramblerAmount|GetGadgetPower|GetGameTypeEnumFromName|GetGametypeSetting|GetGrappleTargetArray|GetGroundEnt|GetHeadGender|GetHealthOverlayTime|GetHeliDamageState|GetHelmetAccentColorCountForHero|GetHeroBodyModelIndices|GetHeroes|GetHeroGender|GetHeroHeadModelIndices|GetHeroHelmetModelIndices|GetHorizontalOffsetFromScreenCenter|GetInfluenceAt|GetInfluenceFacePos|GetInfluenceNumFaces|GetInfluencerPreset|GetInfluencerTimeoutRemaining|GetInKillcam|GetInterestPoolAwareness|GetInterestPoolValue|GetItemArray|GetItemAttachment|GetItemAttachmentAllocationCost|GetItemGroupForWeaponName|GetItemGroupFromItemIndex|GetKillCamEntity|GetKnownLength|GetLastOutWaterTime|GetLightColor|GetLightExponent|GetLightFovOuter|GetLightIntensity|GetLightRadius|GetLinkedEnt|GetLoadoutAllocation|GetLoadoutGunSmithVariantIndex|GetLoadoutItem|GetLoadoutItemRef|GetLoadoutPerks|GetLoadoutWeapon|GetLobbyClientCount|GetLocalClientAngles|GetLocalClientDriver|GetLocalClientEyePos|GetLocalClientFOV|GetLocalClientNumber|GetLocalClientPos|GetLocalGunnerAngles|GetLocalPlayer|GetLocalPlayers|GetLocalPlayerTeam|GetMapAtIndex|GetMapFields|GetMapIntroMovie|GetMapOrder|GetMapOutroMovie|GetMaxLocalClients|GetMaxReverseSpeed|GetMaxs|GetMaxVehicles|GetMeleeChainCount|GetMigrationStatus|GetMillisecondsRaw|GetMins|GetMissileOwner|GetMissionName|GetMissionUniqueID|GetMissionVersion|GetMoveDelta|GetMovementType|GetMoverEnt|GetMoveSpeedScale|GetNavMeshFaceNormal|GetNavMeshTriggersForPoint|GetNearestNode|GetNearestPathPoint|GetNextMap|GetNextTraversalNodeOnPath|GetNode|GetNodeArray|GetNodeArraySorted|GetNodeIndexOnPath|GetNodeOwner|GetNodeRegion|GetNodesInRadius|GetNodesInRadiusSorted|GetNonPredictedLocalPlayer|GetNormalHealth|GetNorthYaw|GetNotetracksInDelta|GetNotetrackTimes|GetNumberOfCollectiblesForLevel|GetNumChallengesComplete|GetNumConnectedPlayers|GetNumExpectedPlayers|GetNumFreeEntities|GetNumParts|GetNumZBarrierPieces|GetOrigin|GetOtherNodeInNegotiationPair|GetOwner|GetParentEntity|GetPartName|GetPathfindingRadius|GetPathMetric|GetPlaybackTime|GetPlayerCorpse|GetPlayerGibDef|GetPlayerGravity|GetPlayerLastOutWaterTime|GetPlayerName|GetPlayers|GetPlayerSpawnId|GetPlayerSpeed|GetPlayerVehicle|GetPointInBounds|GetPrimaryDeltaAnim|GetRandomCompatibleAttachmentsForWeapon|GetRandomPointOnNavVolume|GetRealTime|GetRefFromItemIndex|GetReflectionLocs|GetReflectionOrigin|GetRetrievableWeapons|GetRevealPulseMaxRadius|GetRevealPulseOrigin|GetRevealPulseRadius|GetRootMapName|GetRope|GetScriptBundle|GetScriptBundleList|GetScriptBundleNames|GetScriptBundles|GetScriptMoverArray|GetServerHighestClientFieldVersion|GetShootAtPos|GetShoutcasterSetting|GetSkiptoName|GetSkipTos|GetSnapshotIndexArray|GetSoundFromSurfaceTable|GetSpawnerArray|GetSpawnerTeamArray|GetSpawnStructForCharacter|GetStance|GetStartAngles|GetStartOrigin|GetStartTime|GetStowedWeapon|GetStreamerRequestProgress|GetStreamingProgress|GetTagAngles|GetTagOrigin|GetTargetEntity|GetTargetLockEntity|GetTargetLockEntityArray|GetTargetOrigin|GetTeam|GetTeamPlayersAlive|GetTeamSatellite|GetTeamScore|GetTeamSpyplane|GetTime|GetTopPlayersBodyModel|GetTopPlayersBodyRenderOptions|GetTopPlayersGesture|GetTopPlayersHelmetModel|GetTopPlayersHelmetRenderOptions|GetTopPlayersIndex|GetTopPlayersTaunt|GetTopPlayersWeaponInfo|GetTopPlayersWeaponModel|GetTopPlayersWeaponRenderOptions|GetTopScorerCount|GetTotalAmmo|GetTotalServerPauseTime|GetTouchingVolume|GetTriggerAccumulate|GetTurretArcLimits|GetTurretOwner|GetTurretTarget|GetUpgradedPieceNumLives|GetUTC|GetValidCoverPeekOuts|GetVehicleArray|GetVehicleSpawnerArray|GetVehicleSpawnerTeamArray|GetVehicleTeamArray|GetVehicleTriggerFlags|GetVelocity|GetVisibleNode|GetVisibleNodes|GetVisionPulseMaxRadius|GetVisionPulseRadius|GetWallRunWallNormal|GetWatcherWeapons|GetWaterHeight|GetWeaponAccuracy|GetWeaponAttachments|GetWeaponChargeLevel|GetWeaponForCharacter|GetWeaponForwardDir|GetWeaponHackRatio|GetWeaponModelForCharacter|GetWeaponMuzzlePoint|GetWeaponOptic|GetWeaponPosFrac|GetWeaponWithAttachments|GetWeaponWorldModel|GetWeaponXCam|GetXCamForCharacter|GetXCamMouseControl|GetXModelCenterOffset|GetZBarrierArray|GetZBarrierAttackSlotHorzOffset|GetZBarrierNumAttackSlots|GetZBarrierPieceAnimLengthForState|GetZBarrierPieceAnimState|GetZBarrierPieceAnimSubState|GetZBarrierPieceIndicesInState|GetZBarrierPieceState|GetZBarrierReachThroughAttackAnimState|GetZBarrierTauntAnimState|Ghost|Gib|GlassRadiusDamage|GrenadeExplosionEffect|GroundTrace|HasAnimTree|HasASM|HasDObj|HasPart|HeliTurretDogTrace|HeliTurretSightTrace|Hide|HideFromTeam|HideMiscModels|HidePart|HideZBarrierPiece|IncrementCounter|incrementSpecificWeaponPickedUpCount|InitClientObjectives|IPrintLn|IPrintLnBold|IsActor|IsActorCorpse|IsActorSpawner|IsADS|IsAI|IsAirborne|IsAlive|IsAnimLooping|IsArenaMode|IsAssetLoaded|IsAttached|IsBonusCardActive|IsCamAnimLooping|IsCameraSpikeToggled|IsClientCacheStable|IsContentScreenFilterPlaying|IsCorpse|IsCoverNode|IsDangerous|IsDedicated|IsDemoPlaying|IsDoubleJumping|IsDriving|IsEMPJammed|IsEntity|IsEntityLinkedToTag|IsEventServiced|IsFiringTurret|IsFlared|IsFriendly|IsGadgetMeleeCharging|IsGlobalStatsServer|IsGodMode|isGrenadeDud|IsHidden|IsInHelicopter|IsInScritpedAnim|IsInSecondChance|IsInsideHeightLock|IsLaserOn|IsLinkedTo|IsLoadingCinematicPlaying|IsLocalClientDead|IsLocalClientDriver|IsLocalGame|IsLocalPlayer|IsLocalPlayerViewLinked|IsLocalPlayerWeaponViewOnlyLinked|IsMantling|IsMapSubLevel|IsMature|ismissileinsideheightlock|IsMovingPlatform|IsNavVolumeLoaded|IsNodeEnabled|IsNodeOccupied|IsOnGround|IsOnLadder|IsOnSlide|IsOnTurret|IsPathfinder|IsPaused|IsPeelingOut|IsPlayer|IsPlayerCorpse|IsPlayerDead|IsPlayerDoubleJumping|IsPlayerFiring|IsPlayerJumping|IsPlayerNumber|IsPlayerSliding|IsPlayerSprinting|IsPlayerSwimming|IsPlayerSwimmingOnSurface|IsPlayerSwimmingUnderwater|IsPlayerTalking|IsPlayerUnderwater|IsPlayerWallRunning|IsPlayerWallRunningRight|IsPlayingAnimScripted|IsPlayingLoopSound|IsPointInNavVolume|IsPointOnNavMesh|IsPoisoned|IsRagdoll|IsRobot|IsScrambled|IsSentient|IsShoutcaster|IsSlamming|IsSliding|IsSpawner|IsSpawnPointVisible|IsSpectating|IsSplitScreen|IsSplitScreenHost|IsSprinting|IsStarterPack|IsStartingClassDefault|IsStreamed|IsStreamerReady|IsSwimming|istestclient|IsThirdPerson|IsTouching|IsTouchingSwept|IsTouchingVolume|IsTraversing|IsTriggerEnabled|IsTurretFiring|IsTurretLockedOn|IsUnderwater|IsUsingNavVolume|isUsingT7Melee|IsValidGametype|IsVehicle|IsVehicleSpawner|IsVisibleByPlayer|IsWallRunning|IsWallrunNode|IsWheelColliding|IsWheelPeelingOut|IsWheelSliding|IsWorldPaused|IsZBarrier|IsZBarrierClosed|IsZBarrierOpen|ItemWeaponSetAmmo|Kick|Kill|KillClientRadiantExploder|KillServer|LaserOff|LaserOn|Launch|launchdynent|LaunchRagdoll|LaunchVehicle|LerpViewAngleClamp|LinkNodes|LinkTo|LinkToBlendToTag|LinkToCamera|LinkToUpdateOffset|LinkTraversal|LoadSentientEventParameters|LoadSiegeAnim|LocalClientActive|LocalToWorldCoords|LookAtEntity|LookAtPos|LUINotifyEvent|LUINotifyEventToSpectators|MagicBullet|MagicGrenade|MagicGrenadeManual|MagicGrenadeManualPlayer|MagicGrenadePlayer|MagicGrenadeType|MagicMissile|MakeFakeAI|MakeGrenadeDud|MakePathfinder|MakeSentient|MakeTurretUnusable|MakeTurretUsable|MakeUnusable|MakeUsable|Map|Map_Restart|MapExists|MapShaderConstant|MarkAsDirty|MarkDestructibleDestroyed|MarkNoVehicleNavMeshFaces|Matrix4x4TransformPoints|MaySpawnEntity|MaySpawnFakeEntity|MisdirectionEnable|Missile_DroneSetVisible|Missile_GetTarget|missile_settarget|MissionFailed|MissionHasAccolades|MissionHasCollectibles|MissionRestart|MoveGravity|MoveSlide|MoveTo|MoveX|MoveY|MoveZ|NavPointSightFilter|NeedsRevive|NodesAreLinked|NodesVisible|NotSolid|NumRemoteClients|Obituary|Objective_Add|Objective_ClearAllUsing|Objective_ClearEntity|Objective_ClearPlayerUsing|Objective_Delete|Objective_FlipIcon|Objective_GetGamemodeFlags|Objective_Icon|Objective_OnEntity|Objective_Position|Objective_Set3D|Objective_SetColor|Objective_SetFlag|Objective_SetGamemodeFlags|Objective_SetIcon|Objective_SetIconSize|Objective_SetInvisibleToAll|Objective_SetInvisibleToPlayer|Objective_SetInvisibleToPlayerByIndex|Objective_SetPlayerUsing|Objective_SetProgress|Objective_SetSize|Objective_SetStencil|Objective_SetUIModelValue|Objective_SetVisibleToAll|Objective_SetVisibleToPlayer|Objective_SetVisibleToPlayerByIndex|Objective_State|Objective_Team|Objective_VisibleTeams|OverrideLightingOrigin|OverrideSpawnflags|PathDistance|PhysicsExplosionCylinder|PhysicsExplosionSphere|PhysicsJetThrust|PhysicsJolt|PhysicsLaunch|PhysicsTrace|PhysicsTraceEx|PlaceSpawnPoint|PlayBattleChatterToTeam|PlayerBeingSpectated|PlayerBulletTrace|PlayerCamLinkTo|PlayerCamUnlink|PlayerGrappleTrace|PlayerLinkedOffsetDisable|PlayerLinkedOffsetEnable|PlayerLinkedSetUseBaseAngleForViewClamp|PlayerLinkTo|PlayerLinkToAbsolute|PlayerLinkToBlend|PlayerLinkToDelta|PlayerLinkWeaponViewToDelta|PlayerPhysicsTrace|PlayerPhysicsTraceIgnoreEnt|PlayerPositionValid|PlayerPositionValidIgnoreEnt|PlayerSetGroundReferenceEnt|PlayerSightTrace|PlayFX|PlayFXOnCamera|PlayFXOnTag|PlayLoopedFX|PlayLoopSound|PlayRumbleLoopOnEntity|PlayRumbleLoopOnPosition|PlayRumbleOnEntity|PlayRumbleOnPosition|PlaySound|PlaySoundAtPosition|PlaySoundOnTag|PlaySoundToAllButPlayer|PlaySoundToPlayer|PlaySoundToTeam|PlaySoundWithNotify|PositionQuery_Filter_Directness|PositionQuery_Filter_DistanceToGoal|PositionQuery_Filter_InClaimedLocation|PositionQuery_Filter_Sight|PositionQuery_Source_Navigation|PositionWouldTelefrag|PrecacheLeaderboards|PredictGrenade|PredictPosition|PredictSpawnPoint|Print|PrintLn|ProcessClientFieldsAsIfNew|PropagateCurrentEvent|QSortScoredSpawnPointsAscending|queuemeleeactionstate|RadioActive_FX|RadiusDamage|ReCacheLeaderboards|RecordBreadcrumbDataForPlayer|RefreshShieldAttachment|RegisterClientField|RegisterSkipto|ReleaseClaimedTrigger|RemoveAllFriendlyScramblers|RemoveAllSensorGrenadeAreas|RemoveForceNoCull|RemoveFriendlyScrambler|RemoveInfluencer|RemoveNoSunShadow|RemoveSensorGrenadeArea|RemoveZombieBoxWeapon|RenderHealthOverlay|RenderHealthOverlayHealth|ReportUser|ResetAILimit|ResetDestructible|ResetDoubleJumpRechargeTime|ResetFOV|ResetGlass|ResetMissileDetonationTime|ResetZombieBoxWeapons|ReviveObituary|RopeGetPosition|RopePulse|Rotate|RotatePitch|RotateRoll|RotateTo|RotateVelocity|RotateYaw|ScreenShake|SendFaceEvent|SendKillstreakDamageEvent|ServerObjective_GetObjective|ServerObjective_GetObjectiveEntity|ServerObjective_GetObjectiveGameModeFlags|ServerObjective_GetObjectiveOrigin|ServerObjective_GetObjectiveProgress|ServerObjective_GetObjectiveTeam|ServiceEvent|ServiceEventsInRadius|SessionModeAbbreviation|SessionModeIsCampaignDeadOpsGame|SessionModeIsCampaignGame|SessionModeIsCampaignZombiesGame|SessionModeIsMultiplayerGame|SessionModeIsOnlineGame|SessionModeIsPrivate|SessionModeIsPrivateOnlineGame|SessionModeIsSystemlink|SessionModeIsZombiesGame|SetActorWeapon|SetAILimit|SetAISpread|SetAmbientSnapshot|SetAnim|SetAnimForceNew|SetAnimKnob|SetAnimKnobAll|SetAnimKnobAllLimited|SetAnimKnobAllLimitedRestart|SetAnimKnobAllRestart|SetAnimKnobLimited|SetAnimKnobLimitedRestart|SetAnimKnobRestart|SetAnimLimited|SetAnimLimitedRestart|SetAnimRestart|SetAnimTime|SetAnimTimeByName|SetAssassinationEnabled|SetAttachmentCosmeticVariantIndex|SetAttachmentCosmeticVariantIndexes|SetAvoidanceMask|SetAvoidanceProperty|SetBallPassAllowed|SetBeastModeIconMaterial|SetBlur|SetBlurByLocalClientNum|SetBodyRenderOptions|SetBodyRenderOptionsPacked|SetBombTimer|SetBurn|SetCameraSpikeActive|SetCanDamage|SetClearanceCeiling|SetClientNameMode|SetClone|SetCompassIcon|SetContents|SetCorpseGibState|SetCullDist|SetCursorHint|SetDamageDirectionIndicator|SetDangerous|SetDedicatedShadow|SetDefaultDropPitch|SetDemoIntermissionPoint|SetDepthOfField|SetDoubleJumpEnergy|SetDrawInfrared|SetDrawName|SetDrawOwnerName|SetDvar|SetDynEntBodyRenderOptionsPacked|SetDynEntEnabled|SetElectrified|SetEMPJammed|SetEnableNode|SetEnemyGlobalScrambler|SetEnemyModel|SetEnemyScramblerAmount|SetEntBeastModeIconType|SetEntGravityTrajectory|SetEntityAnimRate|SetEntityPaused|SetEntityWeapon|SetExcludeTeamForTrigger|SetExpFog|SetFakeFire|SetFlagAsAway|SetForceNoCull|SetForceNotSimple|SetFOVForKillcam|SetFriendlyNameDraw|SetFriendlyScramblerAmount|SetGameEndTime|SetGametypeSetting|SetGlobalFutz|SetGrapplableType|SetGravity|SetGroupSnapshot|SetHealthSnapshot|SetHideonClientWhenScriptedAnimCompleted|SetHideWhenScriptedAnimationCompleted|SetHighDetail|SetHintLowPriority|SetHintString|SetHintStringForPerk|SetHintStringForPlayer|SetIgnoreEntForTrigger|SetIgnorePauseWorld|SetIncludeMeshes|SetInfluenceAt|SetInfluencerTeamMask|SetInfluencerTimeout|SetInfraredVision|SetInfraredVisionSet|SetInitialPlayersConnected|setInTacticalHud|SetInvisibleToAll|SetInvisibleToPlayer|SetJumpHeight|SetLevelFadeSnapshot|SetLightColor|SetLightExponent|SetLightFovRange|SetLightingOnly|SetLightingState|SetLightIntensity|SetLightRadius|SetLocalRadarEnabled|SetLocalRadarPosition|SetLoopState|SetMapCenter|SetMapLatLong|SetMatchFlag|SetMatchTalkFlag|SetMaterialOverride|SetmaxHealth|SetMiniMap|SetMissileBrake|SetMissileCoasting|SetMissileOwner|SetMode|SetModel|SetMoveSpeedScale|SetMovingPlatformEnabled|SetNearestEnemyScrambler|SetNemesisXUID|SetNodePriority|SetNormalHealth|SetNoSunShadow|SetObjectivePointStatus|SetOnTargetAngle|SetOwner|SetPauseWorld|SetPerkForTrigger|SetPlayerCollision|SetPlayerCurrentObjective|SetPlayerCurrentStreak|SetPlayerGravity|SetPlayerIgnoreRadiusDamage|SetPlayerSpread|SetPlayerStateLoadoutBonusCards|SetPlayerStateLoadoutWeapons|SetRenderInThirdPersonSpectate|SetReviveHintString|SetRoundsPlayed|SetSAnim|SetScale|SetScanningPitch|SetScoreboardColumns|SetScriptMoverFlag|SetScriptStreamBias|SetSessStat|setshaderconstant|SetSharedViewPort|SetShowcaseWeaponPaintshopXUID|SetSkipTos|SetSlowMotion|SetSModelSAnimShot|SetSonarAttachmentEnabled|SetSoundContext|SetSoundEntContext|SetSoundPitch|SetSoundPitchRate|SetSoundVolume|SetSoundVolumeRate|SetSpawnClientFlag|SetSpawnPointRandomVariation|SetSpawnPointsBaseWeight|SetStableMissile|SetStance|SetStepTriggerSound|SetStowedWeapon|SetStreamerRequest|SetStunned|SetTargetEntity|SetTargetOrigin|SetTeam|SetTeamForTrigger|SetTeamReviveIcon|SetTeamSatellite|SetTeamScore|SetTeamSpyplane|SetThirdPerson|SetTmodeProvider|SetTopDownCameraYaw|SetTopScorer|SetTurretCarried|SetTurretMinimapVisible|SetTurretNode|SetTurretOwner|SetTurretSpinning|SetTurretType|SetUnderwaterVisionSet|SetupClientFieldAnimSpeedCallbacks|setupclientfieldcodecallbacks|SetupClientFieldLuiCodeCallbacks|SetupFieldOpsKitLoadouts|SetViewAngleResistance|SetViewModelDepthOfField|SetVisibleToAll|SetVisibleToAllExceptTeam|SetVisibleToPlayer|SetVisibleToTeam|SetVisionSetForPlayer|SetVolFog|SetVoteNoCount|SetVoteString|SetVoteTime|SetVoteYesCount|SetWaterDisturbanceParams|SetWaterDrops|SetWaveWaterEnabled|SetWaveWaterGeneratorAmplitude|SetWaveWaterHeight|SetWeapon|SetWeaponOptions|SetWeaponRenderOptions|SetWinningPlayer|SetWinningTeam|SetWorldFogActiveBank|SetZBarrierColModel|SetZBarrierPieceState|SetZombieName|ShellShock|ShootTurret|ShootUp|Show|ShowAllParts|ShowMiscModels|ShowPart|ShowToPlayer|ShowToTeam|ShowZBarrierPiece|SiegeCmd|SightConeTrace|SightTracePassed|SModelAnimCmd|SnapshotAcknowledged|Solid|SoundExists|SoundGetAlias|SoundGetPlaybackTime|SoundLineEmitter|SoundLoopEmitter|SoundPlayAutoFX|SoundPlaying|SoundRattle|SoundRattleSetup|SoundSetMusicState|SoundStopLineEmitter|SoundStopLoopEmitter|SoundTimeScale|SoundUpdateLineEmitter|Spawn|SpawnActor|SpawnCollision|spawndynent|SpawnFromSpawner|SpawnFX|SpawnHelicopter|SpawnNapalmGroundFlame|SpawnPathNode|SpawnPlane|SpawnStruct|SpawnTimedFX|SpawnTurret|SpawnVehicle|StartBinocs|StartFadingBlur|StartFiring|StartPoisoning|StartRagdoll|StartResurrectViewAngleTransition|StopAllLoopSounds|StopAllRumbles|StopAnimScripted|StopBinocs|StopDemoRecording|StopFiring|StopForceStreamingMaterial|StopForceStreamingXModel|StopForcingStreamer|StopJukeMove|StopLoopSound|StopMoveSlide|StopPoisoning|StopRumble|StopShellShock|StopShootTurret|StopSound|StopSounds|StreamerModelHint|StreamerNotify|StreamerRequest|StreamerSkiptoDebug|StreamTextureList|SubtitlePrint|SwitchMap_Load|SwitchMap_Preload|SwitchMap_SetLoadingMovie|SwitchMap_Switch|Target_BoundingIsUnderReticle|Target_ClearReticleLockOn|Target_GetArray|Target_GetOffset|Target_IsInCircle|Target_IsInRect|Target_IsTarget|Target_OriginIsInCircle|Target_Remove|Target_ScaleMinMaxRadius|Target_Set|Target_SetAllowHighSteering|Target_SetAttackMode|Target_SetJavelinOnly|Target_SetOffscreenShader|Target_SetOffset|Target_SetShader|Target_SetTurretAquire|Target_StartReticleLockOn|TestSpawnPoint|TmodeSetServerUser|ToggleNoVehicleFaceTraversability|TracePassedOnNavMesh|TracePoint|TriggerEnable|TriggerFX|TriggerIgnoreTeam|Underwater|Unlink|UnlinkNodes|UnlinkTraversal|UnloadSiegeAnim|UnlockSongByAlias|UnSetTurretNode|UpdateClientNames|UpdateNavTriggers|UpdateUnlockedAttachmentBits|UseAlternateAimParams|UseAlternateHud|UseAlternateReviveIcon|UseAnimTree|UseBuildKitWeaponModel|UseBy|UseServerVisionset|UseTriggerIgnoreUseHoldTime|UseTriggerRequireLookAt|UseTriggerRequireLookToward|UseWeaponHideTags|UseWeaponModel|Vibrate|VideoPause|VideoPrime|VideoStart|VideoStop|VideoUnpause|ViewKick|VisionSetLastStand|VisionSetLerpRatio|VisionSetNaked|WalkUnderwater|WeaponFriendlyHacking|WeaponHasAttachment|WeaponHasAttachmentAndUnlocked|WorldEntNumber|WorldToLocalCoords|WorldTrace|ZBarrierGetPiece|ZBarrierPieceUseAlternateModel|ZBarrierPieceUseAttachWeapon|ZBarrierPieceUseBoxRiseLogic|ZBarrierPieceUseDefaultModel|ZBarrierPieceUseUpgradedModel|ZBarrierSupportsZombieReachThroughAttacks|ZBarrierSupportsZombieTaunts|ZeroGravityVolumeOff|ZeroGravityVolumeOn|AddSentientEventListener|aithrowgrenade|AllowPitchAngle|AnimMode|AtDangerousNode|AttackedRecently|CalcApproximatePathToPosition|CalcLookaheadPos|CalcPathLength|CanAttackEnemyNode|CanSee|CanShoot|CanShootEnemy|CanThrowGrenade|CanThrowGrenadePos|CheckGrenadeThrow|CheckGrenadeThrowPos|CheckProne|ChooseBetterCoverNode|ClearEnemy|ClearEntityOwner|ClearEntityTarget|ClearFixedNodeSafeVolume|ClearForcedGoal|ClearGoalVolume|ClearPath|ClearPitchOrient|ClearPotentialThreat|ClearUsePosition|CreateThreatBiasGroup|DamageMode|DropWeapon|FindBestCoverNode|FindBestCoverNodes|FindCoverNodeAtLocation|FindReacquireDirectPath|FindReacquireNode|FindReacquireProximatePath|FinishActorDamage|ForceTeleport|GenerateRadioEvent|GetAimLimitsFromEntry|GetAnglesToLikelyEnemyPath|GetBehaviorTreeStatus|GetClosestEnemySqDist|GetDropToFloorPosition|GetFinalPathPos|GetFireMode|GetFixedNodeSafeVolume|GetFlashBangedStrength|GetGoalVolume|GetGroundEntType|GetHitEntType|GetHitYaw|GetIgnoreEnt|GetNextFindBestCoverTime|GetNodeOffsetAngles|GetNodeOffsetPosition|GetOrientMode|GetPathLength|GetPathMode|GetPerfectInfo|GetPersonalThreatBias|GetReacquireNode|GetStealthSightValue|GetThreatBias|GetThreatBiasGroup|GetTurnExitYaw|GrenadeThrow|HasPath|HasValidInterrupt|IsActorShooting|IsApproachingGoal|IsAtCoverNode|IsAtCoverNodeStrict|IsAtGoal|IsBadGuy|IsCoverValid|IsCurrentBTActionLooping|IsDeflected|IsFlankedAtCoverNode|IsGrenadePosSafe|IsInAnyBadPlace|IsInGoal|IsInScriptedState|IsKnownEnemyInRadius|IsKnownEnemyInVolume|IsMoveSuppressed|IsNoTarget|IsPathDirect|IsPosAtGoal|IsPosInClaimedLocation|IsSafeFromGrenade|IsStanceAllowed|IsSuppressed|IsSuppressionWaiting|Knockback|LastKnownPos|LastKnownTime|LerpPosition|MayMoveFromPointToPoint|MayMoveToPoint|Melee|MeleeWithOffset|NearClaimNode|NearClaimNodeAndAngle|NearNode|OrientMode|PathMode|PickUpGrenade|PredictArrival|PredictExit|PredictPath|PushActors|PushPlayer|ReacquireMove|ReacquireStep|RemoveSentientEventListener|ResetVisibilityCacheWithinRadius|SeeRecently|SetEntityOwner|SetEntityTarget|SetFixedNodeSafeVolume|SetFlashBanged|SetFlashbangImmunity|SetFreeCameraLockOnAllowed|SetGoal|setgoalentity|setgoalnode|setgoalpos|setgoalvolume|setgoalvolumeauto|SetIgnoreEnt|SetIgnoreMeGroup|SetPersonalIgnore|SetPersonalThreatBias|SetPhysParams|SetPitchOrient|SetPotentialThreat|SetRepairPaths|SetStairsExitTransform|SetStealthSight|SetStealthSightAwareness|SetStealthSightValue|SetSteeringMode|SetTalkToSpecies|SetThreatBias|SetThreatBiasAgainstAll|SetThreatBiasGroup|Shoot|ShouldFaceMotion|ShouldHoldGroundAgainstEnemy|ShouldStartArrival|ShouldStartTraversal|ShouldUseCoverNode|StartCoverArrival|Teleport|ThreatBiasGroupExists|TraverseMode|TrimPathtoAttack|UseCoverNode|UsePosition|UseReacquireNode|AddBoltedFXExclusionVolume|AddDuplicateRenderOption|AddFXExclusionVolume|BeamKill|BeamLaunch|BulletTracer|CaptureFrame|ClearExtraCam|CreateSceneCodeImage|DeleteFX|DisableDuplicateRendering|EnableFrontendLockedWeaponOverlay|EnableFrontendStreamingOverlay|EnableFrontendTokenLockedWeaponOverlay|EnableThermalDraw|EVEnable|EvStatus|FindStaticModelIndex|FindStaticModelIndexArray|FindVolumeDecalIndexArray|FreeCodeImage|GetCameraSpikeCamStatic|GetFXFromSurfaceTable|GetServerVolumetricFogDensity|GetSurfaceStrings|GetVisionSetNaked|GetWorldFogScriptID|HideStaticModel|HideVolumeDecal|IGCActive|IsFXPlaying|IsIGCActive|IsStereoOn|KillFX|KillRadiantExploder|MakeLight|MapMaterialIndex|MotionPulse_Enable|MotionPulse_SetDesat|MotionPulse_SetFadeOut|MotionPulse_SetFalloff|MotionPulse_SetLineWidth|MotionPulse_SetOutline|MotionPulse_SetRadius|MotionPulse_SetSolid|OED_NightVision_Enable|OED_NightVision_Reset|OED_NightVision_SetTextureLevel|OED_SitRepScan_Enable|OED_SitRepScan_SetDesat|OED_SitRepScan_SetFalloff|OED_SitRepScan_SetLineWidth|OED_SitRepScan_SetOutline|OED_SitRepScan_SetRadius|OED_SitRepScan_SetSolid|PlayExtraCamXCam|PlayFXOnDynEnt|PlayMainCamXCam|PlayRadiantExploder|PlayTagFXSet|PlayViewmodelFX|RandomFade|RegisterRewindFX|RemoveFXExclusionVolume|SetAllowXCamRightStickRotation|SetArmPulse|SetArmPulsePosition|SetCameraSpikeCamActive|SetCameraSpikeCamAngles|SetCameraSpikeCamEntity|SetCameraSpikeCamOrigin|SetCameraSpikeCamStatic|SetClientVolumetricFog|SetExposureActiveBank|SetExposureIgnoreTeleport|SetExposureInstantSnap|SetExtraCam|SetExtraCamFocalLength|SetFilterBitFlag|SetFilterPassCodeTexture|SetFilterPassConstant|SetFilterPassEnabled|SetFilterPassMaterial|SetFilterPassQuads|SetFXIgnorePause|SetFXOutdoor|SetFXTeam|SetGenericSceneValue|SetHotZone|SetLitFogBank|SetLutScriptIndex|SetLutVolumeActiveBank|SetOverlayConstant|SetOverlayEnabled|SetOverlayMaterial|SetPBGActiveBank|SetRimIntensity|SetRippleWave|SetServerVolumetricFogDensity|SetUkkoScriptIndex|StartWaterSheetingFX|StopExtraCamXCam|StopFX|StopMainCamXCam|StopRadiantExploder|StopWaterSheetingFX|SwitchToClientVolumetricFog|SwitchToServerVolumetricFog|TmodeClearFlag|TmodeEnable|TmodeSetFlag|TmodeStatus|umbra_clearpersistenttometrigger|Umbra_SetAccurateOcclusionThreshold|Umbra_SetDistanceScale|Umbra_SetMinimumContributionThreshold|umbra_settometrigger|umbra_settometriggeronce|UnhideStaticModel|UnhideVolumeDecal|VisionSetLastStandLerp|VisionSetNakedLerp|WeakPoint_Enable|ZombieShooterSpotted|Abs|AbsAngleClamp180|AbsAngleClamp360|ACos|AngleClamp180|AngleLerp|AnglesToForward|AnglesToRight|AnglesToUp|ASin|ATan|Ceil|Closer|CombineAngles|Cos|DiffTrack|DiffTrackAngle|Distance|Distance2D|Distance2DSquared|DistanceSquared|Float|Floor|ForwardRotateAroundUpByAngle|GetMinBitCountForNum|Int|Length|LengthSquared|LerpFloat|LerpVector|Log|MapFloat|Max|Min|PackRgba|PointOnSegmentNearestToPoint|Pow|Project2Dto3D|Project3Dto2D|RandomFloat|RandomFloatRange|RandomInt|RandomIntRange|RotatePoint|RotatePointAroundAxis|Sin|Sqrt|Tan|VectorCross|VectorDot|VectorFromLineToPoint|VectorLerp|VectorNormalize|VectorProjection|VectortoAngles|ViewAspect|ActionButtonPressed|ActionSlotFourButtonPressed|ActionSlotOneButtonPressed|ActionSlotThreeButtonPressed|ActionSlotTwoButtonPressed|AddToDamageIndicator|AdsButtonPressed|AllowAds|AllowCrouch|AllowDoubleJump|AllowJump|AllowLean|AllowMelee|AllowMeleePowerLeft|AllowProne|AllowSlide|AllowSpectateTeam|AllowSprint|AllowStand|AllowWallRun|AnyAmmoForWeaponModes|ApplyKnockBack|AreControlsFrozen|AttackButtonPressed|BeginLocationAirstrikeSelection|BeginLocationArtillerySelection|BeginLocationComlinkSelection|BeginLocationMortarSelection|BeginLocationNapalmSelection|BeginLocationSelection|BoostButtonPressed|BotSetRandomCharacterCustomization|ButtonBitState|ButtonPressed|CalcPlayerOptions|CalcWeaponOptions|CameraActivate|CameraSetAngles|CameraSetLookAt|CameraSetPosition|CanPlaceRiotshield|CanPlayerPlaceTurret|CanPlayerPlaceVehicle|CantSeeEntities|CarryTurret|ChangeSeatButtonPressed|ClearDamageIndicator|ClearPerks|ClonePlayer|CloseInGameMenu|CloseLUIMenu|CloseMenu|CreateFlashbackClone|DamageRiotShield|DeathStreakActive|DisableDeathStreak|DisableInvulnerability|DisableOffhandWeapons|DisableRoundStartDelay|DisableUsability|DisableWeaponCycling|DisableWeaponFire|DisableWeapons|DropItem|DropScavengerItem|EnableDeathStreak|EnableInvulnerability|EnableOffhandWeapons|EnableRoundStartDelay|EnableUsability|EnableWeaponCycling|EnableWeaponFire|EnableWeapons|EndLocationSelection|FakeDamageFrom|finishMeleeHit|FinishPlayerDamage|ForceGrenadeThrow|ForceOffHandEnd|ForceSlick|FragButtonPressed|FreezeControls|FreezeControlsAllowLook|GamepadUsedLast|GetCharacterBodyModel|GetCharacterBodyRenderOptions|GetCharacterBodyType|GetCharacterHeadModel|GetCharacterHelmetModel|GetControllerUIModelValue|GetCurrentOffHand|GetCurrentWeapon|GetCurrentWeaponAltWeapon|GetCurrentWeaponSpinLerp|GetEnemyDogTagModel|GetFractionMaxAmmo|GetFractionStartAmmo|GetFriendlies|GetFriendlyDogTagModel|GetGunAngles|GetHeroAbilityName|GetHeroWeaponName|GetInventoryHeldWeapon|GetInventoryWeapon|GetIpAddress|GetLeagueTeamID|GetLightingState|GetLockOnLossRadius|GetLockOnOrigin|GetLockOnRadius|GetLockOnSpeed|GetLUIMenu|GetLUIMenuData|GetMpDialogName|GetNormalizedCameraMovement|GetNormalizedMovement|GetOffHandSecondaryClass|GetPerks|GetPlayerAngles|GetPlayerAttachmentCosmeticVariantIndexes|GetPlayerCameraPos|GetPlayerGenderType|GetPlayerMovementState|GetPlayerSelectedGesture|GetPlayerSelectedTaunt|GetPlayerShowcaseWeapon|GetPlayerViewHeight|getreplaygunlockonorigin|GetSnapshotAckIndex|GetSunShadowSplitDistance|GetTargetScreenAngles|GetVehicleBoostTime|GetVehicleBoostTimeLeft|GetVehicleFocusEntity|GetVehicleMinBoostTime|GetVehicleOccupied|GetWeaponAcvi|GetWeaponAmmoClip|GetWeaponAmmoFuel|GetWeaponAmmoStock|GetWeaponForWeaponRoot|GetWeaponOptions|GetWeaponsList|GetWeaponsListPrimaries|GiveDedicatedShadow|GiveMaxAmmo|GiveNextBaseWeapon|GiveStartAmmo|GiveWeapon|GiveWeaponNextAttachment|HasAGrenadePulledBack|HasMaxPrimaryWeapons|HasPerk|HasRiotShield|HasWeapon|HideViewModel|InitialWeaponRaise|InventoryButtonPressed|IsCarryingTurret|IsChargeShotPending|IsDroppingWeapon|IsFiring|IsGrappling|IsHost|IsHostForBots|IsInMoveMode|IsInVehicle|IsLocalToHost|IsLookingAt|IsMeleeing|IsPlayerOnSameMachine|IsReloading|IsRemoteControlling|IsSwitchingWeapons|IsTalking|IsThrowingGrenade|IsUsingOffHand|IsWeaponOverheating|IsWeaponViewOnlyLinked|JumpButtonPressed|LinkGuidedMissileCamera|LinkToMissile|MeleeButtonPressed|MurderLine|NextPlayerRenderOption|OffhandSpecialButtonPressed|OpenLUIMenu|OpenMenu|OpenMenuNoMouse|PickupAmmoEvent|PickupWeaponEvent|PingPlayer|PlayBombDefuse|PlayBombPlant|PlayClientAirstrike|PlayClientNapalm|PlayerADS|PlayerKnockback|PlayHitMarker|PlayLocalSound|PrimaryButtonPressedLocal|PrimeMovie|ReloadButtonPressed|ReloadWeaponAmmo|RemoteControlTurret|RemoteControlTurretOff|ResetAnimations|ResetCharacterCustomization|ResetFlashBack|ResetSpreadOverride|Revive|RevivePlayer|SayAll|SayTeam|SecondaryButtonPressedLocal|SecondaryOffhandButtonPressed|SetActionSlot|SetArenaPoints|SetBlockWeaponPickup|SetCarryingObject|SetCharacterBodyStyle|SetCharacterBodyType|SetCharacterHelmetStyle|SetClientCGObjectiveText|SetClientCompass|SetClientDrawTalk|SetClientFocalLength|SetClientHUDHardcore|SetClientMiniScoreboardHide|SetClientNumLives|SetClientPlayerPushAmount|SetClientPlayerSprintTime|SetClientScriptMainMenu|SetClientThirdPerson|SetClientThirdPersonAngle|SetClientUIVisibilityFlag|SetControllerUIModelValue|SetCurrentSpectatorClient|SetCurrentWeaponSpinLerp|SetDisabledTargetHint|SetElectrifiedState|SetEnterTime|SetEverHadWeaponAll|SetHighlighted|SetInventoryHeldWeapon|SetInventoryWeapon|SetLowReady|SetLUIMenuData|SetModelLodBias|SetNoLOSOnTargetsHint|SetNoTargetsHint|setOffhandPrimaryClass|SetOffhandSecondaryClass|SetOffhandVisible|SetOrigin|SetParagonIconId|SetParagonRank|SetPerk|SetPlacementHint|SetPlayerAngles|SetPlayerRenderOptions|SetRank|SetRiotshieldFailHint|SetSpawnWeapon|SetSpreadOverride|SetSprintCooldown|SetSprintDuration|SetSunShadowSplitDistance|SetTacticalWheel|SetTargetAlreadyInUseHint|SetTargetAlreadyTargetedHint|SetTargetedEntityEndTime|SetTargetedMissilesRemaining|SetTargetingAbortedHint|SetTargetOORHint|SetTargetWrongTypeHint|SetVehicleDamageMeter|SetVehicleDrivableDuration|SetVehicleDrivableEndTime|SetVehicleFocusEntity|SetVehicleLockedOnByEnt|SetVehicleWeaponWaitDuration|SetVehicleWeaponWaitEndTime|SetVelocity|SetViewClamp|SetWeaponAmmoClip|SetWeaponAmmoFuel|SetWeaponAmmoStock|SetWeaponFriendlyHacking|SetWeaponFriendlyTargeting|SetWeaponFriendlyTargetLocked|SetWeaponHackPercent|SetWeaponHeatPercent|SetWeaponLockOnPercent|SetWeaponOverheating|ShowViewModel|SortHeldWeapons|SpawnSpectator|SprintButtonPressed|SprintUpRequired|StanceButtonPressed|StartCameraTween|StartRevive|StopCarryTurret|StopLocalSound|StopRevive|Suicide|SwitchToOffHand|SwitchToWeapon|SwitchToWeaponImmediate|TakeAllWeapons|TakeWeapon|ThrowButtonPressed|TurnedHuman|UndoLastStand|UnlinkFromMissile|UnlinkGuidedMissileCamera|UnSetPerk|UpdateWeaponOptions|UseButtonPressed|VehicleMoveUpButtonPressed|WeaponLockCount|WeaponLockDetect|WeaponLockFinalize|WeaponLockFree|WeaponLockNoClearance|WeaponLockRemoveSlot|WeaponLockStart|WeaponLockTargetTooClose|WeaponPlayEjectBrass|WeaponSwitchButtonPressed|ChangeFontScaleOverTime|ClearTargetEnt|CloseLUIMenu|CreateLUIMenu|CreateUIModel|Destroy|FadeOverTime|FreeUIModel|GetGlobalUIModel|GetLUIMenu|GetLUIMenuData|GetTextWidth|GetUIModel|GetUIModelForController|GetUIModelValue|IsLuiEnabled|LuiDisable|LuiEnable|LuiLoad|MoveOverTime|NewClientHudElem|NewDamageIndicatorHudElem|NewDebugHudElem|NewHudElem|NewScoreHudElem|NewTeamHudElem|OpenLUIMenu|OpenLUIPopup|PopulateScriptDebugMenu|Reset|ScaleOverTime|SetClock|SetClockUp|SetCOD7DecodeFX|SetExtraCamRenderReady|SetGameTypeString|SetLUIMenuData|SetMapNameString|SetPerks|SetPlayerNameString|SetPulseFX|SetRedactFX|SetShader|SetTargetEnt|SetTenthsTimer|SetTenthsTimerUp|SetText|SetTimer|SetTimerUp|SetTypewriterFX|SetUIModelValue|SetValue|SetWarGameData|SetWayPoint|ArrayCombine|ArrayCopy|ArrayGetClosest|ArrayGetFarthest|ArrayInsert|ArrayIntersect|ArrayRemoveIndex|ArrayRemoveValue|Assert|AssertMsg|ClientHasSnapshot|ErrorMsg|GetArrayKeys|GetAttachmentTableIndex|GetDvarFloat|GetDvarInt|GetDvarString|GetDvarVector|GetFirstArrayKey|GetItemIndexFromRef|GetLastArrayKey|GetMapCenter|GetNextArrayKey|GetPrevArrayKey|GetServerTime|GetStructField|GetSubStr|GetSystemTime|IsArray|IsClass|IsFloat|IsFunctionPtr|IsInArray|IsInt|IsMatureContentEnabled|IsShowBloodEnabled|IsShowGibsEnabled|IsString|IsSubStr|istring|IsVec|IsWeapon|MakeLocalizedString|SplitArgs|sprintf|StrEndsWith|StrIsFloat|StrIsInt|StrIsNumber|StrStartsWith|StrStrip|StrTok|StrTok2|TableLookup|TableLookupColumnCount|TableLookupColumnForRow|TableLookupFindCoreAsset|TableLookupIString|TableLookupRow|TableLookupRowCount|TableLookupRowNum|Throw|ToLower|ToUpper|AttachPath|CancelAIMove|ClearDefaultPitch|ClearGoalYaw|ClearGunnerTarget|ClearLookAtEnt|ClearTargetYaw|ClearTurretTarget|ClearVehGoalPos|CreateTrack|DisableDriverFiring|DisableGunnerFiring|DrawTrajectory|DrivePath|FinishVehicleDamage|FinishVehicleRadiusDamage|FireWeapon|Flip180|FreeVehicle|GetAllVehicleNodes|GetAngularVelocity|GetAttachPos|GetBrake|GetDefaultAcceleration|getgoalspeedMPH|GetGoalYaw|GetGunnerTargetEnt|GetGunnerTargetVec|GetHandBrake|GetHeliHeightLock|GetHeliHeightLockHeight|GetMaxSpeed|GetNumVehicles|GetOccupantSeat|GetPathFixedOffset|GetPathVariableOffset|GetPhysAcceleration|GetScriptBrake|GetSeatFiringAngles|GetSeatFiringOrigin|GetSeatOccupant|GetSpeed|GetSpeedMPH|GetSteering|GetThrottle|GetTimeFromVehicleNodeToNode|GetTurretHeatValue|GetTurretLimitsYaw|GetTurretTargetVec|GetVehDamageMultiplier|GetVehicleAvoidance|GetVehicleAvoidanceNodes|GetVehicleNode|GetVehicleNodeArray|GetVehicleOwner|GetVehOccupants|GetWheelSurface|IsDriverFiring|IsGunnerFiring|IsInsideHeliHeightLock|isremotecontrol|IsTurretReady|IsVehicleImmuneToDamage|IsVehicleManualControl|IsVehicleSeatOccupied|IsVehicleTurretOverheating|IsVehicleUsable|JoltBody|MakeVehicleUnusable|MakeVehicleUsable|PathFixedOffset|PathFixedOffsetClear|PathMove|PathMoveClear|PathVariableOffset|PathVariableOffsetClear|RecalcSplinePaths|ReconnectVehicleNodes|ResetVehicleFromDropDeploy|ResumeSpeed|ReturnPlayerControl|SeatGetWeapon|SetAcceleration|SetAirResistance|SetAngularVelocity|SetBrake|SetBuoyancyOffset|SetDamageStage|SetDeceleration|SetDefaultPitch|SetDrivePathPhysicsScale|SetGoalYaw|SetGunnerTargetEnt|SetGunnerTargetVec|SetGunnerTurretOnTargetRange|SetHeliDogfighting|SetHeliHeightCap|SetHeliHeightLock|SetHeliHeightPatchEnabled|SetHoverParams|SetJitterParams|SetLookAtEnt|SetLookAtOrigin|SetMantleEnabled|SetMaxAccelerationScale|SetMaxPitchRoll|SetMaxSpeedScale|SetMinDesiredTurnYaw|SetNearGoalNotifyDist|SetPathTransitionTime|SetPhysAcceleration|SetPhysAngles|SetPlaneBarrelRoll|SetPlaneGoalPos|SetRotorSpeed|SetSeatOccupied|SetSpeed|SetSpeedImmediate|SetSwitchNode|SetTargetYaw|SetTurningAbility|SetTurretTargetEnt|SetTurretTargetRelativeAngles|SetTurretTargetVec|SetVehGoalPos|SetVehicleAvoidance|SetVehicleForDropDeploy|SetVehicleManualControl|SetVehicleType|SetVehMaxSpeed|SetVehVelocity|SetVehWeapon|SetYawSpeed|StartPath|StopFireWeapon|SwitchStartNode|TakePlayerControl|UseVehicle|VehDriverAimAtCrosshairs|EnumerateWeapons|Missile_CreateAttractorEnt|Missile_CreateAttractorOrigin|Missile_CreateRepulsorEnt|Missile_CreateRepulsorOrigin|Missile_DeleteAttractor)\\b"
+        },
+        "function-call": {
+            "patterns": [
+                { "include": "#namespace-call" },
+                { "include": "#inbuilt-function" },
+                { "include": "#other-function" }
+            ]
+        },
+        "line-continuation-character": {
+            "match": "\\\\\\n",
+            "name": "constant.character.escape.line-continuation.gsc"
+        },
+        "function": {	
+            "name": "meta.function.gsc",
+			"comment": "match regular function like: function myFunc(arg) { É }",
+			"begin": "\\b(function)(\\s[a-zA-Z_$]\\w*)?\\s+([a-zA-Z_$]\\w*)?\\s*(\\()",
+			"end": "(?!\\G)(?<=\\))",
+			"beginCaptures": {
+                "1": { "name": "storage.type.function.gsc" },
+                "2": {
+                    "patterns": [
+                        {
+                            "name": "storage.modifier.function.gsc",
+                            "match": "\\b(private|autoexec)\\b"
+                        }
+                    ]
+                },
+                "3": { "name": "entity.name.function.gsc" },
+                "4": { "name": "punctuation.definition.parameters.begin.gsc" }
+            },
+			"endCaptures": {
+				"1": { "name": "punctuation.definition.parameters.end.gsc" }
+			},
+			"patterns": [
+				{
+					"include": "#function-parameter-defaults"
+				},
+				{
+					"include": "#expression"
+				},
+				{
+					"include": "#function-vararg"
+				},
+				{
+					"name": "keyword.operator.parameter-comma.gsc",
+					"match": ","
+				}
+			]
+        },
+        "line-comment": 
+        {
+            "name": "comment.line.double-slash.gsc",
+            "begin": "//",
+            "end": "(?<=\\n)(?<!\\\\\\n)",
+            "patterns": [
+                { "include": "#line-continuation-character" }
+            ]
+        },
+        "class": {
+            "patterns": [
+                { "include": "#class-decl" },
+                { "include": "#class-structor" }
+            ]
+        },
+        "class-decl": {	
+            "name": "meta.class.gsc",
+			"comment": "match classes like: class Ham, class Cheddar : Cheese { É }",
+			"match": "\\b(class)\\s([a-zA-Z_$]\\w*)(\\s:\\s+([a-zA-Z_$]\\w*))?",
+			"captures": {
+                "1": { "name": "storage.type.class.gsc" },
+                "2": { "name": "entity.name.class.gsc" },
+                "4": { "name": "entity.other.inherited-class.gsc" }
+            }
+        },
+        "class-structor": {	
+            "name": "meta.class.structor.gsc",
+			"comment": "con/de structor()",
+			"match": "\\b(constructor|destructor)\\s*(\\()(.*?)(\\))",
+			"captures": {
+                "1": { "name": "storage.type.function.gsc" },
+                "2": { "name": "punctuation.definition.parameters.begin.gsc" },
+                "3": { 
+                    "name": "variable.parameter.function.gsc",
+                    "patterns": [
+                        {
+                            "include": "#function-parameter-defaults"
+                        },
+                        {
+                            "include": "#expression"
+                        },
+                        {
+                            "include": "#function-vararg"
+                        },
+                        {
+                            "name": "keyword.operator.parameter-comma.gsc",
+                            "match": ","
+                        }
+                    ]
+                },
+                "4": { "name": "punctuation.definition.parameters.end.gsc" }
+            }
+        },
+        "operator": {
+            "name": "keyword.operator.gsc",
+            "comment": "Reserved operators in GSC/CSC",
+            "match": "(\\|\\||\\&\\&|\\||\\&|\\^|\\=\\=|\\=\\=\\=|\\!\\=|\\!\\=\\=|\\<|\\>|\\<\\=|\\>\\=|\\<\\<|\\>\\>|\\+|\\-|\\*|\\%|\\!|\\~|\\=|\\-\\>|\\+\\+|\\-\\-|\\|\\=|\\^\\=|\\&\\=|\\<\\<\\=|\\>\\>\\=|\\+\\=|\\-\\=|\\*\\=|\\/\\=|\\%\\=)"
+        },
+        "doc-data-types": {
+            "name": "entity.name.type.documentation.gsc",
+            "comment": "GSC/CSC data types to show in documentation",
+            "match": "(void|bool|int|float|vec3|string|entity|struct|object|array)"
+        },
+        "doc-data-modifiers": {
+            "name": "storage.modifier.documentation.gsc",
+            "comment": "GSC/CSC modifiers to show in documentation",
+            "match": "(const|\\?|undefined)"
+        },
+        "doc-comment-descriptor": {
+            "name": "comment.block.documentation.descriptor.gsc",
+            "comment": "GSC/CSC function description",
+            "match": "\"(.*?): (.*)\"",
+            "captures": {
+                "1": { "name": "entity.name.tag.documentation.gsc" },
+                "2": {
+                    "patterns": [
+                        { "include": "#doc-comment-function-name" },
+                        { "include": "#doc-comment-argument" }
+                    ]
+                }
+            }
+        },
+        "doc-comment-function-name": {
+            "name": "comment.block.documentation.argument.gsc",
+            "comment": "GSC/CSC doc comment function declaration",
+            "match": ".*?(\\()(.*?)(\\))",
+            "captures": {
+                "1": { "name": "punctuation.definition.parameters.begin.documentation.gsc" },
+                "2": { 
+                    "patterns": [
+                        { "include": "#doc-comment-argument" }
+                    ]
+                },
+                "3": { "name": "punctuation.definition.parameters.end.documentation.gsc" }
+            }
+        },
+        "doc-comment-argument": {
+            "match": "(<|\\[)(.*?)(>|\\])",
+            "captures": {
+                "1": { "name": "punctuation.definition.tag.documentation.gsc" },
+                "2": { "name": "variable.parameter.documentation.gsc" },
+                "3": { "name": "punctuation.definition.tag.documentation.gsc" }
+            }
+        },
+        "doc-comment-gscode-directive": {
+            "match": "(gscode) (\\w*) (\\w*)?",
+            "captures": {
+                "1": { "name": "support.type.gscode-directive.gsc" },
+                "2": { "name": "support.function.gscode-directive.gsc" },
+                "3": {
+                    "patterns": [
+                        { "include": "#doc-comment-gscode-option" }
+                    ]
+                }
+            }
+        },
+        "doc-comment-gscode-option": {
+            "match": "types|nameInference",
+            "name": "support.variable.gscode-directive.gsc"
+        }
+    }
+}

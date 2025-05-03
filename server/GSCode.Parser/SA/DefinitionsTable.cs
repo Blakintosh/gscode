@@ -4,15 +4,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using GSCode.Parser.AST;
 
-namespace GSCode.Parser.SPA.Logic.Components;
+namespace GSCode.Parser.SA;
 
-#if PREVIEW
 public class DefinitionsTable
 {
     public string CurrentNamespace { get; set; }
 
-    internal List<Tuple<ScrFunction, ASTBranch>> LocalScopedFunctions { get; } = new();
+    internal List<Tuple<ScrFunction, FunDefnNode>> LocalScopedFunctions { get; } = new();
     public List<ScrFunction> ExportedFunctions { get; } = new();
     // TODO: Class definitions (not in this version)
 
@@ -23,9 +23,9 @@ public class DefinitionsTable
         CurrentNamespace = currentNamespace;
     }
 
-    internal void AddFunction(ScrFunction function, ASTBranch branch)
+    internal void AddFunction(ScrFunction function, FunDefnNode node)
     {
-        LocalScopedFunctions.Add(new Tuple<ScrFunction, ASTBranch>(function, branch));
+        LocalScopedFunctions.Add(new Tuple<ScrFunction, FunDefnNode>(function, node));
         ExportedFunctions.Add(function with { Namespace = CurrentNamespace });
     }
 
@@ -34,5 +34,3 @@ public class DefinitionsTable
         Dependencies.Add(new Uri(scriptPath));
     }
 }
-
-#endif

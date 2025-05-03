@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using GSCode.Parser.SA;
 
 namespace GSCode.Parser;
 
@@ -24,13 +25,15 @@ public class Script(DocumentUri ScriptUri)
 
     private Task? ParsingTask { get; set; } = null;
 
+    private ScriptNode? RootNode { get; set; } = null;
+
     public async Task ParseAsync(string documentText)
     {
         ParsingTask = DoParseAsync(documentText);
         await ParsingTask;
     }
 
-    public async Task DoParseAsync(string documentText)
+    public Task DoParseAsync(string documentText)
     {
         Token startToken;
         Token endToken;
@@ -44,7 +47,7 @@ public class Script(DocumentUri ScriptUri)
         {
             // Failed to parse the script
             Failed = true;
-            await Console.Error.WriteLineAsync($"Failed to tokenise script: {ex.Message}");
+            Console.Error.WriteLine($"Failed to tokenise script: {ex.Message}");
 
             // Create a dummy IntelliSense container so we can provide an error to the IDE.
             Sense = new(0, ScriptUri);
@@ -64,7 +67,7 @@ public class Script(DocumentUri ScriptUri)
         catch (Exception ex)
         {
             Failed = true;
-            await Console.Error.WriteLineAsync($"Failed to preprocess script: {ex.Message}");
+            Console.Error.WriteLine($"Failed to preprocess script: {ex.Message}");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledMacError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -75,20 +78,24 @@ public class Script(DocumentUri ScriptUri)
 
         // Build the AST.
         AST.Parser parser = new(startToken, sense);
-        ScriptNode rootNode;
 
         try
         {
-            rootNode = parser.Parse();
+            RootNode = parser.Parse();
         }
         catch (Exception ex)
         {
             Failed = true;
-            await Console.Error.WriteLineAsync($"Failed to AST-gen script: {ex.Message}");
+            Console.Error.WriteLine($"Failed to AST-gen script: {ex.Message}");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledAstError, ex.GetType().Name);
             return Task.CompletedTask;
         }
+
+        // Gather signatures for all functions and classes.
+        DefinitionsTable definitionsTable = new("sys");
+        SignatureAnalyser signatureAnalyser = new(RootNode, definitionsTable, Sense);
+        signatureAnalyser.Analyse();
 
         Parsed = true;
         return Task.CompletedTask;
@@ -111,8 +118,8 @@ public class Script(DocumentUri ScriptUri)
     public async Task PushSemanticTokensAsync(SemanticTokensBuilder builder, CancellationToken cancellationToken)
     {
         await WaitUntilParsedAsync(cancellationToken);
-        
-        foreach(ISemanticToken token in Sense.SemanticTokens)
+
+        foreach (ISemanticToken token in Sense.SemanticTokens)
         {
             builder.Push(token.Range, token.SemanticTokenType, token.SemanticTokenModifiers);
         }
@@ -139,7 +146,7 @@ public class Script(DocumentUri ScriptUri)
     private async Task WaitUntilParsedAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        
+
         if (ParsingTask is null)
         {
             throw new InvalidOperationException("The script has not been parsed yet.");

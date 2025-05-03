@@ -9,7 +9,7 @@ namespace GSCode.Parser.Data;
 
 public sealed class Trie<T>
 {
-    private readonly TrieNode<T> _root = new(string.Empty);
+    private readonly TrieNode<T> _root = new(default(T));
 
     sealed record class TrieNode<V>(V value)
     {

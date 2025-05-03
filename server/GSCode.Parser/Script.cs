@@ -12,6 +12,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using GSCode.Parser.SA;
+using System.IO;
 
 namespace GSCode.Parser;
 
@@ -26,6 +27,10 @@ public class Script(DocumentUri ScriptUri)
     private Task? ParsingTask { get; set; } = null;
 
     private ScriptNode? RootNode { get; set; } = null;
+
+    public DefinitionsTable? DefinitionsTable { get; private set; } = default;
+
+    public IEnumerable<Uri> Dependencies => DefinitionsTable?.Dependencies ?? [];
 
     public async Task ParseAsync(string documentText)
     {
@@ -93,9 +98,22 @@ public class Script(DocumentUri ScriptUri)
         }
 
         // Gather signatures for all functions and classes.
-        DefinitionsTable definitionsTable = new("sys");
-        SignatureAnalyser signatureAnalyser = new(RootNode, definitionsTable, Sense);
-        signatureAnalyser.Analyse();
+        string initialNamespace = Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+        DefinitionsTable = new(initialNamespace);
+
+        SignatureAnalyser signatureAnalyser = new(RootNode, DefinitionsTable, Sense);
+        try
+        {
+            signatureAnalyser.Analyse();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Console.Error.WriteLine($"Failed to signature analyse script: {ex.Message}");
+
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
 
         Parsed = true;
         return Task.CompletedTask;

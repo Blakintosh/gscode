@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GSCode.Parser.AST;
+using GSCode.Parser.Lexical;
 
 namespace GSCode.Parser.SA;
 
@@ -26,7 +27,12 @@ public class DefinitionsTable
     internal void AddFunction(ScrFunction function, FunDefnNode node)
     {
         LocalScopedFunctions.Add(new Tuple<ScrFunction, FunDefnNode>(function, node));
-        ExportedFunctions.Add(function with { Namespace = CurrentNamespace });
+
+        // Only add to exported functions if it's not private.
+        if (!function.IsPrivate)
+        {
+            ExportedFunctions.Add(function with { Namespace = CurrentNamespace });
+        }
     }
 
     public void AddDependency(string scriptPath)

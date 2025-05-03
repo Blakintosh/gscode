@@ -7,7 +7,7 @@ using System.Text;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
-namespace GSCode.NET.LSP; 
+namespace GSCode.NET.LSP;
 
 public class ScriptCache
 {
@@ -29,7 +29,7 @@ public class ScriptCache
         foreach (TextDocumentContentChangeEvent change in changes)
         {
             // If no range is specified then this is an outright replacement of the entire document.
-            if(change.Range == null)
+            if (change.Range == null)
             {
                 cachedVersion = new(change.Text);
                 continue;
@@ -44,7 +44,7 @@ public class ScriptCache
             int endLineBase = GetBaseCharOfLine(cachedString, end.Line);
             int endPosition = endLineBase + end.Character;
 
-            if(endLineBase == -1 || endPosition > cachedVersion.Length)
+            if (endLineBase == -1 || endPosition > cachedVersion.Length)
             {
                 cachedVersion.Remove(startPosition, cachedVersion.Length - startPosition);
                 cachedVersion.Append(change.Text);
@@ -104,11 +104,7 @@ public class ScriptManager
         string content = _cache.AddToCache(document);
         Script script = GetEditor(document);
 
-        await script.ParseAsync(content);
-
-        // await script.GetHoverAsync(new Position(13, 15), cancellationToken);
-
-        return await script.GetDiagnosticsAsync(cancellationToken);
+        return await ProcessEditorAsync(document.Uri.ToUri(), script, content, cancellationToken);
     }
 
     public async Task<IEnumerable<Diagnostic>> UpdateEditorAsync(OptionalVersionedTextDocumentIdentifier document, IEnumerable<TextDocumentContentChangeEvent> changes, CancellationToken cancellationToken = default)
@@ -116,7 +112,27 @@ public class ScriptManager
         string updatedContent = _cache.UpdateCache(document, changes);
         Script script = GetEditor(document);
 
-        await script.ParseAsync(updatedContent);
+        return await ProcessEditorAsync(document.Uri.ToUri(), script, updatedContent, cancellationToken);
+    }
+
+    private async Task<IEnumerable<Diagnostic>> ProcessEditorAsync(Uri documentUri, Script script, string content, CancellationToken cancellationToken = default)
+    {
+        await script.ParseAsync(content);
+
+        List<Task> dependencyTasks = new();
+
+        // Now, get their dependencies and parse them.
+        foreach (Uri dependency in script.Dependencies)
+        {
+            dependencyTasks.Add(AddDependencyAsync(documentUri, dependency));
+        }
+
+        await Task.WhenAll(dependencyTasks);
+
+        // Finally, analyse the script.
+        await script.AnalyseAsync();
+
+        // await script.GetHoverAsync(new Position(13, 15), cancellationToken);
 
         return await script.GetDiagnosticsAsync(cancellationToken);
     }
@@ -201,7 +217,7 @@ public class ScriptManager
             }
 
             // Housekeeping
-            if(dependents.Count == 0 && script.Value.Type == CachedScriptType.Dependency)
+            if (dependents.Count == 0 && script.Value.Type == CachedScriptType.Dependency)
             {
                 Scripts.Remove(script.Key, out _);
             }
@@ -232,7 +248,7 @@ public class ScriptManager
 
         CachedScript script = Scripts[uri];
 
-        if(script.Type != CachedScriptType.Editor)
+        if (script.Type != CachedScriptType.Editor)
         {
             script = Scripts[uri] = new CachedScript()
             {

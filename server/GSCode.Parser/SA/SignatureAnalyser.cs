@@ -1,4 +1,6 @@
 
+using System.Text;
+using GSCode.Data;
 using GSCode.Parser.AST;
 using GSCode.Parser.Data;
 using GSCode.Parser.DFA;
@@ -22,25 +24,43 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 case AstNodeType.FunctionDefinition:
                     AnalyseFunction((FunDefnNode)scriptDefn);
                     break;
+                case AstNodeType.Namespace:
+                    AnalyseNamespace((NamespaceNode)scriptDefn);
+                    break;
+                case AstNodeType.Dependency:
+                    AnalyseDependency((DependencyNode)scriptDefn);
+                    break;
             }
         }
+    }
+
+    public void AnalyseDependency(DependencyNode dependencyNode)
+    {
+        // Add the dependency to the list
+        DefinitionsTable.AddDependency(dependencyNode.Path);
+    }
+
+    public void AnalyseNamespace(NamespaceNode namespaceNode)
+    {
+        // Change the namespace at this point and onwards
+        DefinitionsTable.CurrentNamespace = namespaceNode.NamespaceIdentifier;
     }
 
     public void AnalyseFunction(FunDefnNode functionDefn)
     {
         // Get the name of the function - if it's unnamed then it's one that was produced in recovery. No use to us.
-        string? name = functionDefn.Name?.Lexeme;
-
-        if (name is null)
+        if (functionDefn.Name is not Token nameToken)
         {
             return;
         }
 
+        string name = nameToken.Lexeme;
+
         // Analyze the parameter list
         IEnumerable<ScrParameter> parameters = AnalyseFunctionParameters(functionDefn.Parameters);
 
-        // Produce a definition for our function
-        DefinitionsTable.AddFunction(new ScrFunction()
+
+        ScrFunction function = new()
         {
             Name = name,
             Description = null, // TODO: Check the DOC COMMENT
@@ -55,9 +75,15 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 Name = "unk",
                 Required = false
             }, // TODO: Check the DOC COMMENT
-            Tags = new() { "userdefined" },
+            Tags = ["userdefined"],
+            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
             IntelliSense = null // I have no idea why this exists
-        }, functionDefn);
+        };
+
+        // Produce a definition for our function
+        DefinitionsTable.AddFunction(function, functionDefn);
+
+        Sense.AddSenseToken(nameToken, new ScrFunctionSymbol(nameToken, function));
 
         if (parameters is not null)
         {
@@ -139,5 +165,58 @@ internal record ScrParameterSymbol(ScrParameter Source) : ISenseDefinition
                    parameterName)
             })
         };
+    }
+}
+
+internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseDefinition
+{
+    public bool IsFromPreprocessor { get; } = false;
+    public Range Range { get; } = NameToken.Range;
+
+    public string SemanticTokenType { get; } = "function";
+    public string[] SemanticTokenModifiers { get; } = [];
+
+    public Hover GetHover()
+    {
+        StringBuilder builder = new();
+
+        builder.AppendLine("```gsc");
+        builder.Append($"function {Source.Name}(");
+
+        bool first = true;
+        foreach (ScrFunctionArg parameter in Source.Args ?? [])
+        {
+            AppendParameter(builder, parameter, ref first);
+        }
+        builder.AppendLine(")");
+        builder.AppendLine("```");
+
+
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = builder.ToString()
+            })
+        };
+    }
+
+    private static void AppendParameter(StringBuilder builder, ScrFunctionArg parameter, ref bool first)
+    {
+        if (!first)
+        {
+            builder.Append(", ");
+        }
+        first = false;
+
+        if (string.IsNullOrEmpty(parameter.Type) || parameter.Type == "unknown")
+        {
+            builder.Append($"{parameter.Name}");
+            return;
+        }
+
+        builder.Append($"/@ {parameter.Type} @/ {parameter.Name}");
     }
 }

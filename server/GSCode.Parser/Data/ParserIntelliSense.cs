@@ -60,10 +60,10 @@ internal sealed class ParserIntelliSense
         {
             return;
         }
-        
+
         // Link the definition to the token so that we don't have duplicates later on.
         token.SenseDefinition = definition;
-        
+
         SemanticTokens.Add(definition);
         HoverLibrary.Add(definition);
     }
@@ -88,7 +88,7 @@ internal sealed class ParserIntelliSense
         string? resolvedPath = ParserUtil.GetScriptFilePath(_scriptPath, dependencyPath);
 
         // Sanity check the result
-        if(resolvedPath is null || !File.Exists(resolvedPath))
+        if (resolvedPath is null || !File.Exists(resolvedPath))
         {
             return null;
         }
@@ -109,21 +109,22 @@ internal sealed class ParserIntelliSense
     {
         Token? token = Tokens.Get(position);
 
-        if(token is null)
+        if (token is null)
         {
             return [];
         }
 
         // For the moment, we'll just support Identifier completions.
-        if(token.Type != TokenType.Identifier)
+        if (token.Type != TokenType.Identifier)
         {
             return [];
         }
 
         // Get the completions from the definition.
-        
 
-        return token.SenseDefinition?.GetCompletions();
+
+        // return token.SenseDefinition?.GetCompletions();
+        return [];
     }
 
     /* Others to support:

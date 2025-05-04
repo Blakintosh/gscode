@@ -1,0 +1,13 @@
+2024-06-25 00:01:34.549 +01:00 [DBG] Finding descriptors for shutdown
+2024-06-25 00:01:34.552 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-25 00:01:34.552 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-25 00:01:34.552 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-25 00:01:34.552 +01:00 [DBG] Queueing "Serial":shutdown:57 request for processing
+2024-06-25 00:01:34.552 +01:00 [DBG] Starting: Processing request shutdown 57
+2024-06-25 00:01:34.552 +01:00 [DBG] Starting: Routing Request (57) shutdown
+2024-06-25 00:01:34.557 +01:00 [DBG] Finished: Routing Request (57) shutdown in 4ms
+2024-06-25 00:01:34.557 +01:00 [DBG] Finished: Processing request shutdown 57 in 4ms
+2024-06-25 00:01:34.558 +01:00 [DBG] Finding descriptors for exit
+2024-06-25 00:01:34.558 +01:00 [DBG] Queueing "Serial":exit request for processing
+2024-06-25 00:01:34.558 +01:00 [DBG] Starting: Processing notification exit
+2024-06-25 00:01:34.558 +01:00 [DBG] Starting: Routing Notification exit

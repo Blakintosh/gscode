@@ -30,8 +30,113 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 case AstNodeType.Dependency:
                     AnalyseDependency((DependencyNode)scriptDefn);
                     break;
+                case AstNodeType.ClassDefinition:
+                    AnalyseClass((ClassDefnNode)scriptDefn);
+                    break;
             }
         }
+    }
+
+    public void AnalyseClass(ClassDefnNode classDefn)
+    {
+        // Get the name of the class - if it's unnamed then it's one that was produced in recovery. No use to us.
+        if (classDefn.NameToken is not Token nameToken)
+        {
+            return;
+        }
+
+        string name = nameToken.Lexeme;
+
+        // Create a class definition
+        ScrClass scrClass = new()
+        {
+            Name = name,
+            Description = null, // TODO: Check the DOC COMMENT
+            InheritsFrom = classDefn.InheritsFromToken?.Lexeme,
+        };
+
+        foreach (AstNode child in classDefn.Body.Definitions)
+        {
+            switch (child.NodeType)
+            {
+                case AstNodeType.FunctionDefinition:
+                    AnalyseClassFunction(scrClass, (FunDefnNode)child);
+                    break;
+                case AstNodeType.ClassMember:
+                    AnalyseClassMember(scrClass, (MemberDeclNode)child);
+                    break;
+            }
+        }
+
+        // DefinitionsTable.AddClass(scrClass, classDefn);
+        Sense.AddSenseToken(nameToken, new ScrClassSymbol(nameToken, scrClass));
+    }
+
+    private void AnalyseClassFunction(ScrClass scrClass, FunDefnNode functionDefn)
+    {
+        // Get the name of the function - if it's unnamed then it's one that was produced in recovery. No use to us.
+        if (functionDefn.Name is not Token nameToken)
+        {
+            return;
+        }
+
+        string name = nameToken.Lexeme;
+
+        // Analyze the parameter list
+        IEnumerable<ScrParameter> parameters = AnalyseFunctionParameters(functionDefn.Parameters);
+
+        // TODO: Probably needs to be a ScrMethod instead.
+        ScrFunction function = new()
+        {
+            Name = name,
+            Description = null, // TODO: Check the DOC COMMENT
+            Args = GetParametersAsRecord(parameters),
+            CalledOn = new ScrFunctionArg()
+            {
+                Name = "unk",
+                Required = false
+            }, // TODO: Check the DOC COMMENT
+            Returns = new ScrFunctionArg()
+            {
+                Name = "unk",
+                Required = false
+            }, // TODO: Check the DOC COMMENT
+            Tags = ["userdefined"],
+            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
+            IntelliSense = null // I have no idea why this exists
+        };
+
+        // Produce a definition for our function
+        scrClass.Methods.Add(function);
+
+        // TODO: may need this to be different for class methods, not sure yet.
+        Sense.AddSenseToken(nameToken, new ScrMethodSymbol(nameToken, function, scrClass));
+
+        if (parameters is not null)
+        {
+            foreach (ScrParameter parameter in parameters)
+            {
+                Sense.AddSenseToken(parameter.Source, new ScrParameterSymbol(parameter));
+            }
+        }
+    }
+
+    private void AnalyseClassMember(ScrClass scrClass, MemberDeclNode memberDecl)
+    {
+        // Get the name of the member - if it's unnamed then it's one that was produced in recovery. No use to us.
+        if (memberDecl.NameToken is not Token nameToken)
+        {
+            return;
+        }
+
+        ScrMember member = new()
+        {
+            Name = memberDecl.NameToken?.Lexeme ?? "",
+            Description = null // TODO: Check the DOC COMMENT
+        };
+
+        scrClass.Members.Add(member);
+        Sense.AddSenseToken(nameToken, new ScrClassMemberSymbol(nameToken, member, scrClass));
     }
 
     public void AnalyseDependency(DependencyNode dependencyNode)
@@ -176,7 +281,7 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
     public string SemanticTokenType { get; } = "function";
     public string[] SemanticTokenModifiers { get; } = [];
 
-    public Hover GetHover()
+    public virtual Hover GetHover()
     {
         StringBuilder builder = new();
 
@@ -203,7 +308,7 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
         };
     }
 
-    private static void AppendParameter(StringBuilder builder, ScrFunctionArg parameter, ref bool first)
+    protected static void AppendParameter(StringBuilder builder, ScrFunctionArg parameter, ref bool first)
     {
         if (!first)
         {
@@ -218,5 +323,86 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
         }
 
         builder.Append($"/@ {parameter.Type} @/ {parameter.Name}");
+    }
+}
+
+internal record ScrClassSymbol(Token NameToken, ScrClass Source) : ISenseDefinition
+{
+    public bool IsFromPreprocessor { get; } = false;
+    public Range Range { get; } = NameToken.Range;
+
+    public string SemanticTokenType { get; } = "class";
+    public string[] SemanticTokenModifiers { get; } = [];
+
+    public Hover GetHover()
+    {
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = "```gsc\nclass " + Source.Name + "\n```"
+            })
+        };
+    }
+}
+
+
+internal record ScrClassMemberSymbol(Token NameToken, ScrMember Source, ScrClass ClassSource) : ISenseDefinition
+{
+    public bool IsFromPreprocessor { get; } = false;
+    public Range Range { get; } = NameToken.Range;
+
+    public string SemanticTokenType { get; } = "property";
+    public string[] SemanticTokenModifiers { get; } = [];
+
+    public Hover GetHover()
+    {
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = $"```gsc\n{ClassSource.Name}.{Source.Name}\n```"
+            })
+        };
+    }
+}
+
+internal record ScrMethodSymbol(Token NameToken, ScrFunction Source, ScrClass ClassSource) : ScrFunctionSymbol(NameToken, Source)
+{
+    public bool IsFromPreprocessor { get; } = false;
+    public Range Range { get; } = NameToken.Range;
+
+    public string SemanticTokenType { get; } = "method";
+    public string[] SemanticTokenModifiers { get; } = [];
+
+    public override Hover GetHover()
+    {
+        StringBuilder builder = new();
+
+        builder.AppendLine("```gsc");
+        builder.Append($"{ClassSource.Name}::{Source.Name}(");
+
+        bool first = true;
+        foreach (ScrFunctionArg parameter in Source.Args ?? [])
+        {
+            AppendParameter(builder, parameter, ref first);
+        }
+        builder.AppendLine(")");
+        builder.AppendLine("```");
+
+
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = builder.ToString()
+            })
+        };
     }
 }

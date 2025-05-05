@@ -1,0 +1,1402 @@
+2024-06-24 22:51:55.340 +01:00 [INF] GSCode Language Server
+2024-06-24 22:51:55.724 +01:00 [DBG] Finding descriptors for initialize
+2024-06-24 22:51:55.842 +01:00 [DBG] Queueing "Serial":initialize:0 request for processing
+2024-06-24 22:51:55.855 +01:00 [DBG] Starting: Processing request initialize 0
+2024-06-24 22:51:55.859 +01:00 [DBG] Starting: Routing Request (0) initialize
+2024-06-24 22:51:56.077 +01:00 [DBG] Finished: Routing Request (0) initialize in 217ms
+2024-06-24 22:51:56.078 +01:00 [DBG] Finished: Processing request initialize 0 in 221ms
+2024-06-24 22:51:56.104 +01:00 [DBG] Finding descriptors for initialized
+2024-06-24 22:51:56.105 +01:00 [DBG] Queueing "Serial":initialized request for processing
+2024-06-24 22:51:56.108 +01:00 [DBG] Starting: Processing notification initialized
+2024-06-24 22:51:56.109 +01:00 [DBG] Starting: Routing Notification initialized
+2024-06-24 22:51:56.133 +01:00 [WRN] No ConfigurationItems have been defined, configuration won't surface any configuration from the client!
+2024-06-24 22:51:56.135 +01:00 [INF] Language server connected successfully!
+2024-06-24 22:51:56.149 +01:00 [DBG] Finished: Routing Notification initialized in 39ms
+2024-06-24 22:51:56.149 +01:00 [DBG] Finished: Processing notification initialized in 40ms
+2024-06-24 22:51:56.149 +01:00 [DBG] Finding descriptors for workspace/didChangeConfiguration
+2024-06-24 22:51:56.150 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:51:56.150 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:51:56.152 +01:00 [DBG] Queueing "Parallel":workspace/didChangeConfiguration request for processing
+2024-06-24 22:51:56.152 +01:00 [DBG] Starting: Processing notification workspace/didChangeConfiguration
+2024-06-24 22:51:56.152 +01:00 [DBG] Starting: Routing Notification workspace/didChangeConfiguration
+2024-06-24 22:51:56.161 +01:00 [DBG] Finished: Routing Notification workspace/didChangeConfiguration in 8ms
+2024-06-24 22:51:56.161 +01:00 [DBG] Finished: Processing notification workspace/didChangeConfiguration in 9ms
+2024-06-24 22:51:56.167 +01:00 [DBG] Finding descriptors for textDocument/didOpen
+2024-06-24 22:51:56.174 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:51:56.174 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:51:56.174 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:51:56.174 +01:00 [DBG] Queueing "Serial":textDocument/didOpen request for processing
+2024-06-24 22:51:56.175 +01:00 [DBG] Starting: Processing notification textDocument/didOpen
+2024-06-24 22:51:56.175 +01:00 [DBG] Starting: Routing Notification textDocument/didOpen
+2024-06-24 22:51:56.178 +01:00 [INF] Document opened
+2024-06-24 22:51:56.185 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:51:56.211 +01:00 [INF] Tokenized in 25.1892ms.
+2024-06-24 22:51:56.260 +01:00 [INF] Parsed in 45.5331ms.
+2024-06-24 22:51:56.272 +01:00 [DBG] Finished: Routing Notification textDocument/didOpen in 97ms
+2024-06-24 22:51:56.273 +01:00 [DBG] Finished: Processing notification textDocument/didOpen in 98ms
+2024-06-24 22:51:56.653 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/range
+2024-06-24 22:51:56.660 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:51:56.660 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:51:56.660 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/range:1 request for processing
+2024-06-24 22:51:56.660 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/range 1
+2024-06-24 22:51:56.660 +01:00 [DBG] Starting: Routing Request (1) textDocument/semanticTokens/range
+2024-06-24 22:51:56.663 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:51:56.679 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:51:56.681 +01:00 [DBG] Finished: Routing Request (1) textDocument/semanticTokens/range in 20ms
+2024-06-24 22:51:56.681 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/range 1 in 20ms
+2024-06-24 22:51:58.154 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full
+2024-06-24 22:51:58.156 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full:2 request for processing
+2024-06-24 22:51:58.157 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full 2
+2024-06-24 22:51:58.157 +01:00 [DBG] Starting: Routing Request (2) textDocument/semanticTokens/full
+2024-06-24 22:51:58.159 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:51:58.159 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:51:58.159 +01:00 [DBG] Finished: Routing Request (2) textDocument/semanticTokens/full in 2ms
+2024-06-24 22:51:58.159 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full 2 in 2ms
+2024-06-24 22:51:58.278 +01:00 [DBG] Finding descriptors for textDocument/hover
+2024-06-24 22:51:58.280 +01:00 [DBG] Queueing "Parallel":textDocument/hover:3 request for processing
+2024-06-24 22:51:58.280 +01:00 [DBG] Starting: Processing request textDocument/hover 3
+2024-06-24 22:51:58.280 +01:00 [DBG] Starting: Routing Request (3) textDocument/hover
+2024-06-24 22:51:58.282 +01:00 [INF] Hover request received, processing...
+2024-06-24 22:51:58.283 +01:00 [INF] Hover request processed. Hover being sent: null
+2024-06-24 22:51:58.283 +01:00 [DBG] Finished: Routing Request (3) textDocument/hover in 2ms
+2024-06-24 22:51:58.283 +01:00 [DBG] Finished: Processing request textDocument/hover 3 in 2ms
+2024-06-24 22:52:07.000 +01:00 [DBG] Finding descriptors for textDocument/hover
+2024-06-24 22:52:07.001 +01:00 [DBG] Queueing "Parallel":textDocument/hover:4 request for processing
+2024-06-24 22:52:07.001 +01:00 [DBG] Starting: Processing request textDocument/hover 4
+2024-06-24 22:52:07.001 +01:00 [DBG] Starting: Routing Request (4) textDocument/hover
+2024-06-24 22:52:07.004 +01:00 [INF] Hover request received, processing...
+2024-06-24 22:52:07.004 +01:00 [INF] Hover request processed. Hover being sent: null
+2024-06-24 22:52:07.004 +01:00 [DBG] Finished: Routing Request (4) textDocument/hover in 2ms
+2024-06-24 22:52:07.004 +01:00 [DBG] Finished: Processing request textDocument/hover 4 in 2ms
+2024-06-24 22:52:15.068 +01:00 [DBG] Finding descriptors for textDocument/hover
+2024-06-24 22:52:15.068 +01:00 [DBG] Queueing "Parallel":textDocument/hover:5 request for processing
+2024-06-24 22:52:15.068 +01:00 [DBG] Starting: Processing request textDocument/hover 5
+2024-06-24 22:52:15.068 +01:00 [DBG] Starting: Routing Request (5) textDocument/hover
+2024-06-24 22:52:15.068 +01:00 [INF] Hover request received, processing...
+2024-06-24 22:52:15.069 +01:00 [INF] Hover request processed. Hover being sent: null
+2024-06-24 22:52:15.069 +01:00 [DBG] Finished: Routing Request (5) textDocument/hover in 0ms
+2024-06-24 22:52:15.069 +01:00 [DBG] Finished: Processing request textDocument/hover 5 in 0ms
+2024-06-24 22:52:24.568 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:24.572 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:24.572 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:24.572 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:24.572 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:24.572 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:24.572 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:24.574 +01:00 [INF] Document changed
+2024-06-24 22:52:24.575 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:24.576 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:24.585 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:24.585 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:24.585 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:6 request for processing
+2024-06-24 22:52:24.589 +01:00 [INF] Tokenized in 13.9275ms.
+2024-06-24 22:52:24.607 +01:00 [INF] Parsed in 17.645ms.
+2024-06-24 22:52:24.608 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:24.608 +01:00 [INF] diag.
+2024-06-24 22:52:24.608 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 35ms
+2024-06-24 22:52:24.608 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 35ms
+2024-06-24 22:52:24.608 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 6
+2024-06-24 22:52:24.609 +01:00 [DBG] Starting: Routing Request (6) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:24.610 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:24.610 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:24.611 +01:00 [DBG] Finished: Routing Request (6) textDocument/semanticTokens/full/delta in 2ms
+2024-06-24 22:52:24.611 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 6 in 2ms
+2024-06-24 22:52:24.955 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:24.956 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:24.956 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:24.956 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:24.956 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:24.956 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:24.956 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:24.958 +01:00 [INF] Document changed
+2024-06-24 22:52:24.958 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:24.958 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:24.959 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:24.959 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:24.959 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:7 request for processing
+2024-06-24 22:52:24.960 +01:00 [INF] Tokenized in 1.7655ms.
+2024-06-24 22:52:24.968 +01:00 [WRN] Error added: range [start: (35, 0), end: (35, 3)] code "TokenNotValidInContext"
+2024-06-24 22:52:24.969 +01:00 [INF] Parsed in 8.5049ms.
+2024-06-24 22:52:24.969 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:24.969 +01:00 [INF] diag.
+2024-06-24 22:52:24.969 +01:00 [INF] diag.
+2024-06-24 22:52:24.969 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:24.969 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 13ms
+2024-06-24 22:52:24.969 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 7
+2024-06-24 22:52:24.969 +01:00 [DBG] Starting: Routing Request (7) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:24.971 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:24.972 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:24.972 +01:00 [DBG] Finished: Routing Request (7) textDocument/semanticTokens/full/delta in 2ms
+2024-06-24 22:52:24.972 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 7 in 2ms
+2024-06-24 22:52:25.332 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:25.333 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:25.333 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:25.333 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:25.333 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:25.333 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:25.333 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:25.334 +01:00 [INF] Document changed
+2024-06-24 22:52:25.334 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:25.334 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:25.334 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:25.334 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:25.334 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:8 request for processing
+2024-06-24 22:52:25.335 +01:00 [INF] Tokenized in 1.4917ms.
+2024-06-24 22:52:25.351 +01:00 [WRN] Error added: range [start: (35, 0), end: (35, 7)] code "TokenNotValidInContext"
+2024-06-24 22:52:25.352 +01:00 [INF] Parsed in 16.3607ms.
+2024-06-24 22:52:25.352 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:25.352 +01:00 [INF] diag.
+2024-06-24 22:52:25.352 +01:00 [INF] diag.
+2024-06-24 22:52:25.352 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 18ms
+2024-06-24 22:52:25.352 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 18ms
+2024-06-24 22:52:25.352 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 8
+2024-06-24 22:52:25.352 +01:00 [DBG] Starting: Routing Request (8) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:25.353 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:25.353 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:25.353 +01:00 [DBG] Finished: Routing Request (8) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:25.353 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 8 in 0ms
+2024-06-24 22:52:25.596 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:25.597 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:25.597 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:25.597 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:25.597 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:25.597 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:25.597 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:25.597 +01:00 [INF] Document changed
+2024-06-24 22:52:25.597 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:25.599 +01:00 [INF] Tokenized in 1.4645ms.
+2024-06-24 22:52:25.603 +01:00 [WRN] Error added: range [start: (35, 0), end: (35, 8)] code "TokenNotValidInContext"
+2024-06-24 22:52:25.611 +01:00 [INF] Parsed in 11.944ms.
+2024-06-24 22:52:25.611 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:25.611 +01:00 [INF] diag.
+2024-06-24 22:52:25.611 +01:00 [INF] diag.
+2024-06-24 22:52:25.611 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 14ms
+2024-06-24 22:52:25.611 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 14ms
+2024-06-24 22:52:25.689 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:25.690 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:25.690 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:25.690 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:25.690 +01:00 [INF] Document changed
+2024-06-24 22:52:25.690 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:25.690 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:25.691 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:25.691 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:25.691 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:9 request for processing
+2024-06-24 22:52:25.692 +01:00 [INF] Tokenized in 1.5556ms.
+2024-06-24 22:52:25.697 +01:00 [WRN] Error added: range [start: (35, 0), end: (35, 9)] code "TokenNotValidInContext"
+2024-06-24 22:52:25.698 +01:00 [INF] Parsed in 5.7386ms.
+2024-06-24 22:52:25.698 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:25.698 +01:00 [INF] diag.
+2024-06-24 22:52:25.698 +01:00 [INF] diag.
+2024-06-24 22:52:25.698 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 8ms
+2024-06-24 22:52:25.698 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 8ms
+2024-06-24 22:52:25.698 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 9
+2024-06-24 22:52:25.698 +01:00 [DBG] Starting: Routing Request (9) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:25.699 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:25.699 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:25.699 +01:00 [DBG] Finished: Routing Request (9) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:25.699 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 9 in 0ms
+2024-06-24 22:52:26.115 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:26.116 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:26.116 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:26.116 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:26.116 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:26.116 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:26.116 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:26.116 +01:00 [INF] Document changed
+2024-06-24 22:52:26.116 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:26.116 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:26.122 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:26.122 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:26.122 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:10 request for processing
+2024-06-24 22:52:26.123 +01:00 [INF] Tokenized in 6.8375ms.
+2024-06-24 22:52:26.127 +01:00 [WRN] Error added: range [start: (35, 0), end: (35, 13)] code "TokenNotValidInContext"
+2024-06-24 22:52:26.128 +01:00 [INF] Parsed in 4.9564ms.
+2024-06-24 22:52:26.128 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:26.128 +01:00 [INF] diag.
+2024-06-24 22:52:26.128 +01:00 [INF] diag.
+2024-06-24 22:52:26.129 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:26.129 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:26.129 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 10
+2024-06-24 22:52:26.129 +01:00 [DBG] Starting: Routing Request (10) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:26.129 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:26.129 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:26.129 +01:00 [DBG] Finished: Routing Request (10) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:26.129 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 10 in 0ms
+2024-06-24 22:52:26.465 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:26.465 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:26.465 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:26.465 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:26.465 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:26.465 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:26.465 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:26.466 +01:00 [INF] Document changed
+2024-06-24 22:52:26.466 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:26.466 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:26.466 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:26.466 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:26.466 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:11 request for processing
+2024-06-24 22:52:26.467 +01:00 [INF] Tokenized in 1.4981ms.
+2024-06-24 22:52:26.476 +01:00 [INF] Parsed in 9.022ms.
+2024-06-24 22:52:26.476 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:26.476 +01:00 [INF] diag.
+2024-06-24 22:52:26.476 +01:00 [INF] diag.
+2024-06-24 22:52:26.477 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 11ms
+2024-06-24 22:52:26.477 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 11ms
+2024-06-24 22:52:26.477 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 11
+2024-06-24 22:52:26.477 +01:00 [DBG] Starting: Routing Request (11) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:26.477 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:26.477 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:26.477 +01:00 [DBG] Finished: Routing Request (11) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:26.477 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 11 in 0ms
+2024-06-24 22:52:26.713 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:26.713 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:26.713 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:26.713 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:26.713 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:26.714 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:26.714 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:26.714 +01:00 [INF] Document changed
+2024-06-24 22:52:26.714 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:26.716 +01:00 [INF] Tokenized in 1.5241ms.
+2024-06-24 22:52:26.726 +01:00 [INF] Parsed in 10.2824ms.
+2024-06-24 22:52:26.726 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:26.726 +01:00 [INF] diag.
+2024-06-24 22:52:26.726 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:26.726 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:26.818 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:26.818 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:26.818 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:26.818 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:12 request for processing
+2024-06-24 22:52:26.818 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 12
+2024-06-24 22:52:26.818 +01:00 [DBG] Starting: Routing Request (12) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:26.819 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:26.819 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:26.819 +01:00 [DBG] Finished: Routing Request (12) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:26.819 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 12 in 0ms
+2024-06-24 22:52:27.210 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:27.210 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:27.210 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:27.211 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:27.211 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:27.211 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:27.211 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:27.211 +01:00 [INF] Document changed
+2024-06-24 22:52:27.211 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:27.211 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:27.211 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:27.211 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:27.211 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:13 request for processing
+2024-06-24 22:52:27.213 +01:00 [INF] Tokenized in 1.473ms.
+2024-06-24 22:52:27.223 +01:00 [INF] Parsed in 10.5825ms.
+2024-06-24 22:52:27.223 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:27.223 +01:00 [INF] diag.
+2024-06-24 22:52:27.224 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:27.224 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:27.224 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 13
+2024-06-24 22:52:27.224 +01:00 [DBG] Starting: Routing Request (13) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:27.224 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:27.224 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:27.224 +01:00 [DBG] Finished: Routing Request (13) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:27.224 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 13 in 0ms
+2024-06-24 22:52:27.632 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:27.633 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:27.633 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:27.633 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:27.633 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:27.633 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:27.633 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:27.633 +01:00 [INF] Document changed
+2024-06-24 22:52:27.634 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:27.634 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:27.634 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:27.634 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:27.634 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:14 request for processing
+2024-06-24 22:52:27.635 +01:00 [INF] Tokenized in 1.4875ms.
+2024-06-24 22:52:27.640 +01:00 [INF] Parsed in 5.2366ms.
+2024-06-24 22:52:27.640 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:27.640 +01:00 [INF] diag.
+2024-06-24 22:52:27.641 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 7ms
+2024-06-24 22:52:27.641 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 7ms
+2024-06-24 22:52:27.641 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 14
+2024-06-24 22:52:27.641 +01:00 [DBG] Starting: Routing Request (14) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:27.641 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:27.641 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:27.641 +01:00 [DBG] Finished: Routing Request (14) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:27.641 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 14 in 0ms
+2024-06-24 22:52:28.249 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:28.250 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:28.250 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:28.250 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:28.250 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:28.250 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:28.250 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:28.250 +01:00 [INF] Document changed
+2024-06-24 22:52:28.250 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:28.250 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:28.251 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:28.251 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:28.251 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:15 request for processing
+2024-06-24 22:52:28.257 +01:00 [INF] Tokenized in 6.8983ms.
+2024-06-24 22:52:28.262 +01:00 [INF] Parsed in 4.5869ms.
+2024-06-24 22:52:28.262 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:28.262 +01:00 [INF] diag.
+2024-06-24 22:52:28.262 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:28.262 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:28.263 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 15
+2024-06-24 22:52:28.263 +01:00 [DBG] Starting: Routing Request (15) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:28.263 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:28.263 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:28.263 +01:00 [DBG] Finished: Routing Request (15) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:28.263 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 15 in 0ms
+2024-06-24 22:52:28.624 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:28.625 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:28.625 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:28.625 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:28.625 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:28.625 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:28.625 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:28.625 +01:00 [INF] Document changed
+2024-06-24 22:52:28.625 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:28.625 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:28.626 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:28.626 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:28.626 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:16 request for processing
+2024-06-24 22:52:28.627 +01:00 [INF] Tokenized in 1.4853ms.
+2024-06-24 22:52:28.641 +01:00 [INF] Parsed in 14.5972ms.
+2024-06-24 22:52:28.641 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:28.642 +01:00 [INF] diag.
+2024-06-24 22:52:28.642 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 16ms
+2024-06-24 22:52:28.642 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 16ms
+2024-06-24 22:52:28.642 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 16
+2024-06-24 22:52:28.642 +01:00 [DBG] Starting: Routing Request (16) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:28.642 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:28.642 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:28.642 +01:00 [DBG] Finished: Routing Request (16) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:28.642 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 16 in 0ms
+2024-06-24 22:52:29.156 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:29.157 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:29.157 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:29.157 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:29.157 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:29.157 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:29.157 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:29.157 +01:00 [INF] Document changed
+2024-06-24 22:52:29.157 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:29.157 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:29.158 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:29.158 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:29.158 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:17 request for processing
+2024-06-24 22:52:29.159 +01:00 [INF] Tokenized in 1.4837ms.
+2024-06-24 22:52:29.169 +01:00 [INF] Parsed in 9.9401ms.
+2024-06-24 22:52:29.169 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:29.169 +01:00 [INF] diag.
+2024-06-24 22:52:29.169 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:29.169 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:29.169 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 17
+2024-06-24 22:52:29.169 +01:00 [DBG] Starting: Routing Request (17) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:29.169 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:29.170 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:29.170 +01:00 [DBG] Finished: Routing Request (17) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:29.170 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 17 in 0ms
+2024-06-24 22:52:29.511 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:29.511 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:29.511 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:29.511 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:29.512 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:29.512 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:29.512 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:29.512 +01:00 [INF] Document changed
+2024-06-24 22:52:29.512 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:29.512 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:29.512 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:29.512 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:29.512 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:18 request for processing
+2024-06-24 22:52:29.514 +01:00 [INF] Tokenized in 1.5209ms.
+2024-06-24 22:52:29.524 +01:00 [INF] Parsed in 10.8008ms.
+2024-06-24 22:52:29.525 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:29.525 +01:00 [INF] diag.
+2024-06-24 22:52:29.525 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 13ms
+2024-06-24 22:52:29.525 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 13ms
+2024-06-24 22:52:29.525 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 18
+2024-06-24 22:52:29.525 +01:00 [DBG] Starting: Routing Request (18) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:29.525 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:29.526 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:29.526 +01:00 [DBG] Finished: Routing Request (18) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:29.526 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 18 in 0ms
+2024-06-24 22:52:29.902 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:29.903 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:29.903 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:29.903 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:29.903 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:29.903 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:29.903 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:29.903 +01:00 [INF] Document changed
+2024-06-24 22:52:29.903 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:29.903 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:29.903 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:29.903 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:29.904 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:19 request for processing
+2024-06-24 22:52:29.905 +01:00 [INF] Tokenized in 1.513ms.
+2024-06-24 22:52:29.909 +01:00 [INF] Parsed in 4.5901ms.
+2024-06-24 22:52:29.909 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:29.909 +01:00 [INF] diag.
+2024-06-24 22:52:29.910 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:29.910 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:29.910 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 19
+2024-06-24 22:52:29.910 +01:00 [DBG] Starting: Routing Request (19) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:29.910 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:29.910 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:29.910 +01:00 [DBG] Finished: Routing Request (19) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:29.910 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 19 in 0ms
+2024-06-24 22:52:30.275 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:30.275 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:30.275 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:30.275 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:30.275 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:30.275 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:30.275 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:30.276 +01:00 [INF] Document changed
+2024-06-24 22:52:30.276 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:30.283 +01:00 [INF] Tokenized in 6.6647ms.
+2024-06-24 22:52:30.287 +01:00 [INF] Parsed in 4.5255ms.
+2024-06-24 22:52:30.287 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:30.287 +01:00 [INF] diag.
+2024-06-24 22:52:30.288 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:30.288 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:30.306 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:30.306 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:30.306 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:30.306 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:20 request for processing
+2024-06-24 22:52:30.306 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 20
+2024-06-24 22:52:30.306 +01:00 [DBG] Starting: Routing Request (20) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:30.307 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:30.307 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:30.307 +01:00 [DBG] Finished: Routing Request (20) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:30.307 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 20 in 0ms
+2024-06-24 22:52:30.979 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:30.980 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:30.980 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:30.980 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:30.980 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:30.980 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:30.980 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:30.980 +01:00 [INF] Document changed
+2024-06-24 22:52:30.980 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:30.980 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:30.980 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:30.980 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:30.980 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:21 request for processing
+2024-06-24 22:52:30.982 +01:00 [INF] Tokenized in 1.4705ms.
+2024-06-24 22:52:30.991 +01:00 [INF] Parsed in 9.0124ms.
+2024-06-24 22:52:30.991 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:30.991 +01:00 [INF] diag.
+2024-06-24 22:52:30.991 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 11ms
+2024-06-24 22:52:30.991 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 11ms
+2024-06-24 22:52:30.991 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 21
+2024-06-24 22:52:30.991 +01:00 [DBG] Starting: Routing Request (21) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:30.991 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:30.991 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:30.991 +01:00 [DBG] Finished: Routing Request (21) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:30.992 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 21 in 0ms
+2024-06-24 22:52:31.226 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:31.226 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:31.226 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:31.226 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:31.226 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:31.226 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:31.226 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:31.226 +01:00 [INF] Document changed
+2024-06-24 22:52:31.226 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:31.228 +01:00 [INF] Tokenized in 1.4736ms.
+2024-06-24 22:52:31.238 +01:00 [INF] Parsed in 10.2306ms.
+2024-06-24 22:52:31.238 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:31.238 +01:00 [INF] diag.
+2024-06-24 22:52:31.239 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:31.239 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:31.318 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:31.318 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:31.319 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:31.319 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:22 request for processing
+2024-06-24 22:52:31.319 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 22
+2024-06-24 22:52:31.319 +01:00 [DBG] Starting: Routing Request (22) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:31.319 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:31.319 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:31.319 +01:00 [DBG] Finished: Routing Request (22) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:31.319 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 22 in 0ms
+2024-06-24 22:52:31.705 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:31.705 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:31.705 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:31.705 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:31.705 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:31.705 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:31.705 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:31.706 +01:00 [INF] Document changed
+2024-06-24 22:52:31.706 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:31.707 +01:00 [INF] Tokenized in 1.448ms.
+2024-06-24 22:52:31.717 +01:00 [INF] Parsed in 10.259ms.
+2024-06-24 22:52:31.717 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:31.718 +01:00 [INF] diag.
+2024-06-24 22:52:31.718 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:31.718 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:31.798 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:31.798 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:31.798 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:31.798 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:23 request for processing
+2024-06-24 22:52:31.798 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 23
+2024-06-24 22:52:31.798 +01:00 [DBG] Starting: Routing Request (23) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:31.799 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:31.799 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:31.799 +01:00 [DBG] Finished: Routing Request (23) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:31.799 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 23 in 0ms
+2024-06-24 22:52:32.179 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:32.179 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:32.179 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:32.180 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:32.180 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:32.180 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:32.180 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:32.180 +01:00 [INF] Document changed
+2024-06-24 22:52:32.180 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:32.180 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:32.180 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:32.180 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:32.180 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:24 request for processing
+2024-06-24 22:52:32.182 +01:00 [INF] Tokenized in 1.5532ms.
+2024-06-24 22:52:32.186 +01:00 [INF] Parsed in 4.7382ms.
+2024-06-24 22:52:32.186 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:32.187 +01:00 [INF] diag.
+2024-06-24 22:52:32.187 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:32.187 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 7ms
+2024-06-24 22:52:32.187 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 24
+2024-06-24 22:52:32.187 +01:00 [DBG] Starting: Routing Request (24) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:32.187 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:32.187 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:32.187 +01:00 [DBG] Finished: Routing Request (24) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:32.187 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 24 in 0ms
+2024-06-24 22:52:32.616 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:32.616 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:32.616 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:32.616 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:32.616 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:32.616 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:32.616 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:32.616 +01:00 [INF] Document changed
+2024-06-24 22:52:32.616 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:32.616 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:32.617 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:32.617 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:32.617 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:25 request for processing
+2024-06-24 22:52:32.623 +01:00 [INF] Tokenized in 6.9492ms.
+2024-06-24 22:52:32.628 +01:00 [INF] Parsed in 4.5338ms.
+2024-06-24 22:52:32.628 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:32.628 +01:00 [INF] diag.
+2024-06-24 22:52:32.628 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:32.628 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:32.628 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 25
+2024-06-24 22:52:32.628 +01:00 [DBG] Starting: Routing Request (25) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:32.629 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:32.629 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:32.629 +01:00 [DBG] Finished: Routing Request (25) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:32.629 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 25 in 0ms
+2024-06-24 22:52:33.068 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:33.069 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:33.069 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:33.069 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:33.069 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:33.069 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:33.069 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:33.069 +01:00 [INF] Document changed
+2024-06-24 22:52:33.069 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:33.069 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:33.070 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:33.070 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:33.070 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:26 request for processing
+2024-06-24 22:52:33.071 +01:00 [INF] Tokenized in 1.5014ms.
+2024-06-24 22:52:33.081 +01:00 [INF] Parsed in 9.8581ms.
+2024-06-24 22:52:33.081 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:33.081 +01:00 [INF] diag.
+2024-06-24 22:52:33.081 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:33.081 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:33.081 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 26
+2024-06-24 22:52:33.081 +01:00 [DBG] Starting: Routing Request (26) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:33.081 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:33.082 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:33.082 +01:00 [DBG] Finished: Routing Request (26) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:33.082 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 26 in 0ms
+2024-06-24 22:52:34.279 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:34.280 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:34.280 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:34.280 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:34.280 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:34.280 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:34.280 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:34.280 +01:00 [INF] Document changed
+2024-06-24 22:52:34.280 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:34.282 +01:00 [INF] Tokenized in 1.5369ms.
+2024-06-24 22:52:34.293 +01:00 [INF] Parsed in 11.3985ms.
+2024-06-24 22:52:34.293 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:34.293 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:34.293 +01:00 [INF] diag.
+2024-06-24 22:52:34.294 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 13ms
+2024-06-24 22:52:34.294 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:34.294 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 14ms
+2024-06-24 22:52:34.294 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:34.294 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:34.294 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:34.294 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:34.294 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:34.294 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:27 request for processing
+2024-06-24 22:52:34.294 +01:00 [INF] Document changed
+2024-06-24 22:52:34.295 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:34.296 +01:00 [INF] Tokenized in 1.5101ms.
+2024-06-24 22:52:34.301 +01:00 [INF] Parsed in 4.6189ms.
+2024-06-24 22:52:34.301 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:34.301 +01:00 [INF] diag.
+2024-06-24 22:52:34.301 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 7ms
+2024-06-24 22:52:34.301 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 7ms
+2024-06-24 22:52:34.301 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 27
+2024-06-24 22:52:34.301 +01:00 [DBG] Starting: Routing Request (27) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:34.302 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:34.302 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:34.302 +01:00 [DBG] Finished: Routing Request (27) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:34.302 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 27 in 0ms
+2024-06-24 22:52:34.626 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:34.626 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:34.626 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:34.626 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:34.626 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:34.626 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:34.626 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:34.627 +01:00 [INF] Document changed
+2024-06-24 22:52:34.627 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:34.628 +01:00 [INF] Tokenized in 1.4589ms.
+2024-06-24 22:52:34.633 +01:00 [INF] Parsed in 4.6786ms.
+2024-06-24 22:52:34.633 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:34.633 +01:00 [INF] diag.
+2024-06-24 22:52:34.633 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:34.633 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:34.713 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:34.713 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:34.713 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:34.714 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:34.714 +01:00 [INF] Document changed
+2024-06-24 22:52:34.714 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:34.714 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:34.714 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:34.714 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:34.714 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:28 request for processing
+2024-06-24 22:52:34.715 +01:00 [INF] Tokenized in 1.4514ms.
+2024-06-24 22:52:34.723 +01:00 [INF] Parsed in 7.4394ms.
+2024-06-24 22:52:34.723 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:34.723 +01:00 [INF] diag.
+2024-06-24 22:52:34.723 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 9ms
+2024-06-24 22:52:34.723 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 9ms
+2024-06-24 22:52:34.723 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 28
+2024-06-24 22:52:34.723 +01:00 [DBG] Starting: Routing Request (28) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:34.724 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:34.724 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:34.724 +01:00 [DBG] Finished: Routing Request (28) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:34.724 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 28 in 0ms
+2024-06-24 22:52:34.976 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:34.977 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:34.977 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:34.977 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:34.977 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:34.977 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:34.977 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:34.977 +01:00 [INF] Document changed
+2024-06-24 22:52:34.977 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:34.979 +01:00 [INF] Tokenized in 1.4668ms.
+2024-06-24 22:52:34.989 +01:00 [INF] Parsed in 9.9676ms.
+2024-06-24 22:52:34.989 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:34.989 +01:00 [INF] diag.
+2024-06-24 22:52:34.989 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:34.989 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:35.069 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:35.069 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:35.069 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:35.069 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:35.070 +01:00 [INF] Document changed
+2024-06-24 22:52:35.070 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:35.070 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:35.070 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:35.070 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:35.070 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:29 request for processing
+2024-06-24 22:52:35.071 +01:00 [INF] Tokenized in 1.4946ms.
+2024-06-24 22:52:35.082 +01:00 [INF] Parsed in 10.8407ms.
+2024-06-24 22:52:35.082 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:35.082 +01:00 [INF] diag.
+2024-06-24 22:52:35.082 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 13ms
+2024-06-24 22:52:35.083 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 13ms
+2024-06-24 22:52:35.083 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 29
+2024-06-24 22:52:35.083 +01:00 [DBG] Starting: Routing Request (29) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:35.083 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:35.083 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:35.083 +01:00 [DBG] Finished: Routing Request (29) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:35.083 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 29 in 0ms
+2024-06-24 22:52:35.690 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:35.690 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:35.690 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:35.690 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:35.690 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:35.690 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:35.690 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:35.690 +01:00 [INF] Document changed
+2024-06-24 22:52:35.691 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:35.691 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:35.691 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:35.691 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:35.691 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:30 request for processing
+2024-06-24 22:52:35.692 +01:00 [INF] Tokenized in 1.4748ms.
+2024-06-24 22:52:35.697 +01:00 [INF] Parsed in 4.5195ms.
+2024-06-24 22:52:35.697 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:35.697 +01:00 [INF] diag.
+2024-06-24 22:52:35.697 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:35.697 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:35.697 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 30
+2024-06-24 22:52:35.697 +01:00 [DBG] Starting: Routing Request (30) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:35.697 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:35.697 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:35.697 +01:00 [DBG] Finished: Routing Request (30) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:35.697 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 30 in 0ms
+2024-06-24 22:52:36.245 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:36.246 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:36.246 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:36.246 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:36.246 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:36.246 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:36.246 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:36.246 +01:00 [INF] Document changed
+2024-06-24 22:52:36.246 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:36.246 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:36.247 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:36.247 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:36.247 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:31 request for processing
+2024-06-24 22:52:36.253 +01:00 [INF] Tokenized in 6.9682ms.
+2024-06-24 22:52:36.258 +01:00 [INF] Parsed in 4.5312ms.
+2024-06-24 22:52:36.258 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:36.258 +01:00 [INF] diag.
+2024-06-24 22:52:36.258 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:36.258 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:36.259 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 31
+2024-06-24 22:52:36.259 +01:00 [DBG] Starting: Routing Request (31) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:36.259 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:36.259 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:36.259 +01:00 [DBG] Finished: Routing Request (31) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:36.259 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 31 in 0ms
+2024-06-24 22:52:36.599 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:36.600 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:36.600 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:36.600 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:36.600 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:36.600 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:36.600 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:36.600 +01:00 [INF] Document changed
+2024-06-24 22:52:36.600 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:36.601 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:36.601 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:36.601 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:36.601 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:32 request for processing
+2024-06-24 22:52:36.602 +01:00 [INF] Tokenized in 1.5359ms.
+2024-06-24 22:52:36.611 +01:00 [INF] Parsed in 8.5629ms.
+2024-06-24 22:52:36.611 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:36.611 +01:00 [INF] diag.
+2024-06-24 22:52:36.611 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 10ms
+2024-06-24 22:52:36.611 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 10ms
+2024-06-24 22:52:36.611 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 32
+2024-06-24 22:52:36.611 +01:00 [DBG] Starting: Routing Request (32) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:36.611 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:36.611 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:36.611 +01:00 [DBG] Finished: Routing Request (32) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:36.611 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 32 in 0ms
+2024-06-24 22:52:37.040 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:37.041 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:37.041 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:37.041 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:37.041 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:37.041 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:37.041 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:37.041 +01:00 [INF] Document changed
+2024-06-24 22:52:37.041 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:37.041 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:37.041 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:37.041 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:37.041 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:33 request for processing
+2024-06-24 22:52:37.043 +01:00 [INF] Tokenized in 1.5135ms.
+2024-06-24 22:52:37.053 +01:00 [INF] Parsed in 9.763ms.
+2024-06-24 22:52:37.053 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:37.053 +01:00 [INF] diag.
+2024-06-24 22:52:37.053 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 11ms
+2024-06-24 22:52:37.053 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 11ms
+2024-06-24 22:52:37.053 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 33
+2024-06-24 22:52:37.053 +01:00 [DBG] Starting: Routing Request (33) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:37.053 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:37.053 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:37.053 +01:00 [DBG] Finished: Routing Request (33) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:37.053 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 33 in 0ms
+2024-06-24 22:52:37.487 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:37.487 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:37.487 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:37.487 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:37.487 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:37.487 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:37.487 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:37.488 +01:00 [INF] Document changed
+2024-06-24 22:52:37.488 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:37.488 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:37.488 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:37.488 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:37.488 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:34 request for processing
+2024-06-24 22:52:37.489 +01:00 [INF] Tokenized in 1.4647ms.
+2024-06-24 22:52:37.500 +01:00 [INF] Parsed in 10.5086ms.
+2024-06-24 22:52:37.500 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:37.500 +01:00 [INF] diag.
+2024-06-24 22:52:37.500 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:37.500 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:37.500 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 34
+2024-06-24 22:52:37.500 +01:00 [DBG] Starting: Routing Request (34) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:37.500 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:37.500 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:37.501 +01:00 [DBG] Finished: Routing Request (34) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:37.501 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 34 in 0ms
+2024-06-24 22:52:37.839 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:37.839 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:37.839 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:37.839 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:37.839 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:37.839 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:37.839 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:37.839 +01:00 [INF] Document changed
+2024-06-24 22:52:37.839 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:37.839 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:37.840 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:37.840 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:37.840 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:35 request for processing
+2024-06-24 22:52:37.841 +01:00 [INF] Tokenized in 1.4892ms.
+2024-06-24 22:52:37.845 +01:00 [WRN] Error added: range [start: (35, 63), end: (35, 64)] code "TokenNotValidInContext"
+2024-06-24 22:52:37.846 +01:00 [INF] Parsed in 4.6078ms.
+2024-06-24 22:52:37.846 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:37.846 +01:00 [INF] diag.
+2024-06-24 22:52:37.846 +01:00 [INF] diag.
+2024-06-24 22:52:37.846 +01:00 [INF] diag.
+2024-06-24 22:52:37.846 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:37.846 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:37.846 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 35
+2024-06-24 22:52:37.846 +01:00 [DBG] Starting: Routing Request (35) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:37.846 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:37.846 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:37.846 +01:00 [DBG] Finished: Routing Request (35) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:37.847 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 35 in 0ms
+2024-06-24 22:52:38.176 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:38.176 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:38.176 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:38.176 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:38.176 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:38.176 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:38.176 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:38.177 +01:00 [INF] Document changed
+2024-06-24 22:52:38.177 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:38.177 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:38.177 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:38.177 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:38.177 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:36 request for processing
+2024-06-24 22:52:38.184 +01:00 [INF] Tokenized in 6.7388ms.
+2024-06-24 22:52:38.187 +01:00 [WRN] Error added: range [start: (35, 67), end: (35, 68)] code "TokenNotValidInContext"
+2024-06-24 22:52:38.188 +01:00 [INF] Parsed in 4.5796ms.
+2024-06-24 22:52:38.188 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:38.188 +01:00 [INF] diag.
+2024-06-24 22:52:38.188 +01:00 [INF] diag.
+2024-06-24 22:52:38.188 +01:00 [INF] diag.
+2024-06-24 22:52:38.189 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:38.189 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:38.189 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 36
+2024-06-24 22:52:38.189 +01:00 [DBG] Starting: Routing Request (36) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:38.189 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:38.189 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:38.189 +01:00 [DBG] Finished: Routing Request (36) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:38.189 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 36 in 0ms
+2024-06-24 22:52:38.501 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:38.501 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:38.501 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:38.501 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:38.501 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:38.501 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:38.501 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:38.501 +01:00 [INF] Document changed
+2024-06-24 22:52:38.502 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:38.502 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:38.502 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:38.502 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:38.502 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:37 request for processing
+2024-06-24 22:52:38.503 +01:00 [INF] Tokenized in 1.4878ms.
+2024-06-24 22:52:38.517 +01:00 [WRN] Error added: range [start: (35, 71), end: (35, 72)] code "TokenNotValidInContext"
+2024-06-24 22:52:38.518 +01:00 [INF] Parsed in 15.0476ms.
+2024-06-24 22:52:38.518 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:38.518 +01:00 [INF] diag.
+2024-06-24 22:52:38.518 +01:00 [INF] diag.
+2024-06-24 22:52:38.518 +01:00 [INF] diag.
+2024-06-24 22:52:38.519 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 17ms
+2024-06-24 22:52:38.519 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 17ms
+2024-06-24 22:52:38.519 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 37
+2024-06-24 22:52:38.519 +01:00 [DBG] Starting: Routing Request (37) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:38.519 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:38.519 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:38.519 +01:00 [DBG] Finished: Routing Request (37) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:38.519 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 37 in 0ms
+2024-06-24 22:52:38.949 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:38.949 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:38.949 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:38.949 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:38.949 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:38.949 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:38.949 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:38.950 +01:00 [INF] Document changed
+2024-06-24 22:52:38.950 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:38.950 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:38.950 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:38.950 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:38.950 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:38 request for processing
+2024-06-24 22:52:38.951 +01:00 [INF] Tokenized in 1.4929ms.
+2024-06-24 22:52:38.960 +01:00 [WRN] Error added: range [start: (35, 68), end: (35, 69)] code "TokenNotValidInContext"
+2024-06-24 22:52:38.961 +01:00 [INF] Parsed in 9.9589ms.
+2024-06-24 22:52:38.961 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:38.961 +01:00 [INF] diag.
+2024-06-24 22:52:38.961 +01:00 [INF] diag.
+2024-06-24 22:52:38.961 +01:00 [INF] diag.
+2024-06-24 22:52:38.961 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:38.962 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:38.962 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 38
+2024-06-24 22:52:38.962 +01:00 [DBG] Starting: Routing Request (38) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:38.962 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:38.962 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:38.962 +01:00 [DBG] Finished: Routing Request (38) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:38.962 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 38 in 0ms
+2024-06-24 22:52:39.371 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:39.372 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:39.372 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:39.372 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:39.372 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:39.372 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:39.372 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:39.372 +01:00 [INF] Document changed
+2024-06-24 22:52:39.372 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:39.372 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:39.372 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:39.372 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:39.372 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:39 request for processing
+2024-06-24 22:52:39.374 +01:00 [INF] Tokenized in 1.5105ms.
+2024-06-24 22:52:39.377 +01:00 [WRN] Error added: range [start: (35, 68), end: (35, 69)] code "TokenNotValidInContext"
+2024-06-24 22:52:39.385 +01:00 [INF] Parsed in 11.4894ms.
+2024-06-24 22:52:39.385 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:39.385 +01:00 [INF] diag.
+2024-06-24 22:52:39.385 +01:00 [INF] diag.
+2024-06-24 22:52:39.385 +01:00 [INF] diag.
+2024-06-24 22:52:39.386 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 13ms
+2024-06-24 22:52:39.386 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 13ms
+2024-06-24 22:52:39.386 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 39
+2024-06-24 22:52:39.386 +01:00 [DBG] Starting: Routing Request (39) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:39.386 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:39.386 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:39.386 +01:00 [DBG] Finished: Routing Request (39) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:39.386 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 39 in 0ms
+2024-06-24 22:52:39.683 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:39.683 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:39.683 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:39.683 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:39.683 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:39.683 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:39.683 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:39.683 +01:00 [INF] Document changed
+2024-06-24 22:52:39.684 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:39.684 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:39.684 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:39.684 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:39.684 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:40 request for processing
+2024-06-24 22:52:39.685 +01:00 [INF] Tokenized in 1.4564ms.
+2024-06-24 22:52:39.689 +01:00 [WRN] Error added: range [start: (35, 71), end: (35, 72)] code "TokenNotValidInContext"
+2024-06-24 22:52:39.690 +01:00 [INF] Parsed in 4.511ms.
+2024-06-24 22:52:39.690 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:39.690 +01:00 [INF] diag.
+2024-06-24 22:52:39.690 +01:00 [INF] diag.
+2024-06-24 22:52:39.690 +01:00 [INF] diag.
+2024-06-24 22:52:39.690 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:39.690 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:39.690 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 40
+2024-06-24 22:52:39.690 +01:00 [DBG] Starting: Routing Request (40) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:39.690 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:39.690 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:39.690 +01:00 [DBG] Finished: Routing Request (40) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:39.690 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 40 in 0ms
+2024-06-24 22:52:42.525 +01:00 [DBG] Finding descriptors for textDocument/hover
+2024-06-24 22:52:42.525 +01:00 [DBG] Queueing "Parallel":textDocument/hover:41 request for processing
+2024-06-24 22:52:42.525 +01:00 [DBG] Starting: Processing request textDocument/hover 41
+2024-06-24 22:52:42.525 +01:00 [DBG] Starting: Routing Request (41) textDocument/hover
+2024-06-24 22:52:42.526 +01:00 [INF] Hover request received, processing...
+2024-06-24 22:52:42.526 +01:00 [INF] Hover request processed. Hover being sent: null
+2024-06-24 22:52:42.527 +01:00 [DBG] Finished: Routing Request (41) textDocument/hover in 1ms
+2024-06-24 22:52:42.527 +01:00 [DBG] Finished: Processing request textDocument/hover 41 in 1ms
+2024-06-24 22:52:44.281 +01:00 [DBG] Finding descriptors for textDocument/hover
+2024-06-24 22:52:44.281 +01:00 [DBG] Queueing "Parallel":textDocument/hover:42 request for processing
+2024-06-24 22:52:44.281 +01:00 [DBG] Starting: Processing request textDocument/hover 42
+2024-06-24 22:52:44.281 +01:00 [DBG] Starting: Routing Request (42) textDocument/hover
+2024-06-24 22:52:44.281 +01:00 [INF] Hover request received, processing...
+2024-06-24 22:52:44.283 +01:00 [INF] Hover request processed. Hover being sent: [Markdown] ```gsc
+#define REGISTER_SYSTEM(__sys,__func_init_preload,__reqs) function autoexec __init__sytem__() { system::register(__sys,__func_init_preload,undefined,__reqs); }
+```
+
+
+---
+Expands to:
+```gsc
+function autoexec __init__sytem__() { system::register("symbo_zns_transports",&__init__,undefined,&__main__); }
+``` [start: (35, 0), end: (35, 15)]
+2024-06-24 22:52:44.283 +01:00 [DBG] Finished: Routing Request (42) textDocument/hover in 1ms
+2024-06-24 22:52:44.283 +01:00 [DBG] Finished: Processing request textDocument/hover 42 in 1ms
+2024-06-24 22:52:45.371 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:45.372 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:45.372 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:45.372 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:45.372 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:45.372 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:45.372 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:45.372 +01:00 [INF] Document changed
+2024-06-24 22:52:45.372 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:45.374 +01:00 [INF] Tokenized in 1.4537ms.
+2024-06-24 22:52:45.377 +01:00 [WRN] Error added: range [start: (35, 0), end: (35, 16)] code "TokenNotValidInContext"
+2024-06-24 22:52:45.378 +01:00 [INF] Parsed in 4.5429ms.
+2024-06-24 22:52:45.378 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:45.378 +01:00 [INF] diag.
+2024-06-24 22:52:45.378 +01:00 [INF] diag.
+2024-06-24 22:52:45.378 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:45.378 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:45.465 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:45.465 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:45.465 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:45.465 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:45.465 +01:00 [INF] Document changed
+2024-06-24 22:52:45.466 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:45.466 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:45.466 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:45.466 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:45.466 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:43 request for processing
+2024-06-24 22:52:45.467 +01:00 [INF] Tokenized in 1.4881ms.
+2024-06-24 22:52:45.475 +01:00 [WRN] Error added: range [start: (35, 0), end: (35, 17)] code "TokenNotValidInContext"
+2024-06-24 22:52:45.475 +01:00 [INF] Parsed in 8.3772ms.
+2024-06-24 22:52:45.475 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:45.476 +01:00 [INF] diag.
+2024-06-24 22:52:45.476 +01:00 [INF] diag.
+2024-06-24 22:52:45.476 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 10ms
+2024-06-24 22:52:45.476 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 10ms
+2024-06-24 22:52:45.476 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 43
+2024-06-24 22:52:45.476 +01:00 [DBG] Starting: Routing Request (43) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:45.476 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:45.476 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:45.476 +01:00 [DBG] Finished: Routing Request (43) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:45.476 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 43 in 0ms
+2024-06-24 22:52:45.823 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:45.823 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:45.823 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:45.823 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:45.823 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:45.823 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:45.823 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:45.823 +01:00 [INF] Document changed
+2024-06-24 22:52:45.823 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:45.825 +01:00 [INF] Tokenized in 1.4594ms.
+2024-06-24 22:52:45.834 +01:00 [INF] Parsed in 9.0309ms.
+2024-06-24 22:52:45.834 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:45.834 +01:00 [INF] diag.
+2024-06-24 22:52:45.834 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 11ms
+2024-06-24 22:52:45.834 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 11ms
+2024-06-24 22:52:45.917 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:45.917 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:45.917 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:45.917 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:44 request for processing
+2024-06-24 22:52:45.917 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 44
+2024-06-24 22:52:45.917 +01:00 [DBG] Starting: Routing Request (44) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:45.917 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:45.917 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:45.917 +01:00 [DBG] Finished: Routing Request (44) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:45.918 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 44 in 0ms
+2024-06-24 22:52:49.406 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:49.406 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:49.406 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:49.406 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:49.406 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:49.406 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:49.406 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:49.407 +01:00 [INF] Document changed
+2024-06-24 22:52:49.407 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:49.407 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:49.407 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:49.407 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:49.407 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:45 request for processing
+2024-06-24 22:52:49.408 +01:00 [INF] Tokenized in 1.5206ms.
+2024-06-24 22:52:49.419 +01:00 [INF] Parsed in 11.0644ms.
+2024-06-24 22:52:49.419 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:49.419 +01:00 [INF] diag.
+2024-06-24 22:52:49.420 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 13ms
+2024-06-24 22:52:49.420 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 13ms
+2024-06-24 22:52:49.420 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 45
+2024-06-24 22:52:49.420 +01:00 [DBG] Starting: Routing Request (45) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:49.420 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:49.420 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:49.420 +01:00 [DBG] Finished: Routing Request (45) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:49.420 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 45 in 0ms
+2024-06-24 22:52:49.904 +01:00 [DBG] Finding descriptors for textDocument/hover
+2024-06-24 22:52:49.904 +01:00 [DBG] Queueing "Parallel":textDocument/hover:46 request for processing
+2024-06-24 22:52:49.904 +01:00 [DBG] Starting: Processing request textDocument/hover 46
+2024-06-24 22:52:49.904 +01:00 [DBG] Starting: Routing Request (46) textDocument/hover
+2024-06-24 22:52:49.904 +01:00 [INF] Hover request received, processing...
+2024-06-24 22:52:49.904 +01:00 [INF] Hover request processed. Hover being sent: null
+2024-06-24 22:52:49.905 +01:00 [DBG] Finished: Routing Request (46) textDocument/hover in 0ms
+2024-06-24 22:52:49.905 +01:00 [DBG] Finished: Processing request textDocument/hover 46 in 0ms
+2024-06-24 22:52:51.914 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:51.915 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:51.915 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:51.915 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:51.915 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:51.915 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:51.915 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:51.915 +01:00 [INF] Document changed
+2024-06-24 22:52:51.915 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:51.915 +01:00 [DBG] Finding descriptors for textDocument/hover
+2024-06-24 22:52:51.916 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:51.916 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:51.916 +01:00 [DBG] Queueing "Parallel":textDocument/hover:47 request for processing
+2024-06-24 22:52:51.917 +01:00 [INF] Tokenized in 1.5806ms.
+2024-06-24 22:52:51.922 +01:00 [INF] Parsed in 4.5728ms.
+2024-06-24 22:52:51.922 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:51.922 +01:00 [INF] diag.
+2024-06-24 22:52:51.922 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:51.922 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:51.922 +01:00 [DBG] Starting: Processing request textDocument/hover 47
+2024-06-24 22:52:51.922 +01:00 [DBG] Starting: Routing Request (47) textDocument/hover
+2024-06-24 22:52:51.922 +01:00 [INF] Hover request received, processing...
+2024-06-24 22:52:51.922 +01:00 [INF] Hover request processed. Hover being sent: null
+2024-06-24 22:52:51.922 +01:00 [DBG] Finished: Routing Request (47) textDocument/hover in 0ms
+2024-06-24 22:52:51.922 +01:00 [DBG] Finished: Processing request textDocument/hover 47 in 0ms
+2024-06-24 22:52:51.929 +01:00 [DBG] Found cancellation request $/cancelRequest
+2024-06-24 22:52:51.931 +01:00 [DBG] Cancelling pending request
+2024-06-24 22:52:52.008 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:52.008 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:48 request for processing
+2024-06-24 22:52:52.008 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 48
+2024-06-24 22:52:52.008 +01:00 [DBG] Starting: Routing Request (48) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:52.008 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:52.008 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:52.009 +01:00 [DBG] Finished: Routing Request (48) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:52.009 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 48 in 0ms
+2024-06-24 22:52:52.303 +01:00 [DBG] Finding descriptors for textDocument/hover
+2024-06-24 22:52:52.304 +01:00 [DBG] Queueing "Parallel":textDocument/hover:49 request for processing
+2024-06-24 22:52:52.304 +01:00 [DBG] Starting: Processing request textDocument/hover 49
+2024-06-24 22:52:52.304 +01:00 [DBG] Starting: Routing Request (49) textDocument/hover
+2024-06-24 22:52:52.304 +01:00 [INF] Hover request received, processing...
+2024-06-24 22:52:52.304 +01:00 [INF] Hover request processed. Hover being sent: null
+2024-06-24 22:52:52.304 +01:00 [DBG] Finished: Routing Request (49) textDocument/hover in 0ms
+2024-06-24 22:52:52.304 +01:00 [DBG] Finished: Processing request textDocument/hover 49 in 0ms
+2024-06-24 22:52:52.642 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:52.642 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:52.642 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:52.642 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:52.642 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:52.642 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:52.642 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:52.642 +01:00 [INF] Document changed
+2024-06-24 22:52:52.642 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:52.643 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:52.643 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:52.643 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:52.643 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:50 request for processing
+2024-06-24 22:52:52.644 +01:00 [INF] Tokenized in 1.5262ms.
+2024-06-24 22:52:52.649 +01:00 [INF] Parsed in 4.6324ms.
+2024-06-24 22:52:52.649 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:52.649 +01:00 [INF] diag.
+2024-06-24 22:52:52.649 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:52.649 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:52.649 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 50
+2024-06-24 22:52:52.649 +01:00 [DBG] Starting: Routing Request (50) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:52.649 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:52.649 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:52.650 +01:00 [DBG] Finished: Routing Request (50) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:52.650 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 50 in 0ms
+2024-06-24 22:52:54.678 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:54.678 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:54.678 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:54.678 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:54.678 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:54.678 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:54.678 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:54.679 +01:00 [INF] Document changed
+2024-06-24 22:52:54.679 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:54.686 +01:00 [INF] Tokenized in 7.5749ms.
+2024-06-24 22:52:54.691 +01:00 [INF] Parsed in 4.5604ms.
+2024-06-24 22:52:54.691 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:54.691 +01:00 [INF] diag.
+2024-06-24 22:52:54.691 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:54.691 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:54.770 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:54.770 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:54.770 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:54.770 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:51 request for processing
+2024-06-24 22:52:54.770 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 51
+2024-06-24 22:52:54.770 +01:00 [DBG] Starting: Routing Request (51) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:54.770 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:54.770 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:54.771 +01:00 [DBG] Finished: Routing Request (51) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:54.771 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 51 in 0ms
+2024-06-24 22:52:56.529 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:56.529 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:56.529 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:56.529 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:56.530 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:56.530 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:56.530 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:56.530 +01:00 [INF] Document changed
+2024-06-24 22:52:56.530 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:56.531 +01:00 [INF] Tokenized in 1.4862ms.
+2024-06-24 22:52:56.540 +01:00 [INF] Parsed in 8.8857ms.
+2024-06-24 22:52:56.540 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:56.541 +01:00 [INF] diag.
+2024-06-24 22:52:56.541 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 11ms
+2024-06-24 22:52:56.541 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 11ms
+2024-06-24 22:52:56.622 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:56.622 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:56.622 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:56.622 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:52 request for processing
+2024-06-24 22:52:56.622 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 52
+2024-06-24 22:52:56.622 +01:00 [DBG] Starting: Routing Request (52) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:56.623 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:56.623 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:56.623 +01:00 [DBG] Finished: Routing Request (52) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:56.623 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 52 in 0ms
+2024-06-24 22:52:58.043 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:58.044 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:58.044 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:58.044 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:58.044 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:58.044 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:58.044 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:58.044 +01:00 [INF] Document changed
+2024-06-24 22:52:58.044 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:58.044 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:58.044 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:58.044 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:58.044 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:53 request for processing
+2024-06-24 22:52:58.046 +01:00 [INF] Tokenized in 1.5889ms.
+2024-06-24 22:52:58.056 +01:00 [INF] Parsed in 10.3074ms.
+2024-06-24 22:52:58.056 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:58.056 +01:00 [INF] diag.
+2024-06-24 22:52:58.056 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:58.056 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:58.057 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 53
+2024-06-24 22:52:58.057 +01:00 [DBG] Starting: Routing Request (53) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:58.057 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:58.057 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:58.057 +01:00 [DBG] Finished: Routing Request (53) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:58.057 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 53 in 0ms
+2024-06-24 22:52:58.365 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:58.365 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:58.365 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:58.365 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:58.365 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:58.365 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:58.365 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:58.366 +01:00 [INF] Document changed
+2024-06-24 22:52:58.366 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:58.366 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:58.366 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:58.366 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:58.366 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:54 request for processing
+2024-06-24 22:52:58.367 +01:00 [INF] Tokenized in 1.4657ms.
+2024-06-24 22:52:58.378 +01:00 [INF] Parsed in 10.4423ms.
+2024-06-24 22:52:58.378 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:58.378 +01:00 [INF] diag.
+2024-06-24 22:52:58.378 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:52:58.378 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:52:58.378 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 54
+2024-06-24 22:52:58.378 +01:00 [DBG] Starting: Routing Request (54) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:58.378 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:58.378 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:58.378 +01:00 [DBG] Finished: Routing Request (54) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:58.378 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 54 in 0ms
+2024-06-24 22:52:58.786 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:52:58.786 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:52:58.786 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:52:58.786 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:52:58.786 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:52:58.786 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:52:58.786 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:52:58.787 +01:00 [INF] Document changed
+2024-06-24 22:52:58.787 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:52:58.787 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:52:58.787 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:52:58.787 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:52:58.787 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:55 request for processing
+2024-06-24 22:52:58.788 +01:00 [INF] Tokenized in 1.4623ms.
+2024-06-24 22:52:58.793 +01:00 [INF] Parsed in 4.7544ms.
+2024-06-24 22:52:58.793 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:52:58.793 +01:00 [INF] diag.
+2024-06-24 22:52:58.793 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 6ms
+2024-06-24 22:52:58.793 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 6ms
+2024-06-24 22:52:58.793 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 55
+2024-06-24 22:52:58.793 +01:00 [DBG] Starting: Routing Request (55) textDocument/semanticTokens/full/delta
+2024-06-24 22:52:58.794 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:52:58.794 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:52:58.794 +01:00 [DBG] Finished: Routing Request (55) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:52:58.794 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 55 in 0ms
+2024-06-24 22:53:00.420 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:53:00.420 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:53:00.420 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:53:00.420 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:53:00.420 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:53:00.420 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:53:00.420 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:53:00.420 +01:00 [INF] Document changed
+2024-06-24 22:53:00.421 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:53:00.427 +01:00 [INF] Tokenized in 6.9334ms.
+2024-06-24 22:53:00.432 +01:00 [INF] Parsed in 4.4642ms.
+2024-06-24 22:53:00.432 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:53:00.432 +01:00 [INF] diag.
+2024-06-24 22:53:00.432 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:53:00.432 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:53:00.529 +01:00 [DBG] Finding descriptors for textDocument/semanticTokens/full/delta
+2024-06-24 22:53:00.529 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:53:00.529 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:53:00.529 +01:00 [DBG] Queueing "Parallel":textDocument/semanticTokens/full/delta:56 request for processing
+2024-06-24 22:53:00.529 +01:00 [DBG] Starting: Processing request textDocument/semanticTokens/full/delta 56
+2024-06-24 22:53:00.529 +01:00 [DBG] Starting: Routing Request (56) textDocument/semanticTokens/full/delta
+2024-06-24 22:53:00.530 +01:00 [INF] Tokenization request received, processing...
+2024-06-24 22:53:00.530 +01:00 [INF] Tokenization is complete!
+2024-06-24 22:53:00.530 +01:00 [DBG] Finished: Routing Request (56) textDocument/semanticTokens/full/delta in 0ms
+2024-06-24 22:53:00.530 +01:00 [DBG] Finished: Processing request textDocument/semanticTokens/full/delta 56 in 0ms
+2024-06-24 22:53:40.422 +01:00 [DBG] Finding descriptors for textDocument/didChange
+2024-06-24 22:53:40.422 +01:00 [DBG] Swapping from "Parallel" to "Serial"
+2024-06-24 22:53:40.422 +01:00 [DBG] Cancelling any outstanding requests (switch from parallel to serial)
+2024-06-24 22:53:40.422 +01:00 [DBG] Completing existing request process type "Parallel"
+2024-06-24 22:53:40.422 +01:00 [DBG] Queueing "Serial":textDocument/didChange request for processing
+2024-06-24 22:53:40.422 +01:00 [DBG] Starting: Processing notification textDocument/didChange
+2024-06-24 22:53:40.422 +01:00 [DBG] Starting: Routing Notification textDocument/didChange
+2024-06-24 22:53:40.423 +01:00 [INF] Document changed
+2024-06-24 22:53:40.423 +01:00 [INF] Tokenizing file at '"file:///c:/Users/black/AppData/Local/Temp/43168d3a-c6cb-4b91-acaa-4e676e6b61d6_symbo_zns_transports.rar.1d6/symbo_zns_transports/symbo_zns_transports.gsc"'
+2024-06-24 22:53:40.423 +01:00 [DBG] Finding descriptors for textDocument/didClose
+2024-06-24 22:53:40.424 +01:00 [DBG] Swapping from "Serial" to "Parallel"
+2024-06-24 22:53:40.424 +01:00 [DBG] Completing existing request process type "Serial"
+2024-06-24 22:53:40.424 +01:00 [DBG] Queueing "Parallel":textDocument/didClose request for processing
+2024-06-24 22:53:40.424 +01:00 [INF] Tokenized in 1.4912ms.
+2024-06-24 22:53:40.434 +01:00 [INF] Parsed in 9.746ms.
+2024-06-24 22:53:40.434 +01:00 [INF] It's ciggy friday.
+2024-06-24 22:53:40.434 +01:00 [INF] diag.
+2024-06-24 22:53:40.434 +01:00 [DBG] Finished: Routing Notification textDocument/didChange in 12ms
+2024-06-24 22:53:40.434 +01:00 [DBG] Finished: Processing notification textDocument/didChange in 12ms
+2024-06-24 22:53:40.434 +01:00 [DBG] Starting: Processing notification textDocument/didClose
+2024-06-24 22:53:40.434 +01:00 [DBG] Starting: Routing Notification textDocument/didClose
+2024-06-24 22:53:40.436 +01:00 [INF] Document closed
+2024-06-24 22:53:40.436 +01:00 [DBG] Finished: Routing Notification textDocument/didClose in 1ms
+2024-06-24 22:53:40.436 +01:00 [DBG] Finished: Processing notification textDocument/didClose in 1ms
+2024-06-24 23:44:51.946 +01:00 [DBG] Finding descriptors for $/setTrace
+2024-06-24 23:44:51.948 +01:00 [DBG] Queueing "Parallel":$/setTrace request for processing
+2024-06-24 23:44:51.948 +01:00 [DBG] Starting: Processing notification $/setTrace
+2024-06-24 23:44:51.948 +01:00 [DBG] Starting: Routing Notification $/setTrace
+2024-06-24 23:44:51.950 +01:00 [DBG] Finished: Routing Notification $/setTrace in 2ms
+2024-06-24 23:44:51.950 +01:00 [DBG] Finished: Processing notification $/setTrace in 2ms

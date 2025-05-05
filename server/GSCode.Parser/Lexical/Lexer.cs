@@ -20,7 +20,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         Token current = first;
         while (!_input.IsEmpty)
         {
-            if(AdvanceAtLineBreak(out Token? lineBreakToken))
+            if (AdvanceAtLineBreak(out Token? lineBreakToken))
             {
                 current.Next = lineBreakToken;
                 lineBreakToken.Previous = current;
@@ -117,8 +117,8 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             'v' when StartsWithKeyword("var") => DoCharMatchIfWordBoundary(TokenType.Var, "var"),
             'V' when StartsWithKeyword("var") => DoCharMatchIfWordBoundary(TokenType.Var, "var"),
             // a or A
-            'a' => MatchByA(),
-            'A' => MatchByA(),
+            'a' when StartsWithKeyword("autoexec") => DoCharMatchIfWordBoundary(TokenType.Autoexec, "autoexec"),
+            'A' when StartsWithKeyword("autoexec") => DoCharMatchIfWordBoundary(TokenType.Autoexec, "autoexec"),
             // i or I
             'i' => MatchByI(),
             'I' => MatchByI(),
@@ -152,7 +152,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             _ => default
         };
 
-        if(result is null)
+        if (result is null)
         {
             // Numbers
             if (char.IsDigit(current))
@@ -160,11 +160,11 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
                 result = MatchNumber();
             }
             // Identifiers
-            else if(char.IsLetter(current) || current == '_')
+            else if (char.IsLetter(current) || current == '_')
             {
                 result = MatchIdentifier();
             }
-            else if(char.IsWhiteSpace(current) && current != '\n' && current != '\r')
+            else if (char.IsWhiteSpace(current) && current != '\n' && current != '\r')
             {
                 result = MatchWhitespace();
             }
@@ -180,7 +180,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     /// <returns>True if the line was advanced</returns>
     private bool AdvanceAtLineBreak([NotNullWhen(true)] out Token? lineBreakToken)
     {
-        if(AtNewLine(0))
+        if (AtNewLine(0))
         {
             // Advance two positions if it's carriage return + newline, otherwise 1
             int offset = _input[0] == '\r' ? 2 : 1;
@@ -214,7 +214,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
                 return CharMatch(TokenType.OpenDevBlock, "/#");
             }
             // /* */
-            else if (_input[1] == '*' && 
+            else if (_input[1] == '*' &&
                 SeekMatch(MultilineCommentRegex(), out int mlLength))
             {
                 return MultilineRegexMatch(TokenType.MultilineComment, mlLength);
@@ -239,12 +239,12 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     private Token MatchByDot()
     {
         char second = InputAt(1);
-        if(second == '.' && InputAt(2) == '.')
+        if (second == '.' && InputAt(2) == '.')
         {
             return CharMatch(TokenType.VarargDots, "...");
         }
         // .2, .23423 etc.
-        else if(char.IsDigit(second))
+        else if (char.IsDigit(second))
         {
             int totalLength = 1 + GetLengthOfNumberSequence(1);
 
@@ -262,53 +262,53 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         {
             return CharMatch(TokenType.CloseDevBlock, "#/");
         }
-        else if(second == '"')
+        else if (second == '"')
         {
             return MatchString(TokenType.CompilerHash, 2);
         }
 
         // Seek a preprocessor directive - not pretty, but fast
-        if(_input.StartsWith("#using_animtree"))
+        if (_input.StartsWith("#using_animtree"))
         {
             return CharMatch(TokenType.UsingAnimTree, "#using_animtree");
         }
-        else if(_input.StartsWith("#animtree"))
+        else if (_input.StartsWith("#animtree"))
         {
             return CharMatch(TokenType.AnimTree, "#animtree");
         }
-        else if(_input.StartsWith("#using"))
+        else if (_input.StartsWith("#using"))
         {
             return CharMatch(TokenType.Using, "#using");
         }
-        else if(_input.StartsWith("#insert"))
+        else if (_input.StartsWith("#insert"))
         {
             return CharMatch(TokenType.Insert, "#insert");
         }
-        else if(_input.StartsWith("#define"))
+        else if (_input.StartsWith("#define"))
         {
             return CharMatch(TokenType.Define, "#define");
         }
-        else if(_input.StartsWith("#namespace"))
+        else if (_input.StartsWith("#namespace"))
         {
             return CharMatch(TokenType.Namespace, "#namespace");
         }
-        else if(_input.StartsWith("#precache"))
+        else if (_input.StartsWith("#precache"))
         {
             return CharMatch(TokenType.Precache, "#precache");
         }
-        else if(_input.StartsWith("#if"))
+        else if (_input.StartsWith("#if"))
         {
             return CharMatch(TokenType.PreIf, "#if");
         }
-        else if(_input.StartsWith("#elif"))
+        else if (_input.StartsWith("#elif"))
         {
             return CharMatch(TokenType.PreElIf, "#elif");
         }
-        else if(_input.StartsWith("#else"))
+        else if (_input.StartsWith("#else"))
         {
             return CharMatch(TokenType.PreElse, "#else");
         }
-        else if(_input.StartsWith("#endif"))
+        else if (_input.StartsWith("#endif"))
         {
             return CharMatch(TokenType.PreEndIf, "#endif");
         }
@@ -426,7 +426,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         char second = InputAt(1);
 
         // Anim identifier
-        if(IsWordChar(second))
+        if (IsWordChar(second))
         {
             int length = 2;
 
@@ -467,27 +467,27 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
 
     private Token? MatchByC()
     {
-        if(StartsWithKeyword("classes"))
+        if (StartsWithKeyword("classes"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Classes, "classes");
         }
-        else if(StartsWithKeyword("class"))
+        else if (StartsWithKeyword("class"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Class, "class");
         }
-        else if(StartsWithKeyword("case"))
+        else if (StartsWithKeyword("case"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Case, "case");
         }
-        else if(StartsWithKeyword("continue"))
+        else if (StartsWithKeyword("continue"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Continue, "continue");
         }
-        else if(StartsWithKeyword("constructor"))
+        else if (StartsWithKeyword("constructor"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Constructor, "constructor");
         }
-        else if(StartsWithKeyword("const"))
+        else if (StartsWithKeyword("const"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Const, "const");
         }
@@ -511,19 +511,6 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         else if (StartsWithKeyword("false"))
         {
             return DoCharMatchIfWordBoundary(TokenType.False, "false");
-        }
-        return default;
-    }
-
-    private Token? MatchByA()
-    {
-        if (StartsWithKeyword("anim"))
-        {
-            return DoCharMatchIfWordBoundary(TokenType.Anim, "anim");
-        }
-        else if (StartsWithKeyword("autoexec"))
-        {
-            return DoCharMatchIfWordBoundary(TokenType.Autoexec, "autoexec");
         }
         return default;
     }
@@ -564,15 +551,15 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         {
             return DoCharMatchIfWordBoundary(TokenType.While, "while");
         }
-        else if(StartsWithKeyword("wait"))
+        else if (StartsWithKeyword("wait"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Wait, "wait");
         }
-        else if(StartsWithKeyword("waittillframeend"))
+        else if (StartsWithKeyword("waittillframeend"))
         {
             return DoCharMatchIfWordBoundary(TokenType.WaittillFrameEnd, "waittillframeend");
         }
-        else if(StartsWithKeyword("waitrealtime"))
+        else if (StartsWithKeyword("waitrealtime"))
         {
             return DoCharMatchIfWordBoundary(TokenType.WaitRealTime, "waitrealtime");
         }
@@ -582,11 +569,11 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     private Token MatchString(TokenType stringType, int offset = 1)
     {
         bool inEscape = false;
-        
 
-        while(offset < _input.Length && !AtNewLine(offset))
+
+        while (offset < _input.Length && !AtNewLine(offset))
         {
-            if(!inEscape && InputAt(offset) == '"')
+            if (!inEscape && InputAt(offset) == '"')
             {
                 return CreateToken(stringType, _input[..(offset + 1)].ToString(), _line, _linePosition, _line, _linePosition + offset + 1);
             }
@@ -600,7 +587,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     private Token MatchNumber()
     {
         // 0x12AB
-        if(InputAt(0) == '0' && InputAt(1) == 'x')
+        if (InputAt(0) == '0' && InputAt(1) == 'x')
         {
             int hexaLength = 2 + GetLengthOfHexNumberSequence(2);
             return CreateToken(TokenType.Hex, _input[..hexaLength].ToString(), _line, _linePosition, _line, _linePosition + hexaLength);
@@ -609,7 +596,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         int deciLength = GetLengthOfNumberSequence(0);
 
         // 20.5
-        if(InputAt(deciLength) == '.')
+        if (InputAt(deciLength) == '.')
         {
             int fracLength = GetLengthOfNumberSequence(deciLength + 1);
 
@@ -649,7 +636,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     private int GetLengthOfNumberSequence(int startOffset)
     {
         int i = startOffset;
-        while(char.IsDigit(InputAt(i)))
+        while (char.IsDigit(InputAt(i)))
         {
             i++;
         }
@@ -709,7 +696,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
 
     private char InputAt(int index)
     {
-        if(index >= _input.Length)
+        if (index >= _input.Length)
         {
             return '\0';
         }
@@ -730,7 +717,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         {
             ValueMatch result = enumerator.Current;
 
-            if(result.Index != 0)
+            if (result.Index != 0)
             {
                 throw new Exception("Regex is not obeying start of string rule");
             }
@@ -748,7 +735,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         Range range = RangeHelper.From(startLine, startPosition, endLine, endPosition);
 
         // If this lexer task is for a preprocessor insert, keep track of this & the original range even though we spoof the range otherwise.
-        if(_forcedRange is not null)
+        if (_forcedRange is not null)
         {
             return new Token(type, _forcedRange, lexeme)
             {

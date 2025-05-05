@@ -13,11 +13,12 @@ As GSCode is an indepedent implementation of a GSC language parser, it may not i
 With that in mind, if you encounter any situations where the GSC compiler (Linker) reports a syntax error, but GSCode does not, this constitutes an issue. You can report these issues to the [issue tracker on GitHub](https://github.com/Blakintosh/gscode/issues); please provide the expected error and attach a script that can reproduce the issue. Issues reporting bugs in isolated script cases without attaching a script (snippet) will not be looked into!
 
 ## Licence
-GSCode is open-source software licenced under the GNU General Public License v3.0. 
+
+GSCode is open-source software licenced under the GNU General Public License v3.0.
 
 ```
 GSCode - Black Ops III GSC Language Extension
-Copyright (C) 2024 Blakintosh
+Copyright (C) 2025 Blakintosh
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,4 +33,5 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```
+
 Please see [LICENSE.md](https://github.com/Blakintosh/gscode/blob/main/LICENSE.md) for details.

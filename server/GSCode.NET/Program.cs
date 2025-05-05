@@ -16,10 +16,10 @@ using Newtonsoft.Json.Linq;
 
 
 Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .WriteTo.Console()
-                //.WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
-                .CreateLogger();
+				.MinimumLevel.Debug()
+				.WriteTo.Console()
+				//.WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
+				.CreateLogger();
 
 //IObserver<WorkDoneProgressReport> workDone = null!;
 
@@ -73,17 +73,18 @@ LanguageServer server = await LanguageServer.From(options =>
 					Pattern = "**/*.gsc"
 				},
 				new TextDocumentFilter()
-				{ 
+				{
 					Pattern = "**/*.csc"
 				}
 			));
 		})
 		.AddHandler<TextDocumentSyncHandler>()
 		.AddHandler<SemanticTokensHandler>()
-		.AddHandler<HoverHandler>();
-	
+		.AddHandler<HoverHandler>()
+		.AddHandler<CompletionHandler>();
+
 	// Allow disposal of the stream if required.
-	if(disposable is not null)
+	if (disposable is not null)
 	{
 		options.RegisterForDisposal(disposable);
 	}

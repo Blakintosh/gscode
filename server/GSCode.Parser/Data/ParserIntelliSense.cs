@@ -39,12 +39,19 @@ internal sealed class ParserIntelliSense
     /// </summary>
     public List<DocumentUri> Dependencies { get; } = new();
 
-    private readonly string _scriptPath;
+    /// <summary>
+    /// Library of tokens to quickly lookup a token at a given position.
+    /// </summary>
+    public DocumentTokensLibrary Tokens { get; } = new();
 
-    public ParserIntelliSense(int endLine, DocumentUri scriptUri)
+    private readonly string _scriptPath;
+    public readonly string _languageId;
+
+    public ParserIntelliSense(int endLine, DocumentUri scriptUri, string languageId)
     {
         HoverLibrary = new(endLine + 1);
         _scriptPath = scriptUri.Path;
+        _languageId = languageId;
     }
 
     public void AddSenseToken(Token token, ISenseDefinition definition)
@@ -55,10 +62,10 @@ internal sealed class ParserIntelliSense
         {
             return;
         }
-        
+
         // Link the definition to the token so that we don't have duplicates later on.
         token.SenseDefinition = definition;
-        
+
         SemanticTokens.Add(definition);
         HoverLibrary.Add(definition);
     }
@@ -78,12 +85,25 @@ internal sealed class ParserIntelliSense
         Dependencies.Add(new Uri(scriptPath));
     }
 
+    public string? GetDependencyPath(string dependencyPath, Range sourceRange)
+    {
+        string qualifiedDependencyPath = dependencyPath + "." + _languageId;
+        string? resolvedPath = ParserUtil.GetScriptFilePath(_scriptPath, qualifiedDependencyPath);
+        if (resolvedPath is null)
+        {
+            AddSpaDiagnostic(sourceRange, GSCErrorCodes.MissingUsingFile, qualifiedDependencyPath);
+            return null;
+        }
+
+        return resolvedPath;
+    }
+
     public TokenList? GetFileTokens(string dependencyPath, Range? belongToRange = null)
     {
         string? resolvedPath = ParserUtil.GetScriptFilePath(_scriptPath, dependencyPath);
 
         // Sanity check the result
-        if(resolvedPath is null || !File.Exists(resolvedPath))
+        if (resolvedPath is null || !File.Exists(resolvedPath))
         {
             return null;
         }
@@ -93,6 +113,33 @@ internal sealed class ParserIntelliSense
         // Use the lexer to transform the contents into a token list, with their range being the one specified.
         Lexer lexer = new(contents.AsSpan(), belongToRange);
         return lexer.Transform();
+    }
+
+    public void CommitTokens(Token startToken)
+    {
+        Tokens.AddRange(startToken);
+    }
+
+    public CompletionList GetCompletionsFromPosition(Position position)
+    {
+        Token? token = Tokens.Get(position);
+
+        if (token is null)
+        {
+            return [];
+        }
+
+        // For the moment, we'll just support Identifier completions.
+        if (token.Type != TokenType.Identifier)
+        {
+            return [];
+        }
+
+        // Get the completions from the definition.
+
+
+        // return token.SenseDefinition?.GetCompletions();
+        return [];
     }
 
     /* Others to support:

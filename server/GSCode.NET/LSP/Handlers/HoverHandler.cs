@@ -33,8 +33,8 @@ internal class HoverHandler : HoverHandlerBase
     public override async Task<Hover?> Handle(HoverParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Hover request received, processing...");
-        Hover? result = null;
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
+        Hover? result = null;
 
         if(script is not null)
         {

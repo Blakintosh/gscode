@@ -11,10 +11,12 @@ using System.Threading.Tasks;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using GSCode.Parser.SA;
+using System.IO;
 
 namespace GSCode.Parser;
 
-public class Script(DocumentUri ScriptUri)
+public class Script(DocumentUri ScriptUri, string languageId)
 {
     public bool Failed { get; private set; } = false;
     public bool Parsed { get; private set; } = false;
@@ -22,7 +24,15 @@ public class Script(DocumentUri ScriptUri)
 
     internal ParserIntelliSense Sense { get; private set; } = default!;
 
+    public string LanguageId { get; } = languageId;
+
     private Task? ParsingTask { get; set; } = null;
+
+    private ScriptNode? RootNode { get; set; } = null;
+
+    public DefinitionsTable? DefinitionsTable { get; private set; } = default;
+
+    public IEnumerable<Uri> Dependencies => DefinitionsTable?.Dependencies ?? [];
 
     public async Task ParseAsync(string documentText)
     {
@@ -47,13 +57,13 @@ public class Script(DocumentUri ScriptUri)
             Console.Error.WriteLine($"Failed to tokenise script: {ex.Message}");
 
             // Create a dummy IntelliSense container so we can provide an error to the IDE.
-            Sense = new(0, ScriptUri);
+            Sense = new(0, ScriptUri, LanguageId);
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledLexError, ex.GetType().Name);
 
             return Task.CompletedTask;
         }
 
-        ParserIntelliSense sense = Sense = new(endLine: endToken.Range.End.Line, ScriptUri);
+        ParserIntelliSense sense = Sense = new(endLine: endToken.Range.End.Line, ScriptUri, LanguageId);
 
         // Preprocess the tokens.
         Preprocessor preprocessor = new(startToken, sense);
@@ -70,13 +80,15 @@ public class Script(DocumentUri ScriptUri)
             return Task.CompletedTask;
         }
 
+        // Build a library of tokens so IntelliSense can quickly lookup a token at a given position.
+        Sense.CommitTokens(startToken);
+
         // Build the AST.
         AST.Parser parser = new(startToken, sense);
-        ScriptNode rootNode;
 
         try
         {
-            rootNode = parser.Parse();
+            RootNode = parser.Parse();
         }
         catch (Exception ex)
         {
@@ -87,13 +99,33 @@ public class Script(DocumentUri ScriptUri)
             return Task.CompletedTask;
         }
 
+        // Gather signatures for all functions and classes.
+        string initialNamespace = Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+        DefinitionsTable = new(initialNamespace);
+
+        SignatureAnalyser signatureAnalyser = new(RootNode, DefinitionsTable, Sense);
+        try
+        {
+            signatureAnalyser.Analyse();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Console.Error.WriteLine($"Failed to signature analyse script: {ex.Message}");
+
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
+
         Parsed = true;
         return Task.CompletedTask;
     }
 
-    public async Task AnalyseAsync()
+    public async Task AnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
     {
-        await WaitUntilParsedAsync();
+        await WaitUntilParsedAsync(cancellationToken);
+
+        // TODO: Implement this.
     }
 
     public async Task<List<Diagnostic>> GetDiagnosticsAsync(CancellationToken cancellationToken)
@@ -108,8 +140,8 @@ public class Script(DocumentUri ScriptUri)
     public async Task PushSemanticTokensAsync(SemanticTokensBuilder builder, CancellationToken cancellationToken)
     {
         await WaitUntilParsedAsync(cancellationToken);
-        
-        foreach(ISemanticToken token in Sense.SemanticTokens)
+
+        foreach (ISemanticToken token in Sense.SemanticTokens)
         {
             builder.Push(token.Range, token.SemanticTokenType, token.SemanticTokenModifiers);
         }
@@ -127,16 +159,29 @@ public class Script(DocumentUri ScriptUri)
         return null;
     }
 
+    public async Task<CompletionList?> GetCompletionAsync(Position position, CancellationToken cancellationToken)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+        return Sense.GetCompletionsFromPosition(position);
+    }
+
     private async Task WaitUntilParsedAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        
+
         if (ParsingTask is null)
         {
             throw new InvalidOperationException("The script has not been parsed yet.");
         }
         await ParsingTask;
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    public async Task<IEnumerable<IExportedSymbol>> IssueExportedSymbolsAsync(CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        return DefinitionsTable!.ExportedFunctions ?? [];
     }
 
     //private void ThrowIfNotAnalysed()

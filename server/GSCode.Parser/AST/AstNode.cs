@@ -36,7 +36,7 @@ internal enum AstNodeType
     SwitchStmt,
     CaseList,
     CaseStmt,
-    CaseLabel, 
+    CaseLabel,
     DefaultLabel,
     Expr,
     ArgsList,
@@ -77,8 +77,8 @@ internal sealed class DependencyNode(PathNode input) : AstNode(AstNodeType.Depen
 {
     public required string Path { get; init; } = string.Join(System.IO.Path.DirectorySeparatorChar, input.Segments);
     public Range Range { get; init; } = RangeHelper.From(input.First!.Range.Start, input.Last!.Range.End);
+    public Token FirstPathToken { get; init; } = input.First!;
 }
-
 internal sealed class PathNode(Token? last = null) : AstNode(AstNodeType.Temporary)
 {
     public LinkedList<string> Segments { get; } = new();
@@ -152,7 +152,7 @@ internal sealed class StmtListNode(LinkedList<AstNode>? statements = null) : Ast
     public LinkedList<AstNode> Statements { get; } = statements ?? new();
 }
 
-internal sealed class EmptyStmtNode() : AstNode(AstNodeType.EmptyStmt) {}
+internal sealed class EmptyStmtNode() : AstNode(AstNodeType.EmptyStmt) { }
 
 internal sealed class IfStmtNode() : AstNode(AstNodeType.IfStmt)
 {
@@ -251,7 +251,7 @@ internal sealed class CaseLabelNode(AstNodeType labelType, ExprNode? value = def
 internal abstract class ExprNode(ExprOperatorType operatorType, Range range) : AstNode(AstNodeType.Expr)
 {
     public Range Range { get; } = range;
-    
+
     public ExprOperatorType OperatorType { get; } = operatorType;
 }
 
@@ -274,8 +274,11 @@ internal sealed class DataExprNode : ExprNode
             {
                 // Numbers
                 TokenType.Float => new(float.Parse(token.Lexeme), ScrDataTypes.Float, token.Range),
-                TokenType.Integer => new(int.Parse(token.Lexeme), ScrDataTypes.Int, token.Range),
-                TokenType.Hex => new(int.Parse(token.Lexeme[2..], System.Globalization.NumberStyles.HexNumber),
+                // TODO: temp - addresses issue with int overflow on 2147483648 without further information on why this is happening yet
+                // TODO: this is a thing in util_shared, and it's unclear what the intended behaviour is. Validate and confirm later, then
+                // undo the long change if possible.
+                TokenType.Integer => new(long.Parse(token.Lexeme), ScrDataTypes.Int, token.Range),
+                TokenType.Hex => new(long.Parse(token.Lexeme[2..], System.Globalization.NumberStyles.HexNumber),
                     ScrDataTypes.Int, token.Range),
                 // Strings - remove quotes
                 TokenType.String => new(token.Lexeme[1..^1], ScrDataTypes.String, token.Range),
@@ -298,7 +301,7 @@ internal sealed class DataExprNode : ExprNode
         catch (Exception ex)
         {
             throw new Exception(
-                "Failed to parse primitive token, which suggests that the lexer is not producing valid tokens.",
+                $"Failed to parse primitive token, which suggests that the lexer is not producing valid tokens. The intention was: {token.Lexeme}, for type {token.Type}.",
                 ex);
         }
     }
@@ -331,19 +334,19 @@ internal sealed class TernaryExprNode(ExprNode condition, ExprNode? then, ExprNo
 internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.Operand, identifier.Range)
 {
     public bool IsAnim { get; } = identifier.Type == TokenType.AnimIdentifier;
-    
+
     public string Identifier { get; } = identifier.Lexeme;
 }
 
 internal sealed class BinaryExprNode(ExprNode? left, Token operatorToken, ExprNode? right)
     : ExprNode(
-        ExprOperatorType.Binary, 
+        ExprOperatorType.Binary,
         RangeHelper.From(left?.Range.Start ?? operatorToken.Range.Start, right?.Range.End ?? operatorToken.Range.End))
 {
     public ExprNode? Left { get; } = left;
     public Token Operator { get; } = operatorToken;
     public ExprNode? Right { get; } = right;
-    
+
     public TokenType Operation => Operator.Type;
 }
 
@@ -352,7 +355,7 @@ internal sealed class PrefixExprNode(Token operatorToken, ExprNode operand)
 {
     public Token Operator { get; } = operatorToken;
     public ExprNode Operand { get; } = operand;
-    
+
     public TokenType Operation => Operator.Type;
 }
 
@@ -361,7 +364,7 @@ internal sealed class PostfixExprNode(ExprNode operand, Token operatorToken)
 {
     public ExprNode Operand { get; } = operand;
     public Token Operator { get; } = operatorToken;
-    
+
     public TokenType Operation => Operator.Type;
 }
 
@@ -387,7 +390,7 @@ internal sealed class FunCallNode(Position startPosition, ExprNode? target, Args
     public ArgsListNode Arguments { get; } = arguments;
 
     public FunCallNode(ExprNode target, ArgsListNode arguments)
-        : this(target.Range.Start, target, arguments) {}
+        : this(target.Range.Start, target, arguments) { }
 }
 
 internal sealed class NamespacedMemberNode(ExprNode @namespace, ExprNode member)
@@ -428,7 +431,7 @@ internal class MemberDeclNode(Token? nameToken) : AstNode(AstNodeType.ClassMembe
     public Token? NameToken { get; } = nameToken;
 }
 
-internal class StructorDefnNode(Token keywordToken, StmtListNode body) 
+internal class StructorDefnNode(Token keywordToken, StmtListNode body)
     : AstNode(keywordToken.Type == TokenType.Constructor ? AstNodeType.Constructor : AstNodeType.Destructor)
 {
     public Token KeywordToken { get; } = keywordToken;

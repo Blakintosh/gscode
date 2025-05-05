@@ -1,4 +1,6 @@
-﻿using GSCode.Parser.AST.Expressions;
+﻿using GSCode.Parser.AST;
+using GSCode.Parser.AST.Expressions;
+using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA.Sense;
 using System;
 using System.Collections.Generic;
@@ -56,7 +58,7 @@ internal enum ScrDataTypes : uint
     Struct = 1 << 7,
     Entity = (1 << 8) | Struct, // extension of the struct type
     Object = 1 << 9,
-    
+
     // Misc types
     Hash = 1 << 10,
     AnimTree = 1 << 11,
@@ -102,7 +104,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         object? value = default;
 
         // Clone the struct members, if any, if it's a struct type
-        if(IsStructType(Type) && Value is ScrStruct structData)
+        if (IsStructType(Type) && Value is ScrStruct structData)
         {
             value = structData.Copy();
         }
@@ -138,7 +140,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
     public static ScrData Merge(params ScrData[] incoming)
     {
         // Deep-copy if only one source
-        if(incoming.Length == 1)
+        if (incoming.Length == 1)
         {
             return incoming[0].Copy();
         }
@@ -147,35 +149,35 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         ScrDataTypes type = ScrDataTypes.Void;
         bool isReadOnly = true;
 
-        foreach(ScrData data in incoming)
+        foreach (ScrData data in incoming)
         {
             type |= data.Type;
 
             // Short-circuit if we've already established it's any
-            if(type == ScrDataTypes.Any)
+            if (type == ScrDataTypes.Any)
             {
                 return Default;
             }
 
-            if(!data.ReadOnly)
+            if (!data.ReadOnly)
             {
                 isReadOnly = false;
             }
         }
 
         object? value = default;
-        if(IsStructType(type))
+        if (IsStructType(type))
         {
             ScrStruct[] dataStructs = new ScrStruct[incoming.Length];
 
             // Establish whether we can merge all struct contents
-            for(int i = 0; i < incoming.Length; i++)
+            for (int i = 0; i < incoming.Length; i++)
             {
                 if (incoming[i].Value is not ScrStruct incomingStruct)
                 {
                     return new(type, value, isReadOnly);
                 }
-                
+
                 dataStructs[i] = incomingStruct;
             }
 
@@ -989,8 +991,8 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 //    public List<IExpressionNode> Arguments { get; init; }
 //}
 
-//internal class ScrParameter
-//{
+// internal class ScrParameter
+// {
 //    /// <summary>
 //    /// Name of the parameter.
 //    /// </summary>
@@ -1010,11 +1012,9 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 //    /// The text range of the parameter.
 //    /// </summary>
 //    public Range Range { get; init; }
-//}
-
-
-//internal record ScrParameter(string Name, ScrData Data, Range Range, IExpressionNode? DefaultNode = null);
-//internal record ScrVariable(string Name, ScrData Data, int LexicalScope, bool Global = false);
-//internal record ScrArguments(List<IExpressionNode> Arguments);
-
+// }
 #endif
+
+internal record ScrParameter(string Name, Token Source, Range Range, bool ByRef = false, ExprNode? Default = null);
+// internal record ScrVariable(string Name, ScrData Data, int LexicalScope, bool Global = false);
+// internal record ScrArguments(List<IExpressionNode> Arguments);

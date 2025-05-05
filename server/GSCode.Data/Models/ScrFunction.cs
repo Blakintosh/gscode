@@ -18,10 +18,11 @@ public record class ScrFunction : IExportedSymbol
     public List<string> Tags { get; set; } = default!;
     public string? Namespace { get; set; }
     public string? IntelliSense { get; set; }
+    public bool IsPrivate { get; set; } = false;
 }
 
 public record class ScrFunctionArg
-{   
+{
     public string Name { get; set; } = default!;
 
     public string? Description { get; set; } = default!;

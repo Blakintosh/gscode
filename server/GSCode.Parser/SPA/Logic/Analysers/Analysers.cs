@@ -109,23 +109,6 @@
 //    }
 //}
 
-//internal class UsingDirectiveAnalyser : SignatureNodeAnalyser
-//{
-//    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
-//    {
-//        // Implementation for UsingDirective
-//        FilePathComponent filePathComponent = (FilePathComponent)currentNode.Components[1];
-
-//        // Failed
-//        if(filePathComponent.ScriptPath is null)
-//        {
-//            return;
-//        }
-
-//        definitionsTable.AddDependency(filePathComponent.ScriptPath);
-//    }
-//}
-
 //internal class IfStatementAnalyser : DataFlowNodeAnalyser
 //{
 //    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
@@ -269,151 +252,6 @@
 //    }
 //}
 
-//internal class FunctionDeclarationSignatureAnalyser : SignatureNodeAnalyser
-//{
-//    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
-//    {
-//        // Extract the expression component
-//        NameComponent functionName = (NameComponent)currentNode.Components.First(component => component is NameComponent nameComponent && nameComponent.Type == TokenType.Name);
-//        ExpressionComponent expression = (ExpressionComponent)currentNode.Components.First(component => component as ExpressionComponent != null);
-
-//        // Analyze the parameter list
-//        List<ScrParameter>? parameters = FunctionSignatureAnalyser.Analyse(expression.Expression, sense);
-
-//        // Produce a definition for our function
-//        definitionsTable.AddFunction(new ScrFunction()
-//        {
-//            Name = functionName.GetSymbolName(),
-//            Description = null, // TODO: Check the DOC COMMENT
-//            Args = GetParametersAsRecord(parameters),
-//            CalledOn = new ScrFunctionArg()
-//            {
-//                Name = "unk",
-//                Required = false
-//            }, // TODO: Check the DOC COMMENT
-//            Returns = new ScrFunctionArg()
-//            {
-//                Name = "unk",
-//                Required = false
-//            }, // TODO: Check the DOC COMMENT
-//            Tags = new() { "userdefined" },
-//            IntelliSense = null // I have no idea why this exists
-//        }, currentNode.Branch);
-
-//        if(parameters is not null)
-//        {
-//            foreach(ScrParameter parameter in parameters)
-//            {
-//                sense.AddSenseToken(new ScrParameterSymbol(parameter));
-//            }
-//        }
-
-//        //if(expression.Expression.Empty || expression.Expression.Failed)
-//        //{
-//        //    return;
-//        //}
-
-//        //IExpressionNode node = expression.Expression.Root!;
-//        //if (value is not ScrArguments arguments)
-//        //{
-//        //    if((node is not TokenNode || node.NodeType != ExpressionNodeType.Field) &&
-//        //        (node is not OperationNode opNode || opNode.Operation == OperatorOps.Assign))
-//        //    {
-//        //        // ERROR: Expected a parameters list
-//        //        return;
-//        //    }
-
-//        //    AnalyzeArgument(node, symbolTable, sense);
-//        //    return;
-//        //}
-
-//        //// Check & define each parameter, add them to the symbol table
-//        //foreach(IExpressionNode argument in arguments.Arguments)
-//        //{
-//        //    AnalyzeArgument(argument, symbolTable, sense);
-//        //}
-//    }
-
-//    private static List<ScrFunctionArg>? GetParametersAsRecord(List<ScrParameter>? parameters)
-//    {
-//        if (parameters == null)
-//        {
-//            return null;
-//        }
-
-//        List<ScrFunctionArg> result = new();
-//        foreach(ScrParameter parameter in parameters)
-//        {
-//            result.Add(new ScrFunctionArg()
-//            {
-//                Name = parameter.Name,
-//                Description = null, // TODO: Check the DOC COMMENT
-//                Type = "unknown", // TODO: Check the DOC COMMENT
-//                Required = parameter.DefaultNode is null,
-//                Default = null // Not sure we can populate this
-//            });
-//        }
-
-//        return result;
-//    }
-
-//    //public override void AnalyzeForExport(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, DefinitionsTable definitionsTable, ParserIntelliSense sense)
-//    //{
-//    //    // Extract the expression component
-//    //    ExpressionComponent expression = (ExpressionComponent)currentNode.Components.First(component => component as ExpressionComponent != null);
-
-//    //    // Produce a ScrFunction
-//    //    NameComponent nameComponent = (NameComponent)currentNode.Components.First(c => c as NameComponent != null);
-
-//    //    ScrFunction scriptFunction = new()
-//    //    {
-//    //        Name = nameComponent.GetSymbolName(),
-//    //        Args = new()
-//    //    };
-
-//    //    if (expression.Expression.Empty || expression.Expression.Failed)
-//    //    {
-//    //        return;
-//    //    }
-
-//    //    // Analyze the expression
-//    //    ScrData value = ExpressionAnalyser.Analyse(expression.Expression, symbolTable, sense);
-
-//    //    IExpressionNode node = expression.Expression.Root!;
-//    //    if (value is not ScrArguments arguments)
-//    //    {
-//    //        // Check for error, which is suppressed on a dependency
-//    //        if ((node is not TokenNode || node.NodeType != ExpressionNodeType.Field) &&
-//    //            (node is not OperationNode opNode || opNode.Operation != OperatorOps.Assign))
-//    //        {
-//    //            return;
-//    //        }
-
-//    //        scriptFunction.Args.Add(new ScrFunctionArg
-//    //        {
-//    //            Name = node.GetFunctionDeclArgName()
-//    //        });
-//    //        return;
-//    //    }
-
-//    //    // Check & define each parameter, add them to the symbol table
-//    //    foreach (IExpressionNode argument in arguments.Arguments)
-//    //    {
-//    //        // Check for error, which is suppressed on a dependency
-//    //        if ((argument is not TokenNode || argument.NodeType != ExpressionNodeType.Field) &&
-//    //            (argument is not OperationNode opNode || opNode.Operation != OperatorOps.Assign))
-//    //        {
-//    //            return;
-//    //        }
-
-//    //        scriptFunction.Args.Add(new ScrFunctionArg
-//    //        {
-//    //            Name = argument.GetFunctionDeclArgName()
-//    //        });
-//    //    }
-//    //}
-
-//}
 
 //internal class FunctionDeclarationStaticAnalyser : DataFlowNodeAnalyser
 //{
@@ -465,7 +303,7 @@
 
 ////    public override void Analyze(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
 ////    {
-        
+
 ////    }
 ////}
 
@@ -474,17 +312,6 @@
 //    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, SymbolTable symbolTable, ParserIntelliSense sense)
 //    {
 //        // Implementation for PrecacheDirective
-//    }
-//}
-
-//internal class NamespaceDirectiveAnalyser : SignatureNodeAnalyser
-//{
-//    public override void Analyse(ASTNode currentNode, ASTNode? previousNode, ASTNode? nextNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
-//    {
-//        // Extract the new namespace
-//        NameComponent newNamespace = (NameComponent)currentNode.Components.First(component => component is NameComponent nameComponent && nameComponent.Type == TokenType.Name);
-
-//        definitionsTable.CurrentNamespace = newNamespace.GetSymbolName();
 //    }
 //}
 
@@ -536,7 +363,7 @@
 
 //        // Analyze the expression
 //        ScrData value = ExpressionAnalyzer.Analyse(expression.Expression, symbolTable, sense);
-        
+
 //        if(!value.IsOfTypes(ScrDataTypes.Int, ScrDataTypes.Float))
 //        {
 //            sense.Diagnostics.Add(DiagnosticCodes.GetDiagnostic(expression.Expression.Range, DiagnosticSources.Spa, GSCErrorCodes.NoImplicitConversionExists, value.TypeToString(), "int | float"));

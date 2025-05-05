@@ -2,6 +2,8 @@
 using CommandLine;
 using GSCode.NET.LSP;
 using GSCode.Parser;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.CLI;
@@ -22,32 +24,32 @@ class Program
         await CommandLine.Parser.Default.ParseArguments<Options>(args)
                .WithParsedAsync<Options>(async o =>
                {
-                   ScriptManager scriptManager = new ScriptManager();
+                   ScriptManager scriptManager = new ScriptManager(new NullLogger<ScriptManager>());
 
-                    if (o.Parse != null)
-                    {
-                        Console.WriteLine($"Parsing {o.Parse}...");
-                        Uri documentUri = new Uri(o.Parse);
-                        TextDocumentItem documentItem = new TextDocumentItem()
-                        {
-                            Uri = documentUri,
-                            Text = File.ReadAllText(o.Parse)
-                        };
+                   if (o.Parse != null)
+                   {
+                       Console.WriteLine($"Parsing {o.Parse}...");
+                       Uri documentUri = new Uri(o.Parse);  
+                       TextDocumentItem documentItem = new TextDocumentItem()
+                       {
+                           Uri = documentUri,
+                           Text = File.ReadAllText(o.Parse)
+                       };
 
-                        // Adding to ScriptManager's cache and getting diagnostics
-                        IEnumerable<Diagnostic> diagnostics = await scriptManager.AddEditorAsync(documentItem);
+                       // Adding to ScriptManager's cache and getting diagnostics
+                       IEnumerable<Diagnostic> diagnostics = await scriptManager.AddEditorAsync(documentItem);
 
-                        Console.WriteLine("Diagnostics:");
-                        foreach (var diagnosticsItem in diagnostics)
-                        {
-                            Console.WriteLine($"{diagnosticsItem.Message}");
-                        }
-                    }
+                       Console.WriteLine("Diagnostics:");
+                       foreach (var diagnosticsItem in diagnostics)
+                       {
+                           Console.WriteLine($"{diagnosticsItem.Message}");
+                       }
+                   }
 
-                    //if (o.Benchmark)
-                    //{
-                    //    var summary = BenchmarkRunner.Run<Benchmarks>();
-                    //}
+                   //if (o.Benchmark)
+                   //{
+                   //    var summary = BenchmarkRunner.Run<Benchmarks>();
+                   //}
                });
     }
 }

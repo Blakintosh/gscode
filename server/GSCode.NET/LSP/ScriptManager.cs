@@ -6,8 +6,9 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using Microsoft.Extensions.Logging;
 
-namespace GSCode.NET.LSP; 
+namespace GSCode.NET.LSP;
 
 public class ScriptCache
 {
@@ -29,7 +30,7 @@ public class ScriptCache
         foreach (TextDocumentContentChangeEvent change in changes)
         {
             // If no range is specified then this is an outright replacement of the entire document.
-            if(change.Range == null)
+            if (change.Range == null)
             {
                 cachedVersion = new(change.Text);
                 continue;
@@ -44,7 +45,7 @@ public class ScriptCache
             int endLineBase = GetBaseCharOfLine(cachedString, end.Line);
             int endPosition = endLineBase + end.Character;
 
-            if(endLineBase == -1 || endPosition > cachedVersion.Length)
+            if (endLineBase == -1 || endPosition > cachedVersion.Length)
             {
                 cachedVersion.Remove(startPosition, cachedVersion.Length - startPosition);
                 cachedVersion.Append(change.Text);
@@ -91,12 +92,14 @@ public class CachedScript
 public class ScriptManager
 {
     private readonly ScriptCache _cache;
+    private readonly ILogger<ScriptManager> _logger;
 
     private ConcurrentDictionary<DocumentUri, CachedScript> Scripts { get; } = new();
 
-    public ScriptManager()
+    public ScriptManager(ILogger<ScriptManager> logger)
     {
         _cache = new();
+        _logger = logger;
     }
 
     public async Task<IEnumerable<Diagnostic>> AddEditorAsync(TextDocumentItem document, CancellationToken cancellationToken = default)
@@ -104,11 +107,7 @@ public class ScriptManager
         string content = _cache.AddToCache(document);
         Script script = GetEditor(document);
 
-        await script.ParseAsync(content);
-
-        // await script.GetHoverAsync(new Position(13, 15), cancellationToken);
-
-        return await script.GetDiagnosticsAsync(cancellationToken);
+        return await ProcessEditorAsync(document.Uri.ToUri(), script, content, cancellationToken);
     }
 
     public async Task<IEnumerable<Diagnostic>> UpdateEditorAsync(OptionalVersionedTextDocumentIdentifier document, IEnumerable<TextDocumentContentChangeEvent> changes, CancellationToken cancellationToken = default)
@@ -116,7 +115,38 @@ public class ScriptManager
         string updatedContent = _cache.UpdateCache(document, changes);
         Script script = GetEditor(document);
 
-        await script.ParseAsync(updatedContent);
+        return await ProcessEditorAsync(document.Uri.ToUri(), script, updatedContent, cancellationToken);
+    }
+
+    private async Task<IEnumerable<Diagnostic>> ProcessEditorAsync(Uri documentUri, Script script, string content, CancellationToken cancellationToken = default)
+    {
+        await script.ParseAsync(content);
+
+        List<Task> dependencyTasks = new();
+
+        // Now, get their dependencies and parse them.
+        foreach (Uri dependency in script.Dependencies)
+        {
+            dependencyTasks.Add(AddDependencyAsync(documentUri, dependency, script.LanguageId));
+        }
+
+        await Task.WhenAll(dependencyTasks);
+
+        // Using this, we can now get the exported symbols for the script.
+        List<IExportedSymbol> exportedSymbols = new();
+
+        // TODO: find a cleaner way to do this.
+        foreach (Uri dependency in script.Dependencies)
+        {
+            if (Scripts.TryGetValue(dependency, out CachedScript? cachedScript))
+            {
+                exportedSymbols.AddRange(await cachedScript.Script.IssueExportedSymbolsAsync(cancellationToken));
+            }
+        }
+        // Finally, analyse the script.
+        await script.AnalyseAsync(exportedSymbols, cancellationToken);
+
+        // await script.GetHoverAsync(new Position(13, 15), cancellationToken);
 
         return await script.GetDiagnosticsAsync(cancellationToken);
     }
@@ -173,14 +203,14 @@ public class ScriptManager
     }
 #endif
 
-    private async Task<Script> AddDependencyAsync(Uri dependentUri, Uri uri)
+    private async Task<Script> AddDependencyAsync(Uri dependentUri, Uri uri, string languageId)
     {
         if (!Scripts.TryGetValue(uri, out CachedScript? script))
         {
             script = Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Dependency,
-                Script = new Script(uri)
+                Script = new Script(uri, languageId)
             };
             await script.Script.ParseAsync(File.ReadAllText(uri.LocalPath));
         }
@@ -201,7 +231,7 @@ public class ScriptManager
             }
 
             // Housekeeping
-            if(dependents.Count == 0 && script.Value.Type == CachedScriptType.Dependency)
+            if (dependents.Count == 0 && script.Value.Type == CachedScriptType.Dependency)
             {
                 Scripts.Remove(script.Key, out _);
             }
@@ -215,29 +245,29 @@ public class ScriptManager
 
     private Script GetEditor(TextDocumentItem document)
     {
-        return GetEditorByUri(document.Uri);
+        return GetEditorByUri(document.Uri, document.LanguageId);
     }
 
-    private Script GetEditorByUri(DocumentUri uri)
+    private Script GetEditorByUri(DocumentUri uri, string? languageId = null)
     {
         if (!Scripts.ContainsKey(uri))
         {
             Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
-                Script = new Script(uri)
+                Script = new Script(uri, languageId ?? "gsc")
                 // uri, add editor dependencies async
             };
         }
 
         CachedScript script = Scripts[uri];
 
-        if(script.Type != CachedScriptType.Editor)
+        if (script.Type != CachedScriptType.Editor)
         {
             script = Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
-                Script = new Script(uri)
+                Script = new Script(uri, languageId ?? "gsc")
             };
         }
 

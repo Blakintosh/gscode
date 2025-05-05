@@ -291,11 +291,11 @@ internal record ScrParameterSymbol(ScrParameter Source) : ISenseDefinition
 
 internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseDefinition
 {
-    public bool IsFromPreprocessor { get; } = false;
-    public Range Range { get; } = NameToken.Range;
+    public virtual bool IsFromPreprocessor { get; } = false;
+    public virtual Range Range { get; } = NameToken.Range;
 
-    public string SemanticTokenType { get; } = "function";
-    public string[] SemanticTokenModifiers { get; } = [];
+    public virtual string SemanticTokenType { get; } = "function";
+    public virtual string[] SemanticTokenModifiers { get; } = [];
 
     public virtual Hover GetHover()
     {
@@ -389,11 +389,11 @@ internal record ScrClassMemberSymbol(Token NameToken, ScrMember Source, ScrClass
 
 internal record ScrMethodSymbol(Token NameToken, ScrFunction Source, ScrClass ClassSource) : ScrFunctionSymbol(NameToken, Source)
 {
-    public bool IsFromPreprocessor { get; } = false;
-    public Range Range { get; } = NameToken.Range;
+    public override bool IsFromPreprocessor { get; } = false;
+    public override Range Range { get; } = NameToken.Range;
 
-    public string SemanticTokenType { get; } = "method";
-    public string[] SemanticTokenModifiers { get; } = [];
+    public override string SemanticTokenType { get; } = "method";
+    public override string[] SemanticTokenModifiers { get; } = [];
 
     public override Hover GetHover()
     {
@@ -428,7 +428,7 @@ internal record ScrDependencySymbol(Range Range, string Path, string RawPath) : 
     public bool IsFromPreprocessor { get; } = false;
     public Range Range { get; } = Range;
 
-    public string SemanticTokenType { get; } = "namespace";
+    public string SemanticTokenType { get; } = "string";
     public string[] SemanticTokenModifiers { get; } = [];
 
     public Hover GetHover()

@@ -124,12 +124,9 @@ public class ScriptManager
 
         List<Task> dependencyTasks = new();
 
-        _logger.LogInformation("Parsing DONE. Looking at deps...");
-
         // Now, get their dependencies and parse them.
         foreach (Uri dependency in script.Dependencies)
         {
-            _logger.LogInformation("Adding dependency: {Dependency}", dependency);
             dependencyTasks.Add(AddDependencyAsync(documentUri, dependency, script.LanguageId));
         }
 

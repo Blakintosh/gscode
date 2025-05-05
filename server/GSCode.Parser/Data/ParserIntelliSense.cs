@@ -45,11 +45,13 @@ internal sealed class ParserIntelliSense
     public DocumentTokensLibrary Tokens { get; } = new();
 
     private readonly string _scriptPath;
+    public readonly string _languageId;
 
-    public ParserIntelliSense(int endLine, DocumentUri scriptUri)
+    public ParserIntelliSense(int endLine, DocumentUri scriptUri, string languageId)
     {
         HoverLibrary = new(endLine + 1);
         _scriptPath = scriptUri.Path;
+        _languageId = languageId;
     }
 
     public void AddSenseToken(Token token, ISenseDefinition definition)
@@ -81,6 +83,19 @@ internal sealed class ParserIntelliSense
     public void AddDependency(string scriptPath)
     {
         Dependencies.Add(new Uri(scriptPath));
+    }
+
+    public string? GetDependencyPath(string dependencyPath, Range sourceRange)
+    {
+        string qualifiedDependencyPath = dependencyPath + "." + _languageId;
+        string? resolvedPath = ParserUtil.GetScriptFilePath(_scriptPath, qualifiedDependencyPath);
+        if (resolvedPath is null)
+        {
+            AddSpaDiagnostic(sourceRange, GSCErrorCodes.MissingUsingFile, qualifiedDependencyPath);
+            return null;
+        }
+
+        return resolvedPath;
     }
 
     public TokenList? GetFileTokens(string dependencyPath, Range? belongToRange = null)

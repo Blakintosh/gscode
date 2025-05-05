@@ -148,7 +148,7 @@
         },
         "language-reserved-variables": {
             "name": "variable.language.gsc",
-            "match": "\\b(self|level|game|world|vararg)\\b"
+            "match": "\\b(self|level|game|world|vararg|anim)\\b"
         },
 		"storage-types": {
 			"name": "storage.type.gsc",
@@ -195,7 +195,7 @@
         "control": {
             "name": "keyword.control.gsc",
             "comment": "Reserved control keywords in GSC/CSC",
-            "match": "(?i)\\b(class|return|wait|thread|classes|anim|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|isdefined)\\b"
+            "match": "(?i)\\b(class|return|wait|thread|classes|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|isdefined)\\b"
         },
         "escape": {
             "name": "constant.character.escape",

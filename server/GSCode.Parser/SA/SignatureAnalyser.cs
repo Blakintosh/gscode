@@ -17,6 +17,16 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
     public void Analyse()
     {
+        foreach (AstNode scriptDependency in RootNode.Dependencies)
+        {
+            switch (scriptDependency.NodeType)
+            {
+                case AstNodeType.Dependency:
+                    AnalyseDependency((DependencyNode)scriptDependency);
+                    break;
+            }
+        }
+
         foreach (AstNode scriptDefn in RootNode.ScriptDefns)
         {
             switch (scriptDefn.NodeType)
@@ -26,9 +36,6 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                     break;
                 case AstNodeType.Namespace:
                     AnalyseNamespace((NamespaceNode)scriptDefn);
-                    break;
-                case AstNodeType.Dependency:
-                    AnalyseDependency((DependencyNode)scriptDefn);
                     break;
                 case AstNodeType.ClassDefinition:
                     AnalyseClass((ClassDefnNode)scriptDefn);
@@ -141,8 +148,16 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
     public void AnalyseDependency(DependencyNode dependencyNode)
     {
+        string? dependencyPath = Sense.GetDependencyPath(dependencyNode.Path, dependencyNode.Range);
+        if (dependencyPath is null)
+        {
+            return;
+        }
+
+        Sense.AddSenseToken(dependencyNode.FirstPathToken, new ScrDependencySymbol(dependencyNode.Range, dependencyPath, dependencyNode.Path));
+
         // Add the dependency to the list
-        DefinitionsTable.AddDependency(dependencyNode.Path);
+        DefinitionsTable.AddDependency(dependencyPath);
     }
 
     public void AnalyseNamespace(NamespaceNode namespaceNode)
@@ -233,6 +248,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             if (parameter.Default is null)
             {
                 result.Add(new ScrParameter(name, nameToken, nameToken.Range, byRef));
+                continue;
             }
 
             // TODO: do we need to handle defaults now, or leave till later?
@@ -402,6 +418,28 @@ internal record ScrMethodSymbol(Token NameToken, ScrFunction Source, ScrClass Cl
             {
                 Kind = MarkupKind.Markdown,
                 Value = builder.ToString()
+            })
+        };
+    }
+}
+
+internal record ScrDependencySymbol(Range Range, string Path, string RawPath) : ISenseDefinition
+{
+    public bool IsFromPreprocessor { get; } = false;
+    public Range Range { get; } = Range;
+
+    public string SemanticTokenType { get; } = "namespace";
+    public string[] SemanticTokenModifiers { get; } = [];
+
+    public Hover GetHover()
+    {
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = $"```gsc\n#using {RawPath}\n/* (script) \"{Path}\" */\n```"
             })
         };
     }

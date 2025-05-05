@@ -16,13 +16,15 @@ using System.IO;
 
 namespace GSCode.Parser;
 
-public class Script(DocumentUri ScriptUri)
+public class Script(DocumentUri ScriptUri, string languageId)
 {
     public bool Failed { get; private set; } = false;
     public bool Parsed { get; private set; } = false;
     public bool Analysed { get; private set; } = false;
 
     internal ParserIntelliSense Sense { get; private set; } = default!;
+
+    public string LanguageId { get; } = languageId;
 
     private Task? ParsingTask { get; set; } = null;
 
@@ -55,13 +57,13 @@ public class Script(DocumentUri ScriptUri)
             Console.Error.WriteLine($"Failed to tokenise script: {ex.Message}");
 
             // Create a dummy IntelliSense container so we can provide an error to the IDE.
-            Sense = new(0, ScriptUri);
+            Sense = new(0, ScriptUri, LanguageId);
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledLexError, ex.GetType().Name);
 
             return Task.CompletedTask;
         }
 
-        ParserIntelliSense sense = Sense = new(endLine: endToken.Range.End.Line, ScriptUri);
+        ParserIntelliSense sense = Sense = new(endLine: endToken.Range.End.Line, ScriptUri, LanguageId);
 
         // Preprocess the tokens.
         Preprocessor preprocessor = new(startToken, sense);
@@ -119,9 +121,11 @@ public class Script(DocumentUri ScriptUri)
         return Task.CompletedTask;
     }
 
-    public async Task AnalyseAsync()
+    public async Task AnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
     {
-        await WaitUntilParsedAsync();
+        await WaitUntilParsedAsync(cancellationToken);
+
+        // TODO: Implement this.
     }
 
     public async Task<List<Diagnostic>> GetDiagnosticsAsync(CancellationToken cancellationToken)
@@ -171,6 +175,13 @@ public class Script(DocumentUri ScriptUri)
         }
         await ParsingTask;
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    public async Task<IEnumerable<IExportedSymbol>> IssueExportedSymbolsAsync(CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        return DefinitionsTable!.ExportedFunctions ?? [];
     }
 
     //private void ThrowIfNotAnalysed()

@@ -84,7 +84,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         Sense.CommitTokens(startToken);
 
         // Build the AST.
-        AST.Parser parser = new(startToken, sense);
+        AST.Parser parser = new(startToken, sense, LanguageId);
 
         try
         {

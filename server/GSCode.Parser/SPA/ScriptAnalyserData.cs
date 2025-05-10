@@ -33,7 +33,7 @@ public class ScriptAnalyserData
         LanguageId = languageId;
     }
 
-    private static readonly Dictionary<string, ScriptApiJsonLibrary> _languageLibraries = new();
+    private static readonly Dictionary<string, ScrLibraryData> _languageLibraries = new();
 
     public static async Task<bool> LoadLanguageApiAsync(string url, string filePathFallback)
     {
@@ -68,13 +68,13 @@ public class ScriptAnalyserData
         {
             ScriptApiJsonLibrary library = JsonConvert.DeserializeObject<ScriptApiJsonLibrary>(source);
 
-            if (_languageLibraries.TryGetValue(library.LanguageId, out ScriptApiJsonLibrary? existingLibrary)
-                && existingLibrary!.Revision > library.Revision)
+            if (_languageLibraries.TryGetValue(library.LanguageId, out ScrLibraryData? existingLibrary)
+                && existingLibrary!.Library.Revision > library.Revision)
             {
                 return false;
             }
 
-            _languageLibraries[library.LanguageId] = library;
+            _languageLibraries[library.LanguageId] = new ScrLibraryData(library);
             Log.Information("Loaded API library for {LanguageId}.", library.LanguageId);
             return true;
         }
@@ -87,12 +87,38 @@ public class ScriptAnalyserData
 
     public List<ScrFunctionDefinition> GetApiFunctions(string? filter = null)
     {
-        if (!_languageLibraries.TryGetValue(LanguageId, out ScriptApiJsonLibrary? library))
+        if (!_languageLibraries.TryGetValue(LanguageId, out ScrLibraryData? library))
         {
             Log.Error("No API library found for {LanguageId}", LanguageId);
             return [];
         }
-        Log.Information("API library found for {LanguageId}, it has {Count} functions", LanguageId, library.Api.Count);
-        return library.Api.ToList();
+        Log.Information("API library found for {LanguageId}, it has {Count} functions", LanguageId, library.Functions.Count);
+        return library.Library.Api;
+    }
+
+    public ScrFunctionDefinition? GetApiFunction(string name)
+    {
+        if (!_languageLibraries.TryGetValue(LanguageId, out ScrLibraryData? library))
+        {
+            Log.Error("No API library found for {LanguageId}", LanguageId);
+            return null;
+        }
+        return library.Functions.TryGetValue(name, out ScrFunctionDefinition? function) ? function : null;
+    }
+}
+
+internal class ScrLibraryData
+{
+    public ScriptApiJsonLibrary Library { get; }
+    public SortedList<string, ScrFunctionDefinition> Functions { get; }
+
+    public ScrLibraryData(ScriptApiJsonLibrary library)
+    {
+        Library = library;
+        Functions = new SortedList<string, ScrFunctionDefinition>(library.Api.Count);
+        foreach (ScrFunctionDefinition function in library.Api)
+        {
+            Functions.Add(function.Name, function);
+        }
     }
 }

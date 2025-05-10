@@ -44,6 +44,11 @@ internal sealed class ParserIntelliSense
     /// </summary>
     public DocumentTokensLibrary Tokens { get; } = new();
 
+    /// <summary>
+    /// Library of completions to quickly lookup completions at a given position.
+    /// </summary>
+    public DocumentCompletionsLibrary Completions { get; }
+
     private readonly string _scriptPath;
     public readonly string _languageId;
 
@@ -52,6 +57,7 @@ internal sealed class ParserIntelliSense
         HoverLibrary = new(endLine + 1);
         _scriptPath = scriptUri.Path;
         _languageId = languageId;
+        Completions = new(Tokens, languageId);
     }
 
     public void AddSenseToken(Token token, ISenseDefinition definition)
@@ -118,28 +124,6 @@ internal sealed class ParserIntelliSense
     public void CommitTokens(Token startToken)
     {
         Tokens.AddRange(startToken);
-    }
-
-    public CompletionList GetCompletionsFromPosition(Position position)
-    {
-        Token? token = Tokens.Get(position);
-
-        if (token is null)
-        {
-            return [];
-        }
-
-        // For the moment, we'll just support Identifier completions.
-        if (token.Type != TokenType.Identifier)
-        {
-            return [];
-        }
-
-        // Get the completions from the definition.
-
-
-        // return token.SenseDefinition?.GetCompletions();
-        return [];
     }
 
     /* Others to support:

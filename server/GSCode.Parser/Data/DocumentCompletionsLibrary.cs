@@ -68,9 +68,10 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
     private CompletionItem CreateCompletionItem(ScrFunctionDefinition function)
     {
+        // TODO: has been hacked to show first only, but we need to handle all overloads eventually.
         // Generate snippet-formatted parameters with tabstops
         string insertText = function.Name;
-        if (function.Parameters != null && function.Parameters.Count > 0)
+        if (function.Overloads.First().Parameters.Count > 0)
         {
             insertText += "(";
 
@@ -78,7 +79,7 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
             List<string> paramSnippets = new List<string>();
             int tabIndex = 1;
 
-            foreach (var param in function.Parameters)
+            foreach (var param in function.Overloads.First().Parameters)
             {
                 // Add mandatory parameters with tabstops
                 if (param.Mandatory.GetValueOrDefault(false))
@@ -105,37 +106,15 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
             insertText += "()$0";
         }
 
-        // Prepare parameter documentation
-        string parameterDocs = "";
-        if (function.Parameters != null && function.Parameters.Count > 0)
-        {
-            parameterDocs = "\n\n**Parameters:**\n";
-            foreach (var param in function.Parameters)
-            {
-                string required = param.Mandatory.GetValueOrDefault(false) ? "required" : "optional";
-                parameterDocs += $"- `{param.Name ?? "param"}` ({required}): {param.Description ?? "No description"}\n";
-            }
-        }
-
-        // Add called-on context if available
-        string calledOn = "";
-        if (!string.IsNullOrEmpty(function.CalledOn))
-        {
-            calledOn = $"\n\n**Called on:** `{function.CalledOn}`";
-        }
-
-        // Create markdown documentation
-        string docValue = $"```gsc\n{function.Name}()\n```\n\n{function.Description ?? "No description"}{parameterDocs}{calledOn}";
-
         return new CompletionItem()
         {
             Label = function.Name,
             Detail = function.Description,
-            Documentation = new MarkupContent
+            Documentation = new StringOrMarkupContent(new MarkupContent()
             {
                 Kind = MarkupKind.Markdown,
-                Value = docValue
-            },
+                Value = function.Documentation
+            }),
             InsertText = insertText,
             InsertTextFormat = InsertTextFormat.Snippet,
             Kind = CompletionItemKind.Function,

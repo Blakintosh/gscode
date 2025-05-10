@@ -6,58 +6,119 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Serilog;
 
-#if PREVIEW
-namespace GSCode.Parser.SPA
+namespace GSCode.Parser.SPA;
+
+/// <summary>
+/// GSC symbol types. Not all are applicable in all contexts, e.g. namespaces on a stack frame
+/// </summary>
+file enum ScrSymbolType
 {
-    /// <summary>
-    /// GSC symbol types. Not all are applicable in all contexts, e.g. namespaces on a stack frame
-    /// </summary>
-    file enum ScrSymbolType
+    Unknown,
+    Function,
+    Variable,
+    Namespace,
+    Object
+}
+file record class ScrSymbol();
+
+public class ScriptAnalyserData
+{
+    public string GameId { get; } = "t7";
+    public string LanguageId { get; }
+
+    public ScriptAnalyserData(string languageId)
     {
-        Unknown,
-        Function,
-        Variable,
-        Namespace,
-        Object
+        LanguageId = languageId;
     }
-    file record class ScrSymbol();
 
-    public class ScriptAnalyserData
+    private static readonly Dictionary<string, ScrLibraryData> _languageLibraries = new();
+
+    public static async Task<bool> LoadLanguageApiAsync(string url, string filePathFallback)
     {
-        public string GameId { get; } = "t7";
-        public string LanguageId { get; }
-
-        public ScriptAnalyserData(string languageId)
+        // Try to load from URL
+        try
         {
-            LanguageId = languageId;
+            using HttpClient client = new();
+            string json = await client.GetStringAsync(url);
+            return LoadLanguageApiData(json);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to load API from {Url}", url);
         }
 
-        private static readonly Dictionary<string, ScriptApiJsonLibrary> _languageLibraries = new();
-
-        public static bool LoadLanguageApiLibrary(string source)
+        // Try to load from file
+        try
         {
-            try
-            {
-                ScriptApiJsonLibrary library = JsonConvert.DeserializeObject<ScriptApiJsonLibrary>(source);
-
-                if(_languageLibraries.TryGetValue(library.LanguageId, out ScriptApiJsonLibrary? existingLibrary)
-                    && existingLibrary!.Revision > library.Revision)
-                {
-                    return false;
-                }
-
-                _languageLibraries[library.LanguageId] = library;
-                //Log.Information("Loaded API library for {0}.", library.LanguageId);
-                return true;
-            }
-            catch(Exception e)
-            {
-                //Log.Warning(e, "Failed to deserialize API library.");
-            }
-            return false;
+            string json = File.ReadAllText(filePathFallback);
+            return LoadLanguageApiData(json);
         }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to load API from {FilePath}", filePathFallback);
+        }
+        return false;
+    }
+
+    private static bool LoadLanguageApiData(string source)
+    {
+        try
+        {
+            ScriptApiJsonLibrary library = JsonConvert.DeserializeObject<ScriptApiJsonLibrary>(source);
+
+            if (_languageLibraries.TryGetValue(library.LanguageId, out ScrLibraryData? existingLibrary)
+                && existingLibrary!.Library.Revision > library.Revision)
+            {
+                return false;
+            }
+
+            _languageLibraries[library.LanguageId] = new ScrLibraryData(library);
+            Log.Information("Loaded API library for {LanguageId}.", library.LanguageId);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to deserialize API library.");
+        }
+        return false;
+    }
+
+    public List<ScrFunctionDefinition> GetApiFunctions(string? filter = null)
+    {
+        if (!_languageLibraries.TryGetValue(LanguageId, out ScrLibraryData? library))
+        {
+            Log.Error("No API library found for {LanguageId}", LanguageId);
+            return [];
+        }
+        Log.Information("API library found for {LanguageId}, it has {Count} functions", LanguageId, library.Functions.Count);
+        return library.Library.Api;
+    }
+
+    public ScrFunctionDefinition? GetApiFunction(string name)
+    {
+        if (!_languageLibraries.TryGetValue(LanguageId, out ScrLibraryData? library))
+        {
+            Log.Error("No API library found for {LanguageId}", LanguageId);
+            return null;
+        }
+        return library.Functions.TryGetValue(name, out ScrFunctionDefinition? function) ? function : null;
     }
 }
 
-#endif
+internal class ScrLibraryData
+{
+    public ScriptApiJsonLibrary Library { get; }
+    public SortedList<string, ScrFunctionDefinition> Functions { get; }
+
+    public ScrLibraryData(ScriptApiJsonLibrary library)
+    {
+        Library = library;
+        Functions = new SortedList<string, ScrFunctionDefinition>(library.Api.Count);
+        foreach (ScrFunctionDefinition function in library.Api)
+        {
+            Functions.Add(function.Name, function);
+        }
+    }
+}

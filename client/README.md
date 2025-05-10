@@ -12,7 +12,11 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.2.1 beta (latest)
+### 0.2.2 beta (latest)
+* Added a 'dumb' completion handler to suggest function completions.
+* Added a 'dumb' handler to provide GSCode API hover documentation on built-in functions.
+
+### 0.2.1 beta
 * Added basic signature analysis for highlighting of class, function, method and parameter definitions.
 * Added diagnostic for missing scripts from using.
 * Added using highlight with script path hint.

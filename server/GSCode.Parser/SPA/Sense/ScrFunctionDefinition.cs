@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -25,19 +26,14 @@ public sealed class ScrFunctionDefinition
     public string? Description { get; set; }
 
     /// <summary>
-    /// The entity that this function is called on
-    /// </summary>
-    public string? CalledOn { get; set; }
-
-    /// <summary>
-    /// The parameter list of this function, which may be empty
-    /// </summary>
-    public List<ScrFunctionParameter> Parameters { get; set; } = [];
-
-    /// <summary>
     /// An example of this function's usage
     /// </summary>
     public string? Example { get; set; }
+
+    /// <summary>
+    /// The overloads (variants) of this function
+    /// </summary>
+    public List<ScrFunctionOverload> Overloads { get; set; } = [];
 
     /// <summary>
     /// The flags list of this function, which may be empty
@@ -45,6 +41,8 @@ public sealed class ScrFunctionDefinition
     public List<string> Flags { get; set; } = [];
 
     private string? _cachedDocumentation = null;
+
+    // TODO: has been hacked to show first only, but we need to handle all overloads eventually.
 
     /// <summary>
     /// Yields a documentation hover string for this function. Generated once, then cached.
@@ -58,7 +56,7 @@ public sealed class ScrFunctionDefinition
                 return documentation;
             }
 
-            string calledOnString = CalledOn is string calledOn ? $"{calledOn} " : string.Empty;
+            string calledOnString = Overloads.First().CalledOn is ScrFunctionParameter calledOn ? $"{calledOn.Name} " : string.Empty;
 
             _cachedDocumentation =
                 $"""
@@ -90,13 +88,13 @@ public sealed class ScrFunctionDefinition
 
     private string GetCodedParameterList()
     {
-        if (Parameters.Count == 0)
+        if (Overloads.First().Parameters.Count == 0)
         {
             return string.Empty;
         }
 
         List<string> parameters = new();
-        foreach (ScrFunctionParameter parameter in Parameters)
+        foreach (ScrFunctionParameter parameter in Overloads.First().Parameters)
         {
             if (parameter.Mandatory.HasValue && parameter.Mandatory.Value)
             {
@@ -111,13 +109,13 @@ public sealed class ScrFunctionDefinition
 
     private string GetParametersString()
     {
-        string calledOnString = CalledOn is string calledOn ? $"Called on: `<{calledOn}>`\n" : string.Empty;
+        string calledOnString = Overloads.First().CalledOn is ScrFunctionParameter calledOn ? $"Called on: `<{calledOn.Name}>`\n" : string.Empty;
 
         string parametersString = string.Empty;
-        if (Parameters.Count > 0)
+        if (Overloads.First().Parameters.Count > 0)
         {
             parametersString = "Parameters:\n";
-            foreach (ScrFunctionParameter parameter in Parameters)
+            foreach (ScrFunctionParameter parameter in Overloads.First().Parameters)
             {
                 string parameterNameString = (parameter.Mandatory.HasValue && parameter.Mandatory.Value) ? $"<{parameter.Name}>" : $"[{parameter.Name}]";
 
@@ -140,7 +138,7 @@ public sealed class ScrFunctionDefinition
             "broken" => "**Do not use this function as it is broken.**",
             "deprecated" => "**This function is deprecated and should not be used.**",
             "useless" => "_This function serves no purpose for modders._",
-            _ => throw new ArgumentOutOfRangeException(flag)
+            _ => string.Empty
         };
     }
 
@@ -149,11 +147,28 @@ public sealed class ScrFunctionDefinition
         List<string> flags = new();
         foreach (string flag in Flags)
         {
-            flags.Add(GetLabelForFlag(flag));
+            string label = GetLabelForFlag(flag);
+            if (!string.IsNullOrEmpty(label))
+            {
+                flags.Add(label);
+            }
         }
 
         return string.Join('\n', flags);
     }
+}
+
+public sealed class ScrFunctionOverload
+{
+    /// <summary>
+    /// The entity that this function is called on
+    /// </summary>
+    public ScrFunctionParameter? CalledOn { get; set; }
+
+    /// <summary>
+    /// The parameter list of this function, which may be empty
+    /// </summary>
+    public List<ScrFunctionParameter> Parameters { get; set; } = [];
 }
 
 /// <summary>

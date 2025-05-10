@@ -84,7 +84,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         Sense.CommitTokens(startToken);
 
         // Build the AST.
-        AST.Parser parser = new(startToken, sense);
+        AST.Parser parser = new(startToken, sense, LanguageId);
 
         try
         {
@@ -162,7 +162,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
     public async Task<CompletionList?> GetCompletionAsync(Position position, CancellationToken cancellationToken)
     {
         await WaitUntilParsedAsync(cancellationToken);
-        return Sense.GetCompletionsFromPosition(position);
+        return Sense.Completions.GetCompletionsFromPosition(position);
     }
 
     private async Task WaitUntilParsedAsync(CancellationToken cancellationToken = default)

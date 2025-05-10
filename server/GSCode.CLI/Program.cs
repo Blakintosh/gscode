@@ -2,9 +2,11 @@
 using CommandLine;
 using GSCode.NET.LSP;
 using GSCode.Parser;
+using GSCode.Parser.SPA;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using Serilog;
 
 namespace GSCode.CLI;
 

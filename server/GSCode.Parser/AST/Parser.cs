@@ -2,6 +2,8 @@
 using GSCode.Data;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
+using GSCode.Parser.SPA;
+using GSCode.Parser.SPA.Sense;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.AST;
@@ -9,7 +11,7 @@ namespace GSCode.Parser.AST;
 /// <summary>
 /// An implementation of an LL(1) recursive descent parser for the GSC & CSC languages.
 /// </summary>
-internal ref struct Parser(Token startToken, ParserIntelliSense sense)
+internal ref struct Parser(Token startToken, ParserIntelliSense sense, string languageId)
 {
     public Token PreviousToken { get; private set; } = startToken;
     public Token CurrentToken { get; private set; } = startToken;
@@ -27,6 +29,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
     }
     
     private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
+
+    // TODO: temp hack to add function hoverables in current version.
+    // todo: remove language ID once we have a permanent solution.
+    private readonly ScriptAnalyserData _scriptAnalyserData = new(languageId);
 
     public ParserIntelliSense Sense { get; } = sense;
 
@@ -2702,6 +2708,12 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
                 return null;
             }
             FunCallNode call = new FunCallNode(left, functionArgs);
+            
+            // TODO: HACK - create permanent function hoverable solution at SPA-stage in a future version
+            if(left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunctionDefinition function)
+            {
+                Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
+            }
             return CallOrAccessOpRhs(call);
         }
 
@@ -3100,5 +3112,33 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense)
         }
 
         Sense.AddAstDiagnostic(RangeHelper.From(new Position(PreviousToken.Range.End.Line, Math.Max(0, PreviousToken.Range.End.Character - 1)), PreviousToken.Range.End), errorCode, args);
+    }
+}
+
+
+/// <summary>
+/// Records the definition of a function parameter for semantics & hovers
+/// </summary>
+/// <param name="Source">The parameter source</param>
+internal record DumbFunctionSymbol(Token Token, ScrFunctionDefinition Source) : ISenseDefinition
+{
+    // I'm pretty sure this is redundant
+    public bool IsFromPreprocessor { get; } = false;
+    public Range Range { get; } = Token.Range;
+
+    public string SemanticTokenType { get; } = "function";
+    public string[] SemanticTokenModifiers { get; } = [];
+
+    public Hover GetHover()
+    {
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = Source.Documentation
+            })
+        };
     }
 }

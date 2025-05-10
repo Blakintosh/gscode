@@ -33,12 +33,12 @@ internal class CompletionHandler(ILanguageServerFacade facade,
         CompletionList? result = null;
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
 
-        if(script is not null)
+        if (script is not null)
         {
             result = await script.GetCompletionAsync(request.Position, cancellationToken);
         }
 
-        _logger.LogInformation("Completion request processed. CompletionList being sent: {result}", result);
+        _logger.LogInformation("Completion request processed. CompletionList being sent: {result}", result.Count());
         return result;
     }
 

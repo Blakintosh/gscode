@@ -13,37 +13,38 @@ using OmniSharp.Extensions.LanguageServer.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Reflection;
 
 
 Log.Logger = new LoggerConfiguration()
 				.MinimumLevel.Debug()
 				.WriteTo.Console()
-				//.WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
+#if DEBUG
+				.WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
+#endif
 				.CreateLogger();
 
 //IObserver<WorkDoneProgressReport> workDone = null!;
 
 Log.Information("GSCode Language Server");
 
-// Load GSC API into the SPA
-// try
-// {
-//     if (File.Exists(@"api/t7_api_gsc.json"))
-//     {
-//         ScriptAnalyserData.LoadLanguageApiLibrary(File.ReadAllText(@"api/t7_api_gsc.json"));
-//     }
-// }
-// catch(Exception) { }
-//
-// // Load CSC API into the SPA
-// try
-// {
-//     if (File.Exists(@"api/t7_api_csc.json"))
-//     {
-//         ScriptAnalyserData.LoadLanguageApiLibrary(File.ReadAllText(@"api/t7_api_csc.json"));
-//     }
-// }
-// catch (Exception) { }
+// Determine the base directory of the executing assembly
+string assemblyLocation = Assembly.GetExecutingAssembly().Location;
+string? assemblyDirectory = Path.GetDirectoryName(assemblyLocation);
+string apiDirectory = assemblyDirectory is null ? "api" : Path.Combine(assemblyDirectory, "api");
+
+string gscApiPath = Path.Combine(apiDirectory, "t7_api_gsc.json");
+string cscApiPath = Path.Combine(apiDirectory, "t7_api_csc.json");
+
+// Load GSC & CSC API into the SPA
+await ScriptAnalyserData.LoadLanguageApiAsync(
+	"https://www.gscode.net/api/getLibrary?gameId=t7&languageId=gsc",
+	gscApiPath
+);
+await ScriptAnalyserData.LoadLanguageApiAsync(
+	"https://www.gscode.net/api/getLibrary?gameId=t7&languageId=csc",
+	cscApiPath
+);
 
 Log.Information("GSCode Language Server");
 

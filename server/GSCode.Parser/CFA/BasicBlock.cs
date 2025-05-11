@@ -18,7 +18,9 @@ internal enum CfgNodeType
     BasicBlock,
     DecisionNode,
     FunctionEntry,
-    FunctionExit
+    FunctionExit,
+    EnumerationNode,
+    IterationNode
 }
 
 
@@ -59,6 +61,16 @@ internal class DecisionNode(AstNode source, ExprNode condition) : CfgNode(CfgNod
     public CfgNode? WhenTrue { get; set; }
     public CfgNode? WhenFalse { get; set; }
 }
+
+internal class EnumerationNode(AstNode source, Token keyIdentifier, ExprNode collection) : CfgNode(CfgNodeType.EnumerationNode)
+{
+    public AstNode Source { get; } = source;
+    public Token KeyIdentifier { get; } = keyIdentifier;
+    public ExprNode Collection { get; } = collection;
+    public CfgNode? Body { get; set; }
+    public CfgNode? Continuation { get; set; }
+}
+
 
 internal class FunEntryBlock(AstNode source, Token? name) : CfgNode(CfgNodeType.FunctionEntry)
 {

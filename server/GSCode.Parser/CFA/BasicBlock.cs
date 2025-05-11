@@ -1,6 +1,7 @@
 ﻿using GSCode.Data;
 using GSCode.Parser.AST;
 using GSCode.Parser.Data;
+using GSCode.Parser.Lexical;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -12,72 +13,70 @@ using static System.Net.Mime.MediaTypeNames;
 
 namespace GSCode.Parser.CFA;
 
-
-internal enum ControlFlowType
+internal enum CfgNodeType
 {
-    FunctionEntry, // Entry point of a function
-    FunctionExit, // Exit point of a function
-    Loop, // Loop statements
-    If, // If, else-if statements
-    Switch, // Switch statements
-    Logic // Standard logic
+    BasicBlock,
+    DecisionNode,
+    FunctionEntry,
+    FunctionExit
 }
 
-internal class BasicBlock
+
+internal abstract class CfgNode(CfgNodeType type)
 {
-    /// <summary>
-    /// The incoming edges to this node.
-    /// </summary>
-    public List<BasicBlock> Incoming { get; } = new();
-    /// <summary>
-    /// The outgoing edges from this node.
-    /// </summary>
-    public List<BasicBlock> Outgoing { get; } = new();
+    public LinkedList<CfgNode> Incoming { get; } = new();
+    public LinkedList<CfgNode> Outgoing { get; } = new();
 
-    public AstNode? Decision { get; }
-
-    public ControlFlowType Type { get; }
-
-    public int Scope { get; }
-
-    /// <summary>
-    /// The AST nodes that form the logic of this branch.
-    /// </summary>
-    public ReadOnlyCollection<AstNode> Logic { get; } = ReadOnlyCollection<AstNode>.Empty;
-
-    /// <summary>
-    /// Whether this logic block has a jump instruction and should not connect to control flow.
-    /// </summary>
-    public bool Jumps { get; private set; } = false;
-
-    public BasicBlock(int scope, ControlFlowType type = ControlFlowType.Logic)
+    public virtual void ConnectOutgoing(CfgNode other)
     {
-        Scope = scope;
-        Type = type;
+        Outgoing.AddLast(other);
     }
 
-    public BasicBlock(List<AstNode> logic, int scope, bool jumps = false) : this(scope, ControlFlowType.Logic)
+    public virtual void ConnectIncoming(CfgNode other)
     {
-        Logic = logic.AsReadOnly();
-        Jumps = jumps;
+        Incoming.AddLast(other);
     }
 
-    public BasicBlock(AstNode decisionNode, int scope, ControlFlowType type) : this(scope, type)
+    public static void Connect(CfgNode from, CfgNode to)
     {
-        Decision = decisionNode;
+        from.ConnectOutgoing(to);
+        to.ConnectIncoming(from);
     }
 
-    public void ConnectTo(BasicBlock next)
-    {
-        Outgoing.Add(next);
-        next.Incoming.Add(this);
-    }
+    public CfgNodeType Type { get; } = type;
+}
 
-    public void ConnectNonJumpTo(BasicBlock next)
+
+internal class BasicBlock(LinkedList<AstNode> statements) : CfgNode(CfgNodeType.BasicBlock)
+{
+    public LinkedList<AstNode> Statements { get; } = statements;
+}
+
+internal class DecisionNode(AstNode source, ExprNode condition) : CfgNode(CfgNodeType.DecisionNode)
+{
+    public AstNode Source { get; } = source;
+    public ExprNode Condition { get; } = condition;
+    public CfgNode? WhenTrue { get; set; }
+    public CfgNode? WhenFalse { get; set; }
+}
+
+internal class FunEntryBlock(AstNode source, Token? name) : CfgNode(CfgNodeType.FunctionEntry)
+{
+    public AstNode Source { get; } = source;
+    public Token? Name { get; } = name;
+    public CfgNode? Body { get; private set; }
+
+    public override void ConnectOutgoing(CfgNode other)
     {
-        if (!Jumps)
-        {
-            ConnectTo(next);
-        }
+        base.ConnectOutgoing(other);
+        Body = other;
     }
 }
+
+internal class FunExitBlock(AstNode source) : CfgNode(CfgNodeType.FunctionExit)
+{
+    public AstNode Source { get; } = source;
+}
+
+
+

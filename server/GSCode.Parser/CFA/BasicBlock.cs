@@ -62,6 +62,16 @@ internal class DecisionNode(AstNode source, ExprNode condition) : CfgNode(CfgNod
     public CfgNode? WhenFalse { get; set; }
 }
 
+internal class IterationNode(AstNode source, AstNode initialisation, ExprNode condition, AstNode increment) : CfgNode(CfgNodeType.IterationNode)
+{
+    public AstNode Source { get; } = source;
+    public AstNode Initialisation { get; } = initialisation;
+    public ExprNode Condition { get; } = condition;
+    public AstNode Increment { get; } = increment;
+    public CfgNode? Body { get; set; }
+    public CfgNode? Continuation { get; set; }
+}
+
 internal class EnumerationNode(AstNode source, Token keyIdentifier, ExprNode collection) : CfgNode(CfgNodeType.EnumerationNode)
 {
     public AstNode Source { get; } = source;

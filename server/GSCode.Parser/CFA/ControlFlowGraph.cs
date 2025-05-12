@@ -64,7 +64,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
             AstNodeType.IfStmt => Construct_IfStatement(ref currentNode, sense, localHelper),
             AstNodeType.WhileStmt => Construct_Skip(ref currentNode, sense, localHelper),
             AstNodeType.DoWhileStmt => Construct_Skip(ref currentNode, sense, localHelper),
-            AstNodeType.ForStmt => Construct_Skip(ref currentNode, sense, localHelper),
+            AstNodeType.ForStmt => Construct_ForStmt(ref currentNode, sense, localHelper),
             AstNodeType.ForeachStmt => Construct_ForeachStmt(ref currentNode, sense, localHelper),
             AstNodeType.SwitchStmt => Construct_Skip(ref currentNode, sense, localHelper),
             AstNodeType.BraceBlock => Construct_BraceBlock(ref currentNode, sense, localHelper),
@@ -254,6 +254,41 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         enumeration.Body = body;
 
         return enumeration;
+    }
+
+    private static CfgNode Construct_ForStmt(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    {
+        // For loop: (iteration) -> (body) -> (iteration)
+        //                             -> (continuation)
+
+        // Generate the body.
+        ForStmtNode forNode = (ForStmtNode)currentNode!.Value;
+
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
+
+        // Generate an enumeration node.
+        IterationNode iteration = new(forNode, forNode.Init, forNode.Condition, forNode.Increment);
+
+        CfgNode.Connect(iteration, continuation);
+        iteration.Continuation = continuation;
+
+        // Now generate the body.
+        ControlFlowHelper newLocalHelper = new(localHelper)
+        {
+            LoopContinueContext = iteration,
+            BreakContext = continuation,
+            ContinuationContext = continuation,
+        };
+
+        // Now generate the body of the foreach loop.
+        CfgNode body = Construct(forNode.Then, sense, newLocalHelper);
+
+        CfgNode.Connect(iteration, body);
+        iteration.Body = body;
+
+        return iteration;
     }
 
     // Temporary implementation for control flow nodes that doesn't do anything right now.

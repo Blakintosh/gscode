@@ -4,8 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-#if PREVIEW
-
 namespace GSCode.Parser.DFA;
 
 internal class ScrArray //: IEnumerable<ScrData>
@@ -115,5 +113,3 @@ internal record ScrStruct
         return new ScrStruct(mergedFields, deterministic);
     }
 }
-
-#endif

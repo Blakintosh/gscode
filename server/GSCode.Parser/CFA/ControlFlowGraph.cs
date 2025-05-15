@@ -105,7 +105,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
             currentNode = currentNode.Next;
         }
 
-        BasicBlock logic = new(statements);
+        BasicBlock logic = new(statements, localHelper.Scope);
 
         // If we reached the end of the block, just return the logic block with connection to the continuation context.
         if(currentNode is null)
@@ -153,7 +153,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         currentNode = currentNode.Next;
         CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
-        DecisionNode condition = new(ifNode, ifNode.Condition);
+        DecisionNode condition = new(ifNode, ifNode.Condition, localHelper.Scope);
 
         ControlFlowHelper ifHelper = new(localHelper)
         {
@@ -197,7 +197,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         }
         
         // Otherwise, we need to construct a decision node.
-        DecisionNode condition = new(node, node.Condition);
+        DecisionNode condition = new(node, node.Condition, localHelper.Scope);
 
         CfgNode.Connect(condition, then);
         condition.WhenTrue = then;
@@ -234,7 +234,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
         // Generate an enumeration node.
-        EnumerationNode enumeration = new(foreachNode, foreachNode.KeyIdentifier, foreachNode.Collection);
+        EnumerationNode enumeration = new(foreachNode, foreachNode.KeyIdentifier, foreachNode.Collection, localHelper.Scope);
 
         CfgNode.Connect(enumeration, continuation);
         enumeration.Continuation = continuation;
@@ -269,7 +269,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
         // Generate an enumeration node.
-        IterationNode iteration = new(forNode, forNode.Init, forNode.Condition, forNode.Increment);
+        IterationNode iteration = new(forNode, forNode.Init, forNode.Condition, forNode.Increment, localHelper.Scope);
 
         CfgNode.Connect(iteration, continuation);
         iteration.Continuation = continuation;

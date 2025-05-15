@@ -24,7 +24,7 @@ internal enum CfgNodeType
 }
 
 
-internal abstract class CfgNode(CfgNodeType type)
+internal abstract class CfgNode(CfgNodeType type, int scope)
 {
     public LinkedList<CfgNode> Incoming { get; } = new();
     public LinkedList<CfgNode> Outgoing { get; } = new();
@@ -46,15 +46,16 @@ internal abstract class CfgNode(CfgNodeType type)
     }
 
     public CfgNodeType Type { get; } = type;
+    public int Scope { get; } = scope;
 }
 
 
-internal class BasicBlock(LinkedList<AstNode> statements) : CfgNode(CfgNodeType.BasicBlock)
+internal class BasicBlock(LinkedList<AstNode> statements, int scope) : CfgNode(CfgNodeType.BasicBlock, scope)
 {
     public LinkedList<AstNode> Statements { get; } = statements;
 }
 
-internal class DecisionNode(AstNode source, ExprNode condition) : CfgNode(CfgNodeType.DecisionNode)
+internal class DecisionNode(AstNode source, ExprNode condition, int scope) : CfgNode(CfgNodeType.DecisionNode, scope)
 {
     public AstNode Source { get; } = source;
     public ExprNode Condition { get; } = condition;
@@ -62,7 +63,7 @@ internal class DecisionNode(AstNode source, ExprNode condition) : CfgNode(CfgNod
     public CfgNode? WhenFalse { get; set; }
 }
 
-internal class IterationNode(AstNode source, AstNode initialisation, ExprNode condition, AstNode increment) : CfgNode(CfgNodeType.IterationNode)
+internal class IterationNode(AstNode source, AstNode initialisation, ExprNode condition, AstNode increment, int scope) : CfgNode(CfgNodeType.IterationNode, scope)
 {
     public AstNode Source { get; } = source;
     public AstNode Initialisation { get; } = initialisation;
@@ -72,7 +73,7 @@ internal class IterationNode(AstNode source, AstNode initialisation, ExprNode co
     public CfgNode? Continuation { get; set; }
 }
 
-internal class EnumerationNode(AstNode source, Token keyIdentifier, ExprNode collection) : CfgNode(CfgNodeType.EnumerationNode)
+internal class EnumerationNode(AstNode source, Token keyIdentifier, ExprNode collection, int scope) : CfgNode(CfgNodeType.EnumerationNode, scope)
 {
     public AstNode Source { get; } = source;
     public Token KeyIdentifier { get; } = keyIdentifier;
@@ -82,7 +83,7 @@ internal class EnumerationNode(AstNode source, Token keyIdentifier, ExprNode col
 }
 
 
-internal class FunEntryBlock(AstNode source, Token? name) : CfgNode(CfgNodeType.FunctionEntry)
+internal class FunEntryBlock(AstNode source, Token? name) : CfgNode(CfgNodeType.FunctionEntry, 0)
 {
     public AstNode Source { get; } = source;
     public Token? Name { get; } = name;
@@ -95,7 +96,7 @@ internal class FunEntryBlock(AstNode source, Token? name) : CfgNode(CfgNodeType.
     }
 }
 
-internal class FunExitBlock(AstNode source) : CfgNode(CfgNodeType.FunctionExit)
+internal class FunExitBlock(AstNode source) : CfgNode(CfgNodeType.FunctionExit, 0)
 {
     public AstNode Source { get; } = source;
 }

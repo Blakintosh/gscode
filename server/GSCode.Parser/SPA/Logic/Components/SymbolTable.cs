@@ -10,8 +10,6 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace GSCode.Parser.SPA.Logic.Components;
 
-#if PREVIEW
-
 internal class SymbolTable
 {
     private Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = new();
@@ -136,5 +134,3 @@ internal class SymbolTable
         return false;
     }
 }
-
-#endif

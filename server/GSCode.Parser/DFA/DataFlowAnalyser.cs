@@ -1,7 +1,10 @@
 using System.Collections.ObjectModel;
+using GSCode.Data;
 using GSCode.Parser.AST;
 using GSCode.Parser.CFA;
 using GSCode.Parser.Data;
+using GSCode.Parser.Lexical;
+using GSCode.Parser.SPA;
 using GSCode.Parser.SPA.Logic.Components;
 
 namespace GSCode.Parser.DFA;
@@ -74,7 +77,7 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
                 outSets[node] = symbolTable.VariableSymbols;
             }
 
-            // Add the successors to the worklist
+            // Add the successors to the worklist 
             foreach (CfgNode successor in node.Outgoing)
             {
                 worklist.Push(successor);
@@ -86,8 +89,12 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
     {
         LinkedList<AstNode> logic = block.Statements;
 
+        if(logic.Count == 0)
+        {
+            return;
+        }
 
-        for(LinkedListNode<AstNode> node = logic.First; node != null; node = node.Next)
+        for(LinkedListNode<AstNode>? node = logic.First; node != null; node = node.Next)
         {
             AstNode child = node.Value;
 
@@ -112,7 +119,76 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
 
     public void AnalyseExprStmt(ExprStmtNode statement, AstNode? last, AstNode? next, SymbolTable symbolTable)
     {
+        ScrData result = AnalyseExpr(statement.Expr, symbolTable, Sense);
+    }
 
+    public ScrData AnalyseExpr(ExprNode expr, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        switch(expr.OperatorType)
+        {
+            case ExprOperatorType.Binary:
+                AnalyseBinaryExpr((BinaryExprNode)expr, symbolTable);
+                break;
+                
+        }
+
+        return ScrData.Default;
+    }
+
+    public void AnalyseBinaryExpr(BinaryExprNode binary, SymbolTable symbolTable)
+    {
+        switch(binary.Operation)
+        {
+            case TokenType.Assign:
+                AnalyseAssignOp(binary, symbolTable);
+                break;
+        }
+    }
+
+    public ScrData AnalyseAssignOp(BinaryExprNode node, SymbolTable symbolTable)
+    {
+        ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense);
+        ScrData right = AnalyseExpr(node.Right!, symbolTable, Sense);
+
+        // Assigning to a local variable
+        if(node.Left is IdentifierExprNode identifier)
+        {
+            string symbolName = identifier.Identifier;
+
+            if(left.ReadOnly)
+            {
+                Sense.AddSpaDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
+                return ScrData.Default;
+            }
+
+            bool isNew = symbolTable.AddOrSetSymbol(symbolName, right);
+
+            if(isNew && right.Type != ScrDataTypes.Undefined)
+            {
+                Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Declaration(identifier, right));
+            }
+
+            return right;
+        }
+
+        // Assigning to a property on a struct
+        // if(node.Left is OperationNode operationNode && operationNode.Operation == OperatorOps.MemberAccess && left.Owner is ScrStruct destination)
+        // {
+        //     TokenNode leafNode = operationNode.FarRightTokenLeaf;
+        //     string propertyName = leafNode.SourceToken.Contents;
+
+        //     if(left.ReadOnly)
+        //     {
+        //         sense.AddSpaDiagnostic(leafNode.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, propertyName);
+        //         return ScrData.Default;
+        //     }
+
+        //     destination.Set(propertyName, right);
+        //     return right;
+        // }
+
+        // sense.AddSpaDiagnostic(node.Left!.Range, GSCErrorCodes.InvalidAssignmentTarget);
+        return ScrData.Default;
     }
 }
 

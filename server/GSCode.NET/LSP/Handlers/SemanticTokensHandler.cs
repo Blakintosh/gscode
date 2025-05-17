@@ -39,12 +39,13 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
             {
                 TokenModifiers = capability.TokenModifiers,
                 TokenTypes = capability.TokenTypes
+                // TokenTypes = new Container<SemanticTokenType>(SemanticTokenType.Variable)
             },
             Full = new SemanticTokensCapabilityRequestFull
             {
-                Delta = true
+                Delta = false
             },
-            Range = true
+            Range = false
         };
     }
 

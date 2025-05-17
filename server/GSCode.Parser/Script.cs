@@ -13,6 +13,8 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using GSCode.Parser.SA;
 using System.IO;
+using GSCode.Parser.DFA;
+using Serilog;
 
 namespace GSCode.Parser;
 
@@ -27,6 +29,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
     public string LanguageId { get; } = languageId;
 
     private Task? ParsingTask { get; set; } = null;
+    private Task? AnalysisTask { get; set; } = null;
 
     private ScriptNode? RootNode { get; set; } = null;
 
@@ -125,7 +128,19 @@ public class Script(DocumentUri ScriptUri, string languageId)
     {
         await WaitUntilParsedAsync(cancellationToken);
 
-        // TODO: Implement this.
+        AnalysisTask = DoAnalyseAsync(exportedSymbols, cancellationToken);
+        await AnalysisTask;
+    }
+
+    public Task DoAnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
+    {
+        ControlFlowAnalyser controlFlowAnalyser = new(Sense, DefinitionsTable!);
+        controlFlowAnalyser.Run();
+
+        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, Sense, DefinitionsTable!.ExportedSymbols);
+        dataFlowAnalyser.Run();
+
+        return Task.CompletedTask;
     }
 
     public async Task<List<Diagnostic>> GetDiagnosticsAsync(CancellationToken cancellationToken)
@@ -139,17 +154,21 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public async Task PushSemanticTokensAsync(SemanticTokensBuilder builder, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
 
+        int count = 0;
         foreach (ISemanticToken token in Sense.SemanticTokens)
         {
+            Log.Information("Pushing semantic token: {token.SemanticTokenType}, modifiers: {token.SemanticTokenModifiers}", token.SemanticTokenType, token.SemanticTokenModifiers);
             builder.Push(token.Range, token.SemanticTokenType, token.SemanticTokenModifiers);
+            count++;
         }
+        Log.Information("Pushed {count} semantic tokens", count);
     }
 
     public async Task<Hover?> GetHoverAsync(Position position, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
 
         IHoverable? result = Sense.HoverLibrary.Get(position);
         if (result is not null)
@@ -161,7 +180,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public async Task<CompletionList?> GetCompletionAsync(Position position, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
         return Sense.Completions.GetCompletionsFromPosition(position);
     }
 
@@ -174,6 +193,20 @@ public class Script(DocumentUri ScriptUri, string languageId)
             throw new InvalidOperationException("The script has not been parsed yet.");
         }
         await ParsingTask;
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private async Task WaitUntilAnalysedAsync(CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (AnalysisTask is null)
+        {
+            throw new InvalidOperationException("The script has not been parsed yet.");
+        }
+        await AnalysisTask;
         cancellationToken.ThrowIfCancellationRequested();
     }
 

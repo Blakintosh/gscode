@@ -4,6 +4,7 @@ using GSCode.Parser.Lexical;
 using GSCode.Parser.Util;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using System.Collections.Generic;
 
 namespace GSCode.Parser.Data;
 
@@ -18,11 +19,36 @@ public sealed record class DeferredSymbol(Range Range, string? Namespace, string
 
 internal sealed class ParserIntelliSense
 {
+    private class SemanticTokenComparer : IComparer<ISemanticToken>
+    {
+        public int Compare(ISemanticToken? x, ISemanticToken? y)
+        {
+            if (x?.Range is null && y?.Range is null) 
+            { 
+                return 0; 
+            }
+            if (x?.Range is null) 
+            { 
+                return -1; 
+            }
+            if (y?.Range is null) 
+            { 
+                return 1; 
+            }
+
+            int lineComparison = x.Range.Start.Line.CompareTo(y.Range.Start.Line);
+            if (lineComparison != 0)
+            {
+                return lineComparison;
+            }
+            return x.Range.Start.Character.CompareTo(y.Range.Start.Character);
+        }
+    }
 
     /// <summary>
     /// List of semantic tokens to push to the editor.
     /// </summary>
-    public List<ISemanticToken> SemanticTokens { get; } = new();
+    public SortedSet<ISemanticToken> SemanticTokens { get; } = new(new SemanticTokenComparer());
 
     /// <summary>
     /// Hover storage for IntelliSense

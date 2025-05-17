@@ -37,14 +37,13 @@ With that in mind, if you encounter any situations where the GSC compiler (Linke
 ## Known Issues
 
 * Macro hoverables only show nested macro expansions if nested macros are not at the start or end of the expansion.
-* Sometimes, semantic tokens (like macro references) do not colour themselves in the editor. They are still parsed and can be hovered over. The cause of this is currently unknown.
 
 ## Licence
 GSCode is open-source software licenced under the GNU General Public License v3.0. 
 
 ```
 GSCode - Black Ops III GSC Language Extension
-Copyright (C) 2024 Blakintosh
+Copyright (C) 2025 Blakintosh
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

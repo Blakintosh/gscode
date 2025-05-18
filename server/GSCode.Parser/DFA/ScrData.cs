@@ -38,7 +38,7 @@ namespace GSCode.Parser.DFA;
 internal enum ScrDataTypes : uint
 {
     // Ambiguous
-    Any = ~0u, // All bits set to 1, signifies that it could be any type
+    Any = ~0u & ~Error, // All bits set to 1 (except error), signifies that it could be any type
 
     // No type
     Void = 0,     // All bits set to 0, signifies that it has no type
@@ -66,6 +66,9 @@ internal enum ScrDataTypes : uint
 
     // Undefined
     Undefined = 1 << 13,
+
+    // Error marker
+    Error = 1 << 60
 }
 
 internal enum ScrInstanceTypes
@@ -86,12 +89,14 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 {
     public static ScrData Void { get; } = new(ScrDataTypes.Void);
     public static ScrData Default { get; } = new(ScrDataTypes.Any);
+    public static ScrData Error { get; } = new(ScrDataTypes.Error);
 
     public ScrStruct? Owner { get; set; } = null;
+    public string? FieldName { get; set; } = null;
 
-    public static ScrData Undefined(ScrStruct? owner = null)
+    public static ScrData Undefined()
     {
-        return new(ScrDataTypes.Undefined, null, false) { Owner = owner };
+        return new(ScrDataTypes.Undefined, null, false);
     }
 
     /// <summary>
@@ -227,7 +232,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
                     ScrDataTypes.Bool => "bool",
                     ScrDataTypes.String => "string",
                     ScrDataTypes.Array => "array",
-                    ScrDataTypes.Vec3 => "vec3d",
+                    ScrDataTypes.Vec3 => "vector",
                     ScrDataTypes.Struct => "struct",
                     ScrDataTypes.Entity => "entity",
                     ScrDataTypes.Object => "object",
@@ -281,6 +286,11 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         return Type == ScrDataTypes.Void;
     }
 
+    public bool IsNumeric()
+    {
+        return Type == ScrDataTypes.Int || Type == ScrDataTypes.Float;
+    }
+
     public bool TypeUnknown()
     {
         return Type == ScrDataTypes.Any;
@@ -332,10 +342,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         {
             return (float)Value;
         }
-        else
-        {
-            throw new InvalidOperationException("Cannot get numeric value of non-numeric type.");
-        }
+        throw new InvalidOperationException("Cannot get numeric value of non-numeric type.");
     }
 
     public readonly T Get<T>()

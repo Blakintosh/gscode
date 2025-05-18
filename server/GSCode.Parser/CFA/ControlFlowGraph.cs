@@ -54,7 +54,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
     private static CfgNode Construct(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
         // If we're at the end of the current block, return the continuation context.
-        if(currentNode is null)
+        if (currentNode is null)
         {
             return localHelper.ContinuationContext;
         }
@@ -108,7 +108,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         BasicBlock logic = new(statements, localHelper.Scope);
 
         // If we reached the end of the block, just return the logic block with connection to the continuation context.
-        if(currentNode is null)
+        if (currentNode is null)
         {
             CfgNode.Connect(logic, localHelper.ContinuationContext);
 
@@ -116,11 +116,11 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         }
 
         // TODO: This causes construction to stop after this jump node. While this is OK for testing purposes, it'd probably be better to construct another block of unreachable code that we can diagnose.
-        if(IsJumpNode(currentNode.Value))
+        if (IsJumpNode(currentNode.Value))
         {
             // TODO: verify that AST gen will ensure that the jump nodes are defined.
             // Mark the relevant jump node
-            switch(currentNode.Value.NodeType)
+            switch (currentNode.Value.NodeType)
             {
                 case AstNodeType.BreakStmt:
                     CfgNode.Connect(logic, localHelper.BreakContext!);
@@ -168,7 +168,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
 
         // If an else clause is given, construct CFG for it too.
         IfStmtNode? elseNode = ifNode.Else;
-        if(elseNode is not null)
+        if (elseNode is not null)
         {
             CfgNode @else = Construct_ElseIf(elseNode, sense, ifHelper);
 
@@ -191,11 +191,11 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         CfgNode then = Construct(node.Then, sense, localHelper);
 
         // If there's no condition, then it's the else case and we can just return the then block.
-        if(node.Condition is null)
+        if (node.Condition is null)
         {
             return then;
         }
-        
+
         // Otherwise, we need to construct a decision node.
         DecisionNode condition = new(node, node.Condition, localHelper.Scope);
 
@@ -204,7 +204,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
 
         // If an else clause is given, construct CFG for it too.
         IfStmtNode? elseNode = node.Else;
-        if(elseNode is not null)
+        if (elseNode is not null)
         {
             CfgNode @else = Construct_ElseIf(elseNode, sense, localHelper);
 

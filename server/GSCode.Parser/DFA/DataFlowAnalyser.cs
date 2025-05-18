@@ -6,6 +6,7 @@ using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
 using GSCode.Parser.SPA.Logic.Components;
+using Serilog;
 
 namespace GSCode.Parser.DFA;
 
@@ -62,7 +63,8 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
             // Calculate the out set
             if (node.Type == CfgNodeType.FunctionEntry)
             {
-                outSets[node].MergeTables(inSet, node.Scope);
+                AnalyseFunctionEntry((FunEntryBlock)node, inSet);
+                outSets[node] = inSet;
             }
             else if (node.Type == CfgNodeType.BasicBlock)
             {
@@ -85,16 +87,38 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
         }
     }
 
+    public void AnalyseFunctionEntry(FunEntryBlock entry, Dictionary<string, ScrVariable> inSet)
+    {
+        FunDefnNode node = entry.Source;
+
+        // Add the function's parameters to the in set.
+        foreach (ParamNode param in node.Parameters.Parameters)
+        {
+            if (param.Name is null)
+            {
+                continue;
+            }
+
+            inSet[param.Name.Lexeme] = new(param.Name.Lexeme, ScrData.Default, 0, false);
+        }
+
+        // Add global scoped variables to the in set.
+        inSet["self"] = new("self", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
+        inSet["level"] = new("level", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
+        inSet["game"] = new("game", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
+        inSet["anim"] = new("anim", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
+    }
+
     public void AnalyseBasicBlock(BasicBlock block, SymbolTable symbolTable)
     {
         LinkedList<AstNode> logic = block.Statements;
 
-        if(logic.Count == 0)
+        if (logic.Count == 0)
         {
             return;
         }
 
-        for(LinkedListNode<AstNode>? node = logic.First; node != null; node = node.Next)
+        for (LinkedListNode<AstNode>? node = logic.First; node != null; node = node.Next)
         {
             AstNode child = node.Value;
 
@@ -107,55 +131,80 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
 
     public void AnalyseStatement(AstNode statement, AstNode? last, AstNode? next, SymbolTable symbolTable)
     {
-        switch(statement.NodeType)
+        switch (statement.NodeType)
         {
             case AstNodeType.ExprStmt:
                 AnalyseExprStmt((ExprStmtNode)statement, last, next, symbolTable);
                 break;
             default:
                 break;
-        };
+        }
+        ;
     }
 
+    #region Expressions
     public void AnalyseExprStmt(ExprStmtNode statement, AstNode? last, AstNode? next, SymbolTable symbolTable)
     {
         ScrData result = AnalyseExpr(statement.Expr, symbolTable, Sense);
     }
 
-    public ScrData AnalyseExpr(ExprNode expr, SymbolTable symbolTable, ParserIntelliSense sense)
+    private ScrData AnalyseExpr(ExprNode expr, SymbolTable symbolTable, ParserIntelliSense sense, bool createSenseTokenForRhs = true)
     {
-        switch(expr.OperatorType)
+        return expr.OperatorType switch
         {
-            case ExprOperatorType.Binary:
-                AnalyseBinaryExpr((BinaryExprNode)expr, symbolTable);
-                break;
-                
-        }
-
-        return ScrData.Default;
+            ExprOperatorType.Binary => AnalyseBinaryExpr((BinaryExprNode)expr, symbolTable, createSenseTokenForRhs),
+            ExprOperatorType.DataOperand => AnalyseDataExpr((DataExprNode)expr),
+            ExprOperatorType.IdentifierOperand => AnalyseIdentifierExpr((IdentifierExprNode)expr, symbolTable, createSenseTokenForRhs),
+            ExprOperatorType.Vector => AnalyseVectorExpr((VectorExprNode)expr, symbolTable),
+            ExprOperatorType.Indexer => AnalyseIndexerExpr((ArrayIndexNode)expr, symbolTable),
+            // ExprOperatorType.IdentifierOperand => AnalyseIdentifierOperand(expr),
+            _ => ScrData.Default,
+        };
     }
 
-    public void AnalyseBinaryExpr(BinaryExprNode binary, SymbolTable symbolTable)
+    private ScrData AnalyseBinaryExpr(BinaryExprNode binary, SymbolTable symbolTable, bool createSenseTokenForRhs = true)
     {
-        switch(binary.Operation)
+        if (binary.Operation == TokenType.Dot)
         {
-            case TokenType.Assign:
-                AnalyseAssignOp(binary, symbolTable);
-                break;
+            return AnalyseDotOp(binary, symbolTable, createSenseTokenForRhs);
         }
+        if (binary.Operation == TokenType.Assign)
+        {
+            return AnalyseAssignOp(binary, symbolTable);
+        }
+
+        ScrData left = AnalyseExpr(binary.Left!, symbolTable, Sense);
+        ScrData right = AnalyseExpr(binary.Right!, symbolTable, Sense);
+
+        return binary.Operation switch
+        {
+            TokenType.Plus => AnalyseAddOp(binary, left, right),
+            TokenType.Minus => AnalyseMinusOp(binary, left, right),
+            TokenType.Multiply => AnalyseMultiplyOp(binary, left, right),
+            TokenType.Divide => AnalyseDivideOp(binary, left, right),
+            TokenType.Modulo => AnalyseModuloOp(binary, left, right),
+            TokenType.BitLeftShift => AnalyseBitLeftShiftOp(binary, left, right),
+            TokenType.BitRightShift => AnalyseBitRightShiftOp(binary, left, right),
+            TokenType.Equals => AnalyseEqualsOp(binary, left, right),
+            TokenType.NotEquals => AnalyseNotEqualsOp(binary, left, right),
+            _ => ScrData.Default,
+        };
     }
 
-    public ScrData AnalyseAssignOp(BinaryExprNode node, SymbolTable symbolTable)
+    private ScrData AnalyseAssignOp(BinaryExprNode node, SymbolTable symbolTable)
     {
-        ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense);
+        // TODO: decouple this from the general binary handler, then when it's an identifier, manually resolve either it to be a declaration
+        // or a mutation. Check for const too.
+        // actually, might not be necessary. undefined doesn't highlight, so the isNew check should suffice.
+        ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense, false);
         ScrData right = AnalyseExpr(node.Right!, symbolTable, Sense);
 
         // Assigning to a local variable
-        if(node.Left is IdentifierExprNode identifier)
+        if (node.Left is IdentifierExprNode identifier)
         {
             string symbolName = identifier.Identifier;
 
-            if(left.ReadOnly)
+            if (left.ReadOnly)
             {
                 Sense.AddSpaDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
                 return ScrData.Default;
@@ -163,7 +212,7 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
 
             bool isNew = symbolTable.AddOrSetSymbol(symbolName, right);
 
-            if(isNew && right.Type != ScrDataTypes.Undefined)
+            if (isNew && right.Type != ScrDataTypes.Undefined)
             {
                 Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Declaration(identifier, right));
             }
@@ -172,77 +221,427 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
         }
 
         // Assigning to a property on a struct
-        // if(node.Left is OperationNode operationNode && operationNode.Operation == OperatorOps.MemberAccess && left.Owner is ScrStruct destination)
-        // {
-        //     TokenNode leafNode = operationNode.FarRightTokenLeaf;
-        //     string propertyName = leafNode.SourceToken.Contents;
+        if (node.Left is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && left.Owner is ScrStruct destination)
+        {
+            string fieldName = left.FieldName ?? throw new NullReferenceException("Sanity check failed: Left data has no field name.");
 
-        //     if(left.ReadOnly)
-        //     {
-        //         sense.AddSpaDiagnostic(leafNode.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, propertyName);
-        //         return ScrData.Default;
-        //     }
+            if (left.ReadOnly)
+            {
+                Sense.AddSpaDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                return ScrData.Default;
+            }
 
-        //     destination.Set(propertyName, right);
-        //     return right;
-        // }
+            bool isNew = destination.Set(fieldName, right);
 
+            // TODO: decide whether to add definition modifier
+            if (binaryExprNode.Right is IdentifierExprNode identifierNode)
+            {
+                Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, right));
+            }
+
+            return right;
+        }
+
+        // TODO: once all cases are covered, we should enable this.
         // sense.AddSpaDiagnostic(node.Left!.Range, GSCErrorCodes.InvalidAssignmentTarget);
         return ScrData.Default;
     }
+
+    private ScrData AnalyseAddOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        // If both are numeric, we can add them together.
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+            {
+                // Adds the values if they exist, otherwise is just null (ie Value Unknown)
+                return new ScrData(ScrDataTypes.Int, left.Get<int?>() + right.Get<int?>());
+            }
+
+            return new ScrData(ScrDataTypes.Float, left.GetNumericValue() + right.GetNumericValue());
+        }
+
+        // If both are vectors, we can add them together.
+        if (left.Type == ScrDataTypes.Vec3 && right.Type == ScrDataTypes.Vec3)
+        {
+            // TODO: add vec3d addition
+            return new ScrData(ScrDataTypes.Vec3);
+        }
+
+        // At least one is a string, so do string concatenation. Won't be both numbers, as we checked that earlier.
+        if (left.Type == ScrDataTypes.String || right.Type == ScrDataTypes.String || left.IsNumeric() || right.IsNumeric())
+        {
+            if (left.ValueUnknown() || right.ValueUnknown())
+            {
+                return new ScrData(ScrDataTypes.String);
+            }
+
+            return new ScrData(ScrDataTypes.String, left.Value!.ToString() + right.Value!.ToString());
+        }
+
+        // ERROR: Operator '+' cannot be applied on operands of type ...
+        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseMinusOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            return new ScrData(ScrDataTypes.Int, left.Get<int?>() - right.Get<int?>());
+        }
+
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            return new ScrData(ScrDataTypes.Float, left.GetNumericValue() - right.GetNumericValue());
+        }
+
+        if (left.Type == ScrDataTypes.Vec3 && right.Type == ScrDataTypes.Vec3)
+        {
+            // TODO: add vec3d subtraction
+            return new ScrData(ScrDataTypes.Vec3);
+        }
+
+        // ERROR: Operator '-' cannot be applied on operands of type ...
+        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "-", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseMultiplyOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        // TODO: double check if GSC even does integer multiplication, i'm not sure.
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            return new ScrData(ScrDataTypes.Int, left.Get<int?>() * right.Get<int?>());
+        }
+
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            return new ScrData(ScrDataTypes.Float, left.GetNumericValue() * right.GetNumericValue());
+        }
+
+        // TODO: not sure whether multiply can be done on vec3d, etc., need to check.
+
+        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "*", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseDivideOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        // don't think gsc does integer division
+        // if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        // {
+        //     return new ScrData(ScrDataTypes.Int, left.Get<int?>() / right.Get<int?>());
+        // }
+
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            return new ScrData(ScrDataTypes.Float, left.GetNumericValue() / right.GetNumericValue());
+        }
+
+        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "/", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseModuloOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            return new ScrData(ScrDataTypes.Int, left.Get<int?>() % right.Get<int?>());
+        }
+
+        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "%", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseBitLeftShiftOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            return new ScrData(ScrDataTypes.Int, left.Get<int?>() << right.Get<int?>());
+        }
+
+        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "<<", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseBitRightShiftOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            return new ScrData(ScrDataTypes.Int, left.Get<int?>() >> right.Get<int?>());
+        }
+
+        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, ">>", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // TODO: this is a blunt instrument and I don't think it's correct
+        return new ScrData(ScrDataTypes.Bool, left.Value == right.Value);
+    }
+
+    private ScrData AnalyseNotEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // TODO: this is a blunt instrument and I don't think it's correct
+        return new ScrData(ScrDataTypes.Bool, left.Value != right.Value);
+    }
+
+    private ScrData AnalyseDotOp(BinaryExprNode node, SymbolTable symbolTable, bool createSenseTokenForField = true)
+    {
+        if (node.Right!.OperatorType != ExprOperatorType.IdentifierOperand || node.Right is not IdentifierExprNode identifierNode)
+        {
+            Sense.AddSpaDiagnostic(node.Right!.Range, GSCErrorCodes.IdentifierExpected);
+            return ScrData.Default;
+        }
+
+        ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense);
+
+        // Type unknown - nothing to do.
+        if (left.TypeUnknown())
+        {
+            Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, ScrData.Default));
+            return ScrData.Default;
+        }
+
+        // TODO: add special case for undefined where it says ... is not defined.
+        // Make sure it is a struct, object or entity.
+        if (left.Type == ScrDataTypes.Array && identifierNode.Identifier == "size")
+        {
+            // TODO: evaluate value.
+            ScrData sizeValue = new(ScrDataTypes.Int, ReadOnly: true);
+            Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, sizeValue, true));
+            return sizeValue;
+        }
+        if (left.Type != ScrDataTypes.Object && left.Type != ScrDataTypes.Struct && left.Type != ScrDataTypes.Entity)
+        {
+            Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.DoesNotContainMember, identifierNode.Identifier, left.TypeToString());
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown())
+        {
+            Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, ScrData.Default));
+            return ScrData.Default;
+        }
+
+        ScrData value = left.GetField(identifierNode.Identifier);
+
+        if (createSenseTokenForField)
+        {
+            Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, value));
+        }
+
+        // OK, we got a LHS to look at. Access the field.
+        return value;
+    }
+
+    private ScrData AnalyseDataExpr(DataExprNode expr)
+    {
+        return new ScrData(expr.Type, expr.Value);
+    }
+
+    private ScrData AnalyseIdentifierExpr(IdentifierExprNode expr, SymbolTable symbolTable, bool createSenseTokenForRhs = true)
+    {
+        // Analyze and return the corresponding ScrData for the field
+        ScrData? value = symbolTable.TryGetSymbol(expr.Identifier, out bool isGlobal);
+        if (value is not ScrData data)
+        {
+            return ScrData.Undefined();
+        }
+
+        if (data.Type != ScrDataTypes.Undefined)
+        {
+            if (isGlobal)
+            {
+                if (createSenseTokenForRhs)
+                {
+                    Sense.AddSenseToken(expr.Token, ScrVariableSymbol.LanguageSymbol(expr, data));
+                }
+                return data;
+            }
+            if (createSenseTokenForRhs)
+            {
+                Sense.AddSenseToken(expr.Token, ScrVariableSymbol.Usage(expr, data));
+            }
+        }
+        return data;
+    }
+
+    private ScrData AnalyseVectorExpr(VectorExprNode expr, SymbolTable symbolTable)
+    {
+        if (expr.Y is null || expr.Z is null)
+        {
+            return ScrData.Default;
+        }
+
+        ScrData x = AnalyseExpr(expr.X, symbolTable, Sense);
+        ScrData y = AnalyseExpr(expr.Y, symbolTable, Sense);
+        ScrData z = AnalyseExpr(expr.Z, symbolTable, Sense);
+
+        // TODO: evaluate values later.
+        return new ScrData(ScrDataTypes.Vec3);
+    }
+
+    private ScrData AnalyseIndexerExpr(ArrayIndexNode expr, SymbolTable symbolTable)
+    {
+        ScrData collection = AnalyseExpr(expr.Array, symbolTable, Sense);
+
+        if (expr.Index is null)
+        {
+            return ScrData.Default;
+        }
+
+        ScrData indexer = AnalyseExpr(expr.Index, symbolTable, Sense);
+
+        if (indexer.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        // We might not know which collection type it is, but it won't be indexable.
+        if (collection.TypeUnknown())
+        {
+            if (indexer.Type != ScrDataTypes.Int && indexer.Type != ScrDataTypes.String)
+            {
+                Sense.AddSpaDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
+            }
+            return ScrData.Default;
+        }
+
+        // TODO: if map, check for string key. If array, check for int index.
+
+        if (collection.Type == ScrDataTypes.Array)
+        {
+            if (indexer.Type != ScrDataTypes.Int)
+            {
+                Sense.AddSpaDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
+                return ScrData.Default;
+            }
+
+            // return collection.GetArrayElement(indexer.Get<int>());
+            return ScrData.Default;
+        }
+
+        return ScrData.Default;
+    }
+
+
+    // private ScrData AnalyseLhsAssignment(BinaryExprNode node, ScrData computedValue, SymbolTable symbolTable)
+    // {
+
+    // }
+
+    #endregion
 }
 
 file static class DataFlowAnalyserExtensions
 {
-   public static void MergeTables(this Dictionary<string, ScrVariable> target, Dictionary<string, ScrVariable> source, int maxScope)
-   {
-       // Get keys that are present in either
-       HashSet<string> fields = new();
+    public static void MergeTables(this Dictionary<string, ScrVariable> target, Dictionary<string, ScrVariable> source, int maxScope)
+    {
+        // Get keys that are present in either
+        HashSet<string> fields = new();
 
-       fields.UnionWith(target.Keys);
-       fields.UnionWith(source.Keys);
+        fields.UnionWith(target.Keys);
+        fields.UnionWith(source.Keys);
 
-       foreach (string field in fields)
-       {
-           // Shouldn't carry over anything that's not higher than this in scope, it's not accessible
-           if (source.TryGetValue(field, out ScrVariable? sourceData) && sourceData.LexicalScope <= maxScope)
-           {
-               // Also present in target, and are different. Merge them
-               if(target.TryGetValue(field, out ScrVariable? targetData))
-               {
-                   if(sourceData != targetData)
-                   {
-                       target[field] = new(sourceData.Name, ScrData.Merge(targetData.Data, sourceData.Data), sourceData.LexicalScope, sourceData.Global);
-                   }
-                   continue;
-               }
+        foreach (string field in fields)
+        {
+            // Shouldn't carry over anything that's not higher than this in scope, it's not accessible
+            if (source.TryGetValue(field, out ScrVariable? sourceData) && sourceData.LexicalScope <= maxScope)
+            {
+                // Also present in target, and are different. Merge them
+                if (target.TryGetValue(field, out ScrVariable? targetData))
+                {
+                    if (sourceData != targetData)
+                    {
+                        target[field] = new(sourceData.Name, ScrData.Merge(targetData.Data, sourceData.Data), sourceData.LexicalScope, sourceData.Global);
+                    }
+                    continue;
+                }
 
-               // Otherwise just copy one
-               target[field] = new(sourceData.Name, sourceData.Data.Copy(), sourceData.LexicalScope, sourceData.Global);
-           }
-       }
-   }
+                // Otherwise just copy one
+                target[field] = new(sourceData.Name, sourceData.Data.Copy(), sourceData.LexicalScope, sourceData.Global);
+            }
+        }
+    }
 
-   public static bool VariableTableEquals(this Dictionary<string, ScrVariable> target, Dictionary<string, ScrVariable> source)
-   {
-       if (target.Count != source.Count)
-       {
-           return false;
-       }
+    public static bool VariableTableEquals(this Dictionary<string, ScrVariable> target, Dictionary<string, ScrVariable> source)
+    {
+        if (target.Count != source.Count)
+        {
+            return false;
+        }
 
-       foreach (KeyValuePair<string, ScrVariable> pair in target)
-       {
-           if (!source.TryGetValue(pair.Key, out ScrVariable? value))
-           {
-               return false;
-           }
+        foreach (KeyValuePair<string, ScrVariable> pair in target)
+        {
+            if (!source.TryGetValue(pair.Key, out ScrVariable? value))
+            {
+                return false;
+            }
 
-           if (pair.Value != value)
-           {
-               return false;
-           }
-       }
+            if (pair.Value != value)
+            {
+                return false;
+            }
+        }
 
-       return true;
-   }
+        return true;
+    }
 }

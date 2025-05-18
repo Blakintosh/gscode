@@ -83,9 +83,9 @@ internal class EnumerationNode(AstNode source, Token keyIdentifier, ExprNode col
 }
 
 
-internal class FunEntryBlock(AstNode source, Token? name) : CfgNode(CfgNodeType.FunctionEntry, 0)
+internal class FunEntryBlock(FunDefnNode source, Token? name) : CfgNode(CfgNodeType.FunctionEntry, 0)
 {
-    public AstNode Source { get; } = source;
+    public FunDefnNode Source { get; } = source;
     public Token? Name { get; } = name;
     public CfgNode? Body { get; private set; }
 

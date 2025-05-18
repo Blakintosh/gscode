@@ -122,44 +122,45 @@ public class ScrVariableSymbol : ISenseDefinition
 // }
 
 
-// public class ScrPropertySymbol : ISenseToken
-// {
-//     public Range Range { get; }
+public class ScrFieldSymbol : ISenseDefinition
+{
+    public Range Range { get; }
 
-//     public string SemanticTokenType { get; } = "property";
+    public string SemanticTokenType { get; } = "field";
 
-//     public string[] SemanticTokenModifiers { get; } = Array.Empty<string>();
+    public string[] SemanticTokenModifiers { get; private set; } = [];
+    public bool IsFromPreprocessor { get; } = false;
 
-//     internal TokenNode Node { get; }
-//     internal ScrData Value { get; }
+    internal IdentifierExprNode Node { get; }
+    internal string TypeString { get; }
 
-//     public bool ReadOnly { get; private set; } = false;
+    public bool ReadOnly { get; private set; } = false;
 
-//     internal ScrPropertySymbol(TokenNode node, ScrData value, bool isReadOnly = false)
-//     {
-//         Node = node;
-//         Value = value;
-//         Range = node.Range;
-//         if (!isReadOnly)
-//         {
-//             return;
-//         }
-//         SemanticTokenModifiers = new string[] { "readonly" };
-//         ReadOnly = true;
-//     }
+    internal ScrFieldSymbol(IdentifierExprNode node, ScrData data, bool isReadOnly = false)
+    {
+        Node = node;
+        Range = node.Range;
+        TypeString = data.TypeToString();
+        if (!isReadOnly)
+        {
+            return;
+        }
+        SemanticTokenModifiers = new string[] { "readonly" };
+        ReadOnly = true;
+    }
 
-//     public Hover GetHover()
-//     {
-//         string typeValue = $"{(ReadOnly ? "readonly " : string.Empty)}{Value.TypeToString()}";
-//         return new()
-//         {
-//             Range = Range,
-//             Contents = new MarkupContent()
-//             {
-//                 Kind = MarkupKind.Markdown,
-//                 Value = string.Format("```gsc\n(property) /@ {0} @/ {1}\n```",
-//                    typeValue, Node.SourceToken.Contents!)
-//             }
-//         };
-//     }
-// }
+    public Hover GetHover()
+    {
+        string typeValue = $"{(ReadOnly ? "readonly " : string.Empty)}{TypeString}";
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = string.Format("```gsc\n(field) /@ {0} @/ {1}\n```",
+                   typeValue, Node.Identifier!)
+            })
+        };
+    }
+}

@@ -49,7 +49,8 @@ internal enum AstNodeType
 
 internal enum ExprOperatorType
 {
-    Operand,
+    DataOperand,
+    IdentifierOperand,
     Ternary,
     Binary,
     Vector,
@@ -260,7 +261,7 @@ internal sealed class DataExprNode : ExprNode
     public object? Value { get; }
     public ScrDataTypes Type { get; }
 
-    private DataExprNode(object? value, ScrDataTypes dataType, Range range) : base(ExprOperatorType.Operand, range)
+    private DataExprNode(object? value, ScrDataTypes dataType, Range range) : base(ExprOperatorType.DataOperand, range)
     {
         Value = value;
         Type = dataType;
@@ -331,7 +332,7 @@ internal sealed class TernaryExprNode(ExprNode condition, ExprNode? then, ExprNo
     public ExprNode? Else { get; } = @else;
 }
 
-internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.Operand, identifier.Range)
+internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.IdentifierOperand, identifier.Range)
 {
     public Token Token { get; } = identifier;
     public bool IsAnim { get; } = identifier.Type == TokenType.AnimIdentifier;

@@ -97,6 +97,7 @@ public enum GSCErrorCodes
     NoEnclosingLoop = 3031,
     CannotAssignToReadOnlyProperty = 3032,
     MissingUsingFile = 3033,
+    CannotEnumerateType = 3034,
 
     // 8xxx errors are issued by the IDE for conventions
 
@@ -196,6 +197,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.NoEnclosingLoop, new("No enclosing loop out of which to break or continue.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingUsingFile, new("Unable to locate file '{0}' in the workspace or in the shared scripts directory.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.CannotEnumerateType, new("Type '{0}' is not enumerable.", DiagnosticSeverity.Error) },
 
         // 9xxx
         { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },

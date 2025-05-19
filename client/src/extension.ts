@@ -24,7 +24,7 @@ import dotenv = require("dotenv");
 
 let client: LanguageClient;
 
-export function activate(context: ExtensionContext) {
+export function activate(context: ExtensionContext ) {
     // The server is implemented in node
     let serverExe = "dotnet";
 

@@ -67,6 +67,11 @@ internal abstract class AstNode(AstNodeType nodeType)
     public AstNodeType NodeType { get; } = nodeType;
 }
 
+internal abstract class DecisionAstNode(AstNodeType nodeType, ExprNode? condition) : AstNode(nodeType)
+{
+    public ExprNode? Condition { get; init; } = condition;
+}
+
 internal sealed class ScriptNode() : AstNode(AstNodeType.Script)
 {
     public required List<DependencyNode> Dependencies { get; init; }
@@ -155,9 +160,8 @@ internal sealed class StmtListNode(LinkedList<AstNode>? statements = null) : Ast
 
 internal sealed class EmptyStmtNode() : AstNode(AstNodeType.EmptyStmt) { }
 
-internal sealed class IfStmtNode() : AstNode(AstNodeType.IfStmt)
+internal sealed class IfStmtNode(ExprNode? condition) : DecisionAstNode(AstNodeType.IfStmt, condition)
 {
-    public ExprNode? Condition { get; init; }
     public AstNode? Then { get; init; }
     public IfStmtNode? Else { get; set; }
 }
@@ -179,15 +183,13 @@ internal sealed class ExprStmtNode(ExprNode? expr) : AstNode(AstNodeType.ExprStm
     public ExprNode? Expr { get; } = expr;
 }
 
-internal sealed class DoWhileStmtNode(ExprNode? condition, AstNode? then) : AstNode(AstNodeType.DoWhileStmt)
+internal sealed class DoWhileStmtNode(ExprNode? condition, AstNode? then) : DecisionAstNode(AstNodeType.DoWhileStmt, condition)
 {
-    public ExprNode? Condition { get; } = condition;
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class WhileStmtNode(ExprNode? condition, AstNode? then) : AstNode(AstNodeType.WhileStmt)
+internal sealed class WhileStmtNode(ExprNode? condition, AstNode? then) : DecisionAstNode(AstNodeType.WhileStmt, condition)
 {
-    public ExprNode? Condition { get; } = condition;
     public AstNode? Then { get; } = then;
 }
 
@@ -199,10 +201,10 @@ internal sealed class ForStmtNode(AstNode? init, ExprNode? condition, AstNode? i
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class ForeachStmtNode(Token valueIdentifier, Token? keyIdentifier, ExprNode? collection, AstNode? then) : AstNode(AstNodeType.ForeachStmt)
+internal sealed class ForeachStmtNode(IdentifierExprNode valueIdentifier, IdentifierExprNode? keyIdentifier, ExprNode? collection, AstNode? then) : AstNode(AstNodeType.ForeachStmt)
 {
-    public Token? KeyIdentifier { get; } = keyIdentifier;
-    public Token ValueIdentifier { get; } = valueIdentifier;
+    public IdentifierExprNode? KeyIdentifier { get; } = keyIdentifier;
+    public IdentifierExprNode ValueIdentifier { get; } = valueIdentifier;
     public ExprNode? Collection { get; } = collection;
     public AstNode? Then { get; } = then;
 }

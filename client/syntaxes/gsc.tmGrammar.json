@@ -264,6 +264,15 @@
             "match": "\\\\\\n",
             "name": "constant.character.escape.line-continuation.gsc"
         },
+        "line-comment": 
+        {
+            "name": "comment.line.double-slash.gsc",
+            "begin": "//",
+            "end": "(?<=\\n)(?<!\\\\\\n)",
+            "patterns": [
+                { "include": "#line-continuation-character" }
+            ]
+        },
         "function": {	
             "name": "meta.function.gsc",
 			"comment": "match regular function like: function myFunc(arg) { É }",
@@ -295,17 +304,14 @@
 				{
 					"name": "keyword.operator.parameter-comma.gsc",
 					"match": ","
-				}
+				},
+                {
+                    "include": "#block-comment"
+                },
+                {
+                    "include": "#line-comment"
+                }
 			]
-        },
-        "line-comment": 
-        {
-            "name": "comment.line.double-slash.gsc",
-            "begin": "//",
-            "end": "(?<=\\n)(?<!\\\\\\n)",
-            "patterns": [
-                { "include": "#line-continuation-character" }
-            ]
         },
         "class": {
             "patterns": [

@@ -12,7 +12,10 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.2.3 beta (latest)
+### 0.2.4 beta (latest)
+* Fixed a syntax highlighting bug with line comments.
+
+### 0.2.3 beta 
 * Fixed a bug where semantic tokens (e.g. macro, parameters) would not highlight as expected.
 
 ### 0.2.2 beta

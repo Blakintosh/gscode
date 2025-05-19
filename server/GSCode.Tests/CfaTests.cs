@@ -62,9 +62,8 @@ public class CfaTests
             Parameters = new(),
             Body = StmtListNodeFromList([
                 new ExprStmtNode(null),
-                new IfStmtNode()
+                new IfStmtNode(DataExprNode.From(new Token(TokenType.True, RangeHelper.From(0, 0, 0, 1), "true")))
                 {
-                    Condition = DataExprNode.From(new Token(TokenType.True, RangeHelper.From(0, 0, 0, 1), "true")),
                     Then = new ExprStmtNode(null),
                     Else = null,
                 },
@@ -106,13 +105,11 @@ public class CfaTests
             Parameters = new(),
             Body = StmtListNodeFromList([
                 new ExprStmtNode(null), // logic
-                new IfStmtNode()
+                new IfStmtNode(DataExprNode.From(new Token(TokenType.True, RangeHelper.From(0, 0, 0, 1), "true")))
                 {
-                    Condition = DataExprNode.From(new Token(TokenType.True, RangeHelper.From(0, 0, 0, 1), "true")),
                     Then = new ExprStmtNode(null), // then
-                    Else = new IfStmtNode()
+                    Else = new IfStmtNode(null)
                     {
-                        Condition = null,
                         Then = new ExprStmtNode(null), // then
                         Else = null, // else
                     },

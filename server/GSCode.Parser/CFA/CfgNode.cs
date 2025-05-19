@@ -55,29 +55,27 @@ internal class BasicBlock(LinkedList<AstNode> statements, int scope) : CfgNode(C
     public LinkedList<AstNode> Statements { get; } = statements;
 }
 
-internal class DecisionNode(AstNode source, ExprNode condition, int scope) : CfgNode(CfgNodeType.DecisionNode, scope)
+internal class DecisionNode(DecisionAstNode source, ExprNode condition, int scope) : CfgNode(CfgNodeType.DecisionNode, scope)
 {
-    public AstNode Source { get; } = source;
+    public DecisionAstNode Source { get; } = source;
     public ExprNode Condition { get; } = condition;
     public CfgNode? WhenTrue { get; set; }
     public CfgNode? WhenFalse { get; set; }
 }
 
-internal class IterationNode(AstNode source, AstNode initialisation, ExprNode condition, AstNode increment, int scope) : CfgNode(CfgNodeType.IterationNode, scope)
+internal class IterationNode(ForStmtNode source, AstNode? initialisation, ExprNode? condition, AstNode? increment, int scope) : CfgNode(CfgNodeType.IterationNode, scope)
 {
-    public AstNode Source { get; } = source;
-    public AstNode Initialisation { get; } = initialisation;
-    public ExprNode Condition { get; } = condition;
-    public AstNode Increment { get; } = increment;
+    public ForStmtNode Source { get; } = source;
+    public AstNode? Initialisation { get; } = initialisation;
+    public ExprNode? Condition { get; } = condition;
+    public AstNode? Increment { get; } = increment;
     public CfgNode? Body { get; set; }
     public CfgNode? Continuation { get; set; }
 }
 
-internal class EnumerationNode(AstNode source, Token keyIdentifier, ExprNode collection, int scope) : CfgNode(CfgNodeType.EnumerationNode, scope)
+internal class EnumerationNode(ForeachStmtNode source, int scope) : CfgNode(CfgNodeType.EnumerationNode, scope)
 {
-    public AstNode Source { get; } = source;
-    public Token KeyIdentifier { get; } = keyIdentifier;
-    public ExprNode Collection { get; } = collection;
+    public ForeachStmtNode Source { get; } = source;
     public CfgNode? Body { get; set; }
     public CfgNode? Continuation { get; set; }
 }

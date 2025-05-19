@@ -234,7 +234,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
         // Generate an enumeration node.
-        EnumerationNode enumeration = new(foreachNode, foreachNode.KeyIdentifier, foreachNode.Collection, localHelper.Scope);
+        EnumerationNode enumeration = new(foreachNode, localHelper.Scope + 1);
 
         CfgNode.Connect(enumeration, continuation);
         enumeration.Continuation = continuation;

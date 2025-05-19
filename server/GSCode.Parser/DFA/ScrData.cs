@@ -71,6 +71,22 @@ internal enum ScrDataTypes : uint
     Error = 1 << 60
 }
 
+internal static class ScrDataTypeNames
+{
+    public const string Any = "any";
+    public const string Void = "void";
+    public const string Bool = "bool";
+    public const string Int = "int";
+    public const string Float = "float";
+    public const string String = "string";
+    public const string Array = "array";
+    public const string Vec3 = "vector";
+    public const string Struct = "struct";
+    public const string Entity = "entity";
+    public const string Object = "object";
+    public const string Undefined = "undefined";
+}
+
 internal enum ScrInstanceTypes
 {
     Constant,
@@ -227,17 +243,17 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
                 first = false;
                 result.Append(value switch
                 {
-                    ScrDataTypes.Int => "int",
-                    ScrDataTypes.Float => "float",
-                    ScrDataTypes.Bool => "bool",
-                    ScrDataTypes.String => "string",
-                    ScrDataTypes.Array => "array",
-                    ScrDataTypes.Vec3 => "vector",
-                    ScrDataTypes.Struct => "struct",
-                    ScrDataTypes.Entity => "entity",
-                    ScrDataTypes.Object => "object",
-                    ScrDataTypes.Undefined => "undefined",
-                    _ => "any",
+                    ScrDataTypes.Int => ScrDataTypeNames.Int,
+                    ScrDataTypes.Float => ScrDataTypeNames.Float,
+                    ScrDataTypes.Bool => ScrDataTypeNames.Bool,
+                    ScrDataTypes.String => ScrDataTypeNames.String,
+                    ScrDataTypes.Array => ScrDataTypeNames.Array,
+                    ScrDataTypes.Vec3 => ScrDataTypeNames.Vec3,
+                    ScrDataTypes.Struct => ScrDataTypeNames.Struct,
+                    ScrDataTypes.Entity => ScrDataTypeNames.Entity,
+                    ScrDataTypes.Object => ScrDataTypeNames.Object,
+                    ScrDataTypes.Undefined => ScrDataTypeNames.Undefined,
+                    _ => ScrDataTypeNames.Any,
                 });
             }
         }

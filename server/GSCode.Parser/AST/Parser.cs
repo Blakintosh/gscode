@@ -976,9 +976,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Parse the then branch
         AstNode? then = Stmt();
 
-        return new()
+        return new(condition)
         {
-            Condition = condition,
             Then = then
         };
     }
@@ -1025,7 +1024,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Case 2: just an else clause
         AstNode? then = Stmt();
 
-        return new()
+        return new(null)
         {
             Then = then
         };
@@ -1230,9 +1229,9 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         if (valueIdentifierToken is not null)
         {
-            return new ForeachStmtNode(valueIdentifierToken, firstIdentifierToken, collection, then);
+            return new ForeachStmtNode(new IdentifierExprNode(valueIdentifierToken), new IdentifierExprNode(firstIdentifierToken), collection, then);
         }
-        return new ForeachStmtNode(firstIdentifierToken, null, collection, then);
+        return new ForeachStmtNode(new IdentifierExprNode(firstIdentifierToken), null, collection, then);
     }
 
     /// <summary>

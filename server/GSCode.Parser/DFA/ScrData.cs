@@ -361,6 +361,33 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         throw new InvalidOperationException("Cannot get numeric value of non-numeric type.");
     }
 
+    /// <summary>
+    /// Safely gets an integer value from ScrData, handling both int and int? stored values.
+    /// </summary>
+    /// <returns>The integer value as int?, or null if the value is unknown</returns>
+    public readonly int? GetIntegerValue()
+    {
+        if (ValueUnknown())
+        {
+            return null;
+        }
+
+        // Try to get as int first (non-nullable)
+        if (Value is int intValue)
+        {
+            return intValue;
+        }
+
+        // Check if it's a nullable int that contains a value
+        if (Value is int? && ((int?)Value).HasValue)
+        {
+            return ((int?)Value).Value;
+        }
+
+        // Value exists but is not an integer type, or nullable int is null
+        return null;
+    }
+
     public readonly T Get<T>()
     {
         if (Value is not T value)

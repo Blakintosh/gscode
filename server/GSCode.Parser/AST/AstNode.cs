@@ -193,11 +193,11 @@ internal sealed class WhileStmtNode(ExprNode? condition, AstNode? then) : Decisi
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class ForStmtNode(AstNode? init, ExprNode? condition, AstNode? increment, AstNode? then) : AstNode(AstNodeType.ForStmt)
+internal sealed class ForStmtNode(ExprNode? init, ExprNode? condition, ExprNode? increment, AstNode? then) : AstNode(AstNodeType.ForStmt)
 {
-    public AstNode? Init { get; } = init;
+    public ExprNode? Init { get; } = init;
     public ExprNode? Condition { get; } = condition;
-    public AstNode? Increment { get; } = increment;
+    public ExprNode? Increment { get; } = increment;
     public AstNode? Then { get; } = then;
 }
 

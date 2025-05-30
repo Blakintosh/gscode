@@ -127,20 +127,21 @@
 		},
         "function-parameter-defaults": {
             "name": "meta.parameters.default.gsc",
-            "match": "(([[:alnum:]]\\w*)\\s*(=)\\s*([^,]*)(,|\\)))",
-            "captures": {
-                "3": {
-                    "name": "keyword.operator.parameter-default.gsc"
-                },
-                "4": {
-                    "patterns": [
-                        { "include": "#expression" }
-                    ]
-                },
-                "5": {
-                    "name": "keyword.operator.parameter-comma.gsc"
-                }
-            }
+            "begin": "(([[:alnum:]]\\w*)\\s*(=)\\s*)",
+            "end": "(?=,|\\))",
+            "beginCaptures": {
+                "2": { "name": "variable.parameter.gsc" },
+                "3": { "name": "keyword.operator.parameter-default.gsc" }
+            },
+            "patterns": [
+                { "include": "#expression" },
+                { "include": "#line-comment" },
+                { "include": "#block-comment" }
+            ]
+        },
+        "function-parameter": {
+            "name": "variable.parameter.gsc",
+            "match": "\\b[[:alnum:]]\\w*\\b"
         },
         "function-vararg": {
             "name": "keyword.operator.vararg.gsc",
@@ -302,6 +303,9 @@
 					"include": "#function-vararg"
 				},
 				{
+					"include": "#function-parameter"
+				},
+				{
 					"name": "keyword.operator.parameter-comma.gsc",
 					"match": ","
 				},
@@ -341,6 +345,12 @@
                     "patterns": [
                         {
                             "include": "#function-parameter-defaults"
+                        },
+                        {
+                            "include": "#line-comment"
+                        },
+                        {
+                            "include": "#block-comment"
                         },
                         {
                             "include": "#expression"

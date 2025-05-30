@@ -56,6 +56,14 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             // Update the in & out sets
             InSets[node] = inSet;
 
+            // Store the previous outset for comparison
+            Dictionary<string, ScrVariable>? previousOutSet = null;
+            if (OutSets.TryGetValue(node, out Dictionary<string, ScrVariable>? existingOutSet))
+            {
+                // Create a copy of the existing outset for comparison
+                previousOutSet = new Dictionary<string, ScrVariable>(existingOutSet);
+            }
+
             if (!OutSets.ContainsKey(node))
             {
                 OutSets[node] = new Dictionary<string, ScrVariable>();
@@ -79,14 +87,21 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
                 OutSets[node] = symbolTable.VariableSymbols;
             }
-            else if(node.Type == CfgNodeType.EnumerationNode)
+            else if (node.Type == CfgNodeType.EnumerationNode)
             {
                 SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope);
 
                 AnalyseEnumeration((EnumerationNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
-            else if(node.Type == CfgNodeType.DecisionNode)
+            else if (node.Type == CfgNodeType.IterationNode)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope);
+
+                AnalyseIteration((IterationNode)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.DecisionNode)
             {
                 SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope);
 
@@ -99,11 +114,17 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 OutSets[node] = inSet;
             }
 
-            // TODO: don't queue the successors if the out set hasn't changed.
+            // Check if the outset has changed before queueing successors.
+            bool outSetChanged = previousOutSet == null || !previousOutSet.VariableTableEquals(OutSets[node]);
 
             Log.Information("Outset: {0}", string.Join(", ", OutSets[node].Select(kvp => $"{kvp.Key}: {kvp.Value}")));
 
-            // Add the successors to the worklist 
+            // Only add successors to the worklist if the outset has changed
+            if (!outSetChanged)
+            {
+                continue;
+            }
+
             foreach (CfgNode successor in node.Outgoing)
             {
                 worklist.Push(successor);
@@ -138,7 +159,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         ForeachStmtNode foreachStmt = node.Source;
 
         // Nothing to work with, errored earlier on.
-        if(foreachStmt.Collection is null)
+        if (foreachStmt.Collection is null)
         {
             return;
         }
@@ -146,7 +167,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         // Analyse the collection.
         ScrData collection = AnalyseExpr(foreachStmt.Collection, symbolTable, Sense);
 
-        if(!collection.TypeUnknown() && collection.Type != ScrDataTypes.Array)
+        if (!collection.TypeUnknown() && collection.Type != ScrDataTypes.Array)
         {
             Sense.AddSpaDiagnostic(foreachStmt.Collection.Range, GSCErrorCodes.CannotEnumerateType, collection.TypeToString());
         }
@@ -154,7 +175,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         Token valueIdentifier = foreachStmt.ValueIdentifier.Token;
         bool isNew = symbolTable.AddOrSetSymbol(valueIdentifier.Lexeme, ScrData.Default with { ReadOnly = true });
 
-        if(!isNew)
+        if (!isNew)
         {
             // TODO: how does GSC handle this?
         }
@@ -164,9 +185,68 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     public void AnalyseIteration(IterationNode node, SymbolTable symbolTable)
     {
         // Analyse the initialisation.
-        if(node.Initialisation is not null)
+        if (node.Initialisation is not null)
         {
             ScrData initialisation = AnalyseExpr(node.Initialisation, symbolTable, Sense);
+
+            // For loop initialization should follow the same rules as expression statements
+            // Only assignments, calls, increments, decrements should be allowed
+            ValidateExpressionHasSideEffects(node.Initialisation);
+        }
+
+        // Analyse the condition if present
+        if (node.Condition is not null)
+        {
+            ScrData condition = AnalyseExpr(node.Condition, symbolTable, Sense);
+
+            if (!condition.TypeUnknown() && !condition.CanEvaluateToBoolean())
+            {
+                Sense.AddSpaDiagnostic(node.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
+            }
+        }
+
+        // Analyse the increment if present
+        if (node.Increment is not null)
+        {
+            ScrData increment = AnalyseExpr(node.Increment, symbolTable, Sense);
+
+            // For loop increment should also follow expression statement rules
+            ValidateExpressionHasSideEffects(node.Increment);
+        }
+    }
+
+    private void ValidateExpressionHasSideEffects(ExprNode expr)
+    {
+        // Check if this expression has side effects (similar to expression statement validation)
+        bool hasSideEffects = expr.OperatorType switch
+        {
+            ExprOperatorType.Binary when expr is BinaryExprNode binaryExpr =>
+                binaryExpr.Operation == TokenType.Assign ||
+                binaryExpr.Operation == TokenType.PlusAssign ||
+                binaryExpr.Operation == TokenType.MinusAssign ||
+                binaryExpr.Operation == TokenType.MultiplyAssign ||
+                binaryExpr.Operation == TokenType.DivideAssign ||
+                binaryExpr.Operation == TokenType.ModuloAssign ||
+                binaryExpr.Operation == TokenType.BitAndAssign ||
+                binaryExpr.Operation == TokenType.BitOrAssign ||
+                binaryExpr.Operation == TokenType.BitXorAssign ||
+                binaryExpr.Operation == TokenType.BitLeftShiftAssign ||
+                binaryExpr.Operation == TokenType.BitRightShiftAssign,
+
+            ExprOperatorType.Postfix when expr is PostfixExprNode postfixExpr =>
+                postfixExpr.Operator.Type == TokenType.Increment ||
+                postfixExpr.Operator.Type == TokenType.Decrement,
+
+            ExprOperatorType.FunctionCall => true,
+            ExprOperatorType.MethodCall => true,
+            ExprOperatorType.CallOn => true,
+
+            _ => false
+        };
+
+        if (!hasSideEffects)
+        {
+            Sense.AddSpaDiagnostic(expr.Range, GSCErrorCodes.InvalidExpressionStatement);
         }
     }
 
@@ -175,7 +255,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         DecisionAstNode decision = node.Source;
 
         // It either errored or it's an else, nothing to do.
-        if(decision.Condition is null)
+        if (decision.Condition is null)
         {
             return;
         }
@@ -183,7 +263,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         // Analyse the condition.
         ScrData condition = AnalyseExpr(decision.Condition, symbolTable, Sense);
 
-        if(!condition.TypeUnknown() && !condition.CanEvaluateToBoolean())
+        if (!condition.TypeUnknown() && !condition.CanEvaluateToBoolean())
         {
             Sense.AddSpaDiagnostic(decision.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
         }
@@ -227,7 +307,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
     public void AnalyseExprStmt(ExprStmtNode statement, AstNode? last, AstNode? next, SymbolTable symbolTable)
     {
-        if(statement.Expr is null)
+        if (statement.Expr is null)
         {
             return;
         }
@@ -346,7 +426,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
             {
                 // Adds the values if they exist, otherwise is just null (ie Value Unknown)
-                return new ScrData(ScrDataTypes.Int, left.Get<int?>() + right.Get<int?>());
+                return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() + right.GetIntegerValue());
             }
 
             return new ScrData(ScrDataTypes.Float, left.GetNumericValue() + right.GetNumericValue());
@@ -384,7 +464,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.Get<int?>() - right.Get<int?>());
+            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() - right.GetIntegerValue());
         }
 
         if (left.IsNumeric() && right.IsNumeric())
@@ -413,7 +493,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         // TODO: double check if GSC even does integer multiplication, i'm not sure.
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.Get<int?>() * right.Get<int?>());
+            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() * right.GetIntegerValue());
         }
 
         if (left.IsNumeric() && right.IsNumeric())
@@ -458,7 +538,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.Get<int?>() % right.Get<int?>());
+            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() % right.GetIntegerValue());
         }
 
         Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "%", left.TypeToString(), right.TypeToString());
@@ -474,7 +554,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.Get<int?>() << right.Get<int?>());
+            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() << right.GetIntegerValue());
         }
 
         Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "<<", left.TypeToString(), right.TypeToString());
@@ -490,7 +570,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.Get<int?>() >> right.Get<int?>());
+            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() >> right.GetIntegerValue());
         }
 
         Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, ">>", left.TypeToString(), right.TypeToString());

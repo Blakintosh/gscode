@@ -18,6 +18,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> InSets { get; } = new();
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> OutSets { get; } = new();
 
+    public bool Silent { get; set; } = true;
+
     public void Run()
     {
         foreach (Tuple<ScrFunction, ControlFlowGraph> functionGraph in FunctionGraphs)
@@ -28,13 +30,17 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
     public void AnalyseFunction(ScrFunction function, ControlFlowGraph functionGraph)
     {
+        Silent = true;
 
         Stack<CfgNode> worklist = new();
         worklist.Push(functionGraph.Start);
 
+        HashSet<CfgNode> visited = new();
+
         while (worklist.Count > 0)
         {
             CfgNode node = worklist.Pop();
+            visited.Add(node);
 
             // Calculate the in set
             Dictionary<string, ScrVariable> inSet = new();
@@ -42,7 +48,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             {
                 if (OutSets.TryGetValue(incoming, out Dictionary<string, ScrVariable>? value))
                 {
-                    Log.Information("Merging an outset...");
                     inSet.MergeTables(value, node.Scope);
                 }
             }
@@ -117,8 +122,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             // Check if the outset has changed before queueing successors.
             bool outSetChanged = previousOutSet == null || !previousOutSet.VariableTableEquals(OutSets[node]);
 
-            Log.Information("Outset: {0}", string.Join(", ", OutSets[node].Select(kvp => $"{kvp.Key}: {kvp.Value}")));
-
             // Only add successors to the worklist if the outset has changed
             if (!outSetChanged)
             {
@@ -129,6 +132,69 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             {
                 worklist.Push(successor);
             }
+        }
+
+        // Now that analysis is done, do one final pass to add diagnostics.
+        Silent = false;
+
+        foreach (CfgNode node in visited)
+        {
+            if (!InSets.TryGetValue(node, out Dictionary<string, ScrVariable>? inSet))
+            {
+                continue;
+            }
+
+            // Re-run analysis with Silent = false to generate diagnostics
+            switch (node.Type)
+            {
+                case CfgNodeType.BasicBlock:
+                    AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope));
+                    break;
+                case CfgNodeType.EnumerationNode:
+                    AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope));
+                    break;
+                case CfgNodeType.IterationNode:
+                    AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope));
+                    break;
+                case CfgNodeType.DecisionNode:
+                    AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope));
+                    break;
+            }
+        }
+    }
+
+    private void ValidateExpressionHasSideEffects(ExprNode expr)
+    {
+        // Check if this expression has side effects (similar to expression statement validation)
+        bool hasSideEffects = expr.OperatorType switch
+        {
+            ExprOperatorType.Binary when expr is BinaryExprNode binaryExpr =>
+                binaryExpr.Operation == TokenType.Assign ||
+                binaryExpr.Operation == TokenType.PlusAssign ||
+                binaryExpr.Operation == TokenType.MinusAssign ||
+                binaryExpr.Operation == TokenType.MultiplyAssign ||
+                binaryExpr.Operation == TokenType.DivideAssign ||
+                binaryExpr.Operation == TokenType.ModuloAssign ||
+                binaryExpr.Operation == TokenType.BitAndAssign ||
+                binaryExpr.Operation == TokenType.BitOrAssign ||
+                binaryExpr.Operation == TokenType.BitXorAssign ||
+                binaryExpr.Operation == TokenType.BitLeftShiftAssign ||
+                binaryExpr.Operation == TokenType.BitRightShiftAssign,
+
+            ExprOperatorType.Postfix when expr is PostfixExprNode postfixExpr =>
+                postfixExpr.Operator.Type == TokenType.Increment ||
+                postfixExpr.Operator.Type == TokenType.Decrement,
+
+            ExprOperatorType.FunctionCall => true,
+            ExprOperatorType.MethodCall => true,
+            ExprOperatorType.CallOn => true,
+
+            _ => false
+        };
+
+        if (!hasSideEffects)
+        {
+            AddDiagnostic(expr.Range, GSCErrorCodes.InvalidExpressionStatement);
         }
     }
 
@@ -169,7 +235,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (!collection.TypeUnknown() && collection.Type != ScrDataTypes.Array)
         {
-            Sense.AddSpaDiagnostic(foreachStmt.Collection.Range, GSCErrorCodes.CannotEnumerateType, collection.TypeToString());
+            AddDiagnostic(foreachStmt.Collection.Range, GSCErrorCodes.CannotEnumerateType, collection.TypeToString());
         }
 
         Token valueIdentifier = foreachStmt.ValueIdentifier.Token;
@@ -201,7 +267,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
             if (!condition.TypeUnknown() && !condition.CanEvaluateToBoolean())
             {
-                Sense.AddSpaDiagnostic(node.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
+                AddDiagnostic(node.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
             }
         }
 
@@ -212,41 +278,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
             // For loop increment should also follow expression statement rules
             ValidateExpressionHasSideEffects(node.Increment);
-        }
-    }
-
-    private void ValidateExpressionHasSideEffects(ExprNode expr)
-    {
-        // Check if this expression has side effects (similar to expression statement validation)
-        bool hasSideEffects = expr.OperatorType switch
-        {
-            ExprOperatorType.Binary when expr is BinaryExprNode binaryExpr =>
-                binaryExpr.Operation == TokenType.Assign ||
-                binaryExpr.Operation == TokenType.PlusAssign ||
-                binaryExpr.Operation == TokenType.MinusAssign ||
-                binaryExpr.Operation == TokenType.MultiplyAssign ||
-                binaryExpr.Operation == TokenType.DivideAssign ||
-                binaryExpr.Operation == TokenType.ModuloAssign ||
-                binaryExpr.Operation == TokenType.BitAndAssign ||
-                binaryExpr.Operation == TokenType.BitOrAssign ||
-                binaryExpr.Operation == TokenType.BitXorAssign ||
-                binaryExpr.Operation == TokenType.BitLeftShiftAssign ||
-                binaryExpr.Operation == TokenType.BitRightShiftAssign,
-
-            ExprOperatorType.Postfix when expr is PostfixExprNode postfixExpr =>
-                postfixExpr.Operator.Type == TokenType.Increment ||
-                postfixExpr.Operator.Type == TokenType.Decrement,
-
-            ExprOperatorType.FunctionCall => true,
-            ExprOperatorType.MethodCall => true,
-            ExprOperatorType.CallOn => true,
-
-            _ => false
-        };
-
-        if (!hasSideEffects)
-        {
-            Sense.AddSpaDiagnostic(expr.Range, GSCErrorCodes.InvalidExpressionStatement);
         }
     }
 
@@ -265,7 +296,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (!condition.TypeUnknown() && !condition.CanEvaluateToBoolean())
         {
-            Sense.AddSpaDiagnostic(decision.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
+            AddDiagnostic(decision.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
         }
 
         // TODO: if the condition evaluates to false, then mark the block that follows as unreachable.
@@ -320,10 +351,12 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         return expr.OperatorType switch
         {
             ExprOperatorType.Binary => AnalyseBinaryExpr((BinaryExprNode)expr, symbolTable, createSenseTokenForRhs),
+            ExprOperatorType.Prefix => AnalysePrefixExpr((PrefixExprNode)expr, symbolTable, sense),
             ExprOperatorType.DataOperand => AnalyseDataExpr((DataExprNode)expr),
             ExprOperatorType.IdentifierOperand => AnalyseIdentifierExpr((IdentifierExprNode)expr, symbolTable, createSenseTokenForRhs),
             ExprOperatorType.Vector => AnalyseVectorExpr((VectorExprNode)expr, symbolTable),
             ExprOperatorType.Indexer => AnalyseIndexerExpr((ArrayIndexNode)expr, symbolTable),
+            ExprOperatorType.CallOn => AnalyseCallOnExpr((CalledOnNode)expr, symbolTable),
             _ => ScrData.Default,
         };
     }
@@ -353,6 +386,16 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             TokenType.BitRightShift => AnalyseBitRightShiftOp(binary, left, right),
             TokenType.Equals => AnalyseEqualsOp(binary, left, right),
             TokenType.NotEquals => AnalyseNotEqualsOp(binary, left, right),
+            TokenType.ScopeResolution => AnalyseNamespacedFunctionCall(binary, symbolTable, Sense),
+            _ => ScrData.Default,
+        };
+    }
+
+    private ScrData AnalysePrefixExpr(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        return prefix.Operation switch
+        {
+            TokenType.Thread => AnalyseThreadedFunctionCall(prefix, symbolTable, sense),
             _ => ScrData.Default,
         };
     }
@@ -372,7 +415,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
             if (left.ReadOnly)
             {
-                Sense.AddSpaDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
+                AddDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
                 return ScrData.Default;
             }
 
@@ -393,7 +436,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
             if (left.ReadOnly)
             {
-                Sense.AddSpaDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
                 return ScrData.Default;
             }
 
@@ -451,7 +494,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         // ERROR: Operator '+' cannot be applied on operands of type ...
-        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", left.TypeToString(), right.TypeToString());
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", left.TypeToString(), right.TypeToString());
         return ScrData.Default;
     }
 
@@ -479,7 +522,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         // ERROR: Operator '-' cannot be applied on operands of type ...
-        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "-", left.TypeToString(), right.TypeToString());
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "-", left.TypeToString(), right.TypeToString());
         return ScrData.Default;
     }
 
@@ -503,7 +546,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // TODO: not sure whether multiply can be done on vec3d, etc., need to check.
 
-        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "*", left.TypeToString(), right.TypeToString());
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "*", left.TypeToString(), right.TypeToString());
         return ScrData.Default;
     }
 
@@ -525,7 +568,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return new ScrData(ScrDataTypes.Float, left.GetNumericValue() / right.GetNumericValue());
         }
 
-        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "/", left.TypeToString(), right.TypeToString());
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "/", left.TypeToString(), right.TypeToString());
         return ScrData.Default;
     }
 
@@ -541,7 +584,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() % right.GetIntegerValue());
         }
 
-        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "%", left.TypeToString(), right.TypeToString());
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "%", left.TypeToString(), right.TypeToString());
         return ScrData.Default;
     }
 
@@ -557,7 +600,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() << right.GetIntegerValue());
         }
 
-        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "<<", left.TypeToString(), right.TypeToString());
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "<<", left.TypeToString(), right.TypeToString());
         return ScrData.Default;
     }
 
@@ -573,7 +616,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() >> right.GetIntegerValue());
         }
 
-        Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, ">>", left.TypeToString(), right.TypeToString());
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, ">>", left.TypeToString(), right.TypeToString());
         return ScrData.Default;
     }
 
@@ -613,7 +656,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     {
         if (node.Right!.OperatorType != ExprOperatorType.IdentifierOperand || node.Right is not IdentifierExprNode identifierNode)
         {
-            Sense.AddSpaDiagnostic(node.Right!.Range, GSCErrorCodes.IdentifierExpected);
+            AddDiagnostic(node.Right!.Range, GSCErrorCodes.IdentifierExpected);
             return ScrData.Default;
         }
 
@@ -637,7 +680,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
         if (left.Type != ScrDataTypes.Object && left.Type != ScrDataTypes.Struct && left.Type != ScrDataTypes.Entity)
         {
-            Sense.AddSpaDiagnostic(node.Range, GSCErrorCodes.DoesNotContainMember, identifierNode.Identifier, left.TypeToString());
+            AddDiagnostic(node.Range, GSCErrorCodes.DoesNotContainMember, identifierNode.Identifier, left.TypeToString());
             return ScrData.Default;
         }
 
@@ -726,7 +769,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             if (indexer.Type != ScrDataTypes.Int && indexer.Type != ScrDataTypes.String)
             {
-                Sense.AddSpaDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
+                AddDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
             }
             return ScrData.Default;
         }
@@ -737,7 +780,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             if (indexer.Type != ScrDataTypes.Int)
             {
-                Sense.AddSpaDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
+                AddDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
                 return ScrData.Default;
             }
 
@@ -746,6 +789,73 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         return ScrData.Default;
+    }
+
+    private ScrData AnalyseCallOnExpr(CalledOnNode expr, SymbolTable symbolTable)
+    {
+        ScrData target = AnalyseExpr(expr.On, symbolTable, Sense);
+
+        return AnalyseCall(expr.Call, symbolTable, Sense, target);
+    }
+
+    private ScrData AnalyseCall(ExprNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
+    {
+        // If target is null, we don't know, just use any.
+        ScrData targetValue = target ?? ScrData.Default;
+
+        // Analyse the call.
+        return call.OperatorType switch
+        {
+            ExprOperatorType.FunctionCall => AnalyseFunctionCall((FunCallNode)call, symbolTable, sense, targetValue),
+            ExprOperatorType.Prefix when call is PrefixExprNode prefix && prefix.Operation == TokenType.Thread => AnalyseThreadedFunctionCall(prefix, symbolTable, sense, targetValue),
+            ExprOperatorType.Binary when call is BinaryExprNode binary && binary.Operation == TokenType.ScopeResolution => AnalyseNamespacedFunctionCall(binary, symbolTable, sense, targetValue),
+            // for now... might be an error later.
+            _ => ScrData.Default
+        };
+    }
+
+    private string AnalyseNamespace(IdentifierExprNode namespaced, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        Sense.AddSenseToken(namespaced.Token, ScrVariableSymbol.LanguageSymbol(namespaced, ScrData.Default));
+        return namespaced.Identifier;
+    }
+
+    private ScrData AnalyseNamespacedFunctionCall(BinaryExprNode namespaced, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
+    {
+        ScrData targetValue = target ?? ScrData.Default;
+
+        if (namespaced.Left is not IdentifierExprNode namespaceNode)
+        {
+            AddDiagnostic(namespaced.Left!.Range, GSCErrorCodes.IdentifierExpected);
+            return ScrData.Default;
+        }
+
+        string namespaceName = AnalyseNamespace(namespaceNode, symbolTable, sense);
+
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseFunctionCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData target)
+    {
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseThreadedFunctionCall(PrefixExprNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
+    {
+        ScrData targetValue = target ?? ScrData.Default;
+
+        // Threaded calls won't return anything.
+        return ScrData.Undefined();
+    }
+
+    public void AddDiagnostic(Range range, GSCErrorCodes code, params object[] args)
+    {
+        // Only issue the diagnostics on the final pass.
+        if (Silent)
+        {
+            return;
+        }
+        Sense.AddSpaDiagnostic(range, code, args);
     }
 }
 

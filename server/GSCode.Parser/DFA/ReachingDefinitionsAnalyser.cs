@@ -422,11 +422,18 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
             bool isNew = symbolTable.AddOrSetSymbol(symbolName, right);
 
-            if (isNew && right.Type != ScrDataTypes.Undefined)
+            if (right.Type == ScrDataTypes.Undefined)
             {
-                Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Declaration(identifier, right));
+                return right;
             }
 
+            if (isNew)
+            {
+                Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Declaration(identifier, right));
+                return right;
+            }
+
+            Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Usage(identifier, right));
             return right;
         }
 
@@ -724,7 +731,10 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             if (isGlobal && data.Type == ScrDataTypes.Function)
             {
-                Sense.AddSenseToken(expr.Token, new ScrFunctionReferenceSymbol(expr.Token, data.Get<ScrFunction>()));
+                if (createSenseTokenForRhs)
+                {
+                    Sense.AddSenseToken(expr.Token, new ScrFunctionReferenceSymbol(expr.Token, data.Get<ScrFunction>()));
+                }
                 return data;
             }
 

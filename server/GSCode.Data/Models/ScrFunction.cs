@@ -169,7 +169,7 @@ public record class ScrFunction : IExportedSymbol
     /// <summary>
     /// Whether this function is private and cannot be accessed from other scripts.
     /// </summary>
-    public bool IsPrivate { get; set; } = false;
+    public bool Private { get; set; } = false;
 }
 
 

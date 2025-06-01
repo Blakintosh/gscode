@@ -111,7 +111,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             ],
 
             Flags = ["userdefined"],
-            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
+            Private = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
         };
 
         // Produce a definition for our function
@@ -194,7 +194,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 }
             ],
             Flags = ["userdefined"],
-            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
+            Private = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
         };
 
         // Produce a definition for our function

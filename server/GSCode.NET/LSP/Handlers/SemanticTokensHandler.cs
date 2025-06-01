@@ -48,6 +48,7 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
                     SemanticTokenType.Class,
                     SemanticTokenType.Macro,
                     SemanticTokenType.String,
+                    SemanticTokenType.Namespace,
                     new SemanticTokenType("field")
                 )
             },

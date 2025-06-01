@@ -1,6 +1,5 @@
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
-using GSCode.Parser.SPA.Sense;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
 
@@ -52,13 +51,13 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
     private List<CompletionItem> GetGlobalScopeCompletions(CompletionContext context)
     {
-        List<ScrFunctionDefinition> functions = _scriptAnalyserData.GetApiFunctions(context.Filter);
+        List<ScrFunction> functions = _scriptAnalyserData.GetApiFunctions(context.Filter);
 
         List<CompletionItem> completions = new();
 
         Log.Information("Found {Count} functions in global scope", functions.Count);
 
-        foreach (ScrFunctionDefinition function in functions)
+        foreach (ScrFunction function in functions)
         {
             completions.Add(CreateCompletionItem(function));
         }
@@ -66,7 +65,7 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         return completions;
     }
 
-    private CompletionItem CreateCompletionItem(ScrFunctionDefinition function)
+    private CompletionItem CreateCompletionItem(ScrFunction function)
     {
         // TODO: has been hacked to show first only, but we need to handle all overloads eventually.
         // Generate snippet-formatted parameters with tabstops

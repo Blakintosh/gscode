@@ -3,7 +3,6 @@ using GSCode.Data;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
-using GSCode.Parser.SPA.Sense;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.AST;
@@ -2709,11 +2708,6 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             }
             FunCallNode call = new FunCallNode(left, functionArgs);
 
-            // TODO: HACK - create permanent function hoverable solution at SPA-stage in a future version
-            if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunctionDefinition function)
-            {
-                Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
-            }
             return CallOrAccessOpRhs(call);
         }
 
@@ -3121,25 +3115,25 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 /// Records the definition of a function parameter for semantics & hovers
 /// </summary>
 /// <param name="Source">The parameter source</param>
-internal record DumbFunctionSymbol(Token Token, ScrFunctionDefinition Source) : ISenseDefinition
-{
-    // I'm pretty sure this is redundant
-    public bool IsFromPreprocessor { get; } = false;
-    public Range Range { get; } = Token.Range;
+// internal record DumbFunctionSymbol(Token Token, ScrFunctionDefinition Source) : ISenseDefinition
+// {
+//     // I'm pretty sure this is redundant
+//     public bool IsFromPreprocessor { get; } = false;
+//     public Range Range { get; } = Token.Range;
 
-    public string SemanticTokenType { get; } = "function";
-    public string[] SemanticTokenModifiers { get; } = [];
+//     public string SemanticTokenType { get; } = "function";
+//     public string[] SemanticTokenModifiers { get; } = [];
 
-    public Hover GetHover()
-    {
-        return new()
-        {
-            Range = Range,
-            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
-            {
-                Kind = MarkupKind.Markdown,
-                Value = Source.Documentation
-            })
-        };
-    }
-}
+//     public Hover GetHover()
+//     {
+//         return new()
+//         {
+//             Range = Range,
+//             Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+//             {
+//                 Kind = MarkupKind.Markdown,
+//                 Value = Source.Documentation
+//             })
+//         };
+//     }
+// }

@@ -31,7 +31,7 @@ public class DefinitionsTable
         LocalScopedFunctions.Add(new Tuple<ScrFunction, FunDefnNode>(function, node));
 
         // Only add to exported functions if it's not private.
-        if (!function.IsPrivate)
+        if (!function.Private)
         {
             ScrFunction exportedFunction = function with { Namespace = CurrentNamespace };
             ExportedFunctions.Add(exportedFunction);

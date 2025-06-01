@@ -67,6 +67,13 @@ public class ScriptAnalyserData
         {
             ScriptApiJsonLibrary library = JsonConvert.DeserializeObject<ScriptApiJsonLibrary>(source);
 
+            // All built-ins are implicit, because they can be called without using the sys namespace.
+            foreach (ScrFunction function in library.Api)
+            {
+                function.Namespace = "sys";
+                function.Implicit = true;
+            }
+
             if (_languageLibraries.TryGetValue(library.LanguageId, out ScrLibraryData? existingLibrary)
                 && existingLibrary!.Library.Revision > library.Revision)
             {

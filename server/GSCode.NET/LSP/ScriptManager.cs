@@ -145,7 +145,6 @@ public class ScriptManager
         List<ScrFunction> apiFunctions = analyserData.GetApiFunctions();
         foreach (ScrFunction apiFunction in apiFunctions)
         {
-            // Convert ScrFunctionDefinition to ScrFunction (which implements IExportedSymbol)
             exportedSymbols.Add(apiFunction);
         }
 

@@ -128,6 +128,9 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             // d or D
             'd' => MatchByD(),
             'D' => MatchByD(),
+            // n or N
+            'n' when StartsWithKeyword("new") => DoCharMatchIfWordBoundary(TokenType.New, "new"),
+            'N' when StartsWithKeyword("new") => DoCharMatchIfWordBoundary(TokenType.New, "new"),
             // w or W
             'w' when StartsWithKeyword("while") => DoCharMatchIfWordBoundary(TokenType.While, "while"),
             'W' when StartsWithKeyword("while") => DoCharMatchIfWordBoundary(TokenType.While, "while"),

@@ -239,13 +239,16 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         Token valueIdentifier = foreachStmt.ValueIdentifier.Token;
-        bool isNew = symbolTable.AddOrSetSymbol(valueIdentifier.Lexeme, ScrData.Default with { ReadOnly = true });
+        AssignmentResult assignmentResult = symbolTable.AddOrSetSymbol(valueIdentifier.Lexeme, ScrData.Default);
 
-        if (!isNew)
+        // if (!assignmentResult)
+        // {
+        //     // TODO: how does GSC handle this?
+        // }
+        if(assignmentResult == AssignmentResult.SuccessNew)
         {
-            // TODO: how does GSC handle this?
+            Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Declaration(foreachStmt.ValueIdentifier, ScrData.Default));
         }
-        Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Declaration(foreachStmt.ValueIdentifier, ScrData.Default with { ReadOnly = true }, true));
     }
 
     public void AnalyseIteration(IterationNode node, SymbolTable symbolTable)
@@ -420,14 +423,27 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 return ScrData.Default;
             }
 
-            bool isNew = symbolTable.AddOrSetSymbol(symbolName, right);
+            if(right.Type == ScrDataTypes.Function)
+            {
+                AddDiagnostic(node.Right!.Range, GSCErrorCodes.StoreFunctionAsPointer);
+                return ScrData.Default;
+            }
+
+            AssignmentResult assignmentResult = symbolTable.AddOrSetSymbol(symbolName, right);
 
             if (right.Type == ScrDataTypes.Undefined)
             {
                 return right;
             }
 
-            if (isNew)
+            // Failed, because the symbol is reserved
+            if(assignmentResult == AssignmentResult.FailedReserved)
+            {
+                AddDiagnostic(identifier.Range, GSCErrorCodes.ReservedSymbol, symbolName);
+                return ScrData.Default;
+            }
+
+            if (assignmentResult == AssignmentResult.SuccessNew)
             {
                 Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Declaration(identifier, right));
                 return right;
@@ -721,7 +737,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     private ScrData AnalyseIdentifierExpr(IdentifierExprNode expr, SymbolTable symbolTable, bool createSenseTokenForRhs = true)
     {
         // Analyze and return the corresponding ScrData for the field
-        ScrData? value = symbolTable.TryGetSymbol(expr.Identifier, out bool isGlobal);
+        ScrData? value = symbolTable.TryGetSymbol(expr.Identifier, out SymbolFlags flags);
         if (value is not ScrData data)
         {
             return ScrData.Undefined();
@@ -729,16 +745,16 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (data.Type != ScrDataTypes.Undefined)
         {
-            if (isGlobal && data.Type == ScrDataTypes.Function)
+            if (flags.HasFlag(SymbolFlags.Global) && data.Type == ScrDataTypes.Function)
             {
-                if (createSenseTokenForRhs)
+                if (createSenseTokenForRhs && !flags.HasFlag(SymbolFlags.Reserved))
                 {
                     Sense.AddSenseToken(expr.Token, new ScrFunctionReferenceSymbol(expr.Token, data.Get<ScrFunction>()));
                 }
                 return data;
             }
 
-            if (isGlobal)
+            if (flags.HasFlag(SymbolFlags.Global))
             {
                 if (createSenseTokenForRhs)
                 {

@@ -134,12 +134,43 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public Task DoAnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
     {
+        // Get a comprehensive list of symbols available in this context.
+        Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.ExportedSymbols);
+        foreach (IExportedSymbol symbol in exportedSymbols)
+        {
+            // Add dependency symbols, but don't overwrite local symbols (local takes precedence).
+            allSymbols.TryAdd(symbol.Name, symbol);
+        }
+
         ControlFlowAnalyser controlFlowAnalyser = new(Sense, DefinitionsTable!);
-        controlFlowAnalyser.Run();
+        try
+        {
+            controlFlowAnalyser.Run();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Console.Error.WriteLine($"Failed to run control flow analyser: {ex.Message}");
 
-        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, Sense, DefinitionsTable!.ExportedSymbols);
-        dataFlowAnalyser.Run();
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
 
+        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, Sense, allSymbols);
+        try
+        {
+            dataFlowAnalyser.Run();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Console.Error.WriteLine($"Failed to run data flow analyser: {ex.Message}");
+
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
+
+        Analysed = true;
         return Task.CompletedTask;
     }
 

@@ -97,20 +97,21 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         {
             Name = name,
             Description = null, // TODO: Check the DOC COMMENT
-            Args = GetParametersAsRecord(parameters),
-            CalledOn = new ScrFunctionArg()
-            {
-                Name = "unk",
-                Required = false
-            }, // TODO: Check the DOC COMMENT
-            Returns = new ScrFunctionArg()
-            {
-                Name = "unk",
-                Required = false
-            }, // TODO: Check the DOC COMMENT
-            Tags = ["userdefined"],
-            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
-            IntelliSense = null // I have no idea why this exists
+            Overloads = [
+                new ScrFunctionOverload()
+                {
+                    Parameters = GetParametersAsRecord(parameters),
+                    CalledOn = new ScrFunctionArg()
+                    {
+                        Name = "unk",
+                        Mandatory = false
+                    }, // TODO: Check the DOC COMMENT
+                    Returns = null
+                }
+            ],
+
+            Flags = ["userdefined"],
+            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
         };
 
         // Produce a definition for our function
@@ -184,20 +185,16 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         {
             Name = name,
             Description = null, // TODO: Check the DOC COMMENT
-            Args = GetParametersAsRecord(parameters),
-            CalledOn = new ScrFunctionArg()
-            {
-                Name = "unk",
-                Required = false
-            }, // TODO: Check the DOC COMMENT
-            Returns = new ScrFunctionArg()
-            {
-                Name = "unk",
-                Required = false
-            }, // TODO: Check the DOC COMMENT
-            Tags = ["userdefined"],
-            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
-            IntelliSense = null // I have no idea why this exists
+            Overloads = [
+                new ScrFunctionOverload()
+                {
+                    CalledOn = null, // TODO: Check the DOC COMMENT
+                    Parameters = GetParametersAsRecord(parameters),
+                    Returns = null // TODO: Check the DOC COMMENT
+                }
+            ],
+            Flags = ["userdefined"],
+            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
         };
 
         // Produce a definition for our function
@@ -224,7 +221,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 Name = parameter.Name,
                 Description = null, // TODO: Check the DOC COMMENT
                 Type = "unknown", // TODO: Check the DOC COMMENT
-                Required = parameter.Default is null,
+                Mandatory = parameter.Default is null,
                 Default = null // Not sure we can populate this
             });
         }
@@ -299,27 +296,13 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
 
     public virtual Hover GetHover()
     {
-        StringBuilder builder = new();
-
-        builder.AppendLine("```gsc");
-        builder.Append($"function {Source.Name}(");
-
-        bool first = true;
-        foreach (ScrFunctionArg parameter in Source.Args ?? [])
-        {
-            AppendParameter(builder, parameter, ref first);
-        }
-        builder.AppendLine(")");
-        builder.AppendLine("```");
-
-
         return new()
         {
             Range = Range,
             Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
             {
                 Kind = MarkupKind.Markdown,
-                Value = builder.ToString()
+                Value = Source.Documentation
             })
         };
     }
@@ -403,7 +386,7 @@ internal record ScrMethodSymbol(Token NameToken, ScrFunction Source, ScrClass Cl
         builder.Append($"{ClassSource.Name}::{Source.Name}(");
 
         bool first = true;
-        foreach (ScrFunctionArg parameter in Source.Args ?? [])
+        foreach (ScrFunctionArg parameter in Source.Overloads.First().Parameters)
         {
             AppendParameter(builder, parameter, ref first);
         }

@@ -98,6 +98,8 @@ public enum GSCErrorCodes
     CannotAssignToReadOnlyProperty = 3032,
     MissingUsingFile = 3033,
     CannotEnumerateType = 3034,
+    FunctionDoesNotExist = 3035,
+    ExpectedFunction = 3036,
 
     // 8xxx errors are issued by the IDE for conventions
 
@@ -198,6 +200,8 @@ public static class DiagnosticCodes
         { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingUsingFile, new("Unable to locate file '{0}' in the workspace or in the shared scripts directory.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotEnumerateType, new("Type '{0}' is not enumerable.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.FunctionDoesNotExist, new("The function '{0}' does not exist in this context.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedFunction, new("Expected a function, but instead got '{0}'.", DiagnosticSeverity.Error) },
 
         // 9xxx
         { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },

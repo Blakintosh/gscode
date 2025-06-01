@@ -350,6 +350,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     {
         return expr.OperatorType switch
         {
+            ExprOperatorType.Binary when expr is NamespacedMemberNode namespaceMember => AnalyseScopeResolution(namespaceMember, symbolTable, sense),
             ExprOperatorType.Binary => AnalyseBinaryExpr((BinaryExprNode)expr, symbolTable, createSenseTokenForRhs),
             ExprOperatorType.Prefix => AnalysePrefixExpr((PrefixExprNode)expr, symbolTable, sense),
             ExprOperatorType.DataOperand => AnalyseDataExpr((DataExprNode)expr),
@@ -357,6 +358,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             ExprOperatorType.Vector => AnalyseVectorExpr((VectorExprNode)expr, symbolTable),
             ExprOperatorType.Indexer => AnalyseIndexerExpr((ArrayIndexNode)expr, symbolTable),
             ExprOperatorType.CallOn => AnalyseCallOnExpr((CalledOnNode)expr, symbolTable),
+            ExprOperatorType.FunctionCall => AnalyseFunctionCall((FunCallNode)expr, symbolTable, sense),
             _ => ScrData.Default,
         };
     }
@@ -386,7 +388,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             TokenType.BitRightShift => AnalyseBitRightShiftOp(binary, left, right),
             TokenType.Equals => AnalyseEqualsOp(binary, left, right),
             TokenType.NotEquals => AnalyseNotEqualsOp(binary, left, right),
-            TokenType.ScopeResolution => AnalyseNamespacedFunctionCall(binary, symbolTable, Sense),
             _ => ScrData.Default,
         };
     }
@@ -632,6 +633,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return new ScrData(ScrDataTypes.Bool);
         }
 
+        // TODO: undefined can't be compared
+
         // TODO: this is a blunt instrument and I don't think it's correct
         return new ScrData(ScrDataTypes.Bool, left.Value == right.Value);
     }
@@ -647,6 +650,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             return new ScrData(ScrDataTypes.Bool);
         }
+
+        // TODO: undefined can't be compared
 
         // TODO: this is a blunt instrument and I don't think it's correct
         return new ScrData(ScrDataTypes.Bool, left.Value != right.Value);
@@ -717,6 +722,12 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (data.Type != ScrDataTypes.Undefined)
         {
+            if (isGlobal && data.Type == ScrDataTypes.Function)
+            {
+                Sense.AddSenseToken(expr.Token, new ScrFunctionReferenceSymbol(expr.Token, data.Get<ScrFunction>()));
+                return data;
+            }
+
             if (isGlobal)
             {
                 if (createSenseTokenForRhs)
@@ -808,41 +819,69 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             ExprOperatorType.FunctionCall => AnalyseFunctionCall((FunCallNode)call, symbolTable, sense, targetValue),
             ExprOperatorType.Prefix when call is PrefixExprNode prefix && prefix.Operation == TokenType.Thread => AnalyseThreadedFunctionCall(prefix, symbolTable, sense, targetValue),
-            ExprOperatorType.Binary when call is BinaryExprNode binary && binary.Operation == TokenType.ScopeResolution => AnalyseNamespacedFunctionCall(binary, symbolTable, sense, targetValue),
+            ExprOperatorType.Binary when call is NamespacedMemberNode namespaced => AnalyseScopeResolution(namespaced, symbolTable, sense, targetValue),
             // for now... might be an error later.
             _ => ScrData.Default
         };
     }
 
-    private string AnalyseNamespace(IdentifierExprNode namespaced, SymbolTable symbolTable, ParserIntelliSense sense)
-    {
-        Sense.AddSenseToken(namespaced.Token, ScrVariableSymbol.LanguageSymbol(namespaced, ScrData.Default));
-        return namespaced.Identifier;
-    }
-
-    private ScrData AnalyseNamespacedFunctionCall(BinaryExprNode namespaced, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
+    private ScrData AnalyseScopeResolution(NamespacedMemberNode namespaced, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
     {
         ScrData targetValue = target ?? ScrData.Default;
 
-        if (namespaced.Left is not IdentifierExprNode namespaceNode)
+        // I'm pretty sure the grammar stops this from happening, but no harm in being sure.
+        if (namespaced.Namespace is not IdentifierExprNode namespaceNode)
         {
-            AddDiagnostic(namespaced.Left!.Range, GSCErrorCodes.IdentifierExpected);
+            AddDiagnostic(namespaced.Namespace.Range, GSCErrorCodes.IdentifierExpected);
             return ScrData.Default;
         }
 
-        string namespaceName = AnalyseNamespace(namespaceNode, symbolTable, sense);
+        // Emit the namespace symbol.
+        Sense.AddSenseToken(namespaceNode.Token, new ScrNamespaceScopeSymbol(namespaceNode));
 
         return ScrData.Default;
     }
 
-    private ScrData AnalyseFunctionCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData target)
+    private ScrData AnalyseFunctionCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
     {
+        ScrData targetValue = target ?? ScrData.Default;
+
+        // Get the function we're targeting.
+        if (call.Function is null)
+        {
+            return ScrData.Default;
+        }
+
+        ScrData functionTarget = AnalyseExpr(call.Function, symbolTable, sense);
+
+        if (functionTarget.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (functionTarget.Type == ScrDataTypes.Undefined && call.Function is IdentifierExprNode identifierNode)
+        {
+            string functionName = identifierNode.Identifier;
+            AddDiagnostic(call.Function!.Range, GSCErrorCodes.FunctionDoesNotExist, functionName);
+            return ScrData.Default;
+        }
+
+        if (functionTarget.Type != ScrDataTypes.Function)
+        {
+            AddDiagnostic(call.Function!.Range, GSCErrorCodes.ExpectedFunction, functionTarget.TypeToString());
+            return ScrData.Default;
+        }
+
+        ScrFunction function = functionTarget.Get<ScrFunction>();
         return ScrData.Default;
     }
 
     private ScrData AnalyseThreadedFunctionCall(PrefixExprNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
     {
         ScrData targetValue = target ?? ScrData.Default;
+
+        // Analyse the function we're calling.
+        ScrData functionTarget = AnalyseExpr(call.Operand, symbolTable, sense);
 
         // Threaded calls won't return anything.
         return ScrData.Undefined();

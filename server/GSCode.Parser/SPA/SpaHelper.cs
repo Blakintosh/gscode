@@ -230,3 +230,35 @@ public class ScrFunctionReferenceSymbol : ISenseDefinition
         };
     }
 }
+
+public class ScrReservedFunctionSymbol : ISenseDefinition
+{
+    public Range Range { get; }
+
+    public string SemanticTokenType { get; } = "keyword";
+
+    public string[] SemanticTokenModifiers { get; private set; } = [];
+    public bool IsFromPreprocessor { get; } = false;
+
+    internal ScrFunction? Source { get; }
+
+    internal ScrReservedFunctionSymbol(Token token, ScrFunction? source)
+    {
+        Source = source;
+        Range = token.Range;
+    }
+
+    public Hover GetHover()
+    {
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                // TODO: This is a hack
+                Value = Source?.Documentation ?? "Reserved function"
+            })
+        };
+    }
+}

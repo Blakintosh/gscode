@@ -32,7 +32,7 @@ internal class SymbolTable
     /// <returns>true if new, false if not, null if assignment to a constant</returns>
     public bool AddOrSetSymbol(string symbol, ScrData data)
     {
-        if(ContainsSymbol(symbol))
+        if (ContainsSymbol(symbol))
         {
             // Check they're not assigning to a constant
             if (SymbolIsConstant(symbol))
@@ -95,6 +95,23 @@ internal class SymbolTable
     public ScrData? TryGetSymbol(string symbol, out bool isGlobal)
     {
         isGlobal = false;
+
+        // Check if the symbol is an exported symbol.
+        if (ExportedSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
+        {
+            isGlobal = true;
+            return new ScrData(exportedSymbol.Type switch
+            {
+                ExportedSymbolType.Function => ScrDataTypes.Function,
+                // ExportedSymbolType.Class => ScrDataTypes.Class,
+                _ => ScrDataTypes.Undefined
+            }, exportedSymbol.Type switch
+            {
+                ExportedSymbolType.Function => (ScrFunction)exportedSymbol,
+                // ExportedSymbolType.Class => exportedSymbol.Get<ScrClass>(),
+                _ => null
+            });
+        }
 
         // Check if the symbol exists in the global table
         if (VariableSymbols.TryGetValue(symbol, out ScrVariable? globalData))

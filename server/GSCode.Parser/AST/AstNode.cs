@@ -390,7 +390,7 @@ internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode? obje
 internal sealed class FunCallNode(Position startPosition, ExprNode? target, ArgsListNode arguments)
     : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(startPosition, arguments.Range.End))
 {
-    public ExprNode? Target { get; } = target;
+    public ExprNode? Function { get; } = target;
     public ArgsListNode Arguments { get; } = arguments;
 
     public FunCallNode(ExprNode target, ArgsListNode arguments)

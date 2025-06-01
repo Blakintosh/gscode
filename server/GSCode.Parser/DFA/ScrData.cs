@@ -1,7 +1,6 @@
 ﻿using GSCode.Parser.AST;
 using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Lexical;
-using GSCode.Parser.SPA.Sense;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -63,9 +62,11 @@ internal enum ScrDataTypes : uint
     Hash = 1 << 10,
     AnimTree = 1 << 11,
     Anim = 1 << 12,
+    Function = 1 << 13,
+    FunctionPointer = 1 << 14,
 
     // Undefined
-    Undefined = 1 << 13,
+    Undefined = 1 << 15,
 
     // Error marker
     Error = 1 << 60
@@ -84,6 +85,11 @@ internal static class ScrDataTypeNames
     public const string Struct = "struct";
     public const string Entity = "entity";
     public const string Object = "object";
+    public const string Hash = "hash";
+    public const string AnimTree = "animtree";
+    public const string Anim = "anim";
+    public const string Function = "function";
+    public const string FunctionPointer = "function*";
     public const string Undefined = "undefined";
 }
 
@@ -252,6 +258,11 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
                     ScrDataTypes.Struct => ScrDataTypeNames.Struct,
                     ScrDataTypes.Entity => ScrDataTypeNames.Entity,
                     ScrDataTypes.Object => ScrDataTypeNames.Object,
+                    ScrDataTypes.Hash => ScrDataTypeNames.Hash,
+                    ScrDataTypes.AnimTree => ScrDataTypeNames.AnimTree,
+                    ScrDataTypes.Anim => ScrDataTypeNames.Anim,
+                    ScrDataTypes.Function => ScrDataTypeNames.Function,
+                    ScrDataTypes.FunctionPointer => ScrDataTypeNames.FunctionPointer,
                     ScrDataTypes.Undefined => ScrDataTypeNames.Undefined,
                     _ => ScrDataTypeNames.Any,
                 });

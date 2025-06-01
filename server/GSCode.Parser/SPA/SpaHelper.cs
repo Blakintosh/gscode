@@ -2,6 +2,7 @@
 using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Data;
 using GSCode.Parser.DFA;
+using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.Util;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -160,6 +161,71 @@ public class ScrFieldSymbol : ISenseDefinition
                 Kind = MarkupKind.Markdown,
                 Value = string.Format("```gsc\n(field) /@ {0} @/ {1}\n```",
                    typeValue, Node.Identifier!)
+            })
+        };
+    }
+}
+
+public class ScrNamespaceScopeSymbol : ISenseDefinition
+{
+    public Range Range { get; }
+
+    public string SemanticTokenType { get; } = "namespace";
+
+    public string[] SemanticTokenModifiers { get; private set; } = [];
+    public bool IsFromPreprocessor { get; } = false;
+
+    internal IdentifierExprNode Node { get; }
+    internal string NamespaceName { get; }
+
+    internal ScrNamespaceScopeSymbol(IdentifierExprNode node)
+    {
+        Node = node;
+        Range = node.Range;
+        NamespaceName = node.Identifier;
+    }
+
+    public Hover GetHover()
+    {
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = string.Format("```gsc\n(namespace) {0}\n```",
+                   NamespaceName)
+            })
+        };
+    }
+}
+
+public class ScrFunctionReferenceSymbol : ISenseDefinition
+{
+    public Range Range { get; }
+
+    public string SemanticTokenType { get; } = "function";
+
+    public string[] SemanticTokenModifiers { get; private set; } = [];
+    public bool IsFromPreprocessor { get; } = false;
+
+    internal ScrFunction Source { get; }
+
+    internal ScrFunctionReferenceSymbol(Token token, ScrFunction source)
+    {
+        Source = source;
+        Range = token.Range;
+    }
+
+    public Hover GetHover()
+    {
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = Source.Documentation
             })
         };
     }

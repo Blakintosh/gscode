@@ -134,12 +134,23 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public Task DoAnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
     {
+
         // Get a comprehensive list of symbols available in this context.
         Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.ExportedSymbols);
         foreach (IExportedSymbol symbol in exportedSymbols)
         {
             // Add dependency symbols, but don't overwrite local symbols (local takes precedence).
             allSymbols.TryAdd(symbol.Name, symbol);
+        }
+
+        Log.Information("All symbols: {allSymbols}", allSymbols.Count());
+
+        foreach (KeyValuePair<string, IExportedSymbol> symbol in allSymbols)
+        {
+            if (symbol.Value is ScrFunction function)
+            {
+                Log.Information("Exported symbol: key {symbol.Key}, value: {symbol.Value.Namespace}::{symbol.Value.Name}", symbol.Key, function.Namespace, function.Name);
+            }
         }
 
         ControlFlowAnalyser controlFlowAnalyser = new(Sense, DefinitionsTable!);

@@ -12,8 +12,8 @@ namespace GSCode.Parser.SPA.Logic.Components;
 
 internal class SymbolTable
 {
-    private Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = new();
-    public Dictionary<string, ScrVariable> VariableSymbols { get; } = new();
+    private Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, ScrVariable> VariableSymbols { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public int LexicalScope { get; } = 0;
 
@@ -96,6 +96,15 @@ internal class SymbolTable
     {
         isGlobal = false;
 
+        // Local variables take precedence over globals.
+
+        // Check if the symbol exists in the global table
+        if (VariableSymbols.TryGetValue(symbol, out ScrVariable? globalData))
+        {
+            isGlobal = globalData.Global;
+            return globalData.Data!;
+        }
+
         // Check if the symbol is an exported symbol.
         if (ExportedSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
         {
@@ -111,13 +120,6 @@ internal class SymbolTable
                 // ExportedSymbolType.Class => exportedSymbol.Get<ScrClass>(),
                 _ => null
             });
-        }
-
-        // Check if the symbol exists in the global table
-        if (VariableSymbols.TryGetValue(symbol, out ScrVariable? globalData))
-        {
-            isGlobal = globalData.Global;
-            return globalData.Data!;
         }
 
         // If the symbol doesn't exist, return undefined.

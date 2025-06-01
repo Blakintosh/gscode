@@ -136,7 +136,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
     {
 
         // Get a comprehensive list of symbols available in this context.
-        Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.ExportedSymbols);
+        Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.ExportedSymbols, StringComparer.OrdinalIgnoreCase);
         foreach (IExportedSymbol symbol in exportedSymbols)
         {
             // Add dependency symbols, but don't overwrite local symbols (local takes precedence).

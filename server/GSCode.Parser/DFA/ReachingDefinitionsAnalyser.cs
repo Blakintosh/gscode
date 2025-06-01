@@ -43,7 +43,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             visited.Add(node);
 
             // Calculate the in set
-            Dictionary<string, ScrVariable> inSet = new();
+            Dictionary<string, ScrVariable> inSet = new(StringComparer.OrdinalIgnoreCase);
             foreach (CfgNode incoming in node.Incoming)
             {
                 if (OutSets.TryGetValue(incoming, out Dictionary<string, ScrVariable>? value))
@@ -66,12 +66,12 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             if (OutSets.TryGetValue(node, out Dictionary<string, ScrVariable>? existingOutSet))
             {
                 // Create a copy of the existing outset for comparison
-                previousOutSet = new Dictionary<string, ScrVariable>(existingOutSet);
+                previousOutSet = new Dictionary<string, ScrVariable>(existingOutSet, StringComparer.OrdinalIgnoreCase);
             }
 
             if (!OutSets.ContainsKey(node))
             {
-                OutSets[node] = new Dictionary<string, ScrVariable>();
+                OutSets[node] = new Dictionary<string, ScrVariable>(StringComparer.OrdinalIgnoreCase);
             }
 
             // Calculate the out set

@@ -100,6 +100,7 @@ public enum GSCErrorCodes
     CannotEnumerateType = 3034,
     FunctionDoesNotExist = 3035,
     ExpectedFunction = 3036,
+    ReservedSymbol = 3037,
 
     // 8xxx errors are issued by the IDE for conventions
 
@@ -172,7 +173,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.IntegerTooLarge, new("The integer '{0}' exceeds the maximum integer value supported.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.OperatorNotSupportedOnTypes, new("The operator '{0}' is not supported on types '{1}' and '{2}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotAssignToConstant, new("The variable '{0}' cannot be assigned to, it is a constant.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.StoreFunctionAsPointer, new("Function '{0}' cannot be assigned directly to a variable, it must be pointed to.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.StoreFunctionAsPointer, new("A direct function reference cannot be assigned to a variable, it must be pointed to using the double-bracket operator [[ ]].", DiagnosticSeverity.Error) },
         { GSCErrorCodes.IntegerTooSmall, new("The integer '{0}' is less than the minimum integer value supported.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingAccompanyingConditional, new("'else' conditional used without an accompanying 'if' statement.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.RedefinitionOfSymbol, new("The name '{0}' already exists in this context.", DiagnosticSeverity.Error) },
@@ -202,6 +203,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.CannotEnumerateType, new("Type '{0}' is not enumerable.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.FunctionDoesNotExist, new("The function '{0}' does not exist in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedFunction, new("Expected a function, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ReservedSymbol, new("The symbol '{0}' is reserved.", DiagnosticSeverity.Error) },
 
         // 9xxx
         { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },

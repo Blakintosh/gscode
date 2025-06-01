@@ -58,6 +58,7 @@ internal enum ExprOperatorType
     Postfix,
     MethodCall,
     FunctionCall,
+    Constructor,
     Indexer,
     CallOn
 }
@@ -374,7 +375,7 @@ internal sealed class PostfixExprNode(ExprNode operand, Token operatorToken)
 
 // TODO: might need to include the whole range (ie new + the brackets)
 internal sealed class ConstructorExprNode(Token identifierToken)
-    : ExprNode(ExprOperatorType.FunctionCall, identifierToken.Range)
+    : ExprNode(ExprOperatorType.Constructor, identifierToken.Range)
 {
     public Token Identifier { get; } = identifierToken;
 }

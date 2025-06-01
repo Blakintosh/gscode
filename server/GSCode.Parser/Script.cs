@@ -143,16 +143,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
             allSymbols.TryAdd(symbol.Name, symbol);
         }
 
-        Log.Information("All symbols: {allSymbols}", allSymbols.Count());
-
-        foreach (KeyValuePair<string, IExportedSymbol> symbol in allSymbols)
-        {
-            if (symbol.Value is ScrFunction function)
-            {
-                Log.Information("Exported symbol: key {symbol.Key}, value: {symbol.Value.Namespace}::{symbol.Value.Name}", symbol.Key, function.Namespace, function.Name);
-            }
-        }
-
         ControlFlowAnalyser controlFlowAnalyser = new(Sense, DefinitionsTable!);
         try
         {
@@ -161,7 +151,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to run control flow analyser: {ex.Message}");
+            Log.Error($"Failed to run control flow analyser: {ex.Message}");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -175,7 +165,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to run data flow analyser: {ex.Message}");
+            Log.Error($"Failed to run data flow analyser: {ex.Message}");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -201,11 +191,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
         int count = 0;
         foreach (ISemanticToken token in Sense.SemanticTokens)
         {
-            Log.Information("Pushing semantic token: {token.SemanticTokenType}, modifiers: {token.SemanticTokenModifiers}", token.SemanticTokenType, token.SemanticTokenModifiers);
             builder.Push(token.Range, token.SemanticTokenType, token.SemanticTokenModifiers);
             count++;
         }
-        Log.Information("Pushed {count} semantic tokens", count);
     }
 
     public async Task<Hover?> GetHoverAsync(Position position, CancellationToken cancellationToken)

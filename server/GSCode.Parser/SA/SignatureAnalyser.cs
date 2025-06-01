@@ -220,7 +220,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             {
                 Name = parameter.Name,
                 Description = null, // TODO: Check the DOC COMMENT
-                Type = "unknown", // TODO: Check the DOC COMMENT
+                Type = null, // TODO: Check the DOC COMMENT
                 Mandatory = parameter.Default is null,
                 Default = null // Not sure we can populate this
             });
@@ -315,7 +315,7 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
         }
         first = false;
 
-        if (string.IsNullOrEmpty(parameter.Type) || parameter.Type == "unknown")
+        if (parameter.Type is null)
         {
             builder.Append($"{parameter.Name}");
             return;

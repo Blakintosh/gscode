@@ -195,7 +195,7 @@ public record class ScrFunctionReturn
 {
     public string Name { get; set; } = default!;
     public string? Description { get; set; } = default!;
-    public string? Type { get; set; } = default!;
+    public ScrFunctionDataType? Type { get; set; } = default!;
     public bool? Void { get; set; }
 }
 
@@ -215,15 +215,22 @@ public record class ScrFunctionArg
     /// <summary>
     /// The type of the parameter
     /// </summary>
-    public string? Type { get; set; } = default!;
+    public ScrFunctionDataType? Type { get; set; } = default!;
 
     /// <summary>
     /// Whether the parameter is mandatory or optional
     /// </summary>
-    public required bool? Mandatory { get; set; }
+    public bool? Mandatory { get; set; }
 
     /// <summary>
     /// The default value for this parameter
     /// </summary>
     public ScriptValue? Default { get; set; }
+}
+
+public record class ScrFunctionDataType
+{
+    public string DataType { get; set; } = default!;
+    public string? InstanceType { get; set; }
+    public bool IsArray { get; set; } = false;
 }

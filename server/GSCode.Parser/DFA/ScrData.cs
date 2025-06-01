@@ -308,22 +308,22 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         };
     }
 
-    public bool IsVoid()
+    public readonly bool IsVoid()
     {
         return Type == ScrDataTypes.Void;
     }
 
-    public bool IsNumeric()
+    public readonly bool IsNumeric()
     {
         return Type == ScrDataTypes.Int || Type == ScrDataTypes.Float;
     }
 
-    public bool TypeUnknown()
+    public readonly bool TypeUnknown()
     {
         return Type == ScrDataTypes.Any;
     }
 
-    public bool ValueUnknown()
+    public readonly bool ValueUnknown()
     {
         return Value is null || TypeUnknown();
     }

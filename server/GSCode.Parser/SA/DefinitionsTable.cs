@@ -16,6 +16,7 @@ public class DefinitionsTable
 
     internal List<Tuple<ScrFunction, FunDefnNode>> LocalScopedFunctions { get; } = new();
     public List<ScrFunction> ExportedFunctions { get; } = new();
+    public Dictionary<string, IExportedSymbol> InternalSymbols { get; } = new();
     public Dictionary<string, IExportedSymbol> ExportedSymbols { get; } = new();
     // TODO: Class definitions (not in this version)
 
@@ -29,6 +30,7 @@ public class DefinitionsTable
     internal void AddFunction(ScrFunction function, FunDefnNode node)
     {
         LocalScopedFunctions.Add(new Tuple<ScrFunction, FunDefnNode>(function, node));
+        InternalSymbols.Add(function.Name, function with { Namespace = CurrentNamespace, Implicit = true });
 
         // Only add to exported functions if it's not private.
         if (!function.Private)

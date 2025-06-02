@@ -136,10 +136,19 @@ public class Script(DocumentUri ScriptUri, string languageId)
     {
 
         // Get a comprehensive list of symbols available in this context.
-        Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.ExportedSymbols, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.InternalSymbols, StringComparer.OrdinalIgnoreCase);
         foreach (IExportedSymbol symbol in exportedSymbols)
         {
             // Add dependency symbols, but don't overwrite local symbols (local takes precedence).
+            if (symbol.Type == ExportedSymbolType.Function)
+            {
+                ScrFunction function = (ScrFunction)symbol;
+                allSymbols.TryAdd($"{function.Namespace}::{function.Name}", symbol);
+                if (!function.Implicit)
+                {
+                    continue;
+                }
+            }
             allSymbols.TryAdd(symbol.Name, symbol);
         }
 

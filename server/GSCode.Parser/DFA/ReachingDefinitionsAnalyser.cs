@@ -245,7 +245,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         // {
         //     // TODO: how does GSC handle this?
         // }
-        if(assignmentResult == AssignmentResult.SuccessNew)
+        if (assignmentResult == AssignmentResult.SuccessNew)
         {
             Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Declaration(foreachStmt.ValueIdentifier, ScrData.Default));
         }
@@ -423,7 +423,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 return ScrData.Default;
             }
 
-            if(right.Type == ScrDataTypes.Function)
+            if (right.Type == ScrDataTypes.Function)
             {
                 AddDiagnostic(node.Right!.Range, GSCErrorCodes.StoreFunctionAsPointer);
                 return ScrData.Default;
@@ -437,7 +437,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             }
 
             // Failed, because the symbol is reserved
-            if(assignmentResult == AssignmentResult.FailedReserved)
+            if (assignmentResult == AssignmentResult.FailedReserved)
             {
                 AddDiagnostic(identifier.Range, GSCErrorCodes.ReservedSymbol, symbolName);
                 return ScrData.Default;
@@ -747,8 +747,9 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             if (flags.HasFlag(SymbolFlags.Global) && data.Type == ScrDataTypes.Function)
             {
-                if (createSenseTokenForRhs && !flags.HasFlag(SymbolFlags.Reserved))
+                if (createSenseTokenForRhs && !flags.HasFlag(SymbolFlags.Reserved) && !data.ValueUnknown())
                 {
+                    Log.Information("Trying to emit sense token for function {functionName}. Data is {data} with value {value}", expr.Identifier, data.TypeToString(), data.Value);
                     Sense.AddSenseToken(expr.Token, new ScrFunctionReferenceSymbol(expr.Token, data.Get<ScrFunction>()));
                 }
                 return data;

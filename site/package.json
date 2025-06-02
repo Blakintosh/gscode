@@ -44,7 +44,6 @@
     "vite": "^5.4.11",
     "vitest": "^1.6.0"
   },
-
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.9.5"
   },
@@ -62,6 +61,7 @@
     "openai": "^4.72.0",
     "pg": "^8.13.1",
     "pgvector": "^0.1.8",
+    "runed": "^0.28.0",
     "shaku-code-annotate-shiki-transformer": "^0.2.4",
     "tailwind-merge": "^2.5.4",
     "tailwind-variants": "^0.3.0",

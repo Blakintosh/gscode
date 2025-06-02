@@ -866,7 +866,22 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         // Emit the namespace symbol.
         Sense.AddSenseToken(namespaceNode.Token, new ScrNamespaceScopeSymbol(namespaceNode));
 
-        return ScrData.Default;
+        // Now find what symbol within the namespace we're targeting.
+        // Again - probably not necessary, but no harm in being sure.
+        if (namespaced.Member is not IdentifierExprNode memberNode)
+        {
+            AddDiagnostic(namespaced.Member!.Range, GSCErrorCodes.IdentifierExpected);
+            return ScrData.Default;
+        }
+
+        ScrData symbol = symbolTable.TryGetNamespacedSymbol(namespaceNode.Identifier, memberNode.Identifier, out SymbolFlags flags);
+
+        if (flags.HasFlag(SymbolFlags.Global))
+        {
+            Sense.AddSenseToken(memberNode.Token, new ScrFunctionReferenceSymbol(memberNode.Token, symbol.Get<ScrFunction>()));
+        }
+
+        return symbol;
     }
 
     private ScrData AnalyseFunctionCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)

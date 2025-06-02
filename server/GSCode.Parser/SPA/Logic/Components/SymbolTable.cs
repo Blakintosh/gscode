@@ -35,7 +35,7 @@ internal enum SymbolFlags
 
 internal class SymbolTable
 {
-    private Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, IExportedSymbol> GlobalSymbolTable { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, ScrVariable> VariableSymbols { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     private static HashSet<string> ReservedSymbols { get; } = new(StringComparer.OrdinalIgnoreCase)
@@ -50,7 +50,7 @@ internal class SymbolTable
 
     public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope)
     {
-        ExportedSymbolTable = exportedSymbolTable;
+        GlobalSymbolTable = exportedSymbolTable;
         VariableSymbols = inSet;
         LexicalScope = lexicalScope;
     }
@@ -128,7 +128,7 @@ internal class SymbolTable
     /// </summary>
     /// <param name="symbol">The symbol to look for</param>
     /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
-    public ScrData? TryGetSymbol(string symbol, out SymbolFlags flags)
+    public ScrData TryGetSymbol(string symbol, out SymbolFlags flags)
     {
         flags = SymbolFlags.None;
 
@@ -154,23 +154,41 @@ internal class SymbolTable
         }
 
         // Check if the symbol is an exported symbol.
-        if (ExportedSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
+        if (GlobalSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
         {
-            flags = SymbolFlags.Global;
-            return new ScrData(exportedSymbol.Type switch
+            if (exportedSymbol.Type == ExportedSymbolType.Function && ((ScrFunction)exportedSymbol).Implicit)
             {
-                ExportedSymbolType.Function => ScrDataTypes.Function,
-                // ExportedSymbolType.Class => ScrDataTypes.Class,
-                _ => ScrDataTypes.Undefined
-            }, exportedSymbol.Type switch
+                flags = SymbolFlags.Global;
+
+                return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
+            }
+            else if (exportedSymbol.Type == ExportedSymbolType.Class)
             {
-                ExportedSymbolType.Function => (ScrFunction)exportedSymbol,
-                // ExportedSymbolType.Class => exportedSymbol.Get<ScrClass>(),
-                _ => null
-            });
+                flags = SymbolFlags.Global;
+
+                // TODO: needs data
+                return new ScrData(ScrDataTypes.Object, null);
+            }
         }
 
         // If the symbol doesn't exist, return undefined.
+        return ScrData.Undefined();
+    }
+
+    public ScrData TryGetNamespacedSymbol(string namespaceName, string symbol, out SymbolFlags flags)
+    {
+        flags = SymbolFlags.None;
+
+        if (GlobalSymbolTable.TryGetValue($"{namespaceName}::{symbol}", out IExportedSymbol? exportedSymbol))
+        {
+            if (exportedSymbol.Type == ExportedSymbolType.Function && ((ScrFunction)exportedSymbol).Namespace == namespaceName)
+            {
+                flags = SymbolFlags.Global;
+            }
+
+            return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
+        }
+
         return ScrData.Undefined();
     }
 

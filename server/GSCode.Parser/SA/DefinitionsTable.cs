@@ -30,7 +30,10 @@ public class DefinitionsTable
     internal void AddFunction(ScrFunction function, FunDefnNode node)
     {
         LocalScopedFunctions.Add(new Tuple<ScrFunction, FunDefnNode>(function, node));
-        InternalSymbols.Add(function.Name, function with { Namespace = CurrentNamespace, Implicit = true });
+
+        ScrFunction internalFunction = function with { Namespace = CurrentNamespace, Implicit = true };
+        InternalSymbols.Add(function.Name, internalFunction);
+        InternalSymbols.Add($"{CurrentNamespace}::{function.Name}", internalFunction);
 
         // Only add to exported functions if it's not private.
         if (!function.Private)

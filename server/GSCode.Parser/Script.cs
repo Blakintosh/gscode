@@ -57,7 +57,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             // Failed to parse the script
             Failed = true;
-            Console.Error.WriteLine($"Failed to tokenise script: {ex.Message}");
+            Log.Error(ex, "Failed to tokenise script.");
 
             // Create a dummy IntelliSense container so we can provide an error to the IDE.
             Sense = new(0, ScriptUri, LanguageId);
@@ -77,7 +77,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to preprocess script: {ex.Message}");
+            Log.Error(ex, "Failed to preprocess script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledMacError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -96,7 +96,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to AST-gen script: {ex.Message}");
+            Log.Error(ex, "Failed to AST-gen script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledAstError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -114,7 +114,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to signature analyse script: {ex.Message}");
+            Log.Error(ex, "Failed to signature analyse script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSaError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -160,7 +160,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Log.Error($"Failed to run control flow analyser: {ex.Message}");
+            Log.Error(ex, "Failed to run control flow analyser.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -174,7 +174,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Log.Error($"Failed to run data flow analyser: {ex.Message}");
+            Log.Error(ex, "Failed to run data flow analyser.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
             return Task.CompletedTask;

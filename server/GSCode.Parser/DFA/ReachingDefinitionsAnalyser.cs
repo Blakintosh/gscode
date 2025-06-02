@@ -37,8 +37,14 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         HashSet<CfgNode> visited = new();
 
-        while (worklist.Count > 0)
+        // Calculate iteration limit based on graph size to prevent infinite loops
+        int totalNodes = CountAllNodes(functionGraph);
+        int maxIterations = Math.Max(100, totalNodes * 5); // At least 100, or 5x nodes
+        int iterations = 0;
+
+        while (worklist.Count > 0 && iterations < maxIterations)
         {
+            iterations++;
             CfgNode node = worklist.Pop();
             visited.Add(node);
 
@@ -134,6 +140,13 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             }
         }
 
+        // Check if we hit the iteration limit
+        if (iterations >= maxIterations)
+        {
+            Log.Warning("Reaching definitions analysis hit iteration limit ({maxIterations}) for function {functionName}. This may indicate convergence issues.",
+                maxIterations, function.Name ?? "<anonymous>");
+        }
+
         // Now that analysis is done, do one final pass to add diagnostics.
         Silent = false;
 
@@ -218,6 +231,11 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         inSet["level"] = new("level", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
         inSet["game"] = new("game", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
         inSet["anim"] = new("anim", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
+
+        if (node.Parameters.Vararg)
+        {
+            inSet["vararg"] = new("vararg", new ScrData(ScrDataTypes.Array), 0, true);
+        }
     }
 
     public void AnalyseEnumeration(EnumerationNode node, SymbolTable symbolTable)
@@ -749,7 +767,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             {
                 if (createSenseTokenForRhs && !flags.HasFlag(SymbolFlags.Reserved) && !data.ValueUnknown())
                 {
-                    Log.Information("Trying to emit sense token for function {functionName}. Data is {data} with value {value}", expr.Identifier, data.TypeToString(), data.Value);
                     Sense.AddSenseToken(expr.Token, new ScrFunctionReferenceSymbol(expr.Token, data.Get<ScrFunction>()));
                 }
                 return data;
@@ -937,6 +954,30 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return;
         }
         Sense.AddSpaDiagnostic(range, code, args);
+    }
+
+    private static int CountAllNodes(ControlFlowGraph graph)
+    {
+        HashSet<CfgNode> visited = new();
+        Stack<CfgNode> stack = new();
+        stack.Push(graph.Start);
+
+        while (stack.Count > 0)
+        {
+            CfgNode node = stack.Pop();
+            if (visited.Add(node))
+            {
+                foreach (CfgNode successor in node.Outgoing)
+                {
+                    if (!visited.Contains(successor))
+                    {
+                        stack.Push(successor);
+                    }
+                }
+            }
+        }
+
+        return visited.Count;
     }
 }
 

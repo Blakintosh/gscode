@@ -29,7 +29,7 @@ internal enum SymbolFlags
 {
     None = 0,
     Global = 1 << 0,
-    BuiltIn = 1 << 1, 
+    BuiltIn = 1 << 1,
     Reserved = 1 << 2
 }
 
@@ -134,7 +134,7 @@ internal class SymbolTable
 
         // Reserved takes precedence over local variables, and locals take precedence over globals.
 
-        
+
         // TODO: not sure I'm happy with this, we might want to just syntactically enforce the special functions.
         // If the symbol is reserved, return this.
         if (ReservedSymbols.Contains(symbol))
@@ -146,7 +146,7 @@ internal class SymbolTable
         // Check if the symbol exists in the global table
         if (VariableSymbols.TryGetValue(symbol, out ScrVariable? globalData))
         {
-            if(globalData.Global)
+            if (globalData.Global)
             {
                 flags = SymbolFlags.Global;
             }

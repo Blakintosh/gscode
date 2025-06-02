@@ -401,12 +401,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
     public readonly T Get<T>()
     {
-        if (Value is not T value)
-        {
-            throw new InvalidOperationException($"Cannot get value of type {typeof(T)} from type {Type}.");
-        }
-
-        return value;
+        return (T)Value!;
     }
 
     public static ScrData FromDataExprNode(DataExprNode dataExprNode)

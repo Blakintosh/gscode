@@ -46,7 +46,7 @@
 	{#if isDesktop.current}
 		<div class="flex items-center justify-start gap-2 w-[20vw]">
 			<a href="/" aria-label="GSCode Logo">
-				<div class="h-10 w-20 bg-gscodeLight dark:bg-gscode bg-cover" role="img"></div>
+				<div class="h-[3.75rem] w-[7.5rem] -my-4 bg-gscodeLight dark:bg-gscode bg-cover" role="img"></div>
 			</a>
 		</div>
 

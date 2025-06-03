@@ -173,7 +173,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.IntegerTooLarge, new("The integer '{0}' exceeds the maximum integer value supported.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.OperatorNotSupportedOnTypes, new("The operator '{0}' is not supported on types '{1}' and '{2}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotAssignToConstant, new("The variable '{0}' cannot be assigned to, it is a constant.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.StoreFunctionAsPointer, new("A direct function reference cannot be assigned to a variable, it must be pointed to using the double-bracket operator [[ ]].", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.StoreFunctionAsPointer, new("A direct function reference cannot be assigned to a variable, it must be pointed to using the ampersand operator '&'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.IntegerTooSmall, new("The integer '{0}' is less than the minimum integer value supported.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingAccompanyingConditional, new("'else' conditional used without an accompanying 'if' statement.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.RedefinitionOfSymbol, new("The name '{0}' already exists in this context.", DiagnosticSeverity.Error) },

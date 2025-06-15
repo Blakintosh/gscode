@@ -932,6 +932,25 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         ScrFunction function = functionTarget.Get<ScrFunction>();
+
+        // Analyse its arguments.
+        foreach (ExprNode? argument in call.Arguments.Arguments)
+        {
+            if (argument is null)
+            {
+                continue;
+            }
+
+            ScrData argumentValue = AnalyseExpr(argument, symbolTable, sense);
+
+            if (argumentValue.TypeUnknown())
+            {
+                continue;
+            }
+
+            // TODO: Check whether types match up, if we have them.
+        }
+
         return ScrData.Default;
     }
 

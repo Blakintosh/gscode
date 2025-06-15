@@ -48,7 +48,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         // This is cheesy, but should work.
         LinkedListNode<AstNode>? currentNode = new LinkedListNode<AstNode>(node);
 
-        return Construct(ref currentNode, sense, localHelper);
+        return Construct(ref currentNode, sense, localHelper, shouldIncreaseScope);
     }
 
     private static CfgNode Construct(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper, bool shouldIncreaseScope = true)
@@ -188,7 +188,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
     private static CfgNode Construct_ElseIf(IfStmtNode node, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
         // Generate then.
-        CfgNode then = Construct(node.Then, sense, localHelper);
+        CfgNode then = Construct(node.Then, sense, localHelper, false);
 
         // If there's no condition, then it's the else case and we can just return the then block.
         if (node.Condition is null)

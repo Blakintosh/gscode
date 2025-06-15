@@ -229,7 +229,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         // Add global scoped variables to the in set.
         inSet["self"] = new("self", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
         inSet["level"] = new("level", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
-        inSet["game"] = new("game", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
+        inSet["game"] = new("game", new ScrData(ScrDataTypes.Array), 0, true);
         inSet["anim"] = new("anim", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
 
         if (node.Parameters.Vararg)

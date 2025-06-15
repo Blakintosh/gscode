@@ -43,7 +43,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         return new(entry, exit);
     }
 
-    private static CfgNode Construct(AstNode node, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode Construct(AstNode node, ParserIntelliSense sense, ControlFlowHelper localHelper, bool shouldIncreaseScope = true)
     {
         // This is cheesy, but should work.
         LinkedListNode<AstNode>? currentNode = new LinkedListNode<AstNode>(node);
@@ -51,7 +51,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         return Construct(ref currentNode, sense, localHelper);
     }
 
-    private static CfgNode Construct(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode Construct(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper, bool shouldIncreaseScope = true)
     {
         // If we're at the end of the current block, return the continuation context.
         if (currentNode is null)
@@ -67,12 +67,12 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
             AstNodeType.ForStmt => Construct_ForStmt(ref currentNode, sense, localHelper),
             AstNodeType.ForeachStmt => Construct_ForeachStmt(ref currentNode, sense, localHelper),
             AstNodeType.SwitchStmt => Construct_Skip(ref currentNode, sense, localHelper),
-            AstNodeType.BraceBlock => Construct_BraceBlock(ref currentNode, sense, localHelper),
+            AstNodeType.BraceBlock => Construct_BraceBlock(ref currentNode, sense, localHelper, shouldIncreaseScope),
             _ => Construct_LogicBlock(ref currentNode, sense, localHelper),
         };
     }
 
-    private static CfgNode Construct_BraceBlock(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode Construct_BraceBlock(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper, bool shouldIncreaseScope)
     {
 
         StmtListNode stmtList = (StmtListNode)currentNode!.Value;
@@ -85,7 +85,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         ControlFlowHelper newLocalHelper = new(localHelper)
         {
             ContinuationContext = continuation,
-            Scope = localHelper.Scope + 1
+            Scope = shouldIncreaseScope ? localHelper.Scope + 1 : localHelper.Scope
         };
 
         LinkedListNode<AstNode>? blockNode = stmtList.Statements.First;
@@ -161,7 +161,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         };
 
         // Generate then.
-        CfgNode then = Construct(ifNode.Then, sense, ifHelper);
+        CfgNode then = Construct(ifNode.Then, sense, ifHelper, false);
 
         CfgNode.Connect(condition, then);
         condition.WhenTrue = then;

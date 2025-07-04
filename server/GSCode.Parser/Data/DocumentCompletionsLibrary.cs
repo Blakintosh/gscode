@@ -1,6 +1,7 @@
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
 using GSCode.Parser.SPA.Sense;
+using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
 
@@ -45,6 +46,8 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         // Get the completions from the definition.
 
+        // Generate completions from identifiers that occur inside of the file, as well.
+        completions.AddRange(GetFileScopeCompletions(context));
 
         // return token.SenseDefinition?.GetCompletions();
         return new CompletionList(completions);
@@ -61,6 +64,79 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         foreach (ScrFunctionDefinition function in functions)
         {
             completions.Add(CreateCompletionItem(function));
+        }
+
+        return completions;
+    }
+
+    private List<CompletionItem> GetFileScopeCompletions(CompletionContext context)
+    {
+        List<CompletionItem> completions = new();
+        HashSet<string> seenIdentifiers = new();
+
+        // This will be replaced later, but will suffice as a temporary completions solution.
+
+        // Add GSC/CSC keywords
+        string[] keywords = {
+            "class", "return", "wait", "thread", "classes", "if", "else", "do", "while", 
+            "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend", 
+            "switch", "case", "default", "break", "continue", "notify", "endon", 
+            "waitrealtime", "profilestart", "profilestop", "isdefined",
+            // Additional keywords
+            "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
+            "var", "const", "function", "private", "autoexec", "constructor", "destructor"
+        };
+
+        foreach (string keyword in keywords)
+        {
+            if (!seenIdentifiers.Contains(keyword))
+            {
+                completions.Add(new CompletionItem()
+                {
+                    Kind = CompletionItemKind.Keyword,
+                    Label = keyword,
+                    InsertText = keyword
+                });
+                seenIdentifiers.Add(keyword);
+            }
+        }
+
+        // Add GSC directives (only if filter starts with #)
+        if ((context.Filter ?? "").StartsWith("#"))
+        {
+            string[] directives = {
+                "#using", "#insert", "#namespace", "#using_animtree", "#precache", 
+                "#define", "#if", "#elif", "#else", "#endif"
+            };
+
+            foreach (string directive in directives)
+            {
+                if (!seenIdentifiers.Contains(directive))
+                {
+                    completions.Add(new CompletionItem()
+                    {
+                        Kind = CompletionItemKind.Keyword,
+                        Label = directive,
+                        InsertText = directive
+                    });
+                    seenIdentifiers.Add(directive);
+                }
+            }
+        }
+
+        // Generate completions from identifiers that occur inside of the file
+        foreach(Token token in Tokens.GetAll())
+        {
+            if(token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))
+            {
+                completions.Add(new CompletionItem()
+                {
+                    Kind = CompletionItemKind.Variable,
+                    Label = token.Lexeme,
+                    InsertText = token.Lexeme
+                });
+                seenIdentifiers.Add(token.Lexeme);
+            }
         }
 
         return completions;

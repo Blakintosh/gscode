@@ -40,6 +40,7 @@
             <DropdownMenu.RadioGroup bind:value={font}>
                 <DropdownMenu.RadioItem value="font-sans" class="font-sans">Sans (default)</DropdownMenu.RadioItem>
                 <DropdownMenu.RadioItem value="font-serif" class="font-serif">Serif</DropdownMenu.RadioItem>
+                <DropdownMenu.RadioItem value="font-dyslexic" class="font-dyslexic">Dyslexic</DropdownMenu.RadioItem>
             </DropdownMenu.RadioGroup>
         </DropdownMenu.Group>
     </DropdownMenu.Content>

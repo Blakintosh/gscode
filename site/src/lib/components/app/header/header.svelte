@@ -6,12 +6,12 @@
 	import * as Popover from "$lib/components/ui/popover/index.js";
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
 	import { Separator } from "$lib/components/ui/separator/index.js";
-	import { MediaQuery } from "runed";
 
 	// @ts-ignore
 	import Download from "lucide-svelte/icons/download";
 	// @ts-ignore
 	import Menu from "lucide-svelte/icons/menu";
+	import { MediaQuery } from 'svelte/reactivity';
 
 	let pageTitle: string = $derived.by(() => {
 		switch($page.url.pathname) {
@@ -40,7 +40,7 @@
 </script>
 
 <header class="relative flex justify-between items-center w-full py-2 px-6 bg-sidebar border-sidebar-border border-b z-10">
-	{#if isDesktop.matches}
+	{#if isDesktop.current}
 		<div class="flex items-center justify-start gap-2 w-[20vw]">
 			<a href="/" aria-label="GSCode Logo">
 				<div class="h-10 w-20 bg-gscodeLight dark:bg-gscode bg-cover" role="img">
@@ -62,7 +62,7 @@
 
 			<Button size="sm" class="gap-2" href="https://marketplace.visualstudio.com/items?itemName=blakintosh.gscode" target="_blank" rel="noopener noreferrer">
 				<Download class="w-4 h-4"/>
-				v0.2.5-beta
+				v0.2.6-beta
 			</Button>
 		</div>
 	{:else}	

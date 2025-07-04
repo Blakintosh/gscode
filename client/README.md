@@ -12,7 +12,10 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.2.5 beta (latest)
+### 0.2.6 beta (latest)
+* Completion suggestions now include variable names, function names, and keywords.
+
+### 0.2.5 beta
 * Fixed another syntax highlighting bug with line comments.
 
 ### 0.2.4 beta

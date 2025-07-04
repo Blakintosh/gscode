@@ -1,6 +1,7 @@
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
 using GSCode.Parser.SPA.Sense;
+using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
 
@@ -88,10 +89,14 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         foreach (string keyword in keywords)
         {
-            if (keyword.StartsWith(context.Filter ?? "", StringComparison.OrdinalIgnoreCase) && 
-                !seenIdentifiers.Contains(keyword))
+            if (!seenIdentifiers.Contains(keyword))
             {
-                completions.Add(new CompletionItem(keyword, CompletionItemKind.Keyword));
+                completions.Add(new CompletionItem()
+                {
+                    Kind = CompletionItemKind.Keyword,
+                    Label = keyword,
+                    InsertText = keyword
+                });
                 seenIdentifiers.Add(keyword);
             }
         }
@@ -106,10 +111,14 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
             foreach (string directive in directives)
             {
-                if (directive.StartsWith(context.Filter ?? "", StringComparison.OrdinalIgnoreCase) && 
-                    !seenIdentifiers.Contains(directive))
+                if (!seenIdentifiers.Contains(directive))
                 {
-                    completions.Add(new CompletionItem(directive, CompletionItemKind.Snippet));
+                    completions.Add(new CompletionItem()
+                    {
+                        Kind = CompletionItemKind.Keyword,
+                        Label = directive,
+                        InsertText = directive
+                    });
                     seenIdentifiers.Add(directive);
                 }
             }
@@ -120,7 +129,12 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         {
             if(token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))
             {
-                completions.Add(new CompletionItem(token.Lexeme, CompletionItemKind.Variable));
+                completions.Add(new CompletionItem()
+                {
+                    Kind = CompletionItemKind.Variable,
+                    Label = token.Lexeme,
+                    InsertText = token.Lexeme
+                });
                 seenIdentifiers.Add(token.Lexeme);
             }
         }

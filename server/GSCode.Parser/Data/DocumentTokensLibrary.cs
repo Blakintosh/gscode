@@ -76,4 +76,9 @@ public sealed class DocumentTokensLibrary
             currentToken = currentToken.Next!;
         }
     }
+
+    internal IEnumerable<Token> GetAll()
+    {
+        return TokenList;
+    }
 }

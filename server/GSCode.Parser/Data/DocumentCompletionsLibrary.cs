@@ -73,6 +73,49 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         List<CompletionItem> completions = new();
         HashSet<string> seenIdentifiers = new();
 
+        // This will be replaced later, but will suffice as a temporary completions solution.
+
+        // Add GSC/CSC keywords
+        string[] keywords = {
+            "class", "return", "wait", "thread", "classes", "if", "else", "do", "while", 
+            "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend", 
+            "switch", "case", "default", "break", "continue", "notify", "endon", 
+            "waitrealtime", "profilestart", "profilestop", "isdefined",
+            // Additional keywords
+            "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
+            "var", "const", "function", "private", "autoexec", "constructor", "destructor"
+        };
+
+        foreach (string keyword in keywords)
+        {
+            if (keyword.StartsWith(context.Filter ?? "", StringComparison.OrdinalIgnoreCase) && 
+                !seenIdentifiers.Contains(keyword))
+            {
+                completions.Add(new CompletionItem(keyword, CompletionItemKind.Keyword));
+                seenIdentifiers.Add(keyword);
+            }
+        }
+
+        // Add GSC directives (only if filter starts with #)
+        if ((context.Filter ?? "").StartsWith("#"))
+        {
+            string[] directives = {
+                "#using", "#insert", "#namespace", "#using_animtree", "#precache", 
+                "#define", "#if", "#elif", "#else", "#endif"
+            };
+
+            foreach (string directive in directives)
+            {
+                if (directive.StartsWith(context.Filter ?? "", StringComparison.OrdinalIgnoreCase) && 
+                    !seenIdentifiers.Contains(directive))
+                {
+                    completions.Add(new CompletionItem(directive, CompletionItemKind.Snippet));
+                    seenIdentifiers.Add(directive);
+                }
+            }
+        }
+
+        // Generate completions from identifiers that occur inside of the file
         foreach(Token token in Tokens.GetAll())
         {
             if(token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))

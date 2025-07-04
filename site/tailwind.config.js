@@ -96,6 +96,7 @@ const config = {
 			fontFamily: {
 				sans: ["Public Sans", ...fontFamily.sans],
 				serif: ["Arvo", ...fontFamily.serif],
+				dyslexic: ["OpenDyslexic", ...fontFamily.serif],
 				readable: ["Source Serif Pro", ...fontFamily.serif],
 				mono: ["Cascadia Code", ...fontFamily.mono],
 				display: ["Space Grotesk", ...fontFamily.sans]

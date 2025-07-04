@@ -45,6 +45,8 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         // Get the completions from the definition.
 
+        // Generate completions from identifiers that occur inside of the file, as well.
+        completions.AddRange(GetFileScopeCompletions(context));
 
         // return token.SenseDefinition?.GetCompletions();
         return new CompletionList(completions);
@@ -61,6 +63,23 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         foreach (ScrFunctionDefinition function in functions)
         {
             completions.Add(CreateCompletionItem(function));
+        }
+
+        return completions;
+    }
+
+    private List<CompletionItem> GetFileScopeCompletions(CompletionContext context)
+    {
+        List<CompletionItem> completions = new();
+        HashSet<string> seenIdentifiers = new();
+
+        foreach(Token token in Tokens.GetAll())
+        {
+            if(token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))
+            {
+                completions.Add(new CompletionItem(token.Lexeme, CompletionItemKind.Variable));
+                seenIdentifiers.Add(token.Lexeme);
+            }
         }
 
         return completions;

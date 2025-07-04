@@ -65,6 +65,28 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
     --article-background: 240 4% 16%;
   }
+
+  @font-face {
+    font-family: "OpenDyslexic";
+    src: url("/fonts/OpenDyslexic-Regular.otf") format("opentype");
+    font-weight: 400;
+    font-style: normal;
+  }
+
+  @font-face {
+    font-family: "OpenDyslexic";
+    src: url("/fonts/OpenDyslexic-Bold.otf") format("opentype");
+    font-weight: 700;
+    font-style: normal;
+  }
+
+  @font-face {
+    font-family: "OpenDyslexic";
+    src: url("/fonts/OpenDyslexic-Italic.otf") format("opentype");
+    font-weight: 400;
+    font-style: italic;
+  }
+  
 }
 
 @layer base {

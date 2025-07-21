@@ -257,7 +257,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         Token valueIdentifier = foreachStmt.ValueIdentifier.Token;
-        AssignmentResult assignmentResult = symbolTable.AddOrSetSymbol(valueIdentifier.Lexeme, ScrData.Default);
+        AssignmentResult assignmentResult = symbolTable.AddOrSetVariableSymbol(valueIdentifier.Lexeme, ScrData.Default);
 
         // if (!assignmentResult)
         // {
@@ -351,6 +351,9 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             case AstNodeType.ExprStmt:
                 AnalyseExprStmt((ExprStmtNode)statement, last, next, symbolTable);
                 break;
+            case AstNodeType.ConstStmt:
+                AnalyseConstStmt((ConstStmtNode)statement, last, next, symbolTable);
+                break;
             default:
                 break;
         }
@@ -367,6 +370,33 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         ScrData result = AnalyseExpr(statement.Expr, symbolTable, Sense);
     }
 
+    public void AnalyseConstStmt(ConstStmtNode statement, AstNode? last, AstNode? next, SymbolTable symbolTable)
+    {
+        if (statement.Value is null)
+        {
+            return;
+        }
+
+        ScrData result = AnalyseExpr(statement.Value, symbolTable, Sense);
+
+        // Assign the result to the symbol table.
+        AssignmentResult assignmentResult = symbolTable.TryAddVariableSymbol(statement.Identifier, result with { ReadOnly = true });
+
+        if (assignmentResult == AssignmentResult.SuccessNew)
+        {
+            // Add a semantic token for the constant.
+            Sense.AddSenseToken(statement.IdentifierToken, ScrVariableSymbol.ConstantDeclaration(statement.IdentifierToken, result));
+            return;
+        }
+        else if (assignmentResult == AssignmentResult.FailedReserved)
+        {
+            AddDiagnostic(statement.Range, GSCErrorCodes.ReservedSymbol, statement.Identifier);
+            return;
+        }
+
+        AddDiagnostic(statement.Range, GSCErrorCodes.RedefinitionOfSymbol, statement.Identifier);
+    }
+
     private ScrData AnalyseExpr(ExprNode expr, SymbolTable symbolTable, ParserIntelliSense sense, bool createSenseTokenForRhs = true)
     {
         return expr.OperatorType switch
@@ -380,6 +410,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             ExprOperatorType.Indexer => AnalyseIndexerExpr((ArrayIndexNode)expr, symbolTable),
             ExprOperatorType.CallOn => AnalyseCallOnExpr((CalledOnNode)expr, symbolTable),
             ExprOperatorType.FunctionCall => AnalyseFunctionCall((FunCallNode)expr, symbolTable, sense),
+            // ExprOperatorType.MethodCall => AnalyseMethodCall((MethodCallNode)expr, symbolTable, sense),
             _ => ScrData.Default,
         };
     }
@@ -447,7 +478,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 return ScrData.Default;
             }
 
-            AssignmentResult assignmentResult = symbolTable.AddOrSetSymbol(symbolName, right);
+            AssignmentResult assignmentResult = symbolTable.AddOrSetVariableSymbol(symbolName, right);
 
             if (right.Type == ScrDataTypes.Undefined)
             {
@@ -755,7 +786,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     private ScrData AnalyseIdentifierExpr(IdentifierExprNode expr, SymbolTable symbolTable, bool createSenseTokenForRhs = true)
     {
         // Analyze and return the corresponding ScrData for the field
-        ScrData? value = symbolTable.TryGetSymbol(expr.Identifier, out SymbolFlags flags);
+        ScrData? value = symbolTable.TryGetVariableSymbol(expr.Identifier, out SymbolFlags flags);
         if (value is not ScrData data)
         {
             return ScrData.Undefined();
@@ -891,7 +922,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return ScrData.Default;
         }
 
-        ScrData symbol = symbolTable.TryGetNamespacedSymbol(namespaceNode.Identifier, memberNode.Identifier, out SymbolFlags flags);
+        ScrData symbol = symbolTable.TryGetNamespacedFunctionSymbol(namespaceNode.Identifier, memberNode.Identifier, out SymbolFlags flags);
 
         if (flags.HasFlag(SymbolFlags.Global))
         {

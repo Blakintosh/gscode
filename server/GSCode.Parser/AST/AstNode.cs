@@ -175,7 +175,8 @@ internal sealed class ReservedFuncStmtNode(AstNodeType type, ExprNode? expr) : A
 internal sealed class ConstStmtNode(Token identifierToken, ExprNode? value) : AstNode(AstNodeType.ConstStmt)
 {
     public string Identifier { get; } = identifierToken.Lexeme;
-    public Range Range { get; } = RangeHelper.From(identifierToken.Range.Start, value.Range.End);
+    public Token IdentifierToken { get; } = identifierToken;
+    public Range Range { get; } = RangeHelper.From(identifierToken.Range.Start, value?.Range.End ?? identifierToken.Range.End);
     public ExprNode? Value { get; } = value;
 }
 
@@ -381,7 +382,7 @@ internal sealed class ConstructorExprNode(Token identifierToken)
 }
 
 internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode? objectTarget, Token methodToken, ArgsListNode arguments)
-    : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(firstTokenPosition, arguments.Range.End))
+    : ExprNode(ExprOperatorType.MethodCall, RangeHelper.From(firstTokenPosition, arguments.Range.End))
 {
     public ExprNode? Target { get; } = objectTarget;
     public Token Method { get; } = methodToken;

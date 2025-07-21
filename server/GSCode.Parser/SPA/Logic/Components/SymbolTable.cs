@@ -56,12 +56,12 @@ internal class SymbolTable
     }
 
     /// <summary>
-    /// Adds or sets the symbol on the symbol table, returns true if was newly added.
+    /// Adds or sets the variable symbol on the symbol table, returns true if was newly added.
     /// </summary>
     /// <param name="symbol">The symbol name</param>
     /// <param name="data">The value</param>
     /// <returns>true if new, false if not, null if assignment to a constant</returns>
-    public AssignmentResult AddOrSetSymbol(string symbol, ScrData data)
+    public AssignmentResult AddOrSetVariableSymbol(string symbol, ScrData data)
     {
         if (ContainsSymbol(symbol))
         {
@@ -75,7 +75,7 @@ internal class SymbolTable
             SetSymbol(symbol, data);
             return AssignmentResult.SuccessMutated;
         }
-        return TryAddSymbol(symbol, data);
+        return TryAddVariableSymbol(symbol, data);
     }
 
     public bool ContainsConstant(string symbol)
@@ -105,14 +105,16 @@ internal class SymbolTable
     /// <param name="symbol">The symbol to add</param>
     /// <param name="data">The associated ScrData for the symbol</param>
     /// <returns>true if the symbol was added, false if it already exists</returns>
-    public AssignmentResult TryAddSymbol(string symbol, ScrData data)
+    public AssignmentResult TryAddVariableSymbol(string symbol, ScrData data)
     {
         // Check if the symbol exists in the table
         if (VariableSymbols.ContainsKey(symbol))
         {
             return AssignmentResult.Failed;
         }
+
         // If the symbol is reserved, block the assignment.
+        // Technically GSC treats this as a syntax error, but IMO it's more intuitive to use a semantic error.
         if (ReservedSymbols.Contains(symbol))
         {
             return AssignmentResult.FailedReserved;
@@ -128,7 +130,7 @@ internal class SymbolTable
     /// </summary>
     /// <param name="symbol">The symbol to look for</param>
     /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
-    public ScrData TryGetSymbol(string symbol, out SymbolFlags flags)
+    public ScrData TryGetVariableSymbol(string symbol, out SymbolFlags flags)
     {
         flags = SymbolFlags.None;
 
@@ -175,7 +177,36 @@ internal class SymbolTable
         return ScrData.Undefined();
     }
 
-    public ScrData TryGetNamespacedSymbol(string namespaceName, string symbol, out SymbolFlags flags)
+    /// <summary>
+    /// Tries to get the associated ScrData for a function symbol if it exists.
+    /// </summary>
+    /// <param name="symbol">The symbol to look for</param>
+    /// <param name="flags">The flags for the symbol</param>
+    /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
+    public ScrData TryGetFunctionSymbol(string symbol, out SymbolFlags flags)
+    {
+        flags = SymbolFlags.None;
+
+        if (GlobalSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
+        {
+            if (exportedSymbol.Type == ExportedSymbolType.Function)
+            {
+                flags = SymbolFlags.Global;
+                return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
+            }
+        }
+
+        return ScrData.Undefined();
+    }
+
+    /// <summary>
+    /// Tries to get the associated ScrData for a namespaced function symbol if it exists.
+    /// </summary>
+    /// <param name="namespaceName">The namespace to look in</param>
+    /// <param name="symbol">The symbol to look for</param>
+    /// <param name="flags">The flags for the symbol</param>
+    /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
+    public ScrData TryGetNamespacedFunctionSymbol(string namespaceName, string symbol, out SymbolFlags flags)
     {
         flags = SymbolFlags.None;
 
@@ -184,9 +215,8 @@ internal class SymbolTable
             if (exportedSymbol.Type == ExportedSymbolType.Function && ((ScrFunction)exportedSymbol).Namespace == namespaceName)
             {
                 flags = SymbolFlags.Global;
+                return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
             }
-
-            return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
         }
 
         return ScrData.Undefined();

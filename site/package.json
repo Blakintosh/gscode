@@ -61,7 +61,7 @@
     "openai": "^4.72.0",
     "pg": "^8.13.1",
     "pgvector": "^0.1.8",
-    "runed": "^0.28.0",
+    "runed": "^0.29.1",
     "shaku-code-annotate-shiki-transformer": "^0.2.4",
     "tailwind-merge": "^2.5.4",
     "tailwind-variants": "^0.3.0",

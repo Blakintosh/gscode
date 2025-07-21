@@ -12,7 +12,6 @@
 	// @ts-ignore
 	import Menu from 'lucide-svelte/icons/menu';
 	import { MediaQuery } from 'svelte/reactivity';
-	import { Github } from 'lucide-svelte';
 
 	let pageTitle: string = $derived.by(() => {
 		switch ($page.url.pathname) {

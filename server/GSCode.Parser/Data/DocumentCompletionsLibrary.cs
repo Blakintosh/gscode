@@ -1,6 +1,5 @@
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
-using GSCode.Parser.SPA.Sense;
 using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;

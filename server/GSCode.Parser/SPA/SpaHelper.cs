@@ -25,31 +25,39 @@ public class ScrVariableSymbol : ISenseDefinition
     public string[] SemanticTokenModifiers { get; private set; } = [];
     public bool IsFromPreprocessor { get; } = false;
 
-    internal IdentifierExprNode Node { get; }
+    internal Token IdentifierToken { get; }
     internal string TypeString { get; }
 
-    public bool Constant { get; private set; } = false;
+    public bool IsConstant { get; private set; } = false;
 
-    internal ScrVariableSymbol(IdentifierExprNode node, ScrData data)
+    internal ScrVariableSymbol(Token identifierToken, ScrData data)
     {
-        Node = node;
+        IdentifierToken = identifierToken;
         TypeString = data.TypeToString();
-        Range = node.Range;
+        Range = identifierToken.Range;
     }
 
-    internal static ScrVariableSymbol Declaration(IdentifierExprNode node, ScrData data, bool isConstant = false)
+    internal static ScrVariableSymbol Declaration(IdentifierExprNode node, ScrData data)
     {
-        return new(node, data)
+        return new(node.Token, data)
         {
-            SemanticTokenModifiers = isConstant ?
-                new string[] { "declaration", "readonly", "local" } :
-                new string[] { "declaration", "local" }
+            SemanticTokenModifiers =
+                new string[] { "declaration", "local" },
+        };
+    }
+
+    internal static ScrVariableSymbol ConstantDeclaration(Token identifierToken, ScrData data)
+    {
+        return new(identifierToken, data)
+        {
+            SemanticTokenModifiers = new string[] { "declaration", "readonly", "local" },
+            IsConstant = true
         };
     }
 
     internal static ScrVariableSymbol LanguageSymbol(IdentifierExprNode node, ScrData data)
     {
-        return new(node, data)
+        return new(node.Token, data)
         {
             SemanticTokenModifiers = new string[] { "defaultLibrary" }
         };
@@ -59,7 +67,7 @@ public class ScrVariableSymbol : ISenseDefinition
     {
         bool isConstant = data.ReadOnly;
 
-        return new(node, data)
+        return new(node.Token, data)
         {
             SemanticTokenModifiers = isConstant ?
                 new string[] { "readonly", "local" } :
@@ -69,7 +77,7 @@ public class ScrVariableSymbol : ISenseDefinition
 
     public Hover GetHover()
     {
-        string typeValue = $"{(Constant ? "const " : string.Empty)}{TypeString}";
+        string typeValue = $"{(IsConstant ? "const " : string.Empty)}{TypeString}";
         return new()
         {
             Range = Range,
@@ -77,7 +85,7 @@ public class ScrVariableSymbol : ISenseDefinition
             {
                 Kind = MarkupKind.Markdown,
                 Value = string.Format("```gsc\n/@ {0} @/ {1}\n```",
-                   typeValue, Node.Identifier!)
+                   typeValue, IdentifierToken.Lexeme)
             })
         };
     }

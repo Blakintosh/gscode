@@ -23,6 +23,9 @@ public class DefinitionsTable
     private readonly Dictionary<(string Namespace, string Name), (string FilePath, Range Range)> _functionLocations = new();
     private readonly Dictionary<(string Namespace, string Name), (string FilePath, Range Range)> _classLocations = new();
 
+    // Store function parameter names for outline/signature display
+    private readonly Dictionary<(string Namespace, string Name), string[]> _functionParameters = new();
+
     public DefinitionsTable(string currentNamespace)
     {
         CurrentNamespace = currentNamespace;
@@ -53,6 +56,21 @@ public class DefinitionsTable
     public void AddClassLocation(string ns, string name, string filePath, Range range)
     {
         _classLocations[(ns, name)] = (filePath, range);
+    }
+
+    // Record function parameter names for signature display
+    public void RecordFunctionParameters(string ns, string name, IEnumerable<string> parameterNames)
+    {
+        _functionParameters[(ns, name)] = parameterNames?.ToArray() ?? Array.Empty<string>();
+    }
+
+    public string[]? GetFunctionParameters(string ns, string name)
+    {
+        if (_functionParameters.TryGetValue((ns, name), out var list))
+        {
+            return list;
+        }
+        return null;
     }
 
     public (string FilePath, Range Range)? GetFunctionLocation(string ns, string name)

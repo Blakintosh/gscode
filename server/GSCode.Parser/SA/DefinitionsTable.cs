@@ -15,19 +15,15 @@ public class DefinitionsTable
 
     internal List<Tuple<ScrFunction, FunDefnNode>> LocalScopedFunctions { get; } = new();
     public List<ScrFunction> ExportedFunctions { get; } = new();
-    // TODO: Class definitions (not in this version)
 
     public List<Uri> Dependencies { get; } = new();
 
-    // Store locations for functions and classes keyed by (namespace, name)
     private readonly Dictionary<(string Namespace, string Name), (string FilePath, Range Range)> _functionLocations = new();
     private readonly Dictionary<(string Namespace, string Name), (string FilePath, Range Range)> _classLocations = new();
 
-    // Store function parameter names for outline/signature display
     private readonly Dictionary<(string Namespace, string Name), string[]> _functionParameters = new();
-
-    // Store function flags (e.g. private, autoexec)
     private readonly Dictionary<(string Namespace, string Name), string[]> _functionFlags = new();
+    private readonly Dictionary<(string Namespace, string Name), string?> _functionDocs = new();
 
     public DefinitionsTable(string currentNamespace)
     {
@@ -38,7 +34,6 @@ public class DefinitionsTable
     {
         LocalScopedFunctions.Add(new Tuple<ScrFunction, FunDefnNode>(function, node));
 
-        // Only add to exported functions if it's not private.
         if (!function.IsPrivate)
         {
             ExportedFunctions.Add(function with { Namespace = CurrentNamespace });
@@ -50,7 +45,6 @@ public class DefinitionsTable
         Dependencies.Add(new Uri(scriptPath));
     }
 
-    // APIs to record and query locations
     public void AddFunctionLocation(string ns, string name, string filePath, Range range)
     {
         _functionLocations[(ns, name)] = (filePath, range);
@@ -61,7 +55,6 @@ public class DefinitionsTable
         _classLocations[(ns, name)] = (filePath, range);
     }
 
-    // Record function parameter names for signature display
     public void RecordFunctionParameters(string ns, string name, IEnumerable<string> parameterNames)
     {
         _functionParameters[(ns, name)] = parameterNames?.ToArray() ?? Array.Empty<string>();
@@ -72,7 +65,6 @@ public class DefinitionsTable
         return _functionParameters.TryGetValue((ns, name), out var list) ? list : null;
     }
 
-    // Record function flags for outline/signature display
     public void RecordFunctionFlags(string ns, string name, IEnumerable<string> flags)
     {
         _functionFlags[(ns, name)] = flags?.ToArray() ?? Array.Empty<string>();
@@ -81,6 +73,16 @@ public class DefinitionsTable
     public string[]? GetFunctionFlags(string ns, string name)
     {
         return _functionFlags.TryGetValue((ns, name), out var list) ? list : null;
+    }
+
+    public void RecordFunctionDoc(string ns, string name, string? doc)
+    {
+        _functionDocs[(ns, name)] = string.IsNullOrWhiteSpace(doc) ? null : doc;
+    }
+
+    public string? GetFunctionDoc(string ns, string name)
+    {
+        return _functionDocs.TryGetValue((ns, name), out var doc) ? doc : null;
     }
 
     public (string FilePath, Range Range)? GetFunctionLocation(string ns, string name)
@@ -101,7 +103,6 @@ public class DefinitionsTable
         return null;
     }
 
-    // Helper to try all namespaces if a namespace wasn't provided
     public (string FilePath, Range Range)? GetFunctionLocationAnyNamespace(string name)
     {
         foreach (var kv in _functionLocations)
@@ -126,7 +127,6 @@ public class DefinitionsTable
         return null;
     }
 
-    // Expose all stored locations so other scripts can import them
     public IEnumerable<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>> GetAllFunctionLocations()
     {
         return _functionLocations.ToList();
@@ -135,5 +135,16 @@ public class DefinitionsTable
     public IEnumerable<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>> GetAllClassLocations()
     {
         return _classLocations.ToList();
+    }
+
+    // New: expose all parameters and docs
+    public IEnumerable<KeyValuePair<(string Namespace, string Name), string[]>> GetAllFunctionParameters()
+    {
+        return _functionParameters.ToList();
+    }
+
+    public IEnumerable<KeyValuePair<(string Namespace, string Name), string?>> GetAllFunctionDocs()
+    {
+        return _functionDocs.ToList();
     }
 }

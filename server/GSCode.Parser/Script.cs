@@ -158,7 +158,77 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             return result.GetHover();
         }
-        return null;
+
+        // No precomputed hover — try to synthesize one for local/external (non-builtin) function identifiers
+        Token? token = Sense.Tokens.Get(position);
+        if (token is null)
+        {
+            return null;
+        }
+
+        // Only for identifiers (namespace::name or plain name)
+        if (token.Type != TokenType.Identifier)
+        {
+            return null;
+        }
+
+        var (qualifier, name) = ParseNamespaceQualifiedIdentifier(token);
+
+        // Exclude builtin API functions
+        try
+        {
+            ScriptAnalyserData api = new(LanguageId);
+            var apiFn = api.GetApiFunction(name);
+            if (apiFn is not null)
+            {
+                return null; // let existing hover (if any) handle API
+            }
+        }
+        catch { }
+
+        // Find function/method in current script tables
+        string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+        string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
+        string[]? parameters = DefinitionsTable?.GetFunctionParameters(ns, name);
+
+        if (doc is null && parameters is null)
+        {
+            // Try any namespace in this file
+            var any = DefinitionsTable?.GetFunctionLocationAnyNamespace(name);
+            if (any is not null)
+            {
+                // unknown params/doc; still show a basic prototype
+                string proto = $"function {name}()";
+                return new Hover
+                {
+                    Range = token.Range,
+                    Contents = new MarkedStringsOrMarkupContent(new MarkupContent
+                    {
+                        Kind = MarkupKind.Markdown,
+                        Value = $"```gsc\n{proto}\n```"
+                    })
+                };
+            }
+            return null;
+        }
+
+        string protoWithParams = parameters is null || parameters.Length == 0
+            ? $"function {name}()"
+            : $"function {name}({string.Join(", ", parameters)})";
+
+        string value = doc is not null
+            ? $"```gsc\n{protoWithParams}\n```\n---\n{doc}"
+            : $"```gsc\n{protoWithParams}\n```";
+
+        return new Hover
+        {
+            Range = token.Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent
+            {
+                Kind = MarkupKind.Markdown,
+                Value = value
+            })
+        };
     }
 
     public async Task<CompletionList?> GetCompletionAsync(Position position, CancellationToken cancellationToken)

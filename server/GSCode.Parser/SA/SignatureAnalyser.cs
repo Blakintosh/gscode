@@ -125,6 +125,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
+        // Record doc comment if present
+        DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, ExtractDocCommentBefore(nameToken));
+
         Sense.AddSenseToken(nameToken, new ScrMethodSymbol(nameToken, function, scrClass));
 
         if (parameters is not null)
@@ -220,6 +223,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
+        // Record doc comment if present
+        DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, ExtractDocCommentBefore(nameToken));
+
         Sense.AddSenseToken(nameToken, new ScrFunctionSymbol(nameToken, function));
 
         if (parameters is not null)
@@ -273,6 +279,31 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         }
 
         return result;
+    }
+
+    private static string? ExtractDocCommentBefore(Token nameToken)
+    {
+        // Look left for a doc comment immediately preceding the function name line.
+        // Accept tokens of type DocComment or MultilineComment (wrapped in /# #/ or /@ @/ as per request)
+        Token? t = nameToken.Previous;
+        int currentLine = nameToken.Range.Start.Line;
+        while (t is not null && t.Range.End.Line >= currentLine - 2)
+        {
+            if (t.Type == TokenType.DocComment || t.Type == TokenType.MultilineComment)
+            {
+                return t.Lexeme.Trim();
+            }
+            if (!t.IsWhitespacey() && !t.IsComment()) break;
+            t = t.Previous;
+        }
+        return null;
+    }
+
+    private static string BuildPrototype(string? ns, string name, IEnumerable<ScrFunctionArg>? args)
+    {
+        string paramList = args is null ? string.Empty : string.Join(", ", args.Select(a => a.Name));
+        string nsPrefix = string.IsNullOrEmpty(ns) ? string.Empty : ns + "::";
+        return $"function {nsPrefix}{name}({paramList})";
     }
 }
 

@@ -13,6 +13,8 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using GSCode.Parser.SA;
 using System.IO;
+using GSCode.Parser.SPA;
+using System.Text.RegularExpressions;
 
 namespace GSCode.Parser;
 
@@ -182,6 +184,162 @@ public class Script(DocumentUri ScriptUri, string languageId)
         await WaitUntilParsedAsync(cancellationToken);
 
         return DefinitionsTable!.ExportedFunctions ?? [];
+    }
+
+    /// <summary>
+    /// Helper to parse namespace-qualified identifiers: namespace::name or just name.
+    /// </summary>
+    private static (string? qualifier, string name) ParseNamespaceQualifiedIdentifier(Token token)
+    {
+        // If the previous token is '::' and the one before is an identifier, treat as namespace::name
+        if (token.Previous is { Lexeme: "::" } sep && sep.Previous is { Type: TokenType.Identifier } nsToken)
+        {
+            return (nsToken.Lexeme, token.Lexeme);
+        }
+        // Otherwise, no qualifier
+        return (null, token.Lexeme);
+    }
+
+    private static string NormalizeFilePathForUri(string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return filePath;
+
+        // Some paths are produced like "/g:/path/..." on Windows; remove leading slash if followed by drive letter
+        if (filePath.Length >= 3 && filePath[0] == '/' && char.IsLetter(filePath[1]) && filePath[2] == ':')
+        {
+            filePath = filePath.Substring(1);
+        }
+
+        // Convert forward slashes to platform directory separator to be safe
+        if (Path.DirectorySeparatorChar == '\\')
+        {
+            filePath = filePath.Replace('/', Path.DirectorySeparatorChar);
+        }
+
+        // Return full path if possible
+        try
+        {
+            return Path.GetFullPath(filePath);
+        }
+        catch
+        {
+            return filePath;
+        }
+    }
+
+    public async Task<Location?> GetDefinitionAsync(Position position, CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        Token? token = Sense.Tokens.Get(position);
+        if (token is null)
+            return null;
+
+        // If the token has an IntelliSense definition pointing at a dependency, return that file location.
+        if (token.SenseDefinition is ScrDependencySymbol dep)
+        {
+            string resolvedPath = dep.Path;
+            if (!File.Exists(resolvedPath))
+                return null;
+            string normalized = NormalizeFilePathForUri(resolvedPath);
+            var targetUri = new Uri(normalized);
+            return new Location() { Uri = targetUri, Range = dep.Range };
+        }
+
+        // Ensure the token is a function-like identifier before attempting Go-to-Definition.
+        // Acceptable cases:
+        //  - An identifier followed by '(' (call site)
+        //  - A namespace::identifier qualified reference (previous token is '::')
+        //  - The identifier itself is a declared function/class/method (has corresponding SenseDefinition)
+        if (token.Type != TokenType.Identifier)
+        {
+            return null;
+        }
+
+        // Helper: get next non-whitespace/comment token
+        Token? nextNonWs = token.Next;
+        while (nextNonWs is not null && nextNonWs.IsWhitespacey())
+        {
+            nextNonWs = nextNonWs.Next;
+        }
+
+        bool looksLikeCall = nextNonWs is not null && nextNonWs.Type == TokenType.OpenParen;
+        bool isQualified = token.Previous is not null && token.Previous.Type == TokenType.ScopeResolution && token.Previous.Previous is not null && token.Previous.Previous.Type == TokenType.Identifier;
+        bool hasDefinitionSymbol = token.SenseDefinition is ScrFunctionSymbol || token.SenseDefinition is ScrMethodSymbol || token.SenseDefinition is ScrClassSymbol;
+
+        if (!looksLikeCall && !isQualified && !hasDefinitionSymbol)
+        {
+            // Not a function token (could be variable, property, etc.) — skip
+            return null;
+        }
+
+        // Parse namespace qualifier
+        var (qualifier, name) = ParseNamespaceQualifiedIdentifier(token);
+
+        // Built-in API functions/methods: if the name exists in the language API, treat as builtin (no source location)
+        try
+        {
+            ScriptAnalyserData api = new(LanguageId);
+            var apiFn = api.GetApiFunction(name);
+            if (apiFn is not null)
+            {
+                // Built-in function — no source location to return
+                return null;
+            }
+        }
+        catch
+        {
+            // Be permissive on failures when loading API data — fall back to normal lookup
+        }
+
+        // 1. Try qualified lookup if present
+        if (qualifier is not null && DefinitionsTable is not null)
+        {
+            var loc = DefinitionsTable.GetFunctionLocation(qualifier, name)
+                   ?? DefinitionsTable.GetClassLocation(qualifier, name);
+            if (loc is not null)
+            {
+                string normalized = NormalizeFilePathForUri(loc.Value.FilePath);
+                var targetUri = new Uri(normalized); return new Location() { Uri = targetUri, Range = loc.Value.Range };
+            }
+        }
+
+        // 2. Try current namespace
+        string ns = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+        var localLoc = DefinitionsTable?.GetFunctionLocation(ns, name)
+                    ?? DefinitionsTable?.GetClassLocation(ns, name);
+        if (localLoc is not null)
+        {
+            string normalized = NormalizeFilePathForUri(localLoc.Value.FilePath);
+            var targetUri = new Uri(normalized);
+            return new Location() { Uri = targetUri, Range = localLoc.Value.Range };
+        }
+
+        // 3. Try any namespace in this file
+        var anyLoc = DefinitionsTable?.GetFunctionLocationAnyNamespace(name)
+                  ?? DefinitionsTable?.GetClassLocationAnyNamespace(name);
+        if (anyLoc is not null)
+        {
+            string normalized = NormalizeFilePathForUri(anyLoc.Value.FilePath);
+            var targetUri = new Uri(normalized);
+            return new Location() { Uri = targetUri, Range = anyLoc.Value.Range };
+        }
+
+        // 4. Not found locally; let ScriptManager search all loaded scripts (pass qualifier if present)
+        return null;
+    }
+
+    public async Task<(string? qualifier, string name)?> GetQualifiedIdentifierAt(Position position, CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        Token? token = Sense.Tokens.Get(position);
+        if (token is null)
+        {
+            return null;
+        }
+
+        return ParseNamespaceQualifiedIdentifier(token);
     }
 
     //private void ThrowIfNotAnalysed()

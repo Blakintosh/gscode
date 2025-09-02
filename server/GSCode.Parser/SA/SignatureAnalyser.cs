@@ -1,4 +1,3 @@
-
 using System.Text;
 using GSCode.Data;
 using GSCode.Parser.AST;
@@ -46,7 +45,6 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
     public void AnalyseClass(ClassDefnNode classDefn)
     {
-        // Get the name of the class - if it's unnamed then it's one that was produced in recovery. No use to us.
         if (classDefn.NameToken is not Token nameToken)
         {
             return;
@@ -75,13 +73,14 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             }
         }
 
-        // DefinitionsTable.AddClass(scrClass, classDefn);
+        // Record class location for go-to-definition
+        DefinitionsTable.AddClassLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
+
         Sense.AddSenseToken(nameToken, new ScrClassSymbol(nameToken, scrClass));
     }
 
     private void AnalyseClassFunction(ScrClass scrClass, FunDefnNode functionDefn)
     {
-        // Get the name of the function - if it's unnamed then it's one that was produced in recovery. No use to us.
         if (functionDefn.Name is not Token nameToken)
         {
             return;
@@ -116,7 +115,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         // Produce a definition for our function
         scrClass.Methods.Add(function);
 
-        // TODO: may need this to be different for class methods, not sure yet.
+        // Record method/function location (method recorded as function under containing namespace)
+        DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
+
         Sense.AddSenseToken(nameToken, new ScrMethodSymbol(nameToken, function, scrClass));
 
         if (parameters is not null)
@@ -130,7 +131,6 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
     private void AnalyseClassMember(ScrClass scrClass, MemberDeclNode memberDecl)
     {
-        // Get the name of the member - if it's unnamed then it's one that was produced in recovery. No use to us.
         if (memberDecl.NameToken is not Token nameToken)
         {
             return;
@@ -202,6 +202,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
         // Produce a definition for our function
         DefinitionsTable.AddFunction(function, functionDefn);
+
+        // Record function location for go-to-definition
+        DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
 
         Sense.AddSenseToken(nameToken, new ScrFunctionSymbol(nameToken, function));
 

@@ -163,7 +163,6 @@ public class ScriptManager
                 {
                     var key = kv.Key;
                     var val = kv.Value;
-                    // Only import exported functions (non-private). We don't have privacy here, so import all recorded locations.
                     script.DefinitionsTable.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
                 }
 
@@ -173,6 +172,22 @@ public class ScriptManager
                     var key = kv.Key;
                     var val = kv.Value;
                     script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+                }
+
+                // Import function parameters
+                foreach (var kv in depTable.GetAllFunctionParameters())
+                {
+                    var key = kv.Key;
+                    var parms = kv.Value;
+                    script.DefinitionsTable.RecordFunctionParameters(key.Namespace, key.Name, parms);
+                }
+
+                // Import function docs
+                foreach (var kv in depTable.GetAllFunctionDocs())
+                {
+                    var key = kv.Key;
+                    var doc = kv.Value;
+                    script.DefinitionsTable.RecordFunctionDoc(key.Namespace, key.Name, doc);
                 }
             }
         }

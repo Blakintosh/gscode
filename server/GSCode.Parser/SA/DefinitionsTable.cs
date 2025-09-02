@@ -26,6 +26,9 @@ public class DefinitionsTable
     // Store function parameter names for outline/signature display
     private readonly Dictionary<(string Namespace, string Name), string[]> _functionParameters = new();
 
+    // Store function flags (e.g. private, autoexec)
+    private readonly Dictionary<(string Namespace, string Name), string[]> _functionFlags = new();
+
     public DefinitionsTable(string currentNamespace)
     {
         CurrentNamespace = currentNamespace;
@@ -66,11 +69,18 @@ public class DefinitionsTable
 
     public string[]? GetFunctionParameters(string ns, string name)
     {
-        if (_functionParameters.TryGetValue((ns, name), out var list))
-        {
-            return list;
-        }
-        return null;
+        return _functionParameters.TryGetValue((ns, name), out var list) ? list : null;
+    }
+
+    // Record function flags for outline/signature display
+    public void RecordFunctionFlags(string ns, string name, IEnumerable<string> flags)
+    {
+        _functionFlags[(ns, name)] = flags?.ToArray() ?? Array.Empty<string>();
+    }
+
+    public string[]? GetFunctionFlags(string ns, string name)
+    {
+        return _functionFlags.TryGetValue((ns, name), out var list) ? list : null;
     }
 
     public (string FilePath, Range Range)? GetFunctionLocation(string ns, string name)

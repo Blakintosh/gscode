@@ -77,11 +77,14 @@ internal sealed class ParserIntelliSense
 
     private readonly string _scriptPath;
     public readonly string _languageId;
+    public string ScriptPath => _scriptPath;
+    public string ScriptUri { get; }
 
     public ParserIntelliSense(int endLine, DocumentUri scriptUri, string languageId)
     {
         HoverLibrary = new(endLine + 1);
         _scriptPath = scriptUri.Path;
+        ScriptUri = scriptUri.Path;
         _languageId = languageId;
         Completions = new(Tokens, languageId);
     }

@@ -117,6 +117,8 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
         // Record method/function location (method recorded as function under containing namespace)
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
+        // Record parameter names for outline/signature
+        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
 
         Sense.AddSenseToken(nameToken, new ScrMethodSymbol(nameToken, function, scrClass));
 
@@ -205,6 +207,8 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
         // Record function location for go-to-definition
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
+        // Record parameter names for outline/signature
+        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
 
         Sense.AddSenseToken(nameToken, new ScrFunctionSymbol(nameToken, function));
 

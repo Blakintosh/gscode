@@ -31,18 +31,22 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
     private static string NormalizePath(string path)
     {
         if (string.IsNullOrEmpty(path)) return path;
-
-        // Fix leading slash on drive letter (e.g. "/g:/...")
         if (path.Length >= 3 && path[0] == '/' && char.IsLetter(path[1]) && path[2] == ':')
         {
             path = path.Substring(1);
         }
-        // Normalize separators
         if (Path.DirectorySeparatorChar == '\\')
         {
             path = path.Replace('/', Path.DirectorySeparatorChar);
         }
         try { return Path.GetFullPath(path); } catch { return path; }
+    }
+
+    private static string BuildFunctionLabel(string name, string ns, string[]? parameters)
+    {
+        if (parameters is null || parameters.Length == 0)
+            return name + "()";
+        return name + "(" + string.Join(", ", parameters) + ")";
     }
 
     public override async Task<SymbolInformationOrDocumentSymbolContainer?> Handle(DocumentSymbolParams request, CancellationToken cancellationToken)
@@ -55,16 +59,14 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>());
         }
 
-        // Normalize current document path
         string currentPath = NormalizePath(request.TextDocument.Uri.ToUri().LocalPath);
 
         List<DocumentSymbol> symbols = new();
 
-        // Add classes
+        // Add classes first
         foreach (var kv in script.DefinitionsTable.GetAllClassLocations())
         {
-            var key = kv.Key; // (namespace, name)
-            var val = kv.Value; // (filePath, range)
+            var key = kv.Key; var val = kv.Value;
             string filePath = NormalizePath(val.FilePath ?? string.Empty);
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
                 continue;
@@ -78,35 +80,31 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
                 SelectionRange = val.Range,
                 Children = new List<DocumentSymbol>()
             };
-
             symbols.Add(classSymbol);
         }
 
-        // Add top-level functions
+        // Add functions (label includes parameters)
         foreach (var kv in script.DefinitionsTable.GetAllFunctionLocations())
         {
-            var key = kv.Key;
-            var val = kv.Value;
+            var key = kv.Key; var val = kv.Value;
             string filePath = NormalizePath(val.FilePath ?? string.Empty);
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            string[]? parameters = script.DefinitionsTable.GetFunctionParameters(key.Namespace, key.Name);
             var funcSymbol = new DocumentSymbol
             {
-                Name = key.Name,
+                Name = BuildFunctionLabel(key.Name, key.Namespace, parameters),
                 Detail = key.Namespace,
                 Kind = SymbolKind.Function,
                 Range = val.Range,
                 SelectionRange = val.Range
             };
-
             symbols.Add(funcSymbol);
         }
 
         _logger.LogInformation("DocumentSymbol: returning {Count} symbols", symbols.Count);
-
-        // Convert DocumentSymbol list to the union type expected by handler return
-        List<SymbolInformationOrDocumentSymbol> union = symbols.Select(ds => new SymbolInformationOrDocumentSymbol(ds)).ToList();
+        var union = symbols.Select(ds => new SymbolInformationOrDocumentSymbol(ds)).ToList();
         return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>(union));
     }
 

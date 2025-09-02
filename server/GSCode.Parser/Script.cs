@@ -243,7 +243,21 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 return null;
             string normalized = NormalizeFilePathForUri(resolvedPath);
             var targetUri = new Uri(normalized);
-            return new Location() { Uri = targetUri, Range = dep.Range };
+            // Navigate to start of file in the target document
+            return new Location() { Uri = targetUri, Range = RangeHelper.From(0, 0, 0, 0) };
+        }
+
+        // Fallback: if we're on a #using line but the specific token doesn't have a SenseDefinition,
+        // reconstruct the dependency path from tokens on the same line and navigate to it.
+        if (IsOnUsingLine(token, out string? usingPath, out Range? usingRange))
+        {
+            string? resolved = Sense.GetDependencyPath(usingPath!, usingRange!);
+            if (resolved is not null && File.Exists(resolved))
+            {
+                string normalized = NormalizeFilePathForUri(resolved);
+                var targetUri = new Uri(normalized);
+                return new Location() { Uri = targetUri, Range = RangeHelper.From(0, 0, 0, 0) };
+            }
         }
 
         // Ensure the token is a function-like identifier before attempting Go-to-Definition.
@@ -327,6 +341,73 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
         // 4. Not found locally; let ScriptManager search all loaded scripts (pass qualifier if present)
         return null;
+    }
+
+    private static bool IsOnUsingLine(Token token, out string? usingPath, out Range? usingRange)
+    {
+        usingPath = null;
+        usingRange = null;
+
+        int line = token.Range.Start.Line;
+
+        // Move to the first token of the line
+        Token? cursor = token;
+        while (cursor.Previous is not null && cursor.Previous.Range.End.Line == line)
+        {
+            cursor = cursor.Previous;
+        }
+
+        // Find '#using' token on the next line (since this is EOL)
+        Token? usingToken = null;
+        Token? iter = cursor.Next;
+        while (iter is not null && iter.Range.Start.Line == line)
+        {
+            if (iter.Lexeme == "#using")
+            {
+                usingToken = iter;
+                break;
+            }
+            iter = iter.Next;
+        }
+
+        if (usingToken is null)
+        {
+            return false;
+        }
+
+        // Collect tokens after '#using' up to ';' or EOL
+        Token? start = usingToken.Next;
+        while (start is not null && start.IsWhitespacey()) start = start.Next;
+        if (start is null || start.Range.Start.Line != line)
+        {
+            return false;
+        }
+        Token? end = start;
+        Token? walker = start;
+        while (walker is not null && walker.Range.Start.Line == line)
+        {
+            if (walker.Type == TokenType.Semicolon || walker.Type == TokenType.LineBreak)
+            {
+                break;
+            }
+            end = walker;
+            walker = walker.Next;
+        }
+        if (end is null)
+        {
+            return false;
+        }
+
+        // Build path using raw source between start and end
+        var list = new TokenList(start, end);
+        string raw = list.ToRawString();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+        usingPath = raw.Trim();
+        usingRange = RangeHelper.From(start.Range.Start, end.Range.End);
+        return true;
     }
 
     public async Task<(string? qualifier, string name)?> GetQualifiedIdentifierAt(Position position, CancellationToken cancellationToken = default)

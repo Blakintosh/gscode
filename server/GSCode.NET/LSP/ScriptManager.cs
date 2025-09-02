@@ -1,5 +1,6 @@
 ﻿using GSCode.Data.Models.Interfaces;
 using GSCode.Parser;
+using GSCode.Parser.SA;
 using Serilog;
 using System.Collections.Concurrent;
 using System.Security.Cryptography.X509Certificates;
@@ -143,6 +144,39 @@ public class ScriptManager
                 exportedSymbols.AddRange(await cachedScript.Script.IssueExportedSymbolsAsync(cancellationToken));
             }
         }
+
+        // Merge dependency function/class locations into this script's DefinitionsTable so qualified lookups work.
+        // This allows go-to-definition for namespace::function where the namespace is defined in a #using file.
+        if (script.DefinitionsTable is not null)
+        {
+            foreach (Uri dependency in script.Dependencies)
+            {
+                if (!Scripts.TryGetValue(dependency, out CachedScript? depScript))
+                    continue;
+
+                DefinitionsTable? depTable = depScript.Script.DefinitionsTable;
+                if (depTable is null)
+                    continue;
+
+                // Import all function locations
+                foreach (var kv in depTable.GetAllFunctionLocations())
+                {
+                    var key = kv.Key;
+                    var val = kv.Value;
+                    // Only import exported functions (non-private). We don't have privacy here, so import all recorded locations.
+                    script.DefinitionsTable.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+                }
+
+                // Import all class locations
+                foreach (var kv in depTable.GetAllClassLocations())
+                {
+                    var key = kv.Key;
+                    var val = kv.Value;
+                    script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+                }
+            }
+        }
+
         // Finally, analyse the script.
         await script.AnalyseAsync(exportedSymbols, cancellationToken);
 
@@ -170,6 +204,51 @@ public class ScriptManager
         CachedScript script = Scripts[uri];
 
         return script.Script;
+    }
+
+    /// <summary>
+    /// Try to find a symbol (function or class) in any cached script. If ns is provided, search that namespace first.
+    /// Returns a Location or null.
+    /// </summary>
+    public Location? FindSymbolLocation(string? ns, string name)
+    {
+        foreach (KeyValuePair<DocumentUri, CachedScript> kvp in Scripts)
+        {
+            CachedScript cached = kvp.Value;
+            if (cached.Script.DefinitionsTable is null)
+                continue;
+
+            // If namespace provided, try that first for this table.
+            if (ns is not null)
+            {
+                var funcLoc = cached.Script.DefinitionsTable.GetFunctionLocation(ns, name);
+                if (funcLoc is not null && File.Exists(funcLoc.Value.FilePath))
+                {
+                    return new Location() { Uri = new Uri(funcLoc.Value.FilePath), Range = funcLoc.Value.Range };
+                }
+
+                var classLoc = cached.Script.DefinitionsTable.GetClassLocation(ns, name);
+                if (classLoc is not null && File.Exists(classLoc.Value.FilePath))
+                {
+                    return new Location() { Uri = new Uri(classLoc.Value.FilePath), Range = classLoc.Value.Range };
+                }
+            }
+
+            // Try any namespace in this table
+            var funcAny = cached.Script.DefinitionsTable.GetFunctionLocationAnyNamespace(name);
+            if (funcAny is not null && File.Exists(funcAny.Value.FilePath))
+            {
+                return new Location() { Uri = new Uri(funcAny.Value.FilePath), Range = funcAny.Value.Range };
+            }
+
+            var classAny = cached.Script.DefinitionsTable.GetClassLocationAnyNamespace(name);
+            if (classAny is not null && File.Exists(classAny.Value.FilePath))
+            {
+                return new Location() { Uri = new Uri(classAny.Value.FilePath), Range = classAny.Value.Range };
+            }
+        }
+
+        return null;
     }
 
 #if PREVIEW

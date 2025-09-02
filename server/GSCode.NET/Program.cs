@@ -85,7 +85,8 @@ LanguageServer server = await LanguageServer.From(options =>
 		.AddHandler<HoverHandler>()
 		.AddHandler<CompletionHandler>()
 		.AddHandler<DefinitionHandler>()
-		.AddHandler<DocumentSymbolHandler>();
+		.AddHandler<DocumentSymbolHandler>()
+		.AddHandler<SignatureHelpHandler>();
 
 	// Allow disposal of the stream if required.
 	if (disposable is not null)

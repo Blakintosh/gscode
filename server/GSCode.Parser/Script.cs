@@ -159,13 +159,32 @@ public class Script(DocumentUri ScriptUri, string languageId)
             return result.GetHover();
         }
 
-        // No precomputed hover — try to synthesize one for local/external (non-builtin) function identifiers
         Token? token = Sense.Tokens.Get(position);
         if (token is null)
         {
             return null;
         }
 
+        // If cursor is inside a call's argument list, synthesize a signature-like hover with current parameter highlighted
+        if (TryGetCallInfo(token, out Token idToken, out int activeParam))
+        {
+            var (q, funcName) = ParseNamespaceQualifiedIdentifier(idToken);
+            string? md = BuildSignatureMarkdown(funcName, q, activeParam);
+            if (md is not null)
+            {
+                return new Hover
+                {
+                    Range = idToken.Range,
+                    Contents = new MarkedStringsOrMarkupContent(new MarkupContent
+                    {
+                        Kind = MarkupKind.Markdown,
+                        Value = md
+                    })
+                };
+            }
+        }
+
+        // No precomputed hover — try to synthesize one for local/external (non-builtin) function identifiers
         // Only for identifiers (namespace::name or plain name)
         if (token.Type != TokenType.Identifier)
         {
@@ -229,6 +248,125 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 Value = value
             })
         };
+    }
+
+    private string? BuildSignatureMarkdown(string name, string? qualifier, int activeParam)
+    {
+        // Built-in API: try first
+        try
+        {
+            ScriptAnalyserData api = new(LanguageId);
+            var apiFn = api.GetApiFunction(name);
+            if (apiFn is not null)
+            {
+                var overload = apiFn.Overloads.FirstOrDefault();
+                var paramSeq = overload != null ? overload.Parameters : new List<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                string[] names = paramSeq.Select(p => p.Name ?? string.Empty).ToArray();
+                string sig = FormatSignature(name, names, activeParam, qualifier);
+                string desc = apiFn.Description ?? string.Empty;
+                return string.IsNullOrEmpty(desc) ? sig : $"{sig}\n---\n{desc}";
+            }
+        }
+        catch { }
+
+        // Script-defined (local or imported)
+        string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+        string[]? parms = DefinitionsTable?.GetFunctionParameters(ns, name);
+        string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
+        if (parms is not null)
+        {
+            string sig = FormatSignature(name, parms, activeParam, qualifier);
+            return doc is not null ? $"{sig}\n---\n{doc}" : sig;
+        }
+
+        // Fallback: show empty params signature if symbol exists somewhere
+        var any = DefinitionsTable?.GetFunctionLocationAnyNamespace(name);
+        if (any is not null)
+        {
+            return FormatSignature(name, Array.Empty<string>(), activeParam, qualifier);
+        }
+        return null;
+    }
+
+    private static string FormatSignature(string name, IReadOnlyList<string> parameters, int activeParam, string? qualifier)
+    {
+        string nsPrefix = string.IsNullOrEmpty(qualifier) ? string.Empty : qualifier + "::";
+        if (parameters.Count == 0)
+        {
+            return $"```gsc\nfunction {nsPrefix}{name}()\n```";
+        }
+        StringBuilder sb = new();
+        sb.Append("```gsc\nfunction ").Append(nsPrefix).Append(name).Append('(');
+        for (int i = 0; i < parameters.Count; i++)
+        {
+            if (i > 0) sb.Append(", ");
+            string p = parameters[i];
+            if (i == activeParam)
+            {
+                sb.Append('<').Append(p).Append('>');
+            }
+            else
+            {
+                sb.Append(p);
+            }
+        }
+        sb.Append(")\n```");
+        return sb.ToString();
+    }
+
+    private static bool TryGetCallInfo(Token token, out Token idToken, out int activeParam)
+    {
+        idToken = default!;
+        activeParam = 0;
+
+        // Find the nearest '(' that starts the current argument list
+        Token? cursor = token;
+        int parenDepth = 0;
+        while (cursor is not null)
+        {
+            if (cursor.Type == TokenType.CloseParen) parenDepth++;
+            if (cursor.Type == TokenType.OpenParen)
+            {
+                if (parenDepth == 0) break;
+                parenDepth--;
+            }
+            cursor = cursor.Previous;
+        }
+        if (cursor is null)
+            return false; // not in a call
+
+        // The identifier before this '('
+        Token? id = cursor.Previous;
+        while (id is not null && (id.IsWhitespacey() || id.IsComment())) id = id.Previous;
+        if (id is null || id.Type != TokenType.Identifier)
+            return false;
+
+        idToken = id;
+
+        // Count commas to determine parameter index; ignore nested parens/brackets/braces
+        Token? walker = cursor.Next;
+        int depthParen = 0, depthBracket = 0, depthBrace = 0;
+        int index = 0;
+        while (walker is not null && walker != token.Next)
+        {
+            if (walker.Type == TokenType.OpenParen) depthParen++;
+            else if (walker.Type == TokenType.CloseParen)
+            {
+                if (depthParen == 0) break;
+                depthParen--;
+            }
+            else if (walker.Type == TokenType.OpenBracket) depthBracket++;
+            else if (walker.Type == TokenType.CloseBracket && depthBracket > 0) depthBracket--;
+            else if (walker.Type == TokenType.OpenBrace) depthBrace++;
+            else if (walker.Type == TokenType.CloseBrace && depthBrace > 0) depthBrace--;
+            else if (walker.Type == TokenType.Comma && depthParen == 0 && depthBracket == 0 && depthBrace == 0)
+            {
+                index++;
+            }
+            walker = walker.Next;
+        }
+        activeParam = index;
+        return true;
     }
 
     public async Task<CompletionList?> GetCompletionAsync(Position position, CancellationToken cancellationToken)
@@ -493,11 +631,104 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return ParseNamespaceQualifiedIdentifier(token);
     }
 
-    //private void ThrowIfNotAnalysed()
-    //{
-    //    if (!Analysed)
-    //    {
-    //        throw new InvalidOperationException("The script has not been analysed yet.");
-    //    }
-    //}
+    public async Task<SignatureHelp?> GetSignatureHelpAsync(Position position, CancellationToken cancellationToken)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        Token? token = Sense.Tokens.Get(position);
+        if (token is null)
+            return null;
+
+        // Determine if we're inside a call: find identifier before '(' and count comma-separated args
+        // Scan left to find the nearest '(' that starts the current argument list
+        Token? cursor = token;
+        int parenDepth = 0;
+        while (cursor is not null)
+        {
+            if (cursor.Type == TokenType.CloseParen) parenDepth++;
+            if (cursor.Type == TokenType.OpenParen)
+            {
+                if (parenDepth == 0) break;
+                parenDepth--;
+            }
+            cursor = cursor.Previous;
+        }
+        if (cursor is null)
+            return null; // not in a call
+
+        // Find the identifier before this '('
+        Token? id = cursor.Previous;
+        while (id is not null && (id.IsWhitespacey() || id.IsComment())) id = id.Previous;
+        if (id is null || id.Type != TokenType.Identifier)
+            return null;
+
+        var (qualifier, name) = ParseNamespaceQualifiedIdentifier(id);
+
+        // Count arguments index by scanning commas from cursor to current position, without nesting into inner parens/brackets/braces
+        int activeParam = 0;
+        Token? walker = cursor.Next;
+        int depthParen = 0, depthBracket = 0, depthBrace = 0;
+        while (walker is not null && walker != token.Next)
+        {
+            if (walker.Type == TokenType.OpenParen) depthParen++;
+            else if (walker.Type == TokenType.CloseParen)
+            {
+                if (depthParen == 0) break; // end of this call
+                depthParen--;
+            }
+            else if (walker.Type == TokenType.OpenBracket) depthBracket++;
+            else if (walker.Type == TokenType.CloseBracket && depthBracket > 0) depthBracket--;
+            else if (walker.Type == TokenType.OpenBrace) depthBrace++;
+            else if (walker.Type == TokenType.CloseBrace && depthBrace > 0) depthBrace--;
+            else if (walker.Type == TokenType.Comma && depthParen == 0 && depthBracket == 0 && depthBrace == 0)
+            {
+                activeParam++;
+            }
+            walker = walker.Next;
+        }
+
+        // Try builtin API first
+        List<SignatureInformation> signatures = new();
+        try
+        {
+            ScriptAnalyserData api = new(LanguageId);
+            var apiFn = api.GetApiFunction(name);
+            if (apiFn is not null)
+            {
+                var overload = apiFn.Overloads.FirstOrDefault();
+                IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                string label = $"function {name}({string.Join(", ", paramSeq.Select(p => p.Name).Where(n => !string.IsNullOrEmpty(n)))})";
+                var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = p.Name ?? string.Empty, Documentation = p.Description ?? string.Empty }));
+                signatures.Add(new SignatureInformation { Label = label, Documentation = apiFn.Description, Parameters = parameters });
+            }
+        }
+        catch { }
+
+        // Then script-defined (local or imported) using DefinitionsTable
+        string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+        string[]? parms = DefinitionsTable?.GetFunctionParameters(ns, name) ?? DefinitionsTable?.GetFunctionParameters(qualifier ?? ns, name);
+        string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
+        if (parms is not null)
+        {
+            string label = $"function {name}({string.Join(", ", parms)})";
+            var parameters = new Container<ParameterInformation>(parms.Select(p => new ParameterInformation { Label = p }));
+            signatures.Add(new SignatureInformation { Label = label, Documentation = doc, Parameters = parameters });
+        }
+
+        if (signatures.Count == 0)
+            return null;
+
+        int paramCount = 1;
+        if (signatures[0].Parameters is { } paramContainer)
+        {
+            paramCount = paramContainer.Count();
+        }
+
+        return new SignatureHelp
+        {
+            ActiveSignature = 0,
+            ActiveParameter = Math.Max(0, Math.Min(activeParam, paramCount - 1)),
+            Signatures = new Container<SignatureInformation>(signatures)
+        };
+    }
 }

@@ -42,11 +42,11 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         try { return Path.GetFullPath(path); } catch { return path; }
     }
 
-    private static string BuildFunctionLabel(string name, string ns, string[]? parameters)
+    private static string BuildFunctionLabel(string name, string ns, string[]? parameters, string[]? flags)
     {
-        if (parameters is null || parameters.Length == 0)
-            return name + "()";
-        return name + "(" + string.Join(", ", parameters) + ")";
+        string paramText = parameters is null || parameters.Length == 0 ? "()" : $"({string.Join(", ", parameters)})";
+        string flagText = flags is null || flags.Length == 0 ? string.Empty : $" [{string.Join(", ", flags)}]";
+        return name + paramText + flagText;
     }
 
     public override async Task<SymbolInformationOrDocumentSymbolContainer?> Handle(DocumentSymbolParams request, CancellationToken cancellationToken)
@@ -83,7 +83,7 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             symbols.Add(classSymbol);
         }
 
-        // Add functions (label includes parameters)
+        // Add functions (label includes parameters and flags)
         foreach (var kv in script.DefinitionsTable.GetAllFunctionLocations())
         {
             var key = kv.Key; var val = kv.Value;
@@ -92,9 +92,10 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
                 continue;
 
             string[]? parameters = script.DefinitionsTable.GetFunctionParameters(key.Namespace, key.Name);
+            string[]? flags = script.DefinitionsTable.GetFunctionFlags(key.Namespace, key.Name);
             var funcSymbol = new DocumentSymbol
             {
-                Name = BuildFunctionLabel(key.Name, key.Namespace, parameters),
+                Name = BuildFunctionLabel(key.Name, key.Namespace, parameters, flags),
                 Detail = key.Namespace,
                 Kind = SymbolKind.Function,
                 Range = val.Range,

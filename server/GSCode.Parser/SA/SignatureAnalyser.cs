@@ -119,6 +119,11 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
         // Record parameter names for outline/signature
         DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        // Record flags (private, autoexec)
+        var flags = new List<string>();
+        if (function.IsPrivate) flags.Add("private");
+        if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
+        DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
         Sense.AddSenseToken(nameToken, new ScrMethodSymbol(nameToken, function, scrClass));
 
@@ -209,6 +214,11 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
         // Record parameter names for outline/signature
         DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        // Record flags (private, autoexec)
+        var flags = new List<string>();
+        if (function.IsPrivate) flags.Add("private");
+        if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
+        DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
         Sense.AddSenseToken(nameToken, new ScrFunctionSymbol(nameToken, function));
 

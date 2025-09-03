@@ -757,6 +757,52 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return ParseNamespaceQualifiedIdentifier(token);
     }
 
+    private static string? ExtractParameterDocFromDoc(string? doc, string paramName, int paramIndex)
+    {
+        if (string.IsNullOrWhiteSpace(doc) || string.IsNullOrWhiteSpace(paramName)) return null;
+        string Normalize(string s) => s.Trim().Trim('<', '>', '[', ']').Trim();
+
+        // Try to parse prototype line to map by position
+        string[] ParseDocPrototypeParams(string d)
+        {
+            var lines = d.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            var line = lines[1].Trim(); // always the second line from ```gsc\r\nfoo(bar)...```
+            int lp = line.IndexOf('(');
+            int rp = line.LastIndexOf(')');
+            if (lp < 0 || rp < lp) return Array.Empty<string>();
+            string inside = line.Substring(lp + 1, rp - lp - 1);
+            if (string.IsNullOrWhiteSpace(inside)) return Array.Empty<string>();
+            var parts = inside.Split(',');
+            return parts.Select(p => Normalize(p)).Where(p => p.Length > 0).ToArray();
+        }
+
+        string[] protoParams = ParseDocPrototypeParams(doc);
+        List<string> candidates = new() { Normalize(paramName) };
+        if (paramIndex >= 0 && paramIndex < protoParams.Length)
+        {
+            candidates.Add(Normalize(protoParams[paramIndex]));
+        }
+
+        // Scan parameter description lines (``<param>`` — desc)
+        string[] linesDoc = doc.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        foreach (var raw in linesDoc)
+        {
+            string line = raw.Trim();
+            if (line.Length == 0) continue;
+            int b1 = line.IndexOf('`');
+            if (b1 < 0) continue;
+            int b2 = line.IndexOf('`', b1 + 1);
+            if (b2 < 0) continue;
+            string token = Normalize(line.Substring(b1 + 1, b2 - b1 - 1));
+            if (!candidates.Any(c => string.Equals(c, token, StringComparison.Ordinal))) continue;
+            int dash = line.IndexOf('—', b2 + 1); // em dash
+            if (dash < 0) dash = line.IndexOf('-', b2 + 1); // fallback
+            string desc = dash >= 0 && dash + 1 < line.Length ? line[(dash + 1)..].Trim() : string.Empty;
+            return desc;
+        }
+        return null;
+    }
+
     public async Task<SignatureHelp?> GetSignatureHelpAsync(Position position, CancellationToken cancellationToken)
     {
         await WaitUntilParsedAsync(cancellationToken);
@@ -777,11 +823,11 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (parenDepth == 0) break;
                 parenDepth--;
             }
-            if(cursor.Type == TokenType.Identifier && cursor.Next.Type == TokenType.OpenParen && parenDepth == 0)
-            {
-                cursor = cursor.Next;
-                break;
-            }
+            //if(cursor.Type == TokenType.Identifier && cursor.Next.Type == TokenType.OpenParen && parenDepth == 0)
+            //{
+            //    cursor = cursor.Next;
+            //    break;
+            //}
             cursor = cursor.Previous;
         }
         if (cursor is null)
@@ -845,7 +891,16 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             var cleaned = parms.Select(StripDefault).ToArray();
             string label = $"function {name}({string.Join(", ", cleaned)})";
-            var parameters = new Container<ParameterInformation>(cleaned.Select(p => new ParameterInformation { Label = p, Documentation = new MarkupContent { Kind = MarkupKind.Markdown, Value = string.Empty } }));
+            var paramInfos = cleaned.Select((p, i) =>
+            {
+                string? pDoc = ExtractParameterDocFromDoc(doc, p, i);
+                return new ParameterInformation
+                {
+                    Label = p,
+                    Documentation = new MarkupContent { Kind = MarkupKind.Markdown, Value = string.IsNullOrWhiteSpace(pDoc) ? string.Empty : pDoc }
+                };
+            });
+            var parameters = new Container<ParameterInformation>(paramInfos);
             // Do not include full Markdown doc in SignatureHelp for script-defined; keep prototype and parameters only
             signatures.Add(new SignatureInformation { Label = label, Parameters = parameters });
         }

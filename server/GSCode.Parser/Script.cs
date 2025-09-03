@@ -777,6 +777,11 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (parenDepth == 0) break;
                 parenDepth--;
             }
+            if(cursor.Type == TokenType.Identifier && cursor.Next.Type == TokenType.OpenParen && parenDepth == 0)
+            {
+                cursor = cursor.Next;
+                break;
+            }
             cursor = cursor.Previous;
         }
         if (cursor is null)
@@ -840,10 +845,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             var cleaned = parms.Select(StripDefault).ToArray();
             string label = $"function {name}({string.Join(", ", cleaned)})";
-            var parameters = new Container<ParameterInformation>(cleaned.Select(p => new ParameterInformation { Label = p }));
-            string docValue = doc is not null ? NormalizeDocComment(doc) : string.Empty;
-            var docContent = new MarkupContent { Kind = MarkupKind.Markdown, Value = docValue };
-            signatures.Add(new SignatureInformation { Label = label, Documentation = docContent, Parameters = parameters });
+            var parameters = new Container<ParameterInformation>(cleaned.Select(p => new ParameterInformation { Label = p, Documentation = new MarkupContent { Kind = MarkupKind.Markdown, Value = string.Empty } }));
+            // Do not include full Markdown doc in SignatureHelp for script-defined; keep prototype and parameters only
+            signatures.Add(new SignatureInformation { Label = label, Parameters = parameters });
         }
 
         if (signatures.Count == 0)

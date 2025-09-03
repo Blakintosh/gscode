@@ -90,6 +90,8 @@ public class CachedScript
     public required Script Script { get; init; }
 }
 
+public readonly record struct LoadedScript(DocumentUri Uri, Script Script);
+
 public class ScriptManager
 {
     private readonly ScriptCache _cache;
@@ -366,5 +368,13 @@ public class ScriptManager
         }
 
         return script.Script;
+    }
+
+    public IEnumerable<LoadedScript> GetLoadedScripts()
+    {
+        foreach (var kv in Scripts)
+        {
+            yield return new LoadedScript(kv.Key, kv.Value.Script);
+        }
     }
 }

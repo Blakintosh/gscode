@@ -13,6 +13,8 @@ using GSCode.Parser.SA;
 
 namespace GSCode.NET.LSP.Handlers;
 
+using LspSymbolKind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind;
+
 internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
 {
     private readonly ScriptManager _script_manager;
@@ -75,7 +77,7 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             {
                 Name = key.Name,
                 Detail = key.Namespace,
-                Kind = SymbolKind.Class,
+                Kind = LspSymbolKind.Class,
                 Range = val.Range,
                 SelectionRange = val.Range,
                 Children = new List<DocumentSymbol>()
@@ -97,7 +99,7 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             {
                 Name = BuildFunctionLabel(key.Name, key.Namespace, parameters, flags),
                 Detail = key.Namespace,
-                Kind = SymbolKind.Function,
+                Kind = LspSymbolKind.Function,
                 Range = val.Range,
                 SelectionRange = val.Range
             };

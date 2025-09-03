@@ -18,6 +18,8 @@ using System.Text.RegularExpressions;
 
 namespace GSCode.Parser;
 
+using SymbolKindSA = GSCode.Parser.SA.SymbolKind;
+
 public class Script(DocumentUri ScriptUri, string languageId)
 {
     public bool Failed { get; private set; } = false;
@@ -35,6 +37,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
     public DefinitionsTable? DefinitionsTable { get; private set; } = default;
 
     public IEnumerable<Uri> Dependencies => DefinitionsTable?.Dependencies ?? [];
+
+    // Reference index: map from symbol key to all ranges in this file
+    private readonly Dictionary<SymbolKey, List<Range>> _references = new();
+    public IReadOnlyDictionary<SymbolKey, List<Range>> References => _references;
 
     public async Task ParseAsync(string documentText)
     {
@@ -119,15 +125,97 @@ public class Script(DocumentUri ScriptUri, string languageId)
             return Task.CompletedTask;
         }
 
+        // Build references index from token stream
+        BuildReferenceIndex();
+
         Parsed = true;
         return Task.CompletedTask;
+    }
+
+    private static Token? PreviousNonTrivia(Token? token)
+    {
+        Token? t = token?.Previous;
+        while (t is not null && (t.IsWhitespacey() || t.IsComment()))
+        {
+            t = t.Previous;
+        }
+        return t;
+    }
+
+    private static bool IsAddressOfIdentifier(Token identifier)
+    {
+        // identifier may be part of ns::name; find left-most identifier
+        Token leftMost = identifier;
+        if (identifier.Previous is { Type: TokenType.ScopeResolution } scope && scope.Previous is { Type: TokenType.Identifier } ns)
+        {
+            leftMost = ns;
+        }
+        Token? prev = PreviousNonTrivia(leftMost);
+        return prev is not null && prev.Type == TokenType.BitAnd;
+    }
+
+    private void BuildReferenceIndex()
+    {
+        _references.Clear();
+        foreach (var token in Sense.Tokens.GetAll())
+        {
+            if (token.Type != TokenType.Identifier) continue;
+
+            // Recognize definition identifiers
+            if (token.SenseDefinition is ScrFunctionSymbol)
+            {
+                var defNamespace = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+                AddRef(new SymbolKey(SymbolKindSA.Function, defNamespace, token.Lexeme), token.Range);
+                continue;
+            }
+            if (token.SenseDefinition is ScrClassSymbol)
+            {
+                var defNamespace = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+                AddRef(new SymbolKey(SymbolKindSA.Class, defNamespace, token.Lexeme), token.Range);
+                continue;
+            }
+
+            // Recognize call-site or qualified references, or address-of '&name' / '&ns::name'
+            Token? next = token.Next;
+            while (next is not null && next.IsWhitespacey()) next = next.Next;
+            bool looksLikeCall = next is not null && next.Type == TokenType.OpenParen;
+            bool isQualified = token.Previous is not null && token.Previous.Type == TokenType.ScopeResolution && token.Previous.Previous is not null && token.Previous.Previous.Type == TokenType.Identifier;
+            bool isAddressOf = IsAddressOfIdentifier(token);
+            if (!looksLikeCall && !isQualified && !isAddressOf) continue;
+
+            var (qual, name) = ParseNamespaceQualifiedIdentifier(token);
+
+            // Skip builtin
+            try
+            {
+                ScriptAnalyserData api = new(LanguageId);
+                if (api.GetApiFunction(name) is not null) continue;
+            }
+            catch { }
+
+            // Resolve to a namespace
+            string resolvedNamespace = qual ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+            // Index as function reference for now (method support can be added later)
+            AddRef(new SymbolKey(SymbolKindSA.Function, resolvedNamespace, name), token.Range);
+        }
+
+        void AddRef(SymbolKey key, Range range)
+        {
+            if (!_references.TryGetValue(key, out var list))
+            {
+                list = new List<Range>();
+                _references[key] = list;
+            }
+            list.Add(range);
+        }
     }
 
     public async Task AnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
     {
         await WaitUntilParsedAsync(cancellationToken);
 
-        // TODO: Implement this.
+        // TODO: Implement deeper analysis; for now references are built after parse.
+        Analysed = true;
     }
 
     public async Task<List<Diagnostic>> GetDiagnosticsAsync(CancellationToken cancellationToken)
@@ -231,9 +319,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
             return null;
         }
 
-        string protoWithParams = parameters is null || parameters.Length == 0
+        string[] cleanParams = parameters is null ? Array.Empty<string>() : parameters.Select(StripDefault).ToArray();
+        string protoWithParams = cleanParams.Length == 0
             ? $"function {name}()"
-            : $"function {name}({string.Join(", ", parameters)})";
+            : $"function {name}({string.Join(", ", cleanParams)})";
 
         string value = doc is not null
             ? $"```gsc\n{protoWithParams}\n```\n---\n{doc}"
@@ -261,7 +350,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             {
                 var overload = apiFn.Overloads.FirstOrDefault();
                 var paramSeq = overload != null ? overload.Parameters : new List<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
-                string[] names = paramSeq.Select(p => p.Name ?? string.Empty).ToArray();
+                string[] names = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                 string sig = FormatSignature(name, names, activeParam, qualifier);
                 string desc = apiFn.Description ?? string.Empty;
                 return string.IsNullOrEmpty(desc) ? sig : $"{sig}\n---\n{desc}";
@@ -275,7 +364,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
         if (parms is not null)
         {
-            string sig = FormatSignature(name, parms, activeParam, qualifier);
+            string sig = FormatSignature(name, parms.Select(StripDefault).ToArray(), activeParam, qualifier);
             return doc is not null ? $"{sig}\n---\n{doc}" : sig;
         }
 
@@ -300,7 +389,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         for (int i = 0; i < parameters.Count; i++)
         {
             if (i > 0) sb.Append(", ");
-            string p = parameters[i];
+            string p = StripDefault(parameters[i]);
             if (i == activeParam)
             {
                 sb.Append('<').Append(p).Append('>');
@@ -473,6 +562,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         //  - An identifier followed by '(' (call site)
         //  - A namespace::identifier qualified reference (previous token is '::')
         //  - The identifier itself is a declared function/class/method (has corresponding SenseDefinition)
+        //  - Address-of function reference '&name' or '&ns::name'
         if (token.Type != TokenType.Identifier)
         {
             return null;
@@ -488,8 +578,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
         bool looksLikeCall = nextNonWs is not null && nextNonWs.Type == TokenType.OpenParen;
         bool isQualified = token.Previous is not null && token.Previous.Type == TokenType.ScopeResolution && token.Previous.Previous is not null && token.Previous.Previous.Type == TokenType.Identifier;
         bool hasDefinitionSymbol = token.SenseDefinition is ScrFunctionSymbol || token.SenseDefinition is ScrMethodSymbol || token.SenseDefinition is ScrClassSymbol;
+        bool isAddressOf = IsAddressOfIdentifier(token);
 
-        if (!looksLikeCall && !isQualified && !hasDefinitionSymbol)
+        if (!looksLikeCall && !isQualified && !hasDefinitionSymbol && !isAddressOf)
         {
             // Not a function token (could be variable, property, etc.) — skip
             return null;
@@ -697,8 +788,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
             {
                 var overload = apiFn.Overloads.FirstOrDefault();
                 IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
-                string label = $"function {name}({string.Join(", ", paramSeq.Select(p => p.Name).Where(n => !string.IsNullOrEmpty(n)))})";
-                var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = p.Name ?? string.Empty, Documentation = p.Description ?? string.Empty }));
+                var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
+                string label = $"function {name}({string.Join(", ", cleaned)})";
+                var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = p.Description ?? string.Empty }));
                 signatures.Add(new SignatureInformation { Label = label, Documentation = apiFn.Description, Parameters = parameters });
             }
         }
@@ -710,8 +802,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
         string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
         if (parms is not null)
         {
-            string label = $"function {name}({string.Join(", ", parms)})";
-            var parameters = new Container<ParameterInformation>(parms.Select(p => new ParameterInformation { Label = p }));
+            var cleaned = parms.Select(StripDefault).ToArray();
+            string label = $"function {name}({string.Join(", ", cleaned)})";
+            var parameters = new Container<ParameterInformation>(cleaned.Select(p => new ParameterInformation { Label = p }));
             signatures.Add(new SignatureInformation { Label = label, Documentation = doc, Parameters = parameters });
         }
 
@@ -730,5 +823,12 @@ public class Script(DocumentUri ScriptUri, string languageId)
             ActiveParameter = Math.Max(0, Math.Min(activeParam, paramCount - 1)),
             Signatures = new Container<SignatureInformation>(signatures)
         };
+    }
+
+    private static string StripDefault(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+        int idx = name.IndexOf('=');
+        return idx >= 0 ? name[..idx].Trim() : name.Trim();
     }
 }

@@ -825,8 +825,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
                 var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                 string label = $"function {name}({string.Join(", ", cleaned)})";
-                var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = p.Description ?? string.Empty }));
-                signatures.Add(new SignatureInformation { Label = label, Documentation = apiFn.Description, Parameters = parameters });
+                var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description ?? string.Empty } }));
+                var docContent = new MarkupContent { Kind = MarkupKind.Markdown, Value = apiFn.Description ?? string.Empty };
+                signatures.Add(new SignatureInformation { Label = label, Documentation = docContent, Parameters = parameters });
             }
         }
         catch { }
@@ -840,7 +841,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
             var cleaned = parms.Select(StripDefault).ToArray();
             string label = $"function {name}({string.Join(", ", cleaned)})";
             var parameters = new Container<ParameterInformation>(cleaned.Select(p => new ParameterInformation { Label = p }));
-            signatures.Add(new SignatureInformation { Label = label, Documentation = doc, Parameters = parameters });
+            string docValue = doc is not null ? NormalizeDocComment(doc) : string.Empty;
+            var docContent = new MarkupContent { Kind = MarkupKind.Markdown, Value = docValue };
+            signatures.Add(new SignatureInformation { Label = label, Documentation = docContent, Parameters = parameters });
         }
 
         if (signatures.Count == 0)

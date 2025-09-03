@@ -442,38 +442,21 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
         if (!string.IsNullOrWhiteSpace(summary))
         {
-            sb.AppendLine(summary);
+            sb.AppendLine($"### _{summary}_");
             sb.AppendLine("---");
         }
 
-        /*
-         * ```gsc
-function Spawn(classname, origin)
-```
----
-Spawn an entity.
-
----
-Parameters:
-* `<classname>` The classname of the entity to spawn
-* `<origin>` The position to spawn at
-* `[spawnflags]` Optional spawn flags (up to 5)
-
----
-_This documentation was generated from Treyarch's API, which may contain errors._
-         */
-
         if (!string.IsNullOrWhiteSpace(module) || !string.IsNullOrWhiteSpace(callOn) || !string.IsNullOrWhiteSpace(spmp))
         {
-            if (!string.IsNullOrWhiteSpace(module)) sb.AppendLine($"- Module: {module}");
-            if (!string.IsNullOrWhiteSpace(callOn)) sb.AppendLine($"- CallOn: {callOn}");
-            if (!string.IsNullOrWhiteSpace(spmp)) sb.AppendLine($"- SPMP: {spmp}");
+            if (!string.IsNullOrWhiteSpace(module)) sb.AppendLine($"- Module: ```{module}```");
+            if (!string.IsNullOrWhiteSpace(callOn)) sb.AppendLine($"- CallOn: ```{callOn}```");
+            if (!string.IsNullOrWhiteSpace(spmp)) sb.AppendLine($"- SPMP: ```{spmp}```");
             sb.AppendLine("---");
         }
 
         if (mandatory.Count > 0 || optional.Count > 0)
         {
-            sb.AppendLine("Parameters");
+            sb.AppendLine("### Parameters");
             if (mandatory.Count > 0)
             {
                 sb.AppendLine("- Mandatory");

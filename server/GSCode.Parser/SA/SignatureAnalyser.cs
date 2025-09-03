@@ -5,6 +5,7 @@ using GSCode.Parser.Data;
 using GSCode.Parser.DFA;
 using GSCode.Parser.Lexical;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using System.Text.RegularExpressions;
 
 namespace GSCode.Parser.SA;
 
@@ -207,7 +208,8 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             }, // TODO: Check the DOC COMMENT
             Tags = ["userdefined"],
             IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
-            IntelliSense = null // I have no idea why this exists
+            IntelliSense = null, // I have no idea why this exists
+            DocComment = ExtractDocCommentBefore(nameToken)
         };
 
         // Produce a definition for our function
@@ -224,7 +226,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
         // Record doc comment if present
-        DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, ExtractDocCommentBefore(nameToken));
+        DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, function.DocComment);
 
         Sense.AddSenseToken(nameToken, new ScrFunctionSymbol(nameToken, function));
 
@@ -283,20 +285,223 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
 
     private static string? ExtractDocCommentBefore(Token nameToken)
     {
-        // Look left for a doc comment immediately preceding the function name line.
-        // Accept tokens of type DocComment or MultilineComment (wrapped in /# #/ or /@ @/ as per request)
-        Token? t = nameToken.Previous;
-        int currentLine = nameToken.Range.Start.Line;
-        while (t is not null && t.Range.End.Line >= currentLine - 2)
+        while (nameToken.Range.Start.Line > 0 && nameToken.Type != TokenType.LineBreak)
         {
-            if (t.Type == TokenType.DocComment || t.Type == TokenType.MultilineComment)
-            {
-                return t.Lexeme.Trim();
-            }
-            if (!t.IsWhitespacey() && !t.IsComment()) break;
-            t = t.Previous;
+            nameToken = nameToken.Previous;
         }
+
+        if ( nameToken.Previous == null)
+        {
+            return null;
+        }
+
+        // check around 50 tokens
+        int count = 50;
+        while(count > 0 && nameToken.Previous.Type != TokenType.DocComment)
+        {
+            nameToken = nameToken.Previous;
+            count--;
+
+            if (nameToken.Previous == null)
+            {
+                return null;
+            }
+        }
+
+        if (nameToken.Previous.Type == TokenType.DocComment)
+        {
+            return SanitizeDocForMarkdown(nameToken.Previous.Lexeme);
+        }
+
         return null;
+    }
+
+    private static string SanitizeDocForMarkdown(string lexeme)
+    {
+        if (string.IsNullOrWhiteSpace(lexeme)) return string.Empty;
+        string s = lexeme;
+
+        // Strip common block wrappers
+        if (s.StartsWith("/@"))
+        {
+            if (s.EndsWith("@/")) s = s.Substring(2, s.Length - 4);
+            else s = s.Substring(2);
+        }
+        else if (s.StartsWith("/*"))
+        {
+            if (s.EndsWith("*/")) s = s.Substring(2, s.Length - 4);
+            else s = s.Substring(2);
+        }
+
+        // Normalize CRLF to LF and unescape common sequences (\\n, \\r, \\t, \\")
+        s = s.Replace("\r\n", "\n").Replace("\r", "\n");
+        s = s.Replace("\\n", "\n").Replace("\\r", string.Empty).Replace("\\t", "    ").Replace("\\\"", "\"");
+
+        // Split and clean each line: remove leading *, trim, remove surrounding quotes per line
+        string[] rawLines = s.Split('\n');
+        List<string> lines = new();
+        foreach (var line in rawLines)
+        {
+            string l = line.Trim();
+            if (l.StartsWith("*")) l = l.TrimStart('*').TrimStart();
+            if (l.Length >= 2 && l[0] == '"' && l[^1] == '"')
+            {
+                l = l.Substring(1, l.Length - 2);
+            }
+            // Avoid stray Markdown code fence terminators
+            l = l.Replace("```", "`\u200B``");
+            if (l.Length > 0) lines.Add(l);
+        }
+
+        // Parse into fields
+        string? name = null, summary = null, module = null, callOn = null, spmp = null;
+        var mandatory = new List<(string Arg, string Desc)>();
+        var optional = new List<(string Arg, string Desc)>();
+        var examples = new List<string>();
+
+        Regex kv = new Regex(@"^(?<k>\w+)\s*:\s*(?<v>.+)$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+        // Accept <arg> desc, <arg>: desc, [arg] desc, [arg]: desc, or bareword desc
+        Regex argPattern = new Regex(@"^(?<n><[^>]+>|\[[^\]]+\]|[^:\s]+)\s*:??\s*(?<d>.+)$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        foreach (var l in lines)
+        {
+            var m = kv.Match(l);
+            if (!m.Success) continue;
+            string key = m.Groups["k"].Value.Trim().ToLowerInvariant();
+            string val = m.Groups["v"].Value.Trim();
+
+            switch (key)
+            {
+                case "name":
+                    name = val;
+                    break;
+                case "summary":
+                    summary = val;
+                    break;
+                case "module":
+                    module = val;
+                    break;
+                case "callon":
+                    callOn = string.IsNullOrWhiteSpace(val) ? "UNKNOWN" : val;
+                    break;
+                case "spmp":
+                    spmp = val;
+                    break;
+                case "mandatoryarg":
+                {
+                    var am = argPattern.Match(val);
+                    if (am.Success)
+                    {
+                        string a = am.Groups["n"].Value.Trim();
+                        string d = am.Groups["d"].Value.Trim();
+
+                        a = a.Replace("<", "").Replace(">", "");
+                        a = a.Replace("[", "").Replace("]", "");
+
+                        mandatory.Add((a, d));
+                    }
+                    break;
+                }
+                case "optionalarg":
+                {
+                    var am = argPattern.Match(val);
+                    if (am.Success)
+                    {
+                        string a = am.Groups["n"].Value.Trim();
+                        string d = am.Groups["d"].Value.Trim();
+
+                        a = a.Replace("<", "").Replace(">", "");
+                        a = a.Replace("[", "").Replace("]", "");
+
+                        optional.Add((a, d));
+                    }
+                    break;
+                }
+                case "example":
+                    examples.Add(val);
+                    break;
+            }
+        }
+
+        // If parsing found nothing significant, fall back to cleaned plain text
+        if (name is null && summary is null && module is null && callOn is null && spmp is null && mandatory.Count == 0 && optional.Count == 0 && examples.Count == 0)
+        {
+            return string.Join('\n', lines).Trim();
+        }
+
+        // Render Markdown
+        StringBuilder sb = new();
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            sb.AppendLine("```gsc");
+            sb.AppendLine(name);
+            sb.AppendLine("```");
+            sb.AppendLine("---");
+        }
+
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            sb.AppendLine(summary);
+            sb.AppendLine("---");
+        }
+
+        /*
+         * ```gsc
+function Spawn(classname, origin)
+```
+---
+Spawn an entity.
+
+---
+Parameters:
+* `<classname>` The classname of the entity to spawn
+* `<origin>` The position to spawn at
+* `[spawnflags]` Optional spawn flags (up to 5)
+
+---
+_This documentation was generated from Treyarch's API, which may contain errors._
+         */
+
+        if (!string.IsNullOrWhiteSpace(module) || !string.IsNullOrWhiteSpace(callOn) || !string.IsNullOrWhiteSpace(spmp))
+        {
+            if (!string.IsNullOrWhiteSpace(module)) sb.AppendLine($"- Module: {module}");
+            if (!string.IsNullOrWhiteSpace(callOn)) sb.AppendLine($"- CallOn: {callOn}");
+            if (!string.IsNullOrWhiteSpace(spmp)) sb.AppendLine($"- SPMP: {spmp}");
+            sb.AppendLine("---");
+        }
+
+        if (mandatory.Count > 0 || optional.Count > 0)
+        {
+            sb.AppendLine("Parameters");
+            if (mandatory.Count > 0)
+            {
+                sb.AppendLine("- Mandatory");
+                foreach (var (a, d) in mandatory)
+                {
+                    sb.AppendLine($"  - `<{a}>` — {d}");
+                }
+            }
+            if (optional.Count > 0)
+            {
+                sb.AppendLine("- Optional");
+                foreach (var (a, d) in optional)
+                {
+                    sb.AppendLine($"  - `[{a}]` — {d}");
+                }
+            }
+            sb.AppendLine("---");
+        }
+
+        foreach (var ex in examples)
+        {
+            sb.AppendLine("Example");
+            sb.AppendLine("```gsc");
+            sb.AppendLine(ex);
+            sb.AppendLine("```");
+        }
+
+        return sb.ToString().Trim();
     }
 
     private static string BuildPrototype(string? ns, string name, IEnumerable<ScrFunctionArg>? args)
@@ -347,6 +552,20 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
 
     public virtual Hover GetHover()
     {
+        // Prefer user doc comment, if present
+        if (!string.IsNullOrWhiteSpace(Source.DocComment))
+        {
+            return new()
+            {
+                Range = Range,
+                Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+                {
+                    Kind = MarkupKind.Markdown,
+                    Value = Source.DocComment
+                })
+            };
+        }
+
         StringBuilder builder = new();
 
         builder.AppendLine("```gsc");

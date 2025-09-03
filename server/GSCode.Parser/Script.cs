@@ -154,6 +154,39 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return prev is not null && prev.Type == TokenType.BitAnd;
     }
 
+    private static string NormalizeDocComment(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        string s = raw.Trim();
+        // Strip block wrappers /@ @/ or /* */
+        if (s.StartsWith("/@"))
+        {
+            if (s.EndsWith("@/")) s = s.Substring(2, s.Length - 4);
+            else s = s.Substring(2);
+        }
+        else if (s.StartsWith("/*"))
+        {
+            if (s.EndsWith("*/")) s = s.Substring(2, s.Length - 4);
+            else s = s.Substring(2);
+        }
+        // Normalize lines: remove leading * and surrounding quotes
+        var lines = s.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        List<string> cleaned = new();
+        foreach (var line in lines)
+        {
+            string l = line.Trim();
+            if (l.StartsWith("*")) l = l.TrimStart('*').TrimStart();
+            // Remove starting and ending quotes if present
+            if (l.Length >= 2 && l[0] == '"' && l[^1] == '"')
+            {
+                l = l.Substring(1, l.Length - 2);
+            }
+            if (l.Length == 0) continue;
+            cleaned.Add(l);
+        }
+        return string.Join("\n", cleaned);
+    }
+
     private void BuildReferenceIndex()
     {
         _references.Clear();
@@ -324,9 +357,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
             ? $"function {name}()"
             : $"function {name}({string.Join(", ", cleanParams)})";
 
-        string value = doc is not null
-            ? $"```gsc\n{protoWithParams}\n```\n---\n{doc}"
-            : $"```gsc\n{protoWithParams}\n```";
+        string formattedDoc = doc is not null ? NormalizeDocComment(doc) : string.Empty;
+        string value = string.IsNullOrEmpty(formattedDoc)
+            ? $"```gsc\n{protoWithParams}\n```"
+            : $"```gsc\n{protoWithParams}\n```\n---\n{formattedDoc}";
 
         return new Hover
         {
@@ -365,7 +399,8 @@ public class Script(DocumentUri ScriptUri, string languageId)
         if (parms is not null)
         {
             string sig = FormatSignature(name, parms.Select(StripDefault).ToArray(), activeParam, qualifier);
-            return doc is not null ? $"{sig}\n---\n{doc}" : sig;
+            string formattedDoc = doc is not null ? NormalizeDocComment(doc) : string.Empty;
+            return string.IsNullOrEmpty(formattedDoc) ? sig : $"{sig}\n---\n{formattedDoc}";
         }
 
         // Fallback: show empty params signature if symbol exists somewhere

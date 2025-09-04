@@ -17,6 +17,9 @@ public enum DeferredSymbolType
 }
 public sealed record class DeferredSymbol(Range Range, string? Namespace, string Value);
 
+// New: macro outline item for document symbols
+public sealed record class MacroOutlineItem(string Name, Range Range);
+
 internal sealed class ParserIntelliSense
 {
     private class SemanticTokenComparer : IComparer<ISemanticToken>
@@ -80,6 +83,11 @@ internal sealed class ParserIntelliSense
     public string ScriptPath => _scriptPath;
     public string ScriptUri { get; }
 
+    /// <summary>
+    /// Macros discovered during preprocessing for use in the outliner.
+    /// </summary>
+    public List<MacroOutlineItem> MacroOutlines { get; } = new();
+
     public ParserIntelliSense(int endLine, DocumentUri scriptUri, string languageId)
     {
         HoverLibrary = new(endLine + 1);
@@ -87,6 +95,11 @@ internal sealed class ParserIntelliSense
         ScriptUri = scriptUri.Path;
         _languageId = languageId;
         Completions = new(Tokens, languageId);
+    }
+
+    public void AddMacroOutline(string name, Range range)
+    {
+        MacroOutlines.Add(new MacroOutlineItem(name, range));
     }
 
     public void AddSenseToken(Token token, ISenseDefinition definition)

@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GSCode.Parser;
 using GSCode.Parser.SA;
+using GSCode.Parser.Data;
 
 namespace GSCode.NET.LSP.Handlers;
 
@@ -51,6 +52,27 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         return name + paramText + flagText;
     }
 
+    private static Range ComputeContainerRange(IEnumerable<DocumentSymbol> children)
+    {
+        using var e = children.GetEnumerator();
+        if (!e.MoveNext())
+        {
+            return new Range(new Position(0, 0), new Position(0, 0));
+        }
+
+        var start = e.Current.Range.Start;
+        var end = e.Current.Range.End;
+
+        foreach (var ds in children)
+        {
+            var s = ds.Range.Start;
+            var d = ds.Range.End;
+            if (s.Line < start.Line || (s.Line == start.Line && s.Character < start.Character)) start = s;
+            if (d.Line > end.Line || (d.Line == end.Line && d.Character > end.Character)) end = d;
+        }
+        return new Range(start, end);
+    }
+
     public override async Task<SymbolInformationOrDocumentSymbolContainer?> Handle(DocumentSymbolParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("DocumentSymbol (outline) request received");
@@ -63,9 +85,8 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
 
         string currentPath = NormalizePath(request.TextDocument.Uri.ToUri().LocalPath);
 
-        List<DocumentSymbol> symbols = new();
-
-        // Add classes first
+        // Collect by type
+        List<DocumentSymbol> classNodes = new();
         foreach (var kv in script.DefinitionsTable.GetAllClassLocations())
         {
             var key = kv.Key; var val = kv.Value;
@@ -73,7 +94,7 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var classSymbol = new DocumentSymbol
+            classNodes.Add(new DocumentSymbol
             {
                 Name = key.Name,
                 Detail = key.Namespace,
@@ -81,11 +102,10 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
                 Range = val.Range,
                 SelectionRange = val.Range,
                 Children = new List<DocumentSymbol>()
-            };
-            symbols.Add(classSymbol);
+            });
         }
 
-        // Add functions (label includes parameters and flags)
+        List<DocumentSymbol> functionNodes = new();
         foreach (var kv in script.DefinitionsTable.GetAllFunctionLocations())
         {
             var key = kv.Key; var val = kv.Value;
@@ -95,19 +115,80 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
 
             string[]? parameters = script.DefinitionsTable.GetFunctionParameters(key.Namespace, key.Name);
             string[]? flags = script.DefinitionsTable.GetFunctionFlags(key.Namespace, key.Name);
-            var funcSymbol = new DocumentSymbol
+            functionNodes.Add(new DocumentSymbol
             {
                 Name = BuildFunctionLabel(key.Name, key.Namespace, parameters, flags),
                 Detail = key.Namespace,
                 Kind = LspSymbolKind.Function,
                 Range = val.Range,
                 SelectionRange = val.Range
-            };
-            symbols.Add(funcSymbol);
+            });
         }
 
-        _logger.LogInformation("DocumentSymbol: returning {Count} symbols", symbols.Count);
-        var union = symbols.Select(ds => new SymbolInformationOrDocumentSymbol(ds)).ToList();
+        List<DocumentSymbol> macroNodes = new();
+        if (script.MacroOutlines.Count > 0)
+        {
+            foreach (var m in script.MacroOutlines)
+            {
+                macroNodes.Add(new DocumentSymbol
+                {
+                    Name = m.Name,
+                    Detail = "#define",
+                    Kind = LspSymbolKind.Constant,
+                    Range = m.Range,
+                    SelectionRange = m.Range
+                });
+            }
+        }
+
+        // Build grouped root nodes (separates by type)
+        List<DocumentSymbol> root = new();
+
+        if (classNodes.Count > 0)
+        {
+            classNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            var range = ComputeContainerRange(classNodes);
+            root.Add(new DocumentSymbol
+            {
+                Name = "Classes",
+                Kind = LspSymbolKind.Namespace,
+                Range = range,
+                SelectionRange = range,
+                Children = classNodes
+            });
+        }
+
+        if (functionNodes.Count > 0)
+        {
+            functionNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            var range = ComputeContainerRange(functionNodes);
+            root.Add(new DocumentSymbol
+            {
+                Name = "Functions",
+                Kind = LspSymbolKind.Namespace,
+                Range = range,
+                SelectionRange = range,
+                Children = functionNodes
+            });
+        }
+
+        if (macroNodes.Count > 0)
+        {
+            macroNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            var range = ComputeContainerRange(macroNodes);
+            root.Add(new DocumentSymbol
+            {
+                Name = "Macros",
+                Kind = LspSymbolKind.Namespace,
+                Range = range,
+                SelectionRange = range,
+                Children = macroNodes
+            });
+        }
+
+        int totalSymbols = root.Sum(n => n.Children != null ? n.Children.Count() : 0);
+        _logger.LogInformation("DocumentSymbol: returning {Count} symbols", totalSymbols);
+        var union = root.Select(ds => new SymbolInformationOrDocumentSymbol(ds)).ToList();
         return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>(union));
     }
 

@@ -876,7 +876,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
                 var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                 string label = $"function {name}({string.Join(", ", cleaned)})";
-                var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description ?? string.Empty } }));
+                var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = string.IsNullOrWhiteSpace(p.Description) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description! } }));
                 var docContent = new MarkupContent { Kind = MarkupKind.Markdown, Value = apiFn.Description ?? string.Empty };
                 signatures.Add(new SignatureInformation { Label = label, Documentation = docContent, Parameters = parameters });
             }
@@ -891,16 +891,18 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             var cleaned = parms.Select(StripDefault).ToArray();
             string label = $"function {name}({string.Join(", ", cleaned)})";
-            var paramInfos = cleaned.Select((p, i) =>
+            var paramList = new List<ParameterInformation>(cleaned.Length);
+            for (int i = 0; i < cleaned.Length; i++)
             {
+                string p = cleaned[i];
                 string? pDoc = ExtractParameterDocFromDoc(doc, p, i);
-                return new ParameterInformation
+                paramList.Add(new ParameterInformation
                 {
                     Label = p,
-                    Documentation = new MarkupContent { Kind = MarkupKind.Markdown, Value = string.IsNullOrWhiteSpace(pDoc) ? string.Empty : pDoc }
-                };
-            });
-            var parameters = new Container<ParameterInformation>(paramInfos);
+                    Documentation = string.IsNullOrWhiteSpace(pDoc) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = pDoc }
+                });
+            }
+            var parameters = new Container<ParameterInformation>(paramList);
             // Do not include full Markdown doc in SignatureHelp for script-defined; keep prototype and parameters only
             signatures.Add(new SignatureInformation { Label = label, Parameters = parameters });
         }

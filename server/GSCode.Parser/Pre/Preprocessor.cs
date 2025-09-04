@@ -213,6 +213,8 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         {
             // Fine to add
             Defines.Add(macroName, definition);
+            // Outline entry: macro name range
+            Sense.AddMacroOutline(macroName, nameToken.Range);
         }
         Sense.AddSenseToken(nameToken, definition);
     }

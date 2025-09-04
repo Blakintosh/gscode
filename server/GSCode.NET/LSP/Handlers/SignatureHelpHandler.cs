@@ -5,6 +5,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using GSCode.Parser;
 
 namespace GSCode.NET.LSP.Handlers;
@@ -30,13 +31,17 @@ internal class SignatureHelpHandler : SignatureHelpHandlerBase
     public override async Task<SignatureHelp?> Handle(SignatureHelpParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("SignatureHelp request received, processing...");
+        var sw = Stopwatch.StartNew();
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
         if (script is null)
         {
+            sw.Stop();
+            _logger.LogInformation("SignatureHelp finished in {ElapsedMs} ms: no script", sw.ElapsedMilliseconds);
             return null;
         }
         var help = await script.GetSignatureHelpAsync(request.Position, cancellationToken);
-        _logger.LogInformation("SignatureHelp returning: {exists}", help != null);
+        sw.Stop();
+        _logger.LogInformation("SignatureHelp finished in {ElapsedMs} ms. Has result: {Has}", sw.ElapsedMilliseconds, help != null);
         return help;
     }
 

@@ -11,6 +11,10 @@ namespace GSCode.Parser.SA;
 
 internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable definitionsTable, ParserIntelliSense sense)
 {
+    private static readonly Regex s_kv = new(@"^(?<k>\w+)\s*:\s*(?<v>.+)$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    // Accept <arg> desc, <arg>: desc, [arg] desc, [arg]: desc, or bareword desc
+    private static readonly Regex s_argPattern = new(@"^(?<n><[^>]+>|\[[^\]]+\]|[^:\s]+)\s*:??\s*(?<d>.+)$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private ScriptNode RootNode { get; } = rootNode;
     private DefinitionsTable DefinitionsTable { get; } = definitionsTable;
     private ParserIntelliSense Sense { get; } = sense;
@@ -359,13 +363,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         var optional = new List<(string Arg, string Desc)>();
         var examples = new List<string>();
 
-        Regex kv = new Regex(@"^(?<k>\w+)\s*:\s*(?<v>.+)$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
-        // Accept <arg> desc, <arg>: desc, [arg] desc, [arg]: desc, or bareword desc
-        Regex argPattern = new Regex(@"^(?<n><[^>]+>|\[[^\]]+\]|[^:\s]+)\s*:??\s*(?<d>.+)$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
         foreach (var l in lines)
         {
-            var m = kv.Match(l);
+            var m = s_kv.Match(l);
             if (!m.Success) continue;
             string key = m.Groups["k"].Value.Trim().ToLowerInvariant();
             string val = m.Groups["v"].Value.Trim();
@@ -389,7 +389,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                     break;
                 case "mandatoryarg":
                 {
-                    var am = argPattern.Match(val);
+                    var am = s_argPattern.Match(val);
                     if (am.Success)
                     {
                         string a = am.Groups["n"].Value.Trim();
@@ -404,7 +404,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 }
                 case "optionalarg":
                 {
-                    var am = argPattern.Match(val);
+                    var am = s_argPattern.Match(val);
                     if (am.Success)
                     {
                         string a = am.Groups["n"].Value.Trim();
@@ -487,7 +487,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         return sb.ToString().Trim();
     }
 
-    private static string BuildPrototype(string? ns, string name, IEnumerable<ScrFunctionArg>? args)
+    private static string? BuildPrototype(string? ns, string name, IEnumerable<ScrFunctionArg>? args)
     {
         string paramList = args is null ? string.Empty : string.Join(", ", args.Select(a => a.Name));
         string nsPrefix = string.IsNullOrEmpty(ns) ? string.Empty : ns + "::";

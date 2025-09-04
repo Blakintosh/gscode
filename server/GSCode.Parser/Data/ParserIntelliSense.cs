@@ -135,7 +135,7 @@ internal sealed class ParserIntelliSense
 
     public string? GetDependencyPath(string dependencyPath, Range sourceRange)
     {
-        string qualifiedDependencyPath = dependencyPath + "." + _languageId;
+        string qualifiedDependencyPath = (!dependencyPath.Contains(".") ? dependencyPath + "." + _languageId : dependencyPath);
         string? resolvedPath = ParserUtil.GetScriptFilePath(_scriptPath, qualifiedDependencyPath);
         if (resolvedPath is null)
         {

@@ -576,6 +576,23 @@ public class Script(DocumentUri ScriptUri, string languageId)
     {
         await WaitUntilParsedAsync(cancellationToken);
 
+        // First, allow preprocessor macro definitions/usages to resolve even if the original macro token was removed
+        IHoverable? hoverable = Sense.HoverLibrary.Get(position);
+        if (hoverable is Pre.MacroDefinition macroDef && !macroDef.IsFromPreprocessor)
+        {
+            string normalized = NormalizeFilePathForUri(ScriptUri.ToUri().LocalPath);
+            return new Location() { Uri = new Uri(normalized), Range = macroDef.Range };
+        }
+        if (hoverable is Pre.ScriptMacro scriptMacro)
+        {
+            var def = scriptMacro.DefineSource;
+            if (def.IsFromPreprocessor)
+            {
+                string normalized = NormalizeFilePathForUri(ScriptUri.ToUri().LocalPath);
+                return new Location() { Uri = new Uri(normalized), Range = def.Range };
+            }
+        }
+
         Token? token = Sense.Tokens.Get(position);
         if (token is null)
             return null;
@@ -595,6 +612,19 @@ public class Script(DocumentUri ScriptUri, string languageId)
         if (IsOnUsingLine(token, out string? usingPath, out Range? usingRange))
         {
             string? resolved = Sense.GetDependencyPath(usingPath!, usingRange!);
+            if (resolved is not null && File.Exists(resolved))
+            {
+                string normalized = NormalizeFilePathForUri(resolved);
+                var targetUri = new Uri(normalized);
+                return new Location() { Uri = targetUri, Range = RangeHelper.From(0, 0, 0, 0) };
+            }
+        }
+
+        // If on an #insert line and we recorded a hover for it, go to the inserted file
+        IHoverable? h = Sense.HoverLibrary.Get(position);
+        if (h is Pre.InsertDirectiveHover ih)
+        {
+            string? resolved = Sense.GetDependencyPath(ih.RawPath, ih.Range);
             if (resolved is not null && File.Exists(resolved))
             {
                 string normalized = NormalizeFilePathForUri(resolved);

@@ -134,10 +134,11 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         {
             foreach (var m in script.MacroOutlines)
             {
+                string detail = m.SourceDisplay is null || m.SourceDisplay.Length == 0 ? "#define" : m.SourceDisplay;
                 macroNodes.Add(new DocumentSymbol
                 {
                     Name = m.Name,
-                    Detail = "#define",
+                    Detail = detail,
                     Kind = LspSymbolKind.Constant,
                     Range = m.Range,
                     SelectionRange = m.Range

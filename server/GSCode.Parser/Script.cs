@@ -624,7 +624,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         IHoverable? h = Sense.HoverLibrary.Get(position);
         if (h is Pre.InsertDirectiveHover ih)
         {
-            string? resolved = Sense.GetDependencyPath(ih.RawPath, ih.Range);
+            string? resolved = Sense.ResolveInsertPath(ih.RawPath, ih.Range);
             if (resolved is not null && File.Exists(resolved))
             {
                 string normalized = NormalizeFilePathForUri(resolved);

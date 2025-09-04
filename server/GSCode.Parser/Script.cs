@@ -38,6 +38,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public IEnumerable<Uri> Dependencies => DefinitionsTable?.Dependencies ?? [];
 
+    // Expose macro outlines for outliner without exposing Sense outside assembly
+    public IReadOnlyList<MacroOutlineItem> MacroOutlines => Sense == null ? Array.Empty<MacroOutlineItem>() : (IReadOnlyList<MacroOutlineItem>)Sense.MacroOutlines;
+
     // Reference index: map from symbol key to all ranges in this file
     private readonly Dictionary<SymbolKey, List<Range>> _references = new();
     public IReadOnlyDictionary<SymbolKey, List<Range>> References => _references;

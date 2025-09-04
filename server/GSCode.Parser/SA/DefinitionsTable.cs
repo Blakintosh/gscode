@@ -25,6 +25,9 @@ public class DefinitionsTable
     private readonly Dictionary<(string Namespace, string Name), string[]> _functionFlags = new();
     private readonly Dictionary<(string Namespace, string Name), string?> _functionDocs = new();
 
+    private static (string Namespace, string Name) NK(string ns, string name)
+        => (ns?.ToLowerInvariant() ?? string.Empty, name?.ToLowerInvariant() ?? string.Empty);
+
     public DefinitionsTable(string currentNamespace)
     {
         CurrentNamespace = currentNamespace;
@@ -47,47 +50,47 @@ public class DefinitionsTable
 
     public void AddFunctionLocation(string ns, string name, string filePath, Range range)
     {
-        _functionLocations[(ns, name)] = (filePath, range);
+        _functionLocations[NK(ns, name)] = (filePath, range);
     }
 
     public void AddClassLocation(string ns, string name, string filePath, Range range)
     {
-        _classLocations[(ns, name)] = (filePath, range);
+        _classLocations[NK(ns, name)] = (filePath, range);
     }
 
     public void RecordFunctionParameters(string ns, string name, IEnumerable<string> parameterNames)
     {
-        _functionParameters[(ns, name)] = parameterNames?.ToArray() ?? Array.Empty<string>();
+        _functionParameters[NK(ns, name)] = parameterNames?.Select(p => p?.ToLowerInvariant() ?? string.Empty).ToArray() ?? Array.Empty<string>();
     }
 
     public string[]? GetFunctionParameters(string ns, string name)
     {
-        return _functionParameters.TryGetValue((ns, name), out var list) ? list : null;
+        return _functionParameters.TryGetValue(NK(ns, name), out var list) ? list : null;
     }
 
     public void RecordFunctionFlags(string ns, string name, IEnumerable<string> flags)
     {
-        _functionFlags[(ns, name)] = flags?.ToArray() ?? Array.Empty<string>();
+        _functionFlags[NK(ns, name)] = flags?.Select(f => f?.ToLowerInvariant() ?? string.Empty).ToArray() ?? Array.Empty<string>();
     }
 
     public string[]? GetFunctionFlags(string ns, string name)
     {
-        return _functionFlags.TryGetValue((ns, name), out var list) ? list : null;
+        return _functionFlags.TryGetValue(NK(ns, name), out var list) ? list : null;
     }
 
     public void RecordFunctionDoc(string ns, string name, string? doc)
     {
-        _functionDocs[(ns, name)] = string.IsNullOrWhiteSpace(doc) ? null : doc;
+        _functionDocs[NK(ns, name)] = string.IsNullOrWhiteSpace(doc) ? null : doc;
     }
 
     public string? GetFunctionDoc(string ns, string name)
     {
-        return _functionDocs.TryGetValue((ns, name), out var doc) ? doc : null;
+        return _functionDocs.TryGetValue(NK(ns, name), out var doc) ? doc : null;
     }
 
     public (string FilePath, Range Range)? GetFunctionLocation(string ns, string name)
     {
-        if (ns is not null && _functionLocations.TryGetValue((ns, name), out var loc))
+        if (ns is not null && _functionLocations.TryGetValue(NK(ns, name), out var loc))
         {
             return loc;
         }
@@ -96,7 +99,7 @@ public class DefinitionsTable
 
     public (string FilePath, Range Range)? GetClassLocation(string ns, string name)
     {
-        if (ns is not null && _classLocations.TryGetValue((ns, name), out var loc))
+        if (ns is not null && _classLocations.TryGetValue(NK(ns, name), out var loc))
         {
             return loc;
         }
@@ -105,9 +108,10 @@ public class DefinitionsTable
 
     public (string FilePath, Range Range)? GetFunctionLocationAnyNamespace(string name)
     {
+        string lookup = name?.ToLowerInvariant() ?? string.Empty;
         foreach (var kv in _functionLocations)
         {
-            if (kv.Key.Name == name)
+            if (string.Equals(kv.Key.Name, lookup, StringComparison.Ordinal))
             {
                 return kv.Value;
             }
@@ -117,9 +121,10 @@ public class DefinitionsTable
 
     public (string FilePath, Range Range)? GetClassLocationAnyNamespace(string name)
     {
+        string lookup = name?.ToLowerInvariant() ?? string.Empty;
         foreach (var kv in _classLocations)
         {
-            if (kv.Key.Name == name)
+            if (string.Equals(kv.Key.Name, lookup, StringComparison.Ordinal))
             {
                 return kv.Value;
             }

@@ -794,7 +794,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             int b2 = line.IndexOf('`', b1 + 1);
             if (b2 < 0) continue;
             string token = Normalize(line.Substring(b1 + 1, b2 - b1 - 1));
-            if (!candidates.Any(c => string.Equals(c, token, StringComparison.Ordinal))) continue;
+            if (!candidates.Any(c => string.Equals(c, token, StringComparison.OrdinalIgnoreCase))) continue;
             int dash = line.IndexOf('—', b2 + 1); // em dash
             if (dash < 0) dash = line.IndexOf('-', b2 + 1); // fallback
             string desc = dash >= 0 && dash + 1 < line.Length ? line[(dash + 1)..].Trim() : string.Empty;

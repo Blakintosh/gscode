@@ -48,26 +48,21 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
 
     private static string BuildFunctionLabel(string name, string ns, string[]? parameters, string[]? flags)
     {
-        string paramText = parameters is null || parameters.Length == 0 ? "()" : $"({string.Join(", ", parameters)})";
-        string flagText = flags is null || flags.Length == 0 ? string.Empty : $" [{string.Join(", ", flags)}]";
-        return name + paramText + flagText;
+        string paramText = (parameters is null || parameters.Length == 0) ? "()" : ($"(" + string.Join(", ", parameters) + ")");
+        if (flags is null || flags.Length == 0) return name + paramText;
+        return name + paramText + " [" + string.Join(", ", flags) + "]";
     }
 
-    private static Range ComputeContainerRange(IEnumerable<DocumentSymbol> children)
+    private static Range ComputeContainerRange(List<DocumentSymbol> children)
     {
-        using var e = children.GetEnumerator();
-        if (!e.MoveNext())
-        {
-            return new Range(new Position(0, 0), new Position(0, 0));
-        }
+        // children is never empty when called
+        var start = children[0].Range.Start;
+        var end = children[0].Range.End;
 
-        var start = e.Current.Range.Start;
-        var end = e.Current.Range.End;
-
-        foreach (var ds in children)
+        for (int i = 1; i < children.Count; i++)
         {
-            var s = ds.Range.Start;
-            var d = ds.Range.End;
+            var s = children[i].Range.Start;
+            var d = children[i].Range.End;
             if (s.Line < start.Line || (s.Line == start.Line && s.Character < start.Character)) start = s;
             if (d.Line > end.Line || (d.Line == end.Line && d.Character > end.Character)) end = d;
         }
@@ -76,6 +71,11 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
 
     public override async Task<SymbolInformationOrDocumentSymbolContainer?> Handle(DocumentSymbolParams request, CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>());
+        }
+
         _logger.LogInformation("DocumentSymbol (outline) request received");
         var sw = Stopwatch.StartNew();
 
@@ -93,6 +93,8 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         List<DocumentSymbol> classNodes = new();
         foreach (var kv in script.DefinitionsTable.GetAllClassLocations())
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var key = kv.Key; var val = kv.Value;
             string filePath = NormalizePath(val.FilePath ?? string.Empty);
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
@@ -112,6 +114,8 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         List<DocumentSymbol> functionNodes = new();
         foreach (var kv in script.DefinitionsTable.GetAllFunctionLocations())
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var key = kv.Key; var val = kv.Value;
             string filePath = NormalizePath(val.FilePath ?? string.Empty);
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
@@ -134,7 +138,9 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         {
             foreach (var m in script.MacroOutlines)
             {
-                string detail = m.SourceDisplay is null || m.SourceDisplay.Length == 0 ? "#define" : m.SourceDisplay;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string detail = (m.SourceDisplay is null || m.SourceDisplay.Length == 0) ? "#define" : m.SourceDisplay;
                 macroNodes.Add(new DocumentSymbol
                 {
                     Name = m.Name,
@@ -147,11 +153,14 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         }
 
         // Build grouped root nodes (separates by type)
-        List<DocumentSymbol> root = new();
+        List<DocumentSymbol> root = new(capacity: 3);
 
         if (classNodes.Count > 0)
         {
-            classNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            if (classNodes.Count > 1)
+            {
+                classNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            }
             var range = ComputeContainerRange(classNodes);
             root.Add(new DocumentSymbol
             {
@@ -165,7 +174,10 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
 
         if (functionNodes.Count > 0)
         {
-            functionNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            if (functionNodes.Count > 1)
+            {
+                functionNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            }
             var range = ComputeContainerRange(functionNodes);
             root.Add(new DocumentSymbol
             {
@@ -179,7 +191,10 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
 
         if (macroNodes.Count > 0)
         {
-            macroNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            if (macroNodes.Count > 1)
+            {
+                macroNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
+            }
             var range = ComputeContainerRange(macroNodes);
             root.Add(new DocumentSymbol
             {
@@ -191,10 +206,15 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             });
         }
 
-        int totalSymbols = root.Sum(n => n.Children != null ? n.Children.Count() : 0);
+        int totalSymbols = classNodes.Count + functionNodes.Count + macroNodes.Count;
         sw.Stop();
         _logger.LogInformation("DocumentSymbol finished in {ElapsedMs} ms: {Count} symbols", sw.ElapsedMilliseconds, totalSymbols);
-        var union = root.Select(ds => new SymbolInformationOrDocumentSymbol(ds)).ToList();
+
+        var union = new List<SymbolInformationOrDocumentSymbol>(root.Count);
+        for (int i = 0; i < root.Count; i++)
+        {
+            union.Add(new SymbolInformationOrDocumentSymbol(root[i]));
+        }
         return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>(union));
     }
 

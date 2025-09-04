@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.SA;
 using GSCode.Parser.Data;
@@ -76,10 +77,13 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
     public override async Task<SymbolInformationOrDocumentSymbolContainer?> Handle(DocumentSymbolParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("DocumentSymbol (outline) request received");
+        var sw = Stopwatch.StartNew();
 
         Script? script = _script_manager.GetParsedEditor(request.TextDocument);
         if (script is null || script.DefinitionsTable is null)
         {
+            sw.Stop();
+            _logger.LogInformation("DocumentSymbol finished in {ElapsedMs} ms: no script or no definitions", sw.ElapsedMilliseconds);
             return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>());
         }
 
@@ -187,7 +191,8 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         }
 
         int totalSymbols = root.Sum(n => n.Children != null ? n.Children.Count() : 0);
-        _logger.LogInformation("DocumentSymbol: returning {Count} symbols", totalSymbols);
+        sw.Stop();
+        _logger.LogInformation("DocumentSymbol finished in {ElapsedMs} ms: {Count} symbols", sw.ElapsedMilliseconds, totalSymbols);
         var union = root.Select(ds => new SymbolInformationOrDocumentSymbol(ds)).ToList();
         return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>(union));
     }

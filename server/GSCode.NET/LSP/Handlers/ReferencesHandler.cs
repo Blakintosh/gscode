@@ -34,7 +34,7 @@ internal sealed class ReferencesHandler : ReferencesHandlerBase
             return new LocationContainer();
         }
 
-        var qid = await script.GetQualifiedIdentifierAt(request.Position, cancellationToken);
+        var qid = await script.GetQualifiedIdentifierAtAsync(request.Position, cancellationToken);
         if (qid is null)
         {
             return new LocationContainer();

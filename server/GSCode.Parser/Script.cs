@@ -42,6 +42,20 @@ public class Script(DocumentUri ScriptUri, string languageId)
     private readonly Dictionary<SymbolKey, List<Range>> _references = new();
     public IReadOnlyDictionary<SymbolKey, List<Range>> References => _references;
 
+    // Cache for language API to avoid repeated construction in hot paths
+    private ScriptAnalyserData? _api;
+    private ScriptAnalyserData? TryGetApi()
+    {
+        if (_api is not null) return _api;
+        try { _api = new(LanguageId); } catch { _api = null; }
+        return _api;
+    }
+    private bool IsBuiltinFunction(string name)
+    {
+        var api = TryGetApi();
+        return api is not null && api.GetApiFunction(name) is not null;
+    }
+
     public async Task ParseAsync(string documentText)
     {
         ParsingTask = DoParseAsync(documentText);
@@ -190,6 +204,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
     private void BuildReferenceIndex()
     {
         _references.Clear();
+        var api = TryGetApi();
         foreach (var token in Sense.Tokens.GetAll())
         {
             if (token.Type != TokenType.Identifier) continue;
@@ -219,12 +234,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
             var (qual, name) = ParseNamespaceQualifiedIdentifier(token);
 
             // Skip builtin
-            try
+            if (api is not null)
             {
-                ScriptAnalyserData api = new(LanguageId);
-                if (api.GetApiFunction(name) is not null) continue;
+                try { if (api.GetApiFunction(name) is not null) continue; } catch { }
             }
-            catch { }
 
             // Resolve to a namespace
             string resolvedNamespace = qual ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
@@ -315,16 +328,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
         var (qualifier, name) = ParseNamespaceQualifiedIdentifier(token);
 
         // Exclude builtin API functions
-        try
+        if (IsBuiltinFunction(name))
         {
-            ScriptAnalyserData api = new(LanguageId);
-            var apiFn = api.GetApiFunction(name);
-            if (apiFn is not null)
-            {
-                return null; // let existing hover (if any) handle API
-            }
+            return null; // let existing hover (if any) handle API
         }
-        catch { }
 
         // Find function/method in current script tables
         string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
@@ -376,21 +383,24 @@ public class Script(DocumentUri ScriptUri, string languageId)
     private string? BuildSignatureMarkdown(string name, string? qualifier, int activeParam)
     {
         // Built-in API: try first
-        try
+        var api = TryGetApi();
+        if (api is not null)
         {
-            ScriptAnalyserData api = new(LanguageId);
-            var apiFn = api.GetApiFunction(name);
-            if (apiFn is not null)
+            try
             {
-                var overload = apiFn.Overloads.FirstOrDefault();
-                var paramSeq = overload != null ? overload.Parameters : new List<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
-                string[] names = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
-                string sig = FormatSignature(name, names, activeParam, qualifier);
-                string desc = apiFn.Description ?? string.Empty;
-                return string.IsNullOrEmpty(desc) ? sig : $"{sig}\n---\n{desc}";
+                var apiFn = api.GetApiFunction(name);
+                if (apiFn is not null)
+                {
+                    var overload = apiFn.Overloads.FirstOrDefault();
+                    var paramSeq = overload != null ? overload.Parameters : new List<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                    string[] names = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
+                    string sig = FormatSignature(name, names, activeParam, qualifier);
+                    string desc = apiFn.Description ?? string.Empty;
+                    return string.IsNullOrEmpty(desc) ? sig : $"{sig}\n---\n{desc}";
+                }
             }
+            catch { }
         }
-        catch { }
 
         // Script-defined (local or imported)
         string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
@@ -579,8 +589,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
             return new Location() { Uri = targetUri, Range = RangeHelper.From(0, 0, 0, 0) };
         }
 
-        // Fallback: if we're on a #using line but the specific token doesn't have a SenseDefinition,
-        // reconstruct the dependency path from tokens on the same line and navigate to it.
         if (IsOnUsingLine(token, out string? usingPath, out Range? usingRange))
         {
             string? resolved = Sense.GetDependencyPath(usingPath!, usingRange!);
@@ -593,54 +601,29 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
 
         // Ensure the token is a function-like identifier before attempting Go-to-Definition.
-        // Acceptable cases:
-        //  - An identifier followed by '(' (call site)
-        //  - A namespace::identifier qualified reference (previous token is '::')
-        //  - The identifier itself is a declared function/class/method (has corresponding SenseDefinition)
-        //  - Address-of function reference '&name' or '&ns::name'
         if (token.Type != TokenType.Identifier)
         {
             return null;
         }
-
         // Helper: get next non-whitespace/comment token
         Token? nextNonWs = token.Next;
         while (nextNonWs is not null && nextNonWs.IsWhitespacey())
         {
             nextNonWs = nextNonWs.Next;
         }
-
         bool looksLikeCall = nextNonWs is not null && nextNonWs.Type == TokenType.OpenParen;
         bool isQualified = token.Previous is not null && token.Previous.Type == TokenType.ScopeResolution && token.Previous.Previous is not null && token.Previous.Previous.Type == TokenType.Identifier;
         bool hasDefinitionSymbol = token.SenseDefinition is ScrFunctionSymbol || token.SenseDefinition is ScrMethodSymbol || token.SenseDefinition is ScrClassSymbol;
         bool isAddressOf = IsAddressOfIdentifier(token);
-
         if (!looksLikeCall && !isQualified && !hasDefinitionSymbol && !isAddressOf)
         {
-            // Not a function token (could be variable, property, etc.) — skip
             return null;
         }
-
-        // Parse namespace qualifier
         var (qualifier, name) = ParseNamespaceQualifiedIdentifier(token);
-
-        // Built-in API functions/methods: if the name exists in the language API, treat as builtin (no source location)
-        try
+        if (IsBuiltinFunction(name))
         {
-            ScriptAnalyserData api = new(LanguageId);
-            var apiFn = api.GetApiFunction(name);
-            if (apiFn is not null)
-            {
-                // Built-in function — no source location to return
-                return null;
-            }
+            return null;
         }
-        catch
-        {
-            // Be permissive on failures when loading API data — fall back to normal lookup
-        }
-
-        // 1. Try qualified lookup if present
         if (qualifier is not null && DefinitionsTable is not null)
         {
             var loc = DefinitionsTable.GetFunctionLocation(qualifier, name)
@@ -651,8 +634,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 var targetUri = new Uri(normalized); return new Location() { Uri = targetUri, Range = loc.Value.Range };
             }
         }
-
-        // 2. Try current namespace
         string ns = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
         var localLoc = DefinitionsTable?.GetFunctionLocation(ns, name)
                     ?? DefinitionsTable?.GetClassLocation(ns, name);
@@ -662,8 +643,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
             var targetUri = new Uri(normalized);
             return new Location() { Uri = targetUri, Range = localLoc.Value.Range };
         }
-
-        // 3. Try any namespace in this file
         var anyLoc = DefinitionsTable?.GetFunctionLocationAnyNamespace(name)
                   ?? DefinitionsTable?.GetClassLocationAnyNamespace(name);
         if (anyLoc is not null)
@@ -672,8 +651,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
             var targetUri = new Uri(normalized);
             return new Location() { Uri = targetUri, Range = anyLoc.Value.Range };
         }
-
-        // 4. Not found locally; let ScriptManager search all loaded scripts (pass qualifier if present)
         return null;
     }
 
@@ -744,7 +721,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return true;
     }
 
-    public async Task<(string? qualifier, string name)?> GetQualifiedIdentifierAt(Position position, CancellationToken cancellationToken = default)
+    public async Task<(string? qualifier, string name)?> GetQualifiedIdentifierAtAsync(Position position, CancellationToken cancellationToken = default)
     {
         await WaitUntilParsedAsync(cancellationToken);
 
@@ -872,22 +849,25 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
         // Try builtin API first
         List<SignatureInformation> signatures = new();
-        try
+        var api = TryGetApi();
+        if (api is not null)
         {
-            ScriptAnalyserData api = new(LanguageId);
-            var apiFn = api.GetApiFunction(name);
-            if (apiFn is not null)
+            try
             {
-                var overload = apiFn.Overloads.FirstOrDefault();
-                IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
-                var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
-                string label = $"function {name}({string.Join(", ", cleaned)})";
-                var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = string.IsNullOrWhiteSpace(p.Description) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description! } }));
-                var docContent = new MarkupContent { Kind = MarkupKind.Markdown, Value = apiFn.Description ?? string.Empty };
-                signatures.Add(new SignatureInformation { Label = label, Documentation = docContent, Parameters = parameters });
+                var apiFn = api.GetApiFunction(name);
+                if (apiFn is not null)
+                {
+                    var overload = apiFn.Overloads.FirstOrDefault();
+                    IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                    var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
+                    string label = $"function {name}({string.Join(", ", cleaned)})";
+                    var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = string.IsNullOrWhiteSpace(p.Description) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description! } }));
+                    var docContent = new MarkupContent { Kind = MarkupKind.Markdown, Value = apiFn.Description ?? string.Empty };
+                    signatures.Add(new SignatureInformation { Label = label, Documentation = docContent, Parameters = parameters });
+                }
             }
+            catch { }
         }
-        catch { }
 
         // Then script-defined (local or imported) using DefinitionsTable
         string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));

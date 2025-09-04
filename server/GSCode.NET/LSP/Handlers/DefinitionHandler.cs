@@ -44,7 +44,7 @@ internal class DefinitionHandler : DefinitionHandlerBase
         }
 
         // If not found locally, get the qualified identifier using published API
-        var qual = await script.GetQualifiedIdentifierAt(request.Position, cancellationToken);
+        var qual = await script.GetQualifiedIdentifierAtAsync(request.Position, cancellationToken);
         string? ns = qual?.qualifier;
         string name = qual?.name ?? "";
 

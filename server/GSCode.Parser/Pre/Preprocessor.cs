@@ -363,6 +363,9 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             return;
         }
 
+        // Record hover on the #insert path text for navigation
+        Sense.HoverLibrary.Add(new InsertDirectiveHover(filePath, path.Range!));
+
         // Get the file contents
         TokenList? insertTokensResult;
         try

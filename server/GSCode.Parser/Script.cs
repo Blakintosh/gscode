@@ -823,11 +823,17 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (parenDepth == 0) break;
                 parenDepth--;
             }
-            //if(cursor.Type == TokenType.Identifier && cursor.Next.Type == TokenType.OpenParen && parenDepth == 0)
-            //{
-            //    cursor = cursor.Next;
-            //    break;
-            //}
+            if (cursor.Type == TokenType.Identifier && cursor.Next.Type == TokenType.OpenParen && parenDepth == 0)
+            {
+                cursor = cursor.Next;
+                break;
+            }
+            if(cursor.Type == TokenType.Semicolon || cursor.Type == TokenType.LineBreak)
+            {
+                // Hit end of statement without finding '('
+                cursor = null;
+                break;
+            }
             cursor = cursor.Previous;
         }
         if (cursor is null)

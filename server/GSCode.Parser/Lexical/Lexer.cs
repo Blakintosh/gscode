@@ -55,7 +55,7 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         return new TokenList(first, eof);
     }
 
-    [GeneratedRegex(@"^/*.*?\*/", RegexOptions.Singleline)]
+    [GeneratedRegex(@"^/\*.*?\*/", RegexOptions.Singleline)]
     private static partial Regex MultilineCommentRegex();
 
     [GeneratedRegex(@"^/@.*?@/", RegexOptions.Singleline)]

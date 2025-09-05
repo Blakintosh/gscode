@@ -106,9 +106,10 @@ public enum GSCErrorCodes
     UnhandledMacError = 9001,
     UnhandledAstError = 9002,
     UnhandledSaError = 9003,
-    UnhandledSpaError = 9004,
-    UnhandledIdeError = 9005,
-    FailedToReadInsertFile = 9006,
+    UnhandledFraError = 9004,
+    UnhandledSpaError = 9005,
+    UnhandledIdeError = 9006,
+    FailedToReadInsertFile = 9007,
 
     PreprocessorIfAnalysisUnsupported = 9900,
 }
@@ -206,6 +207,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.UnhandledMacError, new("An unhandled exception '{0}' caused preprocessing (gscode-mac) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledAstError, new("An unhandled exception '{0}' caused syntax tree generation (gscode-ast) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledSaError, new("An unhandled exception '{0}' caused signature analysis (gscode-sa) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledFraError, new("An unhandled exception '{0}' caused folding range analysis (gscode-fra) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledSpaError, new("An unhandled exception '{0}' caused static program analysis (gscode-spa) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledIdeError, new("An unhandled exception '{0}' caused GSCode IDE analysis (gscode-ide) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.FailedToReadInsertFile, new("Failed to read contents of insert-directive file '{0}' due to exception '{1}'. Check the file is accessible, then try again.", DiagnosticSeverity.Error) },

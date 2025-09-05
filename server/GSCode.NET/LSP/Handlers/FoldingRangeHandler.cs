@@ -22,21 +22,24 @@ internal class FoldingRangeHandler(ILanguageServerFacade facade,
     private readonly ILogger<FoldingRangeHandler> _logger = logger;
     private readonly TextDocumentSelector _documentSelector = documentSelector;
 
-    public override Task<Container<FoldingRange>?> Handle(
+    public override async Task<Container<FoldingRange>?> Handle(
         FoldingRangeRequestParam request,
         CancellationToken cancellationToken
-    ) =>
-        Task.FromResult<Container<FoldingRange>?>(
-            new Container<FoldingRange>(
-                new FoldingRange {
-                    StartLine = 10,
-                    EndLine = 20,
-                    Kind = FoldingRangeKind.Region,
-                    EndCharacter = 0,
-                    StartCharacter = 0
-                }
-            )
-        );
+    )
+    {
+        _logger.LogInformation("Folding range request received, processing...");
+        Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
+
+        Container<FoldingRange> result = new();
+
+        if (script is not null)
+        {
+            result = new Container<FoldingRange>(await script.GetFoldingRangesAsync(cancellationToken));
+        }
+
+        _logger.LogInformation("Folding range request processed. FoldingRange being sent: {result}", result.Count());
+        return result;
+    }
 
     protected override FoldingRangeRegistrationOptions CreateRegistrationOptions(FoldingRangeCapability capability, ClientCapabilities clientCapabilities)
     {

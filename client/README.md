@@ -14,9 +14,11 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ### 0.3.0 beta (latest)
 * Added Outliner support for classes, functions, and macros.
-* Added goto Definition support for usings, script functions, and macros.
+* Added goto definition support for usings, script functions, and macros.
 * Added signature support for script functions & builtins.
 * Fixed function & variable names not showing signatures & tooltips due to case-sensitivity.
+
+Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed these changes.
 
 ### 0.2 beta
 * Added a 'dumb' completion handler to suggest function completions.

@@ -12,25 +12,17 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.2.6 beta (latest)
-* Completion suggestions now include variable names, function names, and keywords.
+### 0.3.0 beta (latest)
+* Added Outliner support for classes, functions, and macros.
+* Added goto Definition support for usings, script functions, and macros.
+* Added signature support for script functions & builtins.
+* Fixed function & variable names not showing signatures & tooltips due to case-sensitivity.
 
-### 0.2.5 beta
-* Fixed another syntax highlighting bug with line comments.
-
-### 0.2.4 beta
-* Fixed a syntax highlighting bug with line comments.
-
-### 0.2.3 beta 
-* Fixed a bug where semantic tokens (e.g. macro, parameters) would not highlight as expected.
-
-### 0.2.2 beta
+### 0.2 beta
 * Added a 'dumb' completion handler to suggest function completions.
 * Added a 'dumb' handler to provide GSCode API hover documentation on built-in functions.
-
-### 0.2.1 beta
-* Added basic signature analysis for highlighting of class, function, method and parameter definitions.
 * Added diagnostic for missing scripts from using.
+* Added basic signature analysis for highlighting of class, function, method and parameter definitions.
 * Added using highlight with script path hint.
 * Various bug fixes.
 

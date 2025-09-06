@@ -12,6 +12,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using GSCode.Parser.SA;
+using GSCode.Parser.Misc;
 using System.IO;
 using GSCode.Parser.SPA;
 using System.Text.RegularExpressions;
@@ -144,8 +145,24 @@ public class Script(DocumentUri ScriptUri, string languageId)
             return Task.CompletedTask;
         }
 
+        // Analyze folding ranges from the token stream
+        UserRegionsAnalyser foldingRangeAnalyser = new(startToken, Sense);
+        try
+        {
+            foldingRangeAnalyser.Analyse();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Console.Error.WriteLine($"Failed to analyse folding ranges: {ex.Message}");
+
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
+
         // Build references index from token stream
         BuildReferenceIndex();
+
 
         Parsed = true;
         return Task.CompletedTask;
@@ -537,6 +554,12 @@ public class Script(DocumentUri ScriptUri, string languageId)
     {
         await WaitUntilParsedAsync(cancellationToken);
         return Sense.Completions.GetCompletionsFromPosition(position);
+    }
+
+    public async Task<IEnumerable<FoldingRange>> GetFoldingRangesAsync(CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+        return Sense.FoldingRanges;
     }
 
     private async Task WaitUntilParsedAsync(CancellationToken cancellationToken = default)

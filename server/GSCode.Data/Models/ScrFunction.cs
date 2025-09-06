@@ -27,6 +27,11 @@ public record class ScrFunction : IExportedSymbol
     public string? Example { get; set; }
 
     /// <summary>
+    /// The documentation comment for this function.
+    /// </summary>
+    public string? DocComment { get; set; }
+
+    /// <summary>
     /// The overloads (variants) of this function
     /// </summary>
     public List<ScrFunctionOverload> Overloads { get; set; } = [];

@@ -22,8 +22,6 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     [Flags]
     private enum ParserContextFlags
     {
-    private enum ParserContextFlags
-    {
         None = 0,
         InFunctionBody = 1,
         InSwitchBody = 2,
@@ -2720,10 +2718,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             FunCallNode call = new FunCallNode(left, functionArgs);
 
             // TODO: HACK - create permanent function hoverable solution at SPA-stage in a future version
-            if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunctionDefinition function)
-            {
-                Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
-            }
+            //if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunction function)
+            //{
+            //    Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
+            //}
             return CallOrAccessOpRhs(call);
         }
 

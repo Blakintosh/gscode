@@ -3,6 +3,7 @@ using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.Steps.Interfaces;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using Serilog;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
@@ -18,22 +19,22 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
     public List<FoldingRange> Analyse()
     {
         List<FoldingRange> foldingRanges = new();
-        
-        while(CurrentTokenType != TokenType.Eof)
+
+        while (CurrentTokenType != TokenType.Eof)
         {
-            if(!IsRegionStart(CurrentToken, out string? regionName))
+            if (!IsRegionStart(CurrentToken, out string? regionName, out Match? regionMatch))
             {
                 CurrentToken = CurrentToken.Next;
                 continue;
             }
 
             FoldingRange? foldingRange = AnalyseFoldingRange(CurrentToken, regionName ?? string.Empty, foldingRanges);
-            if(foldingRange is not null)
+            if (foldingRange is not null)
             {
                 foldingRanges.Add(foldingRange);
             }
         }
-        
+
         return foldingRanges;
     }
 
@@ -41,9 +42,9 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
     {
         CurrentToken = CurrentToken.Next;
 
-        while(CurrentTokenType != TokenType.Eof)
+        while (CurrentTokenType != TokenType.Eof)
         {
-            if(IsRegionEnd(CurrentToken))
+            if (IsRegionEnd(CurrentToken))
             {
                 Token endToken = CurrentToken;
                 CurrentToken = CurrentToken.Next;
@@ -60,14 +61,14 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
                 };
             }
 
-            if(!IsRegionStart(CurrentToken, out string? nestedRegionName))
+            if (!IsRegionStart(CurrentToken, out string? nestedRegionName, out Match? nestedRegionMatch))
             {
                 CurrentToken = CurrentToken.Next;
                 continue;
             }
 
             FoldingRange? foldingRange = AnalyseFoldingRange(CurrentToken, nestedRegionName ?? string.Empty, foldingRanges);
-            if(foldingRange is not null)
+            if (foldingRange is not null)
             {
                 foldingRanges.Add(foldingRange);
             }
@@ -77,25 +78,26 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
         return null;
     }
 
-    [GeneratedRegex(@"^\s*/\*\s*region\s+(\w+)\s*\*/\s*$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*/\*\s*region\s+([^*]+?)\s*\*/\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex RegionStartRegex();
 
-    [GeneratedRegex(@"^\s*/\*\s*endregion\s*\*/\s*$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*/\*\s*endregion\s*\*/\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex RegionEndRegex();
 
-    private static bool IsRegionStart(Token token, out string? name)
+    private static bool IsRegionStart(Token token, out string? name, out Match? match)
     {
         name = null;
-        
-        if(token.Type != TokenType.MultilineComment)
+        match = null;
+
+        if (token.Type != TokenType.MultilineComment)
         {
             return false;
         }
 
-        Match match = RegionStartRegex().Match(token.Lexeme);
-        if(match.Success)
+        match = RegionStartRegex().Match(token.Lexeme);
+        if (match.Success)
         {
-            name = match.Groups[1].Value;
+            name = match.Groups[1].Value.Trim();
             return true;
         }
 
@@ -104,7 +106,7 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
 
     private static bool IsRegionEnd(Token token)
     {
-        if(token.Type != TokenType.MultilineComment)
+        if (token.Type != TokenType.MultilineComment)
         {
             return false;
         }

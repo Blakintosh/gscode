@@ -601,12 +601,8 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
         if (hoverable is Pre.ScriptMacro scriptMacro)
         {
-            var def = scriptMacro.DefineSource;
-            if (def.IsFromPreprocessor)
-            {
-                string normalized = NormalizeFilePathForUri(ScriptUri.ToUri().LocalPath);
-                return new Location() { Uri = new Uri(normalized), Range = def.Range };
-            }
+            string normalized = NormalizeFilePathForUri(ScriptUri.ToUri().LocalPath);
+            return new Location() { Uri = new Uri(normalized), Range = scriptMacro.DefineSource.Range };
         }
 
         Token? token = Sense.Tokens.Get(position);

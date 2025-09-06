@@ -30,7 +30,7 @@
 
 		<a href="https://marketplace.visualstudio.com/items?itemName=blakintosh.gscode" class="preview-button my-16 text-white lg:text-2xl text-lg" target="_blank" rel="noopener noreferrer">
 			<Download class="w-6 h-6"/>
-			<span>v0.3.0-beta</span>
+			<span>v0.9.0-beta</span>
 		</a>
 	</div>
 	<!-- <div class="flex items-center flex-col py-8 bg-background">

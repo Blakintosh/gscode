@@ -56,6 +56,11 @@ internal sealed class ParserIntelliSense
     public DocumentHoversLibrary HoverLibrary { get; }
 
     /// <summary>
+    /// List of folding ranges to push to the editor.
+    /// </summary>
+    public List<FoldingRange> FoldingRanges { get; } = [];
+
+    /// <summary>
     /// List of diagnostics to push to the editor.
     /// </summary>
     public List<Diagnostic> Diagnostics { get; } = new();

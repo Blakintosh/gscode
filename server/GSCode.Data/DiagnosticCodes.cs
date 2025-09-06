@@ -98,6 +98,25 @@ public enum GSCErrorCodes
     CannotAssignToReadOnlyProperty = 3032,
     MissingUsingFile = 3033,
 
+    // Newly added SPA diagnostics
+    UnusedVariable = 3034,
+    UnusedParameter = 3035,
+    TooManyArguments = 3036,
+    TooFewArguments = 3037,
+    ArgumentTypeMismatch = 3038,
+    PossibleUndefinedAccess = 3039,
+    UnknownNamespace = 3040,
+    DuplicateCaseLabel = 3041,
+    MultipleDefaultLabels = 3042,
+    FallthroughCase = 3043,
+    UnreachableCase = 3044,
+    ShadowedSymbol = 3045,
+    UnusedUsing = 3046,
+    CircularDependency = 3047,
+    NoMatchingOverload = 3048,
+    CalledOnInvalidTarget = 3049,
+    InvalidThreadCall = 3050,
+
     // 8xxx errors are issued by the IDE for conventions
 
     // 9xxx errors are issued by the IDE for GSCode.NET faults
@@ -196,6 +215,25 @@ public static class DiagnosticCodes
         { GSCErrorCodes.NoEnclosingLoop, new("No enclosing loop out of which to break or continue.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingUsingFile, new("Unable to locate file '{0}' in the workspace or in the shared scripts directory.", DiagnosticSeverity.Error) },
+
+        // Newly added SPA diagnostics
+        { GSCErrorCodes.UnusedVariable, new("The variable '{0}' is declared but never used.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
+        { GSCErrorCodes.UnusedParameter, new("The parameter '{0}' is never used.", DiagnosticSeverity.Hint, new[] { DiagnosticTag.Unnecessary }) },
+        { GSCErrorCodes.TooManyArguments, new("Function '{0}' called with {1} arguments, but expects {2}.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.TooFewArguments, new("Function '{0}' called with {1} arguments, but expects at least {2}.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.ArgumentTypeMismatch, new("Argument {0} to '{1}' expects '{2}', got '{3}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.PossibleUndefinedAccess, new("Possible dereference of 'undefined' value.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.UnknownNamespace, new("The namespace '{0}' does not exist.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.DuplicateCaseLabel, new("Duplicate 'case' label.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.MultipleDefaultLabels, new("Multiple 'default' labels in this switch.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.FallthroughCase, new("Control falls through from 'case' to the next 'case'.", DiagnosticSeverity.Information) },
+        { GSCErrorCodes.UnreachableCase, new("'case' is unreachable.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
+        { GSCErrorCodes.ShadowedSymbol, new("Local '{0}' shadows a symbol from an outer scope.", DiagnosticSeverity.Information) },
+        { GSCErrorCodes.UnusedUsing, new("The using file '{0}' is not referenced.", DiagnosticSeverity.Hint, new[] { DiagnosticTag.Unnecessary }) },
+        { GSCErrorCodes.CircularDependency, new("Circular dependency detected involving '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.NoMatchingOverload, new("No overload of '{0}' matches argument types ({1}).", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.CalledOnInvalidTarget, new("Called-on target must be an entity/struct; got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.InvalidThreadCall, new("Only function calls can be threaded.", DiagnosticSeverity.Error) },
 
         // 9xxx
         { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },

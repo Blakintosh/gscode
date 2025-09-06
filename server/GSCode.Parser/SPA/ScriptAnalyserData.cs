@@ -103,7 +103,7 @@ public class ScriptAnalyserData
             Log.Error("No API library found for {LanguageId}", LanguageId);
             return null;
         }
-        return library.Functions.TryGetValue(name, out ScrFunctionDefinition? function) ? function : null;
+        return library.Functions.TryGetValue(name.ToLower(), out ScrFunctionDefinition? function) ? function : null;
     }
 }
 
@@ -118,7 +118,7 @@ internal class ScrLibraryData
         Functions = new SortedList<string, ScrFunctionDefinition>(library.Api.Count);
         foreach (ScrFunctionDefinition function in library.Api)
         {
-            Functions.Add(function.Name, function);
+            Functions.Add(function.Name.ToLower(), function);
         }
     }
 }

@@ -907,7 +907,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 cursor = cursor.Next;
                 break;
             }
-            if(cursor.Type == TokenType.Semicolon || cursor.Type == TokenType.LineBreak)
+            if (cursor.Type == TokenType.Semicolon || cursor.Type == TokenType.LineBreak)
             {
                 // Hit end of statement without finding '('
                 cursor = null;
@@ -1113,16 +1113,17 @@ public class Script(DocumentUri ScriptUri, string languageId)
                         if (any)
                         {
                             // remove on purpose: too few arguments is very common due to optional params and overloads
+                            // TODO: both disabled due to API - re-enable when we're comfortable with the API or have some middle ground solution
                             //if (argCount < minAny)
                             //{
                             //    Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooFewArguments, name, argCount, minAny);
                             //    continue;
                             //}
-                            if (argCount > maxAny)
-                            {
-                                Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooManyArguments, name, argCount, maxAny);
-                                continue;
-                            }
+                            // if (argCount > maxAny)
+                            // {
+                            //     Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooManyArguments, name, argCount, maxAny);
+                            //     continue;
+                            // }
                             // If within some overload’s min/max, we assume OK (type checking not implemented)
                             continue;
                         }
@@ -1577,7 +1578,8 @@ public class Script(DocumentUri ScriptUri, string languageId)
             case NamespacedMemberNode nm:
                 yield return nm.Namespace; yield return nm.Member; break;
             case ArgsListNode al:
-                foreach (var a in al.Arguments) { if (a is not null) yield return a; } break;
+                foreach (var a in al.Arguments) { if (a is not null) yield return a; }
+                break;
             case ArrayIndexNode ai:
                 yield return ai.Array; if (ai.Index is not null) yield return ai.Index; break;
             case CalledOnNode con:

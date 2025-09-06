@@ -102,16 +102,38 @@ public enum GSCErrorCodes
     ExpectedFunction = 3036,
     ReservedSymbol = 3037,
 
+    // Newly added SPA diagnostics
+    UnusedVariable = 3034,
+    UnusedParameter = 3035,
+    TooManyArguments = 3036,
+    TooFewArguments = 3037,
+    ArgumentTypeMismatch = 3038,
+    PossibleUndefinedAccess = 3039,
+    UnknownNamespace = 3040,
+    DuplicateCaseLabel = 3041,
+    MultipleDefaultLabels = 3042,
+    FallthroughCase = 3043,
+    UnreachableCase = 3044,
+    ShadowedSymbol = 3045,
+    UnusedUsing = 3046,
+    CircularDependency = 3047,
+    NoMatchingOverload = 3048,
+    CalledOnInvalidTarget = 3049,
+    InvalidThreadCall = 3050,
+    AssignOnThreadedFunction = 3051,
+
     // 8xxx errors are issued by the IDE for conventions
+    UnterminatedRegion = 8000,
 
     // 9xxx errors are issued by the IDE for GSCode.NET faults
     UnhandledLexError = 9000,
     UnhandledMacError = 9001,
     UnhandledAstError = 9002,
     UnhandledSaError = 9003,
-    UnhandledSpaError = 9004,
-    UnhandledIdeError = 9005,
-    FailedToReadInsertFile = 9006,
+    UnhandledFraError = 9004,
+    UnhandledSpaError = 9005,
+    UnhandledIdeError = 9006,
+    FailedToReadInsertFile = 9007,
 
     PreprocessorIfAnalysisUnsupported = 9900,
 }
@@ -205,11 +227,35 @@ public static class DiagnosticCodes
         { GSCErrorCodes.ExpectedFunction, new("Expected a function, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ReservedSymbol, new("The symbol '{0}' is reserved.", DiagnosticSeverity.Error) },
 
+        // Newly added SPA diagnostics
+        { GSCErrorCodes.UnusedVariable, new("The variable '{0}' is declared but never used.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
+        { GSCErrorCodes.UnusedParameter, new("The parameter '{0}' is never used.", DiagnosticSeverity.Hint, new[] { DiagnosticTag.Unnecessary }) },
+        { GSCErrorCodes.TooManyArguments, new("Function '{0}' called with {1} arguments, but expects {2}.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.TooFewArguments, new("Function '{0}' called with {1} arguments, but expects at least {2}.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.ArgumentTypeMismatch, new("Argument {0} to '{1}' expects '{2}', got '{3}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.PossibleUndefinedAccess, new("Possible dereference of 'undefined' value.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.UnknownNamespace, new("The namespace '{0}' does not exist.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.DuplicateCaseLabel, new("Duplicate 'case' label.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.MultipleDefaultLabels, new("Multiple 'default' labels in this switch.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.FallthroughCase, new("Control falls through from 'case' to the next 'case'.", DiagnosticSeverity.Information) },
+        { GSCErrorCodes.UnreachableCase, new("'case' is unreachable.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
+        { GSCErrorCodes.ShadowedSymbol, new("Local '{0}' shadows a symbol from an outer scope.", DiagnosticSeverity.Information) },
+        { GSCErrorCodes.UnusedUsing, new("The using file '{0}' is not referenced.", DiagnosticSeverity.Hint, new[] { DiagnosticTag.Unnecessary }) },
+        { GSCErrorCodes.CircularDependency, new("Circular dependency detected involving '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.NoMatchingOverload, new("No overload of '{0}' matches argument types ({1}).", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.CalledOnInvalidTarget, new("Called-on target must be an entity/struct; got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.InvalidThreadCall, new("Only function calls can be threaded.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it", DiagnosticSeverity.Warning) },
+  
+        // 8xxx
+        { GSCErrorCodes.UnterminatedRegion, new("No corresponding '/* endregion */' found to terminate '{0}' region.", DiagnosticSeverity.Warning) },
+      
         // 9xxx
         { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledMacError, new("An unhandled exception '{0}' caused preprocessing (gscode-mac) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledAstError, new("An unhandled exception '{0}' caused syntax tree generation (gscode-ast) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledSaError, new("An unhandled exception '{0}' caused signature analysis (gscode-sa) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledFraError, new("An unhandled exception '{0}' caused folding range analysis (gscode-fra) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledSpaError, new("An unhandled exception '{0}' caused static program analysis (gscode-spa) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledIdeError, new("An unhandled exception '{0}' caused GSCode IDE analysis (gscode-ide) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.FailedToReadInsertFile, new("Failed to read contents of insert-directive file '{0}' due to exception '{1}'. Check the file is accessible, then try again.", DiagnosticSeverity.Error) },

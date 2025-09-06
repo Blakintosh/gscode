@@ -117,3 +117,24 @@ internal record ScriptMacro(Token Source, MacroDefinition DefineSource, TokenLis
         return string.Empty;
     }
 }
+
+/// <summary>
+/// Hoverable entry for an #insert directive path to enable navigation and quick info on that line.
+/// </summary>
+/// <param name="RawPath">The raw path text inside the directive</param>
+/// <param name="Range">The range that covers the path text</param>
+internal sealed record InsertDirectiveHover(string RawPath, Range Range) : IHoverable
+{
+    public Hover GetHover()
+    {
+        return new Hover
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent
+            {
+                Kind = MarkupKind.Markdown,
+                Value = $"#insert {RawPath}"
+            })
+        };
+    }
+}

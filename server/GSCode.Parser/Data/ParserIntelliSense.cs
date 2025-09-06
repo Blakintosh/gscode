@@ -5,6 +5,7 @@ using GSCode.Parser.Util;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using System.Collections.Generic;
+using System.IO;
 
 namespace GSCode.Parser.Data;
 
@@ -17,23 +18,29 @@ public enum DeferredSymbolType
 }
 public sealed record class DeferredSymbol(Range Range, string? Namespace, string Value);
 
+// Macro outline item now includes a source display (e.g., shared/shared.gsh) if known
+public sealed record class MacroOutlineItem(string Name, Range Range, string? SourceDisplay = null);
+
+// Track #insert regions to map generated tokens back to their origin file
+public sealed record class InsertRegion(Range Range, string RawPath, string? ResolvedPath);
+
 internal sealed class ParserIntelliSense
 {
     private class SemanticTokenComparer : IComparer<ISemanticToken>
     {
         public int Compare(ISemanticToken? x, ISemanticToken? y)
         {
-            if (x?.Range is null && y?.Range is null) 
-            { 
-                return 0; 
+            if (x?.Range is null && y?.Range is null)
+            {
+                return 0;
             }
-            if (x?.Range is null) 
-            { 
-                return -1; 
+            if (x?.Range is null)
+            {
+                return -1;
             }
-            if (y?.Range is null) 
-            { 
-                return 1; 
+            if (y?.Range is null)
+            {
+                return 1;
             }
 
             int lineComparison = x.Range.Start.Line.CompareTo(y.Range.Start.Line);
@@ -54,6 +61,11 @@ internal sealed class ParserIntelliSense
     /// Hover storage for IntelliSense
     /// </summary>
     public DocumentHoversLibrary HoverLibrary { get; }
+
+    /// <summary>
+    /// List of folding ranges to push to the editor.
+    /// </summary>
+    public List<FoldingRange> FoldingRanges { get; } = [];
 
     /// <summary>
     /// List of diagnostics to push to the editor.
@@ -77,13 +89,36 @@ internal sealed class ParserIntelliSense
 
     private readonly string _scriptPath;
     public readonly string _languageId;
+    public string ScriptPath => _scriptPath;
+    public string ScriptUri { get; }
+
+    /// <summary>
+    /// Macros discovered during preprocessing for use in the outliner.
+    /// </summary>
+    public List<MacroOutlineItem> MacroOutlines { get; } = new();
+
+    /// <summary>
+    /// Insert regions (range on the source line) to resolved file path mapping.
+    /// </summary>
+    public List<InsertRegion> InsertRegions { get; } = new();
 
     public ParserIntelliSense(int endLine, DocumentUri scriptUri, string languageId)
     {
         HoverLibrary = new(endLine + 1);
         _scriptPath = scriptUri.Path;
+        ScriptUri = scriptUri.Path;
         _languageId = languageId;
         Completions = new(Tokens, languageId);
+    }
+
+    public void AddInsertRegion(Range range, string rawPath, string? resolvedPath)
+    {
+        InsertRegions.Add(new InsertRegion(range, rawPath, resolvedPath));
+    }
+
+    public void AddMacroOutline(string name, Range range, string? sourceDisplay = null)
+    {
+        MacroOutlines.Add(new MacroOutlineItem(name, range, sourceDisplay));
     }
 
     public void AddSenseToken(Token token, ISenseDefinition definition)
@@ -98,6 +133,11 @@ internal sealed class ParserIntelliSense
         // Link the definition to the token so that we don't have duplicates later on.
         token.SenseDefinition = definition;
 
+        AddSenseDefinition(definition);
+    }
+
+    public void AddSenseDefinition(ISenseDefinition definition)
+    {
         SemanticTokens.Add(definition);
         HoverLibrary.Add(definition);
     }
@@ -150,6 +190,17 @@ internal sealed class ParserIntelliSense
     public void CommitTokens(Token startToken)
     {
         Tokens.AddRange(startToken);
+    }
+
+    public string? ResolveInsertPath(string dependencyPath, Range sourceRange)
+    {
+        string? resolvedPath = ParserUtil.GetScriptFilePath(_scriptPath, dependencyPath);
+        if (resolvedPath is null)
+        {
+            AddPreDiagnostic(sourceRange, GSCErrorCodes.MissingInsertFile, dependencyPath);
+            return null;
+        }
+        return resolvedPath;
     }
 
     /* Others to support:

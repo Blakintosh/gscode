@@ -121,7 +121,7 @@ internal class ScrLibraryData
     public ScrLibraryData(ScriptApiJsonLibrary library)
     {
         Library = library;
-        Functions = new SortedList<string, ScrFunction>(library.Api.Count);
+        Functions = new SortedList<string, ScrFunction>(library.Api.Count, StringComparer.OrdinalIgnoreCase);
         foreach (ScrFunction function in library.Api)
         {
             Functions.Add(function.Name, function);

@@ -84,7 +84,7 @@ LanguageServer server = await LanguageServer.From(options =>
 		.AddHandler<SemanticTokensHandler>()
 		.AddHandler<HoverHandler>()
 		.AddHandler<CompletionHandler>()
-		.AddHandler<FoldingRangeHandler>();
+		.AddHandler<FoldingRangeHandler>()
 		.AddHandler<DefinitionHandler>()
 		.AddHandler<DocumentSymbolHandler>()
 		.AddHandler<SignatureHelpHandler>()

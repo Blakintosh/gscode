@@ -33,8 +33,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public DefinitionsTable? DefinitionsTable { get; private set; } = default;
 
-    private List<FoldingRange> FoldingRanges { get; set; } = [];
-
     public IEnumerable<Uri> Dependencies => DefinitionsTable?.Dependencies ?? [];
 
     public async Task ParseAsync(string documentText)
@@ -121,10 +119,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
 
         // Analyze folding ranges from the token stream
-        var foldingRangeAnalyser = new FoldingRangeAnalyser(startToken, Sense);
+        UserRegionsAnalyser foldingRangeAnalyser = new(startToken, Sense);
         try
         {
-            FoldingRanges = foldingRangeAnalyser.Analyse();
+            foldingRangeAnalyser.Analyse();
         }
         catch (Exception ex)
         {
@@ -132,7 +130,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
             Console.Error.WriteLine($"Failed to analyse folding ranges: {ex.Message}");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSaError, ex.GetType().Name);
-            FoldingRanges = [];
             return Task.CompletedTask;
         }
 
@@ -187,7 +184,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
     public async Task<IEnumerable<FoldingRange>> GetFoldingRangesAsync(CancellationToken cancellationToken = default)
     {
         await WaitUntilParsedAsync(cancellationToken);
-        return FoldingRanges;
+        return Sense.FoldingRanges;
     }
 
     private async Task WaitUntilParsedAsync(CancellationToken cancellationToken = default)

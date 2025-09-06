@@ -718,6 +718,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         // Find '#using' token on the next line (since this is EOL)
         Token? usingToken = null;
         Token? iter = cursor.Next;
+        int guard = 0;
         while (iter is not null && iter.Range.Start.Line == line)
         {
             if (iter.Lexeme == "#using")
@@ -725,7 +726,17 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 usingToken = iter;
                 break;
             }
+            // Advance; break if no progress or if guard trips to avoid infinite loops
+            Token? prev = iter;
             iter = iter.Next;
+            if (ReferenceEquals(iter, prev))
+            {
+                break;
+            }
+            if (++guard > 10000)
+            {
+                break;
+            }
         }
 
         if (usingToken is null)

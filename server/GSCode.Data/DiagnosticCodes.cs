@@ -119,15 +119,17 @@ public enum GSCErrorCodes
     AssignOnThreadedFunction = 3051,
 
     // 8xxx errors are issued by the IDE for conventions
+    UnterminatedRegion = 8000,
 
     // 9xxx errors are issued by the IDE for GSCode.NET faults
     UnhandledLexError = 9000,
     UnhandledMacError = 9001,
     UnhandledAstError = 9002,
     UnhandledSaError = 9003,
-    UnhandledSpaError = 9004,
-    UnhandledIdeError = 9005,
-    FailedToReadInsertFile = 9006,
+    UnhandledFraError = 9004,
+    UnhandledSpaError = 9005,
+    UnhandledIdeError = 9006,
+    FailedToReadInsertFile = 9007,
 
     PreprocessorIfAnalysisUnsupported = 9900,
 }
@@ -216,7 +218,6 @@ public static class DiagnosticCodes
         { GSCErrorCodes.NoEnclosingLoop, new("No enclosing loop out of which to break or continue.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingUsingFile, new("Unable to locate file '{0}' in the workspace or in the shared scripts directory.", DiagnosticSeverity.Error) },
-
         // Newly added SPA diagnostics
         { GSCErrorCodes.UnusedVariable, new("The variable '{0}' is declared but never used.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
         { GSCErrorCodes.UnusedParameter, new("The parameter '{0}' is never used.", DiagnosticSeverity.Hint, new[] { DiagnosticTag.Unnecessary }) },
@@ -236,12 +237,16 @@ public static class DiagnosticCodes
         { GSCErrorCodes.CalledOnInvalidTarget, new("Called-on target must be an entity/struct; got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidThreadCall, new("Only function calls can be threaded.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it", DiagnosticSeverity.Warning) },
-
+  
+        // 8xxx
+        { GSCErrorCodes.UnterminatedRegion, new("No corresponding '/* endregion */' found to terminate '{0}' region.", DiagnosticSeverity.Warning) },
+      
         // 9xxx
         { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledMacError, new("An unhandled exception '{0}' caused preprocessing (gscode-mac) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledAstError, new("An unhandled exception '{0}' caused syntax tree generation (gscode-ast) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledSaError, new("An unhandled exception '{0}' caused signature analysis (gscode-sa) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.UnhandledFraError, new("An unhandled exception '{0}' caused folding range analysis (gscode-fra) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledSpaError, new("An unhandled exception '{0}' caused static program analysis (gscode-spa) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnhandledIdeError, new("An unhandled exception '{0}' caused GSCode IDE analysis (gscode-ide) to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.FailedToReadInsertFile, new("Failed to read contents of insert-directive file '{0}' due to exception '{1}'. Check the file is accessible, then try again.", DiagnosticSeverity.Error) },

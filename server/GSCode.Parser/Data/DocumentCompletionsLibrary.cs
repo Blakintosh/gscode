@@ -4,6 +4,8 @@ using GSCode.Parser.SPA.Sense;
 using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
+using System;
+using System.Collections.Generic;
 
 namespace GSCode.Parser.Data;
 
@@ -72,7 +74,7 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
     private List<CompletionItem> GetFileScopeCompletions(CompletionContext context)
     {
         List<CompletionItem> completions = new();
-        HashSet<string> seenIdentifiers = new();
+        HashSet<string> seenIdentifiers = new(StringComparer.OrdinalIgnoreCase);
 
         // This will be replaced later, but will suffice as a temporary completions solution.
 
@@ -142,7 +144,7 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         return completions;
     }
 
-    private CompletionItem CreateCompletionItem(ScrFunctionDefinition function)
+    private static CompletionItem CreateCompletionItem(ScrFunctionDefinition function)
     {
         // TODO: has been hacked to show first only, but we need to handle all overloads eventually.
         // Generate snippet-formatted parameters with tabstops

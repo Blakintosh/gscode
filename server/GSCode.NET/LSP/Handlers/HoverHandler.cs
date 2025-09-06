@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using GSCode.Parser;
 
 namespace GSCode.NET.LSP.Handlers;
@@ -33,6 +34,7 @@ internal class HoverHandler : HoverHandlerBase
     public override async Task<Hover?> Handle(HoverParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Hover request received, processing...");
+        var sw = Stopwatch.StartNew();
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
         Hover? result = null;
 
@@ -40,8 +42,9 @@ internal class HoverHandler : HoverHandlerBase
         {
             result = await script.GetHoverAsync(request.Position, cancellationToken);
         }
+        sw.Stop();
 
-        _logger.LogInformation("Hover request processed. Hover being sent: {result}", result);
+        _logger.LogInformation("Hover processed in {ElapsedMs} ms. Has result: {Has}", sw.ElapsedMilliseconds, result != null);
         return result;
     }
 

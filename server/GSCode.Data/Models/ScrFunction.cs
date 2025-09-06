@@ -19,6 +19,7 @@ public record class ScrFunction : IExportedSymbol
     public string? Namespace { get; set; }
     public string? IntelliSense { get; set; }
     public bool IsPrivate { get; set; } = false;
+    public string? DocComment { get; set; }
 }
 
 public record class ScrFunctionArg

@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace GSCode.NET.LSP.Handlers;
 
@@ -30,6 +31,7 @@ internal class CompletionHandler(ILanguageServerFacade facade,
     public override async Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Completion request received, processing...");
+        var sw = Stopwatch.StartNew();
         CompletionList? result = null;
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
 
@@ -37,8 +39,10 @@ internal class CompletionHandler(ILanguageServerFacade facade,
         {
             result = await script.GetCompletionAsync(request.Position, cancellationToken);
         }
+        sw.Stop();
 
-        _logger.LogInformation("Completion request processed. CompletionList being sent: {result}", result.Count());
+        int count = result is null ? 0 : result.Count();
+        _logger.LogInformation("Completion processed in {ElapsedMs} ms. Items: {Count}", sw.ElapsedMilliseconds, count);
         return result;
     }
 

@@ -116,6 +116,7 @@ public enum GSCErrorCodes
     NoMatchingOverload = 3048,
     CalledOnInvalidTarget = 3049,
     InvalidThreadCall = 3050,
+    AssignOnThreadedFunction = 3051,
 
     // 8xxx errors are issued by the IDE for conventions
 
@@ -234,6 +235,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.NoMatchingOverload, new("No overload of '{0}' matches argument types ({1}).", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CalledOnInvalidTarget, new("Called-on target must be an entity/struct; got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidThreadCall, new("Only function calls can be threaded.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it", DiagnosticSeverity.Warning) },
 
         // 9xxx
         { GSCErrorCodes.UnhandledLexError, new("An unhandled exception '{0}' caused tokenisation (gscode-lex) of the script to fail. File a GSCode issue report and provide this script file for error reproduction.", DiagnosticSeverity.Error) },

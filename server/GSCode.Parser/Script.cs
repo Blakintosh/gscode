@@ -15,6 +15,7 @@ using GSCode.Parser.SA;
 using System.IO;
 using GSCode.Parser.SPA;
 using System.Text.RegularExpressions;
+using GSCode.Parser.DFA;
 
 namespace GSCode.Parser;
 
@@ -271,6 +272,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             EmitUnknownNamespaceDiagnostics();
             EmitUnusedUsingDiagnostics();
             EmitUnusedVariableDiagnostics();
+            EmitSwitchCaseDiagnostics();
         }
         catch (Exception ex)
         {
@@ -1236,6 +1238,132 @@ public class Script(DocumentUri ScriptUri, string languageId)
         foreach (var child in EnumerateChildren(node))
         {
             CollectIdentifierCounts(child, into);
+        }
+    }
+
+    private void EmitSwitchCaseDiagnostics()
+    {
+        if (RootNode is null) return;
+        foreach (var sw in EnumerateSwitches(RootNode))
+        {
+            HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+            bool defaultSeen = false;
+            var cases = sw.Cases.Cases.ToList();
+            for (int i = 0; i < cases.Count; i++)
+            {
+                var cs = cases[i];
+                // Handle labels
+                foreach (var label in cs.Labels)
+                {
+                    if (label.NodeType == AstNodeType.DefaultLabel)
+                    {
+                        if (defaultSeen)
+                        {
+                            // Multiple default labels
+                            Range r = GetCaseLabelOrBodyRange(cs, sw);
+                            Sense.AddSpaDiagnostic(r, GSCErrorCodes.MultipleDefaultLabels);
+                            // Also mark as unreachable
+                            Sense.AddSpaDiagnostic(r, GSCErrorCodes.UnreachableCase);
+                        }
+                        else
+                        {
+                            defaultSeen = true;
+                        }
+                    }
+                    else if (label.NodeType == AstNodeType.CaseLabel && label.Value is not null)
+                    {
+                        if (TryEvaluateCaseLabelConstant(label.Value, out string key))
+                        {
+                            if (!seen.Add(key))
+                            {
+                                // Duplicate label value in the same switch
+                                Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.DuplicateCaseLabel);
+                                Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.UnreachableCase);
+                            }
+                        }
+                    }
+                }
+
+                // Fallthrough detection: if not the last case and body does not terminate with break/return
+                if (i < cases.Count - 1)
+                {
+                    if (!HasTerminatingBreakOrReturn(cs.Body))
+                    {
+                        Range r = GetCaseLabelOrBodyRange(cs, sw);
+                        Sense.AddSpaDiagnostic(r, GSCErrorCodes.FallthroughCase);
+                    }
+                }
+            }
+        }
+    }
+
+    private static bool TryEvaluateCaseLabelConstant(ExprNode expr, out string key)
+    {
+        key = string.Empty;
+        if (expr is DataExprNode den)
+        {
+            // Encode type in key to avoid collisions between e.g., string "1" and int 1
+            key = den.Type switch
+            {
+                ScrDataTypes.Int => $"int:{den.Value}",
+                ScrDataTypes.Float => $"float:{den.Value}",
+                ScrDataTypes.String => $"str:{den.Value}",
+                ScrDataTypes.IString => $"istr:{den.Value}",
+                ScrDataTypes.Hash => $"hash:{den.Value}",
+                ScrDataTypes.Bool => $"bool:{den.Value}",
+                _ => string.Empty
+            };
+            return key.Length > 0;
+        }
+        return false;
+    }
+
+    private static bool HasTerminatingBreakOrReturn(StmtListNode body)
+    {
+        if (body.Statements.Count == 0) return false;
+        // naive: if any top-level statement is a break or a return, consider terminating
+        foreach (var st in body.Statements)
+        {
+            if (st is ControlFlowActionNode cfan && (cfan.NodeType == AstNodeType.BreakStmt))
+            {
+                return true;
+            }
+            if (st is ReturnStmtNode)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Range GetCaseLabelOrBodyRange(CaseStmtNode cs, SwitchStmtNode sw)
+    {
+        // Prefer the first label's value range if available
+        var firstLabel = cs.Labels.FirstOrDefault();
+        if (firstLabel is not null && firstLabel.Value is not null)
+        {
+            return firstLabel.Value.Range;
+        }
+        // Next, try first statement ranges
+        var firstStmt = cs.Body.Statements.FirstOrDefault();
+        if (firstStmt is ExprStmtNode es && es.Expr is not null)
+        {
+            return es.Expr.Range;
+        }
+        if (firstStmt is ControlFlowActionNode cfan)
+        {
+            return cfan.Range;
+        }
+        // Fallback to the switch expression range
+        return sw.Expression?.Range ?? RangeHelper.From(0, 0, 0, 1);
+    }
+
+    private static IEnumerable<SwitchStmtNode> EnumerateSwitches(AstNode node)
+    {
+        if (node is SwitchStmtNode s) yield return s;
+        foreach (var child in EnumerateChildren(node))
+        {
+            foreach (var x in EnumerateSwitches(child)) yield return x;
         }
     }
 

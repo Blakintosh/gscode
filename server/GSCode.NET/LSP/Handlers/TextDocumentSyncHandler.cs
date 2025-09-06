@@ -7,6 +7,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace GSCode.NET.LSP.Handlers;
 
@@ -47,6 +48,7 @@ public class TextDocumentSyncHandler : ITextDocumentSyncHandler
     public async Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Document changed");
+        var sw = Stopwatch.StartNew();
         var diagnostics = ImmutableArray<Diagnostic>.Empty.ToBuilder();
 
         IEnumerable<Diagnostic> results = await _scriptManager.UpdateEditorAsync(request.TextDocument, request.ContentChanges, cancellationToken);
@@ -62,15 +64,16 @@ public class TextDocumentSyncHandler : ITextDocumentSyncHandler
             Uri = request.TextDocument.Uri,
             Version = request.TextDocument.Version
         });
-
+        sw.Stop();
+        _logger.LogInformation("Document change processed in {ElapsedMs} ms with {DiagCount} diagnostics", sw.ElapsedMilliseconds, diagnostics.Count);
         return Unit.Value;
     }
 
     public async Task<Unit> Handle(DidOpenTextDocumentParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Document opened");
+        var sw = Stopwatch.StartNew();
         IEnumerable<Diagnostic> resultingDiagnostics = await _scriptManager.AddEditorAsync(request.TextDocument, cancellationToken);
-        //var resultingDiagnostics = ImmutableArray<Diagnostic>.Empty.ToBuilder();
 
         _facade.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams()
         {
@@ -78,25 +81,22 @@ public class TextDocumentSyncHandler : ITextDocumentSyncHandler
             Uri = request.TextDocument.Uri,
             Version = request.TextDocument.Version
         });
-
+        sw.Stop();
+        _logger.LogInformation("Document open processed in {ElapsedMs} ms with {DiagCount} diagnostics", sw.ElapsedMilliseconds, resultingDiagnostics.Count());
         return Unit.Value;
     }
 
     public Task<Unit> Handle(DidCloseTextDocumentParams request, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Document closed");
+        var sw = Stopwatch.StartNew();
         _scriptManager.RemoveEditor(request.TextDocument);
-
+        sw.Stop();
+        _logger.LogInformation("Document close processed in {ElapsedMs} ms", sw.ElapsedMilliseconds);
         return Unit.Task;
     }
 
-    public Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("Document saved");
-        //_scriptManager.UpdateScript(request.TextDocument);
-
-        return Unit.Task;
-    }
+    public Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken) => Unit.Task;
 
     TextDocumentOpenRegistrationOptions IRegistration<TextDocumentOpenRegistrationOptions, TextSynchronizationCapability>.GetRegistrationOptions(TextSynchronizationCapability capability, ClientCapabilities clientCapabilities)
     {

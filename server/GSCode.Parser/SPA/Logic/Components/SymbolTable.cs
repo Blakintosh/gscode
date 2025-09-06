@@ -14,15 +14,15 @@ namespace GSCode.Parser.SPA.Logic.Components;
 
 internal class SymbolTable
 {
-    private Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = new();
-    public Dictionary<string, ScrVariable> VariableSymbols { get; } = new();
+    private Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, ScrVariable> VariableSymbols { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public int LexicalScope { get; } = 0;
 
     public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope)
     {
-        ExportedSymbolTable = exportedSymbolTable;
-        VariableSymbols = inSet;
+        ExportedSymbolTable = new Dictionary<string, IExportedSymbol>(exportedSymbolTable, StringComparer.OrdinalIgnoreCase);
+        VariableSymbols = new Dictionary<string, ScrVariable>(inSet, StringComparer.OrdinalIgnoreCase);
         LexicalScope = lexicalScope;
     }
 

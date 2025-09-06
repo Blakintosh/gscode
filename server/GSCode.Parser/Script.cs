@@ -273,6 +273,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             EmitUnusedUsingDiagnostics();
             EmitUnusedVariableDiagnostics();
             EmitSwitchCaseDiagnostics();
+            EmitAssignOnThreadDiagnostics();
         }
         catch (Exception ex)
         {
@@ -1388,6 +1389,54 @@ public class Script(DocumentUri ScriptUri, string languageId)
         foreach (var child in EnumerateChildren(node))
         {
             foreach (var c in EnumerateNamespacedMembers(child)) yield return c;
+        }
+    }
+
+    private static IEnumerable<BinaryExprNode> EnumerateBinaryExprs(AstNode node)
+    {
+        if (node is BinaryExprNode b) yield return b;
+        foreach (var child in EnumerateChildren(node))
+        {
+            foreach (var c in EnumerateBinaryExprs(child)) yield return c;
+        }
+    }
+
+    private static bool ContainsThreadCall(AstNode node)
+    {
+        if (node is PrefixExprNode pe && pe.Operation == TokenType.Thread)
+        {
+            return true;
+        }
+        if (node is CalledOnNode con)
+        {
+            // thread appears on the call side for patterns like self thread foo();
+            if (ContainsThreadCall(con.Call)) return true;
+            // also traverse 'on' to be thorough
+            if (ContainsThreadCall(con.On)) return true;
+            return false;
+        }
+        foreach (var child in EnumerateChildren(node))
+        {
+            if (ContainsThreadCall(child)) return true;
+        }
+        return false;
+    }
+
+    private void EmitAssignOnThreadDiagnostics()
+    {
+        if (RootNode is null) return;
+        foreach (var fn in EnumerateFunctions(RootNode))
+        {
+            foreach (var bin in EnumerateBinaryExprs(fn.Body))
+            {
+                if (bin.Operation == TokenType.Assign && bin.Right is not null)
+                {
+                    if (ContainsThreadCall(bin.Right))
+                    {
+                        Sense.AddSpaDiagnostic(bin.Range, GSCErrorCodes.AssignOnThreadedFunction);
+                    }
+                }
+            }
         }
     }
 

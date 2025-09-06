@@ -124,10 +124,10 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         // Record method/function location (method recorded as function under containing namespace)
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
         // Record parameter names for outline/signature
-        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Overloads[0].Parameters ?? new List<ScrFunctionArg>()).Select(a => a.Name));
         // Record flags (private, autoexec)
         var flags = new List<string>();
-        if (function.IsPrivate) flags.Add("private");
+        if (function.Private) flags.Add("private");
         if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
@@ -209,8 +209,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 }
             ],
             Flags = ["userdefined"],
-            Private = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
-            IntelliSense = null, // I have no idea why this exists
+            Private = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
             DocComment = ExtractDocCommentBefore(nameToken)
         };
 
@@ -220,10 +219,10 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         // Record function location for go-to-definition
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
         // Record parameter names for outline/signature
-        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Overloads[0].Parameters ?? new List<ScrFunctionArg>()).Select(a => a.Name));
         // Record flags (private, autoexec)
         var flags = new List<string>();
-        if (function.IsPrivate) flags.Add("private");
+        if (function.Private) flags.Add("private");
         if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
@@ -553,7 +552,7 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
         builder.Append($"function {Source.Name}(");
 
         bool first = true;
-        foreach (ScrFunctionArg parameter in Source.Args ?? [])
+        foreach (ScrFunctionArg parameter in Source.Overloads[0].Parameters ?? [])
         {
             AppendParameter(builder, parameter, ref first);
         }

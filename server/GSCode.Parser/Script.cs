@@ -263,7 +263,21 @@ public class Script(DocumentUri ScriptUri, string languageId)
     {
         await WaitUntilParsedAsync(cancellationToken);
 
-        // TODO: Implement deeper analysis; for now references are built after parse.
+        // Basic SPA diagnostics
+        try
+        {
+            EmitUnusedParameterDiagnostics();
+            EmitCallArityDiagnostics();
+            EmitUnknownNamespaceDiagnostics();
+            EmitUnusedUsingDiagnostics();
+            EmitUnusedVariableDiagnostics();
+        }
+        catch (Exception ex)
+        {
+            // Do not fail analysis entirely; surface as SPA failure
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
+        }
+
         Analysed = true;
     }
 
@@ -948,5 +962,389 @@ public class Script(DocumentUri ScriptUri, string languageId)
         if (string.IsNullOrWhiteSpace(name)) return string.Empty;
         int idx = name.IndexOf('=');
         return idx >= 0 ? name[..idx].Trim() : name.Trim();
+    }
+
+    // ===== SPA helpers =====
+
+    private void EmitUnusedParameterDiagnostics()
+    {
+        if (RootNode is null) return;
+        // Traverse functions
+        foreach (var fn in EnumerateFunctions(RootNode))
+        {
+            // collect used identifiers in function body
+            HashSet<string> used = new(StringComparer.OrdinalIgnoreCase);
+            CollectIdentifiers(fn.Body, used);
+            foreach (var p in fn.Parameters.Parameters)
+            {
+                if (p.Name is null) continue;
+                string paramName = p.Name.Lexeme;
+                if (!used.Contains(paramName))
+                {
+                    Sense.AddSpaDiagnostic(p.Name.Range, GSCErrorCodes.UnusedParameter, paramName);
+                }
+            }
+        }
+    }
+
+    private void EmitCallArityDiagnostics()
+    {
+        if (RootNode is null) return;
+        // Build known function param counts for local/dep functions
+        var localParamMap = new Dictionary<(string ns, string name), (int required, int total)>();
+        if (DefinitionsTable is not null)
+        {
+            foreach (var kv in DefinitionsTable.GetAllFunctionParameters())
+            {
+                var key = kv.Key;
+                var values = kv.Value ?? Array.Empty<string>();
+                int total = values.Length;
+                int required = 0;
+                foreach (var v in values)
+                {
+                    if (string.IsNullOrWhiteSpace(v)) continue;
+                    if (!v.Contains('=')) required++;
+                }
+                localParamMap[(key.Namespace, key.Name)] = (required, total);
+            }
+        }
+
+        // Walk all call nodes
+        foreach (var call in EnumerateCalls(RootNode))
+        {
+            string? ns = null;
+            string? name = null;
+            Range reportRange = call.Arguments.Range;
+
+            if (call is FunCallNode fcall)
+            {
+                switch (fcall.Target)
+                {
+                    case IdentifierExprNode id:
+                        name = id.Identifier;
+                        reportRange = fcall.Arguments.Range;
+                        break;
+                    case NamespacedMemberNode nsm:
+                        if (nsm.Namespace is IdentifierExprNode nsId && nsm.Member is IdentifierExprNode member)
+                        {
+                            ns = nsId.Identifier; name = member.Identifier; reportRange = fcall.Arguments.Range;
+                        }
+                        break;
+                }
+            }
+            // MethodCallNode also counts as a call, but we can't reliably infer name for arity; skip
+            if (name is null) continue;
+
+            int argCount = call.Arguments.Arguments.Count;
+
+            // Builtin API arity check
+            if (TryGetApi() is ScriptAnalyserData api)
+            {
+                try
+                {
+                    var apiFn = api.GetApiFunction(name);
+                    if (apiFn is not null && ns is null)
+                    {
+                        int minAny = int.MaxValue; int maxAny = int.MinValue; bool any = false;
+                        foreach (var ov in apiFn.Overloads)
+                        {
+                            int total = ov.Parameters.Count;
+                            int req = ov.Parameters.Count(p => p.Mandatory == true);
+                            minAny = Math.Min(minAny, req);
+                            maxAny = Math.Max(maxAny, total);
+                            any = true;
+                        }
+                        if (any)
+                        {
+                            // remove on purpose: too few arguments is very common due to optional params and overloads
+                            //if (argCount < minAny)
+                            //{
+                            //    Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooFewArguments, name, argCount, minAny);
+                            //    continue;
+                            //}
+                            if (argCount > maxAny)
+                            {
+                                Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooManyArguments, name, argCount, maxAny);
+                                continue;
+                            }
+                            // If within some overload’s min/max, we assume OK (type checking not implemented)
+                            continue;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // Local/dep function arity check via DefinitionsTable
+            string lookupNs = ns ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+            (int required, int total) paramInfo;
+            if (!localParamMap.TryGetValue((lookupNs, name), out paramInfo))
+            {
+                // try any namespace entry for this name if not namespaced
+                if (ns is null && localParamMap.Count > 0)
+                {
+                    bool found = false;
+                    foreach (var kv in localParamMap)
+                    {
+                        if (string.Equals(kv.Key.name, name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            paramInfo = kv.Value;
+                            lookupNs = kv.Key.ns;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                    {
+                        continue; // unknown symbol; skip
+                    }
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            // removed on purpose : too few arguments is very common due to optional params and overloads
+            //if (argCount < paramInfo.required)
+            //{
+            //    Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooFewArguments, name, argCount, paramInfo.required);
+            //}
+            //else 
+            if (paramInfo.total >= 0 && argCount > paramInfo.total)
+            {
+                Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooManyArguments, name, argCount, paramInfo.total);
+            }
+        }
+    }
+
+    private void EmitUnknownNamespaceDiagnostics()
+    {
+        if (RootNode is null || DefinitionsTable is null) return;
+        HashSet<string> known = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in DefinitionsTable.GetAllFunctionLocations()) known.Add(kv.Key.Namespace);
+        foreach (var kv in DefinitionsTable.GetAllClassLocations()) known.Add(kv.Key.Namespace);
+        known.Add(DefinitionsTable.CurrentNamespace);
+
+        foreach (var nsm in EnumerateNamespacedMembers(RootNode))
+        {
+            if (nsm.Namespace is IdentifierExprNode nsId && !known.Contains(nsId.Identifier))
+            {
+                Sense.AddSpaDiagnostic(nsId.Range, GSCErrorCodes.UnknownNamespace, nsId.Identifier);
+            }
+        }
+    }
+
+    private void EmitUnusedUsingDiagnostics()
+    {
+        if (RootNode is null || DefinitionsTable is null) return;
+
+        // Map referenced file paths
+        HashSet<string> referencedFiles = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in _references)
+        {
+            var key = kv.Key;
+            var fLoc = DefinitionsTable.GetFunctionLocation(key.Namespace, key.Name);
+            if (fLoc is not null) { referencedFiles.Add(NormalizeFilePathForUri(fLoc.Value.FilePath)); continue; }
+            var cLoc = DefinitionsTable.GetClassLocation(key.Namespace, key.Name);
+            if (cLoc is not null) { referencedFiles.Add(NormalizeFilePathForUri(cLoc.Value.FilePath)); continue; }
+        }
+
+        // For each using directive, if no referenced symbol comes from that dependency file, mark unused
+        foreach (var depNode in RootNode.Dependencies)
+        {
+            // Build expected suffix: ..\scripts\<depNode.Path>.<LanguageId>
+            string rel = depNode.Path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
+            string expectedSuffix = Path.DirectorySeparatorChar + rel + "." + LanguageId;
+
+            bool anyFromThisUsing = false;
+            foreach (var referenced in referencedFiles)
+            {
+                string normalizedPath = NormalizeFilePathForUri(referenced);
+                if (normalizedPath.Contains(expectedSuffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    anyFromThisUsing = true;
+                    break;
+                }
+            }
+
+            if (!anyFromThisUsing)
+            {
+                Sense.AddSpaDiagnostic(depNode.Range, GSCErrorCodes.UnusedUsing, depNode.Path);
+            }
+        }
+    }
+
+    private void EmitUnusedVariableDiagnostics()
+    {
+        if (RootNode is null) return;
+        foreach (var fn in EnumerateFunctions(RootNode))
+        {
+            // Count all identifier occurrences within the function body
+            Dictionary<string, int> usageCounts = new(StringComparer.OrdinalIgnoreCase);
+            CollectIdentifierCounts(fn.Body, usageCounts);
+
+            // Flag unused const declarations
+            foreach (var node in EnumerateChildren(fn.Body))
+            {
+                if (node is ConstStmtNode cst)
+                {
+                    string name = cst.Identifier;
+                    usageCounts.TryGetValue(name, out int count);
+                    if (count == 0)
+                    {
+                        Sense.AddSpaDiagnostic(cst.Range, GSCErrorCodes.UnusedVariable, name);
+                    }
+                }
+            }
+
+            // Flag simple assignments to new/local variables that are never used elsewhere
+            foreach (var node in EnumerateChildren(fn.Body))
+            {
+                if (node is ExprStmtNode es && es.Expr is BinaryExprNode be && be.Operation == TokenType.Assign && be.Left is IdentifierExprNode id)
+                {
+                    string name = id.Identifier;
+                    usageCounts.TryGetValue(name, out int count);
+                    // If the only occurrence is this defining assignment (LHS), consider it unused
+                    if (count <= 1)
+                    {
+                        Sense.AddSpaDiagnostic(id.Range, GSCErrorCodes.UnusedVariable, name);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void CollectIdentifierCounts(AstNode node, Dictionary<string, int> into)
+    {
+        if (node is IdentifierExprNode id)
+        {
+            if (!into.TryGetValue(id.Identifier, out int c)) c = 0;
+            into[id.Identifier] = c + 1;
+        }
+        foreach (var child in EnumerateChildren(node))
+        {
+            CollectIdentifierCounts(child, into);
+        }
+    }
+
+    // Enumerators
+    private static IEnumerable<FunDefnNode> EnumerateFunctions(AstNode node)
+    {
+        if (node is FunDefnNode fn) yield return fn;
+        foreach (var child in EnumerateChildren(node))
+        {
+            foreach (var f in EnumerateFunctions(child)) yield return f;
+        }
+    }
+
+    private static IEnumerable<FunCallNode> EnumerateCalls(AstNode node)
+    {
+        if (node is FunCallNode f) yield return f;
+        foreach (var child in EnumerateChildren(node))
+        {
+            foreach (var c in EnumerateCalls(child)) yield return c;
+        }
+    }
+
+    private static IEnumerable<NamespacedMemberNode> EnumerateNamespacedMembers(AstNode node)
+    {
+        if (node is NamespacedMemberNode n) yield return n;
+        foreach (var child in EnumerateChildren(node))
+        {
+            foreach (var c in EnumerateNamespacedMembers(child)) yield return c;
+        }
+    }
+
+    private static IEnumerable<AstNode> EnumerateChildren(AstNode node)
+    {
+        switch (node)
+        {
+            case ScriptNode s:
+                foreach (var d in s.Dependencies) yield return d;
+                foreach (var sd in s.ScriptDefns) yield return sd; break;
+            case ClassBodyListNode cbl:
+                foreach (var d in cbl.Definitions) yield return d; break;
+            case StmtListNode sl:
+                foreach (var st in sl.Statements) yield return st; break;
+            case IfStmtNode iff:
+                if (iff.Condition is not null) yield return iff.Condition;
+                if (iff.Then is not null) yield return iff.Then;
+                if (iff.Else is not null) yield return iff.Else; break;
+            case ReservedFuncStmtNode rfs:
+                if (rfs.Expr is not null) yield return rfs.Expr; break;
+            case ConstStmtNode cst:
+                if (cst.Value is not null) yield return cst.Value; break;
+            case ExprStmtNode es:
+                if (es.Expr is not null) yield return es.Expr; break;
+            case DoWhileStmtNode dw:
+                if (dw.Condition is not null) yield return dw.Condition; if (dw.Then is not null) yield return dw.Then; break;
+            case WhileStmtNode wl:
+                if (wl.Condition is not null) yield return wl.Condition; if (wl.Then is not null) yield return wl.Then; break;
+            case ForStmtNode fr:
+                if (fr.Init is not null) yield return fr.Init; if (fr.Condition is not null) yield return fr.Condition; if (fr.Increment is not null) yield return fr.Increment; if (fr.Then is not null) yield return fr.Then; break;
+            case ForeachStmtNode fe:
+                if (fe.Collection is not null) yield return fe.Collection; if (fe.Then is not null) yield return fe.Then; break;
+            case ReturnStmtNode rt:
+                if (rt.Value is not null) yield return rt.Value; break;
+            case DefnDevBlockNode db:
+                foreach (var d in db.Definitions) yield return d; break;
+            case FunDevBlockNode fdb:
+                yield return fdb.Body; break;
+            case SwitchStmtNode sw:
+                if (sw.Expression is not null) yield return sw.Expression; yield return sw.Cases; break;
+            case CaseListNode cl:
+                foreach (var c in cl.Cases) yield return c; break;
+            case CaseStmtNode cs:
+                foreach (var l in cs.Labels) yield return l; yield return cs.Body; break;
+            case CaseLabelNode cln:
+                if (cln.Value is not null) yield return cln.Value; break;
+            case FunDefnNode fd:
+                yield return fd.Parameters; yield return fd.Body; break;
+            case ParamListNode pl:
+                foreach (var p in pl.Parameters) yield return p; break;
+            case ParamNode pn:
+                if (pn.Default is not null) yield return pn.Default; break;
+            case VectorExprNode vx:
+                yield return vx.X; if (vx.Y is not null) yield return vx.Y; if (vx.Z is not null) yield return vx.Z; break;
+            case TernaryExprNode te:
+                yield return te.Condition; if (te.Then is not null) yield return te.Then; if (te.Else is not null) yield return te.Else; break;
+            case BinaryExprNode be:
+                if (be.Left is not null) yield return be.Left; if (be.Right is not null) yield return be.Right; break;
+            case PrefixExprNode pe:
+                yield return pe.Operand; break;
+            case PostfixExprNode pxe:
+                yield return pxe.Operand; break;
+            case ConstructorExprNode:
+                break;
+            case MethodCallNode mc:
+                if (mc.Target is not null) yield return mc.Target; yield return mc.Arguments; break;
+            case FunCallNode fc:
+                if (fc.Target is not null) yield return fc.Target; yield return fc.Arguments; break;
+            case NamespacedMemberNode nm:
+                yield return nm.Namespace; yield return nm.Member; break;
+            case ArgsListNode al:
+                foreach (var a in al.Arguments) { if (a is not null) yield return a; } break;
+            case ArrayIndexNode ai:
+                yield return ai.Array; if (ai.Index is not null) yield return ai.Index; break;
+            case CalledOnNode con:
+                yield return con.On; yield return con.Call; break;
+            default:
+                break;
+        }
+    }
+
+    private static void CollectIdentifiers(AstNode node, HashSet<string> into)
+    {
+        switch (node)
+        {
+            case IdentifierExprNode id:
+                into.Add(id.Identifier);
+                break;
+        }
+        foreach (var child in EnumerateChildren(node))
+        {
+            CollectIdentifiers(child, into);
+        }
     }
 }

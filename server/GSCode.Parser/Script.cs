@@ -497,7 +497,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (apiFn is not null)
                 {
                     var overload = apiFn.Overloads.FirstOrDefault();
-                    var paramSeq = overload != null ? overload.Parameters : new List<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                    var paramSeq = overload != null ? overload.Parameters : new List<ScrFunctionArg>();
                     string[] names = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                     string sig = FormatSignature(name, names, activeParam, qualifier);
                     string desc = apiFn.Description ?? string.Empty;
@@ -1032,7 +1032,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (apiFn is not null)
                 {
                     var overload = apiFn.Overloads.FirstOrDefault();
-                    IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                    IEnumerable<ScrFunctionArg> paramSeq = overload != null ? (IEnumerable<ScrFunctionArg>)overload.Parameters : Enumerable.Empty<ScrFunctionArg>();
                     var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                     string label = $"function {name}({string.Join(", ", cleaned)})";
                     var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = string.IsNullOrWhiteSpace(p.Description) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description! } }));
@@ -1146,7 +1146,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
             if (call is FunCallNode fcall)
             {
-                switch (fcall.Target)
+                switch (fcall.Function)
                 {
                     case IdentifierExprNode id:
                         name = id.Identifier;
@@ -1646,7 +1646,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             case MethodCallNode mc:
                 if (mc.Target is not null) yield return mc.Target; yield return mc.Arguments; break;
             case FunCallNode fc:
-                if (fc.Target is not null) yield return fc.Target; yield return fc.Arguments; break;
+                if (fc.Function is not null) yield return fc.Function; yield return fc.Arguments; break;
             case NamespacedMemberNode nm:
                 yield return nm.Namespace; yield return nm.Member; break;
             case ArgsListNode al:

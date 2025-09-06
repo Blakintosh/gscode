@@ -10,17 +10,15 @@ using System.Text.RegularExpressions;
 
 namespace GSCode.Parser.Misc;
 
-internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelliSense sense)
+internal ref partial struct UserRegionsAnalyser(Token startToken, ParserIntelliSense sense)
 {
     private Token CurrentToken { get; set; } = startToken;
     public readonly TokenType CurrentTokenType => CurrentToken.Type;
 
     private ParserIntelliSense Sense { get; } = sense;
 
-    public List<FoldingRange> Analyse()
+    public void Analyse()
     {
-        List<FoldingRange> foldingRanges = new();
-
         while (CurrentTokenType != TokenType.Eof)
         {
             if (!IsRegionStart(CurrentToken, out string? regionName, out Match? regionMatch))
@@ -31,17 +29,15 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
 
             EmitRegionStartSemanticTokens(CurrentToken, regionName, regionMatch);
 
-            FoldingRange? foldingRange = AnalyseFoldingRange(CurrentToken, regionName ?? string.Empty, foldingRanges);
+            FoldingRange? foldingRange = AnalyseFoldingRange(CurrentToken, regionName ?? string.Empty);
             if (foldingRange is not null)
             {
-                foldingRanges.Add(foldingRange);
+                Sense.FoldingRanges.Add(foldingRange);
             }
         }
-
-        return foldingRanges;
     }
 
-    private FoldingRange? AnalyseFoldingRange(Token startToken, string name, List<FoldingRange> foldingRanges)
+    private FoldingRange? AnalyseFoldingRange(Token startToken, string name)
     {
         CurrentToken = CurrentToken.Next;
 
@@ -62,6 +58,7 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
                     EndLine = endToken.Range.End.Line,
                     EndCharacter = endToken.Range.Start.Character,
 
+                    CollapsedText = name,
                     Kind = FoldingRangeKind.Region
                 };
             }
@@ -74,10 +71,10 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
 
             EmitRegionStartSemanticTokens(CurrentToken, nestedRegionName, nestedRegionMatch);
 
-            FoldingRange? foldingRange = AnalyseFoldingRange(CurrentToken, nestedRegionName ?? string.Empty, foldingRanges);
+            FoldingRange? foldingRange = AnalyseFoldingRange(CurrentToken, nestedRegionName ?? string.Empty);
             if (foldingRange is not null)
             {
-                foldingRanges.Add(foldingRange);
+                Sense.FoldingRanges.Add(foldingRange);
             }
         }
 
@@ -91,14 +88,14 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
         int line = token.Range.Start.Line;
 
         // Emit the 'region' keyword
-        int regionStartCharOffset = match.Groups[0].Index;
-        int regionEndCharOffset = regionStartCharOffset + match.Groups[0].Length;
+        int regionStartCharOffset = match.Groups[1].Index;
+        int regionEndCharOffset = regionStartCharOffset + match.Groups[1].Length;
 
         Sense.SemanticTokens.Add(new SemanticTokenDefinition(new Range(line, regionStartCharOffset + baseChar, line, regionEndCharOffset + baseChar), "keyword", []));
 
         // and the region's name
-        int nameStartCharOffset = match.Groups[1].Index;
-        int nameEndCharOffset = nameStartCharOffset + match.Groups[1].Length;
+        int nameStartCharOffset = match.Groups[2].Index;
+        int nameEndCharOffset = nameStartCharOffset + match.Groups[2].Length;
 
         Sense.SemanticTokens.Add(new SemanticTokenDefinition(new Range(line, nameStartCharOffset + baseChar, line, nameEndCharOffset + baseChar), "variable", []));
     }
@@ -108,10 +105,13 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
         int baseChar = token.Range.Start.Character;
         int line = token.Range.Start.Line;
 
-        Sense.SemanticTokens.Add(new SemanticTokenDefinition(new Range(line, baseChar, line, baseChar + match.Groups[0].Length), "keyword", []));
+        int endregionStartCharOffset = match.Groups[1].Index;
+        int endregionEndCharOffset = endregionStartCharOffset + match.Groups[1].Length;
+
+        Sense.SemanticTokens.Add(new SemanticTokenDefinition(new Range(line, endregionStartCharOffset + baseChar, line, endregionEndCharOffset + baseChar), "keyword", []));
     }
 
-    [GeneratedRegex(@"^\s*/\*\s*region\s+([^*]+?)\s*\*/\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"^\s*/\*\s*(region)\s+([^*]+?)\s*\*/\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex RegionStartRegex();
 
     [GeneratedRegex(@"^\s*/\*\s*(endregion)\s*\*/\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]

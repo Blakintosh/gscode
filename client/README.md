@@ -12,37 +12,46 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.3.0 beta (latest)
-* Added Outliner support for classes, functions, and macros.
-* Added goto definition support for usings, script functions, and macros.
-* Added signature support for script functions & builtins.
-* Fixed function & variable names not showing signatures & tooltips due to case-sensitivity.
+### 0.9.0 beta (latest)
 
-Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed these changes.
+- Added Outliner support for classes, functions, and macros.
+- Added goto definition support for usings, script functions, and macros.
+- Added signature support for script functions & builtins.
+- Fixed function & variable names not showing signatures & tooltips due to case-sensitivity.
+- Added analyser checks for: unknown namespace, unused using, unused variable, unused parameters, switch checks.
+
+Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed all of the above changes ([#24](https://github.com/Blakintosh/gscode/pull/24)).
+
+Additionally,
+
+- Added comment code region support (`/* region Name */` `/* endregion */` syntax) with folding ranges in the editor ([#22](https://github.com/Blakintosh/gscode/issues/22)).
 
 ### 0.2 beta
-* Added a 'dumb' completion handler to suggest function completions.
-* Added a 'dumb' handler to provide GSCode API hover documentation on built-in functions.
-* Added diagnostic for missing scripts from using.
-* Added basic signature analysis for highlighting of class, function, method and parameter definitions.
-* Added using highlight with script path hint.
-* Various bug fixes.
+
+- Added a 'dumb' completion handler to suggest function completions.
+- Added a 'dumb' handler to provide GSCode API hover documentation on built-in functions.
+- Added diagnostic for missing scripts from using.
+- Added basic signature analysis for highlighting of class, function, method and parameter definitions.
+- Added using highlight with script path hint.
+- Various bug fixes.
 
 ### 0.1 beta
-* Initial public release. Adds GSC & CSC language support, providing syntax highlighting and IntelliSense for preprocessor and syntactic analysis.
+
+- Initial public release. Adds GSC & CSC language support, providing syntax highlighting and IntelliSense for preprocessor and syntactic analysis.
 
 ## Reporting Issues and Tweaks
 
-As GSCode is an indepedent implementation of a GSC language parser, it may not immediately have feature parity with the GSC compiler. This is the eventual aim, however. More specifically, we aim to ensure that GSCode catches any and all errors caught by the GSC compiler as a minimum (syntactic and semantic).
+As GSCode is an indepedent implementation of a GSC language parser, it may not immediately have feature parity with the GSC compiler. Any instance where it does not catch bugs that the GSC compiler does will be considered a bug. Additionally, we're hoping to catch more bugs than the GSC compiler eventually.
 
 With that in mind, if you encounter any situations where the GSC compiler (Linker) reports a syntax error, but GSCode does not, this constitutes an issue. You can report these issues to the [issue tracker on GitHub](https://github.com/Blakintosh/gscode/issues); please provide the expected error and attach a script that can reproduce the issue. Issues reporting bugs in isolated script cases without attaching a script (snippet) will not be looked into!
 
 ## Known Issues
 
-* Macro hoverables only show nested macro expansions if nested macros are not at the start or end of the expansion.
+- Macro hoverables only show nested macro expansions if nested macros are not at the start or end of the expansion.
 
 ## Licence
-GSCode is open-source software licenced under the GNU General Public License v3.0. 
+
+GSCode is open-source software licenced under the GNU General Public License v3.0.
 
 ```
 GSCode - Black Ops III GSC Language Extension
@@ -61,4 +70,5 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```
+
 Please see [LICENSE.md](https://github.com/Blakintosh/gscode/blob/main/LICENSE.md) for details.

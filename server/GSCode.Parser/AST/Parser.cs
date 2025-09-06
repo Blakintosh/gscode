@@ -18,7 +18,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     public readonly TokenType CurrentTokenType => CurrentToken.Type;
     public readonly Range CurrentTokenRange => CurrentToken.Range;
 
+
     [Flags]
+    private enum ParserContextFlags
+    {
     private enum ParserContextFlags
     {
         None = 0,
@@ -27,6 +30,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         InLoopBody = 4,
         InDevBlock = 8,
     }
+
 
     private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
 
@@ -531,7 +535,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         Token? inheritedClassToken = InheritsFrom();
 
         // Check for LBRACE
-        if (!AdvanceIfType(TokenType.OpenBrace))
+        if (!ConsumeIfType(TokenType.OpenBrace, out Token? openBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
 
@@ -543,11 +547,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         ClassBodyListNode classBody = ClassBodyDefnList();
 
         // Check for RBRACE
-        if (!AdvanceIfType(TokenType.CloseBrace))
+        if (!ConsumeIfType(TokenType.CloseBrace, out Token? closeBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '}', CurrentToken.Lexeme);
             EnterRecovery();
         }
+
+        EmitFoldingRangeIfPossible(openBraceToken, closeBraceToken);
 
         return new ClassDefnNode(identifierToken, inheritedClassToken, classBody);
     }
@@ -816,15 +822,18 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private StmtListNode FunBraceBlock()
     {
         // Pass over OPENBRACE
-        Advance();
+        Token openBraceToken = Consume();
 
         // Parse the statements in the block
         StmtListNode stmtListNode = StmtList();
 
-        if (!AdvanceIfType(TokenType.CloseBrace))
+        if (!ConsumeIfType(TokenType.CloseBrace, out Token? closeBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '}', CurrentToken.Lexeme);
         }
+
+        EmitFoldingRangeIfPossible(openBraceToken, closeBraceToken);
+
         return stmtListNode;
     }
 
@@ -1285,7 +1294,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Check for OPENBRACE
-        if (!AdvanceIfType(TokenType.OpenBrace))
+        if (!ConsumeIfType(TokenType.OpenBrace, out Token? openBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
         }
@@ -1294,10 +1303,12 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         CaseListNode cases = CaseList();
 
         // Check for CLOSEBRACE
-        if (!AdvanceIfType(TokenType.CloseBrace))
+        if (!ConsumeIfType(TokenType.CloseBrace, out Token? closeBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '}', CurrentToken.Lexeme);
         }
+
+        EmitFoldingRangeIfPossible(openBraceToken, closeBraceToken);
 
         return new SwitchStmtNode()
         {
@@ -2708,6 +2719,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             }
             FunCallNode call = new FunCallNode(left, functionArgs);
 
+            // TODO: HACK - create permanent function hoverable solution at SPA-stage in a future version
+            if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunctionDefinition function)
+            {
+                Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
+            }
             return CallOrAccessOpRhs(call);
         }
 
@@ -3072,6 +3088,24 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         return false;
+    }
+
+    // next: This is not my preferred method of emitting folding ranges, may move to SPA later.
+    private void EmitFoldingRangeIfPossible(Token? openToken, Token? closeToken)
+    {
+        if (openToken is null || closeToken is null)
+        {
+            return;
+        }
+
+        Sense.FoldingRanges.Add(new FoldingRange()
+        {
+            StartLine = openToken.Range.End.Line,
+            StartCharacter = openToken.Range.End.Character,
+
+            EndLine = closeToken.Previous.Range.Start.Line,
+            EndCharacter = closeToken.Previous.Range.Start.Character
+        });
     }
 
     private bool ConsumeIfType(TokenType type, [NotNullWhen(true)] out Token? consumed)

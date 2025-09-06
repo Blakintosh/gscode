@@ -5,6 +5,7 @@ using GSCode.Parser.Steps.Interfaces;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 
 namespace GSCode.Parser.Misc;
@@ -28,6 +29,8 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
                 continue;
             }
 
+            EmitRegionStartSemanticTokens(CurrentToken, regionName, regionMatch);
+
             FoldingRange? foldingRange = AnalyseFoldingRange(CurrentToken, regionName ?? string.Empty, foldingRanges);
             if (foldingRange is not null)
             {
@@ -44,8 +47,10 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
 
         while (CurrentTokenType != TokenType.Eof)
         {
-            if (IsRegionEnd(CurrentToken))
+            if (IsRegionEnd(CurrentToken, out Match? regionEndMatch))
             {
+                EmitRegionEndSemanticTokens(CurrentToken, regionEndMatch);
+
                 Token endToken = CurrentToken;
                 CurrentToken = CurrentToken.Next;
 
@@ -67,6 +72,8 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
                 continue;
             }
 
+            EmitRegionStartSemanticTokens(CurrentToken, nestedRegionName, nestedRegionMatch);
+
             FoldingRange? foldingRange = AnalyseFoldingRange(CurrentToken, nestedRegionName ?? string.Empty, foldingRanges);
             if (foldingRange is not null)
             {
@@ -78,13 +85,39 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
         return null;
     }
 
+    private readonly void EmitRegionStartSemanticTokens(Token token, string lexeme, Match match)
+    {
+        int baseChar = token.Range.Start.Character;
+        int line = token.Range.Start.Line;
+
+        // Emit the 'region' keyword
+        int regionStartCharOffset = match.Groups[0].Index;
+        int regionEndCharOffset = regionStartCharOffset + match.Groups[0].Length;
+
+        Sense.SemanticTokens.Add(new SemanticTokenDefinition(new Range(line, regionStartCharOffset + baseChar, line, regionEndCharOffset + baseChar), "keyword", []));
+
+        // and the region's name
+        int nameStartCharOffset = match.Groups[1].Index;
+        int nameEndCharOffset = nameStartCharOffset + match.Groups[1].Length;
+
+        Sense.SemanticTokens.Add(new SemanticTokenDefinition(new Range(line, nameStartCharOffset + baseChar, line, nameEndCharOffset + baseChar), "variable", []));
+    }
+
+    private readonly void EmitRegionEndSemanticTokens(Token token, Match match)
+    {
+        int baseChar = token.Range.Start.Character;
+        int line = token.Range.Start.Line;
+
+        Sense.SemanticTokens.Add(new SemanticTokenDefinition(new Range(line, baseChar, line, baseChar + match.Groups[0].Length), "keyword", []));
+    }
+
     [GeneratedRegex(@"^\s*/\*\s*region\s+([^*]+?)\s*\*/\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex RegionStartRegex();
 
-    [GeneratedRegex(@"^\s*/\*\s*endregion\s*\*/\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"^\s*/\*\s*(endregion)\s*\*/\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex RegionEndRegex();
 
-    private static bool IsRegionStart(Token token, out string? name, out Match? match)
+    private static bool IsRegionStart(Token token, [NotNullWhen(true)] out string? name, [NotNullWhen(true)] out Match? match)
     {
         name = null;
         match = null;
@@ -104,13 +137,20 @@ internal ref partial struct FoldingRangeAnalyser(Token startToken, ParserIntelli
         return false;
     }
 
-    private static bool IsRegionEnd(Token token)
+    private static bool IsRegionEnd(Token token, [NotNullWhen(true)] out Match? match)
     {
+        match = null;
         if (token.Type != TokenType.MultilineComment)
         {
             return false;
         }
 
-        return RegionEndRegex().IsMatch(token.Lexeme);
+        match = RegionEndRegex().Match(token.Lexeme);
+        if (match.Success)
+        {
+            return true;
+        }
+
+        return false;
     }
 }

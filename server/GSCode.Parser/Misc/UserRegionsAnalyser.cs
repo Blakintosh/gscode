@@ -130,7 +130,7 @@ internal ref partial struct UserRegionsAnalyser(Token startToken, ParserIntelliS
         match = RegionStartRegex().Match(token.Lexeme);
         if (match.Success)
         {
-            name = match.Groups[1].Value.Trim();
+            name = match.Groups[2].Value.Trim();
             return true;
         }
 

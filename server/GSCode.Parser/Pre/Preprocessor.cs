@@ -213,8 +213,33 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         {
             // Fine to add
             Defines.Add(macroName, definition);
+            // Determine source display for macro (use nearest insert region if any)
+            string? srcDisplay = null;
+            foreach (var region in Sense.InsertRegions)
+            {
+                // If the define tokens fall after an insert range on the same line, prefer that region
+                if (region.Range.Start.Line <= nameToken.Range.Start.Line && region.ResolvedPath is not null)
+                {
+                    string rel = GetRelativeDisplay(region.ResolvedPath);
+                    srcDisplay = rel;
+                }
+            }
+            Sense.AddMacroOutline(macroName, nameToken.Range, srcDisplay);
         }
         Sense.AddSenseToken(nameToken, definition);
+
+        static string GetRelativeDisplay(string fullPath)
+        {
+            try
+            {
+                // Show trailing two segments if possible, e.g., shared/shared.gsh
+                string dir = System.IO.Path.GetDirectoryName(fullPath) ?? string.Empty;
+                string file = System.IO.Path.GetFileName(fullPath);
+                string lastDir = string.IsNullOrEmpty(dir) ? string.Empty : System.IO.Path.GetFileName(dir);
+                return string.IsNullOrEmpty(lastDir) ? file : System.IO.Path.Combine(lastDir, file).Replace('\\', '/');
+            }
+            catch { return fullPath; }
+        }
     }
 
     /// <summary>
@@ -360,6 +385,12 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             ConnectTokens(insertToken.Previous, terminatorToken!.Previous);
             return;
         }
+
+        // Record hover on the #insert path text for navigation
+        Sense.HoverLibrary.Add(new InsertDirectiveHover(filePath, path.Range!));
+        // Track insert region and its resolved path to later attribute definitions
+        string? resolvedInsertPath = Sense.ResolveInsertPath(filePath, path.Range!);
+        Sense.AddInsertRegion(path.Range!, filePath, resolvedInsertPath);
 
         // Get the file contents
         TokenList? insertTokensResult;

@@ -14,6 +14,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Reflection;
+using System.Diagnostics;
 
 
 Log.Logger = new LoggerConfiguration()
@@ -84,6 +85,10 @@ LanguageServer server = await LanguageServer.From(options =>
 		.AddHandler<HoverHandler>()
 		.AddHandler<CompletionHandler>()
 		.AddHandler<FoldingRangeHandler>();
+		.AddHandler<DefinitionHandler>()
+		.AddHandler<DocumentSymbolHandler>()
+		.AddHandler<SignatureHelpHandler>()
+		.AddHandler<ReferencesHandler>();
 
 	// Allow disposal of the stream if required.
 	if (disposable is not null)

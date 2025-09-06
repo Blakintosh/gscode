@@ -16,6 +16,7 @@ using System.IO;
 using GSCode.Parser.SPA;
 using System.Text.RegularExpressions;
 using GSCode.Parser.DFA;
+using System.Runtime.CompilerServices;
 
 namespace GSCode.Parser;
 
@@ -150,6 +151,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return Task.CompletedTask;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Token? PreviousNonTrivia(Token? token)
     {
         Token? t = token?.Previous;
@@ -160,6 +162,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return t;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsAddressOfIdentifier(Token identifier)
     {
         // identifier may be part of ns::name; find left-most identifier
@@ -189,6 +192,13 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
         // Normalize lines: remove leading * and surrounding quotes
         var lines = s.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        if (lines.Length == 1)
+        {
+            string l = lines[0].Trim();
+            if (l.StartsWith("*")) l = l.TrimStart('*').TrimStart();
+            if (l.Length >= 2 && l[0] == '"' && l[^1] == '"') l = l.Substring(1, l.Length - 2);
+            return l.Length == 0 ? string.Empty : l;
+        }
         List<string> cleaned = new();
         foreach (var line in lines)
         {
@@ -449,7 +459,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             return $"```gsc\nfunction {nsPrefix}{name}()\n```";
         }
-        StringBuilder sb = new();
+        var sb = new StringBuilder();
         sb.Append("```gsc\nfunction ").Append(nsPrefix).Append(name).Append('(');
         for (int i = 0; i < parameters.Count; i++)
         {
@@ -551,6 +561,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
     /// <summary>
     /// Helper to parse namespace-qualified identifiers: namespace::name or just name.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static (string? qualifier, string name) ParseNamespaceQualifiedIdentifier(Token token)
     {
         // If the previous token is '::' and the one before is an identifier, treat as namespace::name
@@ -800,14 +811,20 @@ public class Script(DocumentUri ScriptUri, string languageId)
         string[] ParseDocPrototypeParams(string d)
         {
             var lines = d.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-            var line = lines[1].Trim(); // always the second line from ```gsc\r\nfoo(bar)...```
+            var line = lines.Length > 1 ? lines[1].Trim() : string.Empty; // second line from ```gsc\r\nfoo(bar)...```
             int lp = line.IndexOf('(');
             int rp = line.LastIndexOf(')');
             if (lp < 0 || rp < lp) return Array.Empty<string>();
             string inside = line.Substring(lp + 1, rp - lp - 1);
             if (string.IsNullOrWhiteSpace(inside)) return Array.Empty<string>();
             var parts = inside.Split(',');
-            return parts.Select(p => Normalize(p)).Where(p => p.Length > 0).ToArray();
+            var list = new List<string>(parts.Length);
+            foreach (var p in parts)
+            {
+                var v = Normalize(p);
+                if (v.Length > 0) list.Add(v);
+            }
+            return list.ToArray();
         }
 
         string[] protoParams = ParseDocPrototypeParams(doc);
@@ -828,7 +845,12 @@ public class Script(DocumentUri ScriptUri, string languageId)
             int b2 = line.IndexOf('`', b1 + 1);
             if (b2 < 0) continue;
             string token = Normalize(line.Substring(b1 + 1, b2 - b1 - 1));
-            if (!candidates.Any(c => string.Equals(c, token, StringComparison.OrdinalIgnoreCase))) continue;
+            bool match = false;
+            foreach (var c in candidates)
+            {
+                if (string.Equals(c, token, StringComparison.OrdinalIgnoreCase)) { match = true; break; }
+            }
+            if (!match) continue;
             int dash = line.IndexOf('—', b2 + 1); // em dash
             if (dash < 0) dash = line.IndexOf('-', b2 + 1); // fallback
             string desc = dash >= 0 && dash + 1 < line.Length ? line[(dash + 1)..].Trim() : string.Empty;
@@ -967,6 +989,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         };
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static string StripDefault(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return string.Empty;
@@ -1170,8 +1193,8 @@ public class Script(DocumentUri ScriptUri, string languageId)
             bool anyFromThisUsing = false;
             foreach (var referenced in referencedFiles)
             {
-                string normalizedPath = NormalizeFilePathForUri(referenced);
-                if (normalizedPath.Contains(expectedSuffix, StringComparison.OrdinalIgnoreCase))
+                // referenced already normalized
+                if (referenced.Contains(expectedSuffix, StringComparison.OrdinalIgnoreCase))
                 {
                     anyFromThisUsing = true;
                     break;
@@ -1194,7 +1217,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             Dictionary<string, int> usageCounts = new(StringComparer.OrdinalIgnoreCase);
             CollectIdentifierCounts(fn.Body, usageCounts);
 
-            // Flag unused const declarations
+            // Single pass through function body to flag unused consts and assignments
             foreach (var node in EnumerateChildren(fn.Body))
             {
                 if (node is ConstStmtNode cst)
@@ -1205,12 +1228,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
                     {
                         Sense.AddSpaDiagnostic(cst.Range, GSCErrorCodes.UnusedVariable, name);
                     }
+                    continue;
                 }
-            }
 
-            // Flag simple assignments to new/local variables that are never used elsewhere
-            foreach (var node in EnumerateChildren(fn.Body))
-            {
                 if (node is ExprStmtNode es && es.Expr is BinaryExprNode be && be.Operation == TokenType.Assign && be.Left is IdentifierExprNode id)
                 {
                     string name = id.Identifier;
@@ -1245,10 +1265,11 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
             bool defaultSeen = false;
-            var cases = sw.Cases.Cases.ToList();
-            for (int i = 0; i < cases.Count; i++)
+            var list = sw.Cases.Cases;
+            for (var node = list.First; node is not null; node = node.Next)
             {
-                var cs = cases[i];
+                var cs = node.Value;
+                bool isLast = node.Next is null;
                 // Handle labels
                 foreach (var label in cs.Labels)
                 {
@@ -1282,7 +1303,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 }
 
                 // Fallthrough detection: if not the last case and body does not terminate with break/return
-                if (i < cases.Count - 1)
+                if (!isLast)
                 {
                     if (!HasTerminatingBreakOrReturn(cs.Body))
                     {
@@ -1422,16 +1443,41 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return false;
     }
 
+    private static bool ContainsThreadCallCached(AstNode node, Dictionary<AstNode, bool> cache)
+    {
+        if (cache.TryGetValue(node, out var v)) return v;
+        bool result;
+        if (node is PrefixExprNode pe && pe.Operation == TokenType.Thread)
+        {
+            result = true;
+        }
+        else if (node is CalledOnNode con)
+        {
+            result = ContainsThreadCallCached(con.Call, cache) || ContainsThreadCallCached(con.On, cache);
+        }
+        else
+        {
+            result = false;
+            foreach (var child in EnumerateChildren(node))
+            {
+                if (ContainsThreadCallCached(child, cache)) { result = true; break; }
+            }
+        }
+        cache[node] = result;
+        return result;
+    }
+
     private void EmitAssignOnThreadDiagnostics()
     {
         if (RootNode is null) return;
+        var cache = new Dictionary<AstNode, bool>(ReferenceEqualityComparer.Instance);
         foreach (var fn in EnumerateFunctions(RootNode))
         {
             foreach (var bin in EnumerateBinaryExprs(fn.Body))
             {
                 if (bin.Operation == TokenType.Assign && bin.Right is not null)
                 {
-                    if (ContainsThreadCall(bin.Right))
+                    if (ContainsThreadCallCached(bin.Right, cache))
                     {
                         Sense.AddSpaDiagnostic(bin.Range, GSCErrorCodes.AssignOnThreadedFunction);
                     }

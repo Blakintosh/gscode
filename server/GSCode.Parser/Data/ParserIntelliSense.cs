@@ -30,17 +30,17 @@ internal sealed class ParserIntelliSense
     {
         public int Compare(ISemanticToken? x, ISemanticToken? y)
         {
-            if (x?.Range is null && y?.Range is null) 
-            { 
-                return 0; 
+            if (x?.Range is null && y?.Range is null)
+            {
+                return 0;
             }
-            if (x?.Range is null) 
-            { 
-                return -1; 
+            if (x?.Range is null)
+            {
+                return -1;
             }
-            if (y?.Range is null) 
-            { 
-                return 1; 
+            if (y?.Range is null)
+            {
+                return 1;
             }
 
             int lineComparison = x.Range.Start.Line.CompareTo(y.Range.Start.Line);
@@ -61,6 +61,11 @@ internal sealed class ParserIntelliSense
     /// Hover storage for IntelliSense
     /// </summary>
     public DocumentHoversLibrary HoverLibrary { get; }
+
+    /// <summary>
+    /// List of folding ranges to push to the editor.
+    /// </summary>
+    public List<FoldingRange> FoldingRanges { get; } = [];
 
     /// <summary>
     /// List of diagnostics to push to the editor.
@@ -128,6 +133,11 @@ internal sealed class ParserIntelliSense
         // Link the definition to the token so that we don't have duplicates later on.
         token.SenseDefinition = definition;
 
+        AddSenseDefinition(definition);
+    }
+
+    public void AddSenseDefinition(ISenseDefinition definition)
+    {
         SemanticTokens.Add(definition);
         HoverLibrary.Add(definition);
     }

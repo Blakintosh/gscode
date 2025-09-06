@@ -18,16 +18,17 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
     public readonly TokenType CurrentTokenType => CurrentToken.Type;
     public readonly Range CurrentTokenRange => CurrentToken.Range;
-    
+
     [Flags]
-    private enum ParserContextFlags {
+    private enum ParserContextFlags
+    {
         None = 0,
         InFunctionBody = 1,
         InSwitchBody = 2,
         InLoopBody = 4,
         InDevBlock = 8,
     }
-    
+
     private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
 
     // TODO: temp hack to add function hoverables in current version.
@@ -84,12 +85,12 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     {
         List<DependencyNode> dependencies = new List<DependencyNode>();
 
-        while(CurrentTokenType == TokenType.Using)
+        while (CurrentTokenType == TokenType.Using)
         {
             DependencyNode? next = Dependency();
 
             // Success
-            if(next is not null)
+            if (next is not null)
             {
                 dependencies.Add(next);
                 continue;
@@ -99,8 +100,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             EnterRecovery();
 
             // While we're not in the first set of ScriptList (or at EOF), keep advancing to try and recover.
-            while(
-                CurrentTokenType != TokenType.Precache && 
+            while (
+                CurrentTokenType != TokenType.Precache &&
                 CurrentTokenType != TokenType.UsingAnimTree &&
                 CurrentTokenType != TokenType.Function &&
                 CurrentTokenType != TokenType.Class &&
@@ -111,7 +112,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 Advance();
 
                 // We've recovered, so we can try to parse the next dependency.
-                if(CurrentTokenType == TokenType.Using)
+                if (CurrentTokenType == TokenType.Using)
                 {
                     ExitRecovery();
                     break;
@@ -136,7 +137,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         // Parse the path
         PathNode? path = Path();
-        if(path is null)
+        if (path is null)
         {
             return null;
         }
@@ -160,7 +161,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private PathNode? Path()
     {
         Token segmentToken = CurrentToken;
-        if(CurrentTokenType != TokenType.Identifier)
+        if (CurrentTokenType != TokenType.Identifier)
         {
             // Expected a path segment
             AddError(GSCErrorCodes.ExpectedPathSegment, CurrentToken.Lexeme);
@@ -172,7 +173,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         PathNode? partial = PathPartial();
 
-        if(partial is null)
+        if (partial is null)
         {
             return null;
         }
@@ -191,7 +192,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private PathNode? PathPartial()
     {
         // Empty case
-        if(CurrentTokenType != TokenType.Backslash)
+        if (CurrentTokenType != TokenType.Backslash)
         {
             return new PathNode();
         }
@@ -215,7 +216,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         PathNode? partial = PathPartial();
 
         // Failed to parse the rest of the path 
-        if(partial is null)
+        if (partial is null)
         {
             return null;
         }
@@ -236,24 +237,24 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         List<AstNode> scriptDefns = new List<AstNode>();
 
         // Keep parsing script definitions until we reach the end of the file, as this is our last production.
-        while(CurrentTokenType != TokenType.Eof &&
+        while (CurrentTokenType != TokenType.Eof &&
               (CurrentTokenType != TokenType.CloseDevBlock || !InDevBlock()))
         {
             AstNode? next = ScriptDefn();
 
             // Success
-            if(next is not null)
+            if (next is not null)
             {
                 scriptDefns.Add(next);
-                
+
                 // We're at the end of a dev block, so we can return the script definitions.
-                if(CurrentTokenType == TokenType.CloseDevBlock && InDevBlock())
+                if (CurrentTokenType == TokenType.CloseDevBlock && InDevBlock())
                 {
                     return scriptDefns;
                 }
 
                 // We're not in recovery mode, so we can continue parsing as normal.
-                if(!InRecovery())
+                if (!InRecovery())
                 {
                     continue;
                 }
@@ -263,8 +264,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             EnterRecovery();
 
             // While we're not in the first set of ScriptList (or at EOF), keep advancing to try and recover.
-            while(
-                CurrentTokenType != TokenType.Precache && 
+            while (
+                CurrentTokenType != TokenType.Precache &&
                 CurrentTokenType != TokenType.UsingAnimTree &&
                 CurrentTokenType != TokenType.Function &&
                 CurrentTokenType != TokenType.Class &&
@@ -279,7 +280,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 Advance();
 
                 // We've recovered, so we can try to parse the next script definition.
-                if(CurrentTokenType is TokenType.Precache or TokenType.UsingAnimTree or TokenType.Function or TokenType.Class or TokenType.Namespace ||
+                if (CurrentTokenType is TokenType.Precache or TokenType.UsingAnimTree or TokenType.Function or TokenType.Class or TokenType.Namespace ||
                    // Newly opening a dev block
                    (CurrentTokenType == TokenType.OpenDevBlock && !InDevBlock()))
                 {
@@ -300,7 +301,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// </remarks>
     private AstNode? ScriptDefn()
     {
-        switch(CurrentTokenType)
+        switch (CurrentTokenType)
         {
             case TokenType.Precache:
                 return PrecacheDir();
@@ -346,7 +347,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         Advance();
 
         // Check for OPENPAREN
-        if(!AdvanceIfType(TokenType.OpenParen))
+        if (!AdvanceIfType(TokenType.OpenParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
             return null;
@@ -490,21 +491,21 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private AstNode DefnDevBlock()
     {
         bool isNewly = EnterContextIfNewly(ParserContextFlags.InDevBlock);
-        
+
         // Pass OPENDEVBLOCK
         Advance();
-        
+
         // Parse the script list within this dev block
         List<AstNode> scriptDefns = ScriptList();
-        
+
         // Check for CLOSEDEVBLOCK
         if (!AdvanceIfType(TokenType.CloseDevBlock))
         {
             AddError(GSCErrorCodes.ExpectedToken, "#/", CurrentToken.Lexeme);
         }
-        
+
         ExitContextIfWasNewly(ParserContextFlags.InDevBlock, isNewly);
-        
+
         return new DefnDevBlockNode(scriptDefns);
     }
 
@@ -521,7 +522,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         Advance();
 
         // Parse the class's identifier
-        if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+        if (!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
         {
             AddError(GSCErrorCodes.ExpectedClassIdentifier, CurrentToken.Lexeme);
             EnterRecovery();
@@ -531,7 +532,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         Token? inheritedClassToken = InheritsFrom();
 
         // Check for LBRACE
-        if (!AdvanceIfType(TokenType.OpenBrace))
+        if (!ConsumeIfType(TokenType.OpenBrace, out Token? openBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
 
@@ -543,11 +544,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         ClassBodyListNode classBody = ClassBodyDefnList();
 
         // Check for RBRACE
-        if (!AdvanceIfType(TokenType.CloseBrace))
+        if (!ConsumeIfType(TokenType.CloseBrace, out Token? closeBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '}', CurrentToken.Lexeme);
             EnterRecovery();
         }
+
+        EmitFoldingRangeIfPossible(openBraceToken, closeBraceToken);
 
         return new ClassDefnNode(identifierToken, inheritedClassToken, classBody);
     }
@@ -561,14 +564,14 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private Token? InheritsFrom()
     {
-        if(!AdvanceIfType(TokenType.Colon))
+        if (!AdvanceIfType(TokenType.Colon))
         {
             return null;
         }
 
         ExitRecovery();
 
-        if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+        if (!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
         {
             AddError(GSCErrorCodes.ExpectedClassIdentifier, CurrentToken.Lexeme);
             EnterRecovery();
@@ -586,14 +589,14 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ClassBodyListNode ClassBodyDefnList()
     {
         // Empty case
-        if(CurrentTokenType != TokenType.Var && CurrentTokenType != TokenType.Constructor && CurrentTokenType != TokenType.Destructor && CurrentTokenType != TokenType.Function)
+        if (CurrentTokenType != TokenType.Var && CurrentTokenType != TokenType.Constructor && CurrentTokenType != TokenType.Destructor && CurrentTokenType != TokenType.Function)
         {
             return new();
         }
 
         AstNode? classDefn = ClassBodyDefn();
 
-        if(classDefn is null && 
+        if (classDefn is null &&
             // No chance of recovery
             CurrentTokenType != TokenType.Var && CurrentTokenType != TokenType.Constructor && CurrentTokenType != TokenType.Destructor && CurrentTokenType != TokenType.Function)
         {
@@ -603,7 +606,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         ClassBodyListNode rest = ClassBodyDefnList();
 
         // Only add our first definition if it was successfully parsed
-        if(classDefn is not null)
+        if (classDefn is not null)
         {
             rest.Definitions.AddFirst(classDefn);
         }
@@ -620,7 +623,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private AstNode? ClassBodyDefn()
     {
-        switch(CurrentTokenType)
+        switch (CurrentTokenType)
         {
             case TokenType.Var:
                 return MemberDecl();
@@ -650,7 +653,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         Advance();
 
         // Get the field name
-        if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+        if (!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
         {
             AddError(GSCErrorCodes.ExpectedMemberIdentifier, CurrentToken.Lexeme);
             EnterRecovery();
@@ -689,7 +692,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         if (!AdvanceIfType(TokenType.CloseParen))
         {
             // Were they trying to define a constructor with parameters?
-            if(CurrentTokenType == TokenType.Identifier)
+            if (CurrentTokenType == TokenType.Identifier)
             {
                 AddError(GSCErrorCodes.UnexpectedConstructorParameter, CurrentToken.Lexeme);
             }
@@ -736,7 +739,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         // Parse the function's identifier
         Token? identifierToken = null;
-        if(CurrentTokenType == TokenType.Identifier)
+        if (CurrentTokenType == TokenType.Identifier)
         {
             identifierToken = CurrentToken;
             Advance();
@@ -773,13 +776,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Check for the brace block, then parse it.
-        if(CurrentTokenType != TokenType.OpenBrace)
+        if (CurrentTokenType != TokenType.OpenBrace)
         {
             AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
             ExitRecovery();
 
             // No use in doing a placeholder without a body, unless it's got a name.
-            if(identifierToken is null)
+            if (identifierToken is null)
             {
                 return null;
             }
@@ -816,15 +819,18 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private StmtListNode FunBraceBlock()
     {
         // Pass over OPENBRACE
-        Advance();
+        Token openBraceToken = Consume();
 
         // Parse the statements in the block
         StmtListNode stmtListNode = StmtList();
 
-        if(!AdvanceIfType(TokenType.CloseBrace))
+        if (!ConsumeIfType(TokenType.CloseBrace, out Token? closeBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '}', CurrentToken.Lexeme);
         }
+
+        EmitFoldingRangeIfPossible(openBraceToken, closeBraceToken);
+
         return stmtListNode;
     }
 
@@ -838,12 +844,12 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private StmtListNode StmtList(ParserContextFlags newContext = ParserContextFlags.None)
     {
         bool isNewContext = false;
-        if(newContext != ParserContextFlags.None)
+        if (newContext != ParserContextFlags.None)
         {
             isNewContext = EnterContextIfNewly(newContext);
         }
-        
-        switch(CurrentTokenType)
+
+        switch (CurrentTokenType)
         {
             // Control flow
             case TokenType.If:
@@ -872,7 +878,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 AstNode? statement = Stmt();
 
                 StmtListNode rest = StmtList();
-                if(statement is not null)
+                if (statement is not null)
                 {
                     rest.Statements.AddFirst(statement);
                 }
@@ -896,11 +902,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private AstNode? Stmt(ParserContextFlags newContext = ParserContextFlags.None)
     {
         bool isNewContext = false;
-        if(newContext != ParserContextFlags.None)
+        if (newContext != ParserContextFlags.None)
         {
             isNewContext = EnterContextIfNewly(newContext);
         }
-        
+
         AstNode? result = CurrentTokenType switch
         {
             TokenType.If => IfElseStmt(),
@@ -922,7 +928,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             TokenType.Identifier or TokenType.Thread or TokenType.OpenBracket => ExprStmt(),
             _ => null
         };
-        
+
         ExitContextIfWasNewly(newContext, isNewContext);
         return result;
     }
@@ -937,7 +943,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private IfStmtNode IfElseStmt()
     {
         IfStmtNode firstClause = IfClause();
-            
+
         // May go into another clause
         firstClause.Else = ElseOrEndClause();
 
@@ -974,7 +980,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         // Parse the then branch
         AstNode? then = Stmt();
-        
+
         return new()
         {
             Condition = condition,
@@ -996,7 +1002,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return null;
         }
-        
+
         // Otherwise, seek an else or else-if
         return ElseClause();
     }
@@ -1014,13 +1020,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         if (CurrentTokenType == TokenType.If)
         {
             IfStmtNode clause = IfClause();
-            
+
             // May go into another clause
             clause.Else = ElseOrEndClause();
 
             return clause;
         }
-        
+
         // Case 2: just an else clause
         AstNode? then = Stmt();
 
@@ -1042,42 +1048,42 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // TODO: Fault tolerant logic
         // Pass over DO
         Advance();
-        
+
         // Parse the loop's body
         AstNode? then = Stmt(ParserContextFlags.InLoopBody);
-        
+
         // Check for WHILE
         if (!AdvanceIfType(TokenType.While))
         {
             AddError(GSCErrorCodes.ExpectedToken, "while", CurrentToken.Lexeme);
             return new DoWhileStmtNode(null, then);
         }
-        
+
         // Check for OPENPAREN
         if (!AdvanceIfType(TokenType.OpenParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
             EnterRecovery();
         }
-        
+
         ExitRecovery();
         // Parse the loop's condition
         ExprNode? condition = Expr();
-        
+
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
             EnterRecovery();
         }
-        
+
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
             AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "do-while loop");
             EnterRecovery();
         }
-        
+
         ExitRecovery();
         return new DoWhileStmtNode(condition, then);
     }
@@ -1094,25 +1100,25 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // TODO: Fault tolerant logic
         // Pass over WHILE
         Advance();
-        
+
         // Check for OPENPAREN
         if (!AdvanceIfType(TokenType.OpenParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
         }
-        
+
         // Parse the loop's condition
         ExprNode? condition = Expr();
-        
+
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
         }
-        
+
         // Parse the loop's body, update context.
         AstNode? then = Stmt(ParserContextFlags.InLoopBody);
-        
+
         return new WhileStmtNode(condition, then);
     }
 
@@ -1128,7 +1134,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // TODO: Fault tolerant logic
         // Pass over FOR
         Advance();
-        
+
         // Check for OPENPAREN
         if (!AdvanceIfType(TokenType.OpenParen))
         {
@@ -1173,10 +1179,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
         }
-        
+
         // Parse the loop's body, update context.
         AstNode? then = Stmt(ParserContextFlags.InLoopBody);
-        
+
         return new(init, condition, increment, then);
     }
 
@@ -1192,13 +1198,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // TODO: Fault tolerant logic
         // Pass over FOREACH
         Advance();
-        
+
         // Check for OPENPAREN
         if (!AdvanceIfType(TokenType.OpenParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
         }
-        
+
         // Parse the loop's identifier
         Token firstIdentifierToken = CurrentToken;
         if (!AdvanceIfType(TokenType.Identifier))
@@ -1208,26 +1214,26 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         // Check for COMMA and another identifier, which would indicate that we're iterating over key-value pairs.
         Token? valueIdentifierToken = ForeachValueIdentifier();
-        
+
         // Check for IN
         if (!AdvanceIfType(TokenType.In))
         {
             AddError(GSCErrorCodes.ExpectedToken, "in", CurrentToken.Lexeme);
         }
-        
+
         // Parse the loop's collection
         ExprNode? collection = Expr();
-        
+
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
         }
-        
+
         // Parse the loop's body, update context.
         AstNode? then = Stmt(ParserContextFlags.InLoopBody);
 
-        if(valueIdentifierToken is not null)
+        if (valueIdentifierToken is not null)
         {
             return new ForeachStmtNode(valueIdentifierToken, firstIdentifierToken, collection, then);
         }
@@ -1269,37 +1275,39 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // TODO: Fault tolerant logic
         // Pass over SWITCH
         Advance();
-        
+
         // Check for OPENPAREN
         if (!AdvanceIfType(TokenType.OpenParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
         }
-        
+
         // Parse the switch's expression
         ExprNode? expression = Expr();
-        
+
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
         }
-        
+
         // Check for OPENBRACE
-        if (!AdvanceIfType(TokenType.OpenBrace))
+        if (!ConsumeIfType(TokenType.OpenBrace, out Token? openBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '{', CurrentToken.Lexeme);
         }
-        
+
         // Parse the cases
         CaseListNode cases = CaseList();
-        
+
         // Check for CLOSEBRACE
-        if (!AdvanceIfType(TokenType.CloseBrace))
+        if (!ConsumeIfType(TokenType.CloseBrace, out Token? closeBraceToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, '}', CurrentToken.Lexeme);
         }
-        
+
+        EmitFoldingRangeIfPossible(openBraceToken, closeBraceToken);
+
         return new SwitchStmtNode()
         {
             Expression = expression,
@@ -1321,13 +1329,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return new();
         }
-        
+
         // Parse the current case, then prepend it to the rest of the cases.
         CaseStmtNode caseStmt = CaseStmt();
         CaseListNode rest = CaseList();
-        
+
         rest.Cases.AddFirst(caseStmt);
-        
+
         return rest;
     }
 
@@ -1341,7 +1349,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private CaseStmtNode CaseStmt()
     {
         CaseLabelNode label = CaseOrDefaultLabel();
-        
+
         // Now go to the RHS
         CaseStmtNode rhs = CaseStmtRhs();
         rhs.Labels.AddFirst(label);
@@ -1359,10 +1367,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private CaseStmtNode CaseStmtRhs()
     {
-        if(CurrentTokenType == TokenType.Case || CurrentTokenType == TokenType.Default)
+        if (CurrentTokenType == TokenType.Case || CurrentTokenType == TokenType.Default)
         {
             CaseLabelNode label = CaseOrDefaultLabel();
-            
+
             // Self-recurse to exhaust all cases
             CaseStmtNode rhs = CaseStmtRhs();
             rhs.Labels.AddFirst(label);
@@ -1370,7 +1378,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         StmtListNode production = StmtList(ParserContextFlags.InSwitchBody);
-        
+
         return new()
         {
             Body = production
@@ -1396,25 +1404,25 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             }
             return new(AstNodeType.DefaultLabel);
         }
-        
+
         // Case label
         if (!AdvanceIfType(TokenType.Case))
         {
             AddError(GSCErrorCodes.ExpectedToken, "case", CurrentToken.Lexeme);
         }
-        
+
         // Parse the case's expression
         ExprNode? expression = Expr();
-        
+
         // Check for COLON
         if (!AdvanceIfType(TokenType.Colon))
         {
             AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
         }
-        
+
         return new(AstNodeType.CaseLabel, expression);
     }
-    
+
     /// <summary>
     /// Parses a return statement.
     /// </summary>
@@ -1433,16 +1441,16 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return new();
         }
-        
+
         // Parse the return value
         ExprNode? value = Expr();
-        
+
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
             AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "return statement");
         }
-        
+
         return new(value);
     }
 
@@ -1461,7 +1469,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Pass over the control flow keyword
         Token actionToken = CurrentToken;
         Advance();
-        
+
         // Check for SEMICOLON
         if (AdvanceIfType(TokenType.Semicolon))
         {
@@ -1493,10 +1501,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     {
         // Pass over WAIT, WAITREALTIME, etc.
         Advance();
-        
+
         // Get the function's expression
         ExprNode? expr = Expr();
-        
+
         // Check for SEMICOLON
         if (AdvanceIfType(TokenType.Semicolon))
         {
@@ -1510,10 +1518,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             _ => throw new ArgumentOutOfRangeException(nameof(type), "Invalid reserved function type")
         };
         AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, statementName);
-        
+
         return new(type, expr);
     }
-    
+
     /// <summary>
     /// Parses and outputs a constant declaration statement.
     /// </summary>
@@ -1526,23 +1534,23 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // TODO: Fault tolerant logic
         // Pass over CONST
         Advance();
-        
+
         // Parse the constant's identifier
         Token identifierToken = CurrentToken;
         if (!AdvanceIfType(TokenType.Identifier))
         {
             AddError(GSCErrorCodes.ExpectedConstantIdentifier, CurrentToken.Lexeme);
         }
-        
+
         // Check for ASSIGN
         if (!AdvanceIfType(TokenType.Assign))
         {
             AddError(GSCErrorCodes.ExpectedToken, '=', CurrentToken.Lexeme);
         }
-        
+
         // Parse the constant's value
         ExprNode? value = Expr();
-        
+
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
@@ -1562,19 +1570,19 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private FunDevBlockNode FunDevBlock()
     {
         bool isNewly = EnterContextIfNewly(ParserContextFlags.InDevBlock);
-        
+
         // Pass over OPENDEVBLOCK
         Advance();
-        
+
         // Parse the statements in the block
         StmtListNode stmtListNode = StmtList();
-        
+
         // Check for CLOSEDEVBLOCK
         if (!AdvanceIfType(TokenType.CloseDevBlock))
         {
             AddError(GSCErrorCodes.ExpectedToken, "#/", CurrentToken.Lexeme);
         }
-        
+
         ExitContextIfWasNewly(ParserContextFlags.InDevBlock, isNewly);
         return new FunDevBlockNode(stmtListNode);
     }
@@ -1592,18 +1600,18 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         ExprNode? expr = AssignableExpr();
 
         // The expression failed to parse - try to recover from this.
-        if(expr is null)
+        if (expr is null)
         {
             // @next - make Stmt more fault-tolerant / better at recovery
             EnterRecovery();
         }
-        
+
         // Check for SEMICOLON
         if (!AdvanceIfType(TokenType.Semicolon))
         {
             AddErrorAtEndOfPrevious(GSCErrorCodes.ExpectedSemiColon, "expression statement");
         }
-        
+
         return new ExprStmtNode(expr);
     }
 
@@ -1618,7 +1626,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     {
         // Pass over SEMICOLON
         Advance();
-        
+
         return new();
     }
 
@@ -1636,7 +1644,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return new();
         }
-        
+
         // Got a keyword, prepend it to our keyword list
         Token keywordToken = CurrentToken;
         Advance();
@@ -1657,16 +1665,16 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ParamListNode ParamList()
     {
         // varargdots production
-        if(CurrentTokenType == TokenType.VarargDots)
+        if (CurrentTokenType == TokenType.VarargDots)
         {
             Advance();
             return new([], true);
         }
 
         // empty production
-        if(CurrentTokenType == TokenType.CloseParen)
+        if (CurrentTokenType == TokenType.CloseParen)
         {
-           return new();
+            return new();
         }
 
         // Try to parse a parameter
@@ -1689,13 +1697,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ParamListNode ParamListRhs()
     {
         // Nothing to add, base case.
-        if(!AdvanceIfType(TokenType.Comma))
+        if (!AdvanceIfType(TokenType.Comma))
         {
             return new();
         }
 
         // varargdots production
-        if(AdvanceIfType(TokenType.VarargDots))
+        if (AdvanceIfType(TokenType.VarargDots))
         {
             return new([], true);
         }
@@ -1725,13 +1733,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         Token? nameToken = CurrentToken;
 
         // and get the parameter name.
-        if(CurrentTokenType != TokenType.Identifier)
+        if (CurrentTokenType != TokenType.Identifier)
         {
             nameToken = null;
             AddError(GSCErrorCodes.ExpectedParameterIdentifier, CurrentToken.Lexeme);
 
             // Attempt error recovery
-            if(CurrentTokenType is TokenType.Comma or TokenType.CloseParen)
+            if (CurrentTokenType is TokenType.Comma or TokenType.CloseParen)
             {
                 return new(null, byRef);
             }
@@ -1753,7 +1761,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ExprNode? ParamRhs()
     {
-        if(!AdvanceIfType(TokenType.Assign))
+        if (!AdvanceIfType(TokenType.Assign))
         {
             return null;
         }
@@ -1774,11 +1782,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Parse the left-hand side of the assignment
         // TODO: in practice, this could return null.
         ExprNode? left = Expr();
-        if(left is null)
+        if (left is null)
         {
             return null;
         }
-        
+
         // Parse the assignment operator
         return AssignOp(left);
     }
@@ -1850,7 +1858,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return left;
         }
-        
+
         // Parse the right-hand side of the OR expression
         ExprNode? right = LogAnd();
 
@@ -1859,7 +1867,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return left;
         }
-        
+
         // Recurse to the next OR expression
         return LogOrRhs(new BinaryExprNode(left, orToken, right));
     }
@@ -1905,11 +1913,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return left;
         }
-        
+
         // Recurse to the next AND expression
         return LogAndRhs(new BinaryExprNode(left, andToken, right));
     }
-    
+
     /// <summary>
     /// Parses and outputs bitwise OR expressions and higher in precedence, if present.
     /// </summary>
@@ -1938,20 +1946,20 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ExprNode BitOrRhs(ExprNode left)
     {
-        if(!ConsumeIfType(TokenType.BitOr, out Token? bitOrToken))
+        if (!ConsumeIfType(TokenType.BitOr, out Token? bitOrToken))
         {
             return left;
         }
-        
+
         // Parse the right-hand side of the BITOR expression
         ExprNode? right = BitXor();
-        
+
         // TODO: as above, maybe we check for BITOR lookahead, then try construct with unknown RHS/LHS
         if (right is null)
         {
             return left;
         }
-        
+
         // Recurse to the next BITOR expression
         return BitOrRhs(new BinaryExprNode(left, bitOrToken, right));
     }
@@ -1973,7 +1981,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         return BitXorRhs(left);
     }
-    
+
     /// <summary>
     /// Parses and outputs a bitwise XOR expression, if present.
     /// </summary>
@@ -1984,24 +1992,24 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ExprNode BitXorRhs(ExprNode left)
     {
-        if(!ConsumeIfType(TokenType.BitXor, out Token? bitXorToken))
+        if (!ConsumeIfType(TokenType.BitXor, out Token? bitXorToken))
         {
             return left;
         }
-        
+
         // Parse the right-hand side of the BITXOR expression
         ExprNode? right = BitAnd();
-        
+
         // TODO: as above, maybe we check for BITXOR lookahead, then try construct with unknown RHS/LHS
         if (right is null)
         {
             return left;
         }
-        
+
         // Recurse to the next BITXOR expression
         return BitXorRhs(new BinaryExprNode(left, bitXorToken, right));
     }
-    
+
     /// <summary>
     /// Parses and outputs bitwise AND expressions and higher in precedence, if present.
     /// </summary>
@@ -2019,7 +2027,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         return BitAndRhs(left);
     }
-    
+
     /// <summary>
     /// Parses and outputs a bitwise AND expression, if present.
     /// </summary>
@@ -2030,20 +2038,20 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ExprNode BitAndRhs(ExprNode left)
     {
-        if(!ConsumeIfType(TokenType.BitAnd, out Token? bitAndToken))
+        if (!ConsumeIfType(TokenType.BitAnd, out Token? bitAndToken))
         {
             return left;
         }
-        
+
         // Parse the right-hand side of the BITAND expression
         ExprNode? right = EqOp();
-        
+
         // TODO: as above, maybe we check for BITAND lookahead, then try construct with unknown RHS/LHS
         if (right is null)
         {
             return left;
         }
-        
+
         // Recurse to the next BITAND expression
         return BitAndRhs(new BinaryExprNode(left, bitAndToken, right));
     }
@@ -2058,14 +2066,14 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ExprNode? EqOp()
     {
         ExprNode? left = RelOp();
-        if(left is null)
+        if (left is null)
         {
             return null;
         }
-        
+
         return EqOpRhs(left);
     }
-    
+
     /// <summary>
     /// Parses and outputs an equality expression, if present.
     /// </summary>
@@ -2081,18 +2089,18 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return left;
         }
-        
+
         Token operatorToken = Consume();
-        
+
         // Parse the right-hand side of the equality expression
         ExprNode? right = RelOp();
-        
+
         // TODO: as above, maybe we check for EqOp lookahead, then try construct with unknown RHS/LHS
         if (right is null)
         {
             return left;
         }
-        
+
         // Recurse to the next equality expression
         return EqOpRhs(new BinaryExprNode(left, operatorToken, right));
     }
@@ -2174,22 +2182,22 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ExprNode BitShiftOpRhs(ExprNode left)
     {
-        if(CurrentTokenType != TokenType.BitLeftShift && CurrentTokenType != TokenType.BitRightShift)
+        if (CurrentTokenType != TokenType.BitLeftShift && CurrentTokenType != TokenType.BitRightShift)
         {
             return left;
         }
-        
+
         Token operatorToken = Consume();
-        
+
         // Parse the right-hand side of the bit shift expression
         ExprNode? right = AddiOp();
-        
+
         // TODO: as above, maybe we check for BitShiftOp lookahead, then try construct with unknown RHS/LHS
         if (right is null)
         {
             return left;
         }
-        
+
         // Recurse to the next bit shift expression
         return BitShiftOpRhs(new BinaryExprNode(left, operatorToken, right));
     }
@@ -2211,7 +2219,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         return AddiOpRhs(left);
     }
-    
+
     /// <summary>
     /// Parses and outputs an additive expression, if present.
     /// </summary>
@@ -2222,22 +2230,22 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ExprNode AddiOpRhs(ExprNode left)
     {
-        if(CurrentTokenType != TokenType.Plus && CurrentTokenType != TokenType.Minus)
+        if (CurrentTokenType != TokenType.Plus && CurrentTokenType != TokenType.Minus)
         {
             return left;
         }
-        
+
         Token operatorToken = Consume();
-        
+
         // Parse the right-hand side of the additive expression
         ExprNode? right = MulOp();
-        
+
         // TODO: as above, maybe we check for AddiOp lookahead, then try construct with unknown RHS/LHS
         if (right is null)
         {
             return left;
         }
-        
+
         // Recurse to the next additive expression
         return AddiOpRhs(new BinaryExprNode(left, operatorToken, right));
     }
@@ -2259,7 +2267,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         return MulOpRhs(left);
     }
-    
+
     /// <summary>
     /// Parses and outputs a multiplicative expression, if present.
     /// </summary>
@@ -2270,22 +2278,22 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ExprNode MulOpRhs(ExprNode left)
     {
-        if(CurrentTokenType != TokenType.Multiply && CurrentTokenType != TokenType.Divide && CurrentTokenType != TokenType.Modulo)
+        if (CurrentTokenType != TokenType.Multiply && CurrentTokenType != TokenType.Divide && CurrentTokenType != TokenType.Modulo)
         {
             return left;
         }
-        
+
         Token operatorToken = Consume();
-        
+
         // Parse the right-hand side of the multiplicative expression
         ExprNode? right = PrefixOp();
-        
+
         // TODO: as above, maybe we check for MulOp lookahead, then try construct with unknown RHS/LHS
         if (right is null)
         {
             return left;
         }
-        
+
         // Recurse to the next multiplicative expression
         return MulOpRhs(new BinaryExprNode(left, operatorToken, right));
     }
@@ -2308,7 +2316,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             case TokenType.Not:
             case TokenType.BitAnd:
                 Token operatorToken = Consume();
-                
+
                 // Parse the right-hand side of the prefix expression
                 ExprNode? operand = PrefixOp();
                 if (operand is null)
@@ -2319,17 +2327,17 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 return new PrefixExprNode(operatorToken, operand);
             case TokenType.New:
                 Advance();
-                
+
                 // No need to do scope res, etc. as GSC strictly only looks for an identifier.
-                
-                if(!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+
+                if (!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
                 {
                     AddError(GSCErrorCodes.ExpectedClassIdentifier, "identifier", CurrentToken.Lexeme);
                     return null;
                 }
-                
+
                 // GSC doesn't let you pass arguments to constructors, which is hilarious
-                
+
                 // Check for LPAR - TODO: handle these more elegantly
                 if (!AdvanceIfType(TokenType.OpenParen))
                 {
@@ -2340,7 +2348,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 {
                     AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
                 }
-                
+
                 return new ConstructorExprNode(identifierToken);
             default:
                 return CallOrAccessOp();
@@ -2366,13 +2374,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         if (ConsumeIfType(TokenType.Thread, out Token? threadToken))
         {
             ExprNode? call = DerefOpOrOperandFunCall();
-            if(call is null)
+            if (call is null)
             {
                 return null;
             }
             return new PrefixExprNode(threadToken, call);
         }
-        
+
         // Could be a function call, operand, accessor, etc.
         ExprNode? left = Operand();
         if (left is null)
@@ -2389,13 +2397,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ExprNode? DerefOpOrOperandFunCall()
     {
-        if(ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
+        if (ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
         {
             return DerefOp(openBracket);
         }
 
         ExprNode? left = Operand();
-        if(left is null)
+        if (left is null)
         {
             return null;
         }
@@ -2416,7 +2424,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return DataExprNode.EmptyArray(openBracket, closeBracket);
         }
-        
+
         // Must be dereferencing
         return DerefOp(openBracket);
     }
@@ -2436,7 +2444,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             ExprNode? derefCall = DerefOp(openBracket);
 
-            if(derefCall is null)
+            if (derefCall is null)
             {
                 return null;
             }
@@ -2468,11 +2476,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ExprNode? DerefOp(Token openBracket)
     {
         // TODO: fault tolerance
-        if(!AdvanceIfType(TokenType.OpenBracket))
+        if (!AdvanceIfType(TokenType.OpenBracket))
         {
             AddError(GSCErrorCodes.ExpectedToken, '[', CurrentToken.Lexeme);
         }
-        
+
         // Parse the dereference expression
         ExprNode? derefExpr = Expr();
 
@@ -2480,7 +2488,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             EnterRecovery();
         }
-            
+
         // Check for CLOSEBRACKET, twice
         if (!AdvanceIfType(TokenType.CloseBracket) || !AdvanceIfType(TokenType.CloseBracket))
         {
@@ -2512,7 +2520,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 AddError(GSCErrorCodes.ExpectedMethodIdentifier, CurrentToken.Lexeme);
                 return null;
             }
-            
+
             ArgsListNode? methodArgs = FunCall();
             if (methodArgs is null)
             {
@@ -2522,7 +2530,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             MethodCallNode methodCall = new(openBracket.Range.Start, derefExpr, methodToken, methodArgs);
             return CallOrAccessOpRhs(methodCall);
         }
-            
+
         ArgsListNode? funArgs = FunCall();
         if (funArgs is null)
         {
@@ -2546,25 +2554,25 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ExprNode? CallOrAccessOpRhs(ExprNode left)
     {
         // TODO: current grammar won't handle self thread ... but we can bolt this on later
-        if(CurrentTokenType == TokenType.ScopeResolution || CurrentTokenType == TokenType.OpenParen)
+        if (CurrentTokenType == TokenType.ScopeResolution || CurrentTokenType == TokenType.OpenParen)
         {
             return CallOpRhs(left);
         }
 
         // Threaded called-on ent call
-        if(ConsumeIfType(TokenType.Thread, out Token? threadToken))
+        if (ConsumeIfType(TokenType.Thread, out Token? threadToken))
         {
             ExprNode? call = ThreadedCalledOnRhs(threadToken);
-            if(call is null)
+            if (call is null)
             {
                 return null;
             }
 
             return new CalledOnNode(left, call);
         }
-        
+
         // Called-on ent call
-        if(CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
+        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
         {
             return CalledOnRhs(left);
         }
@@ -2572,7 +2580,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Else, array index or accessor
         ExprNode? newLeft = AccessOpRhs(left);
 
-        if(newLeft is null)
+        if (newLeft is null)
         {
             return null;
         }
@@ -2606,7 +2614,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             }
 
             ExprNode? call = CallOpRhs(identifierExprNode);
-            if(call is null)
+            if (call is null)
             {
                 return null;
             }
@@ -2633,7 +2641,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ExprNode? ThreadedCalledOnRhs(Token threadToken)
     {
         // Neither matches
-        if(CurrentTokenType != TokenType.Identifier && CurrentTokenType != TokenType.OpenBracket)
+        if (CurrentTokenType != TokenType.Identifier && CurrentTokenType != TokenType.OpenBracket)
         {
             AddError(GSCErrorCodes.ExpectedFunctionIdentifier, CurrentToken.Lexeme);
             return null;
@@ -2690,7 +2698,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
             // Could be a reference or a function call
             ExprNode? refOrCall = NamespacedFunctionRefOrCall(namespacedMember);
-            if(refOrCall is null)
+            if (refOrCall is null)
             {
                 return null;
             }
@@ -2708,9 +2716,9 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 return null;
             }
             FunCallNode call = new FunCallNode(left, functionArgs);
-            
+
             // TODO: HACK - create permanent function hoverable solution at SPA-stage in a future version
-            if(left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunctionDefinition function)
+            if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunctionDefinition function)
             {
                 Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
             }
@@ -2756,7 +2764,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// <returns></returns>
     private ArgsListNode? FunCall()
     {
-        if(!ConsumeIfType(TokenType.OpenParen, out Token? openParen))
+        if (!ConsumeIfType(TokenType.OpenParen, out Token? openParen))
         {
             AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
             return null;
@@ -2842,12 +2850,12 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
             return CallOrAccessOpRhs(new BinaryExprNode(left, dotToken, right));
         }
-        
+
         // Array index
         if (ConsumeIfType(TokenType.OpenBracket, out Token? openBracket))
         {
             ExprNode? index = Expr();
-            
+
             // Check for CLOSEBRACKET
             if (!ConsumeIfType(TokenType.CloseBracket, out Token? closeBracket))
             {
@@ -2891,7 +2899,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             case TokenType.OpenParen:
                 Advance();
                 ExprNode? parenExpr = ParenExpr();
-                
+
                 // Check for CLOSEPAREN
                 if (!AdvanceIfType(TokenType.CloseParen))
                 {
@@ -2927,7 +2935,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return null;
         }
-        
+
         // Could be a ternary expression or a vector
         return ConditionalOrVector(expr);
     }
@@ -2947,11 +2955,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             ExprNode? trueExpr = Expr();
 
-            if(trueExpr is null)
+            if (trueExpr is null)
             {
                 EnterRecovery();
             }
-            
+
             // Check for COLON
             if (!AdvanceIfType(TokenType.Colon))
             {
@@ -2960,36 +2968,36 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 return null;
             }
             ExitRecovery();
-            
+
             ExprNode? falseExpr = Expr();
-            
+
             return new TernaryExprNode(leftmostExpr, trueExpr, falseExpr);
         }
-        
+
         // Not a vector expression, just a parenthesised sub-expression
         if (!AdvanceIfType(TokenType.Comma))
         {
             return leftmostExpr;
         }
-        
+
         // Vector expression
-        
+
         ExprNode? secondExpr = Expr();
 
         if (secondExpr is null)
         {
             EnterRecovery();
         }
-            
+
         // Check for COMMA
         if (!AdvanceIfType(TokenType.Comma))
         {
             AddError(GSCErrorCodes.ExpectedToken, ',', CurrentToken.Lexeme);
             EnterRecovery();
         }
-            
+
         ExprNode? thirdExpr = Expr();
-            
+
         ExitRecovery();
         return new VectorExprNode(leftmostExpr, secondExpr, thirdExpr);
     }
@@ -2998,7 +3006,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     {
         return (ContextFlags & ParserContextFlags.InDevBlock) != 0;
     }
-    
+
     private bool InLoopOrSwitch()
     {
         return (ContextFlags & ParserContextFlags.InLoopBody) != 0 || (ContextFlags & ParserContextFlags.InSwitchBody) != 0;
@@ -3008,7 +3016,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     {
         return (ContextFlags & ParserContextFlags.InLoopBody) != 0;
     }
-    
+
     private bool EnterContextIfNewly(ParserContextFlags context)
     {
         // Already in this context further down.
@@ -3016,11 +3024,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         {
             return false;
         }
-        
+
         ContextFlags |= context;
         return true;
     }
-    
+
     private bool ExitContextIfWasNewly(ParserContextFlags context, bool wasNewly)
     {
         if (wasNewly)
@@ -3029,7 +3037,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
         return wasNewly;
     }
-    
+
 
     private void EnterRecovery()
     {
@@ -3053,7 +3061,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
         // Ignore all whitespace and comments.
         while (
-            CurrentTokenType == TokenType.Whitespace || 
+            CurrentTokenType == TokenType.Whitespace ||
             CurrentTokenType == TokenType.LineComment ||
             CurrentTokenType == TokenType.MultilineComment ||
             CurrentTokenType == TokenType.DocComment ||
@@ -3064,13 +3072,13 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     {
         Token consumed = CurrentToken;
         Advance();
-        
+
         return consumed;
     }
 
     private bool AdvanceIfType(TokenType type)
     {
-        if(CurrentTokenType == type)
+        if (CurrentTokenType == type)
         {
             Advance();
             return true;
@@ -3079,10 +3087,28 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         return false;
     }
 
+    // next: This is not my preferred method of emitting folding ranges, may move to SPA later.
+    private void EmitFoldingRangeIfPossible(Token? openToken, Token? closeToken)
+    {
+        if (openToken is null || closeToken is null)
+        {
+            return;
+        }
+
+        Sense.FoldingRanges.Add(new FoldingRange()
+        {
+            StartLine = openToken.Range.End.Line,
+            StartCharacter = openToken.Range.End.Character,
+
+            EndLine = closeToken.Previous.Range.Start.Line,
+            EndCharacter = closeToken.Previous.Range.Start.Character
+        });
+    }
+
     private bool ConsumeIfType(TokenType type, [NotNullWhen(true)] out Token? consumed)
     {
         Token current = CurrentToken;
-        if(AdvanceIfType(type))
+        if (AdvanceIfType(type))
         {
             consumed = current;
             return true;
@@ -3091,11 +3117,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         consumed = default;
         return false;
     }
-    
+
     private void AddError(GSCErrorCodes errorCode, params object?[] args)
     {
         // We're in a fault recovery state
-        if(Silent)
+        if (Silent)
         {
             return;
         }

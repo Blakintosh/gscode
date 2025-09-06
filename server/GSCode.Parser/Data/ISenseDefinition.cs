@@ -22,6 +22,13 @@ public interface ISemanticToken
     public string[] SemanticTokenModifiers { get; }
 }
 
+public class SemanticTokenDefinition(Range range, string semanticTokenType, string[] semanticTokenModifiers) : ISemanticToken
+{
+    public Range Range { get; } = range;
+    public string SemanticTokenType { get; } = semanticTokenType;
+    public string[] SemanticTokenModifiers { get; } = semanticTokenModifiers;
+}
+
 public interface IHoverable
 {
     /// <summary>

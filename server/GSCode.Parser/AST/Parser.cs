@@ -337,7 +337,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// Parses and outputs a script precache node.
     /// </summary>
     /// <remarks>
-    /// PrecacheDir := PRECACHE OPENPAREN STRING COMMA STRING CLOSEPAREN SEMICOLON
+    /// PrecacheDir := PRECACHE OPENPAREN STRING COMMA STRING [COMMA] [STRING] CLOSEPAREN SEMICOLON
     /// </remarks>
     /// <returns></returns>
     private PrecacheNode? PrecacheDir()
@@ -375,6 +375,20 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             return null;
         }
 
+        // Optional COMMA
+        if (AdvanceIfType(TokenType.Comma))
+        {
+            // Optional third STRING
+            if (CurrentTokenType == TokenType.String)
+            {
+                // We don't care about the third string, so just advance past it.
+                Advance();
+            }
+            else
+            {
+                AddError(GSCErrorCodes.ExpectedPrecachePath, CurrentToken.Lexeme);
+            }
+        }
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {

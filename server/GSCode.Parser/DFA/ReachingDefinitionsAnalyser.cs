@@ -618,6 +618,11 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         // TODO: not sure whether multiply can be done on vec3d, etc., need to check.
+        if (left.Type == ScrDataTypes.Vec3 && right.IsNumeric())
+        {
+            // TODO: add vec3d multiplication by scalar value
+            return new ScrData(ScrDataTypes.Vec3);
+        }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "*", left.TypeToString(), right.TypeToString());
         return ScrData.Default;
@@ -635,6 +640,12 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         // {
         //     return new ScrData(ScrDataTypes.Int, left.Get<int?>() / right.Get<int?>());
         // }
+
+        if (left.Type == ScrDataTypes.Vec3 && right.IsNumeric())
+        {
+            // TODO: add vec3d division by scalar value
+            return new ScrData(ScrDataTypes.Vec3);
+        }
 
         if (left.IsNumeric() && right.IsNumeric())
         {
@@ -705,7 +716,24 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return new ScrData(ScrDataTypes.Bool);
         }
 
-        // TODO: undefined can't be compared
+        // Undefined can't be compared, that's what isdefined is for.
+        if (left.Type == ScrDataTypes.Undefined || right.Type == ScrDataTypes.Undefined)
+        {
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "==", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
+        }
+
+        // Warn them if either side is possibly undefined.
+        if (left.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Left!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+        if (right.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Right!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
 
         // TODO: this is a blunt instrument and I don't think it's correct
         return new ScrData(ScrDataTypes.Bool, left.Value == right.Value);

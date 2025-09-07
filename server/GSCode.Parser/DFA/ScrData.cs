@@ -223,6 +223,11 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         return Type == ScrDataTypes.Any;
     }
 
+    public readonly bool HasType(ScrDataTypes type)
+    {
+        return (Type & type) == type;
+    }
+
     public string TypeToString()
     {
         if (Type == ScrDataTypes.Any)

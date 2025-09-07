@@ -121,6 +121,7 @@ public enum GSCErrorCodes
     AssignOnThreadedFunction = 3055,
     PossibleUndefinedComparison = 3056,
     InvalidVectorComponent = 3057,
+    FunctionNotFoundInUsingsOrBuiltins = 3058,
 
     // 8xxx errors are issued by the IDE for conventions
     UnterminatedRegion = 8000,
@@ -246,7 +247,8 @@ public static class DiagnosticCodes
         { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.PossibleUndefinedComparison, new("Possible comparison of 'undefined' value, which is not allowed.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.InvalidVectorComponent, new("Cannot use type '{0}' as a vector component.", DiagnosticSeverity.Error) },
-
+        { GSCErrorCodes.FunctionNotFoundInUsingsOrBuiltins, new("Function {0} is not found in any usings or builtins.", DiagnosticSeverity.Warning) },
+      
         // 8xxx
         { GSCErrorCodes.UnterminatedRegion, new("No corresponding '/* endregion */' found to terminate '{0}' region.", DiagnosticSeverity.Warning) },
       

@@ -441,6 +441,13 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             TokenType.Modulo => AnalyseModuloOp(binary, left, right),
             TokenType.BitLeftShift => AnalyseBitLeftShiftOp(binary, left, right),
             TokenType.BitRightShift => AnalyseBitRightShiftOp(binary, left, right),
+            TokenType.GreaterThan => AnalyseGreaterThanOp(binary, left, right),
+            TokenType.LessThan => AnalyseLessThanOp(binary, left, right),
+            TokenType.GreaterThanEquals => AnalyseGreaterThanEqualsOp(binary, left, right),
+            TokenType.LessThanEquals => AnalyseLessThanEqualsOp(binary, left, right),
+            TokenType.BitAnd => AnalyseBitAndOp(binary, left, right),
+            TokenType.BitOr => AnalyseBitOrOp(binary, left, right),
+            TokenType.BitXor => AnalyseBitXorOp(binary, left, right),
             TokenType.Equals => AnalyseEqualsOp(binary, left, right),
             TokenType.NotEquals => AnalyseNotEqualsOp(binary, left, right),
             TokenType.IdentityEquals => AnalyseIdentityEqualsOp(binary, left, right),
@@ -452,13 +459,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // TODO: Binary operators not yet mapped:
         // - Arrow (->)
-        // - GreaterThan (>)
-        // - LessThan (<)
-        // - GreaterThanEquals (>=)
-        // - LessThanEquals (<=)
-        // - BitAnd (&)
-        // - BitOr (|)
-        // - BitXor (^)
         // Assignment operators:
         // - PlusAssign (+=)
         // - MinusAssign (-=)
@@ -939,6 +939,170 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // TODO: evaluate more intelligently - ie check if both are booleanish.
         return new ScrData(ScrDataTypes.Bool);
+    }
+
+    private ScrData AnalyseBitAndOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() & right.GetIntegerValue());
+        }
+
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "&", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseBitOrOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() | right.GetIntegerValue());
+        }
+
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "|", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseBitXorOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() ^ right.GetIntegerValue());
+        }
+
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "^", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseGreaterThanOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            // If we can't determine values but types are numeric, still return bool
+            if (left.IsNumeric() && right.IsNumeric())
+            {
+                return new ScrData(ScrDataTypes.Bool);
+            }
+        }
+
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            if (!left.ValueUnknown() && !right.ValueUnknown())
+            {
+                return new ScrData(ScrDataTypes.Bool, left.GetNumericValue() > right.GetNumericValue());
+            }
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, ">", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseLessThanOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            // If we can't determine values but types are numeric, still return bool
+            if (left.IsNumeric() && right.IsNumeric())
+            {
+                return new ScrData(ScrDataTypes.Bool);
+            }
+        }
+
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            if (!left.ValueUnknown() && !right.ValueUnknown())
+            {
+                return new ScrData(ScrDataTypes.Bool, left.GetNumericValue() < right.GetNumericValue());
+            }
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "<", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseGreaterThanEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            // If we can't determine values but types are numeric, still return bool
+            if (left.IsNumeric() && right.IsNumeric())
+            {
+                return new ScrData(ScrDataTypes.Bool);
+            }
+        }
+
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            if (!left.ValueUnknown() && !right.ValueUnknown())
+            {
+                return new ScrData(ScrDataTypes.Bool, left.GetNumericValue() >= right.GetNumericValue());
+            }
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, ">=", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
+    }
+
+    private ScrData AnalyseLessThanEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            // If we can't determine values but types are numeric, still return bool
+            if (left.IsNumeric() && right.IsNumeric())
+            {
+                return new ScrData(ScrDataTypes.Bool);
+            }
+        }
+
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            if (!left.ValueUnknown() && !right.ValueUnknown())
+            {
+                return new ScrData(ScrDataTypes.Bool, left.GetNumericValue() <= right.GetNumericValue());
+            }
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "<=", left.TypeToString(), right.TypeToString());
+        return ScrData.Default;
     }
 
     private ScrData AnalyseDotOp(BinaryExprNode node, SymbolTable symbolTable, bool createSenseTokenForField = true)

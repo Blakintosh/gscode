@@ -388,16 +388,18 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
             return null;
         }
 
+        // TODO: this isn't an ideal solution, need a better way of handling ints.
+
         // Try to get as int first (non-nullable)
-        if (Value is int intValue)
+        if (Value is long intValue)
         {
-            return intValue;
+            return (int)intValue;
         }
 
         // Check if it's a nullable int that contains a value
-        if (Value is int? && ((int?)Value).HasValue)
+        if (Value is long? && ((long?)Value).HasValue)
         {
-            return ((int?)Value).Value;
+            return (int)((long?)Value).Value;
         }
 
         // Value exists but is not an integer type, or nullable int is null

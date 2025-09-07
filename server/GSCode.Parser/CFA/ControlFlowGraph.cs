@@ -63,7 +63,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         {
             AstNodeType.IfStmt => Construct_IfStatement(ref currentNode, sense, localHelper),
             AstNodeType.WhileStmt => Construct_WhileStatement(ref currentNode, sense, localHelper),
-            AstNodeType.DoWhileStmt => Construct_Skip(ref currentNode, sense, localHelper),
+            AstNodeType.DoWhileStmt => Construct_DoWhileStatement(ref currentNode, sense, localHelper),
             AstNodeType.ForStmt => Construct_ForStmt(ref currentNode, sense, localHelper),
             AstNodeType.ForeachStmt => Construct_ForeachStmt(ref currentNode, sense, localHelper),
             AstNodeType.SwitchStmt => Construct_Skip(ref currentNode, sense, localHelper),
@@ -224,8 +224,6 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         return condition;
     }
 
-    
-
     private static DecisionNode Construct_WhileStatement(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
         // Handle the while statement
@@ -255,6 +253,38 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         condition.WhenFalse = continuation;
 
         return condition;
+    }
+
+    private static CfgNode Construct_DoWhileStatement(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    {
+        // Handle the do-while statement
+        DoWhileStmtNode doWhileNode = (DoWhileStmtNode)currentNode!.Value;
+
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
+
+        DecisionNode condition = new(doWhileNode, doWhileNode.Condition, localHelper.Scope);
+
+        ControlFlowHelper whileHelper = new(localHelper)
+        {
+            LoopContinueContext = condition,
+            ContinuationContext = condition,
+            BreakContext = continuation,
+        };
+
+        // Generate the body of the do-while loop.
+        CfgNode then = Construct(doWhileNode.Then, sense, whileHelper, false);
+
+        CfgNode.Connect(condition, then);
+        condition.WhenTrue = then;
+
+        // If false, then use the continuation.
+        CfgNode.Connect(condition, continuation);
+        condition.WhenFalse = continuation;
+
+        // Unlike while, the body is hit first.
+        return then;
     }
 
     private static CfgNode Construct_ForeachStmt(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)

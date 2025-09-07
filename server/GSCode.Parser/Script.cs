@@ -62,6 +62,18 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return api is not null && api.GetApiFunction(name) is not null;
     }
 
+    // Keywords list duplicated from DocumentCompletionsLibrary.cs for SPA filtering purposes
+    private static readonly HashSet<string> s_completionKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "class", "return", "wait", "thread", "classes", "if", "else", "do", "while",
+        "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend",
+        "switch", "case", "default", "break", "continue", "notify", "endon",
+        "waitrealtime", "profilestart", "profilestop", "isdefined",
+        // Additional keywords
+        "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
+        "var", "const", "function", "private", "autoexec", "constructor", "destructor"
+    };
+
     public async Task ParseAsync(string documentText)
     {
         ParsingTask = DoParseAsync(documentText);
@@ -180,6 +192,17 @@ public class Script(DocumentUri ScriptUri, string languageId)
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Token? NextNonTrivia(Token? token)
+    {
+        Token? t = token?.Next;
+        while (t is not null && (t.IsWhitespacey() || t.IsComment()))
+        {
+            t = t.Next;
+        }
+        return t;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsAddressOfIdentifier(Token identifier)
     {
         // identifier may be part of ns::name; find left-most identifier
@@ -190,6 +213,24 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
         Token? prev = PreviousNonTrivia(leftMost);
         return prev is not null && prev.Type == TokenType.BitAnd;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsFunctionPointerCallIdentifier(Token identifier)
+    {
+        // Pattern: [[ identifier ]]( ... )
+        // Check immediate surrounding tokens ignoring trivia
+        Token? prev1 = PreviousNonTrivia(identifier);
+        if (prev1?.Type != TokenType.OpenBracket) return false;
+        Token? prev2 = PreviousNonTrivia(prev1);
+        if (prev2?.Type != TokenType.OpenBracket) return false;
+        Token? next1 = NextNonTrivia(identifier);
+        if (next1?.Type != TokenType.CloseBracket) return false;
+        Token? next2 = NextNonTrivia(next1);
+        if (next2?.Type != TokenType.CloseBracket) return false;
+        Token? next3 = NextNonTrivia(next2);
+        if (next3?.Type != TokenType.OpenParen) return false;
+        return true;
     }
 
     private static string NormalizeDocComment(string raw)
@@ -452,6 +493,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             EmitUnusedVariableDiagnostics();
             EmitSwitchCaseDiagnostics();
             EmitAssignOnThreadDiagnostics();
+            EmitUnknownFunctionDiagnostics();
         }
         catch (Exception ex)
         {
@@ -1694,6 +1736,73 @@ public class Script(DocumentUri ScriptUri, string languageId)
                         Sense.AddSpaDiagnostic(bin.Range, GSCErrorCodes.AssignOnThreadedFunction);
                     }
                 }
+            }
+        }
+    }
+
+    private void EmitUnknownFunctionDiagnostics()
+    {
+        if (RootNode is null) return;
+        foreach (var call in EnumerateCalls(RootNode))
+        {
+            string? ns = null;
+            string? name = null;
+            Range idRange = call.Range;
+
+            if (call.Target is IdentifierExprNode id)
+            {
+                name = id.Identifier;
+                idRange = id.Range;
+            }
+            else if (call.Target is NamespacedMemberNode nsm && nsm.Member is IdentifierExprNode mem && nsm.Namespace is IdentifierExprNode nsId)
+            {
+                ns = nsId.Identifier;
+                name = mem.Identifier;
+                idRange = mem.Range;
+            }
+            else
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            // Skip keyword-like identifiers to avoid false positives
+            if (s_completionKeywords.Contains(name)) continue;
+
+            // Skip builtin API functions (globals)
+            if (IsBuiltinFunction(name)) continue;
+
+            // Skip function-pointer calls: [[ identifier ]](...)
+            Token? idToken = Sense.Tokens.Get(idRange.Start);
+            if (idToken is not null && idToken.Type == TokenType.Identifier && IsFunctionPointerCallIdentifier(idToken))
+            {
+                continue; // function pointer variable being invoked; not a direct function symbol
+            }
+
+            bool found = false;
+            if (DefinitionsTable is not null)
+            {
+                if (ns is not null)
+                {
+                    if (DefinitionsTable.GetFunctionLocation(ns, name) is not null)
+                    {
+                        found = true;
+                    }
+                }
+                else
+                {
+                    string curNs = DefinitionsTable.CurrentNamespace;
+                    if (DefinitionsTable.GetFunctionLocation(curNs, name) is not null || DefinitionsTable.GetFunctionLocationAnyNamespace(name) is not null)
+                    {
+                        found = true;
+                    }
+                }
+            }
+
+            if (!found)
+            {
+                Sense.AddSpaDiagnostic(idRange, GSCErrorCodes.FunctionNotFoundInUsingsOrBuiltins, name);
             }
         }
     }

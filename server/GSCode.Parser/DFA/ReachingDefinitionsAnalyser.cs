@@ -270,6 +270,10 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Declaration(foreachStmt.ValueIdentifier, ScrData.Default));
         }
+        else if(assignmentResult == AssignmentResult.SuccessMutated)
+        {
+            Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Usage(foreachStmt.ValueIdentifier, ScrData.Default));
+        }
     }
 
     public void AnalyseIteration(IterationNode node, SymbolTable symbolTable)

@@ -62,7 +62,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         return currentNode.Value.NodeType switch
         {
             AstNodeType.IfStmt => Construct_IfStatement(ref currentNode, sense, localHelper),
-            AstNodeType.WhileStmt => Construct_Skip(ref currentNode, sense, localHelper),
+            AstNodeType.WhileStmt => Construct_WhileStatement(ref currentNode, sense, localHelper),
             AstNodeType.DoWhileStmt => Construct_Skip(ref currentNode, sense, localHelper),
             AstNodeType.ForStmt => Construct_ForStmt(ref currentNode, sense, localHelper),
             AstNodeType.ForeachStmt => Construct_ForeachStmt(ref currentNode, sense, localHelper),
@@ -224,6 +224,39 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         return condition;
     }
 
+    
+
+    private static DecisionNode Construct_WhileStatement(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    {
+        // Handle the while statement
+        WhileStmtNode whileNode = (WhileStmtNode)currentNode!.Value;
+
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
+
+        DecisionNode condition = new(whileNode, whileNode.Condition, localHelper.Scope);
+
+        ControlFlowHelper whileHelper = new(localHelper)
+        {
+            LoopContinueContext = condition,
+            ContinuationContext = condition,
+            BreakContext = continuation,
+        };
+
+        // Generate the body of the while loop.
+        CfgNode then = Construct(whileNode.Then, sense, whileHelper, false);
+
+        CfgNode.Connect(condition, then);
+        condition.WhenTrue = then;
+
+        // If false, then use the continuation.
+        CfgNode.Connect(condition, continuation);
+        condition.WhenFalse = continuation;
+
+        return condition;
+    }
+
     private static CfgNode Construct_ForeachStmt(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
         // Foreach loop: (enumeration) -> (body) -> (enumeration)
@@ -237,7 +270,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
         // Generate an enumeration node.
-        EnumerationNode enumeration = new(foreachNode, localHelper.Scope + 1);
+        EnumerationNode enumeration = new(foreachNode, localHelper.Scope /*+ 1*/);
 
         CfgNode.Connect(enumeration, continuation);
         enumeration.Continuation = continuation;

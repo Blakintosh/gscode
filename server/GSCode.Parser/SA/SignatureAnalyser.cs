@@ -131,7 +131,15 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
         // Record doc comment if present
-        DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, ExtractDocCommentBefore(nameToken));
+        string? doc = ExtractDocCommentBefore(nameToken);
+        DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, doc);
+
+        // NEW: Also record under the class name as its own qualifier so ClassName::Method() resolves
+        string classNs = scrClass.Name;
+        DefinitionsTable.AddFunctionLocation(classNs, name, Sense.ScriptPath, nameToken.Range);
+        DefinitionsTable.RecordFunctionParameters(classNs, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        DefinitionsTable.RecordFunctionFlags(classNs, name, flags);
+        DefinitionsTable.RecordFunctionDoc(classNs, name, doc);
 
         Sense.AddSenseToken(nameToken, new ScrMethodSymbol(nameToken, function, scrClass));
 

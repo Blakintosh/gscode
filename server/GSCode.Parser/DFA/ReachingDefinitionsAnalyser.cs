@@ -445,15 +445,13 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             TokenType.NotEquals => AnalyseNotEqualsOp(binary, left, right),
             TokenType.IdentityEquals => AnalyseIdentityEqualsOp(binary, left, right),
             TokenType.IdentityNotEquals => AnalyseIdentityNotEqualsOp(binary, left, right),
+            TokenType.And => AnalyseAndOp(binary, left, right),
+            TokenType.Or => AnalyseOrOp(binary, left, right),
             _ => ScrData.Default,
         };
 
         // TODO: Binary operators not yet mapped:
-        // - IdentityNotEquals (!==)
-        // - IdentityEquals (===)
         // - Arrow (->)
-        // - And (&&)
-        // - Or (||)
         // - GreaterThan (>)
         // - LessThan (<)
         // - GreaterThanEquals (>=)
@@ -872,6 +870,75 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // TODO: this is definitely not right.
         return new ScrData(ScrDataTypes.Bool, left.Value != right.Value || left.Type != right.Type);
+    }
+
+    private ScrData AnalyseAndOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // Undefined can't be compared, that's what isdefined is for.
+        if (left.Type == ScrDataTypes.Undefined || right.Type == ScrDataTypes.Undefined)
+        {
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "&&", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
+        }
+
+        // Warn them if either side is possibly undefined.
+        if (left.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Left!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+        if (right.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Right!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // TODO: evaluate more intelligently - ie check if both are booleanish.
+        return new ScrData(ScrDataTypes.Bool);
+    }
+
+    private ScrData AnalyseOrOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // Undefined can't be compared, that's what isdefined is for.
+        if (left.Type == ScrDataTypes.Undefined || right.Type == ScrDataTypes.Undefined)
+        {
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "||", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
+        }
+
+        // Warn them if either side is possibly undefined.
+        if (left.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Left!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+        if (right.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Right!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // TODO: evaluate more intelligently - ie check if both are booleanish.
+        return new ScrData(ScrDataTypes.Bool);
     }
 
     private ScrData AnalyseDotOp(BinaryExprNode node, SymbolTable symbolTable, bool createSenseTokenForField = true)

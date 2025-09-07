@@ -18,6 +18,7 @@ using GSCode.Parser.SPA;
 using System.Text.RegularExpressions;
 using GSCode.Parser.DFA;
 using System.Runtime.CompilerServices;
+using Serilog;
 
 namespace GSCode.Parser;
 
@@ -34,6 +35,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
     public string LanguageId { get; } = languageId;
 
     private Task? ParsingTask { get; set; } = null;
+    private Task? AnalysisTask { get; set; } = null;
 
     private ScriptNode? RootNode { get; set; } = null;
 
@@ -94,7 +96,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             // Failed to parse the script
             Failed = true;
-            Console.Error.WriteLine($"Failed to tokenise script: {ex.Message}");
+            Log.Error(ex, "Failed to tokenise script.");
 
             // Create a dummy IntelliSense container so we can provide an error to the IDE.
             Sense = new(0, ScriptUri, LanguageId);
@@ -114,7 +116,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to preprocess script: {ex.Message}");
+            Log.Error(ex, "Failed to preprocess script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledMacError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -133,7 +135,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to AST-gen script: {ex.Message}");
+            Log.Error(ex, "Failed to AST-gen script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledAstError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -151,7 +153,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to signature analyse script: {ex.Message}");
+            Log.Error(ex, "Failed to signature analyse script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSaError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -332,6 +334,59 @@ public class Script(DocumentUri ScriptUri, string languageId)
     {
         await WaitUntilParsedAsync(cancellationToken);
 
+        AnalysisTask = DoAnalyseAsync(exportedSymbols, cancellationToken);
+        await AnalysisTask;
+    }
+
+    public Task DoAnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
+    {
+
+        // Get a comprehensive list of symbols available in this context.
+        Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.InternalSymbols, StringComparer.OrdinalIgnoreCase);
+        foreach (IExportedSymbol symbol in exportedSymbols)
+        {
+            // Add dependency symbols, but don't overwrite local symbols (local takes precedence).
+            if (symbol.Type == ExportedSymbolType.Function)
+            {
+                ScrFunction function = (ScrFunction)symbol;
+                allSymbols.TryAdd($"{function.Namespace}::{function.Name}", symbol);
+                if (!function.Implicit)
+                {
+                    continue;
+                }
+            }
+            allSymbols.TryAdd(symbol.Name, symbol);
+        }
+
+        ControlFlowAnalyser controlFlowAnalyser = new(Sense, DefinitionsTable!);
+        try
+        {
+            controlFlowAnalyser.Run();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Log.Error(ex, "Failed to run control flow analyser.");
+
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
+
+        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, Sense, allSymbols);
+        try
+        {
+            dataFlowAnalyser.Run();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Log.Error(ex, "Failed to run data flow analyser.");
+
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
+
+        // TODO: fit this within the analysers above, or a later step.
         // Basic SPA diagnostics
         try
         {
@@ -351,6 +406,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
 
         Analysed = true;
+        return Task.CompletedTask;
     }
 
     public async Task<List<Diagnostic>> GetDiagnosticsAsync(CancellationToken cancellationToken)
@@ -364,17 +420,19 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public async Task PushSemanticTokensAsync(SemanticTokensBuilder builder, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
 
+        int count = 0;
         foreach (ISemanticToken token in Sense.SemanticTokens)
         {
             builder.Push(token.Range, token.SemanticTokenType, token.SemanticTokenModifiers);
+            count++;
         }
     }
 
     public async Task<Hover?> GetHoverAsync(Position position, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
 
         IHoverable? result = Sense.HoverLibrary.Get(position);
         if (result is not null)
@@ -481,7 +539,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (apiFn is not null)
                 {
                     var overload = apiFn.Overloads.FirstOrDefault();
-                    var paramSeq = overload != null ? overload.Parameters : new List<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                    var paramSeq = overload != null ? overload.Parameters : new List<ScrFunctionArg>();
                     string[] names = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                     string sig = FormatSignature(name, names, activeParam, qualifier);
                     string desc = apiFn.Description ?? string.Empty;
@@ -594,7 +652,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public async Task<CompletionList?> GetCompletionAsync(Position position, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
         return Sense.Completions.GetCompletionsFromPosition(position);
     }
 
@@ -613,6 +671,20 @@ public class Script(DocumentUri ScriptUri, string languageId)
             throw new InvalidOperationException("The script has not been parsed yet.");
         }
         await ParsingTask;
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private async Task WaitUntilAnalysedAsync(CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (AnalysisTask is null)
+        {
+            throw new InvalidOperationException("The script has not been parsed yet.");
+        }
+        await AnalysisTask;
         cancellationToken.ThrowIfCancellationRequested();
     }
 
@@ -1002,7 +1074,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (apiFn is not null)
                 {
                     var overload = apiFn.Overloads.FirstOrDefault();
-                    IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                    IEnumerable<ScrFunctionArg> paramSeq = overload != null ? (IEnumerable<ScrFunctionArg>)overload.Parameters : Enumerable.Empty<ScrFunctionArg>();
                     var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                     string label = $"function {name}({string.Join(", ", cleaned)})";
                     var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = string.IsNullOrWhiteSpace(p.Description) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description! } }));
@@ -1116,7 +1188,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
             if (call is FunCallNode fcall)
             {
-                switch (fcall.Target)
+                switch (fcall.Function)
                 {
                     case IdentifierExprNode id:
                         name = id.Identifier;
@@ -1683,7 +1755,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             case MethodCallNode mc:
                 if (mc.Target is not null) yield return mc.Target; yield return mc.Arguments; break;
             case FunCallNode fc:
-                if (fc.Target is not null) yield return fc.Target; yield return fc.Arguments; break;
+                if (fc.Function is not null) yield return fc.Function; yield return fc.Arguments; break;
             case NamespacedMemberNode nm:
                 yield return nm.Namespace; yield return nm.Member; break;
             case ArgsListNode al:

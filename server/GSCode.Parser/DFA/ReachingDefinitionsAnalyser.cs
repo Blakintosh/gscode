@@ -1,3 +1,4 @@
+using System.Numerics;
 using GSCode.Data;
 using GSCode.Parser.AST;
 using GSCode.Parser.CFA;
@@ -79,6 +80,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             {
                 OutSets[node] = new Dictionary<string, ScrVariable>(StringComparer.OrdinalIgnoreCase);
             }
+
+            // TODO: GSC does NOT use lexical scope within functions.
 
             // Calculate the out set
             if (node.Type == CfgNodeType.FunctionEntry)
@@ -440,8 +443,35 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             TokenType.BitRightShift => AnalyseBitRightShiftOp(binary, left, right),
             TokenType.Equals => AnalyseEqualsOp(binary, left, right),
             TokenType.NotEquals => AnalyseNotEqualsOp(binary, left, right),
+            TokenType.IdentityEquals => AnalyseIdentityEqualsOp(binary, left, right),
+            TokenType.IdentityNotEquals => AnalyseIdentityNotEqualsOp(binary, left, right),
             _ => ScrData.Default,
         };
+
+        // TODO: Binary operators not yet mapped:
+        // - IdentityNotEquals (!==)
+        // - IdentityEquals (===)
+        // - Arrow (->)
+        // - And (&&)
+        // - Or (||)
+        // - GreaterThan (>)
+        // - LessThan (<)
+        // - GreaterThanEquals (>=)
+        // - LessThanEquals (<=)
+        // - BitAnd (&)
+        // - BitOr (|)
+        // - BitXor (^)
+        // Assignment operators:
+        // - PlusAssign (+=)
+        // - MinusAssign (-=)
+        // - MultiplyAssign (*=)
+        // - DivideAssign (/=)
+        // - ModuloAssign (%=)
+        // - BitAndAssign (&=)
+        // - BitOrAssign (|=)
+        // - BitXorAssign (^=)
+        // - BitLeftShiftAssign (<<=)
+        // - BitRightShiftAssign (>>=)
     }
 
     private ScrData AnalysePrefixExpr(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
@@ -751,10 +781,97 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return new ScrData(ScrDataTypes.Bool);
         }
 
-        // TODO: undefined can't be compared
+        // Undefined can't be compared, that's what isdefined is for.
+        if (left.Type == ScrDataTypes.Undefined || right.Type == ScrDataTypes.Undefined)
+        {
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "!=", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
+        }
+
+        // Warn them if either side is possibly undefined.
+        if (left.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Left!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+        if (right.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Right!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
 
         // TODO: this is a blunt instrument and I don't think it's correct
         return new ScrData(ScrDataTypes.Bool, left.Value != right.Value);
+    }
+
+    private ScrData AnalyseIdentityEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // Undefined can't be compared, that's what isdefined is for.
+        if (left.Type == ScrDataTypes.Undefined || right.Type == ScrDataTypes.Undefined)
+        {
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "===", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
+        }
+
+        // Warn them if either side is possibly undefined.
+        if (left.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Left!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+        if (right.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Right!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // TODO: this is definitely not right.
+        return new ScrData(ScrDataTypes.Bool, left.Value == right.Value && left.Type == right.Type);
+    }
+
+    private ScrData AnalyseIdentityNotEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
+    {
+        if (left.TypeUnknown() || right.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (left.ValueUnknown() || right.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // Undefined can't be compared, that's what isdefined is for.
+        if (left.Type == ScrDataTypes.Undefined || right.Type == ScrDataTypes.Undefined)
+        {
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "!==", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
+        }
+
+        // Warn them if either side is possibly undefined.
+        if (left.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Left!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+        if (right.HasType(ScrDataTypes.Undefined))
+        {
+            AddDiagnostic(node.Right!.Range, GSCErrorCodes.PossibleUndefinedComparison);
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        // TODO: this is definitely not right.
+        return new ScrData(ScrDataTypes.Bool, left.Value != right.Value || left.Type != right.Type);
     }
 
     private ScrData AnalyseDotOp(BinaryExprNode node, SymbolTable symbolTable, bool createSenseTokenForField = true)
@@ -858,8 +975,28 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         ScrData y = AnalyseExpr(expr.Y, symbolTable, Sense);
         ScrData z = AnalyseExpr(expr.Z, symbolTable, Sense);
 
-        // TODO: evaluate values later.
-        return new ScrData(ScrDataTypes.Vec3);
+        if (x.TypeUnknown() || y.TypeUnknown() || z.TypeUnknown() || x.ValueUnknown() || y.ValueUnknown() || z.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Vec3);
+        }
+
+        if (!x.IsNumeric())
+        {
+            AddDiagnostic(expr.X!.Range, GSCErrorCodes.InvalidVectorComponent, x.TypeToString());
+            return ScrData.Default;
+        }
+        if (!y.IsNumeric())
+        {
+            AddDiagnostic(expr.Y!.Range, GSCErrorCodes.InvalidVectorComponent, y.TypeToString());
+            return ScrData.Default;
+        }
+        if (!z.IsNumeric())
+        {
+            AddDiagnostic(expr.Z!.Range, GSCErrorCodes.InvalidVectorComponent, z.TypeToString());
+            return ScrData.Default;
+        }
+
+        return new ScrData(ScrDataTypes.Vec3, new Vector3(x.GetNumericValue()!.Value, y.GetNumericValue()!.Value, z.GetNumericValue()!.Value));
     }
 
     private ScrData AnalyseIndexerExpr(ArrayIndexNode expr, SymbolTable symbolTable)
@@ -949,6 +1086,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             AddDiagnostic(namespaced.Member!.Range, GSCErrorCodes.IdentifierExpected);
             return ScrData.Default;
         }
+
+        // TODO: we're missing a check if the namespace exists. Incorporate (#24) here.
 
         ScrData symbol = symbolTable.TryGetNamespacedFunctionSymbol(namespaceNode.Identifier, memberNode.Identifier, out SymbolFlags flags);
 

@@ -85,7 +85,10 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         ControlFlowHelper newLocalHelper = new(localHelper)
         {
             ContinuationContext = continuation,
-            Scope = shouldIncreaseScope ? localHelper.Scope + 1 : localHelper.Scope
+            // TODO: GSC does NOT use lexical scope within functions, but we need to consider class scope (as class members can only be used by methods that occur after their definition). 
+            // Leave this commented for now.
+            // Scope = shouldIncreaseScope ? localHelper.Scope + 1 : localHelper.Scope
+            Scope = localHelper.Scope
         };
 
         LinkedListNode<AstNode>? blockNode = stmtList.Statements.First;

@@ -368,7 +368,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
         if (Type == ScrDataTypes.Int)
         {
-            return (int)Value;
+            return (long)Value;
         }
         else if (Type == ScrDataTypes.Float)
         {

@@ -3,3 +3,4 @@
 launchSettings.json
 .svelte-kit/
 .vite/
+server/GSCode.CLI/Properties/launchSettings.json

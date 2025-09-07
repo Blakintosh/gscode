@@ -1,5 +1,4 @@
 ﻿using GSCode.Parser.SPA.Models;
-using GSCode.Parser.SPA.Sense;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -68,6 +67,13 @@ public class ScriptAnalyserData
         {
             ScriptApiJsonLibrary library = JsonConvert.DeserializeObject<ScriptApiJsonLibrary>(source);
 
+            // All built-ins are implicit, because they can be called without using the sys namespace.
+            foreach (ScrFunction function in library.Api)
+            {
+                function.Namespace = "sys";
+                function.Implicit = true;
+            }
+
             if (_languageLibraries.TryGetValue(library.LanguageId, out ScrLibraryData? existingLibrary)
                 && existingLibrary!.Library.Revision > library.Revision)
             {
@@ -85,7 +91,7 @@ public class ScriptAnalyserData
         return false;
     }
 
-    public List<ScrFunctionDefinition> GetApiFunctions(string? filter = null)
+    public List<ScrFunction> GetApiFunctions(string? filter = null)
     {
         if (!_languageLibraries.TryGetValue(LanguageId, out ScrLibraryData? library))
         {
@@ -96,29 +102,29 @@ public class ScriptAnalyserData
         return library.Library.Api;
     }
 
-    public ScrFunctionDefinition? GetApiFunction(string name)
+    public ScrFunction? GetApiFunction(string name)
     {
         if (!_languageLibraries.TryGetValue(LanguageId, out ScrLibraryData? library))
         {
             Log.Error("No API library found for {LanguageId}", LanguageId);
             return null;
         }
-        return library.Functions.TryGetValue(name.ToLower(), out ScrFunctionDefinition? function) ? function : null;
+        return library.Functions.TryGetValue(name, out ScrFunction? function) ? function : null;
     }
 }
 
 internal class ScrLibraryData
 {
     public ScriptApiJsonLibrary Library { get; }
-    public SortedList<string, ScrFunctionDefinition> Functions { get; }
+    public SortedList<string, ScrFunction> Functions { get; }
 
     public ScrLibraryData(ScriptApiJsonLibrary library)
     {
         Library = library;
-        Functions = new SortedList<string, ScrFunctionDefinition>(library.Api.Count);
-        foreach (ScrFunctionDefinition function in library.Api)
+        Functions = new SortedList<string, ScrFunction>(library.Api.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (ScrFunction function in library.Api)
         {
-            Functions.Add(function.Name.ToLower(), function);
+            Functions.Add(function.Name, function);
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using GSCode.Data.Models.Interfaces;
 using GSCode.Parser;
+using GSCode.Parser.Data;
 using GSCode.Parser.SA;
 using Serilog;
 using System.Collections.Concurrent;
@@ -8,6 +9,10 @@ using System.Text;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using GSCode.Parser.SPA;
+using GSCode.Data.Models;
 
 namespace GSCode.NET.LSP;
 
@@ -137,6 +142,14 @@ public class ScriptManager
 
         // Using this, we can now get the exported symbols for the script.
         List<IExportedSymbol> exportedSymbols = new();
+
+        // Add built-in functions from the API
+        ScriptAnalyserData analyserData = new(script.LanguageId);
+        List<ScrFunction> apiFunctions = analyserData.GetApiFunctions();
+        foreach (ScrFunction apiFunction in apiFunctions)
+        {
+            exportedSymbols.Add(apiFunction);
+        }
 
         // TODO: find a cleaner way to do this.
         foreach (Uri dependency in script.Dependencies)

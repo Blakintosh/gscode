@@ -101,8 +101,6 @@ public enum GSCErrorCodes
     FunctionDoesNotExist = 3035,
     ExpectedFunction = 3036,
     ReservedSymbol = 3037,
-
-    // Newly added SPA diagnostics
     UnusedVariable = 3038,
     UnusedParameter = 3039,
     TooManyArguments = 3040,
@@ -122,6 +120,7 @@ public enum GSCErrorCodes
     InvalidThreadCall = 3054,
     AssignOnThreadedFunction = 3055,
     PossibleUndefinedComparison = 3056,
+    InvalidVectorComponent = 3057,
 
     // 8xxx errors are issued by the IDE for conventions
     UnterminatedRegion = 8000,
@@ -227,8 +226,6 @@ public static class DiagnosticCodes
         { GSCErrorCodes.FunctionDoesNotExist, new("The function '{0}' does not exist in this context.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedFunction, new("Expected a function, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ReservedSymbol, new("The symbol '{0}' is reserved.", DiagnosticSeverity.Error) },
-
-        // Newly added SPA diagnostics
         { GSCErrorCodes.UnusedVariable, new("The variable '{0}' is declared but never used.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
         { GSCErrorCodes.UnusedParameter, new("The parameter '{0}' is never used.", DiagnosticSeverity.Hint, new[] { DiagnosticTag.Unnecessary }) },
         { GSCErrorCodes.TooManyArguments, new("Function '{0}' called with {1} arguments, but expects {2}.", DiagnosticSeverity.Error) },
@@ -248,6 +245,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.InvalidThreadCall, new("Only function calls can be threaded.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.PossibleUndefinedComparison, new("Possible comparison of 'undefined' value, which is not allowed.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.InvalidVectorComponent, new("Cannot use type '{0}' as a vector component.", DiagnosticSeverity.Error) },
 
         // 8xxx
         { GSCErrorCodes.UnterminatedRegion, new("No corresponding '/* endregion */' found to terminate '{0}' region.", DiagnosticSeverity.Warning) },

@@ -50,6 +50,7 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
                     SemanticTokenType.String,
                     SemanticTokenType.Namespace,
                     SemanticTokenType.Method,
+                    SemanticTokenType.Keyword,
                     new SemanticTokenType("field")
                 )
             },

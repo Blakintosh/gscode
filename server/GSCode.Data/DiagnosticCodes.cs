@@ -117,6 +117,7 @@ public enum GSCErrorCodes
     CalledOnInvalidTarget = 3049,
     InvalidThreadCall = 3050,
     AssignOnThreadedFunction = 3051,
+    FunctionNotFoundInUsingsOrBuiltins = 3052,
 
     // 8xxx errors are issued by the IDE for conventions
     UnterminatedRegion = 8000,
@@ -237,6 +238,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.CalledOnInvalidTarget, new("Called-on target must be an entity/struct; got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidThreadCall, new("Only function calls can be threaded.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.FunctionNotFoundInUsingsOrBuiltins, new("Function {0} is not found in any usings or builtins.", DiagnosticSeverity.Warning) },
   
         // 8xxx
         { GSCErrorCodes.UnterminatedRegion, new("No corresponding '/* endregion */' found to terminate '{0}' region.", DiagnosticSeverity.Warning) },

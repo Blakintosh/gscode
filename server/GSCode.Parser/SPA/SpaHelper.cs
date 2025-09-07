@@ -3,7 +3,6 @@ using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Data;
 using GSCode.Parser.DFA;
 using GSCode.Parser.Lexical;
-using GSCode.Parser.SPA.Logic.Analysers;
 using GSCode.Parser.Util;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using System;

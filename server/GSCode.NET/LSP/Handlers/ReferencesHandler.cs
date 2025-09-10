@@ -53,6 +53,13 @@ internal sealed class ReferencesHandler : ReferencesHandlerBase
             return new LocationContainer();
         }
 
+        // Try local variable references first (within enclosing function scope)
+        var localRefs = await script.GetLocalVariableReferencesAsync(request.Position, request.Context?.IncludeDeclaration == true, cancellationToken);
+        if (localRefs.Count > 0)
+        {
+            return new LocationContainer(localRefs.Select(r => new Location { Uri = request.TextDocument.Uri.ToUri(), Range = r }));
+        }
+
         var qid = await script.GetQualifiedIdentifierAtAsync(request.Position, cancellationToken);
         if (qid is null)
         {

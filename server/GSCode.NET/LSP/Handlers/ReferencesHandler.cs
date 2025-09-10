@@ -6,6 +6,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
+using System.IO;
 
 namespace GSCode.NET.LSP.Handlers;
 
@@ -26,6 +27,24 @@ internal sealed class ReferencesHandler : ReferencesHandlerBase
         _selector = selector;
     }
 
+    // Normalize file system paths that may come in the form "/g:/path/..." or use forward slashes on Windows
+    private static string NormalizeFilePathForUri(string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return filePath;
+
+        if (filePath.Length >= 3 && filePath[0] == '/' && char.IsLetter(filePath[1]) && filePath[2] == ':')
+        {
+            filePath = filePath.Substring(1);
+        }
+
+        if (Path.DirectorySeparatorChar == '\\')
+        {
+            filePath = filePath.Replace('/', Path.DirectorySeparatorChar);
+        }
+
+        try { return Path.GetFullPath(filePath); } catch { return filePath; }
+    }
+
     public override async Task<LocationContainer?> Handle(ReferenceParams request, CancellationToken cancellationToken)
     {
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
@@ -43,9 +62,11 @@ internal sealed class ReferencesHandler : ReferencesHandlerBase
         string ns = qid.Value.qualifier ?? (script.DefinitionsTable?.CurrentNamespace ?? "");
         string name = qid.Value.name;
 
+        // Support functions (and methods where available) in addition to classes
         var keys = new List<SymbolKey>
         {
             new SymbolKey(SaSymbolKind.Function, ns, name),
+            new SymbolKey(SaSymbolKind.Method, ns, name),
             new SymbolKey(SaSymbolKind.Class, ns, name)
         };
 
@@ -72,7 +93,8 @@ internal sealed class ReferencesHandler : ReferencesHandlerBase
                            ?? s.DefinitionsTable.GetClassLocation(key.Namespace, key.Name);
                     if (loc is not null)
                     {
-                        results.Add(new Location { Uri = new Uri(loc.Value.FilePath), Range = loc.Value.Range });
+                        string normalized = NormalizeFilePathForUri(loc.Value.FilePath);
+                        results.Add(new Location { Uri = new Uri(normalized), Range = loc.Value.Range });
                     }
                 }
             }

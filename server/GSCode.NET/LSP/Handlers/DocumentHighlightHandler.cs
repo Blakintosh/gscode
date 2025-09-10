@@ -29,6 +29,30 @@ internal sealed class DocumentHighlightHandler(
             return new DocumentHighlightContainer();
         }
 
+        // First, try highlighting local variable references within the enclosing function scope
+        var localRefs = await script.GetLocalVariableReferencesAsync(request.Position, includeDeclaration: true, cancellationToken);
+        if (localRefs.Count > 0)
+        {
+            var localHighlights = new List<DocumentHighlight>(localRefs.Count);
+            foreach (var r in localRefs)
+            {
+                localHighlights.Add(new DocumentHighlight { Range = r, Kind = DocumentHighlightKind.Read });
+            }
+
+            // Deduplicate by range just in case
+            if (localHighlights.Count > 1)
+            {
+                localHighlights = localHighlights
+                    .GroupBy(h => new { SLine = h.Range.Start.Line, SChar = h.Range.Start.Character, ELine = h.Range.End.Line, EChar = h.Range.End.Character })
+                    .Select(g => g.First())
+                    .ToList();
+            }
+
+            sw.Stop();
+            _logger.LogInformation("DocumentHighlight finished in {ElapsedMs} ms (local variable). Highlights: {Count}", sw.ElapsedMilliseconds, localHighlights.Count);
+            return new DocumentHighlightContainer(localHighlights);
+        }
+
         var qid = await script.GetQualifiedIdentifierAtAsync(request.Position, cancellationToken);
         if (qid is null)
         {

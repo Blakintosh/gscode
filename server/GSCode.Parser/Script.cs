@@ -287,6 +287,157 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
     }
 
+    public async Task<string?> GetEnclosingFunctionScopeIdAsync(Position position, CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+        if (RootNode is null) return null;
+
+        foreach (var fn in EnumerateFunctions(RootNode))
+        {
+            if (fn.Name is not Token nameTok) continue;
+            var bodyRange = GetStmtListRange(fn.Body);
+            if (IsPositionInsideRange(position, bodyRange))
+            {
+                string ns = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+                return $"{ns}::{nameTok.Lexeme}";
+            }
+        }
+        return null;
+    }
+
+    private static Range GetStmtListRange(StmtListNode body)
+    {
+        if (body.Statements.Count == 0)
+        {
+            return RangeHelper.From(0, 0, 0, 0);
+        }
+        Range? start = null;
+        Range? end = null;
+        foreach (var st in body.Statements)
+        {
+            if (TryGetRange(st, out var r))
+            {
+                if (start is null) start = r;
+                end = r;
+            }
+        }
+        if (start is null || end is null)
+        {
+            return RangeHelper.From(0, 0, 0, 0);
+        }
+        return RangeHelper.From(start!.Start, end!.End);
+    }
+
+    private static bool IsPositionInsideRange(Position pos, Range range)
+    {
+        int cmpStart = ComparePosition(pos, range.Start);
+        int cmpEnd = ComparePosition(range.End, pos);
+        return cmpStart >= 0 && cmpEnd >= 0;
+    }
+
+    private static int ComparePosition(Position a, Position b)
+    {
+        if (a.Line != b.Line) return a.Line.CompareTo(b.Line);
+        return a.Character.CompareTo(b.Character);
+    }
+
+    private static bool TryGetRange(AstNode node, out Range range)
+    {
+        // Fast paths for nodes that carry a Range
+        switch (node)
+        {
+            case ExprNode e:
+                range = e.Range; return true;
+            case ControlFlowActionNode cfan:
+                range = cfan.Range; return true;
+            case ConstStmtNode cst:
+                range = cst.Range; return true;
+            case ExprStmtNode es when es.Expr is not null:
+                range = es.Expr.Range; return true;
+            case ReturnStmtNode rt when rt.Value is not null:
+                range = rt.Value.Range; return true;
+            case ArgsListNode al:
+                range = al.Range; return true;
+        }
+
+        // Composite statements: compute union of child ranges
+        bool ok = false;
+        Range start = default, end = default;
+        void Acc(Range r)
+        {
+            if (!ok) { start = r; end = r; ok = true; }
+            else { start = RangeHelper.From(start.Start, r.Start); end = RangeHelper.From(end.Start, r.End); }
+        }
+
+        switch (node)
+        {
+            case IfStmtNode iff:
+                if (iff.Condition is not null && TryGetRange(iff.Condition, out var rc)) Acc(rc);
+                if (iff.Then is not null && TryGetRange(iff.Then, out var rt)) Acc(rt);
+                if (iff.Else is not null && TryGetRange(iff.Else, out var re)) Acc(re);
+                break;
+            case DoWhileStmtNode dw:
+                if (dw.Then is not null && TryGetRange(dw.Then, out var rdw)) Acc(rdw);
+                if (dw.Condition is not null && TryGetRange(dw.Condition, out var cdw)) Acc(cdw);
+                break;
+            case WhileStmtNode wl:
+                if (wl.Then is not null && TryGetRange(wl.Then, out var rwl)) Acc(rwl);
+                if (wl.Condition is not null && TryGetRange(wl.Condition, out var cwl)) Acc(cwl);
+                break;
+            case ForStmtNode fr:
+                if (fr.Init is not null && TryGetRange(fr.Init, out var ri)) Acc(ri);
+                if (fr.Condition is not null && TryGetRange(fr.Condition, out var rc2)) Acc(rc2);
+                if (fr.Increment is not null && TryGetRange(fr.Increment, out var rinc)) Acc(rinc);
+                if (fr.Then is not null && TryGetRange(fr.Then, out var rthen)) Acc(rthen);
+                break;
+            case ForeachStmtNode fe:
+                if (fe.Collection is not null && TryGetRange(fe.Collection, out var rcol)) Acc(rcol);
+                if (fe.Then is not null && TryGetRange(fe.Then, out var rfe)) Acc(rfe);
+                break;
+            case FunDevBlockNode fdb:
+                var rbody = GetStmtListRange(fdb.Body); Acc(rbody);
+                break;
+            case StmtListNode sl:
+                foreach (var st in sl.Statements)
+                {
+                    if (TryGetRange(st, out var rs)) Acc(rs);
+                }
+                break;
+            case SwitchStmtNode sw:
+                if (sw.Expression is not null && TryGetRange(sw.Expression, out var rexp)) Acc(rexp);
+                if (TryGetRange(sw.Cases, out var rcases)) Acc(rcases);
+                break;
+            case CaseListNode cl:
+                foreach (var cs in cl.Cases)
+                {
+                    if (TryGetRange(cs, out var rcs)) Acc(rcs);
+                }
+                break;
+            case CaseStmtNode cs:
+                foreach (var lbl in cs.Labels)
+                {
+                    if (TryGetRange(lbl, out var rlbl)) Acc(rlbl);
+                }
+                var rb = GetStmtListRange(cs.Body); Acc(rb);
+                break;
+            case CaseLabelNode cln when cln.Value is not null:
+                range = cln.Value.Range; return true;
+            case ClassBodyListNode cbl:
+                foreach (var d in cbl.Definitions)
+                {
+                    if (TryGetRange(d, out var rd)) Acc(rd);
+                }
+                break;
+        }
+
+        if (ok)
+        {
+            range = RangeHelper.From(start.Start, end.End);
+            return true;
+        }
+        range = default;
+        return false;
+    }
     public async Task AnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
     {
         await WaitUntilParsedAsync(cancellationToken);
@@ -1012,7 +1163,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
         };
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static string StripDefault(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return string.Empty;
@@ -1601,5 +1751,84 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             CollectIdentifiers(child, into);
         }
+    }
+
+    public async Task<IReadOnlyList<Range>> GetLocalVariableReferencesAsync(Position position, bool includeDeclaration, CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        // Acquire the token under the cursor
+        Token? token = Sense.Tokens.Get(position);
+        if (token is null || token.Type != TokenType.Identifier)
+        {
+            return Array.Empty<Range>();
+        }
+        string target = token.Lexeme;
+
+        // Find the enclosing function that either contains the position in its body
+        // or, if the token matches a parameter name, the function that declares it.
+        FunDefnNode? enclosing = null;
+        foreach (var fn in EnumerateFunctions(RootNode!))
+        {
+            var bodyRange = GetStmtListRange(fn.Body);
+            if (IsPositionInsideRange(position, bodyRange))
+            {
+                enclosing = fn;
+                break;
+            }
+            // If the position is not inside body, check if it's on a parameter name
+            foreach (var p in fn.Parameters.Parameters)
+            {
+                if (p.Name is null) continue;
+                if (ComparePosition(position, p.Name.Range.Start) >= 0 && ComparePosition(p.Name.Range.End, position) >= 0)
+                {
+                    enclosing = fn;
+                    break;
+                }
+            }
+            if (enclosing is not null) break;
+        }
+
+        if (enclosing is null)
+        {
+            return Array.Empty<Range>();
+        }
+
+        // Compute function body range and collect identifier tokens within it matching the name
+        Range body = GetStmtListRange(enclosing.Body);
+        var results = new List<Range>();
+        foreach (var t in Sense.Tokens.GetAll())
+        {
+            if (t.Type != TokenType.Identifier) continue;
+            // Restrict to tokens in the same function body
+            if (!(ComparePosition(t.Range.Start, body.Start) >= 0 && ComparePosition(body.End, t.Range.End) >= 0))
+                continue;
+            // Match name (case-insensitive to be consistent with SPA checks)
+            if (!string.Equals(t.Lexeme, target, StringComparison.OrdinalIgnoreCase)) continue;
+            // Exclude namespace-qualified identifiers or function calls
+            Token? prev = t.Previous;
+            while (prev is not null && prev.IsWhitespacey()) prev = prev.Previous;
+            if (prev is not null && prev.Type == TokenType.ScopeResolution) continue;
+            Token? next = t.Next;
+            while (next is not null && next.IsWhitespacey()) next = next.Next;
+            if (next is not null && next.Type == TokenType.OpenParen) continue; // looks like a call
+
+            results.Add(t.Range);
+        }
+
+        // Optionally include declaration site (parameter declaration)
+        if (includeDeclaration)
+        {
+            foreach (var p in enclosing.Parameters.Parameters)
+            {
+                if (p.Name is null) continue;
+                if (string.Equals(p.Name.Lexeme, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    results.Add(p.Name.Range);
+                }
+            }
+        }
+
+        return results;
     }
 }

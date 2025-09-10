@@ -4,6 +4,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using System.Diagnostics;
+using System.Linq;
 
 namespace GSCode.NET.LSP.Handlers;
 
@@ -29,8 +30,21 @@ internal sealed class DocumentHighlightHandler(
             return new DocumentHighlightContainer();
         }
 
+        // Normalise position to handle caret at end-of-identifier (common in editors)
+        var pos = request.Position;
+        async Task<IReadOnlyList<Range>> GetLocalAsync(Position p)
+        {
+            return await script.GetLocalVariableReferencesAsync(p, includeDeclaration: true, cancellationToken);
+        }
+
         // First, try highlighting local variable references within the enclosing function scope
-        var localRefs = await script.GetLocalVariableReferencesAsync(request.Position, includeDeclaration: true, cancellationToken);
+        var localRefs = await GetLocalAsync(pos);
+        if (localRefs.Count == 0 && pos.Character > 0)
+        {
+            var leftPos = new Position(pos.Line, pos.Character - 1);
+            localRefs = await GetLocalAsync(leftPos);
+        }
+
         if (localRefs.Count > 0)
         {
             var localHighlights = new List<DocumentHighlight>(localRefs.Count);
@@ -53,7 +67,14 @@ internal sealed class DocumentHighlightHandler(
             return new DocumentHighlightContainer(localHighlights);
         }
 
-        var qid = await script.GetQualifiedIdentifierAtAsync(request.Position, cancellationToken);
+        // If not a local, try to resolve a qualified identifier; also consider caret-left fallback
+        var qid = await script.GetQualifiedIdentifierAtAsync(pos, cancellationToken);
+        if (qid is null && pos.Character > 0)
+        {
+            var leftPos = new Position(pos.Line, pos.Character - 1);
+            qid = await script.GetQualifiedIdentifierAtAsync(leftPos, cancellationToken);
+        }
+
         if (qid is null)
         {
             sw.Stop();

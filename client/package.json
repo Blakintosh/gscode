@@ -16,7 +16,10 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onLanguage:gsc"
+	"onStartupFinished",
+	"workspaceContains:**/*.gsc",
+	"workspaceContains:**/*.csc",
+	"workspaceContains:**/*.gsh"
 	],
 	"main": "./out/extension.js",
 	"contributes": {

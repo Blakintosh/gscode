@@ -17,8 +17,6 @@ public record class ScrClass : IExportedSymbol
     // TODO: need to account for that members are only scoped to functions that occur after their definition.
     public List<ScrFunction> Methods { get; set; } = [];
     public List<ScrMember> Members { get; set; } = [];
-
-    public ExportedSymbolType Type { get; set; } = ExportedSymbolType.Class;
 }
 
 public record class ScrMember

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GSCode.Parser.AST;
-using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
@@ -16,9 +15,6 @@ public class DefinitionsTable
 
     internal List<Tuple<ScrFunction, FunDefnNode>> LocalScopedFunctions { get; } = new();
     public List<ScrFunction> ExportedFunctions { get; } = new();
-    public Dictionary<string, IExportedSymbol> InternalSymbols { get; } = new();
-    public Dictionary<string, IExportedSymbol> ExportedSymbols { get; } = new();
-    // TODO: Class definitions (not in this version)
 
     public List<Uri> Dependencies { get; } = new();
 
@@ -41,16 +37,9 @@ public class DefinitionsTable
     {
         LocalScopedFunctions.Add(new Tuple<ScrFunction, FunDefnNode>(function, node));
 
-        ScrFunction internalFunction = function with { Namespace = CurrentNamespace, Implicit = true };
-        InternalSymbols.Add(function.Name, internalFunction);
-        InternalSymbols.Add($"{CurrentNamespace}::{function.Name}", internalFunction);
-
-        // Only add to exported functions if it's not private.
-        if (!function.Private)
+        if (!function.IsPrivate)
         {
-            ScrFunction exportedFunction = function with { Namespace = CurrentNamespace };
-            ExportedFunctions.Add(exportedFunction);
-            ExportedSymbols.Add(exportedFunction.Name, exportedFunction);
+            ExportedFunctions.Add(function with { Namespace = CurrentNamespace });
         }
     }
 

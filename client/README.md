@@ -12,7 +12,10 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.9.0 beta (latest)
+### 0.10 beta (latest)
+- TODO
+
+### 0.9 beta (latest)
 
 - Added Outliner support for classes, functions, and macros.
 - Added goto definition support for usings, script functions, and macros.

@@ -1362,11 +1362,28 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     private static bool HasTerminatingBreakOrReturn(StmtListNode body)
     {
-        if (body.Statements.Count == 0) return false;
-        // naive: if any top-level statement is a break or a return, consider terminating
-        foreach (var st in body.Statements)
+        // First, check top-level statements in the case body
+        if (HasTopLevelTerminator(body))
         {
-            if (st is ControlFlowActionNode cfan && (cfan.NodeType == AstNodeType.BreakStmt))
+            return true;
+        }
+
+        // If the body is just a scoped brace block (e.g., case X: { ... })
+        // then recurse one level into that block and check its top-level statements
+        if (body.Statements.Count == 1 && body.Statements.First!.Value is StmtListNode inner)
+        {
+            return HasTopLevelTerminator(inner);
+        }
+
+        return false;
+    }
+
+    private static bool HasTopLevelTerminator(StmtListNode block)
+    {
+        if (block.Statements.Count == 0) return false;
+        foreach (var st in block.Statements)
+        {
+            if (st is ControlFlowActionNode cfan && cfan.NodeType == AstNodeType.BreakStmt)
             {
                 return true;
             }

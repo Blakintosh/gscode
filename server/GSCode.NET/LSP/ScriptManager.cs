@@ -1,4 +1,4 @@
-using GSCode.Data.Models.Interfaces;
+﻿using GSCode.Data.Models.Interfaces;
 using GSCode.Parser;
 using GSCode.Parser.SA;
 using Serilog;

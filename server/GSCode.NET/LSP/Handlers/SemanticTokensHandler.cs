@@ -38,21 +38,8 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
             Legend = new SemanticTokensLegend
             {
                 TokenModifiers = capability.TokenModifiers,
-                // TokenTypes = [.. capability.TokenTypes, "field"]
-                TokenTypes = new Container<SemanticTokenType>(
-                    SemanticTokenType.Variable,
-                    SemanticTokenType.Parameter,
-                    SemanticTokenType.Property,
-                    SemanticTokenType.Type,
-                    SemanticTokenType.Function,
-                    SemanticTokenType.Class,
-                    SemanticTokenType.Macro,
-                    SemanticTokenType.String,
-                    SemanticTokenType.Namespace,
-                    SemanticTokenType.Method,
-                    SemanticTokenType.Keyword,
-                    new SemanticTokenType("field")
-                )
+                TokenTypes = capability.TokenTypes
+                // TokenTypes = new Container<SemanticTokenType>(SemanticTokenType.Variable)
             },
             Full = new SemanticTokensCapabilityRequestFull
             {

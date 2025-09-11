@@ -1,5 +1,6 @@
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
+using GSCode.Parser.SPA.Sense;
 using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
@@ -56,13 +57,13 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
     private List<CompletionItem> GetGlobalScopeCompletions(CompletionContext context)
     {
-        List<ScrFunction> functions = _scriptAnalyserData.GetApiFunctions(context.Filter);
+        List<ScrFunctionDefinition> functions = _scriptAnalyserData.GetApiFunctions(context.Filter);
 
         List<CompletionItem> completions = new();
 
         Log.Information("Found {Count} functions in global scope", functions.Count);
 
-        foreach (ScrFunction function in functions)
+        foreach (ScrFunctionDefinition function in functions)
         {
             completions.Add(CreateCompletionItem(function));
         }
@@ -79,9 +80,9 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         // Add GSC/CSC keywords
         string[] keywords = {
-            "class", "return", "wait", "thread", "classes", "if", "else", "do", "while",
-            "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend",
-            "switch", "case", "default", "break", "continue", "notify", "endon",
+            "class", "return", "wait", "thread", "classes", "if", "else", "do", "while", 
+            "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend", 
+            "switch", "case", "default", "break", "continue", "notify", "endon", 
             "waitrealtime", "profilestart", "profilestop", "isdefined",
             // Additional keywords
             "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
@@ -106,7 +107,7 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         if ((context.Filter ?? "").StartsWith("#"))
         {
             string[] directives = {
-                "#using", "#insert", "#namespace", "#using_animtree", "#precache",
+                "#using", "#insert", "#namespace", "#using_animtree", "#precache", 
                 "#define", "#if", "#elif", "#else", "#endif"
             };
 
@@ -126,9 +127,9 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         }
 
         // Generate completions from identifiers that occur inside of the file
-        foreach (Token token in Tokens.GetAll())
+        foreach(Token token in Tokens.GetAll())
         {
-            if (token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))
+            if(token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))
             {
                 completions.Add(new CompletionItem()
                 {
@@ -143,7 +144,7 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         return completions;
     }
 
-    private CompletionItem CreateCompletionItem(ScrFunction function)
+    private static CompletionItem CreateCompletionItem(ScrFunctionDefinition function)
     {
         // TODO: has been hacked to show first only, but we need to handle all overloads eventually.
         // Generate snippet-formatted parameters with tabstops

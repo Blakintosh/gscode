@@ -114,7 +114,8 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             }, // TODO: Check the DOC COMMENT
             Tags = ["userdefined"],
             IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
-            IntelliSense = null // I have no idea why this exists
+            IntelliSense = null, // I have no idea why this exists
+            HasVararg = functionDefn.Parameters.Vararg
         };
 
         // Produce a definition for our function
@@ -124,6 +125,8 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
         // Record parameter names for outline/signature
         DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        // Record vararg flag
+        DefinitionsTable.RecordFunctionVararg(DefinitionsTable.CurrentNamespace, name, functionDefn.Parameters.Vararg);
         // Record flags (private, autoexec)
         var flags = new List<string>();
         if (function.IsPrivate) flags.Add("private");
@@ -213,7 +216,8 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             Tags = ["userdefined"],
             IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
             IntelliSense = null, // I have no idea why this exists
-            DocComment = ExtractDocCommentBefore(nameToken)
+            DocComment = ExtractDocCommentBefore(nameToken),
+            HasVararg = functionDefn.Parameters.Vararg
         };
 
         // Produce a definition for our function
@@ -223,6 +227,8 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
         // Record parameter names for outline/signature
         DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        // Record vararg flag
+        DefinitionsTable.RecordFunctionVararg(DefinitionsTable.CurrentNamespace, name, functionDefn.Parameters.Vararg);
         // Record flags (private, autoexec)
         var flags = new List<string>();
         if (function.IsPrivate) flags.Add("private");
@@ -495,7 +501,6 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
     }
 }
 
-
 /// <summary>
 /// Records the definition of a function parameter for semantics & hovers
 /// </summary>
@@ -558,6 +563,13 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
         foreach (ScrFunctionArg parameter in Source.Args ?? [])
         {
             AppendParameter(builder, parameter, ref first);
+        }
+        // Surface varargs
+        if (Source.HasVararg)
+        {
+            if (!first) builder.Append(", ");
+            builder.Append("...");
+            first = false;
         }
         builder.AppendLine(")");
         builder.AppendLine("```");
@@ -656,6 +668,13 @@ internal record ScrMethodSymbol(Token NameToken, ScrFunction Source, ScrClass Cl
         foreach (ScrFunctionArg parameter in Source.Args ?? [])
         {
             AppendParameter(builder, parameter, ref first);
+        }
+        // Surface varargs for methods
+        if (Source.HasVararg)
+        {
+            if (!first) builder.Append(", ");
+            builder.Append("...");
+            first = false;
         }
         builder.AppendLine(")");
         builder.AppendLine("```");

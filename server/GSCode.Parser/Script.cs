@@ -1337,7 +1337,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
             //    Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooFewArguments, name, argCount, paramInfo.required);
             //}
             //else 
-            if (paramInfo.total >= 0 && argCount > paramInfo.total)
+            // Exclude vararg functions from TooManyArguments SPA
+            bool hasVararg = DefinitionsTable?.GetFunctionHasVararg(lookupNs, name) ?? false;
+            if (!hasVararg && paramInfo.total >= 0 && argCount > paramInfo.total)
             {
                 Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooManyArguments, name, argCount, paramInfo.total);
             }

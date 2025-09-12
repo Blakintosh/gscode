@@ -392,6 +392,21 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         string? resolvedInsertPath = Sense.ResolveInsertPath(filePath, path.Range!);
         Sense.AddInsertRegion(path.Range!, filePath, resolvedInsertPath);
 
+        // If the insert path could not be resolved, a diagnostic was already added in ResolveInsertPath.
+        // Remove the directive to avoid AST errors and return early to prevent a duplicate diagnostic.
+        if (resolvedInsertPath is null)
+        {
+            if (terminatorToken!.Type == TokenType.Semicolon)
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken.Next);
+            }
+            else
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken!.Previous);
+            }
+            return;
+        }
+
         // Get the file contents
         TokenList? insertTokensResult;
         try
@@ -408,9 +423,32 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         if(insertTokensResult is not TokenList insertTokens)
         {
             AddErrorAtRange(GSCErrorCodes.MissingInsertFile, path.Range!, filePath);
+            // Remove the insert directive from the token stream to prevent AST errors
+            if (terminatorToken!.Type == TokenType.Semicolon)
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken.Next);
+            }
+            else
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken!.Previous);
+            }
             return;
         }
 
+        // If the inserted file has no content (only SOF/EOF), remove the directive entirely
+        if (insertTokens.Start!.Next == insertTokens.End!.Previous)
+        {
+            if (terminatorToken!.Type == TokenType.Semicolon)
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken.Next);
+            }
+            else
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken!.Previous);
+            }
+            return;
+        }
+        
         // Otherwise, it's a unique instance so connect its boundaries (exc. the SOF and EOF) to the insert directive
         ConnectTokens(insertToken.Previous, insertTokens.Start!.Next);
         CurrentToken = insertTokens.Start.Next;

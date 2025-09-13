@@ -104,6 +104,8 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         while(CurrentTokenType != TokenType.Eof)
         {
             if((CurrentTokenType == TokenType.Identifier || CurrentToken.IsKeyword()) &&
+                // Do not treat 'default' or 'case' labels in switch statements as macros
+                !(CurrentToken.IsKeyword() && IsSwitchLabelCandidate(CurrentToken)) &&
                 TryGetMacroDefinition(CurrentToken, out MacroDefinition? macro))
             {
                 Macro(macro);
@@ -111,6 +113,69 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             }
             Advance();
         }
+    }
+
+    // Detects when a keyword token is actually being used as a switch label (default: or case ... :)
+    private static bool IsSwitchLabelCandidate(Token token)
+    {
+        if (!token.IsKeyword()) return false;
+
+        static Token? NextNonTrivia(Token t)
+        {
+            Token? cur = t.Next;
+            while (cur is not null && (cur.Type == TokenType.Whitespace || cur.Type == TokenType.LineComment || cur.Type == TokenType.MultilineComment || cur.Type == TokenType.DocComment))
+            {
+                cur = cur.Next;
+            }
+            return cur;
+        }
+
+        string lex = token.Lexeme;
+        if (string.Equals(lex, "default", StringComparison.OrdinalIgnoreCase))
+        {
+            Token? next = NextNonTrivia(token);
+            return next is not null && next.Type == TokenType.Colon;
+        }
+
+        if (string.Equals(lex, "case", StringComparison.OrdinalIgnoreCase))
+        {
+            // Scan forward until a ':' on the same logical line (and not inside (), [], {})
+            int paren = 0, bracket = 0, brace = 0;
+            Token? cur = token;
+            while (cur?.Next is not null)
+            {
+                cur = cur.Next;
+                TokenType tt = cur.Type;
+
+                if (tt == TokenType.LineBreak || tt == TokenType.Eof)
+                {
+                    return false;
+                }
+
+                if (tt == TokenType.Whitespace || tt == TokenType.LineComment || tt == TokenType.MultilineComment || tt == TokenType.DocComment)
+                {
+                    continue;
+                }
+
+                switch (tt)
+                {
+                    case TokenType.OpenParen: paren++; break;
+                    case TokenType.CloseParen: if (paren > 0) paren--; break;
+                    case TokenType.OpenBracket: bracket++; break;
+                    case TokenType.CloseBracket: if (bracket > 0) bracket--; break;
+                    case TokenType.OpenBrace: brace++; break;
+                    case TokenType.CloseBrace: if (brace > 0) brace--; break;
+                    case TokenType.Colon:
+                        if (paren == 0 && bracket == 0 && brace == 0)
+                        {
+                            return true;
+                        }
+                        break;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

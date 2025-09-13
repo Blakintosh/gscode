@@ -62,7 +62,7 @@
 
 			<Button size="sm" class="gap-2" href="https://marketplace.visualstudio.com/items?itemName=blakintosh.gscode" target="_blank" rel="noopener noreferrer">
 				<Download class="w-4 h-4"/>
-				v0.9.0-beta
+				v0.10.0-beta
 			</Button>
 		</div>
 	{:else}	

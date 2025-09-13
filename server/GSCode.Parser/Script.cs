@@ -1800,12 +1800,12 @@ public class Script(DocumentUri ScriptUri, string languageId)
             string? name = null;
             Range idRange = call.Range;
 
-            if (call.Target is IdentifierExprNode id)
+            if (call.Function is IdentifierExprNode id)
             {
                 name = id.Identifier;
                 idRange = id.Range;
             }
-            else if (call.Target is NamespacedMemberNode nsm && nsm.Member is IdentifierExprNode mem && nsm.Namespace is IdentifierExprNode nsId)
+            else if (call.Function is NamespacedMemberNode nsm && nsm.Member is IdentifierExprNode mem && nsm.Namespace is IdentifierExprNode nsId)
             {
                 ns = nsId.Identifier;
                 name = mem.Identifier;

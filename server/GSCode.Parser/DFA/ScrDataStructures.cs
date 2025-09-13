@@ -4,8 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-#if PREVIEW
-
 namespace GSCode.Parser.DFA;
 
 internal class ScrArray //: IEnumerable<ScrData>
@@ -28,31 +26,45 @@ internal record ScrStruct
 {
     // TODO: need to ensure that Fields is deeply compared for value equivalence
     private Dictionary<string, ScrData> Fields { get; } = new();
-    public bool Deterministic { get; } = false;
+    public bool IsDeterministic { get; } = false;
 
-    public ScrStruct(IEnumerable<KeyValuePair<string, ScrData>> fields, bool deterministic = false)
+    protected ScrStruct(IEnumerable<KeyValuePair<string, ScrData>> fields, bool deterministic = false)
     {
-        Deterministic = deterministic;
+        IsDeterministic = deterministic;
         foreach (KeyValuePair<string, ScrData> field in fields)
         {
             Fields.Add(field.Key, field.Value);
         }
     }
 
+    public static ScrStruct Deterministic(params KeyValuePair<string, ScrData>[] fields)
+    {
+        return new ScrStruct(fields, true);
+    }
+
+    public static ScrStruct NonDeterministic(params KeyValuePair<string, ScrData>[] fields)
+    {
+        return new ScrStruct(fields, false);
+    }
+
     public ScrData Get(string fieldName)
     {
-        if(!Fields.TryGetValue(fieldName, out ScrData value))
+        if (!Fields.TryGetValue(fieldName, out ScrData value))
         {
-            return Deterministic ? ScrData.Undefined(this) : ScrData.Default;
+            return (IsDeterministic ? ScrData.Undefined() : ScrData.Default)
+                with
+            { Owner = this, FieldName = fieldName };
         }
 
         return value;
     }
 
-    public void Set(string fieldName, ScrData value)
+    public bool Set(string fieldName, ScrData value)
     {
-        value.Owner = this;
-        Fields[fieldName] = value;
+        bool isNew = !Fields.ContainsKey(fieldName);
+
+        Fields[fieldName] = value with { Owner = this, FieldName = fieldName };
+        return isNew;
     }
 
     /// <summary>
@@ -62,9 +74,9 @@ internal record ScrStruct
     public ScrStruct Copy()
     {
         List<KeyValuePair<string, ScrData>> fields = [];
-        ScrStruct newStruct = new(fields, Deterministic);
+        ScrStruct newStruct = new(fields, IsDeterministic);
 
-        foreach(KeyValuePair<string, ScrData> field in Fields)
+        foreach (KeyValuePair<string, ScrData> field in Fields)
         {
             newStruct.Set(field.Key, field.Value.Copy());
         }
@@ -80,21 +92,21 @@ internal record ScrStruct
     public static ScrStruct Merge(params ScrStruct[] incoming)
     {
         // Base case - just copy the one incoming
-        if(incoming.Length == 1)
+        if (incoming.Length == 1)
         {
             return incoming[0].Copy();
         }
 
         // Find keys present across all structs that are incoming
         HashSet<string> fields = new();
-        bool deterministic = true;
+        bool isDeterministic = true;
 
         foreach (ScrStruct scrStruct in incoming)
         {
             fields.UnionWith(scrStruct.Fields.Keys);
 
             // We can only assert that our resulting struct is deterministic if ALL those it came from are too.
-            deterministic &= scrStruct.Deterministic;
+            isDeterministic &= scrStruct.IsDeterministic;
         }
 
         List<KeyValuePair<string, ScrData>> mergedFields = [];
@@ -104,7 +116,7 @@ internal record ScrStruct
             ScrData mergedValue = ScrData.Merge(values);
 
             // Skip adding if we're not deterministic and the merged value is 'any', it not being present would mean the same thing.
-            if(!deterministic && mergedValue.IsAny())
+            if (!isDeterministic && mergedValue.IsAny())
             {
                 continue;
             }
@@ -112,8 +124,6 @@ internal record ScrStruct
             mergedFields.Add(new KeyValuePair<string, ScrData>(field, mergedValue));
         }
 
-        return new ScrStruct(mergedFields, deterministic);
+        return new ScrStruct(mergedFields, isDeterministic);
     }
 }
-
-#endif

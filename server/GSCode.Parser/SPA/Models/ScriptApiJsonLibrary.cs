@@ -1,5 +1,4 @@
-﻿using GSCode.Parser.SPA.Sense;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,6 +31,6 @@ namespace GSCode.Parser.SPA.Models
         /// The API functions this result is loading into the SPA.
         /// </summary>
         [JsonRequired]
-        public required List<ScrFunctionDefinition> Api { get; set; }
+        public required List<ScrFunction> Api { get; set; }
     }
 }

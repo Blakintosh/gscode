@@ -20,5 +20,15 @@
   <ItemGroup>
     <ProjectReference Include="..\GSCode.Data\GSCode.Data.csproj" />
   </ItemGroup>
+	
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>GSCode.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Properties\" />
+  </ItemGroup>
 
 </Project>

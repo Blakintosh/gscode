@@ -49,7 +49,8 @@ internal enum AstNodeType
 
 internal enum ExprOperatorType
 {
-    Operand,
+    DataOperand,
+    IdentifierOperand,
     Ternary,
     Binary,
     Vector,
@@ -57,6 +58,7 @@ internal enum ExprOperatorType
     Postfix,
     MethodCall,
     FunctionCall,
+    Constructor,
     Indexer,
     CallOn
 }
@@ -64,6 +66,11 @@ internal enum ExprOperatorType
 internal abstract class AstNode(AstNodeType nodeType)
 {
     public AstNodeType NodeType { get; } = nodeType;
+}
+
+internal abstract class DecisionAstNode(AstNodeType nodeType, ExprNode? condition) : AstNode(nodeType)
+{
+    public ExprNode? Condition { get; init; } = condition;
 }
 
 internal sealed class ScriptNode() : AstNode(AstNodeType.Script)
@@ -154,9 +161,8 @@ internal sealed class StmtListNode(LinkedList<AstNode>? statements = null) : Ast
 
 internal sealed class EmptyStmtNode() : AstNode(AstNodeType.EmptyStmt) { }
 
-internal sealed class IfStmtNode() : AstNode(AstNodeType.IfStmt)
+internal sealed class IfStmtNode(ExprNode? condition) : DecisionAstNode(AstNodeType.IfStmt, condition)
 {
-    public ExprNode? Condition { get; init; }
     public AstNode? Then { get; init; }
     public IfStmtNode? Else { get; set; }
 }
@@ -169,7 +175,8 @@ internal sealed class ReservedFuncStmtNode(AstNodeType type, ExprNode? expr) : A
 internal sealed class ConstStmtNode(Token identifierToken, ExprNode? value) : AstNode(AstNodeType.ConstStmt)
 {
     public string Identifier { get; } = identifierToken.Lexeme;
-    public Range Range { get; } = RangeHelper.From(identifierToken.Range.Start, value.Range.End);
+    public Token IdentifierToken { get; } = identifierToken;
+    public Range Range { get; } = RangeHelper.From(identifierToken.Range.Start, value?.Range.End ?? identifierToken.Range.End);
     public ExprNode? Value { get; } = value;
 }
 
@@ -178,30 +185,28 @@ internal sealed class ExprStmtNode(ExprNode? expr) : AstNode(AstNodeType.ExprStm
     public ExprNode? Expr { get; } = expr;
 }
 
-internal sealed class DoWhileStmtNode(ExprNode? condition, AstNode? then) : AstNode(AstNodeType.DoWhileStmt)
+internal sealed class DoWhileStmtNode(ExprNode? condition, AstNode? then) : DecisionAstNode(AstNodeType.DoWhileStmt, condition)
 {
-    public ExprNode? Condition { get; } = condition;
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class WhileStmtNode(ExprNode? condition, AstNode? then) : AstNode(AstNodeType.WhileStmt)
+internal sealed class WhileStmtNode(ExprNode? condition, AstNode? then) : DecisionAstNode(AstNodeType.WhileStmt, condition)
 {
-    public ExprNode? Condition { get; } = condition;
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class ForStmtNode(AstNode? init, ExprNode? condition, AstNode? increment, AstNode? then) : AstNode(AstNodeType.ForStmt)
+internal sealed class ForStmtNode(ExprNode? init, ExprNode? condition, ExprNode? increment, AstNode? then) : AstNode(AstNodeType.ForStmt)
 {
-    public AstNode? Init { get; } = init;
+    public ExprNode? Init { get; } = init;
     public ExprNode? Condition { get; } = condition;
-    public AstNode? Increment { get; } = increment;
+    public ExprNode? Increment { get; } = increment;
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class ForeachStmtNode(Token valueIdentifier, Token? keyIdentifier, ExprNode? collection, AstNode? then) : AstNode(AstNodeType.ForeachStmt)
+internal sealed class ForeachStmtNode(IdentifierExprNode valueIdentifier, IdentifierExprNode? keyIdentifier, ExprNode? collection, AstNode? then) : AstNode(AstNodeType.ForeachStmt)
 {
-    public Token? KeyIdentifier { get; } = keyIdentifier;
-    public Token ValueIdentifier { get; } = valueIdentifier;
+    public IdentifierExprNode? KeyIdentifier { get; } = keyIdentifier;
+    public IdentifierExprNode ValueIdentifier { get; } = valueIdentifier;
     public ExprNode? Collection { get; } = collection;
     public AstNode? Then { get; } = then;
 }
@@ -260,7 +265,7 @@ internal sealed class DataExprNode : ExprNode
     public object? Value { get; }
     public ScrDataTypes Type { get; }
 
-    private DataExprNode(object? value, ScrDataTypes dataType, Range range) : base(ExprOperatorType.Operand, range)
+    private DataExprNode(object? value, ScrDataTypes dataType, Range range) : base(ExprOperatorType.DataOperand, range)
     {
         Value = value;
         Type = dataType;
@@ -331,7 +336,7 @@ internal sealed class TernaryExprNode(ExprNode condition, ExprNode? then, ExprNo
     public ExprNode? Else { get; } = @else;
 }
 
-internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.Operand, identifier.Range)
+internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.IdentifierOperand, identifier.Range)
 {
     public Token Token { get; } = identifier;
     public bool IsAnim { get; } = identifier.Type == TokenType.AnimIdentifier;
@@ -371,13 +376,13 @@ internal sealed class PostfixExprNode(ExprNode operand, Token operatorToken)
 
 // TODO: might need to include the whole range (ie new + the brackets)
 internal sealed class ConstructorExprNode(Token identifierToken)
-    : ExprNode(ExprOperatorType.FunctionCall, identifierToken.Range)
+    : ExprNode(ExprOperatorType.Constructor, identifierToken.Range)
 {
     public Token Identifier { get; } = identifierToken;
 }
 
 internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode? objectTarget, Token methodToken, ArgsListNode arguments)
-    : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(firstTokenPosition, arguments.Range.End))
+    : ExprNode(ExprOperatorType.MethodCall, RangeHelper.From(firstTokenPosition, arguments.Range.End))
 {
     public ExprNode? Target { get; } = objectTarget;
     public Token Method { get; } = methodToken;
@@ -387,7 +392,7 @@ internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode? obje
 internal sealed class FunCallNode(Position startPosition, ExprNode? target, ArgsListNode arguments)
     : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(startPosition, arguments.Range.End))
 {
-    public ExprNode? Target { get; } = target;
+    public ExprNode? Function { get; } = target;
     public ArgsListNode Arguments { get; } = arguments;
 
     public FunCallNode(ExprNode target, ArgsListNode arguments)

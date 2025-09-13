@@ -3,7 +3,6 @@ using GSCode.Data;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
-using GSCode.Parser.SPA.Sense;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.AST;
@@ -19,6 +18,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     public readonly TokenType CurrentTokenType => CurrentToken.Type;
     public readonly Range CurrentTokenRange => CurrentToken.Range;
 
+
     [Flags]
     private enum ParserContextFlags
     {
@@ -28,6 +28,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         InLoopBody = 4,
         InDevBlock = 8,
     }
+
 
     private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
 
@@ -338,7 +339,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// Parses and outputs a script precache node.
     /// </summary>
     /// <remarks>
-    /// PrecacheDir := PRECACHE OPENPAREN STRING COMMA STRING CLOSEPAREN SEMICOLON
+    /// PrecacheDir := PRECACHE OPENPAREN STRING COMMA STRING [COMMA] [STRING] CLOSEPAREN SEMICOLON
     /// </remarks>
     /// <returns></returns>
     private PrecacheNode? PrecacheDir()
@@ -376,6 +377,20 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             return null;
         }
 
+        // Optional COMMA
+        if (AdvanceIfType(TokenType.Comma))
+        {
+            // Optional third STRING
+            if (CurrentTokenType == TokenType.String)
+            {
+                // We don't care about the third string, so just advance past it.
+                Advance();
+            }
+            else
+            {
+                AddError(GSCErrorCodes.ExpectedPrecachePath, CurrentToken.Lexeme);
+            }
+        }
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {
@@ -981,9 +996,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Parse the then branch
         AstNode? then = Stmt();
 
-        return new()
+        return new(condition)
         {
-            Condition = condition,
             Then = then
         };
     }
@@ -1030,7 +1044,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Case 2: just an else clause
         AstNode? then = Stmt();
 
-        return new()
+        return new(null)
         {
             Then = then
         };
@@ -1235,9 +1249,9 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         if (valueIdentifierToken is not null)
         {
-            return new ForeachStmtNode(valueIdentifierToken, firstIdentifierToken, collection, then);
+            return new ForeachStmtNode(new IdentifierExprNode(valueIdentifierToken), new IdentifierExprNode(firstIdentifierToken), collection, then);
         }
-        return new ForeachStmtNode(firstIdentifierToken, null, collection, then);
+        return new ForeachStmtNode(new IdentifierExprNode(firstIdentifierToken), null, collection, then);
     }
 
     /// <summary>
@@ -2718,10 +2732,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             FunCallNode call = new FunCallNode(left, functionArgs);
 
             // TODO: HACK - create permanent function hoverable solution at SPA-stage in a future version
-            if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunctionDefinition function)
-            {
-                Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
-            }
+            //if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunction function)
+            //{
+            //    Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
+            //}
             return CallOrAccessOpRhs(call);
         }
 
@@ -2912,6 +2926,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             case TokenType.AnimIdentifier:
                 Token identifierToken = CurrentToken;
                 Advance();
+                // TODO: doesn't actually use the anim identifier type
                 return new IdentifierExprNode(identifierToken);
         }
 
@@ -3146,25 +3161,25 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 /// Records the definition of a function parameter for semantics & hovers
 /// </summary>
 /// <param name="Source">The parameter source</param>
-internal record DumbFunctionSymbol(Token Token, ScrFunctionDefinition Source) : ISenseDefinition
-{
-    // I'm pretty sure this is redundant
-    public bool IsFromPreprocessor { get; } = false;
-    public Range Range { get; } = Token.Range;
+// internal record DumbFunctionSymbol(Token Token, ScrFunctionDefinition Source) : ISenseDefinition
+// {
+//     // I'm pretty sure this is redundant
+//     public bool IsFromPreprocessor { get; } = false;
+//     public Range Range { get; } = Token.Range;
 
-    public string SemanticTokenType { get; } = "function";
-    public string[] SemanticTokenModifiers { get; } = [];
+//     public string SemanticTokenType { get; } = "function";
+//     public string[] SemanticTokenModifiers { get; } = [];
 
-    public Hover GetHover()
-    {
-        return new()
-        {
-            Range = Range,
-            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
-            {
-                Kind = MarkupKind.Markdown,
-                Value = Source.Documentation
-            })
-        };
-    }
-}
+//     public Hover GetHover()
+//     {
+//         return new()
+//         {
+//             Range = Range,
+//             Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+//             {
+//                 Kind = MarkupKind.Markdown,
+//                 Value = Source.Documentation
+//             })
+//         };
+//     }
+// }

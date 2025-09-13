@@ -1,3 +1,6 @@
 /server/GSCode.CLI/Properties/
 .DS_Store
 launchSettings.json
+.svelte-kit/
+.vite/
+server/GSCode.CLI/Properties/launchSettings.json

@@ -1,7 +1,6 @@
 using GSCode.Data;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
-using GSCode.Parser.Steps.Interfaces;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
 using System.Collections.Generic;

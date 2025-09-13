@@ -12,7 +12,14 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.9.0 beta (latest)
+### 0.10 beta (latest)
+- Added reference finding (Go to Reference, Find All References)
+- Added workspace indexing of scripts.
+- Fixed switch case analysis with braced bodies.
+
+Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed all of the above changes ([#30](https://github.com/Blakintosh/gscode/pull/30), [#31](https://github.com/Blakintosh/gscode/pull/31)).
+
+### 0.9 beta
 
 - Added Outliner support for classes, functions, and macros.
 - Added goto definition support for usings, script functions, and macros.

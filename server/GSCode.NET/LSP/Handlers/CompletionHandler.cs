@@ -23,9 +23,12 @@ internal class CompletionHandler(ILanguageServerFacade facade,
     private readonly ILogger<CompletionHandler> _logger = logger;
     private readonly TextDocumentSelector _documentSelector = documentSelector;
 
+    // Implement resolve to avoid NotImplementedException when client requests item resolution
     public override Task<CompletionItem> Handle(CompletionItem request, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        // If needed, enrich the item using request.Data here.
+        // For now, just return the item as-is to satisfy resolve requests safely.
+        return Task.FromResult(request);
     }
 
     public override async Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
@@ -43,14 +46,17 @@ internal class CompletionHandler(ILanguageServerFacade facade,
 
         int count = result is null ? 0 : result.Count();
         _logger.LogInformation("Completion processed in {ElapsedMs} ms. Items: {Count}", sw.ElapsedMilliseconds, count);
-        return result;
+        return result ?? new CompletionList();
     }
 
     protected override CompletionRegistrationOptions CreateRegistrationOptions(CompletionCapability capability, ClientCapabilities clientCapabilities)
     {
         return new CompletionRegistrationOptions
         {
-            TriggerCharacters = new List<string> { "." }
+            DocumentSelector = _documentSelector,
+            // Include additional triggers useful for namespaces and preprocessor
+            TriggerCharacters = new List<string> { ".", ":", "#", "(", "," },
+            ResolveProvider = true
         };
     }
 }

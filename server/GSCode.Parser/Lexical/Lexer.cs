@@ -128,6 +128,9 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             // d or D
             'd' => MatchByD(),
             'D' => MatchByD(),
+            // n or N
+            'n' when StartsWithKeyword("new") => DoCharMatchIfWordBoundary(TokenType.New, "new"),
+            'N' when StartsWithKeyword("new") => DoCharMatchIfWordBoundary(TokenType.New, "new"),
             // w or W
             'w' when StartsWithKeyword("while") => DoCharMatchIfWordBoundary(TokenType.While, "while"),
             'W' when StartsWithKeyword("while") => DoCharMatchIfWordBoundary(TokenType.While, "while"),
@@ -141,11 +144,14 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             'p' when StartsWithKeyword("private") => DoCharMatchIfWordBoundary(TokenType.Private, "private"),
             'P' when StartsWithKeyword("private") => DoCharMatchIfWordBoundary(TokenType.Private, "private"),
             // t or T
-            't' when StartsWithKeyword("thread") => DoCharMatchIfWordBoundary(TokenType.Thread, "thread"),
-            'T' when StartsWithKeyword("thread") => DoCharMatchIfWordBoundary(TokenType.Thread, "thread"),
+            't' => MatchByT(),
+            'T' => MatchByT(),
+            // u or U
+            'u' when StartsWithKeyword("undefined") => DoCharMatchIfWordBoundary(TokenType.Undefined, "undefined"),
+            'U' when StartsWithKeyword("undefined") => DoCharMatchIfWordBoundary(TokenType.Undefined, "undefined"),
             // w or W
-            'w' when StartsWithKeyword("wait") => DoCharMatchIfWordBoundary(TokenType.Wait, "wait"),
-            'W' when StartsWithKeyword("wait") => DoCharMatchIfWordBoundary(TokenType.Wait, "wait"),
+            'w' => MatchByW(),
+            'W' => MatchByW(),
             // Strings
             '"' => MatchString(TokenType.String),
             // No match
@@ -541,6 +547,19 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         else if (StartsWithKeyword("destructor"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Destructor, "destructor");
+        }
+        return default;
+    }
+
+    private Token? MatchByT()
+    {
+        if (StartsWithKeyword("true"))
+        {
+            return DoCharMatchIfWordBoundary(TokenType.True, "true");
+        }
+        else if (StartsWithKeyword("thread"))
+        {
+            return DoCharMatchIfWordBoundary(TokenType.Thread, "thread");
         }
         return default;
     }

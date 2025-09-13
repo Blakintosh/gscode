@@ -35,7 +35,7 @@ export function activate(context: ExtensionContext) {
 
     // console.log(serverModule);
 
-	const serverLocation = process.env.VSCODE_DEBUG ? process.env.DEBUG_SERVER_LOCATION : process.env.SERVER_LOCATION;
+	const serverLocation = process.env.VSCODE_DEBUG ? process.env.DEBUG_SERVER_LOCATION : "service";
 	if (!serverLocation) {
 		throw new Error("SERVER_LOCATION environment variable is not set. Please set it to the location of the GSCode.NET Language Server in .env");
 	}

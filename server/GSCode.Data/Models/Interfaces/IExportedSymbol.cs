@@ -10,4 +10,11 @@ public interface IExportedSymbol
 {
     public string Name { get; set; }
     public string? Description { get; set; }
+    public ExportedSymbolType Type { get; set; }
+}
+
+public enum ExportedSymbolType
+{
+    Function,
+    Class
 }

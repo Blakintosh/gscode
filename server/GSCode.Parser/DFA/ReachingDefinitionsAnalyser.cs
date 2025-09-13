@@ -270,7 +270,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Declaration(foreachStmt.ValueIdentifier, ScrData.Default));
         }
-        else if(assignmentResult == AssignmentResult.SuccessMutated)
+        else if (assignmentResult == AssignmentResult.SuccessMutated)
         {
             Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Usage(foreachStmt.ValueIdentifier, ScrData.Default));
         }
@@ -432,6 +432,46 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             return AnalyseAssignOp(binary, symbolTable);
         }
+        if (binary.Operation == TokenType.PlusAssign)
+        {
+            return AnalysePlusAssignOp(binary, symbolTable);
+        }
+        if (binary.Operation == TokenType.MinusAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.MinusAssign);
+        }
+        if (binary.Operation == TokenType.MultiplyAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.MultiplyAssign);
+        }
+        if (binary.Operation == TokenType.DivideAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.DivideAssign);
+        }
+        if (binary.Operation == TokenType.ModuloAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.ModuloAssign);
+        }
+        if (binary.Operation == TokenType.BitAndAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitAndAssign);
+        }
+        if (binary.Operation == TokenType.BitOrAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitOrAssign);
+        }
+        if (binary.Operation == TokenType.BitXorAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitXorAssign);
+        }
+        if (binary.Operation == TokenType.BitLeftShiftAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitLeftShiftAssign);
+        }
+        if (binary.Operation == TokenType.BitRightShiftAssign)
+        {
+            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitRightShiftAssign);
+        }
 
         ScrData left = AnalyseExpr(binary.Left!, symbolTable, Sense);
         ScrData right = AnalyseExpr(binary.Right!, symbolTable, Sense);
@@ -559,6 +599,88 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         // TODO: once all cases are covered, we should enable this.
         // sense.AddSpaDiagnostic(node.Left!.Range, GSCErrorCodes.InvalidAssignmentTarget);
         return ScrData.Default;
+    }
+
+    private ScrData AnalyseCompoundAssignOp(BinaryExprNode node, SymbolTable symbolTable, TokenType op)
+    {
+        // Evaluate LHS without creating a RHS usage token, and RHS normally
+        ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense, false);
+        ScrData right = AnalyseExpr(node.Right!, symbolTable, Sense);
+
+        // Variable op= expr
+        if (node.Left is IdentifierExprNode identifier)
+        {
+            string symbolName = identifier.Identifier;
+
+            // Must already exist
+            if (!symbolTable.ContainsSymbol(symbolName))
+            {
+                AddDiagnostic(identifier.Range, GSCErrorCodes.NotDefined, symbolName);
+                return ScrData.Default;
+            }
+
+            // Cannot assign to constant
+            if (left.ReadOnly)
+            {
+                AddDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
+                return ScrData.Default;
+            }
+
+            // Compute result then assign back
+            ScrData result = ExecuteCompoundOp(op, node, left, right);
+            symbolTable.SetSymbol(symbolName, result);
+            Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Usage(identifier, result));
+            return result;
+        }
+
+        // StructField op= expr
+        if (node.Left is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && left.Owner is ScrStruct destination)
+        {
+            string fieldName = left.FieldName ?? throw new NullReferenceException("Sanity check failed: Left data has no field name.");
+
+            if (left.ReadOnly)
+            {
+                AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                return ScrData.Default;
+            }
+
+            ScrData result = ExecuteCompoundOp(op, node, left, right);
+            destination.Set(fieldName, result);
+
+            if (binaryExprNode.Right is IdentifierExprNode identifierNode)
+            {
+                Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, result));
+            }
+
+            return result;
+        }
+
+        // TODO: once all cases are covered, we should enable this.
+        // sense.AddSpaDiagnostic(node.Left!.Range, GSCErrorCodes.InvalidAssignmentTarget);
+        return ScrData.Default;
+    }
+
+    private ScrData ExecuteCompoundOp(TokenType op, BinaryExprNode node, ScrData left, ScrData right)
+    {
+        return op switch
+        {
+            TokenType.PlusAssign => AnalyseAddOp(node, left, right),
+            TokenType.MinusAssign => AnalyseMinusOp(node, left, right),
+            TokenType.MultiplyAssign => AnalyseMultiplyOp(node, left, right),
+            TokenType.DivideAssign => AnalyseDivideOp(node, left, right),
+            TokenType.ModuloAssign => AnalyseModuloOp(node, left, right),
+            TokenType.BitAndAssign => AnalyseBitAndOp(node, left, right),
+            TokenType.BitOrAssign => AnalyseBitOrOp(node, left, right),
+            TokenType.BitXorAssign => AnalyseBitXorOp(node, left, right),
+            TokenType.BitLeftShiftAssign => AnalyseBitLeftShiftOp(node, left, right),
+            TokenType.BitRightShiftAssign => AnalyseBitRightShiftOp(node, left, right),
+            _ => ScrData.Default,
+        };
+    }
+
+    private ScrData AnalysePlusAssignOp(BinaryExprNode node, SymbolTable symbolTable)
+    {
+        return AnalyseCompoundAssignOp(node, symbolTable, TokenType.PlusAssign);
     }
 
     private ScrData AnalyseAddOp(BinaryExprNode node, ScrData left, ScrData right)
@@ -1354,7 +1476,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         if (functionTarget.Type == ScrDataTypes.Undefined && call.Function is IdentifierExprNode identifierNode)
         {
             string functionName = identifierNode.Identifier;
-            AddDiagnostic(call.Function!.Range, GSCErrorCodes.FunctionDoesNotExist, functionName);
+            // TODO: temp - merge broke function resolution in RDA.
+            // AddDiagnostic(call.Function!.Range, GSCErrorCodes.FunctionDoesNotExist, functionName);
             return ScrData.Default;
         }
 
@@ -1438,30 +1561,38 @@ file static class DataFlowAnalyserExtensions
 {
     public static void MergeTables(this Dictionary<string, ScrVariable> target, Dictionary<string, ScrVariable> source, int maxScope)
     {
-        // Get keys that are present in either
-        HashSet<string> fields = new();
-
-        fields.UnionWith(target.Keys);
-        fields.UnionWith(source.Keys);
-
-        foreach (string field in fields)
+        try
         {
-            // Shouldn't carry over anything that's not higher than this in scope, it's not accessible
-            if (source.TryGetValue(field, out ScrVariable? sourceData) && sourceData.LexicalScope <= maxScope)
-            {
-                // Also present in target, and are different. Merge them
-                if (target.TryGetValue(field, out ScrVariable? targetData))
-                {
-                    if (sourceData != targetData)
-                    {
-                        target[field] = new(sourceData.Name, ScrData.Merge(targetData.Data, sourceData.Data), sourceData.LexicalScope, sourceData.Global);
-                    }
-                    continue;
-                }
+            // Get keys that are present in either
+            HashSet<string> fields = new();
 
-                // Otherwise just copy one
-                target[field] = new(sourceData.Name, sourceData.Data.Copy(), sourceData.LexicalScope, sourceData.Global);
+            fields.UnionWith(target.Keys);
+            fields.UnionWith(source.Keys);
+
+            foreach (string field in fields)
+            {
+                // Shouldn't carry over anything that's not higher than this in scope, it's not accessible
+                if (source.TryGetValue(field, out ScrVariable? sourceData) && sourceData.LexicalScope <= maxScope)
+                {
+                    // Also present in target, and are different. Merge them
+                    if (target.TryGetValue(field, out ScrVariable? targetData))
+                    {
+                        if (sourceData != targetData)
+                        {
+                            target[field] = new(sourceData.Name, ScrData.Merge(targetData.Data, sourceData.Data), sourceData.LexicalScope, sourceData.Global);
+                        }
+                        continue;
+                    }
+
+                    // Otherwise just copy one
+                    target[field] = new(sourceData.Name, sourceData.Data.Copy(), sourceData.LexicalScope, sourceData.Global);
+                }
             }
+        }
+        catch (StackOverflowException ex)
+        {
+            Log.Error(ex, "Stack overflow occurred while merging tables. Original target: {target}, source: {source}", target, source);
+            throw;
         }
     }
 

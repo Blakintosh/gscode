@@ -1,4 +1,4 @@
-using GSCode.Data.Models.Interfaces;
+﻿using GSCode.Data.Models.Interfaces;
 using GSCode.Parser;
 using GSCode.Parser.SA;
 using Serilog;
@@ -559,7 +559,8 @@ public class ScriptManager
                     cached.Script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
                 }
             }
-            await cached.Script.AnalyseAsync(exportedSymbols, cancellationToken);
+            // TODO: temp - we don't want to use compute to fully analyse unopened scripts.
+            // await cached.Script.AnalyseAsync(exportedSymbols, cancellationToken);
 
             // Publish diagnostics for indexed file (if LSP facade is available)
             await PublishDiagnosticsAsync(docUri, cached.Script, cancellationToken: cancellationToken);

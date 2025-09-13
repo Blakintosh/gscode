@@ -501,7 +501,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         }
 
         // If the inserted file has no content (only SOF/EOF), remove the directive entirely
-        if (insertTokens.Start!.Next == insertTokens.End!.Previous)
+        if (insertTokens.Start!.Next == insertTokens.End!.Previous || (insertTokens.Start!.Next.Type == TokenType.Eof && insertTokens.End!.Previous.Type == TokenType.Sof))
         {
             if (terminatorToken!.Type == TokenType.Semicolon)
             {

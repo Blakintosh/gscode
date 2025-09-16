@@ -118,26 +118,14 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
     // Detects when a keyword token is actually being used as a switch label (default: or case ... :)
     private static bool IsSwitchLabelCandidate(Token token)
     {
-        if (!token.IsKeyword()) return false;
-
-        static Token? NextNonTrivia(Token t)
+        // default case
+        if(token.Type == TokenType.Default && token.Next.Type == TokenType.Colon)
         {
-            Token? cur = t.Next;
-            while (cur is not null && (cur.Type == TokenType.Whitespace || cur.Type == TokenType.LineComment || cur.Type == TokenType.MultilineComment || cur.Type == TokenType.DocComment))
-            {
-                cur = cur.Next;
-            }
-            return cur;
+            return true;
         }
 
-        string lex = token.Lexeme;
-        if (string.Equals(lex, "default", StringComparison.OrdinalIgnoreCase))
-        {
-            Token? next = NextNonTrivia(token);
-            return next is not null && next.Type == TokenType.Colon;
-        }
-
-        if (string.Equals(lex, "case", StringComparison.OrdinalIgnoreCase))
+        // case <>:
+        if(token.Type == TokenType.Case)
         {
             // Scan forward until a ':' on the same logical line (and not inside (), [], {})
             int paren = 0, bracket = 0, brace = 0;

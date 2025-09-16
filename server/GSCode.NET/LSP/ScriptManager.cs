@@ -161,9 +161,14 @@ public class ScriptManager
             }
         }
 
-        // Snapshot dependency locations while locking each dependency individually
+        // Snapshot dependency locations and parameter/docs/vararg metadata under each dependency's lock
         var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
         var mergeClassLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
+
+        var mergeFuncParams = new List<KeyValuePair<(string Namespace, string Name), string[]>>();
+        var mergeFuncDocs = new List<KeyValuePair<(string Namespace, string Name), string?>>();
+        var mergeFuncVarargs = new List<KeyValuePair<(string Namespace, string Name), bool>>();
+
         foreach (Uri dependency in script.Dependencies)
         {
             var depDoc = DocumentUri.From(dependency);
@@ -174,6 +179,11 @@ public class ScriptManager
                 if (depTable is null) return;
                 mergeFuncLocs.AddRange(depTable.GetAllFunctionLocations());
                 mergeClassLocs.AddRange(depTable.GetAllClassLocations());
+
+                // NEW: also merge parameters/docs/varargs
+                mergeFuncParams.AddRange(depTable.GetAllFunctionParameters());
+                mergeFuncDocs.AddRange(depTable.GetAllFunctionDocs());
+                mergeFuncVarargs.AddRange(depTable.GetAllFunctionVarargs());
                 await Task.CompletedTask;
             });
         }
@@ -184,6 +194,7 @@ public class ScriptManager
         {
             if (script.DefinitionsTable is not null)
             {
+                // locations
                 foreach (var kv in mergeFuncLocs)
                 {
                     var key = kv.Key; var val = kv.Value;
@@ -193,6 +204,23 @@ public class ScriptManager
                 {
                     var key = kv.Key; var val = kv.Value;
                     script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+                }
+
+                // NEW: metadata
+                foreach (var kv in mergeFuncParams)
+                {
+                    var key = kv.Key; var vals = kv.Value;
+                    script.DefinitionsTable.RecordFunctionParameters(key.Namespace, key.Name, vals);
+                }
+                foreach (var kv in mergeFuncDocs)
+                {
+                    var key = kv.Key; var doc = kv.Value;
+                    script.DefinitionsTable.RecordFunctionDoc(key.Namespace, key.Name, doc);
+                }
+                foreach (var kv in mergeFuncVarargs)
+                {
+                    var key = kv.Key; var hasVararg = kv.Value;
+                    script.DefinitionsTable.RecordFunctionVararg(key.Namespace, key.Name, hasVararg);
                 }
             }
             await script.AnalyseAsync(exportedSymbols, cancellationToken);
@@ -526,9 +554,14 @@ public class ScriptManager
             }
         }
 
-        // Snapshot dependency locations under dep locks
+        // Snapshot dependency locations and metadata under dep locks
         var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
         var mergeClassLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
+
+        var mergeFuncParams = new List<KeyValuePair<(string Namespace, string Name), string[]>>();
+        var mergeFuncDocs = new List<KeyValuePair<(string Namespace, string Name), string?>>();
+        var mergeFuncVarargs = new List<KeyValuePair<(string Namespace, string Name), bool>>();
+
         foreach (Uri dep in cached.Script.Dependencies)
         {
             var depDoc = DocumentUri.From(dep);
@@ -539,6 +572,11 @@ public class ScriptManager
                 if (depTable is null) return;
                 mergeFuncLocs.AddRange(depTable.GetAllFunctionLocations());
                 mergeClassLocs.AddRange(depTable.GetAllClassLocations());
+
+                // NEW: also merge parameters/docs/varargs
+                mergeFuncParams.AddRange(depTable.GetAllFunctionParameters());
+                mergeFuncDocs.AddRange(depTable.GetAllFunctionDocs());
+                mergeFuncVarargs.AddRange(depTable.GetAllFunctionVarargs());
                 await Task.CompletedTask;
             });
         }
@@ -557,6 +595,23 @@ public class ScriptManager
                 {
                     var key = kv.Key; var val = kv.Value;
                     cached.Script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+                }
+
+                // NEW: metadata
+                foreach (var kv in mergeFuncParams)
+                {
+                    var key = kv.Key; var vals = kv.Value;
+                    cached.Script.DefinitionsTable.RecordFunctionParameters(key.Namespace, key.Name, vals);
+                }
+                foreach (var kv in mergeFuncDocs)
+                {
+                    var key = kv.Key; var doc = kv.Value;
+                    cached.Script.DefinitionsTable.RecordFunctionDoc(key.Namespace, key.Name, doc);
+                }
+                foreach (var kv in mergeFuncVarargs)
+                {
+                    var key = kv.Key; var hasVararg = kv.Value;
+                    cached.Script.DefinitionsTable.RecordFunctionVararg(key.Namespace, key.Name, hasVararg);
                 }
             }
             await cached.Script.AnalyseAsync(exportedSymbols, cancellationToken);

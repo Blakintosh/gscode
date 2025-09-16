@@ -20,7 +20,6 @@ public record class ScrFunction : IExportedSymbol
     public string? IntelliSense { get; set; }
     public bool IsPrivate { get; set; } = false;
     public string? DocComment { get; set; }
-    // New: indicates if the function prototype ends with a vararg ("...")
     public bool HasVararg { get; set; } = false;
 }
 

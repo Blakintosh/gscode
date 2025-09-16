@@ -179,8 +179,6 @@ public class ScriptManager
                 if (depTable is null) return;
                 mergeFuncLocs.AddRange(depTable.GetAllFunctionLocations());
                 mergeClassLocs.AddRange(depTable.GetAllClassLocations());
-
-                // NEW: also merge parameters/docs/varargs
                 mergeFuncParams.AddRange(depTable.GetAllFunctionParameters());
                 mergeFuncDocs.AddRange(depTable.GetAllFunctionDocs());
                 mergeFuncVarargs.AddRange(depTable.GetAllFunctionVarargs());
@@ -200,23 +198,25 @@ public class ScriptManager
                     var key = kv.Key; var val = kv.Value;
                     script.DefinitionsTable.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
                 }
+
                 foreach (var kv in mergeClassLocs)
                 {
                     var key = kv.Key; var val = kv.Value;
                     script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
                 }
 
-                // NEW: metadata
                 foreach (var kv in mergeFuncParams)
                 {
                     var key = kv.Key; var vals = kv.Value;
                     script.DefinitionsTable.RecordFunctionParameters(key.Namespace, key.Name, vals);
                 }
+
                 foreach (var kv in mergeFuncDocs)
                 {
                     var key = kv.Key; var doc = kv.Value;
                     script.DefinitionsTable.RecordFunctionDoc(key.Namespace, key.Name, doc);
                 }
+
                 foreach (var kv in mergeFuncVarargs)
                 {
                     var key = kv.Key; var hasVararg = kv.Value;
@@ -572,8 +572,6 @@ public class ScriptManager
                 if (depTable is null) return;
                 mergeFuncLocs.AddRange(depTable.GetAllFunctionLocations());
                 mergeClassLocs.AddRange(depTable.GetAllClassLocations());
-
-                // NEW: also merge parameters/docs/varargs
                 mergeFuncParams.AddRange(depTable.GetAllFunctionParameters());
                 mergeFuncDocs.AddRange(depTable.GetAllFunctionDocs());
                 mergeFuncVarargs.AddRange(depTable.GetAllFunctionVarargs());
@@ -591,23 +589,25 @@ public class ScriptManager
                     var key = kv.Key; var val = kv.Value;
                     cached.Script.DefinitionsTable.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
                 }
+
                 foreach (var kv in mergeClassLocs)
                 {
                     var key = kv.Key; var val = kv.Value;
                     cached.Script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
                 }
 
-                // NEW: metadata
                 foreach (var kv in mergeFuncParams)
                 {
                     var key = kv.Key; var vals = kv.Value;
                     cached.Script.DefinitionsTable.RecordFunctionParameters(key.Namespace, key.Name, vals);
                 }
+
                 foreach (var kv in mergeFuncDocs)
                 {
                     var key = kv.Key; var doc = kv.Value;
                     cached.Script.DefinitionsTable.RecordFunctionDoc(key.Namespace, key.Name, doc);
                 }
+
                 foreach (var kv in mergeFuncVarargs)
                 {
                     var key = kv.Key; var hasVararg = kv.Value;

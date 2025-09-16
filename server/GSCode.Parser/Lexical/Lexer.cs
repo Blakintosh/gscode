@@ -540,7 +540,13 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         }
         else if (StartsWithKeyword("default"))
         {
-            return DoCharMatchIfWordBoundary(TokenType.Default, "default");
+            // Only treat 'default' as a keyword when used as a switch label (default:)
+            if (LooksLikeLabelAfterKeyword(7)) // length of "default"
+            {
+                return DoCharMatchIfWordBoundary(TokenType.Default, "default");
+            }
+            // Otherwise, allow it to be lexed as an identifier (e.g., DEFAULT())
+            return default;
         }
         else if (StartsWithKeyword("destructor"))
         {
@@ -775,5 +781,21 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         }
 
         return new Token(type, range, lexeme);
+    }
+
+    /// <summary>
+    /// Checks if the characters immediately following a keyword look like a label (i.e., optional spaces/tabs then ':') on the same line.
+    /// </summary>
+    private bool LooksLikeLabelAfterKeyword(int keywordLength)
+    {
+        int i = keywordLength;
+        while (true)
+        {
+            char c = InputAt(i);
+            if (c == ' ' || c == '\t') { i++; continue; }
+            if (c == ':') return true;
+            // Newline or end-of-input or any other character means not a label
+            return false;
+        }
     }
 }

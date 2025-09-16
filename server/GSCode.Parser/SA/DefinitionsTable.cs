@@ -24,7 +24,6 @@ public class DefinitionsTable
     private readonly Dictionary<(string Namespace, string Name), string[]> _functionParameters = new();
     private readonly Dictionary<(string Namespace, string Name), string[]> _functionFlags = new();
     private readonly Dictionary<(string Namespace, string Name), string?> _functionDocs = new();
-    // New: track whether a function has a vararg ("...")
     private readonly Dictionary<(string Namespace, string Name), bool> _functionVarargs = new();
 
     private static (string Namespace, string Name) NK(string ns, string name)
@@ -65,7 +64,6 @@ public class DefinitionsTable
         _functionParameters[NK(ns, name)] = parameterNames?.Select(p => p?.ToLowerInvariant() ?? string.Empty).ToArray() ?? Array.Empty<string>();
     }
 
-    // New: record and query vararg metadata
     public void RecordFunctionVararg(string ns, string name, bool hasVararg)
     {
         _functionVarargs[NK(ns, name)] = hasVararg;
@@ -155,7 +153,6 @@ public class DefinitionsTable
         return _classLocations.ToList();
     }
 
-    // New: expose all parameters, docs and vararg flags
     public IEnumerable<KeyValuePair<(string Namespace, string Name), string[]>> GetAllFunctionParameters()
     {
         return _functionParameters.ToList();

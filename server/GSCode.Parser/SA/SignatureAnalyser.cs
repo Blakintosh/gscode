@@ -137,7 +137,6 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         string? doc = ExtractDocCommentBefore(nameToken);
         DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, doc);
 
-        // NEW: Also record under the class name as its own qualifier so ClassName::Method() resolves
         string classNs = scrClass.Name;
         DefinitionsTable.AddFunctionLocation(classNs, name, Sense.ScriptPath, nameToken.Range);
         DefinitionsTable.RecordFunctionParameters(classNs, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));

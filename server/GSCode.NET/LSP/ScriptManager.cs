@@ -394,67 +394,53 @@ public class ScriptManager
                 return;
             }
 
-            // Collect files first for count and deterministic iteration
-            var filesList = Directory
+            var files = Directory
                 .EnumerateFiles(rootDirectory, "*.*", SearchOption.AllDirectories)
                 .Where(p => p.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase) ||
-                            p.EndsWith(".csc", StringComparison.OrdinalIgnoreCase))
-                .ToList();
+                            p.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
 
 #if DEBUG
             _logger.LogInformation("Indexing workspace under {Root}", rootDirectory);
-            _logger.LogInformation("Indexing started: {Count} files", filesList.Count);
+            int count = files.Count(); // enumerates, but does not materialize the list
+            _logger.LogInformation("Indexing started: {Count} files", count);
             var swAll = Stopwatch.StartNew();
 #endif
 
             int maxDegree = Math.Max(1, Environment.ProcessorCount - 1);
-            using SemaphoreSlim gate = new(maxDegree, maxDegree);
-            List<Task> tasks = new();
-
-            foreach (string file in filesList)
+            var po = new ParallelOptions
             {
-                await gate.WaitAsync(cancellationToken);
-                tasks.Add(Task.Run(async () =>
-                {
-#if DEBUG
-                    var fileSw = Stopwatch.StartNew();
-#endif
-                    string rel = Path.GetRelativePath(rootDirectory, file);
-                    try
-                    {
-#if DEBUG
-                        _logger.LogInformation("Indexing {File}", rel);
-#endif
-                        await IndexFileAsync(file, cancellationToken);
-#if DEBUG
-                        fileSw.Stop();
-                        _logger.LogInformation("Indexed {File} in {ElapsedMs} ms", rel, fileSw.ElapsedMilliseconds);
-#endif
-                    }
-                    catch (OperationCanceledException) { }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to index {File}", file);
-                    }
-                    finally
-                    {
-                        gate.Release();
-                    }
-                }, cancellationToken));
-            }
+                MaxDegreeOfParallelism = maxDegree,
+                CancellationToken = cancellationToken
+            };
 
-            await Task.WhenAll(tasks);
+            await Parallel.ForEachAsync(files, po, async (file, ct) =>
+            {
+#if DEBUG
+                var fileSw = Stopwatch.StartNew();
+                string rel = Path.GetRelativePath(rootDirectory, file);
+                _logger.LogInformation("Indexing {File}", rel);
+#endif
+                try
+                {
+                    await IndexFileAsync(file, ct);
+#if DEBUG
+                    fileSw.Stop();
+                    _logger.LogInformation("Indexed {File} in {ElapsedMs} ms", rel, fileSw.ElapsedMilliseconds);
+#endif
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to index {File}", file);
+                }
+            });
+
 #if DEBUG
             swAll.Stop();
-            _logger.LogInformation("Indexing completed in {ElapsedMs} ms for {Count} files", swAll.ElapsedMilliseconds, filesList.Count);
+            _logger.LogInformation("Indexing finished in {ElapsedMs} ms", swAll.ElapsedMilliseconds);
 #endif
         }
-        catch (OperationCanceledException)
-        {
-#if DEBUG
-            _logger.LogInformation("Indexing cancelled");
-#endif
-        }
+        catch (OperationCanceledException) { }
     }
 
     private async Task IndexFileAsync(string filePath, CancellationToken cancellationToken)

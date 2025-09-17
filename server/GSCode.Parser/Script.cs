@@ -18,6 +18,7 @@ using GSCode.Parser.SPA;
 using System.Text.RegularExpressions;
 using GSCode.Parser.DFA;
 using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
 
 namespace GSCode.Parser;
 
@@ -49,12 +50,32 @@ public class Script(DocumentUri ScriptUri, string languageId)
     public IReadOnlyDictionary<SymbolKey, List<Range>> References => _references;
 
     // Cache for language API to avoid repeated construction in hot paths
+    private static readonly ConcurrentDictionary<string, ScriptAnalyserData> s_apiCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private ScriptAnalyserData? _api;
     private ScriptAnalyserData? TryGetApi()
     {
         if (_api is not null) return _api;
-        try { _api = new(LanguageId); } catch { _api = null; }
-        return _api;
+
+        if (s_apiCache.TryGetValue(LanguageId, out var cached))
+        {
+            _api = cached;
+            return _api;
+        }
+
+        try
+        {
+            var created = new ScriptAnalyserData(LanguageId);
+            s_apiCache[LanguageId] = created;
+            _api = created;
+            return created;
+        }
+        catch
+        {
+            // Do not cache failures to allow future successful attempts
+            return null;
+        }
     }
     private bool IsBuiltinFunction(string name)
     {

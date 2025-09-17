@@ -91,7 +91,31 @@ LanguageServer server = await LanguageServer.From(options =>
 		{
 			try
 			{
-				var sm = server.Services.GetRequiredService<ScriptManager>();
+                // Read client-provided setting to optionally disable indexing on initialize
+                var disableIndexOnInitialize = false;
+                try
+                {
+                    if (request.InitializationOptions is not null)
+                    {
+                        var token = request.InitializationOptions as JToken ?? JToken.FromObject(request.InitializationOptions);
+                        disableIndexOnInitialize =
+                            token["disableIndexOnInitialize"]?.Value<bool?>()
+                            ?? token["gscode"]?["disableIndexOnInitialize"]?.Value<bool?>()
+                            ?? false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Unable to parse initializationOptions; proceeding with defaults.");
+                }
+
+                if (disableIndexOnInitialize)
+                {
+                    Log.Information("Skipping workspace indexing on initialize per client setting.");
+                    return;
+                }
+
+                var sm = server.Services.GetRequiredService<ScriptManager>();
 
 				// Use a long-lived CTS for indexing; do not tie to Initialize request token
 				var indexingCts = new CancellationTokenSource();

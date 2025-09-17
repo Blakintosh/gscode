@@ -16,10 +16,10 @@
 		"Other"
 	],
 	"activationEvents": [
-	"onStartupFinished",
-	"workspaceContains:**/*.gsc",
-	"workspaceContains:**/*.csc",
-	"workspaceContains:**/*.gsh"
+		"onStartupFinished",
+		"workspaceContains:**/*.gsc",
+		"workspaceContains:**/*.csc",
+		"workspaceContains:**/*.gsh"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -110,6 +110,11 @@
 						"verbose"
 					],
 					"default": "off"
+				},
+				"gscode.disableIndexOnInitialize": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, the language server will not index the workspace during startup."
 				}
 			}
 		}

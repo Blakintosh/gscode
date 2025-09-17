@@ -1244,6 +1244,14 @@ public class Script(DocumentUri ScriptUri, string languageId)
         // Walk all call nodes
         foreach (var call in EnumerateCalls(RootNode))
         {
+            // Skip function-pointer dereference calls: self [[foo]](...), [[ns::foo]](...)
+            // In these, the call's range starts before the target expression's range (due to the leading [[)
+            if (call.Target is ExprNode t && ComparePosition(call.Range.Start, t.Range.Start) < 0)
+            {
+                // Cannot reliably resolve pointee; do not enforce arity
+                continue;
+            }
+
             string? ns = null;
             string? name = null;
             Range reportRange = call.Arguments.Range;

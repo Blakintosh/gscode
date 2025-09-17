@@ -755,12 +755,19 @@ public class Script(DocumentUri ScriptUri, string languageId)
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static (string? qualifier, string name) ParseNamespaceQualifiedIdentifier(Token token)
     {
-        // If the previous token is '::' and the one before is an identifier, treat as namespace::name
-        if (token.Previous is { Lexeme: "::" } sep && sep.Previous is { Type: TokenType.Identifier } nsToken)
+        // Case 1: current token is the name (ns :: name)
+        if (token.Previous is { Type: TokenType.ScopeResolution } sep && sep.Previous is { Type: TokenType.Identifier } nsToken)
         {
             return (nsToken.Lexeme, token.Lexeme);
         }
-        // Otherwise, no qualifier
+
+        // Case 2: current token is the namespace (ns :: name)
+        if (token.Next is { Type: TokenType.ScopeResolution } sep2 && sep2.Next is { Type: TokenType.Identifier } nameToken)
+        {
+            return (token.Lexeme, nameToken.Lexeme);
+        }
+
+        // Default: unqualified identifier
         return (null, token.Lexeme);
     }
 

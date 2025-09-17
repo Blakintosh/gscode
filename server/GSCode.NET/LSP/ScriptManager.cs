@@ -14,6 +14,7 @@ using System.Threading; // added
 using System.Diagnostics; // added
 using OmniSharp.Extensions.LanguageServer.Protocol.Server; // added
 using OmniSharp.Extensions.LanguageServer.Protocol.Document; // added for PublishDiagnostics extension
+using GSCode.NET.Util;
 
 namespace GSCode.NET.LSP;
 
@@ -99,6 +100,16 @@ public class CachedScript
 
 public readonly record struct LoadedScript(DocumentUri Uri, Script Script);
 
+internal sealed class DependencySnapshot
+{
+    public List<IExportedSymbol> ExportedSymbols { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>> FunctionLocations { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>> ClassLocations { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), string[]>> FunctionParameters { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), string?>> FunctionDocs { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), bool>> FunctionVarargs { get; } = new();
+}
+
 public class ScriptManager
 {
     private readonly ScriptCache _cache;
@@ -149,81 +160,15 @@ public class ScriptManager
 
         await Task.WhenAll(dependencyTasks);
 
-        // Build exported symbols
-        List<IExportedSymbol> exportedSymbols = new();
-        foreach (Uri dependency in script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dependency);
-            if (Scripts.TryGetValue(depDoc, out CachedScript? cachedScript))
-            {
-                await EnsureParsedAsync(depDoc, cachedScript.Script, script.LanguageId, cancellationToken);
-                exportedSymbols.AddRange(await cachedScript.Script.IssueExportedSymbolsAsync(cancellationToken));
-            }
-        }
-
-        // Snapshot dependency locations and parameter/docs/vararg metadata under each dependency's lock
-        var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-        var mergeClassLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-
-        var mergeFuncParams = new List<KeyValuePair<(string Namespace, string Name), string[]>>();
-        var mergeFuncDocs = new List<KeyValuePair<(string Namespace, string Name), string?>>();
-        var mergeFuncVarargs = new List<KeyValuePair<(string Namespace, string Name), bool>>();
-
-        foreach (Uri dependency in script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dependency);
-            if (!Scripts.TryGetValue(depDoc, out CachedScript? depScript)) continue;
-            await WithAnalysisLockAsync(depDoc, async () =>
-            {
-                var depTable = depScript.Script.DefinitionsTable;
-                if (depTable is null) return;
-                mergeFuncLocs.AddRange(depTable.GetAllFunctionLocations());
-                mergeClassLocs.AddRange(depTable.GetAllClassLocations());
-                mergeFuncParams.AddRange(depTable.GetAllFunctionParameters());
-                mergeFuncDocs.AddRange(depTable.GetAllFunctionDocs());
-                mergeFuncVarargs.AddRange(depTable.GetAllFunctionVarargs());
-                await Task.CompletedTask;
-            });
-        }
+        // Collect snapshot info and exported symbols from deps
+        var snapshot = await SnapshotDependenciesAsync(script.Dependencies, script.LanguageId, cancellationToken);
 
         // Merge + analyse under this script's analysis lock
         var thisDoc = DocumentUri.From(documentUri);
         await WithAnalysisLockAsync(thisDoc, async () =>
         {
-            if (script.DefinitionsTable is not null)
-            {
-                // locations
-                foreach (var kv in mergeFuncLocs)
-                {
-                    var key = kv.Key; var val = kv.Value;
-                    script.DefinitionsTable.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
-                }
-
-                foreach (var kv in mergeClassLocs)
-                {
-                    var key = kv.Key; var val = kv.Value;
-                    script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
-                }
-
-                foreach (var kv in mergeFuncParams)
-                {
-                    var key = kv.Key; var vals = kv.Value;
-                    script.DefinitionsTable.RecordFunctionParameters(key.Namespace, key.Name, vals);
-                }
-
-                foreach (var kv in mergeFuncDocs)
-                {
-                    var key = kv.Key; var doc = kv.Value;
-                    script.DefinitionsTable.RecordFunctionDoc(key.Namespace, key.Name, doc);
-                }
-
-                foreach (var kv in mergeFuncVarargs)
-                {
-                    var key = kv.Key; var hasVararg = kv.Value;
-                    script.DefinitionsTable.RecordFunctionVararg(key.Namespace, key.Name, hasVararg);
-                }
-            }
-            await script.AnalyseAsync(exportedSymbols, cancellationToken);
+            ApplyDependencySnapshot(script, snapshot);
+            await script.AnalyseAsync(snapshot.ExportedSymbols, cancellationToken);
         });
 
         return await script.GetDiagnosticsAsync(cancellationToken);
@@ -533,88 +478,14 @@ public class ScriptManager
             await AddDependencyAsync(docUri.ToUri(), dep, languageId);
         }
 
-        // Ensure dependencies are parsed before exporting/merging
-        foreach (Uri dep in cached.Script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dep);
-            if (Scripts.TryGetValue(depDoc, out CachedScript? depScript))
-            {
-                await EnsureParsedAsync(depDoc, depScript.Script, languageId, cancellationToken);
-            }
-        }
-
-        // Build exported symbols
-        List<IExportedSymbol> exportedSymbols = new();
-        foreach (Uri dep in cached.Script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dep);
-            if (Scripts.TryGetValue(depDoc, out CachedScript? depScript))
-            {
-                exportedSymbols.AddRange(await depScript.Script.IssueExportedSymbolsAsync(cancellationToken));
-            }
-        }
-
-        // Snapshot dependency locations and metadata under dep locks
-        var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-        var mergeClassLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-
-        var mergeFuncParams = new List<KeyValuePair<(string Namespace, string Name), string[]>>();
-        var mergeFuncDocs = new List<KeyValuePair<(string Namespace, string Name), string?>>();
-        var mergeFuncVarargs = new List<KeyValuePair<(string Namespace, string Name), bool>>();
-
-        foreach (Uri dep in cached.Script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dep);
-            if (!Scripts.TryGetValue(depDoc, out CachedScript? depScript)) continue;
-            await WithAnalysisLockAsync(depDoc, async () =>
-            {
-                var depTable = depScript.Script.DefinitionsTable;
-                if (depTable is null) return;
-                mergeFuncLocs.AddRange(depTable.GetAllFunctionLocations());
-                mergeClassLocs.AddRange(depTable.GetAllClassLocations());
-                mergeFuncParams.AddRange(depTable.GetAllFunctionParameters());
-                mergeFuncDocs.AddRange(depTable.GetAllFunctionDocs());
-                mergeFuncVarargs.AddRange(depTable.GetAllFunctionVarargs());
-                await Task.CompletedTask;
-            });
-        }
+        // Snapshot dependency info and exported symbols
+        var snapshot = await SnapshotDependenciesAsync(cached.Script.Dependencies, languageId, cancellationToken);
 
         // Merge + analyse under this script's analysis lock
         await WithAnalysisLockAsync(docUri, async () =>
         {
-            if (cached.Script.DefinitionsTable is not null)
-            {
-                foreach (var kv in mergeFuncLocs)
-                {
-                    var key = kv.Key; var val = kv.Value;
-                    cached.Script.DefinitionsTable.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
-                }
-
-                foreach (var kv in mergeClassLocs)
-                {
-                    var key = kv.Key; var val = kv.Value;
-                    cached.Script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
-                }
-
-                foreach (var kv in mergeFuncParams)
-                {
-                    var key = kv.Key; var vals = kv.Value;
-                    cached.Script.DefinitionsTable.RecordFunctionParameters(key.Namespace, key.Name, vals);
-                }
-
-                foreach (var kv in mergeFuncDocs)
-                {
-                    var key = kv.Key; var doc = kv.Value;
-                    cached.Script.DefinitionsTable.RecordFunctionDoc(key.Namespace, key.Name, doc);
-                }
-
-                foreach (var kv in mergeFuncVarargs)
-                {
-                    var key = kv.Key; var hasVararg = kv.Value;
-                    cached.Script.DefinitionsTable.RecordFunctionVararg(key.Namespace, key.Name, hasVararg);
-                }
-            }
-            await cached.Script.AnalyseAsync(exportedSymbols, cancellationToken);
+            ApplyDependencySnapshot(cached.Script, snapshot);
+            await cached.Script.AnalyseAsync(snapshot.ExportedSymbols, cancellationToken);
 
             // Publish diagnostics for indexed file (if LSP facade is available)
             await PublishDiagnosticsAsync(docUri, cached.Script, cancellationToken: cancellationToken);
@@ -637,6 +508,75 @@ public class ScriptManager
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish diagnostics for {Uri}", uri.GetFileSystemPath());
+        }
+    }
+
+    // Consolidated: snapshot dependency locations/metadata and exported symbols
+    private async Task<DependencySnapshot> SnapshotDependenciesAsync(IEnumerable<Uri> dependencies, string? languageId, CancellationToken cancellationToken)
+    {
+        var snapshot = new DependencySnapshot();
+        foreach (Uri dependency in dependencies)
+        {
+            var depDoc = DocumentUri.From(dependency);
+            if (Scripts.TryGetValue(depDoc, out CachedScript? depScript))
+            {
+                await EnsureParsedAsync(depDoc, depScript.Script, languageId ?? depScript.Script.LanguageId, cancellationToken);
+                // Collect exported symbols
+                snapshot.ExportedSymbols.AddRange(await depScript.Script.IssueExportedSymbolsAsync(cancellationToken));
+
+                // Snapshot table data under analysis lock
+                await WithAnalysisLockAsync(depDoc, async () =>
+                {
+                    var depTable = depScript.Script.DefinitionsTable;
+                    if (depTable is not null)
+                    {
+                        snapshot.FunctionLocations.AddRange(depTable.GetAllFunctionLocations());
+                        snapshot.ClassLocations.AddRange(depTable.GetAllClassLocations());
+                        snapshot.FunctionParameters.AddRange(depTable.GetAllFunctionParameters());
+                        snapshot.FunctionDocs.AddRange(depTable.GetAllFunctionDocs());
+                        snapshot.FunctionVarargs.AddRange(depTable.GetAllFunctionVarargs());
+                    }
+                    await Task.CompletedTask;
+                });
+            }
+        }
+        return snapshot;
+    }
+
+    // Consolidated: apply snapshot to a target script's DefinitionsTable
+    private static void ApplyDependencySnapshot(Script target, DependencySnapshot snapshot)
+    {
+        var table = target.DefinitionsTable;
+        if (table is null) return;
+
+        foreach (var kv in snapshot.FunctionLocations)
+        {
+            var key = kv.Key; var val = kv.Value;
+            table.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+        }
+
+        foreach (var kv in snapshot.ClassLocations)
+        {
+            var key = kv.Key; var val = kv.Value;
+            table.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+        }
+
+        foreach (var kv in snapshot.FunctionParameters)
+        {
+            var key = kv.Key; var vals = kv.Value;
+            table.RecordFunctionParameters(key.Namespace, key.Name, vals);
+        }
+
+        foreach (var kv in snapshot.FunctionDocs)
+        {
+            var key = kv.Key; var doc = kv.Value;
+            table.RecordFunctionDoc(key.Namespace, key.Name, doc);
+        }
+
+        foreach (var kv in snapshot.FunctionVarargs)
+        {
+            var key = kv.Key; var hasVararg = kv.Value;
+            table.RecordFunctionVararg(key.Namespace, key.Name, hasVararg);
         }
     }
 }

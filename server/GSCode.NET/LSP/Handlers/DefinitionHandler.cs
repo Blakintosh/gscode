@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.SPA;
+using GSCode.NET.Util;
 
 namespace GSCode.NET.LSP.Handlers;
 
@@ -81,8 +82,11 @@ internal class DefinitionHandler : DefinitionHandlerBase
         sw.Stop();
         if (remote is not null)
         {
-            _logger.LogInformation("Definition resolved remotely in {ElapsedMs} ms: {uri}:{range}", sw.ElapsedMilliseconds, remote.Uri, remote.Range);
-            return new LocationOrLocationLinks(remote);
+            // ensure URI is normalized consistently
+            var norm = PathUtils.NormalizeFilePath(remote.Uri.ToString());
+            var normalized = new Location { Uri = new Uri(norm), Range = remote.Range };
+            _logger.LogInformation("Definition resolved remotely in {ElapsedMs} ms: {uri}:{range}", sw.ElapsedMilliseconds, normalized.Uri, normalized.Range);
+            return new LocationOrLocationLinks(normalized);
         }
 
         _logger.LogInformation("Definition finished in {ElapsedMs} ms: not found for {name}", sw.ElapsedMilliseconds, name);

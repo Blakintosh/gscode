@@ -12,6 +12,7 @@ using System.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.SA;
 using GSCode.Parser.Data;
+using GSCode.NET.Util;
 
 namespace GSCode.NET.LSP.Handlers;
 
@@ -30,20 +31,6 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         _script_manager = scriptManager;
         _logger = logger;
         _documentSelector = documentSelector;
-    }
-
-    private static string NormalizePath(string path)
-    {
-        if (string.IsNullOrEmpty(path)) return path;
-        if (path.Length >= 3 && path[0] == '/' && char.IsLetter(path[1]) && path[2] == ':')
-        {
-            path = path.Substring(1);
-        }
-        if (Path.DirectorySeparatorChar == '\\')
-        {
-            path = path.Replace('/', Path.DirectorySeparatorChar);
-        }
-        try { return Path.GetFullPath(path); } catch { return path; }
     }
 
     private static string BuildFunctionLabel(string name, string ns, string[]? parameters, string[]? flags)
@@ -87,7 +74,7 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>());
         }
 
-        string currentPath = NormalizePath(request.TextDocument.Uri.ToUri().LocalPath);
+        string currentPath = PathUtils.NormalizeFilePath(request.TextDocument.Uri.ToUri().LocalPath);
 
         // Collect by type
         List<DocumentSymbol> classNodes = new();
@@ -96,7 +83,7 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             cancellationToken.ThrowIfCancellationRequested();
 
             var key = kv.Key; var val = kv.Value;
-            string filePath = NormalizePath(val.FilePath ?? string.Empty);
+            string filePath = PathUtils.NormalizeFilePath(val.FilePath ?? string.Empty);
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -117,7 +104,7 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             cancellationToken.ThrowIfCancellationRequested();
 
             var key = kv.Key; var val = kv.Value;
-            string filePath = NormalizePath(val.FilePath ?? string.Empty);
+            string filePath = PathUtils.NormalizeFilePath(val.FilePath ?? string.Empty);
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
                 continue;
 

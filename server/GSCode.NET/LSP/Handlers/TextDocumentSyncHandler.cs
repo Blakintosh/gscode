@@ -96,7 +96,24 @@ public class TextDocumentSyncHandler : ITextDocumentSyncHandler
         return Unit.Task;
     }
 
-    public Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken) => Unit.Task;
+    public async Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Document saved");
+        var sw = Stopwatch.StartNew();
+
+        var diagnostics = await _scriptManager.RefreshEditorOnSaveAsync(request.TextDocument, cancellationToken);
+
+        _facade.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams()
+        {
+            Diagnostics = new Container<Diagnostic>(diagnostics.ToArray()),
+            Uri = request.TextDocument.Uri,
+            Version = null // Fix: TextDocumentIdentifier does not have Version
+        });
+
+        sw.Stop();
+        _logger.LogInformation("Document save processed in {ElapsedMs} ms with {DiagCount} diagnostics", sw.ElapsedMilliseconds, diagnostics.Count());
+        return Unit.Value;
+    }
 
     TextDocumentOpenRegistrationOptions IRegistration<TextDocumentOpenRegistrationOptions, TextSynchronizationCapability>.GetRegistrationOptions(TextSynchronizationCapability capability, ClientCapabilities clientCapabilities)
     {

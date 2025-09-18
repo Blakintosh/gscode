@@ -15,6 +15,7 @@ using System.Diagnostics; // added
 using OmniSharp.Extensions.LanguageServer.Protocol.Server; // added
 using OmniSharp.Extensions.LanguageServer.Protocol.Document; // added for PublishDiagnostics extension
 using GSCode.NET.Util;
+using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
 namespace GSCode.NET.LSP;
 
@@ -81,6 +82,18 @@ public class ScriptCache
     {
         DocumentUri documentUri = document.Uri;
         Scripts.Remove(documentUri, out StringBuilder? value);
+    }
+
+    // Expose current text for an editor doc (used to reparse dependents without losing unsaved edits)
+    public bool TryGetText(DocumentUri uri, out string text)
+    {
+        if (Scripts.TryGetValue(uri, out var sb))
+        {
+            text = sb.ToString();
+            return true;
+        }
+        text = string.Empty;
+        return false;
     }
 }
 
@@ -174,6 +187,154 @@ public class ScriptManager
         return await script.GetDiagnosticsAsync(cancellationToken);
     }
 
+    // Re-analyse current document on save; then refresh dependents so external references update
+    public async Task<IEnumerable<Diagnostic>> RefreshEditorOnSaveAsync(TextDocumentIdentifier document, CancellationToken cancellationToken = default)
+    {
+        var script = GetEditor(document);
+        string path = document.Uri.ToUri().LocalPath;
+
+        // Read saved content from disk
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
+
+        // Full re-parse + re-analysis (resets DefinitionsTable and references)
+        var diagnostics = await ProcessEditorAsync(document.Uri.ToUri(), script, content, cancellationToken);
+
+        // Publish diagnostics for the saved doc
+        await PublishDiagnosticsAsync(document.Uri, script, document is OptionalVersionedTextDocumentIdentifier v ? v.Version : null, cancellationToken);
+
+        // Refresh all dependents of this document to update their view of our DefinitionsTable
+        await RefreshDependentsAsync(document.Uri, cancellationToken);
+
+        return diagnostics;
+    }
+
+    // Parse from latest available source (editor buffer if open, otherwise disk)
+    private async Task ReparseFromLatestAsync(DocumentUri docUri, Script script, CancellationToken cancellationToken)
+    {
+        if (Scripts.TryGetValue(docUri, out var cached) &&
+            cached.Type == CachedScriptType.Editor &&
+            _cache.TryGetText(docUri, out var text) &&
+            !string.IsNullOrEmpty(text))
+        {
+            await script.ParseAsync(text);
+        }
+        else
+        {
+            await ParseFromDiskAsync(docUri, script, cancellationToken);
+        }
+    }
+
+    // In RefreshDependentsAsync: reparse each dependent from latest source, not just disk
+    private async Task RefreshDependentsAsync(DocumentUri savedDoc, CancellationToken cancellationToken)
+    {
+        if (!Scripts.TryGetValue(savedDoc, out var savedCached))
+            return;
+
+        foreach (var dep in savedCached.Dependents.Keys)
+        {
+            if (!Scripts.TryGetValue(dep, out var dependentCached))
+                continue;
+
+            var dependentScript = dependentCached.Script;
+
+            // Re-parse to rebuild macro outlines from #insert expansions
+            await ReparseFromLatestAsync(dep, dependentScript, cancellationToken);
+
+            var snapshot = await SnapshotDependenciesAsync(dependentScript.Dependencies, dependentScript.LanguageId, cancellationToken);
+
+            await WithAnalysisLockAsync(dep, async () =>
+            {
+                ApplyDependencySnapshot(dependentScript, snapshot);
+                await dependentScript.AnalyseAsync(snapshot.ExportedSymbols, cancellationToken);
+                await PublishDiagnosticsAsync(dep, dependentScript, cancellationToken: cancellationToken);
+            });
+        }
+    }
+
+    // In RemoveScriptAndRefreshDependentsAsync: same change to ensure clean macro state
+    private async Task RemoveScriptAndRefreshDependentsAsync(DocumentUri docUri, CancellationToken cancellationToken)
+    {
+        if (!Scripts.Remove(docUri, out CachedScript? removed))
+            return;
+
+        foreach (var dep in removed.Dependents.Keys)
+        {
+            if (!Scripts.TryGetValue(dep, out var dependentCached))
+                continue;
+
+            var dependentScript = dependentCached.Script;
+
+            // Re-parse dependent (buffer if open) to drop stale macros and rebuild outlines
+            await ReparseFromLatestAsync(dep, dependentScript, cancellationToken);
+
+            var snapshot = await SnapshotDependenciesAsync(dependentScript.Dependencies, dependentScript.LanguageId, cancellationToken);
+
+            await WithAnalysisLockAsync(dep, async () =>
+            {
+                ApplyDependencySnapshot(dependentScript, snapshot);
+                await dependentScript.AnalyseAsync(snapshot.ExportedSymbols, cancellationToken);
+                await PublishDiagnosticsAsync(dep, dependentScript, cancellationToken: cancellationToken);
+            });
+        }
+    }
+
+    // Entry point used by workspace/didChangeWatchedFiles
+    public async Task HandleWatchedFilesChangedAsync(IEnumerable<FileEvent> changes, CancellationToken cancellationToken)
+    {
+        foreach (var change in changes)
+        {
+            var docUri = change.Uri;
+
+            switch (change.Type)
+            {
+                case FileChangeType.Created:
+                case FileChangeType.Changed:
+                {
+                    // If this file is open in the editor, let textDocument/didChange|didSave handle it
+                    if (Scripts.TryGetValue(docUri, out var cached) && cached.Type == CachedScriptType.Editor)
+                    {
+                        continue;
+                    }
+
+                    // Index (parse + analyse) and publish diagnostics
+                    try
+                    {
+                        string path = docUri.ToUri().LocalPath;
+                        if (File.Exists(path))
+                        {
+                            await IndexFileAsync(path, cancellationToken);
+                            // Refresh dependents that reference this file
+                            await RefreshDependentsAsync(docUri, cancellationToken);
+                        }
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to index changed file {Path}", docUri.GetFileSystemPath());
+                    }
+                    break;
+                }
+                case FileChangeType.Deleted:
+                {
+                    try
+                    {
+                        await RemoveScriptAndRefreshDependentsAsync(docUri, cancellationToken);
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to remove deleted file {Path}", docUri.GetFileSystemPath());
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // =====================
+    // Additional public APIs expected by handlers
+    // =====================
+
     public void RemoveEditor(TextDocumentIdentifier document)
     {
         DocumentUri documentUri = document.Uri;
@@ -195,10 +356,6 @@ public class ScriptManager
         return script.Script;
     }
 
-    /// <summary>
-    /// Try to find a symbol (function or class) in any cached script. If ns is provided, search that namespace first.
-    /// Returns a Location or null.
-    /// </summary>
     public Location? FindSymbolLocation(string? ns, string name)
     {
         foreach (KeyValuePair<DocumentUri, CachedScript> kvp in Scripts)
@@ -240,37 +397,6 @@ public class ScriptManager
         return null;
     }
 
-#if PREVIEW
-    private async Task<IEnumerable<IExportedSymbol>> AddEditorDependenciesAsync(Uri editorUri, List<Uri> dependencyUris)
-    {
-        List<Task<IEnumerable<IExportedSymbol>>> scriptTasks = new(dependencyUris.Count);
-
-        // Wait for all dependencies to finish processing if they haven't already, then get their exported symbols.
-        foreach (Uri dependency in dependencyUris)
-        {
-            Script script = AddDependency(editorUri, dependency);
-
-            scriptTasks.Add(script.IssueExportedSymbolsAsync());
-        }
-
-        // Wait for all tasks to complete and collect their results
-        IEnumerable<IExportedSymbol>[] results = await Task.WhenAll(scriptTasks);
-
-        // Merge all exported symbols into a single IEnumerable
-        IEnumerable<IExportedSymbol> merged;
-        if (results.Length > 0)
-        {
-            merged = results.Aggregate((acc, e) => acc.Union(e));
-        }
-        else
-        {
-            merged = Array.Empty<IExportedSymbol>();
-        }
-
-        return merged;
-    }
-#endif
-
     private async Task EnsureParsedAsync(DocumentUri docUri, Script script, string? languageId, CancellationToken cancellationToken)
     {
         var gate = _parseLocks.GetOrAdd(docUri, _ => new SemaphoreSlim(1, 1));
@@ -284,6 +410,22 @@ public class ScriptManager
                 string content = await File.ReadAllTextAsync(path, cancellationToken);
                 await script.ParseAsync(content);
             }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task ParseFromDiskAsync(DocumentUri docUri, Script script, CancellationToken cancellationToken)
+    {
+        var gate = _parseLocks.GetOrAdd(docUri, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            string path = docUri.ToUri().LocalPath;
+            string content = await File.ReadAllTextAsync(path, cancellationToken);
+            await script.ParseAsync(content);
         }
         finally
         {
@@ -358,18 +500,26 @@ public class ScriptManager
             };
         }
 
-        CachedScript script = Scripts[uri];
+        CachedScript cached = Scripts[uri];
 
-        if (script.Type != CachedScriptType.Editor)
+        if (cached.Type != CachedScriptType.Editor)
         {
-            script = Scripts[uri] = new CachedScript()
+            // Preserve existing dependents when promoting to editor
+            var dependents = cached.Dependents;
+            var newCached = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
                 Script = new Script(uri, languageId ?? "gsc")
             };
+            foreach (var kv in dependents)
+            {
+                newCached.Dependents.TryAdd(kv.Key, 0);
+            }
+            Scripts[uri] = newCached;
+            cached = newCached;
         }
 
-        return script.Script;
+        return cached.Script;
     }
 
     public IEnumerable<LoadedScript> GetLoadedScripts()
@@ -456,7 +606,8 @@ public class ScriptManager
             Script = new Script(key, languageId)
         });
 
-        await EnsureParsedAsync(docUri, cached.Script, languageId, cancellationToken);
+        // Always parse fresh from disk for indexed files
+        await ParseFromDiskAsync(docUri, cached.Script, cancellationToken);
 
         // Parse and include dependencies
         foreach (Uri dep in cached.Script.Dependencies)

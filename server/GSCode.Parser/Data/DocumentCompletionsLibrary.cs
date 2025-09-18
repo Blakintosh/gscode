@@ -30,6 +30,13 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
             return [];
         }
 
+        // Suppress completions until we're inside a block (e.g., a function body).
+        // This prevents showing items while typing "function abc" or "function abc()".
+        if (!IsInsideAnyBlock(token))
+        {
+            return [];
+        }
+
         // For the moment, we'll just support Identifier completions.
         // CompletionContext context = AnalyseCompletionContext(token, position);
         CompletionContext context = new()
@@ -53,6 +60,39 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         // return token.SenseDefinition?.GetCompletions();
         return new CompletionList(completions);
+    }
+
+    private static bool IsInsideAnyBlock(Token token)
+    {
+        // Walk to the first token
+        Token first = token;
+        while (first.Previous is not null)
+        {
+            first = first.Previous;
+        }
+
+        // Track brace nesting up to the caret token
+        int braceDepth = 0;
+        Token? cur = first;
+        while (cur is not null)
+        {
+            if (cur.Type == TokenType.OpenBrace)
+            {
+                braceDepth++;
+            }
+            else if (cur.Type == TokenType.CloseBrace && braceDepth > 0)
+            {
+                braceDepth--;
+            }
+
+            if (ReferenceEquals(cur, token))
+            {
+                break;
+            }
+            cur = cur.Next;
+        }
+
+        return braceDepth > 0;
     }
 
     private List<CompletionItem> GetGlobalScopeCompletions(CompletionContext context)
@@ -80,9 +120,9 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         // Add GSC/CSC keywords
         string[] keywords = {
-            "class", "return", "wait", "thread", "classes", "if", "else", "do", "while", 
-            "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend", 
-            "switch", "case", "default", "break", "continue", "notify", "endon", 
+            "class", "return", "wait", "thread", "classes", "if", "else", "do", "while",
+            "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend",
+            "switch", "case", "default", "break", "continue", "notify", "endon",
             "waitrealtime", "profilestart", "profilestop", "isdefined",
             // Additional keywords
             "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
@@ -107,7 +147,7 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         if ((context.Filter ?? "").StartsWith("#"))
         {
             string[] directives = {
-                "#using", "#insert", "#namespace", "#using_animtree", "#precache", 
+                "#using", "#insert", "#namespace", "#using_animtree", "#precache",
                 "#define", "#if", "#elif", "#else", "#endif"
             };
 
@@ -127,9 +167,9 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         }
 
         // Generate completions from identifiers that occur inside of the file
-        foreach(Token token in Tokens.GetAll())
+        foreach (Token token in Tokens.GetAll())
         {
-            if(token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))
+            if (token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))
             {
                 completions.Add(new CompletionItem()
                 {

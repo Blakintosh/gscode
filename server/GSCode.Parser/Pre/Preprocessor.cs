@@ -392,19 +392,10 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         string? resolvedInsertPath = Sense.ResolveInsertPath(filePath, path.Range!);
         Sense.AddInsertRegion(path.Range!, filePath, resolvedInsertPath);
 
-        // If the insert path could not be resolved, a diagnostic was already added in ResolveInsertPath.
-        // Remove the directive to avoid AST errors and return early to prevent a duplicate diagnostic.
-        if (resolvedInsertPath is null)
+        // If resolved, also add as a dependency so LSP knows who depends on this header
+        if (resolvedInsertPath is not null)
         {
-            if (terminatorToken!.Type == TokenType.Semicolon)
-            {
-                ConnectTokens(insertToken.Previous, terminatorToken.Next);
-            }
-            else
-            {
-                ConnectTokens(insertToken.Previous, terminatorToken!.Previous);
-            }
-            return;
+            try { Sense.AddDependency(resolvedInsertPath); } catch { }
         }
 
         // Get the file contents

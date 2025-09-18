@@ -77,14 +77,9 @@ LanguageServer server = await LanguageServer.From(options =>
 				return new ScriptManager(logger, facade);
 			});
 			services.AddSingleton(new TextDocumentSelector(
-				new TextDocumentFilter()
-				{
-					Pattern = "**/*.gsc"
-				},
-				new TextDocumentFilter()
-				{
-					Pattern = "**/*.csc"
-				}
+				new TextDocumentFilter { Pattern = "**/*.gsc" },
+				new TextDocumentFilter { Pattern = "**/*.csc" },
+				new TextDocumentFilter { Pattern = "**/*.gsh" }
 			));
 		})
 		.OnInitialize(async (server, request, ct) =>
@@ -149,7 +144,8 @@ LanguageServer server = await LanguageServer.From(options =>
 		.AddHandler<DefinitionHandler>()
 		.AddHandler<DocumentSymbolHandler>()
 		.AddHandler<SignatureHelpHandler>()
-		.AddHandler<ReferencesHandler>();
+		.AddHandler<ReferencesHandler>()
+		.AddHandler<WorkspaceDidChangeWatchedFilesHandler>();
 	// Allow disposal of the stream if required.
 	if (disposable is not null)
 	{

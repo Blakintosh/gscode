@@ -40,7 +40,34 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public DefinitionsTable? DefinitionsTable { get; private set; } = default;
 
-    public IEnumerable<Uri> Dependencies => DefinitionsTable?.Dependencies ?? [];
+    // Combine dependency sources: DefinitionsTable (e.g., #using) + preprocessor inserts via Sense
+    public IEnumerable<Uri> Dependencies
+    {
+        get
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var list = new List<Uri>();
+            if (DefinitionsTable?.Dependencies is not null)
+            {
+                foreach (var u in DefinitionsTable.Dependencies)
+                {
+                    if (u is null) continue;
+                    string s = u.ToString();
+                    if (set.Add(s)) list.Add(u);
+                }
+            }
+            if (Sense is not null)
+            {
+                foreach (var u in Sense.Dependencies)
+                {
+                    if (u is null) continue;
+                    string s = u.ToString();
+                    if (set.Add(s)) list.Add(u.ToUri());
+                }
+            }
+            return list;
+        }
+    }
 
     // Expose macro outlines for outliner without exposing Sense outside assembly
     public IReadOnlyList<MacroOutlineItem> MacroOutlines => Sense == null ? Array.Empty<MacroOutlineItem>() : (IReadOnlyList<MacroOutlineItem>)Sense.MacroOutlines;
@@ -82,6 +109,18 @@ public class Script(DocumentUri ScriptUri, string languageId)
         var api = TryGetApi();
         return api is not null && api.GetApiFunction(name) is not null;
     }
+
+    // Keywords list duplicated from DocumentCompletionsLibrary.cs for SPA filtering purposes
+    private static readonly HashSet<string> s_completionKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "class", "return", "wait", "thread", "classes", "if", "else", "do", "while",
+        "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend",
+        "switch", "case", "default", "break", "continue", "notify", "endon",
+        "waitrealtime", "profilestart", "profilestop", "isdefined",
+        // Additional keywords
+        "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
+        "var", "const", "function", "private", "autoexec", "constructor", "destructor"
+    };
 
     public async Task ParseAsync(string documentText)
     {

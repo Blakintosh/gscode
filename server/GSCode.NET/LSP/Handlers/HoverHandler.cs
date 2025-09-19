@@ -33,7 +33,7 @@ internal class HoverHandler : HoverHandlerBase
 
     public override async Task<Hover?> Handle(HoverParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Hover request received, processing...");
+        _logger.LogDebug("Hover request start");
         var sw = Stopwatch.StartNew();
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
         Hover? result = null;
@@ -44,7 +44,7 @@ internal class HoverHandler : HoverHandlerBase
         }
         sw.Stop();
 
-        _logger.LogInformation("Hover processed in {ElapsedMs} ms. Has result: {Has}", sw.ElapsedMilliseconds, result != null);
+        _logger.LogDebug("Hover finished in {ElapsedMs} ms (hasResult={Has})", sw.ElapsedMilliseconds, result != null);
         return result;
     }
 

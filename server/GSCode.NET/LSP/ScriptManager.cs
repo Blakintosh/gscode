@@ -289,44 +289,44 @@ public class ScriptManager
             {
                 case FileChangeType.Created:
                 case FileChangeType.Changed:
-                {
-                    // If this file is open in the editor, let textDocument/didChange|didSave handle it
-                    if (Scripts.TryGetValue(docUri, out var cached) && cached.Type == CachedScriptType.Editor)
                     {
-                        continue;
-                    }
-
-                    // Index (parse + analyse) and publish diagnostics
-                    try
-                    {
-                        string path = docUri.ToUri().LocalPath;
-                        if (File.Exists(path))
+                        // If this file is open in the editor, let textDocument/didChange|didSave handle it
+                        if (Scripts.TryGetValue(docUri, out var cached) && cached.Type == CachedScriptType.Editor)
                         {
-                            await IndexFileAsync(path, cancellationToken);
-                            // Refresh dependents that reference this file
-                            await RefreshDependentsAsync(docUri, cancellationToken);
+                            continue;
                         }
+
+                        // Index (parse + analyse) and publish diagnostics
+                        try
+                        {
+                            string path = docUri.ToUri().LocalPath;
+                            if (File.Exists(path))
+                            {
+                                await IndexFileAsync(path, cancellationToken);
+                                // Refresh dependents that reference this file
+                                await RefreshDependentsAsync(docUri, cancellationToken);
+                            }
+                        }
+                        catch (OperationCanceledException) { }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to index changed file {Path}", docUri.GetFileSystemPath());
+                        }
+                        break;
                     }
-                    catch (OperationCanceledException) { }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to index changed file {Path}", docUri.GetFileSystemPath());
-                    }
-                    break;
-                }
                 case FileChangeType.Deleted:
-                {
-                    try
                     {
-                        await RemoveScriptAndRefreshDependentsAsync(docUri, cancellationToken);
+                        try
+                        {
+                            await RemoveScriptAndRefreshDependentsAsync(docUri, cancellationToken);
+                        }
+                        catch (OperationCanceledException) { }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to remove deleted file {Path}", docUri.GetFileSystemPath());
+                        }
+                        break;
                     }
-                    catch (OperationCanceledException) { }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to remove deleted file {Path}", docUri.GetFileSystemPath());
-                    }
-                    break;
-                }
             }
         }
     }
@@ -549,12 +549,10 @@ public class ScriptManager
                 .Where(p => p.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase) ||
                             p.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
 
-#if DEBUG
-            _logger.LogInformation("Indexing workspace under {Root}", rootDirectory);
+            _logger.LogDebug("Indexing workspace under {Root}", rootDirectory);
             int count = files.Count(); // enumerates, but does not materialize the list
             _logger.LogInformation("Indexing started: {Count} files", count);
             var swAll = Stopwatch.StartNew();
-#endif
 
             int maxDegree = Math.Max(1, Environment.ProcessorCount - 1);
             var po = new ParallelOptions
@@ -565,18 +563,14 @@ public class ScriptManager
 
             await Parallel.ForEachAsync(files, po, async (file, ct) =>
             {
-#if DEBUG
                 var fileSw = Stopwatch.StartNew();
                 string rel = Path.GetRelativePath(rootDirectory, file);
-                _logger.LogInformation("Indexing {File}", rel);
-#endif
+                _logger.LogDebug("Indexing {File}", rel);
                 try
                 {
                     await IndexFileAsync(file, ct);
-#if DEBUG
                     fileSw.Stop();
-                    _logger.LogInformation("Indexed {File} in {ElapsedMs} ms", rel, fileSw.ElapsedMilliseconds);
-#endif
+                    _logger.LogDebug("Indexed {File} in {ElapsedMs} ms", rel, fileSw.ElapsedMilliseconds);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
@@ -585,10 +579,8 @@ public class ScriptManager
                 }
             });
 
-#if DEBUG
             swAll.Stop();
-            _logger.LogInformation("Indexing finished in {ElapsedMs} ms", swAll.ElapsedMilliseconds);
-#endif
+            _logger.LogDebug("Indexing finished in {ElapsedMs} ms", swAll.ElapsedMilliseconds);
         }
         catch (OperationCanceledException) { }
     }

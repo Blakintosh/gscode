@@ -24,16 +24,14 @@ internal sealed class WorkspaceDidChangeWatchedFilesHandler : DidChangeWatchedFi
 
     public override async Task<Unit> Handle(DidChangeWatchedFilesParams request, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("workspace/didChangeWatchedFiles received with {Count} change(s).", request.Changes.Count());
-
-        // Forward changes to script manager to re-index and refresh dependents
+        _logger.LogDebug("WatchedFiles change start (count={Count})", request.Changes.Count());
         await _scriptManager.HandleWatchedFilesChangedAsync(request.Changes, cancellationToken);
+        _logger.LogDebug("WatchedFiles change finished");
         return Unit.Value;
     }
 
     protected override DidChangeWatchedFilesRegistrationOptions CreateRegistrationOptions(DidChangeWatchedFilesCapability capability, ClientCapabilities clientCapabilities)
     {
-        // Watch GSC/CSC scripts and GSH headers (inserted files)
         return new DidChangeWatchedFilesRegistrationOptions
         {
             Watchers = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.FileSystemWatcher>(

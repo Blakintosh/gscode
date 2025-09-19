@@ -84,7 +84,12 @@ export function activate(context: ExtensionContext) {
                 scheme: "file",
                 language: "csc",
                 pattern: "**/*.csc",
-            }
+            },
+            {
+                scheme: "file",
+                language: "gsc",
+                pattern: "**/*.gsh",
+            },
         ],
         progressOnInitialization: true,
         initializationOptions: {
@@ -93,7 +98,7 @@ export function activate(context: ExtensionContext) {
         },
         synchronize: {
             // Synchronize the setting section 'languageServerExample' to the server
-            configurationSection: "gsc",
+            configurationSection: ["gscode"],
             fileEvents: [
                 gscWatcher,
                 cscWatcher,
@@ -114,6 +119,19 @@ export function activate(context: ExtensionContext) {
     // client can be deactivated on extension deactivation
     client.start();
 }
+
+vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('gscode.disableIndexOnInitialize')) {
+        vscode.window.showInformationMessage(
+            'Changing gscode.disableIndexOnInitialize requires reloading the GSCode language server.',
+            'Reload'
+        ).then(sel => {
+            if (sel === 'Reload') {
+                vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+        });
+    }
+});
 
 export function deactivate(): Thenable<void> | undefined {
     if (!client) {

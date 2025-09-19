@@ -47,7 +47,7 @@ public class TextDocumentSyncHandler : ITextDocumentSyncHandler
 
     public async Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Document changed");
+        _logger.LogDebug("Document change start");
         var sw = Stopwatch.StartNew();
         var diagnostics = ImmutableArray<Diagnostic>.Empty.ToBuilder();
 
@@ -65,13 +65,13 @@ public class TextDocumentSyncHandler : ITextDocumentSyncHandler
             Version = request.TextDocument.Version
         });
         sw.Stop();
-        _logger.LogInformation("Document change processed in {ElapsedMs} ms with {DiagCount} diagnostics", sw.ElapsedMilliseconds, diagnostics.Count);
+        _logger.LogDebug("Document change finished in {ElapsedMs} ms (diagnostics={DiagCount})", sw.ElapsedMilliseconds, diagnostics.Count);
         return Unit.Value;
     }
 
     public async Task<Unit> Handle(DidOpenTextDocumentParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Document opened");
+        _logger.LogDebug("Document open start");
         var sw = Stopwatch.StartNew();
         IEnumerable<Diagnostic> resultingDiagnostics = await _scriptManager.AddEditorAsync(request.TextDocument, cancellationToken);
 
@@ -82,23 +82,23 @@ public class TextDocumentSyncHandler : ITextDocumentSyncHandler
             Version = request.TextDocument.Version
         });
         sw.Stop();
-        _logger.LogInformation("Document open processed in {ElapsedMs} ms with {DiagCount} diagnostics", sw.ElapsedMilliseconds, resultingDiagnostics.Count());
+        _logger.LogDebug("Document open finished in {ElapsedMs} ms (diagnostics={DiagCount})", sw.ElapsedMilliseconds, resultingDiagnostics.Count());
         return Unit.Value;
     }
 
     public Task<Unit> Handle(DidCloseTextDocumentParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Document closed");
+        _logger.LogDebug("Document close start");
         var sw = Stopwatch.StartNew();
         _scriptManager.RemoveEditor(request.TextDocument);
         sw.Stop();
-        _logger.LogInformation("Document close processed in {ElapsedMs} ms", sw.ElapsedMilliseconds);
+        _logger.LogDebug("Document close finished in {ElapsedMs} ms", sw.ElapsedMilliseconds);
         return Unit.Task;
     }
 
     public async Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Document saved");
+        _logger.LogDebug("Document save start");
         var sw = Stopwatch.StartNew();
 
         var diagnostics = await _scriptManager.RefreshEditorOnSaveAsync(request.TextDocument, cancellationToken);
@@ -107,11 +107,11 @@ public class TextDocumentSyncHandler : ITextDocumentSyncHandler
         {
             Diagnostics = new Container<Diagnostic>(diagnostics.ToArray()),
             Uri = request.TextDocument.Uri,
-            Version = null // Fix: TextDocumentIdentifier does not have Version
+            Version = null // TextDocumentIdentifier does not have Version
         });
 
         sw.Stop();
-        _logger.LogInformation("Document save processed in {ElapsedMs} ms with {DiagCount} diagnostics", sw.ElapsedMilliseconds, diagnostics.Count());
+        _logger.LogDebug("Document save finished in {ElapsedMs} ms (diagnostics={DiagCount})", sw.ElapsedMilliseconds, diagnostics.Count());
         return Unit.Value;
     }
 

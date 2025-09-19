@@ -101,7 +101,7 @@
 		"configuration": {
 			"title": "GSCode",
 			"properties": {
-				"gsc.trace.server": {
+				"gscode.trace.server": {
 					"scope": "window",
 					"type": "string",
 					"enum": [
@@ -114,7 +114,8 @@
 				"gscode.disableIndexOnInitialize": {
 					"type": "boolean",
 					"default": false,
-					"description": "If true, the language server will not index the workspace during startup."
+					"description": "Skip indexing the workspace during language server initialize. Changing this requires reload.",
+					"scope": "window"
 				}
 			}
 		}

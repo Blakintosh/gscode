@@ -29,27 +29,25 @@ internal class DefinitionHandler : DefinitionHandlerBase
 
     public override async Task<LocationOrLocationLinks> Handle(DefinitionParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Definition request received, processing...");
+        _logger.LogDebug("Definition request start");
         var sw = Stopwatch.StartNew();
 
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
         if (script is null)
         {
             sw.Stop();
-            _logger.LogInformation("Definition finished in {ElapsedMs} ms: no script", sw.ElapsedMilliseconds);
+            _logger.LogDebug("Definition abort (no script) in {ElapsedMs} ms", sw.ElapsedMilliseconds);
             return new LocationOrLocationLinks();
         }
 
-        // Try local script lookup first
         Location? location = await script.GetDefinitionAsync(request.Position, cancellationToken);
         if (location is not null)
         {
             sw.Stop();
-            _logger.LogInformation("Definition resolved locally in {ElapsedMs} ms: {uri}:{range}", sw.ElapsedMilliseconds, location.Uri, location.Range);
+            _logger.LogDebug("Definition local resolved in {ElapsedMs} ms: {Uri}:{Range}", sw.ElapsedMilliseconds, location.Uri, location.Range);
             return new LocationOrLocationLinks(location);
         }
 
-        // If not found locally, get the qualified identifier using published API
         var qual = await script.GetQualifiedIdentifierAtAsync(request.Position, cancellationToken);
         string? ns = qual?.qualifier;
         string name = qual?.name ?? "";
@@ -57,11 +55,10 @@ internal class DefinitionHandler : DefinitionHandlerBase
         if (string.IsNullOrEmpty(name))
         {
             sw.Stop();
-            _logger.LogInformation("Definition finished in {ElapsedMs} ms: no identifier", sw.ElapsedMilliseconds);
+            _logger.LogDebug("Definition unresolved (no identifier) in {ElapsedMs} ms", sw.ElapsedMilliseconds);
             return new LocationOrLocationLinks();
         }
 
-        // If it's a builtin API function, do not return a file location
         try
         {
             ScriptAnalyserData api = new(script.LanguageId);
@@ -69,7 +66,7 @@ internal class DefinitionHandler : DefinitionHandlerBase
             if (apiFn is not null)
             {
                 sw.Stop();
-                _logger.LogInformation("Definition finished in {ElapsedMs} ms: builtin API {name}", sw.ElapsedMilliseconds, name);
+                _logger.LogDebug("Definition identified builtin API '{Name}' in {ElapsedMs} ms", name, sw.ElapsedMilliseconds);
                 return new LocationOrLocationLinks();
             }
         }
@@ -82,20 +79,17 @@ internal class DefinitionHandler : DefinitionHandlerBase
         sw.Stop();
         if (remote is not null)
         {
-            // ensure URI is normalized consistently
-            var norm = PathUtils.NormalizeFilePath(remote.Uri.ToString());
-            var normalized = new Location { Uri = new Uri(norm), Range = remote.Range };
-            _logger.LogInformation("Definition resolved remotely in {ElapsedMs} ms: {uri}:{range}", sw.ElapsedMilliseconds, normalized.Uri, normalized.Range);
-            return new LocationOrLocationLinks(normalized);
+            _logger.LogDebug("Definition resolved remote in {ElapsedMs} ms: {Uri}:{Range}", sw.ElapsedMilliseconds, remote.Uri, remote.Range);
+            return new LocationOrLocationLinks(remote);
         }
 
-        _logger.LogInformation("Definition finished in {ElapsedMs} ms: not found for {name}", sw.ElapsedMilliseconds, name);
+        _logger.LogDebug("Definition not found in {ElapsedMs} ms (ns={Ns}, name={Name})", sw.ElapsedMilliseconds, ns, name);
         return new LocationOrLocationLinks();
     }
 
     protected override DefinitionRegistrationOptions CreateRegistrationOptions(DefinitionCapability capability, ClientCapabilities clientCapabilities)
     {
-        return new DefinitionRegistrationOptions()
+        return new DefinitionRegistrationOptions
         {
             DocumentSelector = _document_selector
         };

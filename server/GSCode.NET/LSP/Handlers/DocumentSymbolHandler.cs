@@ -42,7 +42,6 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
 
     private static Range ComputeContainerRange(List<DocumentSymbol> children)
     {
-        // children is never empty when called
         var start = children[0].Range.Start;
         var end = children[0].Range.End;
 
@@ -63,25 +62,23 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>());
         }
 
-        _logger.LogInformation("DocumentSymbol (outline) request received");
+        _logger.LogDebug("DocumentSymbol request start");
         var sw = Stopwatch.StartNew();
 
         Script? script = _script_manager.GetParsedEditor(request.TextDocument);
         if (script is null || script.DefinitionsTable is null)
         {
             sw.Stop();
-            _logger.LogInformation("DocumentSymbol finished in {ElapsedMs} ms: no script or no definitions", sw.ElapsedMilliseconds);
+            _logger.LogDebug("DocumentSymbol abort (no script/definitions) in {ElapsedMs} ms", sw.ElapsedMilliseconds);
             return new SymbolInformationOrDocumentSymbolContainer(new Container<SymbolInformationOrDocumentSymbol>());
         }
 
         string currentPath = PathUtils.NormalizeFilePath(request.TextDocument.Uri.ToUri().LocalPath);
 
-        // Collect by type
         List<DocumentSymbol> classNodes = new();
         foreach (var kv in script.DefinitionsTable.GetAllClassLocations())
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             var key = kv.Key; var val = kv.Value;
             string filePath = PathUtils.NormalizeFilePath(val.FilePath ?? string.Empty);
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
@@ -102,7 +99,6 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
         foreach (var kv in script.DefinitionsTable.GetAllFunctionLocations())
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             var key = kv.Key; var val = kv.Value;
             string filePath = PathUtils.NormalizeFilePath(val.FilePath ?? string.Empty);
             if (!string.Equals(filePath, currentPath, System.StringComparison.OrdinalIgnoreCase))
@@ -126,7 +122,6 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             foreach (var m in script.MacroOutlines)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 string detail = (m.SourceDisplay is null || m.SourceDisplay.Length == 0) ? "#define" : m.SourceDisplay;
                 macroNodes.Add(new DocumentSymbol
                 {
@@ -139,63 +134,32 @@ internal class DocumentSymbolHandler : DocumentSymbolHandlerBase
             }
         }
 
-        // Build grouped root nodes (separates by type)
         List<DocumentSymbol> root = new(capacity: 3);
 
         if (classNodes.Count > 0)
         {
-            if (classNodes.Count > 1)
-            {
-                classNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
-            }
+            if (classNodes.Count > 1) classNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
             var range = ComputeContainerRange(classNodes);
-            root.Add(new DocumentSymbol
-            {
-                Name = "Classes",
-                Kind = LspSymbolKind.Namespace,
-                Range = range,
-                SelectionRange = range,
-                Children = classNodes
-            });
+            root.Add(new DocumentSymbol { Name = "Classes", Kind = LspSymbolKind.Namespace, Range = range, SelectionRange = range, Children = classNodes });
         }
 
         if (functionNodes.Count > 0)
         {
-            if (functionNodes.Count > 1)
-            {
-                functionNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
-            }
+            if (functionNodes.Count > 1) functionNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
             var range = ComputeContainerRange(functionNodes);
-            root.Add(new DocumentSymbol
-            {
-                Name = "Functions",
-                Kind = LspSymbolKind.Namespace,
-                Range = range,
-                SelectionRange = range,
-                Children = functionNodes
-            });
+            root.Add(new DocumentSymbol { Name = "Functions", Kind = LspSymbolKind.Namespace, Range = range, SelectionRange = range, Children = functionNodes });
         }
 
         if (macroNodes.Count > 0)
         {
-            if (macroNodes.Count > 1)
-            {
-                macroNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
-            }
+            if (macroNodes.Count > 1) macroNodes.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.OrdinalIgnoreCase));
             var range = ComputeContainerRange(macroNodes);
-            root.Add(new DocumentSymbol
-            {
-                Name = "Macros",
-                Kind = LspSymbolKind.Namespace,
-                Range = range,
-                SelectionRange = range,
-                Children = macroNodes
-            });
+            root.Add(new DocumentSymbol { Name = "Macros", Kind = LspSymbolKind.Namespace, Range = range, SelectionRange = range, Children = macroNodes });
         }
 
         int totalSymbols = classNodes.Count + functionNodes.Count + macroNodes.Count;
         sw.Stop();
-        _logger.LogInformation("DocumentSymbol finished in {ElapsedMs} ms: {Count} symbols", sw.ElapsedMilliseconds, totalSymbols);
+        _logger.LogDebug("DocumentSymbol finished in {ElapsedMs} ms (count={Count})", sw.ElapsedMilliseconds, totalSymbols);
 
         var union = new List<SymbolInformationOrDocumentSymbol>(root.Count);
         for (int i = 0; i < root.Count; i++)

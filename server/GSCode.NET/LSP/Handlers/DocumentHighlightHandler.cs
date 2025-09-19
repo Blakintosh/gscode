@@ -19,14 +19,14 @@ internal sealed class DocumentHighlightHandler(
 
     public override async Task<DocumentHighlightContainer?> Handle(DocumentHighlightParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("DocumentHighlight request received, processing...");
+        _logger.LogDebug("DocumentHighlight request start");
         var sw = Stopwatch.StartNew();
 
         var script = _scriptManager.GetParsedEditor(request.TextDocument);
         if (script is null)
         {
             sw.Stop();
-            _logger.LogInformation("DocumentHighlight finished in {ElapsedMs} ms: no script", sw.ElapsedMilliseconds);
+            _logger.LogDebug("DocumentHighlight abort (no script) in {ElapsedMs} ms", sw.ElapsedMilliseconds);
             return new DocumentHighlightContainer();
         }
 
@@ -63,7 +63,7 @@ internal sealed class DocumentHighlightHandler(
             }
 
             sw.Stop();
-            _logger.LogInformation("DocumentHighlight finished in {ElapsedMs} ms (local variable). Highlights: {Count}", sw.ElapsedMilliseconds, localHighlights.Count);
+            _logger.LogDebug("DocumentHighlight local variable in {ElapsedMs} ms (count={Count})", sw.ElapsedMilliseconds, localHighlights.Count);
             return new DocumentHighlightContainer(localHighlights);
         }
 
@@ -78,30 +78,22 @@ internal sealed class DocumentHighlightHandler(
         if (qid is null)
         {
             sw.Stop();
-            _logger.LogInformation("DocumentHighlight finished in {ElapsedMs} ms: no identifier", sw.ElapsedMilliseconds);
+            _logger.LogDebug("DocumentHighlight none (no identifier) in {ElapsedMs} ms", sw.ElapsedMilliseconds);
             return new DocumentHighlightContainer();
         }
 
-        string ns = qid.Value.qualifier ?? (script.DefinitionsTable?.CurrentNamespace ?? string.Empty);
-        string name = qid.Value.name;
-
-        // Collect declaration highlight if in this document
-        Range? declRange = script.DefinitionsTable?.GetFunctionLocation(ns, name)?.Range
-                        ?? script.DefinitionsTable?.GetClassLocation(ns, name)?.Range
-                        ?? script.DefinitionsTable?.GetFunctionLocationAnyNamespace(name)?.Range
-                        ?? script.DefinitionsTable?.GetClassLocationAnyNamespace(name)?.Range;
-
         var highlights = new List<DocumentHighlight>();
-        if (declRange is Range dr)
+        var decl = script.DefinitionsTable?.GetFunctionLocation(qid.Value.qualifier ?? string.Empty, qid.Value.name);
+        if (decl is not null)
         {
-            highlights.Add(new DocumentHighlight { Range = dr, Kind = DocumentHighlightKind.Write });
+            highlights.Add(new DocumentHighlight { Range = decl.Value.Range, Kind = DocumentHighlightKind.Write });
         }
 
         // Add all reference ranges from current script
         var keys = new List<GSCode.Parser.SA.SymbolKey>
         {
-            new(GSCode.Parser.SA.SymbolKind.Function, ns, name),
-            new(GSCode.Parser.SA.SymbolKind.Class, ns, name)
+            new(GSCode.Parser.SA.SymbolKind.Function, qid.Value.qualifier ?? string.Empty, qid.Value.name),
+            new(GSCode.Parser.SA.SymbolKind.Class, qid.Value.qualifier ?? string.Empty, qid.Value.name)
         };
 
         foreach (var key in keys)
@@ -111,9 +103,14 @@ internal sealed class DocumentHighlightHandler(
                 foreach (var r in ranges)
                 {
                     // Skip if it's the declaration range already added as write
-                    if (declRange is Range d && r.Start.Line == d.Start.Line && r.Start.Character == d.Start.Character && r.End.Line == d.End.Line && r.End.Character == d.End.Character)
+                    if (decl is not null)
                     {
-                        continue;
+                        var dRange = decl.Value.Range;
+                        if (r.Start.Line == dRange.Start.Line && r.Start.Character == dRange.Start.Character &&
+                            r.End.Line == dRange.End.Line && r.End.Character == dRange.End.Character)
+                        {
+                            continue; // skip duplicate of declaration
+                        }
                     }
                     highlights.Add(new DocumentHighlight { Range = r, Kind = DocumentHighlightKind.Read });
                 }
@@ -130,7 +127,7 @@ internal sealed class DocumentHighlightHandler(
         }
 
         sw.Stop();
-        _logger.LogInformation("DocumentHighlight finished in {ElapsedMs} ms. Highlights: {Count}", sw.ElapsedMilliseconds, highlights.Count);
+        _logger.LogDebug("DocumentHighlight finished in {ElapsedMs} ms (count={Count})", sw.ElapsedMilliseconds, highlights.Count);
         return new DocumentHighlightContainer(highlights);
     }
 

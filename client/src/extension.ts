@@ -6,6 +6,8 @@
 "use strict";
 
 import * as path from "path";
+import * as vscode from 'vscode';
+
 
 import { workspace, Disposable, ExtensionContext, window } from "vscode";
 import {
@@ -30,15 +32,15 @@ export function activate(context: ExtensionContext) {
 
     dotenv.config({ path: path.join(context.extensionPath, ".env") });
 
-	// const serverModulePath = path.join('..', 'server', 'GSCode.NET', 'bin', 'Debug', 'net8.0', 'GSCode.NET.dll');
+    // const serverModulePath = path.join('..', 'server', 'GSCode.NET', 'bin', 'Debug', 'net8.0', 'GSCode.NET.dll');
     // const serverModule = context.asAbsolutePath(path.normalize(serverModulePath));
 
     // console.log(serverModule);
 
-	const serverLocation = process.env.VSCODE_DEBUG ? process.env.DEBUG_SERVER_LOCATION : "service";
-	if (!serverLocation) {
-		throw new Error("SERVER_LOCATION environment variable is not set. Please set it to the location of the GSCode.NET Language Server in .env");
-	}
+    const serverLocation = process.env.VSCODE_DEBUG ? process.env.DEBUG_SERVER_LOCATION : process.env.SERVER_LOCATION;
+    if (!serverLocation) {
+        throw new Error("SERVER_LOCATION environment variable is not set. Please set it to the location of the GSCode.NET Language Server in .env");
+    }
 
     console.log(context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll'))));
 
@@ -49,7 +51,7 @@ export function activate(context: ExtensionContext) {
         run: {
             command: serverExe,
             transport: TransportKind.pipe,
-			// args: [serverModule],
+            // args: [serverModule],
             args: [context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll')))],
             // args: [path.join(serverLocation, 'GSCode.NET.dll')],
         },
@@ -57,7 +59,7 @@ export function activate(context: ExtensionContext) {
         debug: {
             command: serverExe,
             transport: TransportKind.pipe,
-			// args: [serverModule],
+            // args: [serverModule],
             args: [context.asAbsolutePath(path.normalize(path.join(serverLocation, 'GSCode.NET.dll')))],
             // args: [path.join(serverLocation, 'GSCode.NET.exe')],
         },
@@ -65,6 +67,9 @@ export function activate(context: ExtensionContext) {
 
     const gscWatcher = workspace.createFileSystemWatcher("**/*.gsc");
     const cscWatcher = workspace.createFileSystemWatcher("**/*.csc");
+
+    const cfg = vscode.workspace.getConfiguration('gscode');
+    const disableIndexOnInitialize = cfg.get<boolean>('disableIndexOnInitialize', false);
 
     // Options to control the language client
     let clientOptions: LanguageClientOptions = {
@@ -79,17 +84,26 @@ export function activate(context: ExtensionContext) {
                 scheme: "file",
                 language: "csc",
                 pattern: "**/*.csc",
-            }
+            },
+            {
+                scheme: "file",
+                language: "gsc",
+                pattern: "**/*.gsh",
+            },
         ],
         progressOnInitialization: true,
+        initializationOptions: {
+            // The server reads this at initialize time
+            disableIndexOnInitialize
+        },
         synchronize: {
             // Synchronize the setting section 'languageServerExample' to the server
-            configurationSection: "gsc",
+            configurationSection: ["gscode"],
             fileEvents: [
                 gscWatcher,
                 cscWatcher,
             ],
-        }, 
+        },
         middleware: {
             didOpen: (document, next) => {
                 console.log("didOpen");
@@ -106,10 +120,22 @@ export function activate(context: ExtensionContext) {
     client.start();
 }
 
+vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('gscode.disableIndexOnInitialize')) {
+        vscode.window.showInformationMessage(
+            'Changing gscode.disableIndexOnInitialize requires reloading the GSCode language server.',
+            'Reload'
+        ).then(sel => {
+            if (sel === 'Reload') {
+                vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+        });
+    }
+});
 
 export function deactivate(): Thenable<void> | undefined {
-	if (!client) {
-		return undefined;
-	}
-	return client.stop();
+    if (!client) {
+        return undefined;
+    }
+    return client.stop();
 }

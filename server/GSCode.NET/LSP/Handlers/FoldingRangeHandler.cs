@@ -27,7 +27,7 @@ internal class FoldingRangeHandler(ILanguageServerFacade facade,
         CancellationToken cancellationToken
     )
     {
-        _logger.LogInformation("Folding range request received, processing...");
+        _logger.LogDebug("FoldingRange request start");
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
 
         Container<FoldingRange> result = new();
@@ -37,7 +37,7 @@ internal class FoldingRangeHandler(ILanguageServerFacade facade,
             result = new Container<FoldingRange>(await script.GetFoldingRangesAsync(cancellationToken));
         }
 
-        _logger.LogInformation("Folding range request processed. FoldingRange being sent: {result}", result.Count());
+        _logger.LogDebug("FoldingRange finished (count={Count})", result.Count());
         return result;
     }
 

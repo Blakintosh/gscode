@@ -14,6 +14,8 @@ using System.Threading; // added
 using System.Diagnostics; // added
 using OmniSharp.Extensions.LanguageServer.Protocol.Server; // added
 using OmniSharp.Extensions.LanguageServer.Protocol.Document; // added for PublishDiagnostics extension
+using GSCode.NET.Util;
+using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
 namespace GSCode.NET.LSP;
 
@@ -81,6 +83,18 @@ public class ScriptCache
         DocumentUri documentUri = document.Uri;
         Scripts.Remove(documentUri, out StringBuilder? value);
     }
+
+    // Expose current text for an editor doc (used to reparse dependents without losing unsaved edits)
+    public bool TryGetText(DocumentUri uri, out string text)
+    {
+        if (Scripts.TryGetValue(uri, out var sb))
+        {
+            text = sb.ToString();
+            return true;
+        }
+        text = string.Empty;
+        return false;
+    }
 }
 
 public enum CachedScriptType
@@ -98,6 +112,16 @@ public class CachedScript
 }
 
 public readonly record struct LoadedScript(DocumentUri Uri, Script Script);
+
+internal sealed class DependencySnapshot
+{
+    public List<IExportedSymbol> ExportedSymbols { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>> FunctionLocations { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>> ClassLocations { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), string[]>> FunctionParameters { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), string?>> FunctionDocs { get; } = new();
+    public List<KeyValuePair<(string Namespace, string Name), bool>> FunctionVarargs { get; } = new();
+}
 
 public class ScriptManager
 {
@@ -149,57 +173,167 @@ public class ScriptManager
 
         await Task.WhenAll(dependencyTasks);
 
-        // Build exported symbols
-        List<IExportedSymbol> exportedSymbols = new();
-        foreach (Uri dependency in script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dependency);
-            if (Scripts.TryGetValue(depDoc, out CachedScript? cachedScript))
-            {
-                await EnsureParsedAsync(depDoc, cachedScript.Script, script.LanguageId, cancellationToken);
-                exportedSymbols.AddRange(await cachedScript.Script.IssueExportedSymbolsAsync(cancellationToken));
-            }
-        }
-
-        // Snapshot dependency locations while locking each dependency individually
-        var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-        var mergeClassLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-        foreach (Uri dependency in script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dependency);
-            if (!Scripts.TryGetValue(depDoc, out CachedScript? depScript)) continue;
-            await WithAnalysisLockAsync(depDoc, async () =>
-            {
-                var depTable = depScript.Script.DefinitionsTable;
-                if (depTable is null) return;
-                mergeFuncLocs.AddRange(depTable.GetAllFunctionLocations());
-                mergeClassLocs.AddRange(depTable.GetAllClassLocations());
-                await Task.CompletedTask;
-            });
-        }
+        // Collect snapshot info and exported symbols from deps
+        var snapshot = await SnapshotDependenciesAsync(script.Dependencies, script.LanguageId, cancellationToken);
 
         // Merge + analyse under this script's analysis lock
         var thisDoc = DocumentUri.From(documentUri);
         await WithAnalysisLockAsync(thisDoc, async () =>
         {
-            if (script.DefinitionsTable is not null)
-            {
-                foreach (var kv in mergeFuncLocs)
-                {
-                    var key = kv.Key; var val = kv.Value;
-                    script.DefinitionsTable.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
-                }
-                foreach (var kv in mergeClassLocs)
-                {
-                    var key = kv.Key; var val = kv.Value;
-                    script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
-                }
-            }
-            await script.AnalyseAsync(exportedSymbols, cancellationToken);
+            ApplyDependencySnapshot(script, snapshot);
+            await script.AnalyseAsync(snapshot.ExportedSymbols, cancellationToken);
         });
 
         return await script.GetDiagnosticsAsync(cancellationToken);
     }
+
+    // Re-analyse current document on save; then refresh dependents so external references update
+    public async Task<IEnumerable<Diagnostic>> RefreshEditorOnSaveAsync(TextDocumentIdentifier document, CancellationToken cancellationToken = default)
+    {
+        var script = GetEditor(document);
+        string path = document.Uri.ToUri().LocalPath;
+
+        // Read saved content from disk
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
+
+        // Full re-parse + re-analysis (resets DefinitionsTable and references)
+        var diagnostics = await ProcessEditorAsync(document.Uri.ToUri(), script, content, cancellationToken);
+
+        // Publish diagnostics for the saved doc
+        await PublishDiagnosticsAsync(document.Uri, script, document is OptionalVersionedTextDocumentIdentifier v ? v.Version : null, cancellationToken);
+
+        // Refresh all dependents of this document to update their view of our DefinitionsTable
+        await RefreshDependentsAsync(document.Uri, cancellationToken);
+
+        return diagnostics;
+    }
+
+    // Parse from latest available source (editor buffer if open, otherwise disk)
+    private async Task ReparseFromLatestAsync(DocumentUri docUri, Script script, CancellationToken cancellationToken)
+    {
+        if (Scripts.TryGetValue(docUri, out var cached) &&
+            cached.Type == CachedScriptType.Editor &&
+            _cache.TryGetText(docUri, out var text) &&
+            !string.IsNullOrEmpty(text))
+        {
+            await script.ParseAsync(text);
+        }
+        else
+        {
+            await ParseFromDiskAsync(docUri, script, cancellationToken);
+        }
+    }
+
+    // In RefreshDependentsAsync: reparse each dependent from latest source, not just disk
+    private async Task RefreshDependentsAsync(DocumentUri savedDoc, CancellationToken cancellationToken)
+    {
+        if (!Scripts.TryGetValue(savedDoc, out var savedCached))
+            return;
+
+        foreach (var dep in savedCached.Dependents.Keys)
+        {
+            if (!Scripts.TryGetValue(dep, out var dependentCached))
+                continue;
+
+            var dependentScript = dependentCached.Script;
+
+            // Re-parse to rebuild macro outlines from #insert expansions
+            await ReparseFromLatestAsync(dep, dependentScript, cancellationToken);
+
+            var snapshot = await SnapshotDependenciesAsync(dependentScript.Dependencies, dependentScript.LanguageId, cancellationToken);
+
+            await WithAnalysisLockAsync(dep, async () =>
+            {
+                ApplyDependencySnapshot(dependentScript, snapshot);
+                await dependentScript.AnalyseAsync(snapshot.ExportedSymbols, cancellationToken);
+                await PublishDiagnosticsAsync(dep, dependentScript, cancellationToken: cancellationToken);
+            });
+        }
+    }
+
+    // In RemoveScriptAndRefreshDependentsAsync: same change to ensure clean macro state
+    private async Task RemoveScriptAndRefreshDependentsAsync(DocumentUri docUri, CancellationToken cancellationToken)
+    {
+        if (!Scripts.Remove(docUri, out CachedScript? removed))
+            return;
+
+        foreach (var dep in removed.Dependents.Keys)
+        {
+            if (!Scripts.TryGetValue(dep, out var dependentCached))
+                continue;
+
+            var dependentScript = dependentCached.Script;
+
+            // Re-parse dependent (buffer if open) to drop stale macros and rebuild outlines
+            await ReparseFromLatestAsync(dep, dependentScript, cancellationToken);
+
+            var snapshot = await SnapshotDependenciesAsync(dependentScript.Dependencies, dependentScript.LanguageId, cancellationToken);
+
+            await WithAnalysisLockAsync(dep, async () =>
+            {
+                ApplyDependencySnapshot(dependentScript, snapshot);
+                await dependentScript.AnalyseAsync(snapshot.ExportedSymbols, cancellationToken);
+                await PublishDiagnosticsAsync(dep, dependentScript, cancellationToken: cancellationToken);
+            });
+        }
+    }
+
+    // Entry point used by workspace/didChangeWatchedFiles
+    public async Task HandleWatchedFilesChangedAsync(IEnumerable<FileEvent> changes, CancellationToken cancellationToken)
+    {
+        foreach (var change in changes)
+        {
+            var docUri = change.Uri;
+
+            switch (change.Type)
+            {
+                case FileChangeType.Created:
+                case FileChangeType.Changed:
+                    {
+                        // If this file is open in the editor, let textDocument/didChange|didSave handle it
+                        if (Scripts.TryGetValue(docUri, out var cached) && cached.Type == CachedScriptType.Editor)
+                        {
+                            continue;
+                        }
+
+                        // Index (parse + analyse) and publish diagnostics
+                        try
+                        {
+                            string path = docUri.ToUri().LocalPath;
+                            if (File.Exists(path))
+                            {
+                                await IndexFileAsync(path, cancellationToken);
+                                // Refresh dependents that reference this file
+                                await RefreshDependentsAsync(docUri, cancellationToken);
+                            }
+                        }
+                        catch (OperationCanceledException) { }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to index changed file {Path}", docUri.GetFileSystemPath());
+                        }
+                        break;
+                    }
+                case FileChangeType.Deleted:
+                    {
+                        try
+                        {
+                            await RemoveScriptAndRefreshDependentsAsync(docUri, cancellationToken);
+                        }
+                        catch (OperationCanceledException) { }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to remove deleted file {Path}", docUri.GetFileSystemPath());
+                        }
+                        break;
+                    }
+            }
+        }
+    }
+
+    // =====================
+    // Additional public APIs expected by handlers
+    // =====================
 
     public void RemoveEditor(TextDocumentIdentifier document)
     {
@@ -222,10 +356,6 @@ public class ScriptManager
         return script.Script;
     }
 
-    /// <summary>
-    /// Try to find a symbol (function or class) in any cached script. If ns is provided, search that namespace first.
-    /// Returns a Location or null.
-    /// </summary>
     public Location? FindSymbolLocation(string? ns, string name)
     {
         foreach (KeyValuePair<DocumentUri, CachedScript> kvp in Scripts)
@@ -267,37 +397,6 @@ public class ScriptManager
         return null;
     }
 
-#if PREVIEW
-    private async Task<IEnumerable<IExportedSymbol>> AddEditorDependenciesAsync(Uri editorUri, List<Uri> dependencyUris)
-    {
-        List<Task<IEnumerable<IExportedSymbol>>> scriptTasks = new(dependencyUris.Count);
-
-        // Wait for all dependencies to finish processing if they haven't already, then get their exported symbols.
-        foreach (Uri dependency in dependencyUris)
-        {
-            Script script = AddDependency(editorUri, dependency);
-
-            scriptTasks.Add(script.IssueExportedSymbolsAsync());
-        }
-
-        // Wait for all tasks to complete and collect their results
-        IEnumerable<IExportedSymbol>[] results = await Task.WhenAll(scriptTasks);
-
-        // Merge all exported symbols into a single IEnumerable
-        IEnumerable<IExportedSymbol> merged;
-        if (results.Length > 0)
-        {
-            merged = results.Aggregate((acc, e) => acc.Union(e));
-        }
-        else
-        {
-            merged = Array.Empty<IExportedSymbol>();
-        }
-
-        return merged;
-    }
-#endif
-
     private async Task EnsureParsedAsync(DocumentUri docUri, Script script, string? languageId, CancellationToken cancellationToken)
     {
         var gate = _parseLocks.GetOrAdd(docUri, _ => new SemaphoreSlim(1, 1));
@@ -311,6 +410,22 @@ public class ScriptManager
                 string content = await File.ReadAllTextAsync(path, cancellationToken);
                 await script.ParseAsync(content);
             }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task ParseFromDiskAsync(DocumentUri docUri, Script script, CancellationToken cancellationToken)
+    {
+        var gate = _parseLocks.GetOrAdd(docUri, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            string path = docUri.ToUri().LocalPath;
+            string content = await File.ReadAllTextAsync(path, cancellationToken);
+            await script.ParseAsync(content);
         }
         finally
         {
@@ -385,18 +500,26 @@ public class ScriptManager
             };
         }
 
-        CachedScript script = Scripts[uri];
+        CachedScript cached = Scripts[uri];
 
-        if (script.Type != CachedScriptType.Editor)
+        if (cached.Type != CachedScriptType.Editor)
         {
-            script = Scripts[uri] = new CachedScript()
+            // Preserve existing dependents when promoting to editor
+            var dependents = cached.Dependents;
+            var newCached = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
                 Script = new Script(uri, languageId ?? "gsc")
             };
+            foreach (var kv in dependents)
+            {
+                newCached.Dependents.TryAdd(kv.Key, 0);
+            }
+            Scripts[uri] = newCached;
+            cached = newCached;
         }
 
-        return script.Script;
+        return cached.Script;
     }
 
     public IEnumerable<LoadedScript> GetLoadedScripts()
@@ -421,67 +544,45 @@ public class ScriptManager
                 return;
             }
 
-            // Collect files first for count and deterministic iteration
-            var filesList = Directory
+            var files = Directory
                 .EnumerateFiles(rootDirectory, "*.*", SearchOption.AllDirectories)
                 .Where(p => p.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase) ||
-                            p.EndsWith(".csc", StringComparison.OrdinalIgnoreCase))
-                .ToList();
+                            p.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
 
-#if DEBUG
-            _logger.LogInformation("Indexing workspace under {Root}", rootDirectory);
-            _logger.LogInformation("Indexing started: {Count} files", filesList.Count);
+            _logger.LogDebug("Indexing workspace under {Root}", rootDirectory);
+            int count = files.Count(); // enumerates, but does not materialize the list
+            _logger.LogInformation("Indexing started: {Count} files", count);
             var swAll = Stopwatch.StartNew();
-#endif
 
             int maxDegree = Math.Max(1, Environment.ProcessorCount - 1);
-            using SemaphoreSlim gate = new(maxDegree, maxDegree);
-            List<Task> tasks = new();
-
-            foreach (string file in filesList)
+            var po = new ParallelOptions
             {
-                await gate.WaitAsync(cancellationToken);
-                tasks.Add(Task.Run(async () =>
-                {
-#if DEBUG
-                    var fileSw = Stopwatch.StartNew();
-#endif
-                    string rel = Path.GetRelativePath(rootDirectory, file);
-                    try
-                    {
-#if DEBUG
-                        _logger.LogInformation("Indexing {File}", rel);
-#endif
-                        await IndexFileAsync(file, cancellationToken);
-#if DEBUG
-                        fileSw.Stop();
-                        _logger.LogInformation("Indexed {File} in {ElapsedMs} ms", rel, fileSw.ElapsedMilliseconds);
-#endif
-                    }
-                    catch (OperationCanceledException) { }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to index {File}", file);
-                    }
-                    finally
-                    {
-                        gate.Release();
-                    }
-                }, cancellationToken));
-            }
+                MaxDegreeOfParallelism = maxDegree,
+                CancellationToken = cancellationToken
+            };
 
-            await Task.WhenAll(tasks);
-#if DEBUG
+            await Parallel.ForEachAsync(files, po, async (file, ct) =>
+            {
+                var fileSw = Stopwatch.StartNew();
+                string rel = Path.GetRelativePath(rootDirectory, file);
+                _logger.LogDebug("Indexing {File}", rel);
+                try
+                {
+                    await IndexFileAsync(file, ct);
+                    fileSw.Stop();
+                    _logger.LogDebug("Indexed {File} in {ElapsedMs} ms", rel, fileSw.ElapsedMilliseconds);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to index {File}", file);
+                }
+            });
+
             swAll.Stop();
-            _logger.LogInformation("Indexing completed in {ElapsedMs} ms for {Count} files", swAll.ElapsedMilliseconds, filesList.Count);
-#endif
+            _logger.LogDebug("Indexing finished in {ElapsedMs} ms", swAll.ElapsedMilliseconds);
         }
-        catch (OperationCanceledException)
-        {
-#if DEBUG
-            _logger.LogInformation("Indexing cancelled");
-#endif
-        }
+        catch (OperationCanceledException) { }
     }
 
     private async Task IndexFileAsync(string filePath, CancellationToken cancellationToken)
@@ -497,7 +598,8 @@ public class ScriptManager
             Script = new Script(key, languageId)
         });
 
-        await EnsureParsedAsync(docUri, cached.Script, languageId, cancellationToken);
+        // Always parse fresh from disk for indexed files
+        await ParseFromDiskAsync(docUri, cached.Script, cancellationToken);
 
         // Parse and include dependencies
         foreach (Uri dep in cached.Script.Dependencies)
@@ -505,61 +607,14 @@ public class ScriptManager
             await AddDependencyAsync(docUri.ToUri(), dep, languageId);
         }
 
-        // Ensure dependencies are parsed before exporting/merging
-        foreach (Uri dep in cached.Script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dep);
-            if (Scripts.TryGetValue(depDoc, out CachedScript? depScript))
-            {
-                await EnsureParsedAsync(depDoc, depScript.Script, languageId, cancellationToken);
-            }
-        }
-
-        // Build exported symbols
-        List<IExportedSymbol> exportedSymbols = new();
-        foreach (Uri dep in cached.Script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dep);
-            if (Scripts.TryGetValue(depDoc, out CachedScript? depScript))
-            {
-                exportedSymbols.AddRange(await depScript.Script.IssueExportedSymbolsAsync(cancellationToken));
-            }
-        }
-
-        // Snapshot dependency locations under dep locks
-        var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-        var mergeClassLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-        foreach (Uri dep in cached.Script.Dependencies)
-        {
-            var depDoc = DocumentUri.From(dep);
-            if (!Scripts.TryGetValue(depDoc, out CachedScript? depScript)) continue;
-            await WithAnalysisLockAsync(depDoc, async () =>
-            {
-                var depTable = depScript.Script.DefinitionsTable;
-                if (depTable is null) return;
-                mergeFuncLocs.AddRange(depTable.GetAllFunctionLocations());
-                mergeClassLocs.AddRange(depTable.GetAllClassLocations());
-                await Task.CompletedTask;
-            });
-        }
+        // Snapshot dependency info and exported symbols
+        var snapshot = await SnapshotDependenciesAsync(cached.Script.Dependencies, languageId, cancellationToken);
 
         // Merge + analyse under this script's analysis lock
         await WithAnalysisLockAsync(docUri, async () =>
         {
-            if (cached.Script.DefinitionsTable is not null)
-            {
-                foreach (var kv in mergeFuncLocs)
-                {
-                    var key = kv.Key; var val = kv.Value;
-                    cached.Script.DefinitionsTable.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
-                }
-                foreach (var kv in mergeClassLocs)
-                {
-                    var key = kv.Key; var val = kv.Value;
-                    cached.Script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
-                }
-            }
-            await cached.Script.AnalyseAsync(exportedSymbols, cancellationToken);
+            ApplyDependencySnapshot(cached.Script, snapshot);
+            await cached.Script.AnalyseAsync(snapshot.ExportedSymbols, cancellationToken);
 
             // Publish diagnostics for indexed file (if LSP facade is available)
             await PublishDiagnosticsAsync(docUri, cached.Script, cancellationToken: cancellationToken);
@@ -582,6 +637,75 @@ public class ScriptManager
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish diagnostics for {Uri}", uri.GetFileSystemPath());
+        }
+    }
+
+    // Consolidated: snapshot dependency locations/metadata and exported symbols
+    private async Task<DependencySnapshot> SnapshotDependenciesAsync(IEnumerable<Uri> dependencies, string? languageId, CancellationToken cancellationToken)
+    {
+        var snapshot = new DependencySnapshot();
+        foreach (Uri dependency in dependencies)
+        {
+            var depDoc = DocumentUri.From(dependency);
+            if (Scripts.TryGetValue(depDoc, out CachedScript? depScript))
+            {
+                await EnsureParsedAsync(depDoc, depScript.Script, languageId ?? depScript.Script.LanguageId, cancellationToken);
+                // Collect exported symbols
+                snapshot.ExportedSymbols.AddRange(await depScript.Script.IssueExportedSymbolsAsync(cancellationToken));
+
+                // Snapshot table data under analysis lock
+                await WithAnalysisLockAsync(depDoc, async () =>
+                {
+                    var depTable = depScript.Script.DefinitionsTable;
+                    if (depTable is not null)
+                    {
+                        snapshot.FunctionLocations.AddRange(depTable.GetAllFunctionLocations());
+                        snapshot.ClassLocations.AddRange(depTable.GetAllClassLocations());
+                        snapshot.FunctionParameters.AddRange(depTable.GetAllFunctionParameters());
+                        snapshot.FunctionDocs.AddRange(depTable.GetAllFunctionDocs());
+                        snapshot.FunctionVarargs.AddRange(depTable.GetAllFunctionVarargs());
+                    }
+                    await Task.CompletedTask;
+                });
+            }
+        }
+        return snapshot;
+    }
+
+    // Consolidated: apply snapshot to a target script's DefinitionsTable
+    private static void ApplyDependencySnapshot(Script target, DependencySnapshot snapshot)
+    {
+        var table = target.DefinitionsTable;
+        if (table is null) return;
+
+        foreach (var kv in snapshot.FunctionLocations)
+        {
+            var key = kv.Key; var val = kv.Value;
+            table.AddFunctionLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+        }
+
+        foreach (var kv in snapshot.ClassLocations)
+        {
+            var key = kv.Key; var val = kv.Value;
+            table.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
+        }
+
+        foreach (var kv in snapshot.FunctionParameters)
+        {
+            var key = kv.Key; var vals = kv.Value;
+            table.RecordFunctionParameters(key.Namespace, key.Name, vals);
+        }
+
+        foreach (var kv in snapshot.FunctionDocs)
+        {
+            var key = kv.Key; var doc = kv.Value;
+            table.RecordFunctionDoc(key.Namespace, key.Name, doc);
+        }
+
+        foreach (var kv in snapshot.FunctionVarargs)
+        {
+            var key = kv.Key; var hasVararg = kv.Value;
+            table.RecordFunctionVararg(key.Namespace, key.Name, hasVararg);
         }
     }
 }

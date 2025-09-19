@@ -16,10 +16,10 @@
 		"Other"
 	],
 	"activationEvents": [
-	"onStartupFinished",
-	"workspaceContains:**/*.gsc",
-	"workspaceContains:**/*.csc",
-	"workspaceContains:**/*.gsh"
+		"onStartupFinished",
+		"workspaceContains:**/*.gsc",
+		"workspaceContains:**/*.csc",
+		"workspaceContains:**/*.gsh"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -101,7 +101,7 @@
 		"configuration": {
 			"title": "GSCode",
 			"properties": {
-				"gsc.trace.server": {
+				"gscode.trace.server": {
 					"scope": "window",
 					"type": "string",
 					"enum": [
@@ -110,6 +110,12 @@
 						"verbose"
 					],
 					"default": "off"
+				},
+				"gscode.disableIndexOnInitialize": {
+					"type": "boolean",
+					"default": false,
+					"description": "Skip indexing the workspace during language server initialize. Changing this requires reload.",
+					"scope": "window"
 				}
 			}
 		}

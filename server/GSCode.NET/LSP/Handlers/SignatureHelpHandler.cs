@@ -30,18 +30,20 @@ internal class SignatureHelpHandler : SignatureHelpHandlerBase
 
     public override async Task<SignatureHelp?> Handle(SignatureHelpParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("SignatureHelp request received, processing...");
+        _logger.LogDebug("SignatureHelp request start");
         var sw = Stopwatch.StartNew();
+
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
         if (script is null)
         {
             sw.Stop();
-            _logger.LogInformation("SignatureHelp finished in {ElapsedMs} ms: no script", sw.ElapsedMilliseconds);
+            _logger.LogDebug("SignatureHelp abort (no script) in {ElapsedMs} ms", sw.ElapsedMilliseconds);
             return null;
         }
+
         var help = await script.GetSignatureHelpAsync(request.Position, cancellationToken);
         sw.Stop();
-        _logger.LogInformation("SignatureHelp finished in {ElapsedMs} ms. Has result: {Has}", sw.ElapsedMilliseconds, help != null);
+        _logger.LogDebug("SignatureHelp finished in {ElapsedMs} ms (hasResult={Has})", sw.ElapsedMilliseconds, help != null);
         return help;
     }
 

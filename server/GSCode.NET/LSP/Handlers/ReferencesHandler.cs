@@ -6,7 +6,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
-using System.IO;
+using GSCode.NET.Util;
 
 namespace GSCode.NET.LSP.Handlers;
 
@@ -25,24 +25,6 @@ internal sealed class ReferencesHandler : ReferencesHandlerBase
         _scriptManager = scriptManager;
         _logger = logger;
         _selector = selector;
-    }
-
-    // Normalize file system paths that may come in the form "/g:/path/..." or use forward slashes on Windows
-    private static string NormalizeFilePathForUri(string filePath)
-    {
-        if (string.IsNullOrEmpty(filePath)) return filePath;
-
-        if (filePath.Length >= 3 && filePath[0] == '/' && char.IsLetter(filePath[1]) && filePath[2] == ':')
-        {
-            filePath = filePath.Substring(1);
-        }
-
-        if (Path.DirectorySeparatorChar == '\\')
-        {
-            filePath = filePath.Replace('/', Path.DirectorySeparatorChar);
-        }
-
-        try { return Path.GetFullPath(filePath); } catch { return filePath; }
     }
 
     public override async Task<LocationContainer?> Handle(ReferenceParams request, CancellationToken cancellationToken)
@@ -100,7 +82,7 @@ internal sealed class ReferencesHandler : ReferencesHandlerBase
                            ?? s.DefinitionsTable.GetClassLocation(key.Namespace, key.Name);
                     if (loc is not null)
                     {
-                        string normalized = NormalizeFilePathForUri(loc.Value.FilePath);
+                        string normalized = PathUtils.NormalizeFilePath(loc.Value.FilePath);
                         results.Add(new Location { Uri = new Uri(normalized), Range = loc.Value.Range });
                     }
                 }

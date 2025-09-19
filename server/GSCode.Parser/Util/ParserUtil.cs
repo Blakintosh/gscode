@@ -212,15 +212,19 @@ internal static partial class ParserUtil
     /// <returns>A string containing the readable code for these tokens</returns>
     public static string ProduceSnippetString(List<Token> tokensSource)
     {
-        // TODO: this function is gross
-        StringBuilder sb = new();
-
         ReadOnlySpan<Token> tokenSpan = CollectionsMarshal.AsSpan(tokensSource);
+        if (tokenSpan.Length == 0) return string.Empty;
 
-        // Skip whitespace tokens that begin/end the snippet so Trim() is not required on the final string.
         int startIndex = tokenSpan[0].Type == TokenType.Whitespace ? 1 : 0;
         int endIndex = tokenSpan[^1].Type == TokenType.Whitespace ? tokenSpan.Length - 1 : tokenSpan.Length;
 
+        int capacity = 0;
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            capacity += tokensSource[i].Lexeme?.Length ?? 0;
+        }
+
+        var sb = new StringBuilder(Math.Max(0, capacity));
         for (int i = startIndex; i < endIndex; i++)
         {
             sb.Append(tokensSource[i].Lexeme);

@@ -20,6 +20,7 @@ public record class ScrFunction : IExportedSymbol
     public string? IntelliSense { get; set; }
     public bool IsPrivate { get; set; } = false;
     public string? DocComment { get; set; }
+    public bool HasVararg { get; set; } = false;
 }
 
 public record class ScrFunctionArg

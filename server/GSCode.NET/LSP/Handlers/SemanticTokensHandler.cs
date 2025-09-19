@@ -3,11 +3,6 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using GSCode.Parser;
 
 namespace GSCode.NET.LSP.Handlers;
@@ -39,12 +34,8 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
             {
                 TokenModifiers = capability.TokenModifiers,
                 TokenTypes = capability.TokenTypes
-                // TokenTypes = new Container<SemanticTokenType>(SemanticTokenType.Variable)
             },
-            Full = new SemanticTokensCapabilityRequestFull
-            {
-                Delta = false
-            },
+            Full = new SemanticTokensCapabilityRequestFull { Delta = false },
             Range = false
         };
     }
@@ -56,7 +47,7 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
 
     protected override async Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Tokenization request received, processing...");
+        _logger.LogDebug("Semantic tokens request start");
         Script? script = _scriptManager.GetParsedEditor(identifier.TextDocument);
 
         if (script is not null)
@@ -64,6 +55,6 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
             await script.PushSemanticTokensAsync(builder, cancellationToken);
         }
 
-        _logger.LogInformation("Tokenization is complete!");
+        _logger.LogDebug("Semantic tokens finished");
     }
 }

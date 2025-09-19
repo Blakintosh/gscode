@@ -33,7 +33,7 @@ internal class CompletionHandler(ILanguageServerFacade facade,
 
     public override async Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Completion request received, processing...");
+        _logger.LogDebug("Completion request start");
         var sw = Stopwatch.StartNew();
         CompletionList? result = null;
         Script? script = _scriptManager.GetParsedEditor(request.TextDocument);
@@ -45,7 +45,7 @@ internal class CompletionHandler(ILanguageServerFacade facade,
         sw.Stop();
 
         int count = result is null ? 0 : result.Count();
-        _logger.LogInformation("Completion processed in {ElapsedMs} ms. Items: {Count}", sw.ElapsedMilliseconds, count);
+        _logger.LogDebug("Completion finished in {ElapsedMs} ms (items={Count})", sw.ElapsedMilliseconds, count);
         return result ?? new CompletionList();
     }
 

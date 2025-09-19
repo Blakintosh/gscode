@@ -18,6 +18,7 @@ using GSCode.Parser.SPA;
 using System.Text.RegularExpressions;
 using GSCode.Parser.DFA;
 using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
 
 namespace GSCode.Parser;
 
@@ -39,7 +40,34 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public DefinitionsTable? DefinitionsTable { get; private set; } = default;
 
-    public IEnumerable<Uri> Dependencies => DefinitionsTable?.Dependencies ?? [];
+    // Combine dependency sources: DefinitionsTable (e.g., #using) + preprocessor inserts via Sense
+    public IEnumerable<Uri> Dependencies
+    {
+        get
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var list = new List<Uri>();
+            if (DefinitionsTable?.Dependencies is not null)
+            {
+                foreach (var u in DefinitionsTable.Dependencies)
+                {
+                    if (u is null) continue;
+                    string s = u.ToString();
+                    if (set.Add(s)) list.Add(u);
+                }
+            }
+            if (Sense is not null)
+            {
+                foreach (var u in Sense.Dependencies)
+                {
+                    if (u is null) continue;
+                    string s = u.ToString();
+                    if (set.Add(s)) list.Add(u.ToUri());
+                }
+            }
+            return list;
+        }
+    }
 
     // Expose macro outlines for outliner without exposing Sense outside assembly
     public IReadOnlyList<MacroOutlineItem> MacroOutlines => Sense == null ? Array.Empty<MacroOutlineItem>() : (IReadOnlyList<MacroOutlineItem>)Sense.MacroOutlines;
@@ -49,18 +77,50 @@ public class Script(DocumentUri ScriptUri, string languageId)
     public IReadOnlyDictionary<SymbolKey, List<Range>> References => _references;
 
     // Cache for language API to avoid repeated construction in hot paths
+    private static readonly ConcurrentDictionary<string, ScriptAnalyserData> s_apiCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private ScriptAnalyserData? _api;
     private ScriptAnalyserData? TryGetApi()
     {
         if (_api is not null) return _api;
-        try { _api = new(LanguageId); } catch { _api = null; }
-        return _api;
+
+        if (s_apiCache.TryGetValue(LanguageId, out var cached))
+        {
+            _api = cached;
+            return _api;
+        }
+
+        try
+        {
+            var created = new ScriptAnalyserData(LanguageId);
+            s_apiCache[LanguageId] = created;
+            _api = created;
+            return created;
+        }
+        catch
+        {
+            // Do not cache failures to allow future successful attempts
+            return null;
+        }
     }
     private bool IsBuiltinFunction(string name)
     {
         var api = TryGetApi();
         return api is not null && api.GetApiFunction(name) is not null;
     }
+
+    // Keywords list duplicated from DocumentCompletionsLibrary.cs for SPA filtering purposes
+    private static readonly HashSet<string> s_completionKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "class", "return", "wait", "thread", "classes", "if", "else", "do", "while",
+        "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend",
+        "switch", "case", "default", "break", "continue", "notify", "endon",
+        "waitrealtime", "profilestart", "profilestop", "isdefined",
+        // Additional keywords
+        "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
+        "var", "const", "function", "private", "autoexec", "constructor", "destructor"
+    };
 
     public async Task ParseAsync(string documentText)
     {
@@ -130,6 +190,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
         // Gather signatures for all functions and classes.
         string initialNamespace = Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
         DefinitionsTable = new(initialNamespace);
+
+        // Let completions access local/imported function info
+        Sense.Completions.SetDefinitionsProvider(() => DefinitionsTable);
 
         SignatureAnalyser signatureAnalyser = new(RootNode, DefinitionsTable, Sense);
         try
@@ -535,6 +598,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
         string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
         string[]? parameters = DefinitionsTable?.GetFunctionParameters(ns, name);
+        bool hasVarargLocal = DefinitionsTable?.GetFunctionHasVararg(ns, name) ?? false;
 
         if (doc is null && parameters is null)
         {
@@ -558,9 +622,17 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
 
         string[] cleanParams = parameters is null ? Array.Empty<string>() : parameters.Select(StripDefault).ToArray();
-        string protoWithParams = cleanParams.Length == 0
-            ? $"function {name}()"
-            : $"function {name}({string.Join(", ", cleanParams)})";
+        string protoWithParams;
+        if (cleanParams.Length == 0)
+        {
+            protoWithParams = hasVarargLocal ? $"function {name}(...)" : $"function {name}()";
+        }
+        else
+        {
+            string inside = string.Join(", ", cleanParams);
+            if (hasVarargLocal) inside += ", ...";
+            protoWithParams = $"function {name}({inside})";
+        }
 
         string formattedDoc = doc is not null ? NormalizeDocComment(doc) : string.Empty;
         string value = string.IsNullOrEmpty(formattedDoc)
@@ -592,7 +664,8 @@ public class Script(DocumentUri ScriptUri, string languageId)
                     var overload = apiFn.Overloads.FirstOrDefault();
                     var paramSeq = overload != null ? overload.Parameters : new List<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
                     string[] names = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
-                    string sig = FormatSignature(name, names, activeParam, qualifier);
+                    bool hasVarargApi = paramSeq.Any(p => string.Equals(StripDefault(p.Name), "vararg", StringComparison.OrdinalIgnoreCase));
+                    string sig = FormatSignature(name, names, activeParam, qualifier, hasVarargApi);
                     string desc = apiFn.Description ?? string.Empty;
                     return string.IsNullOrEmpty(desc) ? sig : $"{sig}\n---\n{desc}";
                 }
@@ -604,9 +677,11 @@ public class Script(DocumentUri ScriptUri, string languageId)
         string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
         string[]? parms = DefinitionsTable?.GetFunctionParameters(ns, name);
         string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
+        bool hasVarargLocal = DefinitionsTable?.GetFunctionHasVararg(ns, name) ?? false;
         if (parms is not null)
         {
-            string sig = FormatSignature(name, parms.Select(StripDefault).ToArray(), activeParam, qualifier);
+            var cleaned = parms.Select(StripDefault).ToArray();
+            string sig = FormatSignature(name, cleaned, activeParam, qualifier, hasVarargLocal);
             string formattedDoc = doc is not null ? NormalizeDocComment(doc) : string.Empty;
             return string.IsNullOrEmpty(formattedDoc) ? sig : $"{sig}\n---\n{formattedDoc}";
         }
@@ -620,10 +695,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return null;
     }
 
-    private static string FormatSignature(string name, IReadOnlyList<string> parameters, int activeParam, string? qualifier)
+    private static string FormatSignature(string name, IReadOnlyList<string> parameters, int activeParam, string? qualifier, bool hasVararg = false)
     {
         string nsPrefix = string.IsNullOrEmpty(qualifier) ? string.Empty : qualifier + "::";
-        if (parameters.Count == 0)
+        if (parameters.Count == 0 && !hasVararg)
         {
             return $"```gsc\nfunction {nsPrefix}{name}()\n```";
         }
@@ -641,6 +716,11 @@ public class Script(DocumentUri ScriptUri, string languageId)
             {
                 sb.Append(p);
             }
+        }
+        if (hasVararg)
+        {
+            if (parameters.Count > 0) sb.Append(", ");
+            if (activeParam >= parameters.Count) sb.Append("<...>"); else sb.Append("...");
         }
         sb.Append(")\n```");
         return sb.ToString();
@@ -738,12 +818,19 @@ public class Script(DocumentUri ScriptUri, string languageId)
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static (string? qualifier, string name) ParseNamespaceQualifiedIdentifier(Token token)
     {
-        // If the previous token is '::' and the one before is an identifier, treat as namespace::name
-        if (token.Previous is { Lexeme: "::" } sep && sep.Previous is { Type: TokenType.Identifier } nsToken)
+        // Case 1: current token is the name (ns :: name)
+        if (token.Previous is { Type: TokenType.ScopeResolution } sep && sep.Previous is { Type: TokenType.Identifier } nsToken)
         {
             return (nsToken.Lexeme, token.Lexeme);
         }
-        // Otherwise, no qualifier
+
+        // Case 2: current token is the namespace (ns :: name)
+        if (token.Next is { Type: TokenType.ScopeResolution } sep2 && sep2.Next is { Type: TokenType.Identifier } nameToken)
+        {
+            return (token.Lexeme, nameToken.Lexeme);
+        }
+
+        // Default: unqualified identifier
         return (null, token.Lexeme);
     }
 
@@ -1113,7 +1200,8 @@ public class Script(DocumentUri ScriptUri, string languageId)
                     var overload = apiFn.Overloads.FirstOrDefault();
                     IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
                     var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
-                    string label = $"function {name}({string.Join(", ", cleaned)})";
+                    bool hasVarargApi = paramSeq.Any(p => string.Equals(StripDefault(p.Name), "vararg", StringComparison.OrdinalIgnoreCase));
+                    string label = $"function {name}({string.Join(", ", cleaned)}{(hasVarargApi && cleaned.Length > 0 ? ", ..." : hasVarargApi ? "..." : string.Empty)})";
                     var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = string.IsNullOrWhiteSpace(p.Description) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description! } }));
                     var docContent = new MarkupContent { Kind = MarkupKind.Markdown, Value = apiFn.Description ?? string.Empty };
                     signatures.Add(new SignatureInformation { Label = label, Documentation = docContent, Parameters = parameters });
@@ -1126,10 +1214,11 @@ public class Script(DocumentUri ScriptUri, string languageId)
         string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
         string[]? parms = DefinitionsTable?.GetFunctionParameters(ns, name) ?? DefinitionsTable?.GetFunctionParameters(qualifier ?? ns, name);
         string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
+        bool hasVarargLocal = DefinitionsTable?.GetFunctionHasVararg(ns, name) ?? false;
         if (parms is not null)
         {
             var cleaned = parms.Select(StripDefault).ToArray();
-            string label = $"function {name}({string.Join(", ", cleaned)})";
+            string label = $"function {name}({string.Join(", ", cleaned)}{(hasVarargLocal && cleaned.Length > 0 ? ", ..." : hasVarargLocal ? "..." : string.Empty)})";
             var paramList = new List<ParameterInformation>(cleaned.Length);
             for (int i = 0; i < cleaned.Length; i++)
             {
@@ -1218,6 +1307,14 @@ public class Script(DocumentUri ScriptUri, string languageId)
         // Walk all call nodes
         foreach (var call in EnumerateCalls(RootNode))
         {
+            // Skip function-pointer dereference calls: self [[foo]](...), [[ns::foo]](...)
+            // In these, the call's range starts before the target expression's range (due to the leading [[)
+            if (call.Target is ExprNode t && ComparePosition(call.Range.Start, t.Range.Start) < 0)
+            {
+                // Cannot reliably resolve pointee; do not enforce arity
+                continue;
+            }
+
             string? ns = null;
             string? name = null;
             Range reportRange = call.Arguments.Range;
@@ -1251,7 +1348,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                     var apiFn = api.GetApiFunction(name);
                     if (apiFn is not null && ns is null)
                     {
-                        int minAny = int.MaxValue; int maxAny = int.MinValue; bool any = false;
+                        int minAny = int.MaxValue; int maxAny = int.MinValue; bool any = true;
                         foreach (var ov in apiFn.Overloads)
                         {
                             int total = ov.Parameters.Count;
@@ -1318,7 +1415,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
             //    Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooFewArguments, name, argCount, paramInfo.required);
             //}
             //else 
-            if (paramInfo.total >= 0 && argCount > paramInfo.total)
+            // Exclude vararg functions from TooManyArguments SPA
+            bool hasVararg = DefinitionsTable?.GetFunctionHasVararg(lookupNs, name) ?? false;
+            if (!hasVararg && paramInfo.total >= 0 && argCount > paramInfo.total)
             {
                 Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooManyArguments, name, argCount, paramInfo.total);
             }
@@ -1797,7 +1896,8 @@ public class Script(DocumentUri ScriptUri, string languageId)
             foreach (var p in fn.Parameters.Parameters)
             {
                 if (p.Name is null) continue;
-                if (ComparePosition(position, p.Name.Range.Start) >= 0 && ComparePosition(p.Name.Range.End, position) >= 0)
+                string paramName = p.Name.Lexeme;
+                if (ComparePosition(position, p.Name.Range.Start) >= 0 && ComparePosition(p.Name.Range.End, position) <= 0)
                 {
                     enclosing = fn;
                     break;

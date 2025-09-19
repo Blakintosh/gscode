@@ -12,6 +12,8 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     private int _linePosition = 0;
 
     private readonly Range? _forcedRange = forcedRange;
+    // Track previous emitted token to allow context-sensitive lexing (e.g., '%' vs AnimIdentifier)
+    private Token? _prevToken;
 
     public TokenList Transform()
     {
@@ -29,6 +31,8 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
                 continue;
             }
 
+            // Provide context of previous token to NextToken
+            _prevToken = current;
             Token next = NextToken();
 
             // Shorten the input text by the length of the token
@@ -425,8 +429,8 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     {
         char second = InputAt(1);
 
-        // Anim identifier
-        if (IsWordChar(second))
+        // Determine previous non-trivia token to disambiguate modulo vs anim identifier
+        if (IsWordChar(second) && !PrevTokenIsOperand())
         {
             int length = 2;
 
@@ -536,7 +540,13 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         }
         else if (StartsWithKeyword("default"))
         {
-            return DoCharMatchIfWordBoundary(TokenType.Default, "default");
+            // Only treat 'default' as a keyword when used as a switch label (default:)
+            if (LooksLikeLabelAfterKeyword(7)) // length of "default"
+            {
+                return DoCharMatchIfWordBoundary(TokenType.Default, "default");
+            }
+            // Otherwise, allow it to be lexed as an identifier (e.g., DEFAULT())
+            return default;
         }
         else if (StartsWithKeyword("destructor"))
         {
@@ -694,6 +704,32 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         return current == '\n' || (current == '\r' && InputAt(offset + 1) == '\n');
     }
 
+    // Helper: check if previous non-trivia token is an operand (identifier, literal, or closing delimiter)
+    private bool PrevTokenIsOperand()
+    {
+        Token? t = _prevToken;
+        while (t is not null && (t.Type == TokenType.Whitespace || t.Type == TokenType.LineBreak || t.Type == TokenType.LineComment || t.Type == TokenType.MultilineComment || t.Type == TokenType.DocComment))
+        {
+            t = t.Previous;
+        }
+        if (t is null) return false;
+        return t.Type switch
+        {
+            TokenType.Identifier or
+            TokenType.Integer or
+            TokenType.Float or
+            TokenType.String or
+            TokenType.IString or
+            TokenType.True or
+            TokenType.False or
+            TokenType.Undefined or
+            TokenType.CloseParen or
+            TokenType.CloseBracket or
+            TokenType.CloseBrace => true,
+            _ => false
+        };
+    }
+
     private char InputAt(int index)
     {
         if (index >= _input.Length)
@@ -745,5 +781,21 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         }
 
         return new Token(type, range, lexeme);
+    }
+
+    /// <summary>
+    /// Checks if the characters immediately following a keyword look like a label (i.e., optional spaces/tabs then ':') on the same line.
+    /// </summary>
+    private bool LooksLikeLabelAfterKeyword(int keywordLength)
+    {
+        int i = keywordLength;
+        while (true)
+        {
+            char c = InputAt(i);
+            if (c == ' ' || c == '\t') { i++; continue; }
+            if (c == ':') return true;
+            // Newline or end-of-input or any other character means not a label
+            return false;
+        }
     }
 }

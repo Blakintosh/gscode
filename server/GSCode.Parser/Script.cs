@@ -191,6 +191,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
         string initialNamespace = Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
         DefinitionsTable = new(initialNamespace);
 
+        // Let completions access local/imported function info
+        Sense.Completions.SetDefinitionsProvider(() => DefinitionsTable);
+
         SignatureAnalyser signatureAnalyser = new(RootNode, DefinitionsTable, Sense);
         try
         {
@@ -1345,7 +1348,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                     var apiFn = api.GetApiFunction(name);
                     if (apiFn is not null && ns is null)
                     {
-                        int minAny = int.MaxValue; int maxAny = int.MinValue; bool any = false;
+                        int minAny = int.MaxValue; int maxAny = int.MinValue; bool any = true;
                         foreach (var ov in apiFn.Overloads)
                         {
                             int total = ov.Parameters.Count;

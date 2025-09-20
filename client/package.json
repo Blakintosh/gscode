@@ -116,6 +116,12 @@
 					"default": false,
 					"description": "Skip indexing the workspace during language server initialize. Changing this requires reload.",
 					"scope": "window"
+				},
+				"gscode.enableFunctionCompletionParameterFilling": {
+					"type": "boolean",
+					"default": false,
+					"description": "Function completion will fill in all parameters part of the function prototype.",
+					"scope": "window"
 				}
 			}
 		}

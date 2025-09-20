@@ -13,6 +13,10 @@ namespace GSCode.Parser.Data;
 
 public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, string languageId)
 {
+    // Replaces the old static bool EnableFunctionCompletionParameterFilling.
+    // The server layer (ServerConfiguration) assigns this delegate.
+    public static Func<bool> ParameterFillResolver { get; set; } = static () => true;
+
     /// <summary>
     /// Library of tokens to quickly lookup a token at a given position.
     /// </summary>
@@ -183,44 +187,36 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
     private static CompletionItem CreateCompletionItem(ScrFunctionDefinition function)
     {
-        // TODO: has been hacked to show first only, but we need to handle all overloads eventually.
-        // Generate snippet-formatted parameters with tabstops
+        bool fill = ParameterFillResolver();
         string insertText = function.Name;
-        if (function.Overloads.First().Parameters.Count > 0)
+        InsertTextFormat format = InsertTextFormat.PlainText;
+        if (fill)
         {
-            insertText += "(";
-
-            // Create snippet-formatted parameter list with tabstops
-            List<string> paramSnippets = new List<string>();
-            int tabIndex = 1;
-
-            foreach (var param in function.Overloads.First().Parameters)
+            if (function.Overloads.First().Parameters.Count > 0)
             {
-                // Add mandatory parameters with tabstops
-                if (param.Mandatory.GetValueOrDefault(false))
+                List<string> paramSnippets = new();
+                int tabIndex = 1;
+                foreach (var param in function.Overloads.First().Parameters)
                 {
-                    paramSnippets.Add($"${{{tabIndex}:{param.Name ?? $"param{tabIndex}"}}}");
+                    if (param.Mandatory.GetValueOrDefault(false))
+                    {
+                        paramSnippets.Add($"${{{tabIndex}:{param.Name ?? $"param{tabIndex}"}}}");
+                    }
+                    else
+                    {
+                        // Optional parameter: bracketed
+                        paramSnippets.Add($"${{{tabIndex}:[{param.Name ?? $"optionalParam{tabIndex}"}]}}".Replace("]}}", "]}"));
+                    }
                     tabIndex++;
                 }
-                // Optional parameters are added with brackets
-                else
-                {
-                    paramSnippets.Add($"${{{tabIndex}:[{param.Name ?? $"optionalParam{tabIndex}"}]}}");
-                    tabIndex++;
-                }
+                insertText += "(" + string.Join(", ", paramSnippets) + ")$0";
             }
-
-            insertText += string.Join(", ", paramSnippets);
-            insertText += ")";
-
-            // Add a final tabstop after the closing parenthesis
-            insertText += "$0";
+            else
+            {
+                insertText += "()$0";
+            }
+            format = InsertTextFormat.Snippet;
         }
-        else
-        {
-            insertText += "()$0";
-        }
-
         return new CompletionItem()
         {
             Label = function.Name,
@@ -231,13 +227,69 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
                 Value = function.Documentation
             }),
             InsertText = insertText,
-            InsertTextFormat = InsertTextFormat.Snippet,
+            InsertTextFormat = format,
             Kind = CompletionItemKind.Function,
             // Add sorting information to keep API functions organized
             SortText = function.Name.ToLowerInvariant(),
             // Add commit characters to automatically complete when typing these
             CommitCharacters = new Container<string>(new[] { "(", ")", ";" })
         };
+    }
+
+    private static CompletionItem CreateLocalFunctionCompletionItem(string ns, string name, IReadOnlyList<string> parameters, bool hasVararg, string? doc, string? filePath, bool isLocal)
+    {
+        bool fill = ParameterFillResolver();
+        string insertText = name;
+        InsertTextFormat format = InsertTextFormat.PlainText;
+        if (fill)
+        {
+            insertText += "(";
+            List<string> paramSnippets = new();
+            int tab = 1;
+            foreach (var p in parameters)
+            {
+                string clean = StripDefault(p);
+                bool optional = p?.Contains('=') == true;
+                string piece = optional
+                    ? $"${{{tab}:[{clean}]}}"
+                    : $"${{{tab}:{clean}}}";
+                paramSnippets.Add(piece);
+                tab++;
+            }
+            insertText += string.Join(", ", paramSnippets) + ")$0";
+            format = InsertTextFormat.Snippet;
+        }
+
+        string? detail = null;
+        if (!isLocal)
+        {
+            detail = string.IsNullOrEmpty(ns) ? "Imported function" : $"Imported function ({ns})";
+            if (!string.IsNullOrWhiteSpace(filePath))
+            {
+                try { detail += $" — {System.IO.Path.GetFileName(filePath)}"; } catch { }
+            }
+        }
+
+        string? documentation = string.IsNullOrWhiteSpace(doc) ? null : doc;
+
+        return new CompletionItem
+        {
+            Label = name,
+            Detail = detail,
+            Documentation = documentation is null ? null : new StringOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = documentation }),
+            InsertText = insertText,
+            InsertTextFormat = format,
+            Kind = CompletionItemKind.Function,
+            SortText = name.ToLowerInvariant(),
+            CommitCharacters = new Container<string>(new[] { "(", ")", ";" })
+        };
+
+        static string StripDefault(string? n)
+        {
+            if (string.IsNullOrWhiteSpace(n)) return string.Empty;
+            int idx = n.IndexOf('=');
+            return idx >= 0 ? n[..idx].Trim() : n.Trim();
+        }
     }
 
     private List<CompletionItem> GetImportedFunctionCompletions(CompletionContext context, List<CompletionItem> existing)
@@ -322,57 +374,6 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         static bool StartsWithIgnoreCase(string value, string prefix)
             => value?.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ?? false;
-    }
-
-    private static CompletionItem CreateLocalFunctionCompletionItem(string ns, string name, IReadOnlyList<string> parameters, bool hasVararg, string? doc, string? filePath, bool isLocal)
-    {
-        // Build snippet insert text via concatenation to avoid brace escaping issues
-        string insertText = name + "(";
-        List<string> paramSnippets = new();
-        int tab = 1;
-        foreach (var p in parameters)
-        {
-            string clean = StripDefault(p);
-            bool optional = p?.Contains('=') == true;
-            string piece = optional
-                ? ("$" + "{" + tab + ":[" + clean + "]}")
-                : ("$" + "{" + tab + ":" + clean + "}");
-            paramSnippets.Add(piece);
-            tab++;
-        }
-        insertText += string.Join(", ", paramSnippets) + ")$0";
-
-        string? detail = null;
-        if (!isLocal)
-        {
-            detail = string.IsNullOrEmpty(ns) ? "Imported function" : $"Imported function ({ns})";
-            if (!string.IsNullOrWhiteSpace(filePath))
-            {
-                // Only show file name to keep it compact
-                try { detail += $" — {System.IO.Path.GetFileName(filePath)}"; } catch { }
-            }
-        }
-
-        string? documentation = string.IsNullOrWhiteSpace(doc) ? null : doc;
-
-        return new CompletionItem
-        {
-            Label = name,
-            Detail = detail,
-            Documentation = documentation is null ? null : new StringOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = documentation }),
-            InsertText = insertText,
-            InsertTextFormat = InsertTextFormat.Snippet,
-            Kind = CompletionItemKind.Function,
-            SortText = name.ToLowerInvariant(),
-            CommitCharacters = new Container<string>(new[] { "(", ")", ";" })
-        };
-
-        static string StripDefault(string? n)
-        {
-            if (string.IsNullOrWhiteSpace(n)) return string.Empty;
-            int idx = n.IndexOf('=');
-            return idx >= 0 ? n[..idx].Trim() : n.Trim();
-        }
     }
 
     private sealed class KeyComparer : IEqualityComparer<(string Namespace, string Name)>

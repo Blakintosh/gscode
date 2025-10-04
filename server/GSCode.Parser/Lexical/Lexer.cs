@@ -570,10 +570,6 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         {
             return DoCharMatchIfWordBoundary(TokenType.While, "while");
         }
-        else if (StartsWithKeyword("wait"))
-        {
-            return DoCharMatchIfWordBoundary(TokenType.Wait, "wait");
-        }
         else if (StartsWithKeyword("waittillframeend"))
         {
             return DoCharMatchIfWordBoundary(TokenType.WaittillFrameEnd, "waittillframeend");
@@ -581,6 +577,14 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         else if (StartsWithKeyword("waitrealtime"))
         {
             return DoCharMatchIfWordBoundary(TokenType.WaitRealTime, "waitrealtime");
+        }
+        else if (StartsWithKeyword("waittill"))
+        {
+            return DoCharMatchIfWordBoundary(TokenType.Waittill, "waittill");
+        }
+        else if (StartsWithKeyword("wait"))
+        {
+            return DoCharMatchIfWordBoundary(TokenType.Wait, "wait");
         }
         return default;
     }

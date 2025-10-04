@@ -2560,14 +2560,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// </summary>
     /// <remarks>
     /// CallOrAccessOpRhs := CallOpRhs | THREAD CalledOnCallOpRhs | CalledOnCallOpRhs | AccessOpRhs
-    /// 
-    /// TODO TODO TODO: not sure CallOrAccessOp here (for parsing patterns like self foo::bar()) is correct - this might be a left-recursive loop
     /// </remarks>
     /// <param name="left"></param>
     /// <returns></returns>
     private ExprNode? CallOrAccessOpRhs(ExprNode left)
     {
-        // TODO: current grammar won't handle self thread ... but we can bolt this on later
         if (CurrentTokenType == TokenType.ScopeResolution || CurrentTokenType == TokenType.OpenParen)
         {
             return CallOpRhs(left);
@@ -2586,7 +2583,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Called-on ent call
-        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
+        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket || CurrentTokenType == TokenType.Waittill)
         {
             return CalledOnRhs(left);
         }
@@ -2600,7 +2597,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Which itself could still be a called-on target
-        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
+        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket || CurrentTokenType == TokenType.Waittill)
         {
             return CalledOnRhs(newLeft);
         }
@@ -2611,12 +2608,18 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// Parses the right-hand side of a called-on function call or an array indexer.
     /// </summary>
     /// <remarks>
-    /// CalledOnRhs := IDENTIFIER CallOpRhs | OPENBRACKET CalledOnDerefOrIndexerOp
+    /// CalledOnRhs := WAITTILL WaittillRhs | IDENTIFIER CallOpRhs | OPENBRACKET CalledOnDerefOrIndexerOp
     /// </remarks>
     /// <param name="left"></param>
     /// <returns></returns>
     private ExprNode? CalledOnRhs(ExprNode left)
     {
+        // Waittill operation
+        if (ConsumeIfType(TokenType.Waittill, out Token? waitTillToken))
+        {
+            return WaittillRhs(left, waitTillToken);
+        }
+
         // Called-on with identifier, so it's self foo::bar() or self foo()
         if (ConsumeIfType(TokenType.Identifier, out Token? functionQualifier))
         {
@@ -2643,6 +2646,72 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         AddError(GSCErrorCodes.ExpectedFunctionIdentifier, CurrentToken.Lexeme);
         return null;
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a wait till operation.
+    /// </summary>
+    /// <param name="left"></param>
+    /// <param name="waitTillToken"></param>
+    /// <remarks>
+    /// WaittillRhs := OPENPAREN Expr WaittillVariables CLOSEPAREN
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? WaittillRhs(ExprNode left, Token waitTillToken)
+    {
+        // Check for OPENPAREN
+        if (!ConsumeIfType(TokenType.OpenParen, out Token? openParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+            return null;
+        }
+
+        // Parse the expression that gives us the wait till condition
+        ExprNode? expr = Expr();
+        if (expr is null)
+        {
+            return null;
+        }
+
+        // Then find any variable declarations that are populated when this wait till is hit.
+        WaittillVariablesNode variables = WaittillVariables();
+
+        if (!ConsumeIfType(TokenType.CloseParen, out Token? closeParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+            return new WaittillNode(left, expr, variables, RangeHelper.From(left.Range.Start, expr.Range.End));
+        }
+
+        return new WaittillNode(left, expr, variables, RangeHelper.From(left.Range.Start, closeParen.Range.End));
+    }
+
+    /// <summary>
+    /// Parses zero-or-more wait till variable declarations.
+    /// </summary>
+    /// <remarks>
+    /// WaittillVariables := COMMA IDENTIFIER WaittillVariables | ε
+    /// </remarks>
+    /// <returns></returns>
+    private WaittillVariablesNode WaittillVariables()
+    {
+        // If no commas, then at the end of the list.
+        if (!AdvanceIfType(TokenType.Comma))
+        {
+            return new();
+        }
+
+        // Seek to the next identifier
+        if (!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+        {
+            AddError(GSCErrorCodes.ExpectedWaittillIdentifier, CurrentToken.Lexeme);
+            return new();
+        }
+
+        // Recurse to find any other waittill parameter names.
+        WaittillVariablesNode others = WaittillVariables();
+        others.Variables.AddFirst(new IdentifierExprNode(identifierToken));
+
+        return others;
     }
 
     /// <summary>

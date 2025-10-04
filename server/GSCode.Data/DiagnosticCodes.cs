@@ -245,7 +245,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.NoMatchingOverload, new("No overload of '{0}' matches argument types ({1}).", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CalledOnInvalidTarget, new("Called-on target must be an entity/struct; got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidThreadCall, new("Only function calls can be threaded.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.PossibleUndefinedComparison, new("Possible comparison of 'undefined' value, which is not allowed.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.InvalidVectorComponent, new("Cannot use type '{0}' as a vector component.", DiagnosticSeverity.Error) },
       

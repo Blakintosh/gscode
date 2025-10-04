@@ -281,7 +281,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
     /// Gets whether the expression is of a type that can be boolean checked.
     /// </summary>
     /// <returns>true if it can be</returns>
-    public bool CanEvaluateToBoolean()
+    public readonly bool CanEvaluateToBoolean()
     {
         return Type == ScrDataTypes.Int ||
             Type == ScrDataTypes.Bool ||
@@ -292,7 +292,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
     public bool? IsTruthy()
     {
-        if (Value is not bool value)
+        if (Value is null)
         {
             return null;
         }
@@ -301,7 +301,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         {
             ScrDataTypes.Int => (int)Value != 0,
             ScrDataTypes.Float => (float)Value != 0,
-            ScrDataTypes.Bool => value,
+            ScrDataTypes.Bool => (bool)Value,
             ScrDataTypes.String => (string)Value != "",
             ScrDataTypes.Array => true,
             ScrDataTypes.Vec3 => true,
@@ -368,7 +368,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
         if (Type == ScrDataTypes.Int)
         {
-            return (long)Value;
+            return (int)Value;
         }
         else if (Type == ScrDataTypes.Float)
         {
@@ -391,15 +391,15 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         // TODO: this isn't an ideal solution, need a better way of handling ints.
 
         // Try to get as int first (non-nullable)
-        if (Value is long intValue)
+        if (Value is int intValue)
         {
             return (int)intValue;
         }
 
         // Check if it's a nullable int that contains a value
-        if (Value is long? && ((long?)Value).HasValue)
+        if (Value is int? && ((int?)Value).HasValue)
         {
-            return (int)((long?)Value).Value;
+            return ((int?)Value).Value;
         }
 
         // Value exists but is not an integer type, or nullable int is null

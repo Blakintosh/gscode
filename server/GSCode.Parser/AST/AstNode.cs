@@ -281,12 +281,9 @@ internal sealed class DataExprNode : ExprNode
             {
                 // Numbers
                 TokenType.Float => new(float.Parse(token.Lexeme), ScrDataTypes.Float, token.Range),
-                // TODO: temp - addresses issue with int overflow on 2147483648 without further information on why this is happening yet
-                // TODO: this is a thing in util_shared, and it's unclear what the intended behaviour is. Validate and confirm later, then
-                // undo the long change if possible.
-                TokenType.Integer => new(long.Parse(token.Lexeme), ScrDataTypes.Int, token.Range),
-                TokenType.Hex => new(long.Parse(token.Lexeme[2..], System.Globalization.NumberStyles.HexNumber),
-                    ScrDataTypes.Int, token.Range),
+                // Integers with overflow handling
+                TokenType.Integer => new(ParseIntWithOverflow(token.Lexeme), ScrDataTypes.Int, token.Range),
+                TokenType.Hex => new(ParseHexWithOverflow(token.Lexeme[2..]), ScrDataTypes.Int, token.Range),
                 // Strings - remove quotes
                 TokenType.String => new(token.Lexeme[1..^1], ScrDataTypes.String, token.Range),
                 TokenType.IString => new(token.Lexeme[2..^1], ScrDataTypes.IString, token.Range),
@@ -311,6 +308,56 @@ internal sealed class DataExprNode : ExprNode
                 $"Failed to parse primitive token, which suggests that the lexer is not producing valid tokens. The intention was: {token.Lexeme}, for type {token.Type}.",
                 ex);
         }
+    }
+
+    private static int ParseIntWithOverflow(string lexeme)
+    {
+        // Try normal parsing first
+        if (int.TryParse(lexeme, out var result))
+        {
+            return result;
+        }
+
+        // If it fails, handle overflow by parsing as long and wrapping
+        // TODO: add diagnostic for overflow
+        if (long.TryParse(lexeme, out var longResult))
+        {
+            return unchecked((int)longResult);
+        }
+
+        // If even long fails, parse as decimal and wrap
+        if (decimal.TryParse(lexeme, out var decimalResult))
+        {
+            return unchecked((int)(long)decimalResult);
+        }
+
+        // Fallback - should not reach here with valid lexer output
+        return 0;
+    }
+
+    private static int ParseHexWithOverflow(string hexString)
+    {
+        // Try normal parsing first
+        if (int.TryParse(hexString, System.Globalization.NumberStyles.HexNumber, null, out var result))
+        {
+            return result;
+        }
+
+        // If it fails, handle overflow by parsing as long and wrapping
+        // TODO: add diagnostic for overflow
+        if (long.TryParse(hexString, System.Globalization.NumberStyles.HexNumber, null, out var longResult))
+        {
+            return unchecked((int)longResult);
+        }
+
+        // If even long fails, parse as ulong and wrap (hex values are typically unsigned)
+        if (ulong.TryParse(hexString, System.Globalization.NumberStyles.HexNumber, null, out var ulongResult))
+        {
+            return unchecked((int)ulongResult);
+        }
+
+        // Fallback - should not reach here with valid lexer output
+        return 0;
     }
 
     public static DataExprNode EmptyArray(Token openBracket, Token closeBracket)

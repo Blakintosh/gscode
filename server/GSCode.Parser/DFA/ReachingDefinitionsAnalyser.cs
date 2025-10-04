@@ -550,6 +550,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             TokenType.Thread => AnalyseThreadedFunctionCall(prefix, symbolTable, sense),
             TokenType.BitAnd => AnalyseFunctionPointer(prefix, symbolTable, sense),
+            TokenType.Not => AnalyseNotOp(prefix, symbolTable, sense),
             _ => ScrData.Default,
         };
     }
@@ -590,6 +591,28 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // Return as a FunctionPointer type (a pointer to the function, not the function itself)
         return new ScrData(ScrDataTypes.FunctionPointer, functionData.Value);
+    }
+
+    private ScrData AnalyseNotOp(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        ScrData operand = AnalyseExpr(prefix.Operand!, symbolTable, sense);
+
+        // Needs to be a boolean, or at least can be coerced to one.
+        if (!operand.CanEvaluateToBoolean() && !operand.IsAny())
+        {
+            AddDiagnostic(prefix.Operand!.Range, GSCErrorCodes.NoImplicitConversionExists, operand.TypeToString(), ScrDataTypeNames.Bool);
+            return ScrData.Default;
+        }
+
+        bool? truthy = operand.IsTruthy();
+
+        // Value not known, so just return bool.
+        if (truthy is null)
+        {
+            return new ScrData(ScrDataTypes.Bool);
+        }
+
+        return new ScrData(ScrDataTypes.Bool, !truthy.Value);
     }
 
     private ScrData AnalysePostfixExpr(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)

@@ -61,6 +61,7 @@ public enum GSCErrorCodes
     UnexpectedConstructorParameter = 2020,
     ExpectedClassBodyDefinition = 2021,
     ExpectedMemberIdentifier = 2022,
+    ExpectedWaittillIdentifier = 2023,
 
     // 3xxx errors are issued by static analysis
     ObjectTokenNotValid = 3000,
@@ -187,6 +188,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.UnexpectedConstructorParameter, new("Expected ')' to complete constructor definition, but instead got '{0}'. If this was intentional, constructor parameters are not supported by GSC.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedClassBodyDefinition, new("Expected a member, method or constructor definition, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedMemberIdentifier, new("Expected an identifier corresponding to a member name, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedWaittillIdentifier, new("Expected an identifier corresponding to a wait till variable name, but instead got '{0}'.", DiagnosticSeverity.Error) },
 
         // 3xxx
         { GSCErrorCodes.ObjectTokenNotValid, new("The operator '{0}' is not valid on non-object type '{1}'.", DiagnosticSeverity.Error) },

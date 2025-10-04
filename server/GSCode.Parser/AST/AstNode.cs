@@ -45,6 +45,7 @@ internal enum AstNodeType
     ClassMember,
     Constructor,
     Destructor,
+    WaittillVariables,
 }
 
 internal enum ExprOperatorType
@@ -60,7 +61,8 @@ internal enum ExprOperatorType
     FunctionCall,
     Constructor,
     Indexer,
-    CallOn
+    CallOn,
+    Waittill,
 }
 
 internal abstract class AstNode(AstNodeType nodeType)
@@ -424,7 +426,7 @@ internal sealed class CalledOnNode(ExprNode on, ExprNode call) : ExprNode(ExprOp
     public ExprNode Call { get; } = call;
 }
 
-internal class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBodyListNode body) : AstNode(AstNodeType.ClassDefinition)
+internal sealed class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBodyListNode body) : AstNode(AstNodeType.ClassDefinition)
 {
     public Token? NameToken { get; } = nameToken;
     public Token? InheritsFromToken { get; } = inheritsFromToken;
@@ -432,14 +434,28 @@ internal class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBo
     public ClassBodyListNode Body { get; } = body;
 }
 
-internal class MemberDeclNode(Token? nameToken) : AstNode(AstNodeType.ClassMember)
+internal sealed class MemberDeclNode(Token? nameToken) : AstNode(AstNodeType.ClassMember)
 {
     public Token? NameToken { get; } = nameToken;
 }
 
-internal class StructorDefnNode(Token keywordToken, StmtListNode body)
+internal sealed class StructorDefnNode(Token keywordToken, StmtListNode body)
     : AstNode(keywordToken.Type == TokenType.Constructor ? AstNodeType.Constructor : AstNodeType.Destructor)
 {
     public Token KeywordToken { get; } = keywordToken;
     public StmtListNode Body { get; } = body;
+}
+
+internal sealed class WaittillNode(ExprNode entity, ExprNode notifyCondition, WaittillVariablesNode variables, Range range)
+    : ExprNode(ExprOperatorType.Waittill, range)
+{
+    public ExprNode Entity { get; } = entity;
+    public ExprNode NotifyCondition { get; } = notifyCondition;
+    public WaittillVariablesNode Variables { get; } = variables;
+}
+
+
+internal sealed class WaittillVariablesNode() : AstNode(AstNodeType.WaittillVariables)
+{
+    public LinkedList<IdentifierExprNode> Variables { get; } = new();
 }

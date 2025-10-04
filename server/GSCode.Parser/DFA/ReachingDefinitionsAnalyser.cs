@@ -81,8 +81,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 OutSets[node] = new Dictionary<string, ScrVariable>(StringComparer.OrdinalIgnoreCase);
             }
 
-            // TODO: GSC does NOT use lexical scope within functions.
-
             // Calculate the out set
             if (node.Type == CfgNodeType.FunctionEntry)
             {
@@ -417,9 +415,40 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             ExprOperatorType.Indexer => AnalyseIndexerExpr((ArrayIndexNode)expr, symbolTable),
             ExprOperatorType.CallOn => AnalyseCallOnExpr((CalledOnNode)expr, symbolTable),
             ExprOperatorType.FunctionCall => AnalyseFunctionCall((FunCallNode)expr, symbolTable, sense),
+            ExprOperatorType.Waittill => AnalyseWaittillExpr((WaittillNode)expr, symbolTable, sense),
             // ExprOperatorType.MethodCall => AnalyseMethodCall((MethodCallNode)expr, symbolTable, sense),
             _ => ScrData.Default,
         };
+    }
+
+    private ScrData AnalyseWaittillExpr(WaittillNode expr, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        ScrData notifyCondition = AnalyseExpr(expr.NotifyCondition, symbolTable, sense);
+        ScrData entity = AnalyseExpr(expr.Entity, symbolTable, sense);
+
+        // The called-on must be an entity.
+        if (entity.Type != ScrDataTypes.Entity && !entity.IsAny())
+        {
+            AddDiagnostic(expr.Entity.Range, GSCErrorCodes.NoImplicitConversionExists, entity.TypeToString(), ScrDataTypeNames.Entity);
+            return ScrData.Default;
+        }
+
+        // The notify condition must be a string or hash.
+        if (notifyCondition.Type != ScrDataTypes.String && notifyCondition.Type != ScrDataTypes.Hash && !notifyCondition.IsAny())
+        {
+            AddDiagnostic(expr.NotifyCondition.Range, GSCErrorCodes.NoImplicitConversionExists, notifyCondition.TypeToString(), ScrDataTypeNames.String, ScrDataTypeNames.Hash);
+            return ScrData.Default;
+        }
+
+        // Now emit the variables, all as type any.
+        foreach (IdentifierExprNode variable in expr.Variables.Variables)
+        {
+            symbolTable.AddOrSetVariableSymbol(variable.Identifier, ScrData.Default);
+            Sense.AddSenseToken(variable.Token, ScrVariableSymbol.Declaration(variable, ScrData.Default));
+        }
+
+        // Waittill doesn't return.
+        return ScrData.Void;
     }
 
     private ScrData AnalyseBinaryExpr(BinaryExprNode binary, SymbolTable symbolTable, bool createSenseTokenForRhs = true)

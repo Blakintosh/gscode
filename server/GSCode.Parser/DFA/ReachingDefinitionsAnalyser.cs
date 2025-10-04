@@ -1411,11 +1411,14 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return ScrData.Default;
         }
 
-        // TODO: if map, check for string key. If array, check for int index.
+        // TODO: I'm not sure 100% how GSC differentiates between array and map.
+        // It might be that it implicitly converts an array to a map as soon as it first gets
+        // a non-int index.
+        // We'll do it like this for now, and adjust later if needed.
 
         if (collection.Type == ScrDataTypes.Array)
         {
-            if (indexer.Type != ScrDataTypes.Int)
+            if (indexer.Type != ScrDataTypes.Int && indexer.Type != ScrDataTypes.String)
             {
                 AddDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
                 return ScrData.Default;

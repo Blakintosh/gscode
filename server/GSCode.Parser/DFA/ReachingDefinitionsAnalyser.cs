@@ -10,11 +10,12 @@ using Serilog;
 
 namespace GSCode.Parser.DFA;
 
-internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable)
+internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null)
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = functionGraphs;
     public ParserIntelliSense Sense { get; } = sense;
     public Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = exportedSymbolTable;
+    public ScriptAnalyserData? ApiData { get; } = apiData;
 
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> InSets { get; } = new();
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> OutSets { get; } = new();
@@ -89,7 +90,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             }
             else if (node.Type == CfgNodeType.BasicBlock)
             {
-                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope);
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
 
                 // TODO: Unioning of sets is not ideal, better to merge the ScrDatas of common key across multiple dictionaries. Easier to use with the symbol tables.
                 // TODO: Analyse statement-by-statement, using the analysers already created, and get the out set.
@@ -101,21 +102,21 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             }
             else if (node.Type == CfgNodeType.EnumerationNode)
             {
-                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope);
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
 
                 AnalyseEnumeration((EnumerationNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
             else if (node.Type == CfgNodeType.IterationNode)
             {
-                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope);
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
 
                 AnalyseIteration((IterationNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
             else if (node.Type == CfgNodeType.DecisionNode)
             {
-                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope);
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
 
                 AnalyseDecision((DecisionNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
@@ -162,16 +163,16 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             switch (node.Type)
             {
                 case CfgNodeType.BasicBlock:
-                    AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope));
+                    AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
                     break;
                 case CfgNodeType.EnumerationNode:
-                    AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope));
+                    AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
                     break;
                 case CfgNodeType.IterationNode:
-                    AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope));
+                    AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
                     break;
                 case CfgNodeType.DecisionNode:
-                    AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope));
+                    AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
                     break;
             }
         }

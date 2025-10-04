@@ -523,7 +523,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             return Task.CompletedTask;
         }
 
-        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, Sense, allSymbols);
+        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, Sense, allSymbols, TryGetApi());
         try
         {
             dataFlowAnalyser.Run();
@@ -548,7 +548,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
             EmitUnusedVariableDiagnostics();
             EmitSwitchCaseDiagnostics();
             EmitAssignOnThreadDiagnostics();
-            EmitUnknownFunctionDiagnostics();
         }
         catch (Exception ex)
         {
@@ -1787,73 +1786,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
                         Sense.AddSpaDiagnostic(bin.Range, GSCErrorCodes.AssignOnThreadedFunction);
                     }
                 }
-            }
-        }
-    }
-
-    private void EmitUnknownFunctionDiagnostics()
-    {
-        if (RootNode is null) return;
-        foreach (var call in EnumerateCalls(RootNode))
-        {
-            string? ns = null;
-            string? name = null;
-            Range idRange = call.Range;
-
-            if (call.Function is IdentifierExprNode id)
-            {
-                name = id.Identifier;
-                idRange = id.Range;
-            }
-            else if (call.Function is NamespacedMemberNode nsm && nsm.Member is IdentifierExprNode mem && nsm.Namespace is IdentifierExprNode nsId)
-            {
-                ns = nsId.Identifier;
-                name = mem.Identifier;
-                idRange = mem.Range;
-            }
-            else
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(name)) continue;
-
-            // Skip keyword-like identifiers to avoid false positives
-            if (s_completionKeywords.Contains(name)) continue;
-
-            // Skip builtin API functions (globals)
-            if (IsBuiltinFunction(name)) continue;
-
-            // Skip function-pointer calls: [[ identifier ]](...)
-            Token? idToken = Sense.Tokens.Get(idRange.Start);
-            if (idToken is not null && idToken.Type == TokenType.Identifier && IsFunctionPointerCallIdentifier(idToken))
-            {
-                continue; // function pointer variable being invoked; not a direct function symbol
-            }
-
-            bool found = false;
-            if (DefinitionsTable is not null)
-            {
-                if (ns is not null)
-                {
-                    if (DefinitionsTable.GetFunctionLocation(ns, name) is not null)
-                    {
-                        found = true;
-                    }
-                }
-                else
-                {
-                    string curNs = DefinitionsTable.CurrentNamespace;
-                    if (DefinitionsTable.GetFunctionLocation(curNs, name) is not null || DefinitionsTable.GetFunctionLocationAnyNamespace(name) is not null)
-                    {
-                        found = true;
-                    }
-                }
-            }
-
-            if (!found)
-            {
-                Sense.AddSpaDiagnostic(idRange, GSCErrorCodes.FunctionNotFoundInUsingsOrBuiltins, name);
             }
         }
     }

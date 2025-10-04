@@ -37,6 +37,7 @@ internal class SymbolTable
 {
     private Dictionary<string, IExportedSymbol> GlobalSymbolTable { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, ScrVariable> VariableSymbols { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private ScriptAnalyserData? ApiData { get; }
 
     private static HashSet<string> ReservedSymbols { get; } = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -48,11 +49,12 @@ internal class SymbolTable
 
     public int LexicalScope { get; } = 0;
 
-    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope)
+    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope, ScriptAnalyserData? apiData = null)
     {
         GlobalSymbolTable = exportedSymbolTable;
         VariableSymbols = inSet;
         LexicalScope = lexicalScope;
+        ApiData = apiData;
     }
 
     /// <summary>
@@ -174,7 +176,7 @@ internal class SymbolTable
     /// <summary>
     /// Tries to get the associated ScrData for a function if it exists.
     /// This is used for function calls (e.g., b()), function pointers (e.g., &b), and namespaced functions.
-    /// All functions are global - looks up in the global symbol table.
+    /// All functions are global - looks up in the global symbol table, then API functions as fallback.
     /// Reserved functions (waittill, notify, isdefined, endon) take precedence.
     /// </summary>
     /// <param name="symbol">The function symbol to look for</param>
@@ -184,14 +186,14 @@ internal class SymbolTable
     {
         flags = SymbolFlags.None;
 
-        // Reserved functions take precedence
+        // 1. Reserved functions take precedence
         if (ReservedSymbols.Contains(symbol))
         {
             flags = SymbolFlags.Global | SymbolFlags.Reserved | SymbolFlags.BuiltIn;
             return new ScrData(ScrDataTypes.Function);
         }
 
-        // Check if the symbol is a global function (all functions are global in GSC)
+        // 2. Check global symbol table (script-defined functions)
         if (GlobalSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
         {
             if (exportedSymbol.Type == ExportedSymbolType.Function)
@@ -204,6 +206,17 @@ internal class SymbolTable
                 flags = SymbolFlags.Global;
                 // TODO: needs data
                 return new ScrData(ScrDataTypes.Object, null);
+            }
+        }
+
+        // 3. Check API functions (built-in library functions)
+        if (ApiData is not null)
+        {
+            ScrFunction? apiFunction = ApiData.GetApiFunction(symbol);
+            if (apiFunction is not null)
+            {
+                flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
+                return new ScrData(ScrDataTypes.Function, apiFunction);
             }
         }
 
@@ -244,12 +257,24 @@ internal class SymbolTable
     {
         flags = SymbolFlags.None;
 
+        // Check global symbol table first
         if (GlobalSymbolTable.TryGetValue($"{namespaceName}::{symbol}", out IExportedSymbol? exportedSymbol))
         {
             if (exportedSymbol.Type == ExportedSymbolType.Function && ((ScrFunction)exportedSymbol).Namespace == namespaceName)
             {
                 flags = SymbolFlags.Global;
                 return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
+            }
+        }
+
+        // Check if namespace is "sys" and lookup in API
+        if (namespaceName.Equals("sys", StringComparison.OrdinalIgnoreCase) && ApiData is not null)
+        {
+            ScrFunction? apiFunction = ApiData.GetApiFunction(symbol);
+            if (apiFunction is not null)
+            {
+                flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
+                return new ScrData(ScrDataTypes.Function, apiFunction);
             }
         }
 

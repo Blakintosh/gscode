@@ -227,11 +227,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             inSet[param.Name.Lexeme] = new(param.Name.Lexeme, ScrData.Default, 0, false);
         }
 
-        // Add global scoped variables to the in set.
-        inSet["self"] = new("self", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
-        inSet["level"] = new("level", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
-        inSet["game"] = new("game", new ScrData(ScrDataTypes.Array), 0, true);
-        inSet["anim"] = new("anim", new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic()), 0, true);
+        // Note: Built-in globals (self, level, game, anim) are no longer added to the symbol table.
+        // They are implicitly available but should be handled separately if needed.
 
         if (node.Parameters.Vararg)
         {
@@ -551,8 +548,47 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         return prefix.Operation switch
         {
             TokenType.Thread => AnalyseThreadedFunctionCall(prefix, symbolTable, sense),
+            TokenType.BitAnd => AnalyseFunctionPointer(prefix, symbolTable, sense),
             _ => ScrData.Default,
         };
+    }
+
+    /// <summary>
+    /// Analyzes a function pointer expression (e.g., &functionName).
+    /// This looks up the function in the global function table and returns a FunctionPointer type.
+    /// </summary>
+    private ScrData AnalyseFunctionPointer(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        // The operand should be an identifier
+        if (prefix.Operand is not IdentifierExprNode identifier)
+        {
+            // For now, just analyze the operand normally
+            return AnalyseExpr(prefix.Operand!, symbolTable, sense);
+        }
+
+        // Look up the function in the global function table
+        ScrData functionData = symbolTable.TryGetFunction(identifier.Identifier, out SymbolFlags flags);
+
+        if (functionData.Type == ScrDataTypes.Undefined)
+        {
+            AddDiagnostic(identifier.Range, GSCErrorCodes.FunctionDoesNotExist, identifier.Identifier);
+            return ScrData.Undefined();
+        }
+
+        if (functionData.Type != ScrDataTypes.Function)
+        {
+            AddDiagnostic(identifier.Range, GSCErrorCodes.ExpectedFunction, functionData.TypeToString());
+            return ScrData.Undefined();
+        }
+
+        // Add sense token for the function reference
+        if (!flags.HasFlag(SymbolFlags.Reserved) && !functionData.ValueUnknown())
+        {
+            Sense.AddSenseToken(identifier.Token, new ScrFunctionReferenceSymbol(identifier.Token, functionData.Get<ScrFunction>()));
+        }
+
+        // Return as a FunctionPointer type (a pointer to the function, not the function itself)
+        return new ScrData(ScrDataTypes.FunctionPointer, functionData.Value);
     }
 
     private ScrData AnalysePostfixExpr(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)
@@ -1391,8 +1427,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
     private ScrData AnalyseIdentifierExpr(IdentifierExprNode expr, SymbolTable symbolTable, bool createSenseTokenForRhs = true)
     {
-        // Analyze and return the corresponding ScrData for the field
-        ScrData? value = symbolTable.TryGetVariableSymbol(expr.Identifier, out SymbolFlags flags);
+        // Analyze and return the corresponding ScrData for the local variable
+        ScrData? value = symbolTable.TryGetLocalVariable(expr.Identifier, out SymbolFlags flags);
         if (value is not ScrData data)
         {
             return ScrData.Undefined();
@@ -1400,15 +1436,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         if (data.Type != ScrDataTypes.Undefined)
         {
-            if (flags.HasFlag(SymbolFlags.Global) && data.Type == ScrDataTypes.Function)
-            {
-                if (createSenseTokenForRhs && !flags.HasFlag(SymbolFlags.Reserved) && !data.ValueUnknown())
-                {
-                    Sense.AddSenseToken(expr.Token, new ScrFunctionReferenceSymbol(expr.Token, data.Get<ScrFunction>()));
-                }
-                return data;
-            }
-
             if (flags.HasFlag(SymbolFlags.Global))
             {
                 if (createSenseTokenForRhs)
@@ -1563,6 +1590,37 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         return symbol;
     }
 
+    /// <summary>
+    /// Analyzes a dereference operation [[ expr ]], validating that expr is a FunctionPointer
+    /// and converting it to a Function type for calling.
+    /// </summary>
+    /// <param name="derefExpr">The expression being dereferenced (inside [[ ]])</param>
+    /// <param name="symbolTable">The symbol table for lookups</param>
+    /// <param name="sense">IntelliSense for diagnostics</param>
+    /// <returns>A Function if valid, or Default/Undefined otherwise</returns>
+    private ScrData AnalyseDeref(ExprNode derefExpr, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        // Analyze the expression inside the dereference brackets
+        ScrData functionPtrData = AnalyseExpr(derefExpr, symbolTable, sense);
+
+        // If type is unknown, we can't validate
+        if (functionPtrData.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        // Validate that it's a FunctionPointer
+        if (functionPtrData.Type != ScrDataTypes.FunctionPointer)
+        {
+            // Not a function pointer - emit diagnostic
+            AddDiagnostic(derefExpr.Range, GSCErrorCodes.ExpectedFunction, functionPtrData.TypeToString());
+            return ScrData.Default;
+        }
+
+        // Dereference: FunctionPointer → Function
+        return new ScrData(ScrDataTypes.Function, functionPtrData.Value);
+    }
+
     private ScrData AnalyseFunctionCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
     {
         ScrData targetValue = target ?? ScrData.Default;
@@ -1573,18 +1631,41 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return ScrData.Default;
         }
 
-        ScrData functionTarget = AnalyseExpr(call.Function, symbolTable, sense);
+        ScrData functionTarget;
+
+        // If it's a direct identifier, look it up in the global function table
+        // This handles: b() - looks up function b in globals
+        if (call.Function is IdentifierExprNode identifierNode)
+        {
+            functionTarget = symbolTable.TryGetFunction(identifierNode.Identifier, out SymbolFlags flags);
+
+            if (functionTarget.Type == ScrDataTypes.Undefined)
+            {
+                AddDiagnostic(call.Function.Range, GSCErrorCodes.FunctionDoesNotExist, identifierNode.Identifier);
+                return ScrData.Default;
+            }
+
+            // Add sense token for the function reference
+            if (!flags.HasFlag(SymbolFlags.Reserved) && !functionTarget.ValueUnknown())
+            {
+                Sense.AddSenseToken(identifierNode.Token, new ScrFunctionReferenceSymbol(identifierNode.Token, functionTarget.Get<ScrFunction>()));
+            }
+        }
+        // If it's a namespaced function, analyze it as scope resolution
+        // This handles: namespace::func() - direct global function call
+        else if (call.Function is NamespacedMemberNode namespacedMember)
+        {
+            functionTarget = AnalyseScopeResolution(namespacedMember, symbolTable, sense);
+        }
+        else
+        {
+            // For dereference calls [[ expr ]](), explicitly validate and dereference
+            // This expects a FunctionPointer and returns a Function
+            functionTarget = AnalyseDeref(call.Function, symbolTable, sense);
+        }
 
         if (functionTarget.TypeUnknown())
         {
-            return ScrData.Default;
-        }
-
-        if (functionTarget.Type == ScrDataTypes.Undefined && call.Function is IdentifierExprNode identifierNode)
-        {
-            string functionName = identifierNode.Identifier;
-            // TODO: temp - merge broke function resolution in RDA.
-            // AddDiagnostic(call.Function!.Range, GSCErrorCodes.FunctionDoesNotExist, functionName);
             return ScrData.Default;
         }
 
@@ -1621,8 +1702,47 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     {
         ScrData targetValue = target ?? ScrData.Default;
 
-        // Analyse the function we're calling.
-        ScrData functionTarget = AnalyseExpr(call.Operand, symbolTable, sense);
+        if (call.Operand is null)
+        {
+            return ScrData.Undefined();
+        }
+
+        ScrData functionTarget;
+
+        // If it's a direct identifier, look it up in the global function table
+        if (call.Operand is IdentifierExprNode identifierNode)
+        {
+            functionTarget = symbolTable.TryGetFunction(identifierNode.Identifier, out SymbolFlags flags);
+
+            if (functionTarget.Type == ScrDataTypes.Undefined)
+            {
+                AddDiagnostic(call.Operand.Range, GSCErrorCodes.FunctionDoesNotExist, identifierNode.Identifier);
+                return ScrData.Undefined();
+            }
+
+            // Add sense token for the function reference
+            if (!flags.HasFlag(SymbolFlags.Reserved) && !functionTarget.ValueUnknown())
+            {
+                Sense.AddSenseToken(identifierNode.Token, new ScrFunctionReferenceSymbol(identifierNode.Token, functionTarget.Get<ScrFunction>()));
+            }
+        }
+        // If it's a namespaced function, analyze it as scope resolution
+        // This handles: thread namespace::func() - direct global function call
+        else if (call.Operand is NamespacedMemberNode namespacedMember)
+        {
+            functionTarget = AnalyseScopeResolution(namespacedMember, symbolTable, sense);
+        }
+        else
+        {
+            // For dereference calls thread [[ expr ]](), explicitly validate and dereference
+            functionTarget = AnalyseDeref(call.Operand, symbolTable, sense);
+        }
+
+        // Verify it's actually a function
+        if (!functionTarget.TypeUnknown() && functionTarget.Type != ScrDataTypes.Function)
+        {
+            AddDiagnostic(call.Operand.Range, GSCErrorCodes.ExpectedFunction, functionTarget.TypeToString());
+        }
 
         // Threaded calls won't return anything.
         return ScrData.Undefined();

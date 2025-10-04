@@ -126,54 +126,88 @@ internal class SymbolTable
     }
 
     /// <summary>
-    /// Tries to get the associated ScrData for a symbol if it exists.
+    /// Tries to get the associated ScrData for a local variable if it exists.
+    /// This is used for normal identifier references (e.g., a = b, where b is looked up in locals).
     /// </summary>
     /// <param name="symbol">The symbol to look for</param>
     /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
-    public ScrData TryGetVariableSymbol(string symbol, out SymbolFlags flags)
+    public ScrData TryGetLocalVariable(string symbol, out SymbolFlags flags)
     {
         flags = SymbolFlags.None;
 
-        // Reserved takes precedence over local variables, and locals take precedence over globals.
+        // Check if the symbol exists in the local variable table
+        if (VariableSymbols.TryGetValue(symbol, out ScrVariable? localData))
+        {
+            if (localData.Global)
+            {
+                flags = SymbolFlags.Global;
+            }
+            return localData.Data!;
+        }
 
+        // Handle built-in implicit globals that are always available
+        if (symbol.Equals("self", StringComparison.OrdinalIgnoreCase))
+        {
+            flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
+            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+        }
+        if (symbol.Equals("level", StringComparison.OrdinalIgnoreCase))
+        {
+            flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
+            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+        }
+        if (symbol.Equals("game", StringComparison.OrdinalIgnoreCase))
+        {
+            flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
+            return new ScrData(ScrDataTypes.Array);
+        }
+        if (symbol.Equals("anim", StringComparison.OrdinalIgnoreCase))
+        {
+            flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
+            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+        }
 
-        // TODO: not sure I'm happy with this, we might want to just syntactically enforce the special functions.
-        // If the symbol is reserved, return this.
+        // If the symbol doesn't exist, return undefined.
+        return ScrData.Undefined();
+    }
+
+    /// <summary>
+    /// Tries to get the associated ScrData for a function if it exists.
+    /// This is used for function calls (e.g., b()), function pointers (e.g., &b), and namespaced functions.
+    /// All functions are global - looks up in the global symbol table.
+    /// Reserved functions (waittill, notify, isdefined, endon) take precedence.
+    /// </summary>
+    /// <param name="symbol">The function symbol to look for</param>
+    /// <param name="flags">The flags for the symbol</param>
+    /// <returns>The associated ScrData if the function exists, undefined otherwise</returns>
+    public ScrData TryGetFunction(string symbol, out SymbolFlags flags)
+    {
+        flags = SymbolFlags.None;
+
+        // Reserved functions take precedence
         if (ReservedSymbols.Contains(symbol))
         {
             flags = SymbolFlags.Global | SymbolFlags.Reserved | SymbolFlags.BuiltIn;
             return new ScrData(ScrDataTypes.Function);
         }
 
-        // Check if the symbol exists in the global table
-        if (VariableSymbols.TryGetValue(symbol, out ScrVariable? globalData))
-        {
-            if (globalData.Global)
-            {
-                flags = SymbolFlags.Global;
-            }
-            return globalData.Data!;
-        }
-
-        // Check if the symbol is an exported symbol.
+        // Check if the symbol is a global function (all functions are global in GSC)
         if (GlobalSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
         {
-            if (exportedSymbol.Type == ExportedSymbolType.Function && ((ScrFunction)exportedSymbol).Implicit)
+            if (exportedSymbol.Type == ExportedSymbolType.Function)
             {
                 flags = SymbolFlags.Global;
-
                 return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
             }
             else if (exportedSymbol.Type == ExportedSymbolType.Class)
             {
                 flags = SymbolFlags.Global;
-
                 // TODO: needs data
                 return new ScrData(ScrDataTypes.Object, null);
             }
         }
 
-        // If the symbol doesn't exist, return undefined.
+        // If the function doesn't exist, return undefined
         return ScrData.Undefined();
     }
 

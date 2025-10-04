@@ -225,7 +225,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingUsingFile, new("Unable to locate file '{0}' in the workspace or in the shared scripts directory.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotEnumerateType, new("Type '{0}' is not enumerable.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.FunctionDoesNotExist, new("The function '{0}' could not be resolved in this context and may not exist in builtins.\nNote: Built-in function checking is based on Treyarch's API, which may contain errors.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.FunctionDoesNotExist, new("The function '{0}' could not be resolved in this context and may not exist in built-ins.\nNote: Built-in function checking is based on Treyarch's API, which may contain errors.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.ExpectedFunction, new("Expected a function, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ReservedSymbol, new("The symbol '{0}' is reserved.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnusedVariable, new("The variable '{0}' is declared but never used.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },

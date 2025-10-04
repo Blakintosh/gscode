@@ -409,6 +409,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             ExprOperatorType.Binary when expr is NamespacedMemberNode namespaceMember => AnalyseScopeResolution(namespaceMember, symbolTable, sense),
             ExprOperatorType.Binary => AnalyseBinaryExpr((BinaryExprNode)expr, symbolTable, createSenseTokenForRhs),
             ExprOperatorType.Prefix => AnalysePrefixExpr((PrefixExprNode)expr, symbolTable, sense),
+            ExprOperatorType.Postfix => AnalysePostfixExpr((PostfixExprNode)expr, symbolTable, sense),
             ExprOperatorType.DataOperand => AnalyseDataExpr((DataExprNode)expr),
             ExprOperatorType.IdentifierOperand => AnalyseIdentifierExpr((IdentifierExprNode)expr, symbolTable, createSenseTokenForRhs),
             ExprOperatorType.Vector => AnalyseVectorExpr((VectorExprNode)expr, symbolTable),
@@ -554,6 +555,114 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         };
     }
 
+    private ScrData AnalysePostfixExpr(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        return postfix.Operation switch
+        {
+            TokenType.Increment => AnalysePostIncrementOp(postfix, symbolTable, sense),
+            TokenType.Decrement => AnalysePostDecrementOp(postfix, symbolTable, sense),
+            _ => ScrData.Default,
+        };
+    }
+
+    /// <summary>
+    /// Helper method to perform assignment to either a local variable or a struct property.
+    /// Handles read-only validation, symbol table updates, and sense token generation.
+    /// </summary>
+    /// <param name="operand">The expression node representing the assignment target (identifier or dot expression)</param>
+    /// <param name="target">The analyzed ScrData of the target before assignment</param>
+    /// <param name="newValue">The new value to assign</param>
+    /// <param name="symbolTable">The symbol table to update</param>
+    /// <returns>True if assignment was successful, false if it failed (e.g., read-only)</returns>
+    private bool TryAssignToTarget(ExprNode operand, ScrData target, ScrData newValue, SymbolTable symbolTable)
+    {
+        // Assigning to a local variable
+        if (operand is IdentifierExprNode identifier)
+        {
+            string symbolName = identifier.Identifier;
+
+            if (target.ReadOnly)
+            {
+                AddDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
+                return false;
+            }
+
+            symbolTable.SetSymbol(symbolName, newValue);
+            Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Usage(identifier, newValue));
+            return true;
+        }
+
+        // Assigning to a property on a struct
+        if (operand is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && target.Owner is ScrStruct destination)
+        {
+            string fieldName = target.FieldName ?? throw new NullReferenceException("Sanity check failed: Target data has no field name.");
+
+            if (target.ReadOnly)
+            {
+                AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                return false;
+            }
+
+            destination.Set(fieldName, newValue);
+
+            if (binaryExprNode.Right is IdentifierExprNode identifierNode)
+            {
+                Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, newValue));
+            }
+
+            return true;
+        }
+
+        // Unsupported assignment target
+        return false;
+    }
+
+    private ScrData AnalysePostIncrementOp(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        ScrData target = AnalyseExpr(postfix.Operand!, symbolTable, sense, false);
+
+        // TODO: Does it have to be int, or can it also be float?
+        if (target.Type != ScrDataTypes.Int && !target.IsAny())
+        {
+            AddDiagnostic(postfix.Operand!.Range, GSCErrorCodes.NoImplicitConversionExists, target.TypeToString(), ScrDataTypeNames.Int);
+            return ScrData.Default;
+        }
+
+        // Calculate the incremented value
+        ScrData incrementedValue = target.ValueUnknown()
+            ? new ScrData(target.Type)
+            : new ScrData(target.Type, target.Get<int>() + 1);
+
+        // Perform the assignment using the shared helper
+        TryAssignToTarget(postfix.Operand!, target, incrementedValue, symbolTable);
+
+        // Return its old value (post-increment returns the value before incrementing)
+        return target;
+    }
+
+    private ScrData AnalysePostDecrementOp(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        ScrData target = AnalyseExpr(postfix.Operand!, symbolTable, sense, false);
+
+        // TODO: Does it have to be int, or can it also be float?
+        if (target.Type != ScrDataTypes.Int && !target.IsAny())
+        {
+            AddDiagnostic(postfix.Operand!.Range, GSCErrorCodes.NoImplicitConversionExists, target.TypeToString(), ScrDataTypeNames.Int);
+            return ScrData.Default;
+        }
+
+        // Calculate the decremented value
+        ScrData decrementedValue = target.ValueUnknown()
+            ? new ScrData(target.Type)
+            : new ScrData(target.Type, target.Get<int>() - 1);
+
+        // Perform the assignment using the shared helper
+        TryAssignToTarget(postfix.Operand!, target, decrementedValue, symbolTable);
+
+        // Return its old value (post-decrement returns the value before decrementing)
+        return target;
+    }
+
     private ScrData AnalyseAssignOp(BinaryExprNode node, SymbolTable symbolTable)
     {
         // TODO: decouple this from the general binary handler, then when it's an identifier, manually resolve either it to be a declaration
@@ -636,57 +745,23 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense, false);
         ScrData right = AnalyseExpr(node.Right!, symbolTable, Sense);
 
-        // Variable op= expr
+        // For compound assignments on local variables, ensure the variable already exists
         if (node.Left is IdentifierExprNode identifier)
         {
-            string symbolName = identifier.Identifier;
-
-            // Must already exist
-            if (!symbolTable.ContainsSymbol(symbolName))
+            if (!symbolTable.ContainsSymbol(identifier.Identifier))
             {
-                AddDiagnostic(identifier.Range, GSCErrorCodes.NotDefined, symbolName);
+                AddDiagnostic(identifier.Range, GSCErrorCodes.NotDefined, identifier.Identifier);
                 return ScrData.Default;
             }
-
-            // Cannot assign to constant
-            if (left.ReadOnly)
-            {
-                AddDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
-                return ScrData.Default;
-            }
-
-            // Compute result then assign back
-            ScrData result = ExecuteCompoundOp(op, node, left, right);
-            symbolTable.SetSymbol(symbolName, result);
-            Sense.AddSenseToken(identifier.Token, ScrVariableSymbol.Usage(identifier, result));
-            return result;
         }
 
-        // StructField op= expr
-        if (node.Left is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && left.Owner is ScrStruct destination)
-        {
-            string fieldName = left.FieldName ?? throw new NullReferenceException("Sanity check failed: Left data has no field name.");
+        // Compute the result of the compound operation
+        ScrData result = ExecuteCompoundOp(op, node, left, right);
 
-            if (left.ReadOnly)
-            {
-                AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
-                return ScrData.Default;
-            }
+        // Perform the assignment using the shared helper
+        TryAssignToTarget(node.Left!, left, result, symbolTable);
 
-            ScrData result = ExecuteCompoundOp(op, node, left, right);
-            destination.Set(fieldName, result);
-
-            if (binaryExprNode.Right is IdentifierExprNode identifierNode)
-            {
-                Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, result));
-            }
-
-            return result;
-        }
-
-        // TODO: once all cases are covered, we should enable this.
-        // sense.AddSpaDiagnostic(node.Left!.Range, GSCErrorCodes.InvalidAssignmentTarget);
-        return ScrData.Default;
+        return result;
     }
 
     private ScrData ExecuteCompoundOp(TokenType op, BinaryExprNode node, ScrData left, ScrData right)

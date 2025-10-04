@@ -192,16 +192,19 @@
 						{/if}
 					{/snippet}
 				</CopyButton>
+				<!-- Issue 36 is for GSC, issue 35 is for CSC -->
 				<Button
 					variant="secondary"
 					size={'sm'}
 					class="w-full gap-4"
-					href="https://github.com/Blakintosh/gscode/issues/new?assignees=&labels=bug&projects=&template=bug_report.md&title="
+					href={languageName === 'GSC'
+						? 'https://github.com/Blakintosh/gscode/issues/36'
+						: 'https://github.com/Blakintosh/gscode/issues/35'}
 					target="_blank"
 					rel="noopener noreferrer"
 				>
 					<Flag class="w-4 h-4" />
-					<span class="hidden lg:block">Report an issue</span>
+					<span class="hidden lg:block">Report an API issue</span>
 				</Button>
 				<Button
 					variant="secondary"

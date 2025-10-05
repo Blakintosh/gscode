@@ -22,7 +22,7 @@ internal enum CfgNodeType
     EnumerationNode,
     IterationNode,
     SwitchNode,
-    SwitchDecisionNode
+    SwitchCaseDecisionNode
 }
 
 
@@ -79,10 +79,12 @@ internal class SwitchNode(SwitchStmtNode source, CfgNode continuation, int scope
 }
 
 
-internal class SwitchDecisionNode(CaseLabelNode label, int scope) : CfgNode(CfgNodeType.SwitchDecisionNode, scope)
+internal class SwitchCaseDecisionNode(CaseStmtNode caseStmt, SwitchNode parentSwitch, bool hasDefault, int scope) : CfgNode(CfgNodeType.SwitchCaseDecisionNode, scope)
 {
-    public CaseLabelNode Label { get; } = label;
-    public bool IsDefault { get; } = label.NodeType == AstNodeType.DefaultLabel;
+    public CaseStmtNode CaseStmt { get; } = caseStmt;
+    public LinkedList<CaseLabelNode> Labels { get; } = caseStmt.Labels;
+    public SwitchNode ParentSwitch { get; } = parentSwitch;
+    public bool HasDefault { get; } = hasDefault;
     public CfgNode WhenTrue { get; set; } = null!;
     public CfgNode WhenFalse { get; set; } = null!;
 }

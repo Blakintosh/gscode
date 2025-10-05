@@ -377,7 +377,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         SwitchHelper switchHelper = new(continuation);
 
         // Build the labels recursively, which in practice will go backwards, then we'll connect to the first label.
-        CfgNode firstLabel = Construct_SwitchBranch(switchAstNode.Cases.Cases.First!, sense, localHelper, switchHelper, out _);
+        CfgNode firstLabel = Construct_SwitchBranch(switchAstNode.Cases.Cases.First!, switchNode, sense, localHelper, switchHelper, out _);
 
         CfgNode.Connect(switchNode, firstLabel);
         switchNode.FirstLabel = firstLabel;
@@ -385,79 +385,42 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         return switchNode;
     }
 
-    private static CfgNode Construct_SwitchBranch(LinkedListNode<CaseStmtNode> @case, ParserIntelliSense sense, ControlFlowHelper localHelper, SwitchHelper switchHelper, out CfgNode branchBody)
+    private static CfgNode Construct_SwitchBranch(LinkedListNode<CaseStmtNode> @case, SwitchNode switchNode, ParserIntelliSense sense, ControlFlowHelper localHelper, SwitchHelper switchHelper, out CfgNode branchBody)
     {
         CaseStmtNode current = @case.Value;
 
-        // Step 1: proceed forward and construct all labels.
-        CfgNode? firstLabel = null;
-        SwitchDecisionNode? previousLabel = null;
-
-        List<SwitchDecisionNode> labels = new();
-
-        for (LinkedListNode<CaseLabelNode>? node = @case.Value.Labels.First; node != null; node = node.Next)
+        // Check for duplicate default labels within this case
+        bool hasDefault = false;
+        foreach (CaseLabelNode label in current.Labels)
         {
-            CaseLabelNode label = node.Value;
-
-            // Create a decision node for this label.
-            SwitchDecisionNode decision = new(label, localHelper.Scope);
-
-            // If this label is the default, use it as the unmatched node but don't connect it in this context.
             if (label.NodeType == AstNodeType.DefaultLabel)
             {
-                // If it's a duplicate default label, emit an error and skip it.
-                if (switchHelper.ContainsDefaultLabel)
+                if (hasDefault || switchHelper.ContainsDefaultLabel)
                 {
-                    sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.MultipleDefaultLabels);
-                    continue;
+                    sense.AddSpaDiagnostic(label.Value?.Range ?? label.Keyword.Range, GSCErrorCodes.MultipleDefaultLabels);
                 }
-                switchHelper.UnmatchedNode = decision;
-                switchHelper.ContainsDefaultLabel = true;
-                labels.Add(decision);
-                continue;
+                else
+                {
+                    hasDefault = true;
+                    switchHelper.ContainsDefaultLabel = true;
+                }
             }
-
-            firstLabel ??= decision;
-
-            // Connect the previous label to this one, if it exists.
-            if (previousLabel is not null)
-            {
-                CfgNode.Connect(previousLabel, decision);
-                previousLabel.WhenFalse = decision;
-            }
-
-            previousLabel = decision;
-            labels.Add(decision);
         }
+
+        // Create a single decision node for this case (containing all its labels)
+        SwitchCaseDecisionNode caseDecision = new(current, switchNode, hasDefault, localHelper.Scope);
 
         // Track what the continuation for the body should be, ie in case of fall-through.
         CfgNode continuationForBody = switchHelper.Continuation;
 
-        // Step 2: recurse into other branches, and let them generate their labels, and bodies backwards.
+        // Step 1: recurse into other branches, and let them generate their case nodes backwards.
+        CfgNode? nextCaseDecision = null;
         if (@case.Next is not null)
         {
-            CfgNode nextBranchLabel = Construct_SwitchBranch(@case.Next!, sense, localHelper, switchHelper, out continuationForBody);
-
-            // Connect our previous (ie last) label to the next branch's first label.
-            if (previousLabel is not null)
-            {
-                CfgNode.Connect(previousLabel!, nextBranchLabel);
-                previousLabel!.WhenFalse = nextBranchLabel;
-            }
-            else
-            {
-                // If previous label is null, then so is first label, which means this is a default-only case. We'll have to make the caller jump over us, then.
-                firstLabel = nextBranchLabel;
-            }
-        }
-        // Or if there's no next branch, then we're at the final label. Connect it to the unmatched node.
-        else if (previousLabel is not null)
-        {
-            CfgNode.Connect(previousLabel!, switchHelper.UnmatchedNode);
-            previousLabel!.WhenFalse = switchHelper.UnmatchedNode;
+            nextCaseDecision = Construct_SwitchBranch(@case.Next!, switchNode, sense, localHelper, switchHelper, out continuationForBody);
         }
 
-        // Step 3: construct the body of the case, knowing the continuation context.
+        // Step 2: construct the body of the case, knowing the continuation context.
         ControlFlowHelper newLocalHelper = new(localHelper)
         {
             ContinuationContext = continuationForBody,
@@ -466,19 +429,38 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
 
         branchBody = Construct(current.Body, sense, newLocalHelper);
 
-        // Step 4: connect all labels to the body.
-        foreach (SwitchDecisionNode label in labels)
+        // Step 3: connect this case decision node to the body and next case/continuation
+        CfgNode.Connect(caseDecision, branchBody);
+        caseDecision.WhenTrue = branchBody;
+
+        // If this case contains only default label(s), it should be the unmatched node
+        bool hasOnlyDefault = current.Labels.All(l => l.NodeType == AstNodeType.DefaultLabel);
+
+        if (hasOnlyDefault)
         {
-            CfgNode.Connect(label, branchBody);
-            label.WhenTrue = branchBody;
+            // Default-only case: set as unmatched node and point WhenFalse to body (unconditional)
+            switchHelper.UnmatchedNode = caseDecision;
+            caseDecision.WhenFalse = branchBody;
 
-            if (label.IsDefault)
-            {
-                label.WhenFalse = branchBody;
-            }
+            // Return the next case decision if it exists, otherwise the unmatched node (this node)
+            return nextCaseDecision ?? caseDecision;
         }
+        else
+        {
+            // Regular case: connect WhenFalse to next case or unmatched node
+            if (nextCaseDecision is not null)
+            {
+                CfgNode.Connect(caseDecision, nextCaseDecision);
+                caseDecision.WhenFalse = nextCaseDecision;
+            }
+            else
+            {
+                CfgNode.Connect(caseDecision, switchHelper.UnmatchedNode);
+                caseDecision.WhenFalse = switchHelper.UnmatchedNode;
+            }
 
-        return firstLabel ?? switchHelper.UnmatchedNode;
+            return caseDecision;
+        }
     }
 
     // private static CfgNode Construct_SwitchBranch(LinkedListNode<CaseStmtNode> @case, ParserIntelliSense sense, ControlFlowHelper localHelper, CfgNode continuation, out SwitchDecisionNode? finalLabel, out CfgNode nextBody)

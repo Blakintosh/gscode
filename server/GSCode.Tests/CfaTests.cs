@@ -151,9 +151,9 @@ public class CfaTests
     public void Test_SimpleSwitch()
     {
         // Expectation:
-        // (entry) -> (switch) -> (case1Label) -> (case2Label) -> (continuation/exit)
-        //                        case1Label (whenTrue) -> body1 -> (continuation)
-        //                        case2Label (whenTrue) -> body2 -> (continuation)
+        // (entry) -> (switch) -> (case1Decision) -> (case2Decision) -> (continuation/exit)
+        //                        case1Decision (whenTrue) -> body1 -> (continuation)
+        //                        case2Decision (whenTrue) -> body2 -> (continuation)
 
         CaseStmtNode case1 = CreateCase(1, [new ExprStmtNode(null), BreakStmt()]);
         CaseStmtNode case2 = CreateCase(2, [new ExprStmtNode(null), BreakStmt()]);
@@ -165,16 +165,16 @@ public class CfaTests
         // entry -> switch node
         SwitchNode switchNode = GetSingleOutgoing<SwitchNode>(cfg.Start);
 
-        // switch -> case1Label
-        SwitchDecisionNode case1Decision = GetSingleOutgoing<SwitchDecisionNode>(switchNode);
+        // switch -> case1 decision (contains all labels for case 1)
+        SwitchCaseDecisionNode case1Decision = GetSingleOutgoing<SwitchCaseDecisionNode>(switchNode);
 
-        // case1Label -> case2Label (when false)
-        SwitchDecisionNode case2Decision = Assert.IsType<SwitchDecisionNode>(case1Decision.WhenFalse);
+        // case1 -> case2 decision (when false)
+        SwitchCaseDecisionNode case2Decision = Assert.IsType<SwitchCaseDecisionNode>(case1Decision.WhenFalse);
 
-        // case1Label -> body1 (when true)
+        // case1 -> body1 (when true)
         BasicBlock body1 = Assert.IsType<BasicBlock>(case1Decision.WhenTrue);
 
-        // case2Label -> body2 (when true)
+        // case2 -> body2 (when true)
         BasicBlock body2 = Assert.IsType<BasicBlock>(case2Decision.WhenTrue);
 
         // Both bodies should have break statements, so they connect to continuation
@@ -184,7 +184,7 @@ public class CfaTests
         // Both should connect to the same continuation point
         Assert.Equal(contFromBody1, contFromBody2);
 
-        // case2Label's WhenFalse should also point to continuation (last case, no default)
+        // case2's WhenFalse should also point to continuation (last case, no default)
         Assert.Equal(case2Decision.WhenFalse, contFromBody1);
 
         // Continuation should be a basic block (the statement after switch)

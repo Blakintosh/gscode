@@ -242,10 +242,24 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         {
             // Skip the "None" and "Unknown" values
             if (value == ScrDataTypes.Void || value == ScrDataTypes.Any)
+            {
                 continue;
+            }
 
             if ((Type & value) == value)
             {
+                // Skip base types when superset types are present
+                // Entity is a superset of Struct, so skip Struct if Entity is present
+                if (value == ScrDataTypes.Struct && (Type & ScrDataTypes.Entity) == ScrDataTypes.Entity)
+                {
+                    continue;
+                }
+                // IString is a superset of String, so skip String if IString is present
+                if (value == ScrDataTypes.String && (Type & ScrDataTypes.IString) == ScrDataTypes.IString)
+                {
+                    continue;
+                }
+
                 if (!first)
                 {
                     result.Append(" | ");

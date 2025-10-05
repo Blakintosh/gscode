@@ -10,6 +10,14 @@ using Serilog;
 
 namespace GSCode.Parser.DFA;
 
+internal class SwitchAnalysisContext
+{
+    public ScrData SwitchExpressionType { get; set; } = ScrData.Default;
+    public HashSet<string> SeenLabelValues { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<SwitchCaseDecisionNode> AnalyzedNodes { get; } = new();
+    public bool HasDefault { get; set; } = false;
+}
+
 internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null)
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = functionGraphs;
@@ -19,6 +27,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> InSets { get; } = new();
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> OutSets { get; } = new();
+
+    public Dictionary<SwitchNode, SwitchAnalysisContext> SwitchContexts { get; } = new();
 
     public bool Silent { get; set; } = true;
 
@@ -33,6 +43,9 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     public void AnalyseFunction(ScrFunction function, ControlFlowGraph functionGraph)
     {
         Silent = true;
+
+        // Clear switch contexts at the start of each function analysis
+        SwitchContexts.Clear();
 
         Stack<CfgNode> worklist = new();
         worklist.Push(functionGraph.Start);
@@ -121,6 +134,20 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 AnalyseDecision((DecisionNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
+            else if (node.Type == CfgNodeType.SwitchNode)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseSwitch((SwitchNode)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.SwitchCaseDecisionNode)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseSwitchCaseDecision((SwitchCaseDecisionNode)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
             else
             {
                 // TODO: temp - just copy the in set to the out set.
@@ -170,6 +197,12 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                     break;
                 case CfgNodeType.IterationNode:
                     AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+                case CfgNodeType.SwitchNode:
+                    AnalyseSwitch((SwitchNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+                case CfgNodeType.SwitchCaseDecisionNode:
+                    AnalyseSwitchCaseDecision((SwitchCaseDecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
                     break;
                 case CfgNodeType.DecisionNode:
                     AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
@@ -325,6 +358,116 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // TODO: if the condition evaluates to false, then mark the block that follows as unreachable.
         // TODO: if the condition evaluates to true, then any else blocks are unreachable.
+    }
+
+    public void AnalyseSwitch(SwitchNode node, SymbolTable symbolTable)
+    {
+        // Create context for this switch (only once, even if revisited)
+        if (!SwitchContexts.ContainsKey(node))
+        {
+            var context = new SwitchAnalysisContext();
+
+            // Analyze expression ONCE and cache it
+            if (node.Source.Expression is not null)
+            {
+                context.SwitchExpressionType = AnalyseExpr(node.Source.Expression, symbolTable, Sense);
+            }
+
+            SwitchContexts[node] = context;
+        }
+    }
+
+    public void AnalyseSwitchCaseDecision(SwitchCaseDecisionNode node, SymbolTable symbolTable)
+    {
+        // Look up the switch context (guaranteed to exist because worklist processes SwitchNode first)
+        if (!SwitchContexts.TryGetValue(node.ParentSwitch, out var context))
+        {
+            return; // Defensive: shouldn't happen
+        }
+
+        // Check if we've already analyzed this specific node's labels
+        bool isFirstTimeAnalyzingThisNode = context.AnalyzedNodes.Add(node);
+
+        ScrData switchType = context.SwitchExpressionType;
+
+        foreach (CaseLabelNode label in node.Labels)
+        {
+            if (label.NodeType == AstNodeType.DefaultLabel)
+            {
+                // Only update state on first analysis of this node
+                if (isFirstTimeAnalyzingThisNode)
+                {
+                    if (context.HasDefault)
+                    {
+                        // Duplicate default (already caught in CFG construction, but could warn again if needed)
+                    }
+                    context.HasDefault = true;
+                }
+                continue;
+            }
+
+            if (label.Value is null) continue;
+
+            // Analyze the label value
+            ScrData labelType = AnalyseExpr(label.Value, symbolTable, Sense);
+
+            // Type compatibility check - always check since types can change during analysis
+            if (!AreTypesCompatibleForSwitch(switchType, labelType))
+            {
+                if (!Silent) // Only emit in diagnostic pass
+                {
+                    AddDiagnostic(label.Value.Range, GSCErrorCodes.UnreachableCase);
+                }
+            }
+
+            // Duplicate label check - only on first analysis of this node
+            if (isFirstTimeAnalyzingThisNode && TryGetCaseLabelValueKey(label.Value, out string key))
+            {
+                if (!context.SeenLabelValues.Add(key))
+                {
+                    if (!Silent) // Only emit in diagnostic pass
+                    {
+                        AddDiagnostic(label.Value.Range, GSCErrorCodes.DuplicateCaseLabel);
+                    }
+                }
+            }
+        }
+    }
+
+    private bool AreTypesCompatibleForSwitch(ScrData switchType, ScrData labelType)
+    {
+        // If either type is unknown, assume compatible
+        if (switchType.TypeUnknown() || labelType.TypeUnknown())
+        {
+            return true;
+        }
+
+        // TODO: Implement proper type compatibility rules for switch statements
+        // For now, allow any comparison (GSC is weakly typed)
+        return true;
+    }
+
+    private bool TryGetCaseLabelValueKey(ExprNode expr, out string key)
+    {
+        key = string.Empty;
+
+        if (expr is DataExprNode dataExpr)
+        {
+            // Encode type in key to avoid collisions between e.g., string "1" and int 1
+            key = dataExpr.Type switch
+            {
+                ScrDataTypes.Int => $"int:{dataExpr.Value}",
+                ScrDataTypes.Float => $"float:{dataExpr.Value}",
+                ScrDataTypes.String => $"str:{dataExpr.Value}",
+                ScrDataTypes.IString => $"istr:{dataExpr.Value}",
+                ScrDataTypes.Hash => $"hash:{dataExpr.Value}",
+                ScrDataTypes.Bool => $"bool:{dataExpr.Value}",
+                _ => string.Empty
+            };
+            return key.Length > 0;
+        }
+
+        return false;
     }
 
     public void AnalyseBasicBlock(BasicBlock block, SymbolTable symbolTable)

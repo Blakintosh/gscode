@@ -20,7 +20,9 @@ internal enum CfgNodeType
     FunctionEntry,
     FunctionExit,
     EnumerationNode,
-    IterationNode
+    IterationNode,
+    SwitchNode,
+    SwitchDecisionNode
 }
 
 
@@ -45,6 +47,12 @@ internal abstract class CfgNode(CfgNodeType type, int scope)
         to.ConnectIncoming(from);
     }
 
+    public static void Disconnect(CfgNode from, CfgNode to)
+    {
+        from.Outgoing.Remove(to);
+        to.Incoming.Remove(from);
+    }
+
     public CfgNodeType Type { get; } = type;
     public int Scope { get; } = scope;
 }
@@ -61,6 +69,22 @@ internal class DecisionNode(DecisionAstNode source, ExprNode condition, int scop
     public ExprNode Condition { get; } = condition;
     public CfgNode? WhenTrue { get; set; }
     public CfgNode? WhenFalse { get; set; }
+}
+
+internal class SwitchNode(SwitchStmtNode source, CfgNode continuation, int scope) : CfgNode(CfgNodeType.SwitchNode, scope)
+{
+    public SwitchStmtNode Source { get; } = source;
+    public CfgNode? FirstLabel { get; set; }
+    public CfgNode Continuation { get; set; } = continuation;
+}
+
+
+internal class SwitchDecisionNode(CaseLabelNode label, int scope) : CfgNode(CfgNodeType.SwitchDecisionNode, scope)
+{
+    public CaseLabelNode Label { get; } = label;
+    public bool IsDefault { get; } = label.NodeType == AstNodeType.DefaultLabel;
+    public CfgNode WhenTrue { get; set; } = null!;
+    public CfgNode WhenFalse { get; set; } = null!;
 }
 
 internal class IterationNode(ForStmtNode source, ExprNode? initialisation, ExprNode? condition, ExprNode? increment, int scope) : CfgNode(CfgNodeType.IterationNode, scope)

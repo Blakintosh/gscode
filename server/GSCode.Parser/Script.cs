@@ -1551,7 +1551,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         foreach (var sw in EnumerateSwitches(RootNode))
         {
             HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
-            bool defaultSeen = false;
+            // bool defaultSeen = false;
             var list = sw.Cases.Cases;
             for (var node = list.First; node is not null; node = node.Next)
             {
@@ -1560,22 +1560,24 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 // Handle labels
                 foreach (var label in cs.Labels)
                 {
-                    if (label.NodeType == AstNodeType.DefaultLabel)
-                    {
-                        if (defaultSeen)
-                        {
-                            // Multiple default labels
-                            Range r = GetCaseLabelOrBodyRange(cs, sw);
-                            Sense.AddSpaDiagnostic(r, GSCErrorCodes.MultipleDefaultLabels);
-                            // Also mark as unreachable
-                            Sense.AddSpaDiagnostic(r, GSCErrorCodes.UnreachableCase);
-                        }
-                        else
-                        {
-                            defaultSeen = true;
-                        }
-                    }
-                    else if (label.NodeType == AstNodeType.CaseLabel && label.Value is not null)
+                    // Now handled in CFA
+                    // if (label.NodeType == AstNodeType.DefaultLabel)
+                    // {
+                    //     if (defaultSeen)
+                    //     {
+                    //         // Multiple default labels
+                    //         Range r = GetCaseLabelOrBodyRange(cs, sw);
+                    //         Sense.AddSpaDiagnostic(r, GSCErrorCodes.MultipleDefaultLabels);
+                    //         // Also mark as unreachable
+                    //         Sense.AddSpaDiagnostic(r, GSCErrorCodes.UnreachableCase);
+                    //     }
+                    //     else
+                    //     {
+                    //         defaultSeen = true;
+                    //     }
+                    // }
+                    // else 
+                    if (label.NodeType == AstNodeType.CaseLabel && label.Value is not null)
                     {
                         if (TryEvaluateCaseLabelConstant(label.Value, out string key))
                         {

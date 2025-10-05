@@ -1,4 +1,5 @@
-﻿using GSCode.Parser.AST;
+﻿using GSCode.Data;
+using GSCode.Parser.AST;
 using GSCode.Parser.Data;
 using System;
 using System.Collections.Generic;
@@ -66,7 +67,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
             AstNodeType.DoWhileStmt => Construct_DoWhileStatement(ref currentNode, sense, localHelper),
             AstNodeType.ForStmt => Construct_ForStmt(ref currentNode, sense, localHelper),
             AstNodeType.ForeachStmt => Construct_ForeachStmt(ref currentNode, sense, localHelper),
-            AstNodeType.SwitchStmt => Construct_Skip(ref currentNode, sense, localHelper),
+            AstNodeType.SwitchStmt => Construct_SwitchStmt(ref currentNode, sense, localHelper),
             AstNodeType.BraceBlock => Construct_BraceBlock(ref currentNode, sense, localHelper, shouldIncreaseScope),
             _ => Construct_LogicBlock(ref currentNode, sense, localHelper),
         };
@@ -356,6 +357,196 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
 
         return iteration;
     }
+
+    private static CfgNode Construct_SwitchStmt(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    {
+        SwitchStmtNode switchAstNode = (SwitchStmtNode)currentNode!.Value;
+
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
+
+        SwitchNode switchNode = new(switchAstNode, continuation, localHelper.Scope);
+
+        // If there are no cases to analyse, then just early return.
+        if (switchAstNode.Cases.Cases.Count == 0)
+        {
+            return switchNode;
+        }
+
+        SwitchHelper switchHelper = new(continuation);
+
+        // Build the labels recursively, which in practice will go backwards, then we'll connect to the first label.
+        CfgNode firstLabel = Construct_SwitchBranch(switchAstNode.Cases.Cases.First!, sense, localHelper, switchHelper, out _);
+
+        CfgNode.Connect(switchNode, firstLabel);
+        switchNode.FirstLabel = firstLabel;
+
+        return switchNode;
+    }
+
+    private static CfgNode Construct_SwitchBranch(LinkedListNode<CaseStmtNode> @case, ParserIntelliSense sense, ControlFlowHelper localHelper, SwitchHelper switchHelper, out CfgNode branchBody)
+    {
+        CaseStmtNode current = @case.Value;
+
+        // Step 1: proceed forward and construct all labels.
+        CfgNode? firstLabel = null;
+        SwitchDecisionNode? previousLabel = null;
+
+        List<SwitchDecisionNode> labels = new();
+
+        for (LinkedListNode<CaseLabelNode>? node = @case.Value.Labels.First; node != null; node = node.Next)
+        {
+            CaseLabelNode label = node.Value;
+
+            // Create a decision node for this label.
+            SwitchDecisionNode decision = new(label, localHelper.Scope);
+
+            // If this label is the default, use it as the unmatched node but don't connect it in this context.
+            if (label.NodeType == AstNodeType.DefaultLabel)
+            {
+                // If it's a duplicate default label, emit an error and skip it.
+                if (switchHelper.ContainsDefaultLabel)
+                {
+                    sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.MultipleDefaultLabels);
+                    continue;
+                }
+                switchHelper.UnmatchedNode = decision;
+                switchHelper.ContainsDefaultLabel = true;
+                labels.Add(decision);
+                continue;
+            }
+
+            firstLabel ??= decision;
+
+            // Connect the previous label to this one, if it exists.
+            if (previousLabel is not null)
+            {
+                CfgNode.Connect(previousLabel, decision);
+                previousLabel.WhenFalse = decision;
+            }
+
+            previousLabel = decision;
+            labels.Add(decision);
+        }
+
+        // Track what the continuation for the body should be, ie in case of fall-through.
+        CfgNode continuationForBody = switchHelper.Continuation;
+
+        // Step 2: recurse into other branches, and let them generate their labels, and bodies backwards.
+        if (@case.Next is not null)
+        {
+            CfgNode nextBranchLabel = Construct_SwitchBranch(@case.Next!, sense, localHelper, switchHelper, out continuationForBody);
+
+            // Connect our previous (ie last) label to the next branch's first label.
+            if (previousLabel is not null)
+            {
+                CfgNode.Connect(previousLabel!, nextBranchLabel);
+                previousLabel!.WhenFalse = nextBranchLabel;
+            }
+            else
+            {
+                // If previous label is null, then so is first label, which means this is a default-only case. We'll have to make the caller jump over us, then.
+                firstLabel = nextBranchLabel;
+            }
+        }
+        // Or if there's no next branch, then we're at the final label. Connect it to the unmatched node.
+        else if (previousLabel is not null)
+        {
+            CfgNode.Connect(previousLabel!, switchHelper.UnmatchedNode);
+            previousLabel!.WhenFalse = switchHelper.UnmatchedNode;
+        }
+
+        // Step 3: construct the body of the case, knowing the continuation context.
+        ControlFlowHelper newLocalHelper = new(localHelper)
+        {
+            ContinuationContext = continuationForBody,
+            BreakContext = switchHelper.Continuation,
+        };
+
+        branchBody = Construct(current.Body, sense, newLocalHelper);
+
+        // Step 4: connect all labels to the body.
+        foreach (SwitchDecisionNode label in labels)
+        {
+            CfgNode.Connect(label, branchBody);
+            label.WhenTrue = branchBody;
+
+            if (label.IsDefault)
+            {
+                label.WhenFalse = branchBody;
+            }
+        }
+
+        return firstLabel ?? switchHelper.UnmatchedNode;
+    }
+
+    // private static CfgNode Construct_SwitchBranch(LinkedListNode<CaseStmtNode> @case, ParserIntelliSense sense, ControlFlowHelper localHelper, CfgNode continuation, out SwitchDecisionNode? finalLabel, out CfgNode nextBody)
+    // {
+    //     CaseStmtNode current = @case.Value;
+
+    //     finalLabel = null;
+    //     nextBody = continuation;
+
+    //     bool atFinalLabel = @case.Next is null;
+
+    //     CfgNode nextNode = continuation;
+    //     // If next is null, then this is the final label.
+    //     if (!atFinalLabel)
+    //     {
+    //         CfgNode nextLabel = Construct_SwitchBranch(@case.Next!, sense, localHelper, continuation, out finalLabel, out nextBody);
+    //         nextNode = nextLabel;
+    //     }
+
+    //     // Set up such that continuation context (i.e. fall-through) is the next body node, and break context is the continuation.
+    //     ControlFlowHelper newLocalHelper = new(localHelper)
+    //     {
+    //         ContinuationContext = nextBody,
+    //         BreakContext = continuation,
+    //     };
+
+    //     // Construct the body of the case.
+    //     CfgNode body = Construct(current.Body, sense, newLocalHelper);
+
+    //     for (LinkedListNode<CaseLabelNode>? node = current.Labels.Last; node != null; node = node.Previous)
+    //     {
+    //         SwitchDecisionNode decision = new(node.Value, localHelper.Scope);
+
+    //         // Connect the decision to the body.
+    //         CfgNode.Connect(decision, body);
+    //         decision.WhenTrue = body;
+
+    //         // If this is the final label of the switch statement, mark it accordingly.
+    //         if (atFinalLabel)
+    //         {
+    //             finalLabel = decision;
+    //             atFinalLabel = false;
+    //         }
+
+    //         // Connect the decision to the following label/continuation.
+    //         CfgNode.Connect(decision, nextNode);
+    //         decision.WhenFalse = nextNode;
+
+    //         CaseLabelNode label = node.Value;
+
+    //         // If we've found the default label, mark it accordingly and ensure
+    //         // the final label is connected to it as a when-false condition.
+    //         if (label.NodeType == AstNodeType.DefaultLabel)
+    //         {
+    //             // Replace the final label's when-false condition with the default body.
+    //             // Final label is guaranteed to be non-null at this point.
+    //             CfgNode.Disconnect(finalLabel!, finalLabel!.WhenFalse);
+
+    //             CfgNode.Connect(finalLabel, body);
+    //             finalLabel.WhenFalse = body;
+    //         }
+
+    //         nextNode = decision;
+    //     }
+
+    //     nextBody = body;
+    //     return nextNode; // Which is the first label that belongs to this case.
+    // }
 
     // Temporary implementation for control flow nodes that doesn't do anything right now.
     private static CfgNode Construct_Skip(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)

@@ -31,13 +31,13 @@ internal readonly ref struct ControlFlowHelper
 
     public required int Scope { get; init; }
 
-    public ControlFlowHelper() 
+    public ControlFlowHelper()
     {
         Scope = 0;
     }
 
     [SetsRequiredMembers]
-    public ControlFlowHelper(ControlFlowHelper parentScope) 
+    public ControlFlowHelper(ControlFlowHelper parentScope)
     {
         ReturnContext = parentScope.ReturnContext;
         LoopContinueContext = parentScope.LoopContinueContext;
@@ -46,4 +46,31 @@ internal readonly ref struct ControlFlowHelper
 
         Scope = parentScope.Scope;
     }
+}
+
+
+internal class SwitchHelper
+{
+    [SetsRequiredMembers]
+    public SwitchHelper(CfgNode continuation)
+    {
+        Continuation = continuation;
+        UnmatchedNode = continuation;
+    }
+
+    /// <summary>
+    /// The node that should be jumped to when control flow leaves the switch statement.
+    /// </summary>
+    public required CfgNode Continuation { get; init; }
+
+    /// <summary>
+    /// The node that should be jumped to when none of the case labels are matched.
+    /// This is continuation, or the default body if default is present.
+    /// </summary>
+    public required CfgNode UnmatchedNode { get; set; }
+
+    /// <summary>
+    /// Whether this switch statement has a default label.
+    /// </summary>
+    public bool ContainsDefaultLabel { get; set; } = false;
 }

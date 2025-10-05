@@ -52,7 +52,7 @@ internal class SymbolTable
     public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope, ScriptAnalyserData? apiData = null)
     {
         GlobalSymbolTable = exportedSymbolTable;
-        VariableSymbols = inSet;
+        VariableSymbols = new Dictionary<string, ScrVariable>(inSet, StringComparer.OrdinalIgnoreCase);
         LexicalScope = lexicalScope;
         ApiData = apiData;
     }

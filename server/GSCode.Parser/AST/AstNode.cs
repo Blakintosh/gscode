@@ -250,9 +250,10 @@ internal sealed class CaseStmtNode() : AstNode(AstNodeType.CaseStmt)
     public required StmtListNode Body { get; init; }
 }
 
-internal sealed class CaseLabelNode(AstNodeType labelType, ExprNode? value = default) : AstNode(labelType)
+internal sealed class CaseLabelNode(AstNodeType labelType, Token keywordToken, ExprNode? value = default) : AstNode(labelType)
 {
     public ExprNode? Value { get; } = value;
+    public Token Keyword { get; } = keywordToken;
 }
 
 internal abstract class ExprNode(ExprOperatorType operatorType, Range range) : AstNode(AstNodeType.Expr)

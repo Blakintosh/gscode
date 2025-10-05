@@ -236,7 +236,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.PossibleUndefinedAccess, new("Possible dereference of 'undefined' value.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.UnknownNamespace, new("The namespace '{0}' does not exist.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.DuplicateCaseLabel, new("Duplicate 'case' label.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.MultipleDefaultLabels, new("Multiple 'default' labels in this switch.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.MultipleDefaultLabels, new("The switch statement contains multiple cases with the label value 'default'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.FallthroughCase, new("Control falls through from 'case' to the next 'case'.", DiagnosticSeverity.Information) },
         { GSCErrorCodes.UnreachableCase, new("'case' is unreachable.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
         { GSCErrorCodes.ShadowedSymbol, new("Local '{0}' shadows a symbol from an outer scope.", DiagnosticSeverity.Information) },

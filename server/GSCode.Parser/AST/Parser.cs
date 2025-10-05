@@ -1409,18 +1409,18 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private CaseLabelNode CaseOrDefaultLabel()
     {
         // Default label
-        if (AdvanceIfType(TokenType.Default))
+        if (ConsumeIfType(TokenType.Default, out Token? defaultToken))
         {
             // Check for COLON
             if (!AdvanceIfType(TokenType.Colon))
             {
                 AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
             }
-            return new(AstNodeType.DefaultLabel);
+            return new(AstNodeType.DefaultLabel, defaultToken);
         }
 
         // Case label
-        if (!AdvanceIfType(TokenType.Case))
+        if (!ConsumeIfType(TokenType.Case, out Token? caseToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, "case", CurrentToken.Lexeme);
         }
@@ -1434,7 +1434,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
         }
 
-        return new(AstNodeType.CaseLabel, expression);
+        // In practice, this method is only ever hit if we've already detected a case label.
+        return new(AstNodeType.CaseLabel, caseToken!, expression);
     }
 
     /// <summary>

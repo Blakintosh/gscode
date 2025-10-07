@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GSCode.Parser.AST;
+using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
@@ -14,7 +15,11 @@ public class DefinitionsTable
     public string CurrentNamespace { get; set; }
 
     internal List<Tuple<ScrFunction, FunDefnNode>> LocalScopedFunctions { get; } = new();
+    internal List<Tuple<ScrClass, ClassDefnNode>> LocalScopedClasses { get; } = new();
     public List<ScrFunction> ExportedFunctions { get; } = new();
+    public List<ScrClass> ExportedClasses { get; } = new();
+    public Dictionary<string, IExportedSymbol> InternalSymbols { get; } = new();
+    public Dictionary<string, IExportedSymbol> ExportedSymbols { get; } = new();
 
     public List<Uri> Dependencies { get; } = new();
 
@@ -37,10 +42,30 @@ public class DefinitionsTable
     {
         LocalScopedFunctions.Add(new Tuple<ScrFunction, FunDefnNode>(function, node));
 
-        if (!function.IsPrivate)
+        ScrFunction internalFunction = function with { Namespace = CurrentNamespace, Implicit = true };
+        InternalSymbols.Add(function.Name, internalFunction);
+        InternalSymbols.Add($"{CurrentNamespace}::{function.Name}", internalFunction);
+
+        // Only add to exported functions if it's not private.
+        if (!function.Private)
         {
-            ExportedFunctions.Add(function with { Namespace = CurrentNamespace });
+            ScrFunction exportedFunction = function with { Namespace = CurrentNamespace };
+            ExportedFunctions.Add(exportedFunction);
+            ExportedSymbols.Add(exportedFunction.Name, exportedFunction);
         }
+    }
+
+    internal void AddClass(ScrClass scrClass, ClassDefnNode node)
+    {
+        LocalScopedClasses.Add(new Tuple<ScrClass, ClassDefnNode>(scrClass, node));
+
+        // Add to internal symbols for within-file references
+        InternalSymbols.Add(scrClass.Name, scrClass);
+        InternalSymbols.Add($"{CurrentNamespace}::{scrClass.Name}", scrClass);
+
+        // Always export classes (GSC doesn't have private classes)
+        ExportedClasses.Add(scrClass);
+        ExportedSymbols.Add(scrClass.Name, scrClass);
     }
 
     public void AddDependency(string scriptPath)

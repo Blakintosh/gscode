@@ -523,7 +523,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             return Task.CompletedTask;
         }
 
-        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, Sense, allSymbols, TryGetApi());
+        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, controlFlowAnalyser.ClassGraphs, Sense, allSymbols, TryGetApi());
         try
         {
             dataFlowAnalyser.Run();
@@ -1577,18 +1577,18 @@ public class Script(DocumentUri ScriptUri, string languageId)
                     //     }
                     // }
                     // else 
-                    if (label.NodeType == AstNodeType.CaseLabel && label.Value is not null)
-                    {
-                        if (TryEvaluateCaseLabelConstant(label.Value, out string key))
-                        {
-                            if (!seen.Add(key))
-                            {
-                                // Duplicate label value in the same switch
-                                Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.DuplicateCaseLabel);
-                                Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.UnreachableCase);
-                            }
-                        }
-                    }
+                    // if (label.NodeType == AstNodeType.CaseLabel && label.Value is not null)
+                    // {
+                    //     if (TryEvaluateCaseLabelConstant(label.Value, out string key))
+                    //     {
+                    //         if (!seen.Add(key))
+                    //         {
+                    //             // Duplicate label value in the same switch
+                    //             Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.DuplicateCaseLabel);
+                    //             Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.UnreachableCase);
+                    //         }
+                    //     }
+                    // }
                 }
 
                 // Fallthrough detection: if not the last case and body does not terminate with break/return

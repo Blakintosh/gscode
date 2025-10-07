@@ -20,7 +20,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
 {
     // Rule: the CALLER is responsible for connecting to the CALLEE's entry block, and the CALLEE is responsible for connecting to any of its successors (implied by the first rule).
 
-    public static ControlFlowGraph ConstructFunctionGraph(FunDefnNode node, ParserIntelliSense sense)
+    public static ControlFlowGraph ConstructFunctionGraph(FunDefnNode node, ParserIntelliSense sense, int scope = 0)
     {
         // Function graph: (entry) -> (body) -> (exit)
 
@@ -32,7 +32,7 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         {
             ReturnContext = exit,
             ContinuationContext = exit,
-            Scope = 0
+            Scope = scope
         };
 
         // Construct the function graph.
@@ -42,6 +42,184 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         CfgNode.Connect(entry, body);
 
         return new(entry, exit);
+    }
+
+    public static ControlFlowGraph ConstructClassGraph(ClassDefnNode node, ParserIntelliSense sense)
+    {
+        // Class graph: (entry) -> (body) -> (exit)
+
+        // Create the entry and exit blocks
+        ClassEntryBlock entry = new(node, node.NameToken);
+        ClassExitBlock exit = new(node);
+
+        // Construct the class body graph
+        LinkedListNode<AstNode>? currentNode = node.Body.Definitions.First;
+        CfgNode? body = Construct_InClassBody(ref currentNode, sense);
+
+        // If we have a body, connect it; otherwise connect directly to exit
+        if (body is not null)
+        {
+            CfgNode.Connect(entry, body);
+        }
+        else
+        {
+            CfgNode.Connect(entry, exit);
+        }
+
+        return new(entry, exit);
+    }
+
+    private static CfgNode? Construct_InClassBody(AstNode node, ParserIntelliSense sense)
+    {
+        // This is cheesy, but should work.
+        LinkedListNode<AstNode>? currentNode = new LinkedListNode<AstNode>(node);
+
+        return Construct_InClassBody(ref currentNode, sense);
+    }
+
+    private static CfgNode? Construct_InClassBody(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
+    {
+        // If we're at the end of the current block, return null (no continuation)
+        if (currentNode is null)
+        {
+            return null;
+        }
+
+        return currentNode.Value.NodeType switch
+        {
+            AstNodeType.Constructor => Construct_ClassConstructor(ref currentNode, sense),
+            AstNodeType.Destructor => Construct_ClassDestructor(ref currentNode, sense),
+            AstNodeType.FunctionDefinition => Construct_ClassMethod(ref currentNode, sense),
+            _ => Construct_ClassBlock(ref currentNode, sense),
+        };
+    }
+
+    private static ClassMembersBlock Construct_ClassBlock(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
+    {
+        // Class members block: collect consecutive member declarations until we hit a method/constructor/destructor
+        LinkedList<AstNode> members = new();
+
+        while (currentNode != null && !IsClassMethodNode(currentNode.Value))
+        {
+            members.AddLast(currentNode.Value);
+            currentNode = currentNode.Next;
+        }
+
+        ClassMembersBlock membersBlock = new(members, 0);
+
+        // If we reached the end of the class body, just return the members block
+        if (currentNode is null)
+        {
+            return membersBlock;
+        }
+
+        // If we hit a method/constructor/destructor, construct it and connect
+        CfgNode? nextNode = Construct_InClassBody(ref currentNode, sense);
+
+        if (nextNode is not null)
+        {
+            CfgNode.Connect(membersBlock, nextNode);
+        }
+
+        return membersBlock;
+    }
+
+    private static CfgNode? Construct_ClassConstructor(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
+    {
+        StructorDefnNode constructor = (StructorDefnNode)currentNode!.Value;
+
+        // Move to the next node to get the continuation
+        currentNode = currentNode.Next;
+        CfgNode? continuation = Construct_InClassBody(ref currentNode, sense);
+
+        // Create entry and exit blocks for the constructor
+        // Constructor uses scope 1 (class members are at scope 0, constructor body is at scope 1)
+        FunEntryBlock entry = new(null!, constructor.KeywordToken);
+        FunExitBlock exit = new(constructor);
+
+        ControlFlowHelper constructorHelper = new()
+        {
+            ReturnContext = exit,
+            ContinuationContext = exit,
+            Scope = 1  // Class body is scope 0, constructor body is scope 1
+        };
+
+        // Construct the constructor body graph
+        LinkedListNode<AstNode>? bodyNode = constructor.Body.Statements.First;
+        CfgNode body = Construct(ref bodyNode, sense, constructorHelper);
+
+        CfgNode.Connect(entry, body);
+
+        // Connect exit to continuation (next node in class body)
+        if (continuation is not null)
+        {
+            CfgNode.Connect(exit, continuation);
+        }
+
+        return entry;
+    }
+
+    private static CfgNode? Construct_ClassDestructor(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
+    {
+        StructorDefnNode destructor = (StructorDefnNode)currentNode!.Value;
+
+        // Move to the next node to get the continuation
+        currentNode = currentNode.Next;
+        CfgNode? continuation = Construct_InClassBody(ref currentNode, sense);
+
+        // Create entry and exit blocks for the destructor
+        // Destructor uses scope 1 (class members are at scope 0, destructor body is at scope 1)
+        FunEntryBlock entry = new(null!, destructor.KeywordToken);
+        FunExitBlock exit = new(destructor);
+
+        ControlFlowHelper destructorHelper = new()
+        {
+            ReturnContext = exit,
+            ContinuationContext = exit,
+            Scope = 1  // Class body is scope 0, destructor body is scope 1
+        };
+
+        // Construct the destructor body graph
+        LinkedListNode<AstNode>? bodyNode = destructor.Body.Statements.First;
+        CfgNode body = Construct(ref bodyNode, sense, destructorHelper);
+
+        CfgNode.Connect(entry, body);
+
+        // Connect exit to continuation (next node in class body)
+        if (continuation is not null)
+        {
+            CfgNode.Connect(exit, continuation);
+        }
+
+        return entry;
+    }
+
+    private static CfgNode? Construct_ClassMethod(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
+    {
+        FunDefnNode method = (FunDefnNode)currentNode!.Value;
+
+        // Move to the next node to get the continuation
+        currentNode = currentNode.Next;
+        CfgNode? continuation = Construct_InClassBody(ref currentNode, sense);
+
+        // Construct the function graph with scope 1
+        // Class members are at scope 0, method body is at scope 1
+        ControlFlowGraph methodGraph = ConstructFunctionGraph(method, sense, scope: 1);
+
+        // Connect exit to continuation (next node in class body)
+        if (continuation is not null)
+        {
+            CfgNode.Connect(methodGraph.End, continuation);
+        }
+
+        return methodGraph.Start;
+    }
+
+    private static bool IsClassMethodNode(AstNode node)
+    {
+        return node.NodeType == AstNodeType.Constructor ||
+               node.NodeType == AstNodeType.Destructor ||
+               node.NodeType == AstNodeType.FunctionDefinition;
     }
 
     private static CfgNode Construct(AstNode node, ParserIntelliSense sense, ControlFlowHelper localHelper, bool shouldIncreaseScope = true)

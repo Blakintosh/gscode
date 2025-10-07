@@ -542,7 +542,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         try
         {
             EmitUnusedParameterDiagnostics();
-            EmitCallArityDiagnostics();
+            // EmitCallArityDiagnostics(); // Now handled in ReachingDefinitionsAnalyser
             EmitUnknownNamespaceDiagnostics();
             EmitUnusedUsingDiagnostics();
             EmitUnusedVariableDiagnostics();
@@ -1306,6 +1306,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
     }
 
+    // NOTE: This method has been replaced by argument count validation in ReachingDefinitionsAnalyser
+    // which properly handles vararg and runs during data flow analysis.
+    // Keeping this commented out for reference.
+    /*
     private void EmitCallArityDiagnostics()
     {
         if (RootNode is null) return;
@@ -1387,7 +1391,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                             //     Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooManyArguments, name, argCount, maxAny);
                             //     continue;
                             // }
-                            // If within some overload’s min/max, we assume OK (type checking not implemented)
+                            // If within some overload's min/max, we assume OK (type checking not implemented)
                             continue;
                         }
                     }
@@ -1437,6 +1441,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             }
         }
     }
+    */
 
     private void EmitUnknownNamespaceDiagnostics()
     {

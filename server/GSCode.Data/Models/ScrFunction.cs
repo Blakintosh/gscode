@@ -194,6 +194,11 @@ public sealed class ScrFunctionOverload
     /// The return value of this function, if any
     /// </summary>
     public ScrFunctionReturn? Returns { get; set; }
+
+    /// <summary>
+    /// Whether this function accepts variable arguments (...)
+    /// </summary>
+    public bool Vararg { get; set; } = false;
 }
 
 public record class ScrFunctionReturn

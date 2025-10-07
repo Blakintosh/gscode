@@ -444,6 +444,57 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             Sense.AddSenseToken(token, new ScrFunctionReferenceSymbol(token, function));
     }
 
+    private void ValidateArgumentCount(ScrFunction? function, int argCount, Range callRange, string functionName)
+    {
+        // Check if we have function information
+        if (function is null)
+        {
+            return; // No function info, can't validate
+        }
+
+        // Check if we have any overload information
+        if (function.Overloads is null || function.Overloads.Count == 0)
+        {
+            return; // No signature info, can't validate
+        }
+
+        // For now, just validate against the first overload
+        // TODO: Check all overloads and find best match
+        ScrFunctionOverload overload = function.Overloads[0];
+
+        // Parameters can be null in some cases (e.g., API functions)
+        if (overload?.Parameters is null)
+        {
+            return;
+        }
+
+        int minArgs = overload.Parameters.Count(p => p.Mandatory == true);
+        int maxArgs = overload.Parameters.Count;
+        bool hasVararg = overload.Vararg;
+
+        // TODO: Re-enable argument count diagnostics when ready
+        // If function has vararg, it accepts minArgs or more
+        // if (hasVararg)
+        // {
+        //     if (argCount < minArgs)
+        //     {
+        //         AddDiagnostic(callRange, GSCErrorCodes.TooFewArguments, functionName, argCount, minArgs);
+        //     }
+        //     // No upper limit with vararg
+        //     return;
+        // }
+
+        // Without vararg, check bounds
+        // if (argCount < minArgs)
+        // {
+        //     AddDiagnostic(callRange, GSCErrorCodes.TooFewArguments, functionName, argCount, minArgs);
+        // }
+        // else if (argCount > maxArgs)
+        // {
+        //     AddDiagnostic(callRange, GSCErrorCodes.TooManyArguments, functionName, argCount, maxArgs);
+        // }
+    }
+
     private void ValidateExpressionHasSideEffects(ExprNode expr)
     {
         // Check if this expression has side effects (similar to expression statement validation)
@@ -2240,8 +2291,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         ScrFunction function = functionTarget.Get<ScrFunction>();
 
-        // TODO: Validate argument count against function signature (check min/max params, handle varargs)
-
         // Analyse arguments
         foreach (ExprNode? argument in call.Arguments.Arguments)
         {
@@ -2254,6 +2303,13 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
             // TODO: Check whether argument types match expected parameter types
         }
+
+        // Validate argument count
+        int argCount = call.Arguments.Arguments.Count;
+        string functionName = call.Function is IdentifierExprNode idNode ? idNode.Identifier :
+                             call.Function is NamespacedMemberNode nmNode && nmNode.Member is IdentifierExprNode memberId ? memberId.Identifier :
+                             function.Name;
+        ValidateArgumentCount(function, argCount, call.Arguments.Range, functionName);
 
         return ScrData.Default;
     }

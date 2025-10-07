@@ -107,13 +107,14 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             Overloads = [
                 new ScrFunctionOverload()
                 {
-                    Parameters = GetParametersAsRecord(parameters),
+                    Parameters = GetParametersAsRecord(parameters)!,
                     CalledOn = new ScrFunctionArg()
                     {
                         Name = "unk",
                         Mandatory = false
                     }, // TODO: Check the DOC COMMENT
-                    Returns = null
+                    Returns = null!,
+                    Vararg = functionDefn.Parameters.Vararg
                 }
             ],
 
@@ -215,8 +216,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 new ScrFunctionOverload()
                 {
                     CalledOn = null, // TODO: Check the DOC COMMENT
-                    Parameters = GetParametersAsRecord(parameters),
-                    Returns = null // TODO: Check the DOC COMMENT
+                    Parameters = GetParametersAsRecord(parameters)!,
+                    Returns = null!, // TODO: Check the DOC COMMENT
+                    Vararg = functionDefn.Parameters.Vararg
                 }
             ],
             Flags = ["userdefined"],

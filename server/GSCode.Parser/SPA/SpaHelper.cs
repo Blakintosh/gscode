@@ -173,6 +173,51 @@ public class ScrFieldSymbol : ISenseDefinition
     }
 }
 
+public class ScrClassPropertySymbol : ISenseDefinition
+{
+    public Range Range { get; }
+
+    public string SemanticTokenType { get; } = "property";
+
+    public string[] SemanticTokenModifiers { get; private set; } = [];
+    public bool IsFromPreprocessor { get; } = false;
+
+    internal IdentifierExprNode Node { get; }
+    internal string TypeString { get; }
+    internal ScrClass ClassSource { get; }
+
+    public bool ReadOnly { get; private set; } = false;
+
+    internal ScrClassPropertySymbol(IdentifierExprNode node, ScrData data, ScrClass classSource, bool isReadOnly = false)
+    {
+        Node = node;
+        Range = node.Range;
+        TypeString = data.TypeToString();
+        ClassSource = classSource;
+        if (!isReadOnly)
+        {
+            return;
+        }
+        SemanticTokenModifiers = new string[] { "readonly" };
+        ReadOnly = true;
+    }
+
+    public Hover GetHover()
+    {
+        string typeValue = $"{(ReadOnly ? "readonly " : string.Empty)}{TypeString}";
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = string.Format("```gsc\n(property) /@ {0} @/ {1}.{2}\n```",
+                   typeValue, ClassSource.Name, Node.Identifier!)
+            })
+        };
+    }
+}
+
 public class ScrNamespaceScopeSymbol : ISenseDefinition
 {
     public Range Range { get; }
@@ -233,6 +278,61 @@ public class ScrFunctionReferenceSymbol : ISenseDefinition
             {
                 Kind = MarkupKind.Markdown,
                 Value = Source.Documentation
+            })
+        };
+    }
+}
+
+public class ScrMethodReferenceSymbol : ISenseDefinition
+{
+    public Range Range { get; }
+
+    public string SemanticTokenType { get; } = "method";
+
+    public string[] SemanticTokenModifiers { get; private set; } = [];
+    public bool IsFromPreprocessor { get; } = false;
+
+    internal ScrFunction Source { get; }
+    internal ScrClass ClassSource { get; }
+
+    internal ScrMethodReferenceSymbol(Token token, ScrFunction source, ScrClass classSource)
+    {
+        Source = source;
+        ClassSource = classSource;
+        Range = token.Range;
+    }
+
+    public Hover GetHover()
+    {
+        StringBuilder builder = new();
+
+        builder.AppendLine("```gsc");
+        builder.Append($"{ClassSource.Name}::{Source.Name}(");
+
+        bool first = true;
+        foreach (ScrFunctionArg parameter in Source.Overloads.FirstOrDefault()?.Parameters ?? [])
+        {
+            if (!first) builder.Append(", ");
+            first = false;
+            builder.Append(parameter.Name);
+        }
+        builder.AppendLine(")");
+        builder.AppendLine("```");
+
+        // Only show doc comment if it exists (don't show auto-generated Documentation for user methods)
+        if (!string.IsNullOrWhiteSpace(Source.DocComment))
+        {
+            builder.AppendLine();
+            builder.Append(Source.DocComment);
+        }
+
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = builder.ToString().Trim()
             })
         };
     }

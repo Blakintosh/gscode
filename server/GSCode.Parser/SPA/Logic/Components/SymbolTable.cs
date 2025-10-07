@@ -35,9 +35,10 @@ internal enum SymbolFlags
 
 internal class SymbolTable
 {
-    private Dictionary<string, IExportedSymbol> GlobalSymbolTable { get; } = new(StringComparer.OrdinalIgnoreCase);
+    internal Dictionary<string, IExportedSymbol> GlobalSymbolTable { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, ScrVariable> VariableSymbols { get; } = new(StringComparer.OrdinalIgnoreCase);
     private ScriptAnalyserData? ApiData { get; }
+    internal ScrClass? CurrentClass { get; }
 
     private static HashSet<string> ReservedSymbols { get; } = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -49,12 +50,13 @@ internal class SymbolTable
 
     public int LexicalScope { get; } = 0;
 
-    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope, ScriptAnalyserData? apiData = null)
+    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope, ScriptAnalyserData? apiData = null, ScrClass? currentClass = null)
     {
         GlobalSymbolTable = exportedSymbolTable;
         VariableSymbols = new Dictionary<string, ScrVariable>(inSet, StringComparer.OrdinalIgnoreCase);
         LexicalScope = lexicalScope;
         ApiData = apiData;
+        CurrentClass = currentClass;
     }
 
     /// <summary>
@@ -193,7 +195,20 @@ internal class SymbolTable
             return new ScrData(ScrDataTypes.Function);
         }
 
-        // 2. Check global symbol table (script-defined functions)
+        // 2. Check current class methods if we're inside a class
+        if (CurrentClass is not null)
+        {
+            ScrFunction? classMethod = CurrentClass.Methods
+                .FirstOrDefault(m => m.Name.Equals(symbol, StringComparison.OrdinalIgnoreCase));
+
+            if (classMethod is not null)
+            {
+                flags = SymbolFlags.Global;
+                return new ScrData(ScrDataTypes.Function, classMethod);
+            }
+        }
+
+        // 3. Check global symbol table (script-defined functions)
         if (GlobalSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
         {
             if (exportedSymbol.Type == ExportedSymbolType.Function)
@@ -209,7 +224,7 @@ internal class SymbolTable
             }
         }
 
-        // 3. Check API functions (built-in library functions)
+        // 4. Check API functions (built-in library functions)
         if (ApiData is not null)
         {
             ScrFunction? apiFunction = ApiData.GetApiFunction(symbol);
@@ -256,6 +271,21 @@ internal class SymbolTable
     public ScrData TryGetNamespacedFunctionSymbol(string namespaceName, string symbol, out SymbolFlags flags)
     {
         flags = SymbolFlags.None;
+
+        // Check if namespace refers to a class
+        if (GlobalSymbolTable.TryGetValue(namespaceName, out IExportedSymbol? classSymbol)
+            && classSymbol.Type == ExportedSymbolType.Class)
+        {
+            ScrClass scrClass = (ScrClass)classSymbol;
+            ScrFunction? method = scrClass.Methods
+                .FirstOrDefault(m => m.Name.Equals(symbol, StringComparison.OrdinalIgnoreCase));
+
+            if (method is not null)
+            {
+                flags = SymbolFlags.Global;
+                return new ScrData(ScrDataTypes.Function, method);
+            }
+        }
 
         // Check global symbol table first
         if (GlobalSymbolTable.TryGetValue($"{namespaceName}::{symbol}", out IExportedSymbol? exportedSymbol))

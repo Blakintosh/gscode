@@ -15,6 +15,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Reflection;
 using System.Diagnostics;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 
 
 Log.Logger = new LoggerConfiguration()
@@ -68,7 +69,13 @@ LanguageServer server = await LanguageServer.From(options =>
 		.WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Trace)))
 		.WithServices(services =>
 		{
-			services.AddSingleton<ScriptManager>();
+			// Inject ScriptManager with ILanguageServerFacade so it can publish diagnostics during indexing
+			services.AddSingleton<ScriptManager>(sp =>
+			{
+				var logger = sp.GetRequiredService<ILogger<ScriptManager>>();
+				var facade = sp.GetRequiredService<ILanguageServerFacade>();
+				return new ScriptManager(logger, facade);
+			});
 			services.AddSingleton(new TextDocumentSelector(
 				new TextDocumentFilter()
 				{
@@ -80,6 +87,38 @@ LanguageServer server = await LanguageServer.From(options =>
 				}
 			));
 		})
+		// Disabled for now, indexing is too punishing on performance.
+		// .OnInitialize(async (server, request, ct) =>
+		// {
+		// 	try
+		// 	{
+		// 		var sm = server.Services.GetRequiredService<ScriptManager>();
+
+		// 		// Use a long-lived CTS for indexing; do not tie to Initialize request token
+		// 		var indexingCts = new CancellationTokenSource();
+		// 		options.RegisterForDisposal(indexingCts);
+		// 		var indexingToken = indexingCts.Token;
+
+		// 		if (request.WorkspaceFolders is not null && request.WorkspaceFolders.Any())
+		// 		{
+		// 			foreach (var wf in request.WorkspaceFolders)
+		// 			{
+		// 				string root = wf.Uri.ToUri().LocalPath;
+		// 				_ = Task.Run(() => sm.IndexWorkspaceAsync(root, indexingToken), CancellationToken.None);
+		// 			}
+		// 		}
+		// 		else if (request.RootUri is not null)
+		// 		{
+		// 			string root = request.RootUri.ToUri().LocalPath;
+		// 			// Disabled for now, indexing is too punishing on performance.
+		// 			_ = Task.Run(() => sm.IndexWorkspaceAsync(root, indexingToken), CancellationToken.None);
+		// 		}
+		// 	}
+		// 	catch (Exception ex)
+		// 	{
+		// 		Log.Error(ex, "Failed to start workspace indexing");
+		// 	}
+		// })
 		.AddHandler<TextDocumentSyncHandler>()
 		.AddHandler<SemanticTokensHandler>()
 		.AddHandler<HoverHandler>()
@@ -89,7 +128,6 @@ LanguageServer server = await LanguageServer.From(options =>
 		.AddHandler<DocumentSymbolHandler>()
 		.AddHandler<SignatureHelpHandler>()
 		.AddHandler<ReferencesHandler>();
-
 	// Allow disposal of the stream if required.
 	if (disposable is not null)
 	{

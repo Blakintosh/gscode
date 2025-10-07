@@ -81,6 +81,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         // Record class location for go-to-definition
         DefinitionsTable.AddClassLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
 
+        // Add class to definitions table for CFG and RDA analysis
+        DefinitionsTable.AddClass(scrClass, classDefn);
+
         Sense.AddSenseToken(nameToken, new ScrClassSymbol(nameToken, scrClass));
     }
 
@@ -101,20 +104,22 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         {
             Name = name,
             Description = null, // TODO: Check the DOC COMMENT
-            Args = GetParametersAsRecord(parameters),
-            CalledOn = new ScrFunctionArg()
-            {
-                Name = "unk",
-                Required = false
-            }, // TODO: Check the DOC COMMENT
-            Returns = new ScrFunctionArg()
-            {
-                Name = "unk",
-                Required = false
-            }, // TODO: Check the DOC COMMENT
-            Tags = ["userdefined"],
-            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
-            IntelliSense = null // I have no idea why this exists
+            Overloads = [
+                new ScrFunctionOverload()
+                {
+                    Parameters = GetParametersAsRecord(parameters)!,
+                    CalledOn = new ScrFunctionArg()
+                    {
+                        Name = "unk",
+                        Mandatory = false
+                    }, // TODO: Check the DOC COMMENT
+                    Returns = null!,
+                    Vararg = functionDefn.Parameters.Vararg
+                }
+            ],
+
+            Flags = ["userdefined"],
+            Private = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
         };
 
         // Produce a definition for our function
@@ -123,15 +128,23 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         // Record method/function location (method recorded as function under containing namespace)
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
         // Record parameter names for outline/signature
-        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Overloads[0].Parameters ?? new List<ScrFunctionArg>()).Select(a => a.Name));
         // Record flags (private, autoexec)
         var flags = new List<string>();
-        if (function.IsPrivate) flags.Add("private");
+        if (function.Private) flags.Add("private");
         if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
         // Record doc comment if present
-        DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, ExtractDocCommentBefore(nameToken));
+        string? doc = ExtractDocCommentBefore(nameToken);
+        DefinitionsTable.RecordFunctionDoc(DefinitionsTable.CurrentNamespace, name, doc);
+
+        // NEW: Also record under the class name as its own qualifier so ClassName::Method() resolves
+        string classNs = scrClass.Name;
+        DefinitionsTable.AddFunctionLocation(classNs, name, Sense.ScriptPath, nameToken.Range);
+        DefinitionsTable.RecordFunctionParameters(classNs, name, (function.Overloads[0].Parameters ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        DefinitionsTable.RecordFunctionFlags(classNs, name, flags);
+        DefinitionsTable.RecordFunctionDoc(classNs, name, doc);
 
         Sense.AddSenseToken(nameToken, new ScrMethodSymbol(nameToken, function, scrClass));
 
@@ -199,20 +212,17 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         {
             Name = name,
             Description = null, // TODO: Check the DOC COMMENT
-            Args = GetParametersAsRecord(parameters),
-            CalledOn = new ScrFunctionArg()
-            {
-                Name = "unk",
-                Required = false
-            }, // TODO: Check the DOC COMMENT
-            Returns = new ScrFunctionArg()
-            {
-                Name = "unk",
-                Required = false
-            }, // TODO: Check the DOC COMMENT
-            Tags = ["userdefined"],
-            IsPrivate = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
-            IntelliSense = null, // I have no idea why this exists
+            Overloads = [
+                new ScrFunctionOverload()
+                {
+                    CalledOn = null, // TODO: Check the DOC COMMENT
+                    Parameters = GetParametersAsRecord(parameters)!,
+                    Returns = null!, // TODO: Check the DOC COMMENT
+                    Vararg = functionDefn.Parameters.Vararg
+                }
+            ],
+            Flags = ["userdefined"],
+            Private = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
             DocComment = ExtractDocCommentBefore(nameToken)
         };
 
@@ -222,10 +232,10 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         // Record function location for go-to-definition
         DefinitionsTable.AddFunctionLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
         // Record parameter names for outline/signature
-        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Args ?? new List<ScrFunctionArg>()).Select(a => a.Name));
+        DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Overloads[0].Parameters ?? new List<ScrFunctionArg>()).Select(a => a.Name));
         // Record flags (private, autoexec)
         var flags = new List<string>();
-        if (function.IsPrivate) flags.Add("private");
+        if (function.Private) flags.Add("private");
         if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
@@ -252,8 +262,8 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             {
                 Name = parameter.Name,
                 Description = null, // TODO: Check the DOC COMMENT
-                Type = "unknown", // TODO: Check the DOC COMMENT
-                Required = parameter.Default is null,
+                Type = null, // TODO: Check the DOC COMMENT
+                Mandatory = parameter.Default is null,
                 Default = null // Not sure we can populate this
             });
         }
@@ -294,14 +304,14 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             nameToken = nameToken.Previous;
         }
 
-        if ( nameToken.Previous == null)
+        if (nameToken.Previous == null)
         {
             return null;
         }
 
         // check around 50 tokens
         int count = 50;
-        while(count > 0 && nameToken.Previous.Type != TokenType.DocComment)
+        while (count > 0 && nameToken.Previous.Type != TokenType.DocComment)
         {
             nameToken = nameToken.Previous;
             count--;
@@ -388,35 +398,35 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                     spmp = val;
                     break;
                 case "mandatoryarg":
-                {
-                    var am = s_argPattern.Match(val);
-                    if (am.Success)
                     {
-                        string a = am.Groups["n"].Value.Trim();
-                        string d = am.Groups["d"].Value.Trim();
+                        var am = s_argPattern.Match(val);
+                        if (am.Success)
+                        {
+                            string a = am.Groups["n"].Value.Trim();
+                            string d = am.Groups["d"].Value.Trim();
 
-                        a = a.Replace("<", "").Replace(">", "");
-                        a = a.Replace("[", "").Replace("]", "");
+                            a = a.Replace("<", "").Replace(">", "");
+                            a = a.Replace("[", "").Replace("]", "");
 
-                        mandatory.Add((a, d));
+                            mandatory.Add((a, d));
+                        }
+                        break;
                     }
-                    break;
-                }
                 case "optionalarg":
-                {
-                    var am = s_argPattern.Match(val);
-                    if (am.Success)
                     {
-                        string a = am.Groups["n"].Value.Trim();
-                        string d = am.Groups["d"].Value.Trim();
+                        var am = s_argPattern.Match(val);
+                        if (am.Success)
+                        {
+                            string a = am.Groups["n"].Value.Trim();
+                            string d = am.Groups["d"].Value.Trim();
 
-                        a = a.Replace("<", "").Replace(">", "");
-                        a = a.Replace("[", "").Replace("]", "");
+                            a = a.Replace("<", "").Replace(">", "");
+                            a = a.Replace("[", "").Replace("]", "");
 
-                        optional.Add((a, d));
+                            optional.Add((a, d));
+                        }
+                        break;
                     }
-                    break;
-                }
                 case "example":
                     examples.Add(val);
                     break;
@@ -555,7 +565,7 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
         builder.Append($"function {Source.Name}(");
 
         bool first = true;
-        foreach (ScrFunctionArg parameter in Source.Args ?? [])
+        foreach (ScrFunctionArg parameter in Source.Overloads[0].Parameters ?? [])
         {
             AppendParameter(builder, parameter, ref first);
         }
@@ -569,7 +579,7 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
             Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
             {
                 Kind = MarkupKind.Markdown,
-                Value = builder.ToString()
+                Value = Source.Documentation
             })
         };
     }
@@ -582,7 +592,7 @@ internal record ScrFunctionSymbol(Token NameToken, ScrFunction Source) : ISenseD
         }
         first = false;
 
-        if (string.IsNullOrEmpty(parameter.Type) || parameter.Type == "unknown")
+        if (parameter.Type is null)
         {
             builder.Append($"{parameter.Name}");
             return;
@@ -653,7 +663,7 @@ internal record ScrMethodSymbol(Token NameToken, ScrFunction Source, ScrClass Cl
         builder.Append($"{ClassSource.Name}::{Source.Name}(");
 
         bool first = true;
-        foreach (ScrFunctionArg parameter in Source.Args ?? [])
+        foreach (ScrFunctionArg parameter in Source.Overloads.First().Parameters)
         {
             AppendParameter(builder, parameter, ref first);
         }

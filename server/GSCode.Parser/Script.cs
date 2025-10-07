@@ -18,6 +18,7 @@ using GSCode.Parser.SPA;
 using System.Text.RegularExpressions;
 using GSCode.Parser.DFA;
 using System.Runtime.CompilerServices;
+using Serilog;
 
 namespace GSCode.Parser;
 
@@ -34,6 +35,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
     public string LanguageId { get; } = languageId;
 
     private Task? ParsingTask { get; set; } = null;
+    private Task? AnalysisTask { get; set; } = null;
 
     private ScriptNode? RootNode { get; set; } = null;
 
@@ -62,6 +64,18 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return api is not null && api.GetApiFunction(name) is not null;
     }
 
+    // Keywords list duplicated from DocumentCompletionsLibrary.cs for SPA filtering purposes
+    private static readonly HashSet<string> s_completionKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "class", "return", "wait", "thread", "classes", "if", "else", "do", "while",
+        "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend",
+        "switch", "case", "default", "break", "continue", "notify", "endon",
+        "waitrealtime", "profilestart", "profilestop", "isdefined",
+        // Additional keywords
+        "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
+        "var", "const", "function", "private", "autoexec", "constructor", "destructor"
+    };
+
     public async Task ParseAsync(string documentText)
     {
         ParsingTask = DoParseAsync(documentText);
@@ -82,7 +96,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             // Failed to parse the script
             Failed = true;
-            Console.Error.WriteLine($"Failed to tokenise script: {ex.Message}");
+            Log.Error(ex, "Failed to tokenise script.");
 
             // Create a dummy IntelliSense container so we can provide an error to the IDE.
             Sense = new(0, ScriptUri, LanguageId);
@@ -102,7 +116,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to preprocess script: {ex.Message}");
+            Log.Error(ex, "Failed to preprocess script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledMacError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -121,7 +135,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to AST-gen script: {ex.Message}");
+            Log.Error(ex, "Failed to AST-gen script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledAstError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -139,7 +153,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         catch (Exception ex)
         {
             Failed = true;
-            Console.Error.WriteLine($"Failed to signature analyse script: {ex.Message}");
+            Log.Error(ex, "Failed to signature analyse script.");
 
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSaError, ex.GetType().Name);
             return Task.CompletedTask;
@@ -180,6 +194,17 @@ public class Script(DocumentUri ScriptUri, string languageId)
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Token? NextNonTrivia(Token? token)
+    {
+        Token? t = token?.Next;
+        while (t is not null && (t.IsWhitespacey() || t.IsComment()))
+        {
+            t = t.Next;
+        }
+        return t;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsAddressOfIdentifier(Token identifier)
     {
         // identifier may be part of ns::name; find left-most identifier
@@ -190,6 +215,24 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
         Token? prev = PreviousNonTrivia(leftMost);
         return prev is not null && prev.Type == TokenType.BitAnd;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsFunctionPointerCallIdentifier(Token identifier)
+    {
+        // Pattern: [[ identifier ]]( ... )
+        // Check immediate surrounding tokens ignoring trivia
+        Token? prev1 = PreviousNonTrivia(identifier);
+        if (prev1?.Type != TokenType.OpenBracket) return false;
+        Token? prev2 = PreviousNonTrivia(prev1);
+        if (prev2?.Type != TokenType.OpenBracket) return false;
+        Token? next1 = NextNonTrivia(identifier);
+        if (next1?.Type != TokenType.CloseBracket) return false;
+        Token? next2 = NextNonTrivia(next1);
+        if (next2?.Type != TokenType.CloseBracket) return false;
+        Token? next3 = NextNonTrivia(next2);
+        if (next3?.Type != TokenType.OpenParen) return false;
+        return true;
     }
 
     private static string NormalizeDocComment(string raw)
@@ -287,15 +330,219 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
     }
 
+    public async Task<string?> GetEnclosingFunctionScopeIdAsync(Position position, CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+        if (RootNode is null) return null;
+
+        foreach (var fn in EnumerateFunctions(RootNode))
+        {
+            if (fn.Name is not Token nameTok) continue;
+            var bodyRange = GetStmtListRange(fn.Body);
+            if (IsPositionInsideRange(position, bodyRange))
+            {
+                string ns = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+                return $"{ns}::{nameTok.Lexeme}";
+            }
+        }
+        return null;
+    }
+
+    private static Range GetStmtListRange(StmtListNode body)
+    {
+        if (body.Statements.Count == 0)
+        {
+            return RangeHelper.From(0, 0, 0, 0);
+        }
+        Range? start = null;
+        Range? end = null;
+        foreach (var st in body.Statements)
+        {
+            if (TryGetRange(st, out var r))
+            {
+                if (start is null) start = r;
+                end = r;
+            }
+        }
+        if (start is null || end is null)
+        {
+            return RangeHelper.From(0, 0, 0, 0);
+        }
+        return RangeHelper.From(start!.Start, end!.End);
+    }
+
+    private static bool IsPositionInsideRange(Position pos, Range range)
+    {
+        int cmpStart = ComparePosition(pos, range.Start);
+        int cmpEnd = ComparePosition(range.End, pos);
+        return cmpStart >= 0 && cmpEnd >= 0;
+    }
+
+    private static int ComparePosition(Position a, Position b)
+    {
+        if (a.Line != b.Line) return a.Line.CompareTo(b.Line);
+        return a.Character.CompareTo(b.Character);
+    }
+
+    private static bool TryGetRange(AstNode node, out Range range)
+    {
+        // Fast paths for nodes that carry a Range
+        switch (node)
+        {
+            case ExprNode e:
+                range = e.Range; return true;
+            case ControlFlowActionNode cfan:
+                range = cfan.Range; return true;
+            case ConstStmtNode cst:
+                range = cst.Range; return true;
+            case ExprStmtNode es when es.Expr is not null:
+                range = es.Expr.Range; return true;
+            case ReturnStmtNode rt when rt.Value is not null:
+                range = rt.Value.Range; return true;
+            case ArgsListNode al:
+                range = al.Range; return true;
+        }
+
+        // Composite statements: compute union of child ranges
+        bool ok = false;
+        Range start = default, end = default;
+        void Acc(Range r)
+        {
+            if (!ok) { start = r; end = r; ok = true; }
+            else { start = RangeHelper.From(start.Start, r.Start); end = RangeHelper.From(end.Start, r.End); }
+        }
+
+        switch (node)
+        {
+            case IfStmtNode iff:
+                if (iff.Condition is not null && TryGetRange(iff.Condition, out var rc)) Acc(rc);
+                if (iff.Then is not null && TryGetRange(iff.Then, out var rt)) Acc(rt);
+                if (iff.Else is not null && TryGetRange(iff.Else, out var re)) Acc(re);
+                break;
+            case DoWhileStmtNode dw:
+                if (dw.Then is not null && TryGetRange(dw.Then, out var rdw)) Acc(rdw);
+                if (dw.Condition is not null && TryGetRange(dw.Condition, out var cdw)) Acc(cdw);
+                break;
+            case WhileStmtNode wl:
+                if (wl.Then is not null && TryGetRange(wl.Then, out var rwl)) Acc(rwl);
+                if (wl.Condition is not null && TryGetRange(wl.Condition, out var cwl)) Acc(cwl);
+                break;
+            case ForStmtNode fr:
+                if (fr.Init is not null && TryGetRange(fr.Init, out var ri)) Acc(ri);
+                if (fr.Condition is not null && TryGetRange(fr.Condition, out var rc2)) Acc(rc2);
+                if (fr.Increment is not null && TryGetRange(fr.Increment, out var rinc)) Acc(rinc);
+                if (fr.Then is not null && TryGetRange(fr.Then, out var rthen)) Acc(rthen);
+                break;
+            case ForeachStmtNode fe:
+                if (fe.Collection is not null && TryGetRange(fe.Collection, out var rcol)) Acc(rcol);
+                if (fe.Then is not null && TryGetRange(fe.Then, out var rfe)) Acc(rfe);
+                break;
+            case FunDevBlockNode fdb:
+                var rbody = GetStmtListRange(fdb.Body); Acc(rbody);
+                break;
+            case StmtListNode sl:
+                foreach (var st in sl.Statements)
+                {
+                    if (TryGetRange(st, out var rs)) Acc(rs);
+                }
+                break;
+            case SwitchStmtNode sw:
+                if (sw.Expression is not null && TryGetRange(sw.Expression, out var rexp)) Acc(rexp);
+                if (TryGetRange(sw.Cases, out var rcases)) Acc(rcases);
+                break;
+            case CaseListNode cl:
+                foreach (var cs in cl.Cases)
+                {
+                    if (TryGetRange(cs, out var rcs)) Acc(rcs);
+                }
+                break;
+            case CaseStmtNode cs:
+                foreach (var lbl in cs.Labels)
+                {
+                    if (TryGetRange(lbl, out var rlbl)) Acc(rlbl);
+                }
+                var rb = GetStmtListRange(cs.Body); Acc(rb);
+                break;
+            case CaseLabelNode cln when cln.Value is not null:
+                range = cln.Value.Range; return true;
+            case ClassBodyListNode cbl:
+                foreach (var d in cbl.Definitions)
+                {
+                    if (TryGetRange(d, out var rd)) Acc(rd);
+                }
+                break;
+        }
+
+        if (ok)
+        {
+            range = RangeHelper.From(start.Start, end.End);
+            return true;
+        }
+        range = default;
+        return false;
+    }
     public async Task AnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
     {
         await WaitUntilParsedAsync(cancellationToken);
 
+        AnalysisTask = DoAnalyseAsync(exportedSymbols, cancellationToken);
+        await AnalysisTask;
+    }
+
+    public Task DoAnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
+    {
+
+        // Get a comprehensive list of symbols available in this context.
+        Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.InternalSymbols, StringComparer.OrdinalIgnoreCase);
+        foreach (IExportedSymbol symbol in exportedSymbols)
+        {
+            // Add dependency symbols, but don't overwrite local symbols (local takes precedence).
+            if (symbol.Type == ExportedSymbolType.Function)
+            {
+                ScrFunction function = (ScrFunction)symbol;
+                allSymbols.TryAdd($"{function.Namespace}::{function.Name}", symbol);
+                if (!function.Implicit)
+                {
+                    continue;
+                }
+            }
+            allSymbols.TryAdd(symbol.Name, symbol);
+        }
+
+        ControlFlowAnalyser controlFlowAnalyser = new(Sense, DefinitionsTable!);
+        try
+        {
+            controlFlowAnalyser.Run();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Log.Error(ex, "Failed to run control flow analyser.");
+
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
+
+        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, controlFlowAnalyser.ClassGraphs, Sense, allSymbols, TryGetApi());
+        try
+        {
+            dataFlowAnalyser.Run();
+        }
+        catch (Exception ex)
+        {
+            Failed = true;
+            Log.Error(ex, "Failed to run data flow analyser.");
+
+            Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
+            return Task.CompletedTask;
+        }
+
+        // TODO: fit this within the analysers above, or a later step.
         // Basic SPA diagnostics
         try
         {
             EmitUnusedParameterDiagnostics();
-            EmitCallArityDiagnostics();
+            // EmitCallArityDiagnostics(); // Now handled in ReachingDefinitionsAnalyser
             EmitUnknownNamespaceDiagnostics();
             EmitUnusedUsingDiagnostics();
             EmitUnusedVariableDiagnostics();
@@ -309,6 +556,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
 
         Analysed = true;
+        return Task.CompletedTask;
     }
 
     public async Task<List<Diagnostic>> GetDiagnosticsAsync(CancellationToken cancellationToken)
@@ -322,17 +570,19 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public async Task PushSemanticTokensAsync(SemanticTokensBuilder builder, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
 
+        int count = 0;
         foreach (ISemanticToken token in Sense.SemanticTokens)
         {
             builder.Push(token.Range, token.SemanticTokenType, token.SemanticTokenModifiers);
+            count++;
         }
     }
 
     public async Task<Hover?> GetHoverAsync(Position position, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
 
         IHoverable? result = Sense.HoverLibrary.Get(position);
         if (result is not null)
@@ -439,7 +689,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (apiFn is not null)
                 {
                     var overload = apiFn.Overloads.FirstOrDefault();
-                    var paramSeq = overload != null ? overload.Parameters : new List<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                    var paramSeq = overload != null ? overload.Parameters : new List<ScrFunctionArg>();
                     string[] names = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                     string sig = FormatSignature(name, names, activeParam, qualifier);
                     string desc = apiFn.Description ?? string.Empty;
@@ -552,7 +802,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     public async Task<CompletionList?> GetCompletionAsync(Position position, CancellationToken cancellationToken)
     {
-        await WaitUntilParsedAsync(cancellationToken);
+        await WaitUntilAnalysedAsync(cancellationToken);
         return Sense.Completions.GetCompletionsFromPosition(position);
     }
 
@@ -571,6 +821,20 @@ public class Script(DocumentUri ScriptUri, string languageId)
             throw new InvalidOperationException("The script has not been parsed yet.");
         }
         await ParsingTask;
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private async Task WaitUntilAnalysedAsync(CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (AnalysisTask is null)
+        {
+            throw new InvalidOperationException("The script has not been parsed yet.");
+        }
+        await AnalysisTask;
         cancellationToken.ThrowIfCancellationRequested();
     }
 
@@ -960,7 +1224,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (apiFn is not null)
                 {
                     var overload = apiFn.Overloads.FirstOrDefault();
-                    IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter> paramSeq = overload != null ? (IEnumerable<GSCode.Parser.SPA.Sense.ScrFunctionParameter>)overload.Parameters : Enumerable.Empty<GSCode.Parser.SPA.Sense.ScrFunctionParameter>();
+                    IEnumerable<ScrFunctionArg> paramSeq = overload != null ? (IEnumerable<ScrFunctionArg>)overload.Parameters : Enumerable.Empty<ScrFunctionArg>();
                     var cleaned = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                     string label = $"function {name}({string.Join(", ", cleaned)})";
                     var parameters = new Container<ParameterInformation>(paramSeq.Select(p => new ParameterInformation { Label = StripDefault(p.Name), Documentation = string.IsNullOrWhiteSpace(p.Description) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = p.Description! } }));
@@ -1012,7 +1276,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
         };
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static string StripDefault(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return string.Empty;
@@ -1043,6 +1306,10 @@ public class Script(DocumentUri ScriptUri, string languageId)
         }
     }
 
+    // NOTE: This method has been replaced by argument count validation in ReachingDefinitionsAnalyser
+    // which properly handles vararg and runs during data flow analysis.
+    // Keeping this commented out for reference.
+    /*
     private void EmitCallArityDiagnostics()
     {
         if (RootNode is null) return;
@@ -1074,7 +1341,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
             if (call is FunCallNode fcall)
             {
-                switch (fcall.Target)
+                switch (fcall.Function)
                 {
                     case IdentifierExprNode id:
                         name = id.Identifier;
@@ -1124,7 +1391,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
                             //     Sense.AddSpaDiagnostic(reportRange, GSCErrorCodes.TooManyArguments, name, argCount, maxAny);
                             //     continue;
                             // }
-                            // If within some overload’s min/max, we assume OK (type checking not implemented)
+                            // If within some overload's min/max, we assume OK (type checking not implemented)
                             continue;
                         }
                     }
@@ -1174,6 +1441,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             }
         }
     }
+    */
 
     private void EmitUnknownNamespaceDiagnostics()
     {
@@ -1288,7 +1556,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         foreach (var sw in EnumerateSwitches(RootNode))
         {
             HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
-            bool defaultSeen = false;
+            // bool defaultSeen = false;
             var list = sw.Cases.Cases;
             for (var node = list.First; node is not null; node = node.Next)
             {
@@ -1297,33 +1565,35 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 // Handle labels
                 foreach (var label in cs.Labels)
                 {
-                    if (label.NodeType == AstNodeType.DefaultLabel)
-                    {
-                        if (defaultSeen)
-                        {
-                            // Multiple default labels
-                            Range r = GetCaseLabelOrBodyRange(cs, sw);
-                            Sense.AddSpaDiagnostic(r, GSCErrorCodes.MultipleDefaultLabels);
-                            // Also mark as unreachable
-                            Sense.AddSpaDiagnostic(r, GSCErrorCodes.UnreachableCase);
-                        }
-                        else
-                        {
-                            defaultSeen = true;
-                        }
-                    }
-                    else if (label.NodeType == AstNodeType.CaseLabel && label.Value is not null)
-                    {
-                        if (TryEvaluateCaseLabelConstant(label.Value, out string key))
-                        {
-                            if (!seen.Add(key))
-                            {
-                                // Duplicate label value in the same switch
-                                Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.DuplicateCaseLabel);
-                                Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.UnreachableCase);
-                            }
-                        }
-                    }
+                    // Now handled in CFA
+                    // if (label.NodeType == AstNodeType.DefaultLabel)
+                    // {
+                    //     if (defaultSeen)
+                    //     {
+                    //         // Multiple default labels
+                    //         Range r = GetCaseLabelOrBodyRange(cs, sw);
+                    //         Sense.AddSpaDiagnostic(r, GSCErrorCodes.MultipleDefaultLabels);
+                    //         // Also mark as unreachable
+                    //         Sense.AddSpaDiagnostic(r, GSCErrorCodes.UnreachableCase);
+                    //     }
+                    //     else
+                    //     {
+                    //         defaultSeen = true;
+                    //     }
+                    // }
+                    // else 
+                    // if (label.NodeType == AstNodeType.CaseLabel && label.Value is not null)
+                    // {
+                    //     if (TryEvaluateCaseLabelConstant(label.Value, out string key))
+                    //     {
+                    //         if (!seen.Add(key))
+                    //         {
+                    //             // Duplicate label value in the same switch
+                    //             Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.DuplicateCaseLabel);
+                    //             Sense.AddSpaDiagnostic(label.Value.Range, GSCErrorCodes.UnreachableCase);
+                    //         }
+                    //     }
+                    // }
                 }
 
                 // Fallthrough detection: if not the last case and body does not terminate with break/return
@@ -1362,11 +1632,28 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     private static bool HasTerminatingBreakOrReturn(StmtListNode body)
     {
-        if (body.Statements.Count == 0) return false;
-        // naive: if any top-level statement is a break or a return, consider terminating
-        foreach (var st in body.Statements)
+        // First, check top-level statements in the case body
+        if (HasTopLevelTerminator(body))
         {
-            if (st is ControlFlowActionNode cfan && (cfan.NodeType == AstNodeType.BreakStmt))
+            return true;
+        }
+
+        // If the body is just a scoped brace block (e.g., case X: { ... })
+        // then recurse one level into that block and check its top-level statements
+        if (body.Statements.Count == 1 && body.Statements.First!.Value is StmtListNode inner)
+        {
+            return HasTopLevelTerminator(inner);
+        }
+
+        return false;
+    }
+
+    private static bool HasTopLevelTerminator(StmtListNode block)
+    {
+        if (block.Statements.Count == 0) return false;
+        foreach (var st in block.Statements)
+        {
+            if (st is ControlFlowActionNode cfan && cfan.NodeType == AstNodeType.BreakStmt)
             {
                 return true;
             }
@@ -1574,7 +1861,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             case MethodCallNode mc:
                 if (mc.Target is not null) yield return mc.Target; yield return mc.Arguments; break;
             case FunCallNode fc:
-                if (fc.Target is not null) yield return fc.Target; yield return fc.Arguments; break;
+                if (fc.Function is not null) yield return fc.Function; yield return fc.Arguments; break;
             case NamespacedMemberNode nm:
                 yield return nm.Namespace; yield return nm.Member; break;
             case ArgsListNode al:
@@ -1601,5 +1888,84 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             CollectIdentifiers(child, into);
         }
+    }
+
+    public async Task<IReadOnlyList<Range>> GetLocalVariableReferencesAsync(Position position, bool includeDeclaration, CancellationToken cancellationToken = default)
+    {
+        await WaitUntilParsedAsync(cancellationToken);
+
+        // Acquire the token under the cursor
+        Token? token = Sense.Tokens.Get(position);
+        if (token is null || token.Type != TokenType.Identifier)
+        {
+            return Array.Empty<Range>();
+        }
+        string target = token.Lexeme;
+
+        // Find the enclosing function that either contains the position in its body
+        // or, if the token matches a parameter name, the function that declares it.
+        FunDefnNode? enclosing = null;
+        foreach (var fn in EnumerateFunctions(RootNode!))
+        {
+            var bodyRange = GetStmtListRange(fn.Body);
+            if (IsPositionInsideRange(position, bodyRange))
+            {
+                enclosing = fn;
+                break;
+            }
+            // If the position is not inside body, check if it's on a parameter name
+            foreach (var p in fn.Parameters.Parameters)
+            {
+                if (p.Name is null) continue;
+                if (ComparePosition(position, p.Name.Range.Start) >= 0 && ComparePosition(p.Name.Range.End, position) >= 0)
+                {
+                    enclosing = fn;
+                    break;
+                }
+            }
+            if (enclosing is not null) break;
+        }
+
+        if (enclosing is null)
+        {
+            return Array.Empty<Range>();
+        }
+
+        // Compute function body range and collect identifier tokens within it matching the name
+        Range body = GetStmtListRange(enclosing.Body);
+        var results = new List<Range>();
+        foreach (var t in Sense.Tokens.GetAll())
+        {
+            if (t.Type != TokenType.Identifier) continue;
+            // Restrict to tokens in the same function body
+            if (!(ComparePosition(t.Range.Start, body.Start) >= 0 && ComparePosition(body.End, t.Range.End) >= 0))
+                continue;
+            // Match name (case-insensitive to be consistent with SPA checks)
+            if (!string.Equals(t.Lexeme, target, StringComparison.OrdinalIgnoreCase)) continue;
+            // Exclude namespace-qualified identifiers or function calls
+            Token? prev = t.Previous;
+            while (prev is not null && prev.IsWhitespacey()) prev = prev.Previous;
+            if (prev is not null && prev.Type == TokenType.ScopeResolution) continue;
+            Token? next = t.Next;
+            while (next is not null && next.IsWhitespacey()) next = next.Next;
+            if (next is not null && next.Type == TokenType.OpenParen) continue; // looks like a call
+
+            results.Add(t.Range);
+        }
+
+        // Optionally include declaration site (parameter declaration)
+        if (includeDeclaration)
+        {
+            foreach (var p in enclosing.Parameters.Parameters)
+            {
+                if (p.Name is null) continue;
+                if (string.Equals(p.Name.Lexeme, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    results.Add(p.Name.Range);
+                }
+            }
+        }
+
+        return results;
     }
 }

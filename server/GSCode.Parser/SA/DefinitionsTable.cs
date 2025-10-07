@@ -15,10 +15,11 @@ public class DefinitionsTable
     public string CurrentNamespace { get; set; }
 
     internal List<Tuple<ScrFunction, FunDefnNode>> LocalScopedFunctions { get; } = new();
+    internal List<Tuple<ScrClass, ClassDefnNode>> LocalScopedClasses { get; } = new();
     public List<ScrFunction> ExportedFunctions { get; } = new();
+    public List<ScrClass> ExportedClasses { get; } = new();
     public Dictionary<string, IExportedSymbol> InternalSymbols { get; } = new();
     public Dictionary<string, IExportedSymbol> ExportedSymbols { get; } = new();
-    // TODO: Class definitions (not in this version)
 
     public List<Uri> Dependencies { get; } = new();
 
@@ -52,6 +53,19 @@ public class DefinitionsTable
             ExportedFunctions.Add(exportedFunction);
             ExportedSymbols.Add(exportedFunction.Name, exportedFunction);
         }
+    }
+
+    internal void AddClass(ScrClass scrClass, ClassDefnNode node)
+    {
+        LocalScopedClasses.Add(new Tuple<ScrClass, ClassDefnNode>(scrClass, node));
+
+        // Add to internal symbols for within-file references
+        InternalSymbols.Add(scrClass.Name, scrClass);
+        InternalSymbols.Add($"{CurrentNamespace}::{scrClass.Name}", scrClass);
+
+        // Always export classes (GSC doesn't have private classes)
+        ExportedClasses.Add(scrClass);
+        ExportedSymbols.Add(scrClass.Name, scrClass);
     }
 
     public void AddDependency(string scriptPath)

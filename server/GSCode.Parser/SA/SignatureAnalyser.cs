@@ -81,6 +81,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         // Record class location for go-to-definition
         DefinitionsTable.AddClassLocation(DefinitionsTable.CurrentNamespace, name, Sense.ScriptPath, nameToken.Range);
 
+        // Add class to definitions table for CFG and RDA analysis
+        DefinitionsTable.AddClass(scrClass, classDefn);
+
         Sense.AddSenseToken(nameToken, new ScrClassSymbol(nameToken, scrClass));
     }
 
@@ -299,14 +302,14 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
             nameToken = nameToken.Previous;
         }
 
-        if ( nameToken.Previous == null)
+        if (nameToken.Previous == null)
         {
             return null;
         }
 
         // check around 50 tokens
         int count = 50;
-        while(count > 0 && nameToken.Previous.Type != TokenType.DocComment)
+        while (count > 0 && nameToken.Previous.Type != TokenType.DocComment)
         {
             nameToken = nameToken.Previous;
             count--;
@@ -393,35 +396,35 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                     spmp = val;
                     break;
                 case "mandatoryarg":
-                {
-                    var am = s_argPattern.Match(val);
-                    if (am.Success)
                     {
-                        string a = am.Groups["n"].Value.Trim();
-                        string d = am.Groups["d"].Value.Trim();
+                        var am = s_argPattern.Match(val);
+                        if (am.Success)
+                        {
+                            string a = am.Groups["n"].Value.Trim();
+                            string d = am.Groups["d"].Value.Trim();
 
-                        a = a.Replace("<", "").Replace(">", "");
-                        a = a.Replace("[", "").Replace("]", "");
+                            a = a.Replace("<", "").Replace(">", "");
+                            a = a.Replace("[", "").Replace("]", "");
 
-                        mandatory.Add((a, d));
+                            mandatory.Add((a, d));
+                        }
+                        break;
                     }
-                    break;
-                }
                 case "optionalarg":
-                {
-                    var am = s_argPattern.Match(val);
-                    if (am.Success)
                     {
-                        string a = am.Groups["n"].Value.Trim();
-                        string d = am.Groups["d"].Value.Trim();
+                        var am = s_argPattern.Match(val);
+                        if (am.Success)
+                        {
+                            string a = am.Groups["n"].Value.Trim();
+                            string d = am.Groups["d"].Value.Trim();
 
-                        a = a.Replace("<", "").Replace(">", "");
-                        a = a.Replace("[", "").Replace("]", "");
+                            a = a.Replace("<", "").Replace(">", "");
+                            a = a.Replace("[", "").Replace("]", "");
 
-                        optional.Add((a, d));
+                            optional.Add((a, d));
+                        }
+                        break;
                     }
-                    break;
-                }
                 case "example":
                     examples.Add(val);
                     break;

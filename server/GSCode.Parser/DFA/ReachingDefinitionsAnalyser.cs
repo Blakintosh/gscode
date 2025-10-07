@@ -18,9 +18,10 @@ internal class SwitchAnalysisContext
     public bool HasDefault { get; set; } = false;
 }
 
-internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null)
+internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null)
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = functionGraphs;
+    public List<Tuple<ScrClass, ControlFlowGraph>> ClassGraphs { get; } = classGraphs;
     public ParserIntelliSense Sense { get; } = sense;
     public Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = exportedSymbolTable;
     public ScriptAnalyserData? ApiData { get; } = apiData;
@@ -37,6 +38,11 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         foreach (Tuple<ScrFunction, ControlFlowGraph> functionGraph in FunctionGraphs)
         {
             AnalyseFunction(functionGraph.Item1, functionGraph.Item2);
+        }
+
+        foreach (Tuple<ScrClass, ControlFlowGraph> classGraph in ClassGraphs)
+        {
+            AnalyseClass(classGraph.Item1, classGraph.Item2);
         }
     }
 
@@ -101,6 +107,11 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 AnalyseFunctionEntry((FunEntryBlock)node, inSet);
                 OutSets[node] = inSet;
             }
+            else if (node.Type == CfgNodeType.ClassEntry)
+            {
+                // Class entry - just pass through the in set
+                OutSets[node] = inSet;
+            }
             else if (node.Type == CfgNodeType.BasicBlock)
             {
                 SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
@@ -111,6 +122,13 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 //outSet.UnionWith(symbolTable.GetOutgoingSymbols());
                 AnalyseBasicBlock((BasicBlock)node, symbolTable);
 
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.ClassMembersBlock)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseClassMembersBlock((ClassMembersBlock)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
             else if (node.Type == CfgNodeType.EnumerationNode)
@@ -192,6 +210,190 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 case CfgNodeType.BasicBlock:
                     AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
                     break;
+                case CfgNodeType.ClassMembersBlock:
+                    AnalyseClassMembersBlock((ClassMembersBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+                case CfgNodeType.EnumerationNode:
+                    AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+                case CfgNodeType.IterationNode:
+                    AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+                case CfgNodeType.SwitchNode:
+                    AnalyseSwitch((SwitchNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+                case CfgNodeType.SwitchCaseDecisionNode:
+                    AnalyseSwitchCaseDecision((SwitchCaseDecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+                case CfgNodeType.DecisionNode:
+                    AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+            }
+        }
+    }
+
+    public void AnalyseClass(ScrClass scrClass, ControlFlowGraph classGraph)
+    {
+        Silent = true;
+
+        // Clear switch contexts at the start of each class analysis
+        SwitchContexts.Clear();
+
+        Stack<CfgNode> worklist = new();
+        worklist.Push(classGraph.Start);
+
+        HashSet<CfgNode> visited = new();
+
+        // Calculate iteration limit based on graph size to prevent infinite loops
+        int totalNodes = CountAllNodes(classGraph);
+        int maxIterations = Math.Max(100, totalNodes * 5); // At least 100, or 5x nodes
+        int iterations = 0;
+
+        while (worklist.Count > 0 && iterations < maxIterations)
+        {
+            iterations++;
+            CfgNode node = worklist.Pop();
+            visited.Add(node);
+
+            // Calculate the in set
+            Dictionary<string, ScrVariable> inSet = new(StringComparer.OrdinalIgnoreCase);
+            foreach (CfgNode incoming in node.Incoming)
+            {
+                if (OutSets.TryGetValue(incoming, out Dictionary<string, ScrVariable>? value))
+                {
+                    inSet.MergeTables(value, node.Scope);
+                }
+            }
+
+            // Check if the in set has changed, if not, then we can skip this node.
+            if (InSets.TryGetValue(node, out Dictionary<string, ScrVariable>? currentInSet) && currentInSet.VariableTableEquals(inSet))
+            {
+                continue;
+            }
+
+            // Update the in & out sets
+            InSets[node] = inSet;
+
+            // Store the previous outset for comparison
+            Dictionary<string, ScrVariable>? previousOutSet = null;
+            if (OutSets.TryGetValue(node, out Dictionary<string, ScrVariable>? existingOutSet))
+            {
+                // Create a copy of the existing outset for comparison
+                previousOutSet = new Dictionary<string, ScrVariable>(existingOutSet, StringComparer.OrdinalIgnoreCase);
+            }
+
+            if (!OutSets.ContainsKey(node))
+            {
+                OutSets[node] = new Dictionary<string, ScrVariable>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            // Calculate the out set
+            if (node.Type == CfgNodeType.ClassEntry)
+            {
+                // Class entry - just pass through the in set
+                OutSets[node] = inSet;
+            }
+            else if (node.Type == CfgNodeType.FunctionEntry)
+            {
+                AnalyseFunctionEntry((FunEntryBlock)node, inSet);
+                OutSets[node] = inSet;
+            }
+            else if (node.Type == CfgNodeType.BasicBlock)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseBasicBlock((BasicBlock)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.ClassMembersBlock)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseClassMembersBlock((ClassMembersBlock)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.EnumerationNode)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseEnumeration((EnumerationNode)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.IterationNode)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseIteration((IterationNode)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.DecisionNode)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseDecision((DecisionNode)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.SwitchNode)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseSwitch((SwitchNode)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else if (node.Type == CfgNodeType.SwitchCaseDecisionNode)
+            {
+                SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData);
+
+                AnalyseSwitchCaseDecision((SwitchCaseDecisionNode)node, symbolTable);
+                OutSets[node] = symbolTable.VariableSymbols;
+            }
+            else
+            {
+                // TODO: temp - just copy the in set to the out set.
+                OutSets[node] = inSet;
+            }
+
+            // Check if the outset has changed before queueing successors.
+            bool outSetChanged = previousOutSet == null || !previousOutSet.VariableTableEquals(OutSets[node]);
+
+            // Only add successors to the worklist if the outset has changed
+            if (!outSetChanged)
+            {
+                continue;
+            }
+
+            foreach (CfgNode successor in node.Outgoing)
+            {
+                worklist.Push(successor);
+            }
+        }
+
+        // Check if we hit the iteration limit
+        if (iterations >= maxIterations)
+        {
+            Log.Warning("Reaching definitions analysis hit iteration limit ({maxIterations}) for class {className}. This may indicate convergence issues.",
+                maxIterations, scrClass.Name ?? "<anonymous>");
+        }
+
+        // Now that analysis is done, do one final pass to add diagnostics.
+        Silent = false;
+
+        foreach (CfgNode node in visited)
+        {
+            if (!InSets.TryGetValue(node, out Dictionary<string, ScrVariable>? inSet))
+            {
+                continue;
+            }
+
+            // Re-run analysis with Silent = false to generate diagnostics
+            switch (node.Type)
+            {
+                case CfgNodeType.BasicBlock:
+                    AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
+                case CfgNodeType.ClassMembersBlock:
+                    AnalyseClassMembersBlock((ClassMembersBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
+                    break;
                 case CfgNodeType.EnumerationNode:
                     AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData));
                     break;
@@ -248,7 +450,13 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
     public void AnalyseFunctionEntry(FunEntryBlock entry, Dictionary<string, ScrVariable> inSet)
     {
-        FunDefnNode node = entry.Source;
+        FunDefnNode? node = entry.Source;
+
+        // Handle constructor/destructor entries (which have null source)
+        if (node is null)
+        {
+            return;
+        }
 
         // Add the function's parameters to the in set.
         foreach (ParamNode param in node.Parameters.Parameters)
@@ -420,6 +628,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 }
             }
 
+            // TODO: this isn't working at the moment.
             // Duplicate label check - only on first analysis of this node
             if (isFirstTimeAnalyzingThisNode && TryGetCaseLabelValueKey(label.Value, out string key))
             {
@@ -488,6 +697,60 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
             AnalyseStatement(child, last, next, symbolTable);
         }
+    }
+
+    public void AnalyseClassMembersBlock(ClassMembersBlock block, SymbolTable symbolTable)
+    {
+        LinkedList<AstNode> members = block.Statements;
+
+        if (members.Count == 0)
+        {
+            return;
+        }
+
+        // Iterate through member declarations and add them to the symbol table
+        for (LinkedListNode<AstNode>? node = members.First; node != null; node = node.Next)
+        {
+            AstNode child = node.Value;
+
+            // Should only be member declarations in a ClassMembersBlock
+            if (child is MemberDeclNode memberDecl)
+            {
+                AnalyseMemberDecl(memberDecl, symbolTable);
+            }
+        }
+    }
+
+    public void AnalyseMemberDecl(MemberDeclNode memberDecl, SymbolTable symbolTable)
+    {
+        if (memberDecl.NameToken is null)
+        {
+            return;
+        }
+
+        string memberName = memberDecl.NameToken.Lexeme;
+
+        // Add the field to the symbol table with default type (fields can be any type in GSC)
+        // Fields are like variables but at class scope (scope 0)
+        AssignmentResult assignmentResult = symbolTable.TryAddVariableSymbol(memberName, ScrData.Default);
+
+        if (assignmentResult == AssignmentResult.SuccessNew)
+        {
+            // Add a semantic token for the field declaration
+            // Using a custom identifier expression node for the sense token
+            IdentifierExprNode fieldIdentifier = new(memberDecl.NameToken);
+            Sense.AddSenseToken(memberDecl.NameToken, ScrVariableSymbol.Declaration(fieldIdentifier, ScrData.Default));
+            return;
+        }
+
+        if (assignmentResult == AssignmentResult.FailedReserved)
+        {
+            AddDiagnostic(memberDecl.NameToken.Range, GSCErrorCodes.ReservedSymbol, memberName);
+            return;
+        }
+
+        // If not SuccessNew and not FailedReserved, it's a redefinition (FailedConstant or other)
+        AddDiagnostic(memberDecl.NameToken.Range, GSCErrorCodes.RedefinitionOfSymbol, memberName);
     }
 
     public void AnalyseStatement(AstNode statement, AstNode? last, AstNode? next, SymbolTable symbolTable)

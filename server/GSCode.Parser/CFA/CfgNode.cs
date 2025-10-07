@@ -22,7 +22,10 @@ internal enum CfgNodeType
     EnumerationNode,
     IterationNode,
     SwitchNode,
-    SwitchCaseDecisionNode
+    SwitchCaseDecisionNode,
+    ClassEntry,
+    ClassExit,
+    ClassMembersBlock,
 }
 
 
@@ -125,5 +128,19 @@ internal class FunExitBlock(AstNode source) : CfgNode(CfgNodeType.FunctionExit, 
     public AstNode Source { get; } = source;
 }
 
+internal class ClassEntryBlock(ClassDefnNode source, Token? name) : CfgNode(CfgNodeType.ClassEntry, 0)
+{
+    public ClassDefnNode Source { get; } = source;
+    public Token? Name { get; } = name;
+    public CfgNode? Body { get; private set; }
+}
 
+internal class ClassExitBlock(ClassDefnNode source) : CfgNode(CfgNodeType.ClassExit, 0)
+{
+    public ClassDefnNode Source { get; } = source;
+}
 
+internal class ClassMembersBlock(LinkedList<AstNode> statements, int scope) : CfgNode(CfgNodeType.ClassMembersBlock, scope)
+{
+    public LinkedList<AstNode> Statements { get; } = statements;
+}

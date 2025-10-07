@@ -2240,7 +2240,9 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         ScrFunction function = functionTarget.Get<ScrFunction>();
 
-        // Analyse its arguments.
+        // TODO: Validate argument count against function signature (check min/max params, handle varargs)
+
+        // Analyse arguments
         foreach (ExprNode? argument in call.Arguments.Arguments)
         {
             if (argument is null)
@@ -2250,12 +2252,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
             ScrData argumentValue = AnalyseExpr(argument, symbolTable, sense);
 
-            if (argumentValue.TypeUnknown())
-            {
-                continue;
-            }
-
-            // TODO: Check whether types match up, if we have them.
+            // TODO: Check whether argument types match expected parameter types
         }
 
         return ScrData.Default;
@@ -2271,6 +2268,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         ScrData functionTarget;
+        FunCallNode? functionCall = null;
 
         // If it's a direct identifier, look it up in the global function table
         if (call.Operand is IdentifierExprNode identifierNode)
@@ -2295,6 +2293,13 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             functionTarget = AnalyseScopeResolution(namespacedMember, symbolTable, sense);
         }
+        // If it's a function call node, analyze it and extract the function being called
+        else if (call.Operand is FunCallNode funCall)
+        {
+            functionCall = funCall;
+            // Recursively analyze the function call to get the target
+            functionTarget = AnalyseFunctionCall(funCall, symbolTable, sense, targetValue);
+        }
         else
         {
             // For dereference calls thread [[ expr ]](), explicitly validate and dereference
@@ -2306,6 +2311,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             AddDiagnostic(call.Operand.Range, GSCErrorCodes.ExpectedFunction, functionTarget.TypeToString());
         }
+
+        // TODO: Validate argument count for threaded calls (if not already handled by recursive call)
 
         // Threaded calls won't return anything.
         return ScrData.Undefined();

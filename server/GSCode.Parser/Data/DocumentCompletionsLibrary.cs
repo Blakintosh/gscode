@@ -58,6 +58,9 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         // Generate completions from identifiers that occur inside of the file, as well.
         completions.AddRange(GetFileScopeCompletions(context));
 
+        // Add local variable completions (scoped to current block/function).
+        completions.AddRange(GetLocalVariableCompletions(context, token, completions));
+
         // Include functions defined locally and imported via #using.
         completions.AddRange(GetImportedFunctionCompletions(context, completions));
 
@@ -185,6 +188,214 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         return completions;
     }
 
+    // ---------------- Local variable completion ----------------
+    private IEnumerable<CompletionItem> GetLocalVariableCompletions(CompletionContext context, Token caretToken, IEnumerable<CompletionItem> existing)
+    {
+        // Provide variable completions in expression contexts (global-like typing or function call argument lists)
+        if (context.Type is not CompletionContextType.GlobalScope and not CompletionContextType.FunctionCall)
+            return Array.Empty<CompletionItem>();
+
+        HashSet<string> existingLabels = new(existing.Select(c => c.Label ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+
+        var funcInfo = FindEnclosingFunction(caretToken);
+        if (funcInfo.openBrace is null)
+            return Array.Empty<CompletionItem>();
+
+        Token openBrace = funcInfo.openBrace;
+        Token? closeBrace = funcInfo.closeBrace; // may be null if malformed
+
+        string? filter = context.Filter; bool hasFilter = !string.IsNullOrWhiteSpace(filter);
+        Dictionary<string, Token> variables = new(StringComparer.OrdinalIgnoreCase);
+
+        // Seed with parameters first
+        foreach (var p in funcInfo.parameters)
+        {
+            if (!string.IsNullOrWhiteSpace(p)) variables[p] = openBrace; // placeholder token
+        }
+
+        Token? cur = openBrace.Next;
+        // Limit scan to within the block (up to matching close brace if found)
+        while (cur is not null && !ReferenceEquals(cur, closeBrace))
+        {
+            if (!cur.IsComment())
+            {
+                if (IsKeywordLexeme(cur, "var") || IsKeywordLexeme(cur, "const"))
+                {
+                    Token? nextId = NextNonTrivia(cur);
+                    if (nextId is not null && nextId.Type == TokenType.Identifier && !nextId.IsKeyword())
+                    {
+                        TryAddVariable(nextId.Lexeme, nextId);
+                    }
+                }
+                else if (cur.Type == TokenType.Identifier && !cur.IsKeyword())
+                {
+                    Token? next = NextNonTrivia(cur);
+                    if (next is not null && next.Lexeme == "=")
+                    {
+                        TryAddVariable(cur.Lexeme, cur);
+                    }
+                }
+                if (IsKeywordLexeme(cur, "for") || IsKeywordLexeme(cur, "foreach"))
+                {
+                    Token? afterFor = NextNonTrivia(cur);
+                    if (afterFor is not null && afterFor.Lexeme == "(")
+                    {
+                        Token? maybeVar = NextNonTrivia(afterFor);
+                        if (maybeVar is not null && maybeVar.Type == TokenType.Identifier && !maybeVar.IsKeyword())
+                        {
+                            TryAddVariable(maybeVar.Lexeme, maybeVar);
+                        }
+                    }
+                }
+            }
+            cur = cur.Next;
+        }
+
+        List<CompletionItem> items = new();
+        foreach (var kv in variables)
+        {
+            string name = kv.Key;
+            if (existingLabels.Contains(name)) continue;
+            if (hasFilter && !name.StartsWith(filter!, StringComparison.OrdinalIgnoreCase)) continue;
+
+            items.Add(new CompletionItem
+            {
+                Label = name,
+                InsertText = name,
+                Kind = CompletionItemKind.Variable,
+                SortText = "0_" + name.ToLowerInvariant(),
+                InsertTextFormat = InsertTextFormat.PlainText
+            });
+        }
+        return items;
+
+        void TryAddVariable(string? name, Token token)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return;
+            variables[name] = token; // prefer the latest occurrence (shadowing)
+        }
+
+        static bool IsKeywordLexeme(Token token, string keyword)
+            => token.Type == TokenType.Identifier && string.Equals(token.Lexeme, keyword, StringComparison.OrdinalIgnoreCase);
+
+        static Token? NextNonTrivia(Token start)
+        {
+            Token? n = start.Next;
+            while (n is not null && (n.IsWhitespacey() || n.IsComment())) n = n.Next;
+            return n;
+        }
+    }
+
+    private static (Token? openBrace, Token? closeBrace, List<string> parameters) FindEnclosingFunction(Token caret)
+    {
+        // Walk backwards from caret to find the nearest 'function' keyword token.
+        Token? cur = caret;
+        while (cur is not null && cur.Type != TokenType.Function && cur.Type != TokenType.Sof)
+        {
+            cur = cur.Previous;
+        }
+
+        if (cur is null || cur.Type != TokenType.Function)
+        {
+            return (null, null, new List<string>());
+        }
+
+        Token functionToken = cur;
+
+        static Token? NextNonTrivia(Token? t)
+        {
+            t = t?.Next;
+            while (t is not null && (t.IsWhitespacey() || t.IsComment())) t = t.Next;
+            return t;
+        }
+
+        // Function name token
+        Token? nameTok = NextNonTrivia(functionToken);
+        if (nameTok is null || nameTok.Type != TokenType.Identifier)
+        {
+            return (null, null, new List<string>());
+        }
+
+        // Expect '('
+        Token? openParen = NextNonTrivia(nameTok);
+        if (openParen is null || openParen.Type != TokenType.OpenParen)
+        {
+            return (null, null, new List<string>());
+        }
+
+        // Parse parameters until matching ')'
+        List<string> parameters = new();
+        int parenDepth = 1;
+        Token? walker = openParen.Next;
+        Token? closeParen = null;
+        while (walker is not null)
+        {
+            if (walker.Type == TokenType.OpenParen) parenDepth++;
+            else if (walker.Type == TokenType.CloseParen)
+            {
+                parenDepth--;
+                if (parenDepth == 0)
+                {
+                    closeParen = walker;
+                    break;
+                }
+            }
+            else if (parenDepth == 1 && walker.Type == TokenType.Identifier && !walker.IsKeyword())
+            {
+                if (!parameters.Contains(walker.Lexeme, StringComparer.OrdinalIgnoreCase)) parameters.Add(walker.Lexeme);
+            }
+            walker = walker.Next;
+        }
+
+        if (closeParen is null)
+        {
+            return (null, null, new List<string>());
+        }
+
+        // Expect body open brace
+        Token? openBrace = NextNonTrivia(closeParen);
+        if (openBrace is null || openBrace.Type != TokenType.OpenBrace)
+        {
+            return (null, null, new List<string>());
+        }
+
+        // Find matching close brace
+        int depth = 1;
+        Token? bodyWalker = openBrace.Next;
+        Token? closeBrace = null;
+        while (bodyWalker is not null)
+        {
+            if (bodyWalker.Type == TokenType.OpenBrace) depth++;
+            else if (bodyWalker.Type == TokenType.CloseBrace)
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    closeBrace = bodyWalker;
+                    break;
+                }
+            }
+            bodyWalker = bodyWalker.Next;
+        }
+
+        // Caret must be inside body: after openBrace start and (before closeBrace end if exists)
+        bool caretAfterOpen = ComparePos(caret.Range.Start, openBrace.Range.Start) >= 0;
+        bool caretBeforeClose = closeBrace is null || ComparePos(caret.Range.Start, closeBrace.Range.End) < 0;
+        if (!(caretAfterOpen && caretBeforeClose))
+        {
+            return (null, null, new List<string>());
+        }
+
+        return (openBrace, closeBrace, parameters);
+
+        static int ComparePos(Position a, Position b)
+        {
+            int ld = a.Line - b.Line;
+            if (ld != 0) return ld;
+            return a.Character - b.Character;
+        }
+    }
+
     private static CompletionItem CreateCompletionItem(ScrFunctionDefinition function)
     {
         bool fill = ParameterFillResolver();
@@ -302,13 +513,11 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         string currentNs = defs.CurrentNamespace ?? string.Empty;
 
-        // Build existing label set to dedupe
         HashSet<string> existingLabels = new(existing.Select(c => c.Label ?? string.Empty), StringComparer.OrdinalIgnoreCase);
 
         string filter = context.Filter ?? string.Empty;
         bool hasFilter = !string.IsNullOrWhiteSpace(filter);
 
-        // Use parameters table as the source of names (fallback to locations if needed)
         var allParams = defs.GetAllFunctionParameters().ToList();
         var allLocs = defs.GetAllFunctionLocations().ToDictionary(k => k.Key, v => v.Value);
         var allVarargs = defs.GetAllFunctionVarargs().ToDictionary(k => k.Key, v => v.Value);
@@ -343,7 +552,6 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
             items.Add(CreateLocalFunctionCompletionItem(ns, name, parameters, hasVararg, doc, allLocs.TryGetValue(key, out var loc) ? loc.FilePath : null, isLocal));
         }
 
-        // Also consider any functions that only have locations recorded but no parameters
         foreach (var kv in defs.GetAllFunctionLocations())
         {
             var key = kv.Key;

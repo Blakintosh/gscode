@@ -2,6 +2,7 @@
 using GSCode.Parser.AST;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
+using GSCode.Parser.Pre;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -186,11 +187,13 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         Token documentationToken = current.Previous;
         string? documentation = null;
 
-        // TODO: this currently doesn't remove the //, etc.
         if (documentationToken.IsComment())
         {
             documentation = documentationToken.Lexeme;
         }
+
+        // Build a '#define ...' snippet-like preview for completion docs
+        string definePreview = BuildDefinePreview(macroName, parameters, firstExpansionToken, lastExpansionToken);
 
         // Remove the define directive from the script.
         ConnectTokens(defineToken.Previous, current.Next);
@@ -217,14 +220,26 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             string? srcDisplay = null;
             foreach (var region in Sense.InsertRegions)
             {
-                // If the define tokens fall after an insert range on the same line, prefer that region
                 if (region.Range.Start.Line <= nameToken.Range.Start.Line && region.ResolvedPath is not null)
                 {
                     string rel = GetRelativeDisplay(region.ResolvedPath);
                     srcDisplay = rel;
                 }
             }
-            Sense.AddMacroOutline(macroName, nameToken.Range, srcDisplay);
+
+            // Capture parameter names for macro completion & signature
+            string[]? paramNames = null;
+            if (parameters is not null && parameters.Count > 0)
+            {
+                List<string> list = new(parameters.Count);
+                foreach (var p in parameters)
+                {
+                    if (!string.IsNullOrWhiteSpace(p.Lexeme)) list.Add(p.Lexeme);
+                }
+                if (list.Count > 0) paramNames = list.ToArray();
+            }
+
+            Sense.AddMacroOutline(macroName, nameToken.Range, srcDisplay, paramNames, definePreview);
         }
         Sense.AddSenseToken(nameToken, definition);
 
@@ -232,13 +247,41 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         {
             try
             {
-                // Show trailing two segments if possible, e.g., shared/shared.gsh
                 string dir = System.IO.Path.GetDirectoryName(fullPath) ?? string.Empty;
                 string file = System.IO.Path.GetFileName(fullPath);
                 string lastDir = string.IsNullOrEmpty(dir) ? string.Empty : System.IO.Path.GetFileName(dir);
                 return string.IsNullOrEmpty(lastDir) ? file : System.IO.Path.Combine(lastDir, file).Replace('\\', '/');
             }
             catch { return fullPath; }
+        }
+
+        static string BuildDefinePreview(string name, LinkedList<Token>? paramList, Token? expFirst, Token? expLast)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append("#define ").Append(name);
+            if (paramList is not null && paramList.Count > 0)
+            {
+                sb.Append('(');
+                bool first = true;
+                foreach (var p in paramList)
+                {
+                    if (!first) sb.Append(", ");
+                    first = false;
+                    sb.Append(p.Lexeme);
+                }
+                sb.Append(')');
+            }
+            // Show a compact expansion preview if present
+            if (expFirst is not null && expLast is not null)
+            {
+                var tl = new TokenList(expFirst, expLast);
+                string exp = tl.ToSnippetString();
+                if (!string.IsNullOrWhiteSpace(exp))
+                {
+                    sb.Append(' ').Append(exp);
+                }
+            }
+            return sb.ToString();
         }
     }
 

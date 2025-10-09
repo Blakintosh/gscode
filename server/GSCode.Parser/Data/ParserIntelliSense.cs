@@ -19,7 +19,13 @@ public enum DeferredSymbolType
 public sealed record class DeferredSymbol(Range Range, string? Namespace, string Value);
 
 // Macro outline item now includes a source display (e.g., shared/shared.gsh) if known
-public sealed record class MacroOutlineItem(string Name, Range Range, string? SourceDisplay = null);
+// and the parameter names when the macro has a parameter list, plus a define snippet for UI.
+public sealed record class MacroOutlineItem(
+    string Name,
+    Range Range,
+    string? SourceDisplay = null,
+    string[]? Parameters = null,
+    string? DefineSnippet = null);
 
 // Track #insert regions to map generated tokens back to their origin file
 public sealed record class InsertRegion(Range Range, string RawPath, string? ResolvedPath);
@@ -116,9 +122,9 @@ internal sealed class ParserIntelliSense
         InsertRegions.Add(new InsertRegion(range, rawPath, resolvedPath));
     }
 
-    public void AddMacroOutline(string name, Range range, string? sourceDisplay = null)
+    public void AddMacroOutline(string name, Range range, string? sourceDisplay = null, string[]? parameters = null, string? defineSnippet = null)
     {
-        MacroOutlines.Add(new MacroOutlineItem(name, range, sourceDisplay));
+        MacroOutlines.Add(new MacroOutlineItem(name, range, sourceDisplay, parameters, defineSnippet));
     }
 
     public void AddSenseToken(Token token, ISenseDefinition definition)

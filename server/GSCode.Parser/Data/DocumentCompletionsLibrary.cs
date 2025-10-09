@@ -13,8 +13,6 @@ namespace GSCode.Parser.Data;
 
 public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, string languageId)
 {
-    // Replaces the old static bool EnableFunctionCompletionParameterFilling.
-    // The server layer (ServerConfiguration) assigns this delegate.
     public static Func<bool> ParameterFillResolver { get; set; } = static () => true;
 
     /// <summary>
@@ -617,19 +615,55 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
             if (hasFilter && !name.StartsWith(filter, StringComparison.OrdinalIgnoreCase)) continue;
             if (!existingLabels.Add(name)) continue;
 
-            string? detail = string.IsNullOrEmpty(m.SourceDisplay) ? "#define" : m.SourceDisplay;
+            // Build C++-style documentation: '#define NAME(paramlist) expansion' + 'File: source'
+            string defineLine = !string.IsNullOrEmpty(m.DefineSnippet) ? m.DefineSnippet! : BuildDefineLineFallback(m);
+            string fileLine = string.IsNullOrEmpty(m.SourceDisplay) ? null : $"File: {m.SourceDisplay}";
+            MarkupContent? doc = null;
+            if (!string.IsNullOrEmpty(defineLine) || !string.IsNullOrEmpty(fileLine))
+            {
+                string val = string.IsNullOrEmpty(fileLine) ? $"{defineLine}" : $"{defineLine}\n\n{fileLine}";
+                doc = new MarkupContent { Kind = MarkupKind.Markdown, Value = val };
+            }
+
+            // Always show macro parameters (no resolver toggle)
+            string insertText;
+            InsertTextFormat format = InsertTextFormat.Snippet;
+            var p = m.Parameters;
+            if (p is { Length: > 0 })
+            {
+                int tab = 1;
+                var parts = new List<string>(p.Length);
+                foreach (var s in p)
+                {
+                    string pname = string.IsNullOrWhiteSpace(s) ? $"param{tab}" : s;
+                    parts.Add($"${{{tab}:{pname}}}");
+                    tab++;
+                }
+                insertText = name + "(" + string.Join(", ", parts) + ")$0";
+            }
+            else
+            {
+                insertText = name + "$0";
+            }
 
             items.Add(new CompletionItem
             {
                 Label = name,
-                InsertText = name,
+                InsertText = insertText,
+                InsertTextFormat = format,
                 Kind = CompletionItemKind.Constant,
-                Detail = detail,
-                SortText = name.ToLowerInvariant(),
-                InsertTextFormat = InsertTextFormat.PlainText
+                Detail = m.SourceDisplay ?? "#define",
+                Documentation = doc is null ? null : new StringOrMarkupContent(doc),
+                SortText = name.ToLowerInvariant()
             });
         }
         return items;
+
+        static string BuildDefineLineFallback(MacroOutlineItem m)
+        {
+            string ps = (m.Parameters is { Length: > 0 }) ? "(" + string.Join(", ", m.Parameters) + ")" : string.Empty;
+            return $"#define {m.Name}{ps}";
+        }
     }
 
     private sealed class KeyComparer : IEqualityComparer<(string Namespace, string Name)>

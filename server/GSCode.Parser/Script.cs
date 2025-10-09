@@ -193,6 +193,8 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
         // Let completions access local/imported function info
         Sense.Completions.SetDefinitionsProvider(() => DefinitionsTable);
+        // Provide macro items to completions from preprocessor results
+        Sense.Completions.SetMacroProvider(() => Sense.MacroOutlines);
 
         SignatureAnalyser signatureAnalyser = new(RootNode, DefinitionsTable, Sense);
         try

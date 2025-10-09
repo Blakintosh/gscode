@@ -28,6 +28,10 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
     private Func<DefinitionsTable?>? _definitionsProvider;
     public void SetDefinitionsProvider(Func<DefinitionsTable?> provider) => _definitionsProvider = provider;
 
+    // Provider for macros (from preprocessor). Set by Script after preprocessing.
+    private Func<IEnumerable<MacroOutlineItem>>? _macroProvider;
+    public void SetMacroProvider(Func<IEnumerable<MacroOutlineItem>> provider) => _macroProvider = provider;
+
     public CompletionList GetCompletionsFromPosition(Position position)
     {
         Token? tokenAtCaret = Tokens.Get(position);
@@ -63,6 +67,9 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         // Include functions defined locally and imported via #using.
         completions.AddRange(GetImportedFunctionCompletions(context, completions));
+
+        // Include macros defined in this file or inserted headers.
+        completions.AddRange(GetMacroCompletions(context, completions));
 
         return new CompletionList(completions);
     }
@@ -582,6 +589,47 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
         static bool StartsWithIgnoreCase(string value, string prefix)
             => value?.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ?? false;
+    }
+
+    private IEnumerable<CompletionItem> GetMacroCompletions(CompletionContext context, IEnumerable<CompletionItem> existing)
+    {
+        var prov = _macroProvider;
+        if (prov is null)
+        {
+            return Array.Empty<CompletionItem>();
+        }
+
+        string filter = context.Filter ?? string.Empty;
+        bool hasFilter = !string.IsNullOrWhiteSpace(filter);
+
+        HashSet<string> existingLabels = new(existing.Select(c => c.Label ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+        var macros = prov.Invoke();
+        if (macros is null)
+        {
+            return Array.Empty<CompletionItem>();
+        }
+
+        List<CompletionItem> items = new();
+        foreach (var m in macros)
+        {
+            string name = m.Name;
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            if (hasFilter && !name.StartsWith(filter, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!existingLabels.Add(name)) continue;
+
+            string? detail = string.IsNullOrEmpty(m.SourceDisplay) ? "#define" : m.SourceDisplay;
+
+            items.Add(new CompletionItem
+            {
+                Label = name,
+                InsertText = name,
+                Kind = CompletionItemKind.Constant,
+                Detail = detail,
+                SortText = name.ToLowerInvariant(),
+                InsertTextFormat = InsertTextFormat.PlainText
+            });
+        }
+        return items;
     }
 
     private sealed class KeyComparer : IEqualityComparer<(string Namespace, string Name)>

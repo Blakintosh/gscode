@@ -30,6 +30,15 @@ public sealed record class MacroOutlineItem(
 // Track #insert regions to map generated tokens back to their origin file
 public sealed record class InsertRegion(Range Range, string RawPath, string? ResolvedPath);
 
+// Captured macro call-site (pre-expansion), for signature help and related UX.
+public sealed record class MacroCallSite(
+    string Name,
+    Range NameRange,
+    Range CallRange,
+    IReadOnlyList<Range> ArgumentRanges,
+    string[]? ParameterNames,
+    string? Documentation);
+
 internal sealed class ParserIntelliSense
 {
     private class SemanticTokenComparer : IComparer<ISemanticToken>
@@ -108,6 +117,11 @@ internal sealed class ParserIntelliSense
     /// </summary>
     public List<InsertRegion> InsertRegions { get; } = new();
 
+    /// <summary>
+    /// Captured macro call-sites (pre-expansion). Used for signature help.
+    /// </summary>
+    public List<MacroCallSite> MacroCallSites { get; } = new();
+
     public ParserIntelliSense(int endLine, DocumentUri scriptUri, string languageId)
     {
         HoverLibrary = new(endLine + 1);
@@ -125,6 +139,36 @@ internal sealed class ParserIntelliSense
     public void AddMacroOutline(string name, Range range, string? sourceDisplay = null, string[]? parameters = null, string? defineSnippet = null)
     {
         MacroOutlines.Add(new MacroOutlineItem(name, range, sourceDisplay, parameters, defineSnippet));
+    }
+
+    public void AddMacroCallSite(string name, Range nameRange, Range callRange, IReadOnlyList<Range> argumentRanges, string[]? parameterNames, string? documentation = null)
+    {
+        MacroCallSites.Add(new MacroCallSite(name, nameRange, callRange, argumentRanges, parameterNames, documentation));
+    }
+
+    public MacroCallSite? GetMacroCallSiteAt(Position position)
+    {
+        foreach (var site in MacroCallSites)
+        {
+            if (IsPositionInsideRange(position, site.CallRange))
+            {
+                return site;
+            }
+        }
+        return null;
+    }
+
+    private static bool IsPositionInsideRange(Position pos, Range range)
+    {
+        int cmpStart = ComparePosition(pos, range.Start);
+        int cmpEnd = ComparePosition(range.End, pos);
+        return cmpStart >= 0 && cmpEnd >= 0;
+    }
+
+    private static int ComparePosition(Position a, Position b)
+    {
+        if (a.Line != b.Line) return a.Line.CompareTo(b.Line);
+        return a.Character.CompareTo(b.Character);
     }
 
     public void AddSenseToken(Token token, ISenseDefinition definition)

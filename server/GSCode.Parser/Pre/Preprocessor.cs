@@ -574,6 +574,58 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         }
         Token endAnchorToken = CurrentToken;
 
+        // Pre-expansion macro call-site capture
+        try
+        {
+            // Compute call range [macroToken .. closeParen] (or best-effort if ')' missing)
+            Token? maybeClose = endAnchorToken.Previous;
+            bool hasClose = maybeClose is not null && maybeClose.Type == TokenType.CloseParen;
+            var callRange = hasClose
+                ? RangeHelper.From(macroToken.Range.Start, maybeClose!.Range.End)
+                : RangeHelper.From(macroToken.Range.Start, endAnchorToken.Range.End);
+
+            // Compute argument ranges
+            var argRanges = new List<Range>(arguments.Count);
+            foreach (var arg in arguments)
+            {
+                if (arg is TokenList tl && tl.Range is Range r)
+                {
+                    argRanges.Add(r);
+                }
+                else
+                {
+                    // Represent an empty argument with a zero-length range just after '(' if we can infer it,
+                    // otherwise fall back to the macro name end.
+                    argRanges.Add(RangeHelper.From(macroToken.Range.End, macroToken.Range.End));
+                }
+            }
+
+            // Parameter names from the macro definition
+            string[]? paramNames = null;
+            if (macroDefinition.Parameters is not null && macroDefinition.Parameters.Count > 0)
+            {
+                var list = new List<string>(macroDefinition.Parameters.Count);
+                foreach (var p in macroDefinition.Parameters)
+                {
+                    if (!string.IsNullOrWhiteSpace(p.Lexeme)) list.Add(p.Lexeme);
+                }
+                if (list.Count > 0) paramNames = list.ToArray();
+            }
+
+            Sense.AddMacroCallSite(
+                macroDefinition.Source.Lexeme,
+                macroToken.Range,
+                callRange,
+                argRanges,
+                paramNames,
+                macroDefinition.Documentation
+            );
+        }
+        catch
+        {
+            // Swallow – macro expansion must continue; lack of a call-site shouldn't block preprocessing
+        }
+
         // Start with a cloned expansion, then replace references to parameters with the argument expansions.
         TokenList expansion = macroDefinition.ExpansionTokens.CloneList(macroToken.Range);
 
@@ -1288,6 +1340,7 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
 
     private readonly bool TryGetSystemDefinedMacroDefinition(Token token, [NotNullWhen(true)] out MacroDefinition? definition)
     {
+        definition = default;
         // Built-in macros are expanded first and third passes.
         switch (token.Lexeme)
         {
@@ -1305,7 +1358,6 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 definition = FastFileMacro;
                 return true;
         }
-        definition = default;
         return false;
     }
 

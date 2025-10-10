@@ -627,7 +627,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         string protoWithParams;
         if (cleanParams.Length == 0)
         {
-            protoWithParams = hasVarargLocal ? $"function {name}(...)" : $"function {name}()";
+            protoWithParams = hasVarargLocal ? $"function {name}(... )".Replace(" ", string.Empty) : $"function {name}()";
         }
         else
         {
@@ -744,6 +744,17 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 if (parenDepth == 0) break;
                 parenDepth--;
             }
+            if (cursor.Type == TokenType.Identifier && cursor.Next.Type == TokenType.OpenParen && parenDepth == 0)
+            {
+                cursor = cursor.Next;
+                break;
+            }
+            if (cursor.Type == TokenType.Semicolon || cursor.Type == TokenType.LineBreak)
+            {
+                // Hit end of statement without finding '('
+                cursor = null;
+                break;
+            }
             cursor = cursor.Previous;
         }
         if (cursor is null)
@@ -757,7 +768,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
         idToken = id;
 
-        // Count commas to determine parameter index; ignore nested parens/brackets/braces
+        // Count arguments index by scanning commas from cursor to current position, without nesting into inner parens/brackets/braces
         Token? walker = cursor.Next;
         int depthParen = 0, depthBracket = 0, depthBrace = 0;
         int index = 0;
@@ -766,7 +777,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             if (walker.Type == TokenType.OpenParen) depthParen++;
             else if (walker.Type == TokenType.CloseParen)
             {
-                if (depthParen == 0) break;
+                if (depthParen == 0) break; // end of this call
                 depthParen--;
             }
             else if (walker.Type == TokenType.OpenBracket) depthBracket++;
@@ -1126,6 +1137,55 @@ public class Script(DocumentUri ScriptUri, string languageId)
     {
         await WaitUntilParsedAsync(cancellationToken);
 
+        // Prefer macro signature help if inside a macro call-site captured before expansion
+        var macroSite = Sense.GetMacroCallSiteAt(position);
+        if (macroSite is not null)
+        {
+            int activeParam = 0;
+            if (macroSite.ArgumentRanges.Count > 0)
+            {
+                int idxByContainment = -1;
+                for (int i = 0; i < macroSite.ArgumentRanges.Count; i++)
+                {
+                    if (IsPositionInsideRange(position, macroSite.ArgumentRanges[i]))
+                    {
+                        idxByContainment = i;
+                        break;
+                    }
+                }
+
+                if (idxByContainment >= 0)
+                {
+                    activeParam = idxByContainment;
+                }
+                else
+                {
+                    int i = 0;
+                    while (i < macroSite.ArgumentRanges.Count && ComparePosition(position, macroSite.ArgumentRanges[i].Start) > 0) i++;
+                    activeParam = Math.Max(0, Math.Min(i, Math.Max(0, macroSite.ArgumentRanges.Count - 1)));
+                }
+            }
+
+            string[] paramNames = macroSite.ParameterNames ?? Array.Empty<string>();
+            string label = $"#define {macroSite.Name}({string.Join(", ", paramNames)})";
+            var parameters = new Container<ParameterInformation>(paramNames.Select(p => new ParameterInformation { Label = p }));
+
+            var sig = new SignatureInformation
+            {
+                Label = label,
+                Documentation = string.IsNullOrWhiteSpace(macroSite.Documentation) ? null : new MarkupContent { Kind = MarkupKind.Markdown, Value = macroSite.Documentation! },
+                Parameters = parameters
+            };
+
+            int macroParamCount = Math.Max(1, parameters.Count());
+            return new SignatureHelp
+            {
+                ActiveSignature = 0,
+                ActiveParameter = Math.Max(0, Math.Min(activeParam, macroParamCount - 1)),
+                Signatures = new Container<SignatureInformation>(new[] { sig })
+            };
+        }
+
         Token? token = Sense.Tokens.Get(position);
         if (token is null)
             return null;
@@ -1167,7 +1227,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         var (qualifier, name) = ParseNamespaceQualifiedIdentifier(id);
 
         // Count arguments index by scanning commas from cursor to current position, without nesting into inner parens/brackets/braces
-        int activeParam = 0;
+        int activeParam2 = 0;
         Token? walker = cursor.Next;
         int depthParen = 0, depthBracket = 0, depthBrace = 0;
         while (walker is not null && walker != token.Next)
@@ -1184,7 +1244,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             else if (walker.Type == TokenType.CloseBrace && depthBrace > 0) depthBrace--;
             else if (walker.Type == TokenType.Comma && depthParen == 0 && depthBracket == 0 && depthBrace == 0)
             {
-                activeParam++;
+                activeParam2++;
             }
             walker = walker.Next;
         }
@@ -1249,7 +1309,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         return new SignatureHelp
         {
             ActiveSignature = 0,
-            ActiveParameter = Math.Max(0, Math.Min(activeParam, paramCount - 1)),
+            ActiveParameter = Math.Max(0, Math.Min(activeParam2, paramCount - 1)),
             Signatures = new Container<SignatureInformation>(signatures)
         };
     }

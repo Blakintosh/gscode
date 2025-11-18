@@ -12,7 +12,12 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.10 beta (latest)
+### 0.10.1 beta (latest)
+
+- Disabled workspace indexing temporarily due to performance concerns.
+
+### 0.10.0 beta
+
 - Added reference finding (Go to Reference, Find All References)
 - Added workspace indexing of scripts.
 - Fixed switch case analysis with braced bodies.

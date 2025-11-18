@@ -34,10 +34,10 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
         SemanticTokensCapability capability,
         ClientCapabilities clientCapabilities)
     {
-        var tokenModifiers = capability?.TokenModifiers ?? new Container<SemanticTokenModifier>();
-        var tokenTypes = capability?.TokenTypes;
+        Container<SemanticTokenModifier>? tokenModifiers = capability.TokenModifiers;
+        Container<SemanticTokenType>? tokenTypes = capability.TokenTypes;
 
-        if (tokenTypes == null || !tokenTypes.Any())
+        if (tokenTypes is null || !tokenTypes.Any())
         {
             tokenTypes = new Container<SemanticTokenType>(
                 SemanticTokenType.Namespace,
@@ -63,6 +63,12 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
                 SemanticTokenType.Regexp,
                 SemanticTokenType.Operator
             );
+        }
+
+        // Check if "field" token type exists, and add it if not
+        if (!tokenTypes.Any(t => t.ToString() == "field"))
+        {
+            tokenTypes = new Container<SemanticTokenType>(tokenTypes.Concat(new[] { new SemanticTokenType("field") }));
         }
 
         return new SemanticTokensRegistrationOptions

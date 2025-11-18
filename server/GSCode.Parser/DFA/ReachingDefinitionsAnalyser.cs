@@ -578,18 +578,29 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             AddDiagnostic(foreachStmt.Collection.Range, GSCErrorCodes.CannotEnumerateType, collection.TypeToString());
         }
 
+        if (foreachStmt.KeyIdentifier is not null)
+        {
+            Token keyIdentifier = foreachStmt.KeyIdentifier.Token;
+            AssignmentResult keyAssignmentResult = symbolTable.AddOrSetVariableSymbol(keyIdentifier.Lexeme, ScrData.Default);
+
+            if (keyAssignmentResult == AssignmentResult.SuccessNew)
+            {
+                Sense.AddSenseToken(keyIdentifier, ScrVariableSymbol.Declaration(foreachStmt.KeyIdentifier, ScrData.Default));
+            }
+        }
+
         Token valueIdentifier = foreachStmt.ValueIdentifier.Token;
-        AssignmentResult assignmentResult = symbolTable.AddOrSetVariableSymbol(valueIdentifier.Lexeme, ScrData.Default);
+        AssignmentResult valueAssignmentResult = symbolTable.AddOrSetVariableSymbol(valueIdentifier.Lexeme, ScrData.Default);
 
         // if (!assignmentResult)
         // {
         //     // TODO: how does GSC handle this?
         // }
-        if (assignmentResult == AssignmentResult.SuccessNew)
+        if (valueAssignmentResult == AssignmentResult.SuccessNew)
         {
             Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Declaration(foreachStmt.ValueIdentifier, ScrData.Default));
         }
-        else if (assignmentResult == AssignmentResult.SuccessMutated)
+        else if (valueAssignmentResult == AssignmentResult.SuccessMutated)
         {
             Sense.AddSenseToken(valueIdentifier, ScrVariableSymbol.Usage(foreachStmt.ValueIdentifier, ScrData.Default));
         }

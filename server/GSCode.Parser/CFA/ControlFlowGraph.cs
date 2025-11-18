@@ -641,85 +641,6 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         }
     }
 
-    // private static CfgNode Construct_SwitchBranch(LinkedListNode<CaseStmtNode> @case, ParserIntelliSense sense, ControlFlowHelper localHelper, CfgNode continuation, out SwitchDecisionNode? finalLabel, out CfgNode nextBody)
-    // {
-    //     CaseStmtNode current = @case.Value;
-
-    //     finalLabel = null;
-    //     nextBody = continuation;
-
-    //     bool atFinalLabel = @case.Next is null;
-
-    //     CfgNode nextNode = continuation;
-    //     // If next is null, then this is the final label.
-    //     if (!atFinalLabel)
-    //     {
-    //         CfgNode nextLabel = Construct_SwitchBranch(@case.Next!, sense, localHelper, continuation, out finalLabel, out nextBody);
-    //         nextNode = nextLabel;
-    //     }
-
-    //     // Set up such that continuation context (i.e. fall-through) is the next body node, and break context is the continuation.
-    //     ControlFlowHelper newLocalHelper = new(localHelper)
-    //     {
-    //         ContinuationContext = nextBody,
-    //         BreakContext = continuation,
-    //     };
-
-    //     // Construct the body of the case.
-    //     CfgNode body = Construct(current.Body, sense, newLocalHelper);
-
-    //     for (LinkedListNode<CaseLabelNode>? node = current.Labels.Last; node != null; node = node.Previous)
-    //     {
-    //         SwitchDecisionNode decision = new(node.Value, localHelper.Scope);
-
-    //         // Connect the decision to the body.
-    //         CfgNode.Connect(decision, body);
-    //         decision.WhenTrue = body;
-
-    //         // If this is the final label of the switch statement, mark it accordingly.
-    //         if (atFinalLabel)
-    //         {
-    //             finalLabel = decision;
-    //             atFinalLabel = false;
-    //         }
-
-    //         // Connect the decision to the following label/continuation.
-    //         CfgNode.Connect(decision, nextNode);
-    //         decision.WhenFalse = nextNode;
-
-    //         CaseLabelNode label = node.Value;
-
-    //         // If we've found the default label, mark it accordingly and ensure
-    //         // the final label is connected to it as a when-false condition.
-    //         if (label.NodeType == AstNodeType.DefaultLabel)
-    //         {
-    //             // Replace the final label's when-false condition with the default body.
-    //             // Final label is guaranteed to be non-null at this point.
-    //             CfgNode.Disconnect(finalLabel!, finalLabel!.WhenFalse);
-
-    //             CfgNode.Connect(finalLabel, body);
-    //             finalLabel.WhenFalse = body;
-    //         }
-
-    //         nextNode = decision;
-    //     }
-
-    //     nextBody = body;
-    //     return nextNode; // Which is the first label that belongs to this case.
-    // }
-
-    // Temporary implementation for control flow nodes that doesn't do anything right now.
-    private static CfgNode Construct_Skip(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
-    {
-        // Just get the continuation and skip the rest.
-        currentNode = currentNode!.Next;
-        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
-
-        // Effectively: caller will connect directly to the successor.
-
-        return continuation;
-    }
-
     private static bool IsControlFlowNode(AstNode node)
     {
         return node.NodeType == AstNodeType.IfStmt ||
@@ -736,5 +657,81 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         return node.NodeType == AstNodeType.BreakStmt ||
             node.NodeType == AstNodeType.ContinueStmt ||
             node.NodeType == AstNodeType.ReturnStmt;
+    }
+
+    /// <summary>
+    /// Checks if there is a path from the start node to the target node.
+    /// Uses BFS to traverse the CFG.
+    /// </summary>
+    private static bool CanReach(CfgNode start, CfgNode target)
+    {
+        if (start == target)
+        {
+            return true;
+        }
+
+        HashSet<CfgNode> visited = new();
+        Queue<CfgNode> queue = new();
+        queue.Enqueue(start);
+        visited.Add(start);
+
+        while (queue.Count > 0)
+        {
+            CfgNode current = queue.Dequeue();
+
+            foreach (CfgNode outgoing in current.Outgoing)
+            {
+                if (outgoing == target)
+                {
+                    return true;
+                }
+
+                if (!visited.Contains(outgoing))
+                {
+                    visited.Add(outgoing);
+                    queue.Enqueue(outgoing);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the range for reporting a fall-through diagnostic.
+    /// Returns the range of the last statement in the case body, or the last label if the body is empty.
+    /// </summary>
+    private static Range GetCaseFallthroughRange(CaseStmtNode caseStmt)
+    {
+        // If the case body has statements, use the last statement's range
+        if (caseStmt.Body.Statements.Count > 0)
+        {
+            AstNode lastStatement = caseStmt.Body.Statements.Last!.Value;
+            return GetNodeRange(lastStatement);
+        }
+
+        // If the body is empty, use the range of the last label's keyword
+        if (caseStmt.Labels.Count > 0)
+        {
+            CaseLabelNode lastLabel = caseStmt.Labels.Last!.Value;
+            return lastLabel.Keyword.Range;
+        }
+
+        // Fallback: shouldn't reach here, but return a default range
+        return new Range();
+    }
+
+    /// <summary>
+    /// Extracts a range from an AST node. Handles different node types appropriately.
+    /// </summary>
+    private static Range GetNodeRange(AstNode node)
+    {
+        return node switch
+        {
+            ControlFlowActionNode action => action.Range,
+            ReturnStmtNode ret when ret.Value != null => ret.Value.Range,
+            ExprNode expr => expr.Range,
+            _ => new Range() // Default fallback
+        };
     }
 }

@@ -1597,14 +1597,15 @@ public class Script(DocumentUri ScriptUri, string languageId)
                 }
 
                 // Fallthrough detection: if not the last case and body does not terminate with break/return
-                if (!isLast)
-                {
-                    if (!HasTerminatingBreakOrReturn(cs.Body))
-                    {
-                        Range r = GetCaseLabelOrBodyRange(cs, sw);
-                        Sense.AddSpaDiagnostic(r, GSCErrorCodes.FallthroughCase);
-                    }
-                }
+                // Needs to account for control flow, will be handled elsewhere.
+                // if (!isLast)
+                // {
+                //     if (!HasTerminatingBreakOrReturn(cs.Body))
+                //     {
+                //         Range r = GetCaseLabelOrBodyRange(cs, sw);
+                //         Sense.AddSpaDiagnostic(r, GSCErrorCodes.FallthroughCase);
+                //     }
+                // }
             }
         }
     }

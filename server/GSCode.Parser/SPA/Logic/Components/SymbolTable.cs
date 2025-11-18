@@ -290,10 +290,12 @@ internal class SymbolTable
         // Check global symbol table first
         if (GlobalSymbolTable.TryGetValue($"{namespaceName}::{symbol}", out IExportedSymbol? exportedSymbol))
         {
-            if (exportedSymbol.Type == ExportedSymbolType.Function && ((ScrFunction)exportedSymbol).Namespace == namespaceName)
+            if (exportedSymbol.Type == ExportedSymbolType.Function &&
+                exportedSymbol is ScrFunction scrFunction &&
+                scrFunction.Namespace.Equals(namespaceName, StringComparison.OrdinalIgnoreCase))
             {
                 flags = SymbolFlags.Global;
-                return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
+                return new ScrData(ScrDataTypes.Function, scrFunction);
             }
         }
 

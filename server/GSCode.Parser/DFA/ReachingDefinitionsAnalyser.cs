@@ -950,6 +950,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             ExprOperatorType.CallOn => AnalyseCallOnExpr((CalledOnNode)expr, symbolTable),
             ExprOperatorType.FunctionCall => AnalyseFunctionCall((FunCallNode)expr, symbolTable, sense),
             ExprOperatorType.Waittill => AnalyseWaittillExpr((WaittillNode)expr, symbolTable, sense),
+            ExprOperatorType.Ternary => AnalyseTernaryExpr((TernaryExprNode)expr, symbolTable, sense),
             // ExprOperatorType.MethodCall => AnalyseMethodCall((MethodCallNode)expr, symbolTable, sense),
             _ => ScrData.Default,
         };
@@ -983,6 +984,46 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // Waittill doesn't return.
         return ScrData.Void;
+    }
+
+    private ScrData AnalyseTernaryExpr(TernaryExprNode ternary, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        // Analyze the condition
+        ScrData condition = AnalyseExpr(ternary.Condition, symbolTable, sense);
+
+        // Validate that the condition can be evaluated to a boolean
+        if (!condition.TypeUnknown() && !condition.CanEvaluateToBoolean())
+        {
+            AddDiagnostic(ternary.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
+        }
+
+        // Check if we can statically determine the result of the condition
+        bool? truthy = condition.IsTruthy();
+
+        ScrData trueResult = ScrData.Default;
+        if (ternary.Then is not null)
+        {
+            // If we know the condition is false, we technically don't need to analyze the true branch for values,
+            // but we might still want to analyze it for side effects or diagnostics?
+            // In DFA, we usually skip unreachable code's effect on flow, but here we are in an expression analyzer.
+            // For now, let's analyze both to ensure we catch errors in both branches, but we optimize the return value.
+            trueResult = AnalyseExpr(ternary.Then, symbolTable, sense);
+        }
+
+        ScrData falseResult = ScrData.Default;
+        if (ternary.Else is not null)
+        {
+            falseResult = AnalyseExpr(ternary.Else, symbolTable, sense);
+        }
+
+        // If the condition is known at compile time, return only the taken branch's data
+        if (truthy.HasValue)
+        {
+            return truthy.Value ? trueResult : falseResult;
+        }
+
+        // Otherwise, return the merge of both branches
+        return ScrData.Merge(trueResult, falseResult);
     }
 
     private ScrData AnalyseBinaryExpr(BinaryExprNode binary, SymbolTable symbolTable, bool createSenseTokenForRhs = true)
@@ -1086,6 +1127,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             TokenType.Thread => AnalyseThreadedFunctionCall(prefix, symbolTable, sense),
             TokenType.BitAnd => AnalyseFunctionPointer(prefix, symbolTable, sense),
             TokenType.Not => AnalyseNotOp(prefix, symbolTable, sense),
+            TokenType.Minus => AnalyseNegationOp(prefix, symbolTable, sense),
             _ => ScrData.Default,
         };
     }
@@ -1148,6 +1190,48 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         }
 
         return new ScrData(ScrDataTypes.Bool, !truthy.Value);
+    }
+
+    private ScrData AnalyseNegationOp(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        ScrData operand = AnalyseExpr(prefix.Operand!, symbolTable, sense);
+
+        if (operand.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (operand.IsAny())
+        {
+            return ScrData.Default;
+        }
+
+        if (!operand.IsNumeric())
+        {
+            AddDiagnostic(prefix.Range, GSCErrorCodes.NoImplicitConversionExists,
+                operand.TypeToString(), ScrDataTypeNames.Int, ScrDataTypeNames.Float);
+            return ScrData.Default;
+        }
+
+        if (operand.Type == ScrDataTypes.Int)
+        {
+            if (operand.ValueUnknown())
+            {
+                return new ScrData(ScrDataTypes.Int);
+            }
+
+            int? value = operand.GetIntegerValue();
+            return value.HasValue ? new ScrData(ScrDataTypes.Int, -value.Value) : new ScrData(ScrDataTypes.Int);
+        }
+
+        // Must be float if numeric and not int
+        if (operand.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Float);
+        }
+
+        float? numericValue = operand.GetNumericValue();
+        return numericValue.HasValue ? new ScrData(ScrDataTypes.Float, -numericValue.Value) : new ScrData(ScrDataTypes.Float);
     }
 
     private ScrData AnalysePostfixExpr(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)

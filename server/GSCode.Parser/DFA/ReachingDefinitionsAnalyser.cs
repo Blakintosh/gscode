@@ -4,6 +4,7 @@ using GSCode.Parser.AST;
 using GSCode.Parser.CFA;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
+using GSCode.Parser.SA;
 using GSCode.Parser.SPA;
 using GSCode.Parser.SPA.Logic.Components;
 using Serilog;
@@ -949,9 +950,10 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             ExprOperatorType.Indexer => AnalyseIndexerExpr((ArrayIndexNode)expr, symbolTable),
             ExprOperatorType.CallOn => AnalyseCallOnExpr((CalledOnNode)expr, symbolTable),
             ExprOperatorType.FunctionCall => AnalyseFunctionCall((FunCallNode)expr, symbolTable, sense),
+            ExprOperatorType.Constructor => AnalyseConstructorExpr((ConstructorExprNode)expr, symbolTable),
             ExprOperatorType.Waittill => AnalyseWaittillExpr((WaittillNode)expr, symbolTable, sense),
             ExprOperatorType.Ternary => AnalyseTernaryExpr((TernaryExprNode)expr, symbolTable, sense),
-            // ExprOperatorType.MethodCall => AnalyseMethodCall((MethodCallNode)expr, symbolTable, sense),
+            ExprOperatorType.MethodCall => AnalyseMethodCall((MethodCallNode)expr, symbolTable, sense),
             _ => ScrData.Default,
         };
     }
@@ -984,6 +986,22 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // Waittill doesn't return.
         return ScrData.Void;
+    }
+
+    private ScrData AnalyseConstructorExpr(ConstructorExprNode constructor, SymbolTable symbolTable)
+    {
+        Token classIdentifier = constructor.Identifier;
+        string className = classIdentifier.Lexeme;
+
+        if (symbolTable.GlobalSymbolTable.TryGetValue(className, out IExportedSymbol? exportedSymbol) &&
+            exportedSymbol is ScrClass scrClass)
+        {
+            Sense.AddSenseToken(classIdentifier, new ScrClassSymbol(classIdentifier, scrClass));
+            return ScrData.Default;
+        }
+
+        AddDiagnostic(classIdentifier.Range, GSCErrorCodes.NotDefined, className);
+        return ScrData.Default;
     }
 
     private ScrData AnalyseTernaryExpr(TernaryExprNode ternary, SymbolTable symbolTable, ParserIntelliSense sense)
@@ -1024,6 +1042,43 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // Otherwise, return the merge of both branches
         return ScrData.Merge(trueResult, falseResult);
+    }
+
+    private ScrData AnalyseMethodCall(MethodCallNode methodCall, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        // 1. Analyze the target (LHS of ->)
+        // If target is null (implicit 'this'), we treat it as if 'self' was the target
+        ScrData target = methodCall.Target is not null
+            ? AnalyseExpr(methodCall.Target, symbolTable, sense)
+            : new ScrData(ScrDataTypes.Entity); // Assuming 'self' is an entity/object
+
+        // 2. Validate target type
+        // The target must be an Object or Any.
+        if (!target.TypeUnknown() &&
+            target.Type != ScrDataTypes.Object)
+        {
+            // If the target isn't a valid object type, we can't call methods on it.
+            // We only warn if we're sure it's the wrong type (not Any).
+            AddDiagnostic(methodCall.Target?.Range ?? methodCall.Range,
+                GSCErrorCodes.NoImplicitConversionExists,
+                target.TypeToString(),
+                ScrDataTypeNames.Object);
+        }
+
+        // 3. Analyze arguments
+        // We do this even if the target is invalid, to ensure side effects in arguments are processed
+        foreach (ExprNode? argument in methodCall.Arguments.Arguments)
+        {
+            if (argument is null) continue;
+            AnalyseExpr(argument, symbolTable, sense);
+        }
+
+        // 4. Resolve the method symbol (if possible)
+        // For now, we assume the method exists on the target.
+        // We're just "superficially" analyzing, so we don't look up the specific method definition yet
+        // to validate signature or return type.
+
+        return ScrData.Default;
     }
 
     private ScrData AnalyseBinaryExpr(BinaryExprNode binary, SymbolTable symbolTable, bool createSenseTokenForRhs = true)

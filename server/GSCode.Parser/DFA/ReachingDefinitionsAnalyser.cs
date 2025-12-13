@@ -1185,6 +1185,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             TokenType.BitAnd => AnalyseFunctionPointer(prefix, symbolTable, sense),
             TokenType.Not => AnalyseNotOp(prefix, symbolTable, sense),
             TokenType.Minus => AnalyseNegationOp(prefix, symbolTable, sense),
+            TokenType.BitNot => AnalyseBitwiseNegationOp(prefix, symbolTable, sense),
             _ => ScrData.Default,
         };
     }
@@ -1289,6 +1290,36 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         float? numericValue = operand.GetNumericValue();
         return numericValue.HasValue ? new ScrData(ScrDataTypes.Float, -numericValue.Value) : new ScrData(ScrDataTypes.Float);
+    }
+
+    private ScrData AnalyseBitwiseNegationOp(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        ScrData operand = AnalyseExpr(prefix.Operand!, symbolTable, sense);
+
+        if (operand.TypeUnknown())
+        {
+            return ScrData.Default;
+        }
+
+        if (operand.IsAny())
+        {
+            return ScrData.Default;
+        }
+
+        if (operand.Type != ScrDataTypes.Int)
+        {
+            AddDiagnostic(prefix.Range, GSCErrorCodes.NoImplicitConversionExists,
+                operand.TypeToString(), ScrDataTypeNames.Int);
+            return ScrData.Default;
+        }
+
+        if (operand.ValueUnknown())
+        {
+            return new ScrData(ScrDataTypes.Int);
+        }
+
+        int? value = operand.GetIntegerValue();
+        return value.HasValue ? new ScrData(ScrDataTypes.Int, ~value.Value) : new ScrData(ScrDataTypes.Int);
     }
 
     private ScrData AnalysePostfixExpr(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)

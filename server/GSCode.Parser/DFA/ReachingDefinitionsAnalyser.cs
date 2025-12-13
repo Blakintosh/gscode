@@ -19,13 +19,15 @@ internal class SwitchAnalysisContext
     public bool HasDefault { get; set; } = false;
 }
 
-internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null)
+internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null)
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = functionGraphs;
     public List<Tuple<ScrClass, ControlFlowGraph>> ClassGraphs { get; } = classGraphs;
     public ParserIntelliSense Sense { get; } = sense;
     public Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = exportedSymbolTable;
     public ScriptAnalyserData? ApiData { get; } = apiData;
+    public string? CurrentNamespace { get; } = currentNamespace;
+    public HashSet<string>? KnownNamespaces { get; } = knownNamespaces;
 
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> InSets { get; } = new();
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> OutSets { get; } = new();
@@ -218,25 +220,25 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             switch (node.Type)
             {
                 case CfgNodeType.BasicBlock:
-                    AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.ClassMembersBlock:
-                    AnalyseClassMembersBlock((ClassMembersBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseClassMembersBlock((ClassMembersBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.EnumerationNode:
-                    AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.IterationNode:
-                    AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.SwitchNode:
-                    AnalyseSwitch((SwitchNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseSwitch((SwitchNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.SwitchCaseDecisionNode:
-                    AnalyseSwitchCaseDecision((SwitchCaseDecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseSwitchCaseDecision((SwitchCaseDecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.DecisionNode:
-                    AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
             }
         }
@@ -410,25 +412,25 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             switch (node.Type)
             {
                 case CfgNodeType.BasicBlock:
-                    AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseBasicBlock((BasicBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.ClassMembersBlock:
-                    AnalyseClassMembersBlock((ClassMembersBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseClassMembersBlock((ClassMembersBlock)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.EnumerationNode:
-                    AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseEnumeration((EnumerationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.IterationNode:
-                    AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseIteration((IterationNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.SwitchNode:
-                    AnalyseSwitch((SwitchNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseSwitch((SwitchNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.SwitchCaseDecisionNode:
-                    AnalyseSwitchCaseDecision((SwitchCaseDecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseSwitchCaseDecision((SwitchCaseDecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
                 case CfgNodeType.DecisionNode:
-                    AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass));
+                    AnalyseDecision((DecisionNode)node, new SymbolTable(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass, CurrentNamespace, KnownNamespaces));
                     break;
             }
         }
@@ -2330,9 +2332,14 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             return ScrData.Default;
         }
 
-        // TODO: we're missing a check if the namespace exists. Incorporate (#24) here.
+        ScrData symbol = symbolTable.TryGetNamespacedFunctionSymbol(namespaceNode.Identifier, memberNode.Identifier, out SymbolFlags flags, out bool namespaceExists);
 
-        ScrData symbol = symbolTable.TryGetNamespacedFunctionSymbol(namespaceNode.Identifier, memberNode.Identifier, out SymbolFlags flags);
+        // Validate that the namespace exists
+        if (!namespaceExists)
+        {
+            AddDiagnostic(namespaceNode.Range, GSCErrorCodes.UnknownNamespace, namespaceNode.Identifier);
+            return ScrData.Default;
+        }
 
         if (flags.HasFlag(SymbolFlags.Global) && symbol.Type == ScrDataTypes.Function)
         {

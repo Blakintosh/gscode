@@ -10,17 +10,19 @@ using Serilog;
 
 namespace GSCode.Parser.DFA;
 
-internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null)
+internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null)
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = functionGraphs;
     public List<Tuple<ScrClass, ControlFlowGraph>> ClassGraphs { get; } = classGraphs;
     public ParserIntelliSense Sense { get; } = sense;
     public Dictionary<string, IExportedSymbol> ExportedSymbolTable { get; } = exportedSymbolTable;
     public ScriptAnalyserData? ApiData { get; } = apiData;
+    public string? CurrentNamespace { get; } = currentNamespace;
+    public HashSet<string>? KnownNamespaces { get; } = knownNamespaces;
 
     public void Run()
     {
-        ReachingDefinitionsAnalyser reachingDefinitionsAnalyser = new(FunctionGraphs, ClassGraphs, Sense, ExportedSymbolTable, ApiData);
+        ReachingDefinitionsAnalyser reachingDefinitionsAnalyser = new(FunctionGraphs, ClassGraphs, Sense, ExportedSymbolTable, ApiData, CurrentNamespace, KnownNamespaces);
         reachingDefinitionsAnalyser.Run();
 
         SemanticSenseGenerator semanticSenseGenerator = new(FunctionGraphs, Sense, ExportedSymbolTable, reachingDefinitionsAnalyser);

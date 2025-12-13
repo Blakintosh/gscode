@@ -24,13 +24,15 @@ public class SymbolTableTests
         exported.Add("CustomNamespace::DoThing", function);
         exported.Add("DoThing", function);
 
-        SymbolTable table = new(exported, new Dictionary<string, ScrVariable>(StringComparer.OrdinalIgnoreCase), 0);
+        HashSet<string> knownNamespaces = new(StringComparer.OrdinalIgnoreCase) { "CustomNamespace" };
+        SymbolTable table = new(exported, new Dictionary<string, ScrVariable>(StringComparer.OrdinalIgnoreCase), 0, knownNamespaces: knownNamespaces);
 
-        ScrData result = table.TryGetNamespacedFunctionSymbol("customnamespace", "dothing", out SymbolFlags flags);
+        ScrData result = table.TryGetNamespacedFunctionSymbol("customnamespace", "dothing", out SymbolFlags flags, out bool namespaceExists);
 
         Assert.Equal(ScrDataTypes.Function, result.Type);
         Assert.Same(function, result.Get<ScrFunction>());
         Assert.True(flags.HasFlag(SymbolFlags.Global));
+        Assert.True(namespaceExists);
     }
 }
 

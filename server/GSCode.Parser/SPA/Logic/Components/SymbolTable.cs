@@ -40,6 +40,17 @@ internal class SymbolTable
     private ScriptAnalyserData? ApiData { get; }
     internal ScrClass? CurrentClass { get; }
 
+    /// <summary>
+    /// The namespace of the current script. Functions in this namespace can be called without qualification.
+    /// </summary>
+    internal string? CurrentNamespace { get; }
+
+    /// <summary>
+    /// Set of all known namespaces (from function/class definitions and dependencies).
+    /// Used to validate namespace existence in scope resolution.
+    /// </summary>
+    internal HashSet<string>? KnownNamespaces { get; }
+
     private static HashSet<string> ReservedSymbols { get; } = new(StringComparer.OrdinalIgnoreCase)
     {
         "waittill",
@@ -50,13 +61,15 @@ internal class SymbolTable
 
     public int LexicalScope { get; } = 0;
 
-    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope, ScriptAnalyserData? apiData = null, ScrClass? currentClass = null)
+    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope, ScriptAnalyserData? apiData = null, ScrClass? currentClass = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null)
     {
         GlobalSymbolTable = exportedSymbolTable;
         VariableSymbols = new Dictionary<string, ScrVariable>(inSet, StringComparer.OrdinalIgnoreCase);
         LexicalScope = lexicalScope;
         ApiData = apiData;
         CurrentClass = currentClass;
+        CurrentNamespace = currentNamespace;
+        KnownNamespaces = knownNamespaces;
     }
 
     /// <summary>
@@ -224,7 +237,22 @@ internal class SymbolTable
             }
         }
 
-        // 4. Check API functions (built-in library functions)
+        // 4. Check current namespace functions implicitly (e.g., if we're in namespace "a",
+        //    we can call "a::foo" as just "foo")
+        if (CurrentNamespace is not null)
+        {
+            string namespacedSymbol = $"{CurrentNamespace}::{symbol}";
+            if (GlobalSymbolTable.TryGetValue(namespacedSymbol, out IExportedSymbol? namespacedExportedSymbol))
+            {
+                if (namespacedExportedSymbol.Type == ExportedSymbolType.Function)
+                {
+                    flags = SymbolFlags.Global;
+                    return new ScrData(ScrDataTypes.Function, (ScrFunction)namespacedExportedSymbol);
+                }
+            }
+        }
+
+        // 5. Check API functions (built-in library functions)
         if (ApiData is not null)
         {
             ScrFunction? apiFunction = ApiData.GetApiFunction(symbol);
@@ -267,15 +295,34 @@ internal class SymbolTable
     /// <param name="namespaceName">The namespace to look in</param>
     /// <param name="symbol">The symbol to look for</param>
     /// <param name="flags">The flags for the symbol</param>
-    /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
-    public ScrData TryGetNamespacedFunctionSymbol(string namespaceName, string symbol, out SymbolFlags flags)
+    /// <param name="namespaceExists">Output: true if the namespace exists, false otherwise</param>
+    /// <returns>The associated ScrData if the symbol exists, undefined otherwise</returns>
+    public ScrData TryGetNamespacedFunctionSymbol(string namespaceName, string symbol, out SymbolFlags flags, out bool namespaceExists)
     {
         flags = SymbolFlags.None;
+        namespaceExists = false;
+
+        // "sys" namespace always exists (built-in API functions)
+        if (namespaceName.Equals("sys", StringComparison.OrdinalIgnoreCase))
+        {
+            namespaceExists = true;
+            if (ApiData is not null)
+            {
+                ScrFunction? apiFunction = ApiData.GetApiFunction(symbol);
+                if (apiFunction is not null)
+                {
+                    flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
+                    return new ScrData(ScrDataTypes.Function, apiFunction);
+                }
+            }
+            return ScrData.Undefined();
+        }
 
         // Check if namespace refers to a class
         if (GlobalSymbolTable.TryGetValue(namespaceName, out IExportedSymbol? classSymbol)
             && classSymbol.Type == ExportedSymbolType.Class)
         {
+            namespaceExists = true;
             ScrClass scrClass = (ScrClass)classSymbol;
             ScrFunction? method = scrClass.Methods
                 .FirstOrDefault(m => m.Name.Equals(symbol, StringComparison.OrdinalIgnoreCase));
@@ -285,28 +332,25 @@ internal class SymbolTable
                 flags = SymbolFlags.Global;
                 return new ScrData(ScrDataTypes.Function, method);
             }
+            return ScrData.Undefined();
         }
 
-        // Check global symbol table first
+        // Check if namespace exists in known namespaces
+        if (KnownNamespaces is not null && KnownNamespaces.Contains(namespaceName))
+        {
+            namespaceExists = true;
+        }
+
+        // Check global symbol table
         if (GlobalSymbolTable.TryGetValue($"{namespaceName}::{symbol}", out IExportedSymbol? exportedSymbol))
         {
             if (exportedSymbol.Type == ExportedSymbolType.Function &&
                 exportedSymbol is ScrFunction scrFunction &&
                 scrFunction.Namespace.Equals(namespaceName, StringComparison.OrdinalIgnoreCase))
             {
+                namespaceExists = true;
                 flags = SymbolFlags.Global;
                 return new ScrData(ScrDataTypes.Function, scrFunction);
-            }
-        }
-
-        // Check if namespace is "sys" and lookup in API
-        if (namespaceName.Equals("sys", StringComparison.OrdinalIgnoreCase) && ApiData is not null)
-        {
-            ScrFunction? apiFunction = ApiData.GetApiFunction(symbol);
-            if (apiFunction is not null)
-            {
-                flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-                return new ScrData(ScrDataTypes.Function, apiFunction);
             }
         }
 

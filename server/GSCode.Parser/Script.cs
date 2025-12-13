@@ -509,6 +509,12 @@ public class Script(DocumentUri ScriptUri, string languageId)
             allSymbols.TryAdd(symbol.Name, symbol);
         }
 
+        // Build set of known namespaces from function and class definitions
+        HashSet<string> knownNamespaces = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in DefinitionsTable.GetAllFunctionLocations()) knownNamespaces.Add(kv.Key.Namespace);
+        foreach (var kv in DefinitionsTable.GetAllClassLocations()) knownNamespaces.Add(kv.Key.Namespace);
+        knownNamespaces.Add(DefinitionsTable.CurrentNamespace);
+
         ControlFlowAnalyser controlFlowAnalyser = new(Sense, DefinitionsTable!);
         try
         {
@@ -523,7 +529,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
             return Task.CompletedTask;
         }
 
-        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, controlFlowAnalyser.ClassGraphs, Sense, allSymbols, TryGetApi());
+        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, controlFlowAnalyser.ClassGraphs, Sense, allSymbols, TryGetApi(), DefinitionsTable.CurrentNamespace, knownNamespaces);
         try
         {
             dataFlowAnalyser.Run();

@@ -1,5 +1,4 @@
 ﻿using GSCode.Parser.AST;
-using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Data;
 using GSCode.Parser.DFA;
 using GSCode.Parser.Lexical;
@@ -62,15 +61,14 @@ public class ScrVariableSymbol : ISenseDefinition
         };
     }
 
-    internal static ScrVariableSymbol Usage(IdentifierExprNode node, ScrData data)
+    internal static ScrVariableSymbol Usage(IdentifierExprNode node, ScrData data, bool isConstant = false)
     {
-        bool isConstant = data.ReadOnly;
-
         return new(node.Token, data)
         {
             SemanticTokenModifiers = isConstant ?
                 new string[] { "readonly", "local" } :
-                new string[] { "local" }
+                new string[] { "local" },
+            IsConstant = isConstant
         };
     }
 

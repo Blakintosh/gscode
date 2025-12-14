@@ -121,8 +121,9 @@ internal class SymbolTable
     /// </summary>
     /// <param name="symbol">The symbol to add</param>
     /// <param name="data">The associated ScrData for the symbol</param>
+    /// <param name="isConstant">Whether this symbol is a constant</param>
     /// <returns>true if the symbol was added, false if it already exists</returns>
-    public AssignmentResult TryAddVariableSymbol(string symbol, ScrData data)
+    public AssignmentResult TryAddVariableSymbol(string symbol, ScrData data, bool isConstant = false)
     {
         // Check if the symbol exists in the table
         if (VariableSymbols.ContainsKey(symbol))
@@ -138,7 +139,7 @@ internal class SymbolTable
         }
 
         // If the symbol doesn't exist, add it to the top-level scope
-        VariableSymbols.Add(symbol, new ScrVariable(symbol, data.Copy(), LexicalScope));
+        VariableSymbols.Add(symbol, new ScrVariable(symbol, data.Copy(), LexicalScope, IsConstant: isConstant));
         return AssignmentResult.SuccessNew;
     }
 
@@ -369,7 +370,8 @@ internal class SymbolTable
         // Check if the symbol exists in the table, set it there if so
         if (VariableSymbols.TryGetValue(symbol, out ScrVariable? existing))
         {
-            VariableSymbols[symbol] = new ScrVariable(symbol, scrData, existing!.LexicalScope);
+            // Preserve the existing variable's metadata (scope, global, constant flags)
+            VariableSymbols[symbol] = existing with { Data = scrData };
             return;
         }
     }
@@ -377,9 +379,9 @@ internal class SymbolTable
     public bool SymbolIsConstant(string symbol)
     {
         // Check if the symbol exists in the table
-        if (VariableSymbols.ContainsKey(symbol))
+        if (VariableSymbols.TryGetValue(symbol, out ScrVariable? variable))
         {
-            return VariableSymbols[symbol].Data.ReadOnly;
+            return variable.IsConstant;
         }
         return false;
     }

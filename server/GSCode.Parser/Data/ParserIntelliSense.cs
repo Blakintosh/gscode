@@ -1,5 +1,4 @@
 ﻿using GSCode.Data;
-using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.Util;
 using OmniSharp.Extensions.LanguageServer.Protocol;

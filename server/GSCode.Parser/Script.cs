@@ -549,7 +549,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         {
             EmitUnusedParameterDiagnostics();
             // EmitCallArityDiagnostics(); // Now handled in ReachingDefinitionsAnalyser
-            EmitUnknownNamespaceDiagnostics();
+            // EmitUnknownNamespaceDiagnostics(); // Now handled in ReachingDefinitionsAnalyser
             EmitUnusedUsingDiagnostics();
             EmitUnusedVariableDiagnostics();
             EmitSwitchCaseDiagnostics();
@@ -1449,22 +1449,23 @@ public class Script(DocumentUri ScriptUri, string languageId)
     }
     */
 
-    private void EmitUnknownNamespaceDiagnostics()
-    {
-        if (RootNode is null || DefinitionsTable is null) return;
-        HashSet<string> known = new(StringComparer.OrdinalIgnoreCase);
-        foreach (var kv in DefinitionsTable.GetAllFunctionLocations()) known.Add(kv.Key.Namespace);
-        foreach (var kv in DefinitionsTable.GetAllClassLocations()) known.Add(kv.Key.Namespace);
-        known.Add(DefinitionsTable.CurrentNamespace);
+    // Now handled later in analysis
+    // private void EmitUnknownNamespaceDiagnostics()
+    // {
+    //     if (RootNode is null || DefinitionsTable is null) return;
+    //     HashSet<string> known = new(StringComparer.OrdinalIgnoreCase);
+    //     foreach (var kv in DefinitionsTable.GetAllFunctionLocations()) known.Add(kv.Key.Namespace);
+    //     foreach (var kv in DefinitionsTable.GetAllClassLocations()) known.Add(kv.Key.Namespace);
+    //     known.Add(DefinitionsTable.CurrentNamespace);
 
-        foreach (var nsm in EnumerateNamespacedMembers(RootNode))
-        {
-            if (nsm.Namespace is IdentifierExprNode nsId && !known.Contains(nsId.Identifier))
-            {
-                Sense.AddSpaDiagnostic(nsId.Range, GSCErrorCodes.UnknownNamespace, nsId.Identifier);
-            }
-        }
-    }
+    //     foreach (var nsm in EnumerateNamespacedMembers(RootNode))
+    //     {
+    //         if (nsm.Namespace is IdentifierExprNode nsId && !known.Contains(nsId.Identifier))
+    //         {
+    //             Sense.AddSpaDiagnostic(nsId.Range, GSCErrorCodes.UnknownNamespace, nsId.Identifier);
+    //         }
+    //     }
+    // }
 
     private void EmitUnusedUsingDiagnostics()
     {

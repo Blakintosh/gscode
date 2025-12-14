@@ -24,9 +24,49 @@ internal class ScrArray //: IEnumerable<ScrData>
 /// </summary>
 internal record ScrStruct
 {
-    // TODO: need to ensure that Fields is deeply compared for value equivalence
     private Dictionary<string, ScrData> Fields { get; } = new();
     public bool IsDeterministic { get; } = false;
+
+    public virtual bool Equals(ScrStruct? other)
+    {
+        if (other is null)
+        {
+            return false;
+        }
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+        if (IsDeterministic != other.IsDeterministic)
+        {
+            return false;
+        }
+        if (Fields.Count != other.Fields.Count)
+        {
+            return false;
+        }
+
+        foreach (var kvp in Fields)
+        {
+            if (!other.Fields.TryGetValue(kvp.Key, out var otherValue))
+            {
+                return false;
+            }
+            if (!kvp.Value.Equals(otherValue))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public override int GetHashCode()
+    {
+        // Simple hash combining IsDeterministic and field count
+        // Full content hashing would be expensive and isn't needed for correctness
+        return HashCode.Combine(IsDeterministic, Fields.Count);
+    }
 
     protected ScrStruct(IEnumerable<KeyValuePair<string, ScrData>> fields, bool deterministic = false)
     {

@@ -54,8 +54,10 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     {
         Silent = true;
 
-        // Clear switch contexts at the start of each function analysis
+        // Clear state at the start of each function analysis
         SwitchContexts.Clear();
+        InSets.Clear();
+        OutSets.Clear();
 
         Stack<CfgNode> worklist = new();
         worklist.Push(functionGraph.Start);
@@ -121,10 +123,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 ScrClass? currentClass = NodeToClassMap.GetValueOrDefault(node);
                 SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass);
 
-                // TODO: Unioning of sets is not ideal, better to merge the ScrDatas of common key across multiple dictionaries. Easier to use with the symbol tables.
-                // TODO: Analyse statement-by-statement, using the analysers already created, and get the out set.
-                //Analyse(node, symbolTable, inSets, outSets, Sense);
-                //outSet.UnionWith(symbolTable.GetOutgoingSymbols());
                 AnalyseBasicBlock((BasicBlock)node, symbolTable);
 
                 OutSets[node] = symbolTable.VariableSymbols;
@@ -179,7 +177,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             }
             else
             {
-                // TODO: temp - just copy the in set to the out set.
                 OutSets[node] = inSet;
             }
 
@@ -248,8 +245,10 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
     {
         Silent = true;
 
-        // Clear switch contexts at the start of each class analysis
+        // Clear state at the start of each class analysis
         SwitchContexts.Clear();
+        InSets.Clear();
+        OutSets.Clear();
 
         // Build a map of all function entry nodes to this class
         BuildClassContextMap(classGraph.Start, scrClass);
@@ -371,7 +370,6 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             }
             else
             {
-                // TODO: temp - just copy the in set to the out set.
                 OutSets[node] = inSet;
             }
 
@@ -893,7 +891,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         ScrData result = AnalyseExpr(statement.Value, symbolTable, Sense);
 
         // Assign the result to the symbol table.
-        AssignmentResult assignmentResult = symbolTable.TryAddVariableSymbol(statement.Identifier, result with { ReadOnly = true });
+        AssignmentResult assignmentResult = symbolTable.TryAddVariableSymbol(statement.Identifier, result, isConstant: true);
 
         if (assignmentResult == AssignmentResult.SuccessNew)
         {
@@ -1348,7 +1346,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             string symbolName = identifier.Identifier;
 
-            if (target.ReadOnly)
+            // Check if the symbol is a constant (tracked via symbol table, not ScrData.ReadOnly)
+            if (symbolTable.SymbolIsConstant(symbolName))
             {
                 AddDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
                 return false;
@@ -1460,7 +1459,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 return right;
             }
 
-            if (left.ReadOnly)
+            // Check if the symbol is a constant (tracked via symbol table, not ScrData.ReadOnly)
+            if (symbolTable.SymbolIsConstant(symbolName))
             {
                 AddDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
                 return ScrData.Default;
@@ -1472,7 +1472,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 return ScrData.Default;
             }
 
-            AssignmentResult assignmentResult = symbolTable.AddOrSetVariableSymbol(symbolName, right);
+            AssignmentResult assignmentResult = symbolTable.AddOrSetVariableSymbol(symbolName, right with { ReadOnly = false });
 
             if (right.Type == ScrDataTypes.Undefined)
             {
@@ -2231,7 +2231,8 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             }
             if (createSenseTokenForRhs)
             {
-                Sense.AddSenseToken(expr.Token, ScrVariableSymbol.Usage(expr, data));
+                bool isConstant = symbolTable.SymbolIsConstant(expr.Identifier);
+                Sense.AddSenseToken(expr.Token, ScrVariableSymbol.Usage(expr, data, isConstant));
             }
         }
         return data;

@@ -19,7 +19,7 @@ internal class SwitchAnalysisContext
     public bool HasDefault { get; set; } = false;
 }
 
-internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null)
+internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null)
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = functionGraphs;
     public List<Tuple<ScrClass, ControlFlowGraph>> ClassGraphs { get; } = classGraphs;
@@ -31,6 +31,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> InSets { get; } = new();
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> OutSets { get; } = new();
+    public Dictionary<(CfgNode From, CfgNode To), Dictionary<string, ScrVariable>> OutEdgeSets { get; } = new();
 
     public Dictionary<SwitchNode, SwitchAnalysisContext> SwitchContexts { get; } = new();
     private Dictionary<CfgNode, ScrClass> NodeToClassMap { get; } = new();
@@ -58,6 +59,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         SwitchContexts.Clear();
         InSets.Clear();
         OutSets.Clear();
+        OutEdgeSets.Clear();
 
         Stack<CfgNode> worklist = new();
         worklist.Push(functionGraph.Start);
@@ -79,9 +81,15 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             Dictionary<string, ScrVariable> inSet = new(StringComparer.OrdinalIgnoreCase);
             foreach (CfgNode incoming in node.Incoming)
             {
-                if (OutSets.TryGetValue(incoming, out Dictionary<string, ScrVariable>? value))
+                // Prefer edge-specific OUT (needed for type narrowing), fall back to node OUT.
+                if (OutEdgeSets.TryGetValue((incoming, node), out Dictionary<string, ScrVariable>? edgeOut))
                 {
-                    inSet.MergeTables(value, node.Scope);
+                    inSet.MergeTables(edgeOut, node.Scope);
+                    continue;
+                }
+                if (OutSets.TryGetValue(incoming, out Dictionary<string, ScrVariable>? nodeOut))
+                {
+                    inSet.MergeTables(nodeOut, node.Scope);
                 }
             }
 
@@ -106,6 +114,9 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             {
                 OutSets[node] = new Dictionary<string, ScrVariable>(StringComparer.OrdinalIgnoreCase);
             }
+
+            ConditionResult? decisionCondition = null;
+            ConditionResult? iterationCondition = null;
 
             // Calculate the out set
             if (node.Type == CfgNodeType.FunctionEntry)
@@ -148,7 +159,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 ScrClass? currentClass = NodeToClassMap.GetValueOrDefault(node);
                 SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass);
 
-                AnalyseIteration((IterationNode)node, symbolTable);
+                iterationCondition = AnalyseIterationInternal((IterationNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
             else if (node.Type == CfgNodeType.DecisionNode)
@@ -156,7 +167,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 ScrClass? currentClass = NodeToClassMap.GetValueOrDefault(node);
                 SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass);
 
-                AnalyseDecision((DecisionNode)node, symbolTable);
+                decisionCondition = AnalyseDecisionConditionInternal((DecisionNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
             else if (node.Type == CfgNodeType.SwitchNode)
@@ -180,8 +191,12 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 OutSets[node] = inSet;
             }
 
+            // Update edge-specific out sets (used for branch-sensitive narrowing).
+            bool edgeOutChanged = UpdateOutEdgeSetsForNode(node, OutSets[node],
+                node.Type == CfgNodeType.DecisionNode ? decisionCondition : node.Type == CfgNodeType.IterationNode ? iterationCondition : null);
+
             // Check if the outset has changed before queueing successors.
-            bool outSetChanged = previousOutSet == null || !previousOutSet.VariableTableEquals(OutSets[node]);
+            bool outSetChanged = previousOutSet == null || !previousOutSet.VariableTableEquals(OutSets[node]) || edgeOutChanged;
 
             // Only add successors to the worklist if the outset has changed
             if (!outSetChanged)
@@ -249,6 +264,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         SwitchContexts.Clear();
         InSets.Clear();
         OutSets.Clear();
+        OutEdgeSets.Clear();
 
         // Build a map of all function entry nodes to this class
         BuildClassContextMap(classGraph.Start, scrClass);
@@ -273,9 +289,15 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             Dictionary<string, ScrVariable> inSet = new(StringComparer.OrdinalIgnoreCase);
             foreach (CfgNode incoming in node.Incoming)
             {
-                if (OutSets.TryGetValue(incoming, out Dictionary<string, ScrVariable>? value))
+                // Prefer edge-specific OUT (needed for type narrowing), fall back to node OUT.
+                if (OutEdgeSets.TryGetValue((incoming, node), out Dictionary<string, ScrVariable>? edgeOut))
                 {
-                    inSet.MergeTables(value, node.Scope);
+                    inSet.MergeTables(edgeOut, node.Scope);
+                    continue;
+                }
+                if (OutSets.TryGetValue(incoming, out Dictionary<string, ScrVariable>? nodeOut))
+                {
+                    inSet.MergeTables(nodeOut, node.Scope);
                 }
             }
 
@@ -300,6 +322,9 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
             {
                 OutSets[node] = new Dictionary<string, ScrVariable>(StringComparer.OrdinalIgnoreCase);
             }
+
+            ConditionResult? decisionCondition = null;
+            ConditionResult? iterationCondition = null;
 
             // Calculate the out set
             if (node.Type == CfgNodeType.ClassEntry)
@@ -341,7 +366,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 ScrClass? currentClass = NodeToClassMap.GetValueOrDefault(node);
                 SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass);
 
-                AnalyseIteration((IterationNode)node, symbolTable);
+                iterationCondition = AnalyseIterationInternal((IterationNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
             else if (node.Type == CfgNodeType.DecisionNode)
@@ -349,7 +374,7 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 ScrClass? currentClass = NodeToClassMap.GetValueOrDefault(node);
                 SymbolTable symbolTable = new(ExportedSymbolTable, inSet, node.Scope, ApiData, currentClass);
 
-                AnalyseDecision((DecisionNode)node, symbolTable);
+                decisionCondition = AnalyseDecisionConditionInternal((DecisionNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
             }
             else if (node.Type == CfgNodeType.SwitchNode)
@@ -373,8 +398,12 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 OutSets[node] = inSet;
             }
 
+            // Update edge-specific out sets (used for branch-sensitive narrowing).
+            bool edgeOutChanged = UpdateOutEdgeSetsForNode(node, OutSets[node],
+                node.Type == CfgNodeType.DecisionNode ? decisionCondition : node.Type == CfgNodeType.IterationNode ? iterationCondition : null);
+
             // Check if the outset has changed before queueing successors.
-            bool outSetChanged = previousOutSet == null || !previousOutSet.VariableTableEquals(OutSets[node]);
+            bool outSetChanged = previousOutSet == null || !previousOutSet.VariableTableEquals(OutSets[node]) || edgeOutChanged;
 
             // Only add successors to the worklist if the outset has changed
             if (!outSetChanged)
@@ -609,57 +638,73 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
     public void AnalyseIteration(IterationNode node, SymbolTable symbolTable)
     {
+        _ = AnalyseIterationInternal(node, symbolTable);
+    }
+
+    public void AnalyseDecision(DecisionNode node, SymbolTable symbolTable)
+    {
+        _ = AnalyseDecisionConditionInternal(node, symbolTable);
+    }
+
+    private ConditionResult? AnalyseIterationInternal(IterationNode node, SymbolTable symbolTable)
+    {
         // Analyse the initialisation.
         if (node.Initialisation is not null)
         {
-            ScrData initialisation = AnalyseExpr(node.Initialisation, symbolTable, Sense);
+            AnalyseExpr(node.Initialisation, symbolTable, Sense);
 
             // For loop initialization should follow the same rules as expression statements
             // Only assignments, calls, increments, decrements should be allowed
             ValidateExpressionHasSideEffects(node.Initialisation);
         }
 
+        ConditionResult? conditionResult = null;
+
         // Analyse the condition if present
         if (node.Condition is not null)
         {
-            ScrData condition = AnalyseExpr(node.Condition, symbolTable, Sense);
+            conditionResult = AnalyseCondition(node.Condition, symbolTable);
+            ScrData conditionValue = conditionResult.Value.Value;
 
-            if (!condition.TypeUnknown() && !condition.CanEvaluateToBoolean())
+            if (!conditionValue.TypeUnknown() && !conditionValue.CanEvaluateToBoolean())
             {
-                AddDiagnostic(node.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
+                AddDiagnostic(node.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, conditionValue.TypeToString(), ScrDataTypeNames.Bool);
             }
         }
 
         // Analyse the increment if present
         if (node.Increment is not null)
         {
-            ScrData increment = AnalyseExpr(node.Increment, symbolTable, Sense);
+            AnalyseExpr(node.Increment, symbolTable, Sense);
 
             // For loop increment should also follow expression statement rules
             ValidateExpressionHasSideEffects(node.Increment);
         }
+
+        return conditionResult;
     }
 
-    public void AnalyseDecision(DecisionNode node, SymbolTable symbolTable)
+    private ConditionResult? AnalyseDecisionConditionInternal(DecisionNode node, SymbolTable symbolTable)
     {
         DecisionAstNode decision = node.Source;
 
         // It either errored or it's an else, nothing to do.
         if (decision.Condition is null)
         {
-            return;
+            return null;
         }
 
-        // Analyse the condition.
-        ScrData condition = AnalyseExpr(decision.Condition, symbolTable, Sense);
+        ConditionResult conditionResult = AnalyseCondition(decision.Condition, symbolTable);
+        ScrData conditionValue = conditionResult.Value;
 
-        if (!condition.TypeUnknown() && !condition.CanEvaluateToBoolean())
+        if (!conditionValue.TypeUnknown() && !conditionValue.CanEvaluateToBoolean())
         {
-            AddDiagnostic(decision.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, condition.TypeToString(), ScrDataTypeNames.Bool);
+            AddDiagnostic(decision.Condition.Range, GSCErrorCodes.NoImplicitConversionExists, conditionValue.TypeToString(), ScrDataTypeNames.Bool);
         }
 
         // TODO: if the condition evaluates to false, then mark the block that follows as unreachable.
         // TODO: if the condition evaluates to true, then any else blocks are unreachable.
+        return conditionResult;
     }
 
     public void AnalyseSwitch(SwitchNode node, SymbolTable symbolTable)
@@ -1087,49 +1132,20 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
         {
             return AnalyseDotOp(binary, symbolTable, createSenseTokenForRhs);
         }
-        if (binary.Operation == TokenType.Assign)
+
+        if (TryAnalyseAssignmentBinaryExpr(binary, symbolTable, out ScrData assignmentResult))
         {
-            return AnalyseAssignOp(binary, symbolTable);
+            return assignmentResult;
         }
-        if (binary.Operation == TokenType.PlusAssign)
+
+        if (IsLogicalBinaryOperator(binary.Operation))
         {
-            return AnalysePlusAssignOp(binary, symbolTable);
-        }
-        if (binary.Operation == TokenType.MinusAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.MinusAssign);
-        }
-        if (binary.Operation == TokenType.MultiplyAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.MultiplyAssign);
-        }
-        if (binary.Operation == TokenType.DivideAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.DivideAssign);
-        }
-        if (binary.Operation == TokenType.ModuloAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.ModuloAssign);
-        }
-        if (binary.Operation == TokenType.BitAndAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitAndAssign);
-        }
-        if (binary.Operation == TokenType.BitOrAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitOrAssign);
-        }
-        if (binary.Operation == TokenType.BitXorAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitXorAssign);
-        }
-        if (binary.Operation == TokenType.BitLeftShiftAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitLeftShiftAssign);
-        }
-        if (binary.Operation == TokenType.BitRightShiftAssign)
-        {
-            return AnalyseCompoundAssignOp(binary, symbolTable, TokenType.BitRightShiftAssign);
+            // NOTE: For now this is behavior-preserving (still analyzes both sides eagerly).
+            // This is the hook point for short-circuit evaluation + type narrowing:
+            // - AnalyseCondition(...) will return (value, factsWhenTrue, factsWhenFalse)
+            // - && / || will analyse RHS under an env refined by LHS facts (reachability-aware)
+            // - callers like if/while will apply the returned facts to the then/else environments
+            return AnalyseLogicalBinaryExpr(binary, symbolTable);
         }
 
         ScrData left = AnalyseExpr(binary.Left!, symbolTable, Sense);
@@ -1162,17 +1178,33 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
 
         // TODO: Binary operators not yet mapped:
         // - Arrow (->)
-        // Assignment operators:
-        // - PlusAssign (+=)
-        // - MinusAssign (-=)
-        // - MultiplyAssign (*=)
-        // - DivideAssign (/=)
-        // - ModuloAssign (%=)
-        // - BitAndAssign (&=)
-        // - BitOrAssign (|=)
-        // - BitXorAssign (^=)
-        // - BitLeftShiftAssign (<<=)
-        // - BitRightShiftAssign (>>=)
+    }
+
+    private bool TryAnalyseAssignmentBinaryExpr(BinaryExprNode binary, SymbolTable symbolTable, out ScrData result)
+    {
+        switch (binary.Operation)
+        {
+            case TokenType.Assign:
+                result = AnalyseAssignOp(binary, symbolTable);
+                return true;
+            case TokenType.PlusAssign:
+                result = AnalysePlusAssignOp(binary, symbolTable);
+                return true;
+            case TokenType.MinusAssign:
+            case TokenType.MultiplyAssign:
+            case TokenType.DivideAssign:
+            case TokenType.ModuloAssign:
+            case TokenType.BitAndAssign:
+            case TokenType.BitOrAssign:
+            case TokenType.BitXorAssign:
+            case TokenType.BitLeftShiftAssign:
+            case TokenType.BitRightShiftAssign:
+                result = AnalyseCompoundAssignOp(binary, symbolTable, binary.Operation);
+                return true;
+            default:
+                result = default;
+                return false;
+        }
     }
 
     private ScrData AnalysePrefixExpr(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
@@ -2613,6 +2645,97 @@ internal ref struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlF
                 stack.Push(successor);
             }
         }
+    }
+
+    private bool UpdateOutEdgeSetsForNode(CfgNode node, Dictionary<string, ScrVariable> baseOut, ConditionResult? condition)
+    {
+        bool anyChanged = false;
+
+        foreach (CfgNode successor in node.Outgoing)
+        {
+            Dictionary<string, ScrVariable> edgeOut;
+
+            if (condition is not null && node is DecisionNode decisionNode)
+            {
+                if (successor == decisionNode.WhenTrue)
+                {
+                    edgeOut = RefineVariableSymbols(baseOut, condition.Value.WhenTrue);
+                }
+                else if (successor == decisionNode.WhenFalse)
+                {
+                    edgeOut = RefineVariableSymbols(baseOut, condition.Value.WhenFalse);
+                }
+                else
+                {
+                    edgeOut = CloneVariableSymbols(baseOut);
+                }
+            }
+            else if (condition is not null && node is IterationNode iterationNode)
+            {
+                if (successor == iterationNode.Body)
+                {
+                    edgeOut = RefineVariableSymbols(baseOut, condition.Value.WhenTrue);
+                }
+                else if (successor == iterationNode.Continuation)
+                {
+                    edgeOut = RefineVariableSymbols(baseOut, condition.Value.WhenFalse);
+                }
+                else
+                {
+                    edgeOut = CloneVariableSymbols(baseOut);
+                }
+            }
+            else
+            {
+                edgeOut = CloneVariableSymbols(baseOut);
+            }
+
+            (CfgNode From, CfgNode To) edge = (node, successor);
+
+            if (OutEdgeSets.TryGetValue(edge, out Dictionary<string, ScrVariable>? previousEdgeOut))
+            {
+                if (!previousEdgeOut.VariableTableEquals(edgeOut))
+                {
+                    anyChanged = true;
+                }
+            }
+            else
+            {
+                anyChanged = true;
+            }
+
+            OutEdgeSets[edge] = edgeOut;
+        }
+
+        return anyChanged;
+    }
+
+    private static Dictionary<string, ScrVariable> CloneVariableSymbols(Dictionary<string, ScrVariable> symbols)
+    {
+        return new Dictionary<string, ScrVariable>(symbols, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private Dictionary<string, ScrVariable> RefineVariableSymbols(Dictionary<string, ScrVariable> baseOut, Dictionary<string, TypeNarrowing> narrowings)
+    {
+        if (narrowings.Count == 0)
+        {
+            return CloneVariableSymbols(baseOut);
+        }
+
+        Dictionary<string, ScrVariable> refined = CloneVariableSymbols(baseOut);
+
+        foreach ((string symbol, TypeNarrowing narrowing) in narrowings)
+        {
+            if (!refined.TryGetValue(symbol, out ScrVariable? existing) || existing is null)
+            {
+                continue;
+            }
+
+            ScrDataTypes newType = Apply(narrowing, existing.Data.Type);
+            refined[symbol] = existing with { Data = existing.Data with { Type = newType } };
+        }
+
+        return refined;
     }
 
     public void AddDiagnostic(Range range, GSCErrorCodes code, params object[] args)

@@ -1,4 +1,4 @@
-﻿using GSCode.Parser.AST;
+using GSCode.Parser.AST;
 using GSCode.Parser.Lexical;
 using System;
 using System.Collections.Generic;
@@ -219,7 +219,10 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
     /// <returns></returns>
     public readonly bool IsAny()
     {
-        return Type == ScrDataTypes.Any;
+        // "Any" is our unknown-type marker. We also treat "Any except undefined" as unknown,
+        // which is how flow analysis can represent "unknown but definitely defined".
+        return Type == ScrDataTypes.Any ||
+               Type == (ScrDataTypes.Any & ~ScrDataTypes.Undefined);
     }
 
     public readonly bool HasType(ScrDataTypes type)
@@ -229,7 +232,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
     public string TypeToString()
     {
-        if (Type == ScrDataTypes.Any)
+        if (IsAny())
         {
             return "?";
         }
@@ -338,7 +341,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
     public readonly bool TypeUnknown()
     {
-        return Type == ScrDataTypes.Any;
+        return IsAny();
     }
 
     public readonly bool ValueUnknown()

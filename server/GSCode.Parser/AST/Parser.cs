@@ -2505,12 +2505,26 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Check for CLOSEBRACKET, twice
-        if (!AdvanceIfType(TokenType.CloseBracket) || !AdvanceIfType(TokenType.CloseBracket))
+        Position derefEnd = CurrentToken.Range.End;
+        if (!AdvanceIfType(TokenType.CloseBracket))
         {
             AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
         }
+        else
+        {
+            derefEnd = CurrentToken.Range.End;
+            if (!AdvanceIfType(TokenType.CloseBracket))
+            {
+                AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
+            }
+        }
 
-        ExprNode? result = DerefCallOp(openBracket, derefExpr);
+        // Wrap the expression in a DerefExprNode to indicate it came from [[ ]]
+        DerefExprNode? wrappedDeref = derefExpr is not null
+            ? new DerefExprNode(RangeHelper.From(openBracket.Range.Start, derefEnd), derefExpr)
+            : null;
+
+        ExprNode? result = DerefCallOp(openBracket, wrappedDeref);
         ExitRecovery();
 
         return result;

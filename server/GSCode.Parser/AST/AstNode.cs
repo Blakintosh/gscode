@@ -63,6 +63,7 @@ internal enum ExprOperatorType
     Indexer,
     CallOn,
     Waittill,
+    Deref,
 }
 
 internal abstract class AstNode(AstNodeType nodeType)
@@ -447,6 +448,17 @@ internal sealed class FunCallNode(Position startPosition, ExprNode? target, Args
 
     public FunCallNode(ExprNode target, ArgsListNode arguments)
         : this(target.Range.Start, target, arguments) { }
+}
+
+/// <summary>
+/// Represents a dereference expression [[ expr ]].
+/// Used to dereference function pointers for calling ([[ funcPtr ]]())
+/// or class pointers for method calls ([[ classPtr ]]->method()).
+/// </summary>
+internal sealed class DerefExprNode(Range range, ExprNode inner)
+    : ExprNode(ExprOperatorType.Deref, range)
+{
+    public ExprNode Inner { get; } = inner;
 }
 
 internal sealed class NamespacedMemberNode(ExprNode @namespace, ExprNode member)

@@ -122,6 +122,8 @@ public enum GSCErrorCodes
     AssignOnThreadedFunction = 3055,
     PossibleUndefinedComparison = 3056,
     InvalidVectorComponent = 3057,
+    TooManyArgumentsUnverified = 3058,
+    TooFewArgumentsUnverified = 3059,
 
     // 8xxx errors are issued by the IDE for conventions
     UnterminatedRegion = 8000,
@@ -230,8 +232,8 @@ public static class DiagnosticCodes
         { GSCErrorCodes.ReservedSymbol, new("The symbol '{0}' is reserved.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnusedVariable, new("The variable '{0}' is declared but never used.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
         { GSCErrorCodes.UnusedParameter, new("The parameter '{0}' is never used.", DiagnosticSeverity.Hint, new[] { DiagnosticTag.Unnecessary }) },
-        { GSCErrorCodes.TooManyArguments, new("Function '{0}' called with {1} arguments, but expects {2}.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.TooFewArguments, new("Function '{0}' called with {1} arguments, but expects at least {2}.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.TooManyArguments, new("Function '{0}' called with {1} arguments, but expects at most {2}.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.TooFewArguments, new("Function '{0}' called with {1} arguments, but expects at least {2}.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ArgumentTypeMismatch, new("Argument {0} to '{1}' expects '{2}', got '{3}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.PossibleUndefinedAccess, new("Possible dereference of 'undefined' value.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.UnknownNamespace, new("The namespace '{0}' does not exist.", DiagnosticSeverity.Error) },
@@ -248,7 +250,9 @@ public static class DiagnosticCodes
         { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.PossibleUndefinedComparison, new("Possible comparison of 'undefined' value, which is not allowed.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.InvalidVectorComponent, new("Cannot use type '{0}' as a vector component.", DiagnosticSeverity.Error) },
-      
+        { GSCErrorCodes.TooManyArgumentsUnverified, new("Function '{0}' called with {1} arguments, but expects at most {2}.\nNote: Argument count is derived from Treyarch's API, which may contain errors.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.TooFewArgumentsUnverified, new("Function '{0}' called with {1} arguments, but expects at least {2}.\nNote: Argument count is derived from Treyarch's API, which may contain errors.", DiagnosticSeverity.Warning) },
+
         // 8xxx
         { GSCErrorCodes.UnterminatedRegion, new("No corresponding '/* endregion */' found to terminate '{0}' region.", DiagnosticSeverity.Warning) },
       

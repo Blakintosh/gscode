@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -73,7 +73,8 @@ internal record ScrStruct
         IsDeterministic = deterministic;
         foreach (KeyValuePair<string, ScrData> field in fields)
         {
-            Fields.Add(field.Key, field.Value);
+            // Don't store the metadata, because otherwise it creates a cycle for equality checks.
+            Fields.Add(field.Key, field.Value with { Owner = null, FieldName = null });
         }
     }
 
@@ -96,14 +97,17 @@ internal record ScrStruct
             { Owner = this, FieldName = fieldName };
         }
 
-        return value;
+        // Always attach target metadata for member access, even when the field exists.
+        // This is used by the analyser to identify assignment destinations (a.b = ...).
+        return value with { Owner = this, FieldName = fieldName };
     }
 
     public bool Set(string fieldName, ScrData value)
     {
         bool isNew = !Fields.ContainsKey(fieldName);
 
-        Fields[fieldName] = value with { Owner = this, FieldName = fieldName };
+        // Store the value without any target metadata to avoid cycles.
+        Fields[fieldName] = value with { Owner = null, FieldName = null };
         return isNew;
     }
 

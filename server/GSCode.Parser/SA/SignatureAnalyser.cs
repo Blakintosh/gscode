@@ -44,6 +44,9 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 case AstNodeType.ClassDefinition:
                     AnalyseClass((ClassDefnNode)scriptDefn);
                     break;
+                case AstNodeType.DevBlock:
+                    AnalyseDevBlock((DefnDevBlockNode)scriptDefn);
+                    break;
             }
         }
     }
@@ -192,6 +195,29 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
     {
         // Change the namespace at this point and onwards
         DefinitionsTable.CurrentNamespace = namespaceNode.NamespaceIdentifier;
+    }
+
+    public void AnalyseDevBlock(DefnDevBlockNode devBlockNode)
+    {
+        // Recursively analyze all definitions within the devblock
+        foreach (AstNode scriptDefn in devBlockNode.Definitions)
+        {
+            switch (scriptDefn.NodeType)
+            {
+                case AstNodeType.FunctionDefinition:
+                    AnalyseFunction((FunDefnNode)scriptDefn);
+                    break;
+                case AstNodeType.Namespace:
+                    AnalyseNamespace((NamespaceNode)scriptDefn);
+                    break;
+                case AstNodeType.ClassDefinition:
+                    AnalyseClass((ClassDefnNode)scriptDefn);
+                    break;
+                case AstNodeType.DevBlock:
+                    AnalyseDevBlock((DefnDevBlockNode)scriptDefn);
+                    break;
+            }
+        }
     }
 
     public void AnalyseFunction(FunDefnNode functionDefn)

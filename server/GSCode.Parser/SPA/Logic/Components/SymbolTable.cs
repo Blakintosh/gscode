@@ -1,4 +1,5 @@
-﻿using GSCode.Parser.DFA;
+﻿using GSCode.Parser.AST;
+using GSCode.Parser.DFA;
 using GSCode.Parser.DSA.Types;
 using Newtonsoft.Json.Linq;
 using System;
@@ -18,6 +19,8 @@ internal enum AssignmentResult
     SuccessMutated,
     // Failed - the symbol exists and is a constant
     FailedConstant,
+    // Successful - the symbol was already defined by the same source (e.g. in multiple passes)
+    SuccessAlreadyDefined,
     // Failed - the symbol is reserved (isdefined, etc.)
     FailedReserved,
     // Failed for unknown reason (shouldn't be hit)
@@ -78,7 +81,7 @@ internal class SymbolTable
     /// <param name="symbol">The symbol name</param>
     /// <param name="data">The value</param>
     /// <returns>true if new, false if not, null if assignment to a constant</returns>
-    public AssignmentResult AddOrSetVariableSymbol(string symbol, ScrData data)
+    public AssignmentResult AddOrSetVariableSymbol(string symbol, ScrData data, AstNode? definitionSource = null)
     {
         if (ContainsSymbol(symbol))
         {
@@ -89,10 +92,10 @@ internal class SymbolTable
             }
 
             // Re-assign
-            SetSymbol(symbol, data);
+            SetSymbol(symbol, data, definitionSource);
             return AssignmentResult.SuccessMutated;
         }
-        return TryAddVariableSymbol(symbol, data);
+        return TryAddVariableSymbol(symbol, data, definitionSource: definitionSource);
     }
 
     public bool ContainsConstant(string symbol)
@@ -122,12 +125,21 @@ internal class SymbolTable
     /// <param name="symbol">The symbol to add</param>
     /// <param name="data">The associated ScrData for the symbol</param>
     /// <param name="isConstant">Whether this symbol is a constant</param>
+    /// <param name="sourceLocation">The source location where this symbol is declared (for constants)</param>
+    /// <param name="definitionSource">The AST node where this symbol is defined</param>
     /// <returns>true if the symbol was added, false if it already exists</returns>
-    public AssignmentResult TryAddVariableSymbol(string symbol, ScrData data, bool isConstant = false)
+    public AssignmentResult TryAddVariableSymbol(string symbol, ScrData data, bool isConstant = false, Range? sourceLocation = null, AstNode? definitionSource = null)
     {
         // Check if the symbol exists in the table
-        if (VariableSymbols.ContainsKey(symbol))
+        if (VariableSymbols.TryGetValue(symbol, out ScrVariable? existing))
         {
+            // If it's a constant and we're trying to add it again from the same source, allow it.
+            // This happens during multiple analysis passes of the same CFG.
+            if (isConstant && existing.IsConstant && definitionSource != null && existing.DefinitionSource == definitionSource)
+            {
+                return AssignmentResult.SuccessAlreadyDefined;
+            }
+
             return AssignmentResult.Failed;
         }
 
@@ -139,7 +151,7 @@ internal class SymbolTable
         }
 
         // If the symbol doesn't exist, add it to the top-level scope
-        VariableSymbols.Add(symbol, new ScrVariable(symbol, data.Copy(), LexicalScope, IsConstant: isConstant));
+        VariableSymbols.Add(symbol, new ScrVariable(symbol, data.Copy(), LexicalScope, IsConstant: isConstant, SourceLocation: sourceLocation, DefinitionSource: definitionSource));
         return AssignmentResult.SuccessNew;
     }
 
@@ -362,8 +374,10 @@ internal class SymbolTable
     /// Sets the value for the symbol to a copy of the provided ScrData.
     /// </summary>
     /// <param name="symbol">The symbol to look for</param>
+    /// <param name="value">The new value</param>
+    /// <param name="definitionSource">The AST node where this assignment occurs</param>
     /// <returns>The associated ScrData if the symbol exists, null otherwise</returns>
-    public void SetSymbol(string symbol, ScrData value)
+    public void SetSymbol(string symbol, ScrData value, AstNode? definitionSource = null)
     {
         ScrData scrData = value.Copy();
 
@@ -371,7 +385,7 @@ internal class SymbolTable
         if (VariableSymbols.TryGetValue(symbol, out ScrVariable? existing))
         {
             // Preserve the existing variable's metadata (scope, global, constant flags)
-            VariableSymbols[symbol] = existing with { Data = scrData };
+            VariableSymbols[symbol] = existing with { Data = scrData, DefinitionSource = definitionSource ?? existing.DefinitionSource };
             return;
         }
     }

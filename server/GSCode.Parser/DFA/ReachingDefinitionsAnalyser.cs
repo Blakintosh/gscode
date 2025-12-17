@@ -661,7 +661,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         if (foreachStmt.KeyIdentifier is not null)
         {
             Token keyIdentifier = foreachStmt.KeyIdentifier.Token;
-            AssignmentResult keyAssignmentResult = symbolTable.AddOrSetVariableSymbol(keyIdentifier.Lexeme, ScrData.Default);
+            AssignmentResult keyAssignmentResult = symbolTable.AddOrSetVariableSymbol(keyIdentifier.Lexeme, ScrData.Default, definitionSource: foreachStmt);
 
             if (keyAssignmentResult == AssignmentResult.SuccessNew)
             {
@@ -670,7 +670,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         Token valueIdentifier = foreachStmt.ValueIdentifier.Token;
-        AssignmentResult valueAssignmentResult = symbolTable.AddOrSetVariableSymbol(valueIdentifier.Lexeme, ScrData.Default);
+        AssignmentResult valueAssignmentResult = symbolTable.AddOrSetVariableSymbol(valueIdentifier.Lexeme, ScrData.Default, definitionSource: foreachStmt);
 
         // if (!assignmentResult)
         // {
@@ -921,7 +921,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         // Add the field to the symbol table with default type (fields can be any type in GSC)
         // Fields are like variables but at class scope (scope 0)
-        AssignmentResult assignmentResult = symbolTable.TryAddVariableSymbol(memberName, ScrData.Default);
+        AssignmentResult assignmentResult = symbolTable.TryAddVariableSymbol(memberName, ScrData.Default, definitionSource: memberDecl);
 
         if (assignmentResult == AssignmentResult.SuccessNew)
         {
@@ -985,10 +985,17 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         ScrData result = AnalyseExpr(statement.Value, symbolTable, Sense);
 
-        // Assign the result to the symbol table.
-        AssignmentResult assignmentResult = symbolTable.TryAddVariableSymbol(statement.Identifier, result, isConstant: true);
+        // Validate that the RHS is a compile-time constant
+        if (!IsConstantExpression(statement.Value))
+        {
+            AddDiagnostic(statement.Value!.Range, GSCErrorCodes.ExpectedConstantExpression);
+            return;
+        }
 
-        if (assignmentResult == AssignmentResult.SuccessNew)
+        // Assign the result to the symbol table.
+        AssignmentResult assignmentResult = symbolTable.TryAddVariableSymbol(statement.Identifier, result, isConstant: true, sourceLocation: statement.IdentifierToken.Range, definitionSource: statement);
+
+        if (assignmentResult == AssignmentResult.SuccessNew || assignmentResult == AssignmentResult.SuccessAlreadyDefined)
         {
             // Add a semantic token for the constant.
             Sense.AddSenseToken(statement.IdentifierToken, ScrVariableSymbol.ConstantDeclaration(statement.IdentifierToken, result));
@@ -1076,7 +1083,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         // Now emit the variables, all as type any.
         foreach (IdentifierExprNode variable in expr.Variables.Variables)
         {
-            symbolTable.AddOrSetVariableSymbol(variable.Identifier, ScrData.Default);
+            symbolTable.AddOrSetVariableSymbol(variable.Identifier, ScrData.Default, definitionSource: expr);
             Sense.AddSenseToken(variable.Token, ScrVariableSymbol.Declaration(variable, ScrData.Default));
         }
 
@@ -1489,7 +1496,10 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             : new ScrData(target.Type, target.Get<int>() + 1);
 
         // Perform the assignment using the shared helper
-        TryAssignToTarget(postfix.Operand!, target, incrementedValue, symbolTable);
+        if (!TryAssignToTarget(postfix.Operand!, target, incrementedValue, symbolTable))
+        {
+            return ScrData.Default;
+        }
 
         // Return its old value (post-increment returns the value before incrementing)
         return target;
@@ -1512,7 +1522,10 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             : new ScrData(target.Type, target.Get<int>() - 1);
 
         // Perform the assignment using the shared helper
-        TryAssignToTarget(postfix.Operand!, target, decrementedValue, symbolTable);
+        if (!TryAssignToTarget(postfix.Operand!, target, decrementedValue, symbolTable))
+        {
+            return ScrData.Default;
+        }
 
         // Return its old value (post-decrement returns the value before decrementing)
         return target;
@@ -1555,11 +1568,18 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                 return ScrData.Default;
             }
 
-            AssignmentResult assignmentResult = symbolTable.AddOrSetVariableSymbol(symbolName, right with { ReadOnly = false });
+            AssignmentResult assignmentResult = symbolTable.AddOrSetVariableSymbol(symbolName, right with { ReadOnly = false }, definitionSource: node);
 
             if (right.Type == ScrDataTypes.Undefined)
             {
                 return right;
+            }
+
+            // Failed, because the symbol is a constant
+            if (assignmentResult == AssignmentResult.FailedConstant)
+            {
+                AddDiagnostic(identifier.Range, GSCErrorCodes.CannotAssignToConstant, symbolName);
+                return ScrData.Default;
             }
 
             // Failed, because the symbol is reserved
@@ -1631,7 +1651,10 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         ScrData result = ExecuteCompoundOp(op, node, left, right);
 
         // Perform the assignment using the shared helper
-        TryAssignToTarget(node.Left!, left, result, symbolTable);
+        if (!TryAssignToTarget(node.Left!, left, result, symbolTable))
+        {
+            return ScrData.Default;
+        }
 
         return result;
     }
@@ -2839,6 +2862,106 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         return visited.Count;
     }
+
+    /// <summary>
+    /// Determines if an expression is a compile-time constant that can be used in a const declaration.
+    /// This includes literal values and expressions that can be evaluated at compile time.
+    /// </summary>
+    /// <param name="expr">The expression to check</param>
+    /// <returns>True if the expression is a compile-time constant, false otherwise</returns>
+    private static bool IsConstantExpression(ExprNode? expr)
+    {
+        if (expr == null)
+            return false;
+
+        return expr.OperatorType switch
+        {
+            // Literal values are always compile-time constants
+            ExprOperatorType.DataOperand => true,
+
+            // Binary expressions can be constants if both operands are constants
+            ExprOperatorType.Binary when expr is BinaryExprNode binaryExpr => 
+                IsCompileTimeConstantBinaryOp(binaryExpr.Operation) &&
+                IsConstantExpression(binaryExpr.Left) && 
+                IsConstantExpression(binaryExpr.Right),
+
+            // Unary expressions can be constants if the operand is constant
+            ExprOperatorType.Prefix when expr is PrefixExprNode prefixExpr =>
+                IsCompileTimeConstantPrefixOp(prefixExpr.Operation) &&
+                IsConstantExpression(prefixExpr.Operand),
+
+            // Ternary expressions can be constants if all parts are constants
+            ExprOperatorType.Ternary when expr is TernaryExprNode ternaryExpr =>
+                IsConstantExpression(ternaryExpr.Condition) &&
+                IsConstantExpression(ternaryExpr.Then) &&
+                IsConstantExpression(ternaryExpr.Else),
+
+            // Vector expressions can be constants if all components are constants
+            ExprOperatorType.Vector when expr is VectorExprNode vectorExpr =>
+                IsConstantExpression(vectorExpr.X) &&
+                IsConstantExpression(vectorExpr.Y) &&
+                IsConstantExpression(vectorExpr.Z),
+
+            // All other expression types involve runtime evaluation
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Determines if a binary operator can be evaluated at compile time.
+    /// </summary>
+    private static bool IsCompileTimeConstantBinaryOp(TokenType operation)
+    {
+        return operation switch
+        {
+            // Arithmetic operators
+            TokenType.Plus => true,
+            TokenType.Minus => true,
+            TokenType.Multiply => true,
+            TokenType.Divide => true,
+            TokenType.Modulo => true,
+            
+            // Bitwise operators
+            TokenType.BitAnd => true,
+            TokenType.BitOr => true,
+            TokenType.BitXor => true,
+            TokenType.BitLeftShift => true,
+            TokenType.BitRightShift => true,
+            
+            // Logical operators
+            TokenType.And => true,
+            TokenType.Or => true,
+            
+            // Comparison operators
+            TokenType.Equals => true,
+            TokenType.NotEquals => true,
+            TokenType.LessThan => true,
+            TokenType.LessThanEquals => true,
+            TokenType.GreaterThan => true,
+            TokenType.GreaterThanEquals => true,
+            
+            // Assignment and other runtime operators are not compile-time constants
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Determines if a prefix operator can be evaluated at compile time.
+    /// </summary>
+    private static bool IsCompileTimeConstantPrefixOp(TokenType operation)
+    {
+        return operation switch
+        {
+            // Unary arithmetic operators
+            TokenType.Plus => true,
+            TokenType.Minus => true,
+            TokenType.BitNot => true,
+            TokenType.Not => true,
+            
+            // Runtime operators like increment/decrement are not compile-time constants
+            _ => false
+        };
+    }
 }
 
 
@@ -2864,13 +2987,18 @@ file static class DataFlowAnalyserExtensions
                     {
                         if (sourceData != targetData)
                         {
-                            target[field] = new(sourceData.Name, ScrData.Merge(targetData.Data, sourceData.Data), sourceData.LexicalScope, sourceData.Global);
+                            target[field] = sourceData with
+                            {
+                                Data = ScrData.Merge(targetData.Data, sourceData.Data),
+                                IsConstant = sourceData.IsConstant && targetData.IsConstant,
+                                SourceLocation = sourceData.SourceLocation ?? targetData.SourceLocation
+                            };
                         }
                         continue;
                     }
 
                     // Otherwise just copy one
-                    target[field] = new(sourceData.Name, sourceData.Data.Copy(), sourceData.LexicalScope, sourceData.Global);
+                    target[field] = sourceData with { Data = sourceData.Data.Copy() };
                 }
             }
         }

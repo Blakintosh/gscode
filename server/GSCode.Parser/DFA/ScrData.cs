@@ -1,4 +1,4 @@
-using GSCode.Parser.AST;
+﻿using GSCode.Parser.AST;
 using GSCode.Parser.Lexical;
 using System;
 using System.Collections.Generic;
@@ -445,5 +445,5 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 }
 
 internal record ScrParameter(string Name, Token Source, Range Range, bool ByRef = false, ExprNode? Default = null);
-internal record ScrVariable(string Name, ScrData Data, int LexicalScope, bool Global = false, bool IsConstant = false);
+internal record ScrVariable(string Name, ScrData Data, int LexicalScope, bool Global = false, bool IsConstant = false, Range? SourceLocation = null, AstNode? DefinitionSource = null);
 // internal record ScrArguments(List<IExpressionNode> Arguments);

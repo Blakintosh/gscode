@@ -271,8 +271,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 CurrentTokenType != TokenType.Function &&
                 CurrentTokenType != TokenType.Class &&
                 CurrentTokenType != TokenType.Namespace &&
-                // Can't open a dev block if we're already in one
-                (CurrentTokenType != TokenType.OpenDevBlock || InDevBlock()) &&
+                // Can't open a dev block - stop recovery when encountered
+                CurrentTokenType != TokenType.OpenDevBlock &&
                 // Can't be closing a dev block if we're not in one
                 (CurrentTokenType != TokenType.CloseDevBlock || !InDevBlock()) &&
                 CurrentTokenType != TokenType.Eof
@@ -282,8 +282,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
                 // We've recovered, so we can try to parse the next script definition.
                 if (CurrentTokenType is TokenType.Precache or TokenType.UsingAnimTree or TokenType.Function or TokenType.Class or TokenType.Namespace ||
-                   // Newly opening a dev block
-                   (CurrentTokenType == TokenType.OpenDevBlock && !InDevBlock()))
+                   // Opening a dev block (including nested)
+                   CurrentTokenType == TokenType.OpenDevBlock)
                 {
                     ExitRecovery();
                     break;
@@ -314,7 +314,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 return FunDefn();
             case TokenType.Class:
                 return ClassDefn();
-            case TokenType.OpenDevBlock when !InDevBlock():
+            case TokenType.OpenDevBlock:
                 return DefnDevBlock();
             case TokenType.Using:
                 // The GSC compiler doesn't allow this, but we'll still attempt to parse it to get dependency info.
@@ -880,7 +880,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             case TokenType.WaitRealTime:
             // Misc
             case TokenType.Const:
-            case TokenType.OpenDevBlock when !InDevBlock():
+            case TokenType.OpenDevBlock:
             case TokenType.OpenBrace:
             case TokenType.Semicolon:
             // Contextual

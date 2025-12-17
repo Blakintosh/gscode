@@ -1,4 +1,4 @@
-﻿using GSCode.Data;
+using GSCode.Data;
 using GSCode.Parser.Lexical;
 using System.Diagnostics.CodeAnalysis;
 using GSCode.Parser.DFA;

@@ -37,6 +37,14 @@ export class FunctionEditor {
 		this.function.name = name;
 	}
 
+	setDescription(description: string) {
+		this.function.description = description || null;
+	}
+
+	setExample(example: string) {
+		this.function.example = example || null;
+	}
+
 	toggleFlag(flag: string) {
 		if (this.function.flags.includes(flag)) {
 			this.function.flags = this.function.flags.filter((f) => f !== flag);

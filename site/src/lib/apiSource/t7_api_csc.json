@@ -1,8 +1,8 @@
 {
 	"languageId": "csc",
 	"gameId": "t7",
-	"revision": 2,
-	"revisedOn": "2023-04-03T16:05:43.617Z",
+	"revision": 3,
+	"revisedOn": "2025-12-21T00:00:00.000Z",
 	"api": [
 	  {
 		"name": "AddAwarenessIndicator",
@@ -8165,6 +8165,27 @@
 		  }
 		]
 	  },
+
+		{
+			"name": "SpawnStruct",
+			"description": "Spawns (creates) an empty struct.",
+			"flags": [
+				"verified"
+			],
+			"overloads": [
+				{
+					"calledOn": null,
+					"parameters": [],
+					"returns": {
+						"name": "struct",
+						"type": {
+							"dataType": "struct"
+						},
+						"description": "The newly created struct."
+					}
+				}
+			]
+		},
 	  {
 		"name": "StopAllLoopSounds",
 		"description": "Stops a loop sound",

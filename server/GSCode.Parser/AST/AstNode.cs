@@ -63,6 +63,7 @@ internal enum ExprOperatorType
     Indexer,
     CallOn,
     Waittill,
+    WaittillMatch,
     Deref,
 }
 
@@ -518,4 +519,12 @@ internal sealed class WaittillNode(ExprNode entity, ExprNode notifyCondition, Wa
 internal sealed class WaittillVariablesNode() : AstNode(AstNodeType.WaittillVariables)
 {
     public LinkedList<IdentifierExprNode> Variables { get; } = new();
+}
+
+internal sealed class WaittillMatchNode(ExprNode entity, ExprNode notifyName, ExprNode? matchValue, Range range)
+    : ExprNode(ExprOperatorType.WaittillMatch, range)
+{
+    public ExprNode Entity { get; } = entity;
+    public ExprNode NotifyName { get; } = notifyName;
+    public ExprNode? MatchValue { get; } = matchValue;
 }

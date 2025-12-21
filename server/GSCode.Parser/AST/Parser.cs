@@ -2598,7 +2598,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Called-on ent call
-        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket || CurrentTokenType == TokenType.Waittill)
+        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket || CurrentTokenType == TokenType.Waittill || CurrentTokenType == TokenType.WaittillMatch)
         {
             return CalledOnRhs(left);
         }
@@ -2612,7 +2612,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Which itself could still be a called-on target
-        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket || CurrentTokenType == TokenType.Waittill)
+        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket || CurrentTokenType == TokenType.Waittill || CurrentTokenType == TokenType.WaittillMatch)
         {
             return CalledOnRhs(newLeft);
         }
@@ -2623,7 +2623,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// Parses the right-hand side of a called-on function call or an array indexer.
     /// </summary>
     /// <remarks>
-    /// CalledOnRhs := WAITTILL WaittillRhs | IDENTIFIER CallOpRhs | OPENBRACKET CalledOnDerefOrIndexerOp
+    /// CalledOnRhs := WAITTILL WaittillRhs | WAITTILLMATCH WaittillMatchRhs | IDENTIFIER CallOpRhs | OPENBRACKET CalledOnDerefOrIndexerOp
     /// </remarks>
     /// <param name="left"></param>
     /// <returns></returns>
@@ -2633,6 +2633,12 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         if (ConsumeIfType(TokenType.Waittill, out Token? waitTillToken))
         {
             return WaittillRhs(left, waitTillToken);
+        }
+
+        // WaittillMatch operation
+        if (ConsumeIfType(TokenType.WaittillMatch, out Token? waitTillMatchToken))
+        {
+            return WaittillMatchRhs(left, waitTillMatchToken);
         }
 
         // Called-on with identifier, so it's self foo::bar() or self foo()
@@ -2727,6 +2733,51 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         others.Variables.AddFirst(new IdentifierExprNode(identifierToken));
 
         return others;
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a waittillmatch operation.
+    /// </summary>
+    /// <param name="left"></param>
+    /// <param name="waitTillMatchToken"></param>
+    /// <remarks>
+    /// WaittillMatchRhs := OPENPAREN Expr (COMMA Expr)? CLOSEPAREN
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? WaittillMatchRhs(ExprNode left, Token waitTillMatchToken)
+    {
+        // Check for OPENPAREN
+        if (!ConsumeIfType(TokenType.OpenParen, out Token? openParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+            return null;
+        }
+
+        // First required argument: notify name (string)
+        ExprNode? notifyName = Expr();
+        if (notifyName is null)
+        {
+            return null;
+        }
+
+        // Optional second argument: match value (string)
+        ExprNode? matchValue = null;
+        if (ConsumeIfType(TokenType.Comma, out _))
+        {
+            matchValue = Expr();
+            if (matchValue is null)
+            {
+                return null;
+            }
+        }
+
+        if (!ConsumeIfType(TokenType.CloseParen, out Token? closeParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+            return new WaittillMatchNode(left, notifyName, matchValue, RangeHelper.From(left.Range.Start, (matchValue ?? notifyName).Range.End));
+        }
+
+        return new WaittillMatchNode(left, notifyName, matchValue, RangeHelper.From(left.Range.Start, closeParen.Range.End));
     }
 
     /// <summary>

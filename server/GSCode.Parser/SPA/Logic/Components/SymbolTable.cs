@@ -57,6 +57,7 @@ internal class SymbolTable
     private static HashSet<string> ReservedSymbols { get; } = new(StringComparer.OrdinalIgnoreCase)
     {
         "waittill",
+        "waittillmatch",
         "notify",
         "isdefined",
         "endon"

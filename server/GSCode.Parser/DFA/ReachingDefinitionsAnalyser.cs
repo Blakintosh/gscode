@@ -1054,6 +1054,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             ExprOperatorType.FunctionCall => AnalyseFunctionCall((FunCallNode)expr, symbolTable, sense),
             ExprOperatorType.Constructor => AnalyseConstructorExpr((ConstructorExprNode)expr, symbolTable),
             ExprOperatorType.Waittill => AnalyseWaittillExpr((WaittillNode)expr, symbolTable, sense),
+            ExprOperatorType.WaittillMatch => AnalyseWaittillMatchExpr((WaittillMatchNode)expr, symbolTable, sense),
             ExprOperatorType.Ternary => AnalyseTernaryExpr((TernaryExprNode)expr, symbolTable, sense),
             ExprOperatorType.MethodCall => AnalyseMethodCall((MethodCallNode)expr, symbolTable, sense),
             ExprOperatorType.Deref => AnalyseDeref((DerefExprNode)expr, symbolTable, sense),
@@ -1088,6 +1089,40 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // Waittill doesn't return.
+        return ScrData.Void;
+    }
+
+    private ScrData AnalyseWaittillMatchExpr(WaittillMatchNode expr, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        ScrData notifyName = AnalyseExpr(expr.NotifyName, symbolTable, sense);
+        ScrData entity = AnalyseExpr(expr.Entity, symbolTable, sense);
+
+        // The called-on must be an entity.
+        if (entity.Type != ScrDataTypes.Entity && !entity.IsAny())
+        {
+            AddDiagnostic(expr.Entity.Range, GSCErrorCodes.NoImplicitConversionExists, entity.TypeToString(), ScrDataTypeNames.Entity);
+            return ScrData.Default;
+        }
+
+        // The notify name must be a string or hash.
+        if (notifyName.Type != ScrDataTypes.String && notifyName.Type != ScrDataTypes.Hash && !notifyName.IsAny())
+        {
+            AddDiagnostic(expr.NotifyName.Range, GSCErrorCodes.NoImplicitConversionExists, notifyName.TypeToString(), ScrDataTypeNames.String, ScrDataTypeNames.Hash);
+            return ScrData.Default;
+        }
+
+        // Analyse optional match value (must be string if provided).
+        if (expr.MatchValue is not null)
+        {
+            ScrData matchValue = AnalyseExpr(expr.MatchValue, symbolTable, sense);
+            if (matchValue.Type != ScrDataTypes.String && matchValue.Type != ScrDataTypes.Hash && !matchValue.IsAny())
+            {
+                AddDiagnostic(expr.MatchValue.Range, GSCErrorCodes.NoImplicitConversionExists, matchValue.TypeToString(), ScrDataTypeNames.String, ScrDataTypeNames.Hash);
+                return ScrData.Default;
+            }
+        }
+
+        // WaittillMatch doesn't return.
         return ScrData.Void;
     }
 

@@ -578,6 +578,10 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
         {
             return DoCharMatchIfWordBoundary(TokenType.WaitRealTime, "waitrealtime");
         }
+        else if (StartsWithKeyword("waittillmatch"))
+        {
+            return DoCharMatchIfWordBoundary(TokenType.WaittillMatch, "waittillmatch");
+        }
         else if (StartsWithKeyword("waittill"))
         {
             return DoCharMatchIfWordBoundary(TokenType.Waittill, "waittill");

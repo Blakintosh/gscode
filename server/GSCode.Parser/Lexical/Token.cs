@@ -402,6 +402,7 @@ internal enum TokenType
 
     // Reserved functions (case-insensitive) TODO
     WaittillFrameEnd, // waittillframeend
+    WaittillMatch, // waittillmatch
     Waittill, // waittill
     WaitRealTime, // waitrealtime
     Wait, // wait

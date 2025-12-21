@@ -5,8 +5,6 @@
 	// @ts-ignore
 	import Link from 'lucide-svelte/icons/link';
 	// @ts-ignore
-	import TriangleAlert from 'lucide-svelte/icons/triangle-alert';
-	// @ts-ignore
 	import Check from 'lucide-svelte/icons/check';
 	import Button from '$components/ui/button/button.svelte';
 	import CopyButton from '$components/ui/copy-button/copy-button.svelte';
@@ -14,6 +12,7 @@
 	import EditName from '$components/app/pages/editor/article/EditName.svelte';
 	import EditDescription from '$components/app/pages/editor/article/EditDescription.svelte';
 	import EditExample from '$components/app/pages/editor/article/EditExample.svelte';
+	import EditReturns from '$components/app/pages/editor/article/EditReturns.svelte';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { page } from '$app/stores';
 	import type { ScrFunction } from '$lib/models/library';
@@ -119,22 +118,7 @@
 
 						<div class="flex flex-col gap-4">
 							<h3 class="font-medium text-base lg:text-lg border-b py-2">Returns</h3>
-							{#if overload.returns}
-								{#if !overload.returns.void}
-									<div class="divide-y">
-										<ParameterEntry {...overload.returns} />
-									</div>
-								{:else}
-									<div class="text-xs lg:text-sm">This function does not return a value.</div>
-								{/if}
-							{:else}
-								<div class="text-sm flex gap-4 items-center">
-									<TriangleAlert class="w-5 h-5 lg:w-6 lg:h-6" />
-									<span class="italic text-xs lg:text-sm">
-										This function's return type is unknown.
-									</span>
-								</div>
-							{/if}
+							<EditReturns {functionEditor} overloadIndex={index} />
 						</div>
 					{/each}
 				</div>

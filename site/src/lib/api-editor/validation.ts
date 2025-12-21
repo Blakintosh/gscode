@@ -11,7 +11,8 @@ export function validateFunction(fn: ScrFunction): string[] {
 
 	errors.push(...validateName(fn));
 	errors.push(...validateFlags(fn));
-	errors.push(...validateDescription(fn));
+	errors.push(...validateDescription(fn, isVerified));
+	errors.push(...validateRemarks(fn, isVerified));
 
 	fn.overloads.forEach((overload, index) => {
 		const prefix = fn.overloads.length > 1 ? `Overload ${index + 1}: ` : '';
@@ -37,12 +38,31 @@ function validateFlags(fn: ScrFunction): string[] {
 	return errors;
 }
 
-function validateDescription(fn: ScrFunction): string[] {
+function validateDescription(fn: ScrFunction, isVerified: boolean): string[] {
 	const errors: string[] = [];
 	if (!fn.description || fn.description === 'No description.') {
 		errors.push('Description: missing or default.');
+	} else if (isVerified && !isSentence(fn.description)) {
+		errors.push('Description: should be a sentence.');
 	}
 	return errors;
+}
+
+function validateRemarks(fn: ScrFunction, isVerified: boolean): string[] {
+	const errors: string[] = [];
+	if (fn.remarks) {
+		fn.remarks.forEach((remark, index) => {
+			if (isVerified && remark && !isSentence(remark)) {
+				errors.push(`Remark ${index + 1}: should be a sentence.`);
+			}
+		});
+	}
+	return errors;
+}
+
+function isSentence(str: string): boolean {
+	if (!str) return false;
+	return str[0] === str[0].toUpperCase() && str.endsWith('.');
 }
 
 function validateOverload(overload: ScrFunctionOverload, isVerified: boolean, prefix: string): string[] {
@@ -58,15 +78,20 @@ function validateOverload(overload: ScrFunctionOverload, isVerified: boolean, pr
 function validateCalledOn(overload: ScrFunctionOverload, isVerified: boolean, prefix: string): string[] {
 	const errors: string[] = [];
 	if (overload.calledOn) {
+		const label = `${prefix}Called on entity`;
 		if (!overload.calledOn.name || overload.calledOn.name === 'unknown') {
-			errors.push(`${prefix}Called on entity: unknown name.`);
+			errors.push(`${label}: unknown name.`);
+		}
+		if (overload.calledOn.description) {
+			if (isVerified && !isSentence(overload.calledOn.description)) {
+				errors.push(`${label}: description should be a sentence.`);
+			}
+		} else if (isVerified) {
+			errors.push(`${label}: description missing.`);
 		}
 		if (isVerified) {
-			if (!overload.calledOn.description) {
-				errors.push(`${prefix}Called on entity: description missing.`);
-			}
 			if (!overload.calledOn.type?.dataType) {
-				errors.push(`${prefix}Called on entity: type missing.`);
+				errors.push(`${label}: type missing.`);
 			}
 		}
 	}
@@ -77,18 +102,23 @@ function validateParameters(overload: ScrFunctionOverload, isVerified: boolean, 
 	const errors: string[] = [];
 	overload.parameters.forEach((param, pIndex) => {
 		const pName = param.name || 'unknown';
-		const pLabel = `Parameter ${pIndex + 1}`;
+		const pLabel = `${prefix}Parameter ${pIndex + 1}`;
 
 		if (pName === 'unknown') {
-			errors.push(`${prefix}${pLabel}: unknown name.`);
+			errors.push(`${pLabel}: unknown name.`);
+		}
+
+		if (param.description) {
+			if (isVerified && !isSentence(param.description)) {
+				errors.push(`${pLabel}: description should be a sentence.`);
+			}
+		} else if (isVerified) {
+			errors.push(`${pLabel}: description missing.`);
 		}
 
 		if (isVerified) {
-			if (!param.description) {
-				errors.push(`${prefix}${pLabel}: description missing.`);
-			}
 			if (!param.type?.dataType) {
-				errors.push(`${prefix}${pLabel}: type missing.`);
+				errors.push(`${pLabel}: type missing.`);
 			}
 		}
 	});
@@ -97,12 +127,20 @@ function validateParameters(overload: ScrFunctionOverload, isVerified: boolean, 
 
 function validateReturns(overload: ScrFunctionOverload, isVerified: boolean, prefix: string): string[] {
 	const errors: string[] = [];
-	if (isVerified) {
-		if (!overload.returns) {
-			errors.push(`${prefix}Return value section: missing.`);
-		} else if (!overload.returns.void && !overload.returns.type?.dataType) {
-			errors.push(`${prefix}Return value: type missing.`);
+	const label = `${prefix}Return value`;
+	if (overload.returns) {
+		if (overload.returns.description) {
+			if (isVerified && !isSentence(overload.returns.description)) {
+				errors.push(`${label}: description should be a sentence.`);
+			}
 		}
+		if (isVerified) {
+			if (!overload.returns.void && !overload.returns.type?.dataType) {
+				errors.push(`${label}: type missing.`);
+			}
+		}
+	} else if (isVerified) {
+		errors.push(`${label} section: missing.`);
 	}
 	return errors;
 }

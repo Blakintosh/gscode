@@ -1,15 +1,25 @@
 import { z } from "zod";
 
 
-export const ScrDataTypeSchema = z.object({
+// Base schema without union (used for lazy reference)
+const ScrDataTypeBaseSchema = z.object({
 	dataType: z.string(),
 	instanceType: z.string().nullish(),
 	isArray: z.boolean().nullish()
 });
-export type ScrDataType = z.infer<typeof ScrDataTypeSchema>;
+
+// Full schema with optional union support
+export const ScrDataTypeSchema: z.ZodType<ScrDataType> = ScrDataTypeBaseSchema.extend({
+	// For union types - if present, this type is a union of these types
+	unionOf: z.lazy(() => z.array(ScrDataTypeSchema)).nullish()
+});
+
+export type ScrDataType = z.infer<typeof ScrDataTypeBaseSchema> & {
+	unionOf?: ScrDataType[] | null;
+};
 
 export const ScrFunctionParameterSchema = z.object({
-	name: z.string().nullish().default("unknown"),
+	name: z.string().nullish(),
 	description: z.string().nullish(),
 	mandatory: z.boolean().nullish(),
 	type: ScrDataTypeSchema.nullish()

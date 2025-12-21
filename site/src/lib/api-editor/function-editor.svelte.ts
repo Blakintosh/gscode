@@ -1,4 +1,4 @@
-import type { ScrFunction } from '$lib/models/library';
+import type { ScrDataType, ScrFunction, ScrReturnValue } from '$lib/models/library';
 import { validateFunction } from './validation';
 
 /**
@@ -58,5 +58,47 @@ export class FunctionEditor {
 			}
 			this.function.flags = newFlags;
 		}
+	}
+
+	// --- Returns editing methods ---
+
+	private ensureReturns(overloadIndex: number): ScrReturnValue {
+		const overload = this.function.overloads[overloadIndex];
+		overload.returns ??= { void: true };
+		return overload.returns;
+	}
+
+	setReturnsVoid(overloadIndex: number, isVoid: boolean) {
+		const returns = this.ensureReturns(overloadIndex);
+		if (isVoid) {
+			// Clear type info when setting to void
+			returns.void = true;
+			returns.type = null;
+			returns.name = null;
+			returns.description = null;
+		} else {
+			returns.void = false;
+		}
+		// Trigger reactivity by reassigning the overloads array
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setReturnsType(overloadIndex: number, type: ScrDataType | null) {
+		const returns = this.ensureReturns(overloadIndex);
+		returns.type = type;
+		returns.void = false;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setReturnsName(overloadIndex: number, name: string) {
+		const returns = this.ensureReturns(overloadIndex);
+		returns.name = name || null;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setReturnsDescription(overloadIndex: number, description: string) {
+		const returns = this.ensureReturns(overloadIndex);
+		returns.description = description || null;
+		this.function.overloads = [...this.function.overloads];
 	}
 }

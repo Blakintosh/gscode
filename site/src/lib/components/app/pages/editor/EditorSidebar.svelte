@@ -150,6 +150,10 @@
 					<span>Problems Detected</span>
 					<span class="text-foreground font-medium">{stats.invalidCount}</span>
 				</div>
+				<div class="flex justify-between">
+					<span>Bad Verifications</span>
+					<span class="text-foreground font-medium">{stats.badVerificationCount}</span>
+				</div>
 			</div>
 		</div>
 		<Separator />

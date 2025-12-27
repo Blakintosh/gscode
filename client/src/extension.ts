@@ -40,7 +40,7 @@ export function activate(context: ExtensionContext) {
     : "service";
   if (!serverLocation) {
     throw new Error(
-      "SERVER_LOCATION environment variable is not set. Please set it to the location of the GSCode.NET Language Server in .env"
+      "DEBUG_SERVER_LOCATION environment variable is not set. Please set it to the location of the GSCode.NET Language Server in .env"
     );
   }
 

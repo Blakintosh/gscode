@@ -1,6 +1,6 @@
-import { redirect } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
 
+// No load function needed - the editor is created empty in +layout.ts
 export const load: PageLoad = async () => {
-    redirect(302, "/editor/gsc");
+    return {};
 };

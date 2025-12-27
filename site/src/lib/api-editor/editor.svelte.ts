@@ -6,8 +6,14 @@ import { FunctionEditor } from './function-editor.svelte';
  * Main editor class that manages the entire API library editing session.
  */
 export class Editor {
-	library = $state<ScrLibrary>() as ScrLibrary;
+	library = $state<ScrLibrary | null>(null);
 	functions = $state<Map<string, FunctionEditor>>(new Map());
+
+	/** The currently selected function for editing */
+	selectedFunction = $state<string | null>(null);
+
+	/** Whether a library is currently loaded */
+	readonly hasLibrary = $derived(this.library !== null);
 
 	/** Reactive statistics about function verification and validation status */
 	readonly stats = $derived.by(() => {
@@ -44,8 +50,10 @@ export class Editor {
 		};
 	});
 
-	private constructor(library: ScrLibrary) {
-		this.updateLibrary(library);
+	private constructor(library?: ScrLibrary) {
+		if (library) {
+			this.updateLibrary(library);
+		}
 	}
 
 	/**
@@ -58,13 +66,21 @@ export class Editor {
 		for (const fn of library.api) {
 			this.functions.set(fn.name.toLowerCase(), new FunctionEditor(fn));
 		}
+
+		// Select the first function by default
+		const firstFn = library.api[0];
+		this.selectedFunction = firstFn?.name.toLowerCase() ?? null;
 	}
 
 	/**
 	 * Exports the current state of the library.
 	 * If any functions have been edited, increments the revision and updates the revisedOn date.
 	 */
-	exportLibrary(): ScrLibrary {
+	exportLibrary(): ScrLibrary | null {
+		if (!this.library) {
+			return null;
+		}
+
 		const edited = Array.from(this.functions.values()).some((fn) => fn.edited);
 		const newApi = Array.from(this.functions.values()).map((fn) => fn.function);
 
@@ -89,6 +105,30 @@ export class Editor {
 	 */
 	static fromLibrary(library: ScrLibrary): Editor {
 		return new Editor(library);
+	}
+
+	/**
+	 * Creates an empty Editor instance with no library loaded.
+	 */
+	static empty(): Editor {
+		return new Editor();
+	}
+
+	/**
+	 * Selects a function by name for editing.
+	 */
+	selectFunction(name: string | null) {
+		this.selectedFunction = name?.toLowerCase() ?? null;
+	}
+
+	/**
+	 * Gets the currently selected FunctionEditor.
+	 */
+	getSelectedFunction(): FunctionEditor | undefined {
+		if (!this.selectedFunction) {
+			return undefined;
+		}
+		return this.functions.get(this.selectedFunction);
 	}
 
 	/**

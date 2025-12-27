@@ -28,11 +28,6 @@
 			tooltip: 'This function is known to be broken or non-functional.'
 		},
 		{
-			id: 'malicious',
-			label: 'Malicious',
-			tooltip: 'This function is potentially malicious or dangerous to use.'
-		},
-		{
 			id: 'unlisted',
 			label: 'Unlisted',
 			tooltip: 'This function has been unlisted. It is unlikely to be functional and/or useful.'

@@ -32244,7 +32244,7 @@
 			"description": "Gets the IP address of the player.",
 			"example": "ipAddress = self GetIpAddress()",
 			"flags": [
-				"malicious"
+				"verified"
 			],
 			"overloads": [
 				{

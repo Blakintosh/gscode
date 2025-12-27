@@ -77,16 +77,11 @@
 			<h1 class="text-2xl font-semibold">No Library Loaded</h1>
 			<p class="text-muted-foreground max-w-md">
 				Load a library JSON file to start editing function definitions. You can load from a file or
-				use one of the built-in API sources.
+				pull from the latest API version.
 			</p>
 		</div>
 		<div class="flex flex-col gap-2 text-sm text-muted-foreground">
-			<p>Use the sidebar to load a library:</p>
-			<ul class="list-disc list-inside text-left">
-				<li>Load from a JSON file</li>
-				<li>Load latest GSC API</li>
-				<li>Load latest CSC API</li>
-			</ul>
+			<p>Use the sidebar to load a library.</p>
 		</div>
 	</div>
 {:else if !functionEditor}

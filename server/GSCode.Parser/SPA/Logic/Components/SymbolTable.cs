@@ -1,4 +1,4 @@
-﻿using GSCode.Parser.AST;
+using GSCode.Parser.AST;
 using GSCode.Parser.DFA;
 using GSCode.Parser.DSA.Types;
 using Newtonsoft.Json.Linq;

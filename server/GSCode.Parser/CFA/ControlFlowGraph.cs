@@ -1,4 +1,4 @@
-﻿using GSCode.Data;
+using GSCode.Data;
 using GSCode.Parser.AST;
 using GSCode.Parser.Data;
 using System;

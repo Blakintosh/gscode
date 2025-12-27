@@ -18,7 +18,6 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     public readonly TokenType CurrentTokenType => CurrentToken.Type;
     public readonly Range CurrentTokenRange => CurrentToken.Range;
 
-
     [Flags]
     private enum ParserContextFlags
     {
@@ -28,7 +27,6 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         InLoopBody = 4,
         InDevBlock = 8,
     }
-
 
     private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
 

@@ -1,5 +1,4 @@
-import { z } from "zod";
-
+import { z } from 'zod';
 
 // Base schema without union (used for lazy reference)
 const ScrDataTypeBaseSchema = z.object({
@@ -27,7 +26,7 @@ export const ScrFunctionParameterSchema = z.object({
 export type ScrFunctionParameter = z.infer<typeof ScrFunctionParameterSchema>;
 
 export const ScrReturnValueSchema = ScrFunctionParameterSchema.omit({
-	mandatory: true 
+	mandatory: true
 }).extend({
 	void: z.boolean().nullish()
 });
@@ -36,13 +35,13 @@ export type ScrReturnValue = z.infer<typeof ScrReturnValueSchema>;
 export const ScrFunctionOverloadSchema = z.object({
 	calledOn: ScrFunctionParameterSchema.nullish(),
 	parameters: z.array(ScrFunctionParameterSchema),
-	returns: ScrReturnValueSchema.nullish(),
+	returns: ScrReturnValueSchema.nullish()
 });
 export type ScrFunctionOverload = z.infer<typeof ScrFunctionOverloadSchema>;
 
 export const ScrFunctionSchema = z.object({
 	name: z.string(),
-	description: z.string().nullish().default("No description."),
+	description: z.string().nullish().default('No description.'),
 	overloads: z.array(ScrFunctionOverloadSchema),
 	flags: z.array(z.string()),
 	example: z.string().nullish(),
@@ -55,7 +54,7 @@ export const ScrLibrarySchema = z.object({
 	api: z.array(ScrFunctionSchema),
 	gameId: z.string(),
 	languageId: z.string(),
-	revisedOn: z.string().transform( arg => new Date( arg ) ),
+	revisedOn: z.string().transform((arg) => new Date(arg)),
 	revision: z.number()
-})
+});
 export type ScrLibrary = z.infer<typeof ScrLibrarySchema>;

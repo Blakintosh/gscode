@@ -27,14 +27,14 @@ public sealed class Trie<T>
 
     private void AddAt(TrieNode<T> node, ReadOnlySpan<char> keySpan, T value)
     {
-        if(keySpan.Length == 1)
+        if (keySpan.Length == 1)
         {
             node.Children.Add(keySpan[0], new(value));
             return;
         }
 
         char currentChar = keySpan[0];
-        if(!node.Children.TryGetValue(currentChar, out TrieNode<T> child))
+        if (!node.Children.TryGetValue(currentChar, out TrieNode<T> child))
         {
             child = new(default!);
             node.Children.Add(currentChar, child);

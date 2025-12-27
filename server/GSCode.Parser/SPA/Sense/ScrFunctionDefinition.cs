@@ -1,14 +1,18 @@
-﻿using GSCode.Data.Models.Interfaces;
+﻿using GSCode.Parser.Data;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GSCode.Data.Models;
+namespace GSCode.Parser.SPA.Sense;
 
-public record class ScrFunction : IExportedSymbol
+/// <summary>
+/// SPA IntelliSense component for defined functions
+/// </summary>
+public sealed class ScrFunctionDefinition
 {
     /// <summary>
     /// The name of the function
@@ -25,11 +29,6 @@ public record class ScrFunction : IExportedSymbol
     /// An example of this function's usage
     /// </summary>
     public string? Example { get; set; }
-
-    /// <summary>
-    /// The documentation comment for this function.
-    /// </summary>
-    public string? DocComment { get; set; }
 
     /// <summary>
     /// The overloads (variants) of this function
@@ -57,7 +56,7 @@ public record class ScrFunction : IExportedSymbol
                 return documentation;
             }
 
-            string calledOnString = Overloads.First().CalledOn is ScrFunctionArg calledOn ? $"{calledOn.Name} " : string.Empty;
+            string calledOnString = Overloads.First().CalledOn is ScrFunctionParameter calledOn ? $"{calledOn.Name} " : string.Empty;
 
             _cachedDocumentation =
                 $"""
@@ -95,7 +94,7 @@ public record class ScrFunction : IExportedSymbol
         }
 
         List<string> parameters = new();
-        foreach (ScrFunctionArg parameter in Overloads.First().Parameters)
+        foreach (ScrFunctionParameter parameter in Overloads.First().Parameters)
         {
             if (parameter.Mandatory.HasValue && parameter.Mandatory.Value)
             {
@@ -110,13 +109,13 @@ public record class ScrFunction : IExportedSymbol
 
     private string GetParametersString()
     {
-        string calledOnString = Overloads.First().CalledOn is ScrFunctionArg calledOn ? $"Called on: `<{calledOn.Name}>`\n" : string.Empty;
+        string calledOnString = Overloads.First().CalledOn is ScrFunctionParameter calledOn ? $"Called on: `<{calledOn.Name}>`\n" : string.Empty;
 
         string parametersString = string.Empty;
         if (Overloads.First().Parameters.Count > 0)
         {
             parametersString = "Parameters:\n";
-            foreach (ScrFunctionArg parameter in Overloads.First().Parameters)
+            foreach (ScrFunctionParameter parameter in Overloads.First().Parameters)
             {
                 string parameterNameString = (parameter.Mandatory.HasValue && parameter.Mandatory.Value) ? $"<{parameter.Name}>" : $"[{parameter.Name}]";
 
@@ -157,90 +156,41 @@ public record class ScrFunction : IExportedSymbol
 
         return string.Join('\n', flags);
     }
-
-    /// <summary>
-    /// The namespace of this function.
-    /// </summary>
-    public string Namespace { get; set; } = "sys";
-
-    public ExportedSymbolType Type { get; set; } = ExportedSymbolType.Function;
-
-    /// <summary>
-    /// Whether this function's namespace can be skipped, e.g. because it's a built-in
-    /// function or it belongs to this script.
-    /// </summary>
-    public bool Implicit { get; set; } = false;
-
-    /// <summary>
-    /// Whether this function is private and cannot be accessed from other scripts.
-    /// </summary>
-    public bool Private { get; set; } = false;
 }
-
 
 public sealed class ScrFunctionOverload
 {
     /// <summary>
     /// The entity that this function is called on
     /// </summary>
-    public ScrFunctionArg? CalledOn { get; set; }
+    public ScrFunctionParameter? CalledOn { get; set; }
 
     /// <summary>
     /// The parameter list of this function, which may be empty
     /// </summary>
-    public List<ScrFunctionArg> Parameters { get; set; } = [];
-
-    /// <summary>
-    /// The return value of this function, if any
-    /// </summary>
-    public ScrFunctionReturn? Returns { get; set; }
-
-    /// <summary>
-    /// Whether this function accepts variable arguments (...)
-    /// </summary>
-    public bool Vararg { get; set; } = false;
+    public List<ScrFunctionParameter> Parameters { get; set; } = [];
 }
 
-public record class ScrFunctionReturn
-{
-    public string Name { get; set; } = default!;
-    public string? Description { get; set; } = default!;
-    public ScrFunctionDataType? Type { get; set; } = default!;
-    public bool? Void { get; set; }
-}
-
-public record class ScrFunctionArg
+/// <summary>
+/// SPA IntelliSense component for defined functions' parameters
+/// </summary>
+public sealed class ScrFunctionParameter
 {
     // TODO: this currently is nullable due to issues within the API, it'd be better to enforce not null though asap
     /// <summary>
     /// The name of the parameter
     /// </summary>
-    public string Name { get; set; } = default!;
+    public string? Name { get; set; }
 
     /// <summary>
     /// The description for this parameter
     /// </summary>
-    public string? Description { get; set; } = default!;
-
-    /// <summary>
-    /// The type of the parameter
-    /// </summary>
-    public ScrFunctionDataType? Type { get; set; } = default!;
+    public string? Description { get; set; }
 
     /// <summary>
     /// Whether the parameter is mandatory or optional
     /// </summary>
-    public bool? Mandatory { get; set; }
+    public required bool? Mandatory { get; set; }
 
-    /// <summary>
-    /// The default value for this parameter
-    /// </summary>
-    public ScriptValue? Default { get; set; }
-}
-
-public record class ScrFunctionDataType
-{
-    public string DataType { get; set; } = default!;
-    public string? InstanceType { get; set; }
-    public bool IsArray { get; set; } = false;
+    // Type: May be implemented in future
 }

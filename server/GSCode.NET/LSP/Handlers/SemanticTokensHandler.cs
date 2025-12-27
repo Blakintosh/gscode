@@ -80,7 +80,7 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
                 TokenTypes = tokenTypes
             },
             Full = new SemanticTokensCapabilityRequestFull { Delta = false },
-            Range = false∂
+            Range = false
         };
     }
 

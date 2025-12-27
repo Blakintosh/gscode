@@ -488,8 +488,8 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         ControlFlowHelper newLocalHelper = new(localHelper)
         {
             LoopContinueContext = enumeration,
+            ContinuationContext = enumeration,
             BreakContext = continuation,
-            ContinuationContext = continuation,
         };
 
         // Now generate the body of the foreach loop.
@@ -523,8 +523,8 @@ internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
         ControlFlowHelper newLocalHelper = new(localHelper)
         {
             LoopContinueContext = iteration,
+            ContinuationContext = iteration,
             BreakContext = continuation,
-            ContinuationContext = continuation,
         };
 
         // Now generate the body of the foreach loop.

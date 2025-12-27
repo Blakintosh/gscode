@@ -6,8 +6,8 @@ import { FunctionEditor } from './function-editor.svelte';
  * Main editor class that manages the entire API library editing session.
  */
 export class Editor {
-	readonly library: ScrLibrary;
-	readonly functions: Map<string, FunctionEditor>;
+	library = $state<ScrLibrary>() as ScrLibrary;
+	functions = $state<Map<string, FunctionEditor>>(new Map());
 
 	/** Reactive statistics about function verification and validation status */
 	readonly stats = $derived.by(() => {
@@ -45,12 +45,43 @@ export class Editor {
 	});
 
 	private constructor(library: ScrLibrary) {
+		this.updateLibrary(library);
+	}
+
+	/**
+	 * Updates the editor with a new library definition.
+	 */
+	updateLibrary(library: ScrLibrary) {
 		this.library = library;
 		this.functions = new Map();
 
 		for (const fn of library.api) {
 			this.functions.set(fn.name.toLowerCase(), new FunctionEditor(fn));
 		}
+	}
+
+	/**
+	 * Exports the current state of the library.
+	 * If any functions have been edited, increments the revision and updates the revisedOn date.
+	 */
+	exportLibrary(): ScrLibrary {
+		const edited = Array.from(this.functions.values()).some((fn) => fn.edited);
+		const newApi = Array.from(this.functions.values()).map((fn) => fn.function);
+
+		let newRevision = this.library.revision;
+		let newRevisedOn = this.library.revisedOn;
+
+		if (edited) {
+			newRevision++;
+			newRevisedOn = new Date();
+		}
+
+		return {
+			...this.library,
+			api: newApi,
+			revision: newRevision,
+			revisedOn: newRevisedOn
+		};
 	}
 
 	/**
@@ -63,7 +94,10 @@ export class Editor {
 	/**
 	 * Gets the FunctionEditor for a given function name.
 	 */
-	getFunction(name: string): FunctionEditor | undefined {
+	getFunction(name: string | undefined): FunctionEditor | undefined {
+		if (!name) {
+			return undefined;
+		}
 		return this.functions.get(name.toLowerCase());
 	}
 }

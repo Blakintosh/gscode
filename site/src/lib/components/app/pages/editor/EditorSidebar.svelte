@@ -8,27 +8,24 @@
 	// @ts-ignore
 	import Command from 'lucide-svelte/icons/command';
 	// @ts-ignore
-	import LoaderCircle from 'lucide-svelte/icons/loader-circle';
-	// @ts-ignore
 	import Search from 'lucide-svelte/icons/search';
 
 	import LanguageRadio from './drawer/LanguageRadio.svelte';
 	import EditorFilters from './EditorFilters.svelte';
 	import type { ScrFunction, ScrLibrary } from '$lib/models/library';
 	import { page } from '$app/stores';
-	import { getLibrary } from '../../../../../routes/(gscode)/editor/library';
 	import { ApiLibrarian } from '$lib/app/library/api.svelte';
 	import { goto } from '$app/navigation';
 	import { getEditorContext } from '$lib/api-editor/editor.svelte';
+	import { ScrLibrarySchema } from '$lib/models/library';
 
 	const truncateString = (string = '', maxLength = 20) =>
 		string.length > maxLength ? `${string.substring(0, maxLength)}…` : string;
 
 	let librarian: ApiLibrarian = $state($page.data.librarian);
 
-	let library: Promise<ScrLibrary> = $derived(librarian.library);
-
 	let editor = getEditorContext();
+	let library = $derived(editor.library);
 	let stats = $derived(editor.stats);
 
 	async function onLanguageChange(value: string | undefined) {
@@ -48,7 +45,7 @@
 	let showProblems = $state(true);
 	let showBadVerifications = $state(true);
 
-	let filteredData = $derived.by(async () => {
+	let filteredData = $derived.by(() => {
 		// Capture dependencies synchronously at the top
 		const search = searchTerm;
 		const filterVerified = showVerified;
@@ -58,7 +55,7 @@
 
 		let w = search.replace(/[.+^${}()|[\]\\]/g, '\\$&'); // regexp escape
 		const re = new RegExp(`^${w.replace(/\*/g, '.*').replace(/\?/g, '.')}$`, 'i');
-		const resolvedLibrary = await library;
+		const resolvedLibrary = library;
 
 		return {
 			entries: resolvedLibrary.api.filter((apiFunction: ScrFunction) => {
@@ -97,41 +94,104 @@
 		}
 	}
 
+	let fileInputElement: HTMLInputElement | null = $state(null);
+
 	function handleLoadFromJSON() {
-		// TODO: Implement load from JSON logic
-		console.log('Load from JSON clicked');
+		if (stats.editedCount > 0) {
+			const confirmLoad = confirm(
+				'You have unsaved changes. Loading a new JSON will overwrite your current progress. Are you sure?'
+			);
+			if (!confirmLoad) return;
+		}
+		fileInputElement?.click();
+	}
+
+	async function onFileSelected(event: Event) {
+		const target = event.target as HTMLInputElement;
+		const file = target.files?.[0];
+		if (!file) {
+			return;
+		}
+
+		try {
+			const text = await file.text();
+			const json = JSON.parse(text);
+			const validatedLibrary = await ScrLibrarySchema.parseAsync(json);
+			editor.updateLibrary(validatedLibrary);
+			// Reset the input so the same file can be selected again
+			target.value = '';
+		} catch (err) {
+			console.error('Failed to load JSON:', err);
+			alert('Failed to load JSON. Please ensure it follows the correct schema.');
+		}
 	}
 
 	function handleSaveToJSON() {
-		// TODO: Implement save to JSON logic
-		console.log('Save to JSON clicked');
+		const exportedLibrary = editor.exportLibrary();
+		// Convert dates back to strings for JSON
+		const json = JSON.stringify(
+			{
+				...exportedLibrary,
+				revisedOn: exportedLibrary.revisedOn.toISOString()
+			},
+			null,
+			4
+		);
+
+		const blob = new Blob([json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${exportedLibrary.gameId}_api_${exportedLibrary.languageId}.json`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+
+		// Reset original state of all function editors to the newly saved state
+		// This clears the "edited" flag for all functions
+		editor.updateLibrary(exportedLibrary);
+	}
+
+	function handleBeforeUnload(event: BeforeUnloadEvent) {
+		if (stats.editedCount > 0) {
+			event.preventDefault();
+			event.returnValue = ''; // Required for some browsers
+			return '';
+		}
 	}
 </script>
+
+<input
+	type="file"
+	accept="application/json"
+	bind:this={fileInputElement}
+	onchange={onFileSelected}
+	class="hidden"
+/>
 
 <Sidebar.Root side="left" collapsible="offcanvas" variant="sidebar" class="absolute h-full">
 	<Sidebar.Header class="px-4 py-4">
 		<div class="flex flex-col gap-2 shrink-0">
 			<div class="font-medium text-sm">Editor</div>
-			{#await library then lib}
-				<div class="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-					<div class="flex justify-between">
-						<span>Language ID</span>
-						<span class="text-foreground font-medium">{lib.languageId}</span>
-					</div>
-					<div class="flex justify-between">
-						<span>Game Identifier</span>
-						<span class="text-foreground font-medium">{lib.gameId}</span>
-					</div>
-					<div class="flex justify-between">
-						<span>Revision</span>
-						<span class="text-foreground font-medium">{lib.revision}</span>
-					</div>
-					<div class="flex justify-between">
-						<span>Last Revised</span>
-						<span class="text-foreground font-medium">{lib.revisedOn.toLocaleDateString()}</span>
-					</div>
+			<div class="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+				<div class="flex justify-between">
+					<span>Language ID</span>
+					<span class="text-foreground font-medium">{library.languageId}</span>
 				</div>
-			{/await}
+				<div class="flex justify-between">
+					<span>Game Identifier</span>
+					<span class="text-foreground font-medium">{library.gameId}</span>
+				</div>
+				<div class="flex justify-between">
+					<span>Revision</span>
+					<span class="text-foreground font-medium">{library.revision}</span>
+				</div>
+				<div class="flex justify-between">
+					<span>Last Revised</span>
+					<span class="text-foreground font-medium">{library.revisedOn.toLocaleDateString()}</span>
+				</div>
+			</div>
 		</div>
 	</Sidebar.Header>
 	<Sidebar.Content class="flex flex-col gap-3 min-h-0 items-stretch grow px-4 py-4">
@@ -159,51 +219,36 @@
 		<Separator />
 		<div class="flex flex-col min-h-0 grow">
 			<div class="font-medium text-sm mb-2">Functions</div>
-			{#await filteredData}
-				<div
-					class="flex items-center justify-center w-full h-full grow text-sm text-muted-foreground gap-2"
-				>
-					<LoaderCircle class="animate-spin w-4 h-4" />
-					Loading...
+			<ScrollArea class="w-full max-w-full min-h-0 grow">
+				<div class="grid grid-flow-row auto-rows-max w-full">
+					{#each filteredData.entries as apiFunction}
+						{@const functionEditor = editor.getFunction(apiFunction.name)}
+						<Button
+							variant="link"
+							size={'sm'}
+							class="justify-start font-normal text-muted-foreground"
+							href={`/editor/${filteredData.languageId}/${apiFunction.name.toLowerCase()}`}
+						>
+							{#if functionEditor?.isInvalid}
+								<div
+									class="mr-2 h-2 w-2 shrink-0 rounded-full {functionEditor.isVerified
+										? 'bg-red-600'
+										: 'bg-amber-700'}"
+									title={functionEditor.isVerified
+										? 'This verified function has problems'
+										: 'This function has problems'}
+								></div>
+							{:else if functionEditor?.isUnverified}
+								<div
+									class="mr-2 h-2 w-2 shrink-0 rounded-full bg-yellow-400"
+									title="This function is unverified"
+								></div>
+							{/if}
+							{truncateString(apiFunction.name, 25)}
+						</Button>
+					{/each}
 				</div>
-			{:then data}
-				<ScrollArea class="w-full max-w-full min-h-0 grow">
-					<div class="grid grid-flow-row auto-rows-max w-full">
-						{#each data.entries as apiFunction}
-							{@const functionEditor = editor.getFunction(apiFunction.name)}
-							<Button
-								variant="link"
-								size={'sm'}
-								class="justify-start font-normal text-muted-foreground"
-								href={`/editor/${data.languageId}/${apiFunction.name.toLowerCase()}`}
-							>
-								{#if functionEditor?.isInvalid}
-									<div
-										class="mr-2 h-2 w-2 shrink-0 rounded-full {functionEditor.isVerified
-											? 'bg-red-600'
-											: 'bg-amber-700'}"
-										title={functionEditor.isVerified
-											? 'This verified function has problems'
-											: 'This function has problems'}
-									></div>
-								{:else if functionEditor?.isUnverified}
-									<div
-										class="mr-2 h-2 w-2 shrink-0 rounded-full bg-yellow-400"
-										title="This function is unverified"
-									></div>
-								{/if}
-								{truncateString(apiFunction.name, 25)}
-							</Button>
-						{/each}
-					</div>
-				</ScrollArea>
-			{:catch}
-				<div
-					class="flex items-center justify-center w-full h-full grow text-center text-sm text-muted-foreground"
-				>
-					Something went wrong. Try reloading the page.
-				</div>
-			{/await}
+			</ScrollArea>
 		</div>
 
 		<div class="flex gap-2 shrink-0">
@@ -246,7 +291,13 @@
 				<Button variant="outline" size="sm" onclick={handleLoadFromJSON} class="flex-1 text-xs">
 					Load JSON
 				</Button>
-				<Button variant="outline" size="sm" onclick={handleSaveToJSON} class="flex-1 text-xs">
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={handleSaveToJSON}
+					class="flex-1 text-xs"
+					disabled={stats.editedCount === 0}
+				>
 					Save JSON
 				</Button>
 			</div>
@@ -270,4 +321,4 @@
 	<Sidebar.Rail />
 </Sidebar.Root>
 
-<svelte:window onkeydown={handleKeyDown} />
+<svelte:window onkeydown={handleKeyDown} onbeforeunload={handleBeforeUnload} />

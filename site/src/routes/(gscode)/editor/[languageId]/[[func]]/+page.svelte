@@ -13,15 +13,20 @@
 	import EditDescription from '$components/app/pages/editor/article/EditDescription.svelte';
 	import EditExample from '$components/app/pages/editor/article/EditExample.svelte';
 	import EditReturns from '$components/app/pages/editor/article/EditReturns.svelte';
+	import EditCalledOn from '$components/app/pages/editor/article/EditCalledOn.svelte';
+	import EditParameters from '$components/app/pages/editor/article/EditParameters.svelte';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { page } from '$app/stores';
 	import type { ScrFunction } from '$lib/models/library';
 	import type { FunctionEditor } from '$lib/api-editor/function-editor.svelte';
-	import ParameterEntry from '$components/app/pages/editor/article/ParameterEntry.svelte';
 	import { onMount } from 'svelte';
 	import { overloadToSyntacticString } from '$lib/util/scriptApi';
+	import { getEditorContext } from '$lib/api-editor/editor.svelte';
 
-	let functionEditor: FunctionEditor = $derived($page.data.functionEditor);
+	const editor = getEditorContext();
+	let functionEditor: FunctionEditor = $derived(
+		editor.getFunction($page.params.func) ?? [...editor.functions.values()][0]
+	);
 
 	let { name, remarks, overloads }: ScrFunction = $derived(functionEditor.function);
 	let languageName = $derived.by(() => {
@@ -94,26 +99,14 @@
 							</code>
 						</div>
 
-						{#if overload.calledOn}
-							<div class="flex flex-col gap-4">
-								<h3 class="font-medium text-base lg:text-lg border-b py-2">Called on Entity</h3>
-								<div class="divide-y">
-									<ParameterEntry {...overload.calledOn} />
-								</div>
-							</div>
-						{/if}
+						<div class="flex flex-col gap-4">
+							<h3 class="font-medium text-base lg:text-lg border-b py-2">Called on Entity</h3>
+							<EditCalledOn {functionEditor} overloadIndex={index} />
+						</div>
 
 						<div class="flex flex-col gap-4">
 							<h3 class="font-medium text-base lg:text-lg border-b py-2">Parameters</h3>
-							{#if overload.parameters && overload.parameters.length}
-								<div class="divide-y">
-									{#each overload.parameters as parameter}
-										<ParameterEntry {...parameter} />
-									{/each}
-								</div>
-							{:else}
-								<div class="text-sm">No parameters.</div>
-							{/if}
+							<EditParameters {functionEditor} overloadIndex={index} />
 						</div>
 
 						<div class="flex flex-col gap-4">

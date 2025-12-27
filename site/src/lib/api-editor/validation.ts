@@ -100,12 +100,22 @@ function validateCalledOn(overload: ScrFunctionOverload, isVerified: boolean, pr
 
 function validateParameters(overload: ScrFunctionOverload, isVerified: boolean, prefix: string): string[] {
 	const errors: string[] = [];
+	let foundOptional = false;
+	let alreadyErrored = false;
+
 	overload.parameters.forEach((param, pIndex) => {
 		const pName = param.name || 'unknown';
 		const pLabel = `${prefix}Parameter ${pIndex + 1}`;
 
 		if (pName === 'unknown') {
 			errors.push(`${pLabel}: unknown name.`);
+		}
+
+		if (param.mandatory === false) {
+			foundOptional = true;
+		} else if (param.mandatory === true && foundOptional && !alreadyErrored) {
+			errors.push(`${prefix}Parameters: mandatory parameters cannot follow optional ones.`);
+			alreadyErrored = true;
 		}
 
 		if (param.description) {

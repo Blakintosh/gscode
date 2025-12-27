@@ -1,4 +1,9 @@
-import type { ScrDataType, ScrFunction, ScrReturnValue } from '$lib/models/library';
+import type {
+	ScrDataType,
+	ScrFunction,
+	ScrFunctionParameter,
+	ScrReturnValue
+} from '$lib/models/library';
 import { validateFunction } from './validation';
 
 /**
@@ -99,6 +104,95 @@ export class FunctionEditor {
 	setReturnsDescription(overloadIndex: number, description: string) {
 		const returns = this.ensureReturns(overloadIndex);
 		returns.description = description || null;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	// --- CalledOn editing methods ---
+
+	private ensureCalledOn(overloadIndex: number): ScrFunctionParameter {
+		const overload = this.function.overloads[overloadIndex];
+		overload.calledOn ??= { type: null };
+		return overload.calledOn;
+	}
+
+	setCalledOnEnabled(overloadIndex: number, enabled: boolean) {
+		const overload = this.function.overloads[overloadIndex];
+		if (enabled) {
+			overload.calledOn ??= { type: null };
+		} else {
+			overload.calledOn = null;
+		}
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setCalledOnType(overloadIndex: number, type: ScrDataType | null) {
+		const calledOn = this.ensureCalledOn(overloadIndex);
+		calledOn.type = type;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setCalledOnName(overloadIndex: number, name: string) {
+		const calledOn = this.ensureCalledOn(overloadIndex);
+		calledOn.name = name || null;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setCalledOnDescription(overloadIndex: number, description: string) {
+		const calledOn = this.ensureCalledOn(overloadIndex);
+		calledOn.description = description || null;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	// --- Parameters editing methods ---
+
+	addParameter(overloadIndex: number) {
+		const overload = this.function.overloads[overloadIndex];
+		overload.parameters = [
+			...overload.parameters,
+			{ name: 'new_param', description: null, mandatory: true, type: null }
+		];
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	removeParameter(overloadIndex: number, paramIndex: number) {
+		const overload = this.function.overloads[overloadIndex];
+		overload.parameters = overload.parameters.filter((_, i) => i !== paramIndex);
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setParameterName(overloadIndex: number, paramIndex: number, name: string) {
+		const overload = this.function.overloads[overloadIndex];
+		overload.parameters[paramIndex].name = name || null;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setParameterDescription(overloadIndex: number, paramIndex: number, description: string) {
+		const overload = this.function.overloads[overloadIndex];
+		overload.parameters[paramIndex].description = description || null;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setParameterType(overloadIndex: number, paramIndex: number, type: ScrDataType | null) {
+		const overload = this.function.overloads[overloadIndex];
+		overload.parameters[paramIndex].type = type;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	setParameterMandatory(overloadIndex: number, paramIndex: number, mandatory: boolean) {
+		const overload = this.function.overloads[overloadIndex];
+		overload.parameters[paramIndex].mandatory = mandatory;
+		this.function.overloads = [...this.function.overloads];
+	}
+
+	moveParameter(overloadIndex: number, paramIndex: number, direction: 'up' | 'down') {
+		const overload = this.function.overloads[overloadIndex];
+		const newIndex = direction === 'up' ? paramIndex - 1 : paramIndex + 1;
+
+		if (newIndex < 0 || newIndex >= overload.parameters.length) return;
+
+		const params = [...overload.parameters];
+		[params[paramIndex], params[newIndex]] = [params[newIndex], params[paramIndex]];
+		overload.parameters = params;
 		this.function.overloads = [...this.function.overloads];
 	}
 }

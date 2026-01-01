@@ -1,10 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
-#if PREVIEW
 
 namespace GSCode.Parser.DFA;
 
@@ -26,33 +24,91 @@ internal class ScrArray //: IEnumerable<ScrData>
 /// </summary>
 internal record ScrStruct
 {
-    // TODO: need to ensure that Fields is deeply compared for value equivalence
     private Dictionary<string, ScrData> Fields { get; } = new();
-    public bool Deterministic { get; } = false;
+    public bool IsDeterministic { get; } = false;
 
-    public ScrStruct(IEnumerable<KeyValuePair<string, ScrData>> fields, bool deterministic = false)
+    public virtual bool Equals(ScrStruct? other)
     {
-        Deterministic = deterministic;
+        if (other is null)
+        {
+            return false;
+        }
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+        if (IsDeterministic != other.IsDeterministic)
+        {
+            return false;
+        }
+        if (Fields.Count != other.Fields.Count)
+        {
+            return false;
+        }
+
+        foreach (var kvp in Fields)
+        {
+            if (!other.Fields.TryGetValue(kvp.Key, out var otherValue))
+            {
+                return false;
+            }
+            if (!kvp.Value.Equals(otherValue))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public override int GetHashCode()
+    {
+        // Simple hash combining IsDeterministic and field count
+        // Full content hashing would be expensive and isn't needed for correctness
+        return HashCode.Combine(IsDeterministic, Fields.Count);
+    }
+
+    protected ScrStruct(IEnumerable<KeyValuePair<string, ScrData>> fields, bool deterministic = false)
+    {
+        IsDeterministic = deterministic;
         foreach (KeyValuePair<string, ScrData> field in fields)
         {
-            Fields.Add(field.Key, field.Value);
+            // Don't store the metadata, because otherwise it creates a cycle for equality checks.
+            Fields.Add(field.Key, field.Value with { Owner = null, FieldName = null });
         }
+    }
+
+    public static ScrStruct Deterministic(params KeyValuePair<string, ScrData>[] fields)
+    {
+        return new ScrStruct(fields, true);
+    }
+
+    public static ScrStruct NonDeterministic(params KeyValuePair<string, ScrData>[] fields)
+    {
+        return new ScrStruct(fields, false);
     }
 
     public ScrData Get(string fieldName)
     {
-        if(!Fields.TryGetValue(fieldName, out ScrData value))
+        if (!Fields.TryGetValue(fieldName, out ScrData value))
         {
-            return Deterministic ? ScrData.Undefined(this) : ScrData.Default;
+            return (IsDeterministic ? ScrData.Undefined() : ScrData.Default)
+                with
+            { Owner = this, FieldName = fieldName };
         }
 
-        return value;
+        // Always attach target metadata for member access, even when the field exists.
+        // This is used by the analyser to identify assignment destinations (a.b = ...).
+        return value with { Owner = this, FieldName = fieldName };
     }
 
-    public void Set(string fieldName, ScrData value)
+    public bool Set(string fieldName, ScrData value)
     {
-        value.Owner = this;
-        Fields[fieldName] = value;
+        bool isNew = !Fields.ContainsKey(fieldName);
+
+        // Store the value without any target metadata to avoid cycles.
+        Fields[fieldName] = value with { Owner = null, FieldName = null };
+        return isNew;
     }
 
     /// <summary>
@@ -62,9 +118,9 @@ internal record ScrStruct
     public ScrStruct Copy()
     {
         List<KeyValuePair<string, ScrData>> fields = [];
-        ScrStruct newStruct = new(fields, Deterministic);
+        ScrStruct newStruct = new(fields, IsDeterministic);
 
-        foreach(KeyValuePair<string, ScrData> field in Fields)
+        foreach (KeyValuePair<string, ScrData> field in Fields)
         {
             newStruct.Set(field.Key, field.Value.Copy());
         }
@@ -80,21 +136,21 @@ internal record ScrStruct
     public static ScrStruct Merge(params ScrStruct[] incoming)
     {
         // Base case - just copy the one incoming
-        if(incoming.Length == 1)
+        if (incoming.Length == 1)
         {
             return incoming[0].Copy();
         }
 
         // Find keys present across all structs that are incoming
         HashSet<string> fields = new();
-        bool deterministic = true;
+        bool isDeterministic = true;
 
         foreach (ScrStruct scrStruct in incoming)
         {
             fields.UnionWith(scrStruct.Fields.Keys);
 
             // We can only assert that our resulting struct is deterministic if ALL those it came from are too.
-            deterministic &= scrStruct.Deterministic;
+            isDeterministic &= scrStruct.IsDeterministic;
         }
 
         List<KeyValuePair<string, ScrData>> mergedFields = [];
@@ -104,7 +160,7 @@ internal record ScrStruct
             ScrData mergedValue = ScrData.Merge(values);
 
             // Skip adding if we're not deterministic and the merged value is 'any', it not being present would mean the same thing.
-            if(!deterministic && mergedValue.IsAny())
+            if (!isDeterministic && mergedValue.IsAny())
             {
                 continue;
             }
@@ -112,8 +168,6 @@ internal record ScrStruct
             mergedFields.Add(new KeyValuePair<string, ScrData>(field, mergedValue));
         }
 
-        return new ScrStruct(mergedFields, deterministic);
+        return new ScrStruct(mergedFields, isDeterministic);
     }
 }
-
-#endif

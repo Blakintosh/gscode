@@ -2,9 +2,7 @@
 
 A Visual Studio Code language extension that provides IntelliSense support for Call of Duty: Black Ops III's scripting languages, GSC and CSC.
 
-GSCode helps you to find and fix errors before the compiler has to tell you, streamlining scripting. In its current beta version, language support is provided up to syntactic analysis, allowing you to see syntax errors in your code. It also supports the preprocessor, meaning you can see macro usages in your code and spot preprocessor errors.
-
-In the future, full semantic analysis of script files is planned, allowing you to see an entire extra class of errors caught at compile-time or run-time. Additionally, this will provide richer IntelliSense to your editor.
+GSCode helps you to find and fix errors before the compiler has to tell you, streamlining scripting. Additionally, it adds rich IntelliSense into your editor to support the scripting process.
 
 ## Requirements
 
@@ -12,12 +10,15 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 0.10.1 beta (latest)
+### 1.0 (latest)
+
+- Adds semantic analysis steps & type inference associated validation.
+- Various bug fixes.
+- End of beta phase.
+
+### 0.10 beta
 
 - Disabled workspace indexing temporarily due to performance concerns.
-
-### 0.10.0 beta
-
 - Added reference finding (Go to Reference, Find All References)
 - Added workspace indexing of scripts.
 - Fixed switch case analysis with braced bodies.
@@ -67,7 +68,7 @@ GSCode is open-source software licenced under the GNU General Public License v3.
 
 ```
 GSCode - Black Ops III GSC Language Extension
-Copyright (C) 2025 Blakintosh
+Copyright (C) 2026 Blakintosh
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

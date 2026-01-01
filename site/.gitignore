@@ -11,3 +11,6 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 /.netlify
+#.mcp.json
+#/.cursor
+#CLAUDE.md

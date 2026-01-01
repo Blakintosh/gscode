@@ -1,4 +1,4 @@
-﻿using GSCode.Data;
+using GSCode.Data;
 using GSCode.Parser.Lexical;
 using System.Diagnostics.CodeAnalysis;
 using GSCode.Parser.DFA;
@@ -45,11 +45,13 @@ internal enum AstNodeType
     ClassMember,
     Constructor,
     Destructor,
+    WaittillVariables,
 }
 
 internal enum ExprOperatorType
 {
-    Operand,
+    DataOperand,
+    IdentifierOperand,
     Ternary,
     Binary,
     Vector,
@@ -57,13 +59,22 @@ internal enum ExprOperatorType
     Postfix,
     MethodCall,
     FunctionCall,
+    Constructor,
     Indexer,
-    CallOn
+    CallOn,
+    Waittill,
+    WaittillMatch,
+    Deref,
 }
 
 internal abstract class AstNode(AstNodeType nodeType)
 {
     public AstNodeType NodeType { get; } = nodeType;
+}
+
+internal abstract class DecisionAstNode(AstNodeType nodeType, ExprNode? condition) : AstNode(nodeType)
+{
+    public ExprNode? Condition { get; init; } = condition;
 }
 
 internal sealed class ScriptNode() : AstNode(AstNodeType.Script)
@@ -154,9 +165,8 @@ internal sealed class StmtListNode(LinkedList<AstNode>? statements = null) : Ast
 
 internal sealed class EmptyStmtNode() : AstNode(AstNodeType.EmptyStmt) { }
 
-internal sealed class IfStmtNode() : AstNode(AstNodeType.IfStmt)
+internal sealed class IfStmtNode(ExprNode? condition) : DecisionAstNode(AstNodeType.IfStmt, condition)
 {
-    public ExprNode? Condition { get; init; }
     public AstNode? Then { get; init; }
     public IfStmtNode? Else { get; set; }
 }
@@ -169,7 +179,8 @@ internal sealed class ReservedFuncStmtNode(AstNodeType type, ExprNode? expr) : A
 internal sealed class ConstStmtNode(Token identifierToken, ExprNode? value) : AstNode(AstNodeType.ConstStmt)
 {
     public string Identifier { get; } = identifierToken.Lexeme;
-    public Range Range { get; } = RangeHelper.From(identifierToken.Range.Start, value.Range.End);
+    public Token IdentifierToken { get; } = identifierToken;
+    public Range Range { get; } = RangeHelper.From(identifierToken.Range.Start, value?.Range.End ?? identifierToken.Range.End);
     public ExprNode? Value { get; } = value;
 }
 
@@ -178,30 +189,28 @@ internal sealed class ExprStmtNode(ExprNode? expr) : AstNode(AstNodeType.ExprStm
     public ExprNode? Expr { get; } = expr;
 }
 
-internal sealed class DoWhileStmtNode(ExprNode? condition, AstNode? then) : AstNode(AstNodeType.DoWhileStmt)
+internal sealed class DoWhileStmtNode(ExprNode? condition, AstNode? then) : DecisionAstNode(AstNodeType.DoWhileStmt, condition)
 {
-    public ExprNode? Condition { get; } = condition;
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class WhileStmtNode(ExprNode? condition, AstNode? then) : AstNode(AstNodeType.WhileStmt)
+internal sealed class WhileStmtNode(ExprNode? condition, AstNode? then) : DecisionAstNode(AstNodeType.WhileStmt, condition)
 {
-    public ExprNode? Condition { get; } = condition;
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class ForStmtNode(AstNode? init, ExprNode? condition, AstNode? increment, AstNode? then) : AstNode(AstNodeType.ForStmt)
+internal sealed class ForStmtNode(ExprNode? init, ExprNode? condition, ExprNode? increment, AstNode? then) : AstNode(AstNodeType.ForStmt)
 {
-    public AstNode? Init { get; } = init;
+    public ExprNode? Init { get; } = init;
     public ExprNode? Condition { get; } = condition;
-    public AstNode? Increment { get; } = increment;
+    public ExprNode? Increment { get; } = increment;
     public AstNode? Then { get; } = then;
 }
 
-internal sealed class ForeachStmtNode(Token valueIdentifier, Token? keyIdentifier, ExprNode? collection, AstNode? then) : AstNode(AstNodeType.ForeachStmt)
+internal sealed class ForeachStmtNode(IdentifierExprNode valueIdentifier, IdentifierExprNode? keyIdentifier, ExprNode? collection, AstNode? then) : AstNode(AstNodeType.ForeachStmt)
 {
-    public Token? KeyIdentifier { get; } = keyIdentifier;
-    public Token ValueIdentifier { get; } = valueIdentifier;
+    public IdentifierExprNode? KeyIdentifier { get; } = keyIdentifier;
+    public IdentifierExprNode ValueIdentifier { get; } = valueIdentifier;
     public ExprNode? Collection { get; } = collection;
     public AstNode? Then { get; } = then;
 }
@@ -243,9 +252,10 @@ internal sealed class CaseStmtNode() : AstNode(AstNodeType.CaseStmt)
     public required StmtListNode Body { get; init; }
 }
 
-internal sealed class CaseLabelNode(AstNodeType labelType, ExprNode? value = default) : AstNode(labelType)
+internal sealed class CaseLabelNode(AstNodeType labelType, Token keywordToken, ExprNode? value = default) : AstNode(labelType)
 {
     public ExprNode? Value { get; } = value;
+    public Token Keyword { get; } = keywordToken;
 }
 
 internal abstract class ExprNode(ExprOperatorType operatorType, Range range) : AstNode(AstNodeType.Expr)
@@ -260,7 +270,7 @@ internal sealed class DataExprNode : ExprNode
     public object? Value { get; }
     public ScrDataTypes Type { get; }
 
-    private DataExprNode(object? value, ScrDataTypes dataType, Range range) : base(ExprOperatorType.Operand, range)
+    private DataExprNode(object? value, ScrDataTypes dataType, Range range) : base(ExprOperatorType.DataOperand, range)
     {
         Value = value;
         Type = dataType;
@@ -274,12 +284,9 @@ internal sealed class DataExprNode : ExprNode
             {
                 // Numbers
                 TokenType.Float => new(float.Parse(token.Lexeme), ScrDataTypes.Float, token.Range),
-                // TODO: temp - addresses issue with int overflow on 2147483648 without further information on why this is happening yet
-                // TODO: this is a thing in util_shared, and it's unclear what the intended behaviour is. Validate and confirm later, then
-                // undo the long change if possible.
-                TokenType.Integer => new(long.Parse(token.Lexeme), ScrDataTypes.Int, token.Range),
-                TokenType.Hex => new(long.Parse(token.Lexeme[2..], System.Globalization.NumberStyles.HexNumber),
-                    ScrDataTypes.Int, token.Range),
+                // Integers with overflow handling
+                TokenType.Integer => new(ParseIntWithOverflow(token.Lexeme), ScrDataTypes.Int, token.Range),
+                TokenType.Hex => new(ParseHexWithOverflow(token.Lexeme[2..]), ScrDataTypes.Int, token.Range),
                 // Strings - remove quotes
                 TokenType.String => new(token.Lexeme[1..^1], ScrDataTypes.String, token.Range),
                 TokenType.IString => new(token.Lexeme[2..^1], ScrDataTypes.IString, token.Range),
@@ -304,6 +311,56 @@ internal sealed class DataExprNode : ExprNode
                 $"Failed to parse primitive token, which suggests that the lexer is not producing valid tokens. The intention was: {token.Lexeme}, for type {token.Type}.",
                 ex);
         }
+    }
+
+    private static int ParseIntWithOverflow(string lexeme)
+    {
+        // Try normal parsing first
+        if (int.TryParse(lexeme, out var result))
+        {
+            return result;
+        }
+
+        // If it fails, handle overflow by parsing as long and wrapping
+        // TODO: add diagnostic for overflow
+        if (long.TryParse(lexeme, out var longResult))
+        {
+            return unchecked((int)longResult);
+        }
+
+        // If even long fails, parse as decimal and wrap
+        if (decimal.TryParse(lexeme, out var decimalResult))
+        {
+            return unchecked((int)(long)decimalResult);
+        }
+
+        // Fallback - should not reach here with valid lexer output
+        return 0;
+    }
+
+    private static int ParseHexWithOverflow(string hexString)
+    {
+        // Try normal parsing first
+        if (int.TryParse(hexString, System.Globalization.NumberStyles.HexNumber, null, out var result))
+        {
+            return result;
+        }
+
+        // If it fails, handle overflow by parsing as long and wrapping
+        // TODO: add diagnostic for overflow
+        if (long.TryParse(hexString, System.Globalization.NumberStyles.HexNumber, null, out var longResult))
+        {
+            return unchecked((int)longResult);
+        }
+
+        // If even long fails, parse as ulong and wrap (hex values are typically unsigned)
+        if (ulong.TryParse(hexString, System.Globalization.NumberStyles.HexNumber, null, out var ulongResult))
+        {
+            return unchecked((int)ulongResult);
+        }
+
+        // Fallback - should not reach here with valid lexer output
+        return 0;
     }
 
     public static DataExprNode EmptyArray(Token openBracket, Token closeBracket)
@@ -331,7 +388,7 @@ internal sealed class TernaryExprNode(ExprNode condition, ExprNode? then, ExprNo
     public ExprNode? Else { get; } = @else;
 }
 
-internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.Operand, identifier.Range)
+internal sealed class IdentifierExprNode(Token identifier) : ExprNode(ExprOperatorType.IdentifierOperand, identifier.Range)
 {
     public Token Token { get; } = identifier;
     public bool IsAnim { get; } = identifier.Type == TokenType.AnimIdentifier;
@@ -371,13 +428,13 @@ internal sealed class PostfixExprNode(ExprNode operand, Token operatorToken)
 
 // TODO: might need to include the whole range (ie new + the brackets)
 internal sealed class ConstructorExprNode(Token identifierToken)
-    : ExprNode(ExprOperatorType.FunctionCall, identifierToken.Range)
+    : ExprNode(ExprOperatorType.Constructor, identifierToken.Range)
 {
     public Token Identifier { get; } = identifierToken;
 }
 
 internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode? objectTarget, Token methodToken, ArgsListNode arguments)
-    : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(firstTokenPosition, arguments.Range.End))
+    : ExprNode(ExprOperatorType.MethodCall, RangeHelper.From(firstTokenPosition, arguments.Range.End))
 {
     public ExprNode? Target { get; } = objectTarget;
     public Token Method { get; } = methodToken;
@@ -387,11 +444,22 @@ internal sealed class MethodCallNode(Position firstTokenPosition, ExprNode? obje
 internal sealed class FunCallNode(Position startPosition, ExprNode? target, ArgsListNode arguments)
     : ExprNode(ExprOperatorType.FunctionCall, RangeHelper.From(startPosition, arguments.Range.End))
 {
-    public ExprNode? Target { get; } = target;
+    public ExprNode? Function { get; } = target;
     public ArgsListNode Arguments { get; } = arguments;
 
     public FunCallNode(ExprNode target, ArgsListNode arguments)
         : this(target.Range.Start, target, arguments) { }
+}
+
+/// <summary>
+/// Represents a dereference expression [[ expr ]].
+/// Used to dereference function pointers for calling ([[ funcPtr ]]())
+/// or class pointers for method calls ([[ classPtr ]]->method()).
+/// </summary>
+internal sealed class DerefExprNode(Range range, ExprNode inner)
+    : ExprNode(ExprOperatorType.Deref, range)
+{
+    public ExprNode Inner { get; } = inner;
 }
 
 internal sealed class NamespacedMemberNode(ExprNode @namespace, ExprNode member)
@@ -419,7 +487,7 @@ internal sealed class CalledOnNode(ExprNode on, ExprNode call) : ExprNode(ExprOp
     public ExprNode Call { get; } = call;
 }
 
-internal class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBodyListNode body) : AstNode(AstNodeType.ClassDefinition)
+internal sealed class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBodyListNode body) : AstNode(AstNodeType.ClassDefinition)
 {
     public Token? NameToken { get; } = nameToken;
     public Token? InheritsFromToken { get; } = inheritsFromToken;
@@ -427,14 +495,36 @@ internal class ClassDefnNode(Token? nameToken, Token? inheritsFromToken, ClassBo
     public ClassBodyListNode Body { get; } = body;
 }
 
-internal class MemberDeclNode(Token? nameToken) : AstNode(AstNodeType.ClassMember)
+internal sealed class MemberDeclNode(Token? nameToken) : AstNode(AstNodeType.ClassMember)
 {
     public Token? NameToken { get; } = nameToken;
 }
 
-internal class StructorDefnNode(Token keywordToken, StmtListNode body)
+internal sealed class StructorDefnNode(Token keywordToken, StmtListNode body)
     : AstNode(keywordToken.Type == TokenType.Constructor ? AstNodeType.Constructor : AstNodeType.Destructor)
 {
     public Token KeywordToken { get; } = keywordToken;
     public StmtListNode Body { get; } = body;
+}
+
+internal sealed class WaittillNode(ExprNode entity, ExprNode notifyCondition, WaittillVariablesNode variables, Range range)
+    : ExprNode(ExprOperatorType.Waittill, range)
+{
+    public ExprNode Entity { get; } = entity;
+    public ExprNode NotifyCondition { get; } = notifyCondition;
+    public WaittillVariablesNode Variables { get; } = variables;
+}
+
+
+internal sealed class WaittillVariablesNode() : AstNode(AstNodeType.WaittillVariables)
+{
+    public LinkedList<IdentifierExprNode> Variables { get; } = new();
+}
+
+internal sealed class WaittillMatchNode(ExprNode entity, ExprNode notifyName, ExprNode? matchValue, Range range)
+    : ExprNode(ExprOperatorType.WaittillMatch, range)
+{
+    public ExprNode Entity { get; } = entity;
+    public ExprNode NotifyName { get; } = notifyName;
+    public ExprNode? MatchValue { get; } = matchValue;
 }

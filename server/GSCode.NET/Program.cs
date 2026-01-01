@@ -87,7 +87,7 @@ LanguageServer server = await LanguageServer.From(options =>
 				}
 			));
 		})
-		// Temporarily disabled due to performance issues
+		// Disabled for now, indexing is too punishing on performance.
 		// .OnInitialize(async (server, request, ct) =>
 		// {
 		// 	try
@@ -110,6 +110,7 @@ LanguageServer server = await LanguageServer.From(options =>
 		// 		else if (request.RootUri is not null)
 		// 		{
 		// 			string root = request.RootUri.ToUri().LocalPath;
+		// 			// Disabled for now, indexing is too punishing on performance.
 		// 			_ = Task.Run(() => sm.IndexWorkspaceAsync(root, indexingToken), CancellationToken.None);
 		// 		}
 		// 	}

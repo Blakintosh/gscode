@@ -103,20 +103,20 @@ internal record struct TokenList(Token? Start, Token? End)
 
     public static TokenList From(params Token[] tokens)
     {
-        if(tokens.Length == 0)
+        if (tokens.Length == 0)
         {
             return Empty;
         }
 
         // Fully clone the tokens so we have no shared references
         Token[] clonedTokens = new Token[tokens.Length];
-        
-        for(int i = 0; i < clonedTokens.Length; i++)
+
+        for (int i = 0; i < clonedTokens.Length; i++)
         {
             clonedTokens[i] = tokens[i] with { Range = RangeHelper.Empty };
 
             clonedTokens[i].Previous = i > 0 ? clonedTokens[i - 1] : null!;
-            if(i - 1 >= 0)
+            if (i - 1 >= 0)
             {
                 clonedTokens[i - 1].Next = clonedTokens[i];
             }
@@ -210,7 +210,7 @@ internal record struct TokenList(Token? Start, Token? End)
             current = current.Next;
         } while (current is not null && current.Type != TokenType.Eof);
 
-        if(current.Type == TokenType.Eof)
+        if (current.Type == TokenType.Eof)
         {
             Console.Error.WriteLine("sanity check failed");
         }
@@ -402,6 +402,8 @@ internal enum TokenType
 
     // Reserved functions (case-insensitive) TODO
     WaittillFrameEnd, // waittillframeend
+    WaittillMatch, // waittillmatch
+    Waittill, // waittill
     WaitRealTime, // waitrealtime
     Wait, // wait
     //AssertMsg, // assertmsg

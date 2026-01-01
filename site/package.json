@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@fontsource/fira-mono": "^4.5.10",
+    "@lucide/svelte": "^0.482.0",
     "@neoconfetti/svelte": "^1.0.0",
     "@playwright/test": "^1.48.2",
     "@shikijs/twoslash": "^1.23.0",
@@ -52,7 +53,7 @@
     "@shikijs/transformers": "^1.23.0",
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/adapter-vercel": "^5.4.7",
-    "bits-ui": "^1.0.0-next.57",
+    "bits-ui": "^1.4.7",
     "bootstrap-icons": "^1.11.3",
     "clsx": "^2.1.1",
     "dotenv": "^16.4.5",

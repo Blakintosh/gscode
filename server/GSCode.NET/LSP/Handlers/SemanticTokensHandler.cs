@@ -30,21 +30,56 @@ public class SemanticTokensHandler : SemanticTokensHandlerBase
         _documentSelector = documentSelector;
     }
 
-    protected override SemanticTokensRegistrationOptions CreateRegistrationOptions(SemanticTokensCapability capability, ClientCapabilities clientCapabilities)
+    protected override SemanticTokensRegistrationOptions CreateRegistrationOptions(
+        SemanticTokensCapability capability,
+        ClientCapabilities clientCapabilities)
     {
+        Container<SemanticTokenModifier>? tokenModifiers = capability.TokenModifiers;
+        Container<SemanticTokenType>? tokenTypes = capability.TokenTypes;
+
+        if (tokenTypes is null || !tokenTypes.Any())
+        {
+            tokenTypes = new Container<SemanticTokenType>(
+                SemanticTokenType.Namespace,
+                SemanticTokenType.Type,
+                SemanticTokenType.Class,
+                SemanticTokenType.Enum,
+                SemanticTokenType.Interface,
+                SemanticTokenType.Struct,
+                SemanticTokenType.TypeParameter,
+                SemanticTokenType.Parameter,
+                SemanticTokenType.Variable,
+                SemanticTokenType.Property,
+                SemanticTokenType.EnumMember,
+                SemanticTokenType.Event,
+                SemanticTokenType.Function,
+                SemanticTokenType.Method,
+                SemanticTokenType.Macro,
+                SemanticTokenType.Keyword,
+                SemanticTokenType.Modifier,
+                SemanticTokenType.Comment,
+                SemanticTokenType.String,
+                SemanticTokenType.Number,
+                SemanticTokenType.Regexp,
+                SemanticTokenType.Operator
+            );
+        }
+
+        // Check if "field" token type exists, and add it if not
+        if (!tokenTypes.Any(t => t.ToString() == "field"))
+        {
+            tokenTypes = new Container<SemanticTokenType>(tokenTypes.Concat(new[] { new SemanticTokenType("field") }));
+        }
+
         return new SemanticTokensRegistrationOptions
         {
             DocumentSelector = _documentSelector,
             Legend = new SemanticTokensLegend
             {
-                TokenModifiers = capability.TokenModifiers,
-                TokenTypes = capability.TokenTypes
-                // TokenTypes = new Container<SemanticTokenType>(SemanticTokenType.Variable)
+                TokenModifiers = tokenModifiers,
+                TokenTypes = tokenTypes
             },
-            Full = new SemanticTokensCapabilityRequestFull
-            {
-                Delta = false
-            },
+            Full = new SemanticTokensCapabilityRequestFull { Delta = false },
             Range = false
         };
     }

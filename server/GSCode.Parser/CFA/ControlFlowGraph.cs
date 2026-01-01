@@ -1,4 +1,5 @@
-﻿using GSCode.Parser.AST;
+using GSCode.Data;
+using GSCode.Parser.AST;
 using GSCode.Parser.Data;
 using System;
 using System.Collections.Generic;
@@ -8,8 +9,6 @@ using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Threading.Tasks;
 
-#if PREVIEW
-
 namespace GSCode.Parser.CFA;
 
 /// <summary>
@@ -17,301 +16,722 @@ namespace GSCode.Parser.CFA;
 /// </summary>
 /// <param name="Start">The beginning basic block of the graph</param>
 /// <param name="End">The final basic block of the graph</param>
-internal readonly record struct ControlFlowGraph(BasicBlock Start, BasicBlock End)
+internal readonly record struct ControlFlowGraph(CfgNode Start, CfgNode End)
 {
-    public static ControlFlowGraph Construct(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    // Rule: the CALLER is responsible for connecting to the CALLEE's entry block, and the CALLEE is responsible for connecting to any of its successors (implied by the first rule).
+
+    public static ControlFlowGraph ConstructFunctionGraph(FunDefnNode node, ParserIntelliSense sense, int scope = 0)
     {
-        // Build the maximal basic block for the logic portion
-        int i = 0;
-        BasicBlock logic = BuildLogicBlock(nodesStream, sense, localHelper, ref i);
+        // Function graph: (entry) -> (body) -> (exit)
 
-        // TODO: we want unreachable code to be handled here, or in BuildLogicBlock.
-
-        // If at the end of the block, return the logic block
-        if (i == nodesStream.Length)
-        {
-            return new(logic, logic);
-        }
-
-        // Otherwise, construct a subgraph of the control flow we're entering and connect it.
-        ControlFlowGraph control = BuildControlSubGraph(nodesStream[i..], sense, localHelper);
-        logic.ConnectTo(control.Start);
-
-        return new(logic, control.End);
-    }
-
-    public static ControlFlowGraph ConstructFunctionGraph(ASTBranch branch, ParserIntelliSense sense)
-    {
         // Create the entry and exit blocks, and the function graph
-        BasicBlock entry = new(0, ControlFlowType.FunctionEntry);
+        FunEntryBlock entry = new(node, node.Name);
+        FunExitBlock exit = new(node);
 
-        Span<ASTNode> nodeStream = CollectionsMarshal.AsSpan(branch.Children);
-        ControlFlowHelper functionHelper = new();
+        ControlFlowHelper functionHelper = new()
+        {
+            ReturnContext = exit,
+            ContinuationContext = exit,
+            Scope = scope
+        };
 
-        ControlFlowGraph functionGraph = Construct(nodeStream, sense, functionHelper);
+        // Construct the function graph.
+        LinkedListNode<AstNode>? currentNode = node.Body.Statements.First;
+        CfgNode body = Construct(ref currentNode, sense, functionHelper);
 
-        BasicBlock exit = new(0, ControlFlowType.FunctionExit);
-
-        // Connect the entry to the start of the function graph and the end of the function graph to the exit
-        entry.ConnectTo(functionGraph.Start);
-        functionGraph.End.ConnectNonJumpTo(exit);
-
-        // Connect return edges
-        functionHelper.ConnectReturnEdges(exit);
+        CfgNode.Connect(entry, body);
 
         return new(entry, exit);
     }
 
-    private static BasicBlock BuildLogicBlock(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper, ref int i)
+    public static ControlFlowGraph ConstructClassGraph(ClassDefnNode node, ParserIntelliSense sense)
     {
-        List<ASTNode> blockNodes = new();
-        bool jumps = false;
+        // Class graph: (entry) -> (body) -> (exit)
 
-        while (i < nodesStream.Length && !IsControlFlowNode(nodesStream[i]) && !IsJumpNode(nodesStream[i]))
+        // Create the entry and exit blocks
+        ClassEntryBlock entry = new(node, node.NameToken);
+        ClassExitBlock exit = new(node);
+
+        // Construct the class body graph
+        LinkedListNode<AstNode>? currentNode = node.Body.Definitions.First;
+        CfgNode? body = Construct_InClassBody(ref currentNode, sense);
+
+        // If we have a body, connect it; otherwise connect directly to exit
+        if (body is not null)
         {
-            blockNodes.Add(nodesStream[i]);
-            i++;
+            CfgNode.Connect(entry, body);
+        }
+        else
+        {
+            CfgNode.Connect(entry, exit);
         }
 
-        // TODO: This causes construction to stop after this jump node. While this is OK for testing purposes, it'd probably be better to construct another block of unreachable code that we can diagnose.
-        if(i < nodesStream.Length && IsJumpNode(nodesStream[i]))
-        {
-            // Mark the relevant jump node
-            switch(nodesStream[i].Type)
-            {
-                case NodeTypes.BreakStatement:
-                    localHelper.BreakBlocks.Add(new(nodesStream[i], localHelper.Scope, ControlFlowType.Logic));
-                    break;
-                case NodeTypes.ContinueStatement:
-                    localHelper.ContinueBlocks.Add(new(nodesStream[i], localHelper.Scope, ControlFlowType.Logic));
-                    break;
-                case NodeTypes.ReturnStatement:
-                    localHelper.ReturnBlocks.Add(new(nodesStream[i], localHelper.Scope, ControlFlowType.Logic));
-                    break;
-            }
-
-            blockNodes.Add(nodesStream[i]);
-            i++;
-            jumps = true;
-        }
-
-        return new(blockNodes, localHelper.Scope, jumps);
+        return new(entry, exit);
     }
 
-    private static ControlFlowGraph BuildControlSubGraph(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode? Construct_InClassBody(AstNode node, ParserIntelliSense sense)
     {
-        ASTNode controlFlowNode = nodesStream[0];
+        // This is cheesy, but should work.
+        LinkedListNode<AstNode>? currentNode = new LinkedListNode<AstNode>(node);
 
-        return controlFlowNode.NodeType switch
+        return Construct_InClassBody(ref currentNode, sense);
+    }
+
+    private static CfgNode? Construct_InClassBody(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
+    {
+        // If we're at the end of the current block, return null (no continuation)
+        if (currentNode is null)
         {
-            ASTNodeType.IfStmt => Construct_IfStatement(nodesStream, sense, localHelper), // TODO: this one will do some weird crap with else-if
-            ASTNodeType.WhileStmt => Construct_WhileLoop(nodesStream, sense, localHelper),
-            ASTNodeType.DoWhileStmt => Construct_DoWhileLoop(nodesStream, sense, localHelper), // TODO: check this - it was originally just looking for do
-            ASTNodeType.ForStmt => Construct_ForLoop(nodesStream, sense, localHelper),
-            ASTNodeType.ForeachStmt => Construct_ForeachLoop(nodesStream, sense, localHelper),
-            ASTNodeType.SwitchStmt => Construct_SwitchStatement(nodesStream, sense, localHelper),
-            _ => throw new NotSupportedException("Invalid control flow node type. Got " + controlFlowNode.NodeType),
+            return null;
+        }
+
+        return currentNode.Value.NodeType switch
+        {
+            AstNodeType.Constructor => Construct_ClassConstructor(ref currentNode, sense),
+            AstNodeType.Destructor => Construct_ClassDestructor(ref currentNode, sense),
+            AstNodeType.FunctionDefinition => Construct_ClassMethod(ref currentNode, sense),
+            _ => Construct_ClassBlock(ref currentNode, sense),
         };
     }
 
-    private static ControlFlowGraph ConstructFromBranchingNode(ASTNode node, ParserIntelliSense sense, ControlFlowHelper newlocalHelper)
+    private static ClassMembersBlock Construct_ClassBlock(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
     {
-        return Construct(CollectionsMarshal.AsSpan(node.Branch!.Children), sense, newlocalHelper);
+        // Class members block: collect consecutive member declarations until we hit a method/constructor/destructor
+        LinkedList<AstNode> members = new();
+
+        while (currentNode != null && !IsClassMethodNode(currentNode.Value))
+        {
+            members.AddLast(currentNode.Value);
+            currentNode = currentNode.Next;
+        }
+
+        ClassMembersBlock membersBlock = new(members, 0);
+
+        // If we reached the end of the class body, just return the members block
+        if (currentNode is null)
+        {
+            return membersBlock;
+        }
+
+        // If we hit a method/constructor/destructor, construct it and connect
+        CfgNode? nextNode = Construct_InClassBody(ref currentNode, sense);
+
+        if (nextNode is not null)
+        {
+            CfgNode.Connect(membersBlock, nextNode);
+        }
+
+        return membersBlock;
     }
 
-    private static ControlFlowGraph Construct_IfStatement(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode? Construct_ClassConstructor(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
     {
-        // Handle our first if
-        IfStmtNode ifNode = (IfStmtNode)nodesStream[0];
+        StructorDefnNode constructor = (StructorDefnNode)currentNode!.Value;
 
-        BasicBlock firstCondition = new(nodesStream[0], localHelper.Scope, ControlFlowType.If);
+        // Move to the next node to get the continuation
+        currentNode = currentNode.Next;
+        CfgNode? continuation = Construct_InClassBody(ref currentNode, sense);
 
-        ControlFlowGraph firstThen = ConstructFromBranchingNode(nodesStream[0], sense, localHelper.IncreaseScope());
-        firstCondition.ConnectTo(firstThen.Start);
+        // Create entry and exit blocks for the constructor
+        // Constructor uses scope 1 (class members are at scope 0, constructor body is at scope 1)
+        FunEntryBlock entry = new(null!, constructor.KeywordToken);
+        FunExitBlock exit = new(constructor);
 
-        List<ControlFlowGraph> thenGraphs = new() { firstThen };
-
-        int i;
-
-        // Constructs and handles the else-if conditions
-        BasicBlock condition = firstCondition;
-        for (i = 1; i < nodesStream.Length; i++)
+        ControlFlowHelper constructorHelper = new()
         {
-            ASTNode node = nodesStream[i];
+            ReturnContext = exit,
+            ContinuationContext = exit,
+            Scope = 1  // Class body is scope 0, constructor body is scope 1
+        };
 
-            if (node.Type != NodeTypes.ElseIfStatement)
+        // Construct the constructor body graph
+        LinkedListNode<AstNode>? bodyNode = constructor.Body.Statements.First;
+        CfgNode body = Construct(ref bodyNode, sense, constructorHelper);
+
+        CfgNode.Connect(entry, body);
+
+        // Connect exit to continuation (next node in class body)
+        if (continuation is not null)
+        {
+            CfgNode.Connect(exit, continuation);
+        }
+
+        return entry;
+    }
+
+    private static CfgNode? Construct_ClassDestructor(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
+    {
+        StructorDefnNode destructor = (StructorDefnNode)currentNode!.Value;
+
+        // Move to the next node to get the continuation
+        currentNode = currentNode.Next;
+        CfgNode? continuation = Construct_InClassBody(ref currentNode, sense);
+
+        // Create entry and exit blocks for the destructor
+        // Destructor uses scope 1 (class members are at scope 0, destructor body is at scope 1)
+        FunEntryBlock entry = new(null!, destructor.KeywordToken);
+        FunExitBlock exit = new(destructor);
+
+        ControlFlowHelper destructorHelper = new()
+        {
+            ReturnContext = exit,
+            ContinuationContext = exit,
+            Scope = 1  // Class body is scope 0, destructor body is scope 1
+        };
+
+        // Construct the destructor body graph
+        LinkedListNode<AstNode>? bodyNode = destructor.Body.Statements.First;
+        CfgNode body = Construct(ref bodyNode, sense, destructorHelper);
+
+        CfgNode.Connect(entry, body);
+
+        // Connect exit to continuation (next node in class body)
+        if (continuation is not null)
+        {
+            CfgNode.Connect(exit, continuation);
+        }
+
+        return entry;
+    }
+
+    private static CfgNode? Construct_ClassMethod(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense)
+    {
+        FunDefnNode method = (FunDefnNode)currentNode!.Value;
+
+        // Move to the next node to get the continuation
+        currentNode = currentNode.Next;
+        CfgNode? continuation = Construct_InClassBody(ref currentNode, sense);
+
+        // Construct the function graph with scope 1
+        // Class members are at scope 0, method body is at scope 1
+        ControlFlowGraph methodGraph = ConstructFunctionGraph(method, sense, scope: 1);
+
+        // Connect exit to continuation (next node in class body)
+        if (continuation is not null)
+        {
+            CfgNode.Connect(methodGraph.End, continuation);
+        }
+
+        return methodGraph.Start;
+    }
+
+    private static bool IsClassMethodNode(AstNode node)
+    {
+        return node.NodeType == AstNodeType.Constructor ||
+               node.NodeType == AstNodeType.Destructor ||
+               node.NodeType == AstNodeType.FunctionDefinition;
+    }
+
+    private static CfgNode Construct(AstNode node, ParserIntelliSense sense, ControlFlowHelper localHelper, bool shouldIncreaseScope = true)
+    {
+        // This is cheesy, but should work.
+        LinkedListNode<AstNode>? currentNode = new LinkedListNode<AstNode>(node);
+
+        return Construct(ref currentNode, sense, localHelper, shouldIncreaseScope);
+    }
+
+    private static CfgNode Construct(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper, bool shouldIncreaseScope = true)
+    {
+        // If we're at the end of the current block, return the continuation context.
+        if (currentNode is null)
+        {
+            return localHelper.ContinuationContext;
+        }
+
+        return currentNode.Value.NodeType switch
+        {
+            AstNodeType.IfStmt => Construct_IfStatement(ref currentNode, sense, localHelper),
+            AstNodeType.WhileStmt => Construct_WhileStatement(ref currentNode, sense, localHelper),
+            AstNodeType.DoWhileStmt => Construct_DoWhileStatement(ref currentNode, sense, localHelper),
+            AstNodeType.ForStmt => Construct_ForStmt(ref currentNode, sense, localHelper),
+            AstNodeType.ForeachStmt => Construct_ForeachStmt(ref currentNode, sense, localHelper),
+            AstNodeType.SwitchStmt => Construct_SwitchStmt(ref currentNode, sense, localHelper),
+            AstNodeType.BraceBlock => Construct_BraceBlock(ref currentNode, sense, localHelper, shouldIncreaseScope),
+            _ => Construct_LogicBlock(ref currentNode, sense, localHelper),
+        };
+    }
+
+    private static CfgNode Construct_BraceBlock(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper, bool shouldIncreaseScope)
+    {
+
+        StmtListNode stmtList = (StmtListNode)currentNode!.Value;
+
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
+
+        // Now, generate the brace block contents.
+        ControlFlowHelper newLocalHelper = new(localHelper)
+        {
+            ContinuationContext = continuation,
+            // TODO: GSC does NOT use lexical scope within functions, but we need to consider class scope (as class members can only be used by methods that occur after their definition). 
+            // Leave this commented for now.
+            // Scope = shouldIncreaseScope ? localHelper.Scope + 1 : localHelper.Scope
+            Scope = localHelper.Scope
+        };
+
+        LinkedListNode<AstNode>? blockNode = stmtList.Statements.First;
+        CfgNode block = Construct(ref blockNode, sense, newLocalHelper);
+
+        return block;
+    }
+
+    private static BasicBlock Construct_LogicBlock(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    {
+        // Logic block: -> (logic) -> (jump | control flow | continuation)
+        LinkedList<AstNode> statements = new();
+
+        while (currentNode != null && !IsControlFlowNode(currentNode.Value) && !IsJumpNode(currentNode.Value))
+        {
+            statements.AddLast(currentNode.Value);
+            currentNode = currentNode.Next;
+        }
+
+        BasicBlock logic = new(statements, localHelper.Scope);
+
+        // If we reached the end of the block, just return the logic block with connection to the continuation context.
+        if (currentNode is null)
+        {
+            CfgNode.Connect(logic, localHelper.ContinuationContext);
+
+            return logic;
+        }
+
+        // TODO: This causes construction to stop after this jump node. While this is OK for testing purposes, it'd probably be better to construct another block of unreachable code that we can diagnose.
+        if (IsJumpNode(currentNode.Value))
+        {
+            // TODO: verify that AST gen will ensure that the jump nodes are defined.
+            // Mark the relevant jump node
+            switch (currentNode.Value.NodeType)
             {
-                break;
+                case AstNodeType.BreakStmt:
+                    CfgNode.Connect(logic, localHelper.BreakContext!);
+                    break;
+                case AstNodeType.ContinueStmt:
+                    CfgNode.Connect(logic, localHelper.LoopContinueContext!);
+                    break;
+                case AstNodeType.ReturnStmt:
+                    CfgNode.Connect(logic, localHelper.ReturnContext);
+                    break;
             }
 
-            // Connect the else-if condition to the previous condition
-            BasicBlock elseCondition = new(node, localHelper.Scope, ControlFlowType.If);
-            elseCondition.Incoming.Add(condition);
-
-            ControlFlowGraph then = ConstructFromBranchingNode(node, sense, localHelper.IncreaseScope());
-            elseCondition.ConnectTo(then.Start);
-
-            // Now mark this as last
-            condition = elseCondition;
-            thenGraphs.Add(then);
+            statements.AddLast(currentNode.Value);
+            return logic;
         }
 
-        bool endsWithElse = false;
+        // We must be in control flow by this point.
+        CfgNode control = Construct(ref currentNode, sense, localHelper);
+        CfgNode.Connect(logic, control);
 
-        // Check for an else statement
-        if (i < nodesStream.Length && nodesStream[i].Type == NodeTypes.ElseStatement)
+        return logic;
+    }
+
+    private static DecisionNode Construct_IfStatement(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    {
+        // Handle our first if
+        IfStmtNode ifNode = (IfStmtNode)currentNode!.Value;
+
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
+
+        DecisionNode condition = new(ifNode, ifNode.Condition, localHelper.Scope);
+
+        ControlFlowHelper ifHelper = new(localHelper)
         {
-            // Construct the else body and connect it to the last condition
-            ControlFlowGraph elseGraph = ConstructFromBranchingNode(nodesStream[i], sense, localHelper.IncreaseScope());
-            condition.ConnectTo(elseGraph.Start);
-            endsWithElse = true;
+            ContinuationContext = continuation,
+        };
 
-            // Add the else graph to the list
-            thenGraphs.Add(elseGraph);
+        // Generate then.
+        CfgNode then = Construct(ifNode.Then, sense, ifHelper, false);
 
-            i++;
-        }
+        CfgNode.Connect(condition, then);
+        condition.WhenTrue = then;
 
-        // Construct the continuation block, which may be empty, then connect it to the end of all of our then blocks
-        ControlFlowGraph continuationGraph = Construct(nodesStream[i..], sense, localHelper);
-
-        // 'Backpatch' by connecting the continuation to all of the then blocks
-        foreach (ControlFlowGraph then in thenGraphs)
+        // If an else clause is given, construct CFG for it too.
+        IfStmtNode? elseNode = ifNode.Else;
+        if (elseNode is not null)
         {
-            then.End.ConnectNonJumpTo(continuationGraph.Start);
+            CfgNode @else = Construct_ElseIf(elseNode, sense, ifHelper);
+
+            CfgNode.Connect(condition, @else);
+            condition.WhenFalse = @else;
+
+            return condition;
         }
-        // And the continuation to the end of the final condition if it has no else
-        if(!endsWithElse)
+
+        // Otherwise, connect the condition to the continuation.
+        CfgNode.Connect(condition, continuation);
+        condition.WhenFalse = continuation;
+
+        return condition;
+    }
+
+    private static CfgNode Construct_ElseIf(IfStmtNode node, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    {
+        // Generate then.
+        CfgNode then = Construct(node.Then, sense, localHelper, false);
+
+        // If there's no condition, then it's the else case and we can just return the then block.
+        if (node.Condition is null)
         {
-            condition.ConnectTo(continuationGraph.Start);
+            return then;
         }
 
-        // A graph that spans from the first if condition to the end of the continuation graph.
-        return new(firstCondition, continuationGraph.End);
+        // Otherwise, we need to construct a decision node.
+        DecisionNode condition = new(node, node.Condition, localHelper.Scope);
+
+        CfgNode.Connect(condition, then);
+        condition.WhenTrue = then;
+
+        // If an else clause is given, construct CFG for it too.
+        IfStmtNode? elseNode = node.Else;
+        if (elseNode is not null)
+        {
+            CfgNode @else = Construct_ElseIf(elseNode, sense, localHelper);
+
+            CfgNode.Connect(condition, @else);
+            condition.WhenFalse = @else;
+
+            return condition;
+        }
+
+        // Otherwise, connect the condition to the continuation.
+        CfgNode.Connect(condition, localHelper.ContinuationContext);
+        condition.WhenFalse = localHelper.ContinuationContext;
+
+        return condition;
     }
 
-    private static ControlFlowGraph Construct_WhileLoop(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static DecisionNode Construct_WhileStatement(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
-        // Handle the while condition
-        BasicBlock condition = new(nodesStream[0], localHelper.Scope, ControlFlowType.Loop);
+        // Handle the while statement
+        WhileStmtNode whileNode = (WhileStmtNode)currentNode!.Value;
 
-        // Create loop context, process the body, and connect any continue/break statements
-        ControlFlowHelper loopHelper = localHelper.EnterLoopScope();
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
-        ControlFlowGraph body = ConstructFromBranchingNode(nodesStream[0], sense, loopHelper);
-        condition.ConnectTo(body.Start);
-        body.End.ConnectNonJumpTo(condition);
+        DecisionNode condition = new(whileNode, whileNode.Condition, localHelper.Scope);
 
-        // Construct the continuation block, which may be empty, then connect it to the end of the body
-        ControlFlowGraph continuationGraph = Construct(nodesStream[1..], sense, localHelper);
+        ControlFlowHelper whileHelper = new(localHelper)
+        {
+            LoopContinueContext = condition,
+            ContinuationContext = condition,
+            BreakContext = continuation,
+        };
 
-        // Connect the continuation to the first condition
-        condition.ConnectTo(continuationGraph.Start);
+        // Generate the body of the while loop.
+        CfgNode then = Construct(whileNode.Then, sense, whileHelper, false);
 
-        // Connect loop body edges
-        loopHelper.ConnectLoopEdges(condition, continuationGraph.Start);
+        CfgNode.Connect(condition, then);
+        condition.WhenTrue = then;
 
-        // A graph that spans from the while condition to the end of the continuation graph.
-        return new(condition, continuationGraph.End);
+        // If false, then use the continuation.
+        CfgNode.Connect(condition, continuation);
+        condition.WhenFalse = continuation;
+
+        return condition;
     }
 
-    private static ControlFlowGraph Construct_DoWhileLoop(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode Construct_DoWhileStatement(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
-        // Create loop context, process the body, and connect any continue/break statements
-        ControlFlowHelper loopHelper = localHelper.EnterLoopScope();
+        // Handle the do-while statement
+        DoWhileStmtNode doWhileNode = (DoWhileStmtNode)currentNode!.Value;
 
-        // Create the do body
-        ControlFlowGraph body = ConstructFromBranchingNode(nodesStream[0], sense, loopHelper);
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
-        // Handle the while condition
-        BasicBlock condition = new(nodesStream[1], localHelper.Scope, ControlFlowType.Loop);
+        DecisionNode condition = new(doWhileNode, doWhileNode.Condition, localHelper.Scope);
 
-        body.End.ConnectNonJumpTo(condition);
-        condition.ConnectTo(body.Start);
+        ControlFlowHelper whileHelper = new(localHelper)
+        {
+            LoopContinueContext = condition,
+            ContinuationContext = condition,
+            BreakContext = continuation,
+        };
 
-        // Construct the continuation block, which may be empty, then connect it to the end of the body
-        ControlFlowGraph continuationGraph = Construct(nodesStream[1..], sense, localHelper);
+        // Generate the body of the do-while loop.
+        CfgNode then = Construct(doWhileNode.Then, sense, whileHelper, false);
 
-        // Connect the continuation to the first condition
-        condition.ConnectTo(continuationGraph.Start);
+        CfgNode.Connect(condition, then);
+        condition.WhenTrue = then;
 
-        // Connect loop body edges
-        loopHelper.ConnectLoopEdges(condition, continuationGraph.Start);
+        // If false, then use the continuation.
+        CfgNode.Connect(condition, continuation);
+        condition.WhenFalse = continuation;
 
-        // A graph that spans from the while condition to the end of the continuation graph.
-        return new(condition, continuationGraph.End);
+        // Unlike while, the body is hit first.
+        return then;
     }
 
-    private static ControlFlowGraph Construct_ForLoop(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode Construct_ForeachStmt(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
-        // TODO: for now, we'll skip this and just build the continuation graph
+        // Foreach loop: (enumeration) -> (body) -> (enumeration)
+        //                             -> (continuation)
 
-        // TODO: Indexer, condition, incrementer. indexer -> condition -> body -> incrementer -|> condition
-        // Handle the while condition
-        //BasicBlock condition = new(nodesStream[0], baseScope, ControlFlowType.Loop);
+        // Generate the body.
+        ForeachStmtNode foreachNode = (ForeachStmtNode)currentNode!.Value;
 
-        //ControlFlowGraph body = ConstructFromBranchingNode(nodesStream[0], sense, baseScope + 1);
-        //condition.ConnectTo(body.Start);
-        //body.End.ConnectTo(condition);
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
-        // Construct the continuation block, which may be empty, then connect it to the end of the body
-        ControlFlowGraph continuationGraph = Construct(nodesStream[1..], sense, localHelper);
+        // Generate an enumeration node.
+        EnumerationNode enumeration = new(foreachNode, localHelper.Scope /*+ 1*/);
 
-        // Connect the continuation to the first condition
-        //condition.ConnectTo(continuationGraph.Start);
+        CfgNode.Connect(enumeration, continuation);
+        enumeration.Continuation = continuation;
 
-        // A graph that spans from the while condition to the end of the continuation graph.
-        return new(continuationGraph.Start, continuationGraph.End);
+        // Now generate the body.
+        ControlFlowHelper newLocalHelper = new(localHelper)
+        {
+            LoopContinueContext = enumeration,
+            ContinuationContext = enumeration,
+            BreakContext = continuation,
+        };
+
+        // Now generate the body of the foreach loop.
+        CfgNode body = Construct(foreachNode.Then, sense, newLocalHelper);
+
+        CfgNode.Connect(enumeration, body);
+        enumeration.Body = body;
+
+        return enumeration;
     }
 
-    private static ControlFlowGraph Construct_ForeachLoop(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode Construct_ForStmt(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
-        // TODO: for now, we'll skip this and just build the continuation graph
+        // For loop: (iteration) -> (body) -> (iteration)
+        //                             -> (continuation)
 
-        // TODO: reduce to a for loop
-        // Handle the while condition
-        //BasicBlock condition = new(nodesStream[0], baseScope, ControlFlowType.Loop);
+        // Generate the body.
+        ForStmtNode forNode = (ForStmtNode)currentNode!.Value;
 
-        //ControlFlowGraph body = ConstructFromBranchingNode(nodesStream[0], sense, baseScope + 1);
-        //condition.ConnectTo(body.Start);
-        //body.End.ConnectTo(condition);
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
-        // Construct the continuation block, which may be empty, then connect it to the end of the body
-        ControlFlowGraph continuationGraph = Construct(nodesStream[1..], sense, localHelper);
+        // Generate an enumeration node.
+        IterationNode iteration = new(forNode, forNode.Init, forNode.Condition, forNode.Increment, localHelper.Scope);
 
-        // Connect the continuation to the first condition
-        //condition.ConnectTo(continuationGraph.Start);
+        CfgNode.Connect(iteration, continuation);
+        iteration.Continuation = continuation;
 
-        // A graph that spans from the while condition to the end of the continuation graph.
-        return new(continuationGraph.Start, continuationGraph.End);
+        // Now generate the body.
+        ControlFlowHelper newLocalHelper = new(localHelper)
+        {
+            LoopContinueContext = iteration,
+            ContinuationContext = iteration,
+            BreakContext = continuation,
+        };
+
+        // Now generate the body of the foreach loop.
+        CfgNode body = Construct(forNode.Then, sense, newLocalHelper);
+
+        CfgNode.Connect(iteration, body);
+        iteration.Body = body;
+
+        return iteration;
     }
 
-    private static ControlFlowGraph Construct_SwitchStatement(Span<ASTNode> nodesStream, ParserIntelliSense sense, ControlFlowHelper localHelper)
+    private static CfgNode Construct_SwitchStmt(ref LinkedListNode<AstNode>? currentNode, ParserIntelliSense sense, ControlFlowHelper localHelper)
     {
-        // TODO: for now, we'll skip this and just build the continuation graph
+        SwitchStmtNode switchAstNode = (SwitchStmtNode)currentNode!.Value;
 
-        // Construct the continuation block, which may be empty, then connect it to the end of the body
-        ControlFlowGraph continuationGraph = Construct(nodesStream[1..], sense, localHelper);
+        // Get the continuation first.
+        currentNode = currentNode.Next;
+        CfgNode continuation = Construct(ref currentNode, sense, localHelper);
 
-        return new(continuationGraph.Start, continuationGraph.End);
+        SwitchNode switchNode = new(switchAstNode, continuation, localHelper.Scope);
+
+        // If there are no cases to analyse, then just early return.
+        if (switchAstNode.Cases.Cases.Count == 0)
+        {
+            return switchNode;
+        }
+
+        SwitchHelper switchHelper = new(continuation);
+
+        // Build the labels recursively, which in practice will go backwards, then we'll connect to the first label.
+        CfgNode firstLabel = Construct_SwitchBranch(switchAstNode.Cases.Cases.First!, switchNode, sense, localHelper, switchHelper, out _);
+
+        CfgNode.Connect(switchNode, firstLabel);
+        switchNode.FirstLabel = firstLabel;
+
+        return switchNode;
     }
 
-    private static bool IsControlFlowNode(ASTNode node)
+    private static CfgNode Construct_SwitchBranch(LinkedListNode<CaseStmtNode> @case, SwitchNode switchNode, ParserIntelliSense sense, ControlFlowHelper localHelper, SwitchHelper switchHelper, out CfgNode branchBody)
     {
-        return node.NodeType == ASTNodeType.IfStmt ||
-            node.NodeType == ASTNodeType.WhileStmt ||
-            node.NodeType == ASTNodeType.DoWhileStmt ||
-            node.NodeType == ASTNodeType.ForStmt ||
-            node.NodeType == ASTNodeType.ForeachStmt ||
-            node.NodeType == ASTNodeType.SwitchStmt;
+        CaseStmtNode current = @case.Value;
+
+        // Check for duplicate default labels within this case
+        bool hasDefault = false;
+        foreach (CaseLabelNode label in current.Labels)
+        {
+            if (label.NodeType == AstNodeType.DefaultLabel)
+            {
+                if (hasDefault || switchHelper.ContainsDefaultLabel)
+                {
+                    sense.AddSpaDiagnostic(label.Value?.Range ?? label.Keyword.Range, GSCErrorCodes.MultipleDefaultLabels);
+                }
+                else
+                {
+                    hasDefault = true;
+                    switchHelper.ContainsDefaultLabel = true;
+                }
+            }
+        }
+
+        // Create a single decision node for this case (containing all its labels)
+        SwitchCaseDecisionNode caseDecision = new(current, switchNode, hasDefault, localHelper.Scope);
+
+        // Track what the continuation for the body should be, ie in case of fall-through.
+        CfgNode continuationForBody = switchHelper.Continuation;
+
+        // Step 1: recurse into other branches, and let them generate their case nodes backwards.
+        CfgNode? nextCaseDecision = null;
+        if (@case.Next is not null)
+        {
+            nextCaseDecision = Construct_SwitchBranch(@case.Next!, switchNode, sense, localHelper, switchHelper, out continuationForBody);
+        }
+
+        // Step 2: construct the body of the case, knowing the continuation context.
+        ControlFlowHelper newLocalHelper = new(localHelper)
+        {
+            ContinuationContext = continuationForBody,
+            BreakContext = switchHelper.Continuation,
+        };
+
+        branchBody = Construct(current.Body, sense, newLocalHelper);
+
+        // Step 3: connect this case decision node to the body and next case/continuation
+        CfgNode.Connect(caseDecision, branchBody);
+        caseDecision.WhenTrue = branchBody;
+
+        // If this case contains only default label(s), it should be the unmatched node
+        bool hasOnlyDefault = current.Labels.All(l => l.NodeType == AstNodeType.DefaultLabel);
+
+        if (hasOnlyDefault)
+        {
+            // Default-only case: set as unmatched node and point WhenFalse to body (unconditional)
+            switchHelper.UnmatchedNode = caseDecision;
+            caseDecision.WhenFalse = branchBody;
+
+            // Return the next case decision if it exists, otherwise the unmatched node (this node)
+            return nextCaseDecision ?? caseDecision;
+        }
+        else
+        {
+            // Regular case: connect WhenFalse to next case or unmatched node
+            if (nextCaseDecision is not null)
+            {
+                CfgNode.Connect(caseDecision, nextCaseDecision);
+                caseDecision.WhenFalse = nextCaseDecision;
+            }
+            else
+            {
+                CfgNode.Connect(caseDecision, switchHelper.UnmatchedNode);
+                caseDecision.WhenFalse = switchHelper.UnmatchedNode;
+            }
+
+            return caseDecision;
+        }
     }
 
-    private static bool IsJumpNode(ASTNode node)
+    private static bool IsControlFlowNode(AstNode node)
     {
-        return node.NodeType == ASTNodeType.BreakStmt ||
-            node.NodeType == ASTNodeType.ContinueStmt ||
-            node.NodeType == ASTNodeType.ReturnStmt;
+        return node.NodeType == AstNodeType.IfStmt ||
+            node.NodeType == AstNodeType.WhileStmt ||
+            node.NodeType == AstNodeType.DoWhileStmt ||
+            node.NodeType == AstNodeType.ForStmt ||
+            node.NodeType == AstNodeType.ForeachStmt ||
+            node.NodeType == AstNodeType.SwitchStmt ||
+            node.NodeType == AstNodeType.BraceBlock;
+    }
+
+    private static bool IsJumpNode(AstNode node)
+    {
+        return node.NodeType == AstNodeType.BreakStmt ||
+            node.NodeType == AstNodeType.ContinueStmt ||
+            node.NodeType == AstNodeType.ReturnStmt;
+    }
+
+    /// <summary>
+    /// Checks if there is a path from the start node to the target node.
+    /// Uses BFS to traverse the CFG.
+    /// </summary>
+    private static bool CanReach(CfgNode start, CfgNode target)
+    {
+        if (start == target)
+        {
+            return true;
+        }
+
+        HashSet<CfgNode> visited = new();
+        Queue<CfgNode> queue = new();
+        queue.Enqueue(start);
+        visited.Add(start);
+
+        while (queue.Count > 0)
+        {
+            CfgNode current = queue.Dequeue();
+
+            foreach (CfgNode outgoing in current.Outgoing)
+            {
+                if (outgoing == target)
+                {
+                    return true;
+                }
+
+                if (!visited.Contains(outgoing))
+                {
+                    visited.Add(outgoing);
+                    queue.Enqueue(outgoing);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the range for reporting a fall-through diagnostic.
+    /// Returns the range of the last statement in the case body, or the last label if the body is empty.
+    /// </summary>
+    private static Range GetCaseFallthroughRange(CaseStmtNode caseStmt)
+    {
+        // If the case body has statements, use the last statement's range
+        if (caseStmt.Body.Statements.Count > 0)
+        {
+            AstNode lastStatement = caseStmt.Body.Statements.Last!.Value;
+            return GetNodeRange(lastStatement);
+        }
+
+        // If the body is empty, use the range of the last label's keyword
+        if (caseStmt.Labels.Count > 0)
+        {
+            CaseLabelNode lastLabel = caseStmt.Labels.Last!.Value;
+            return lastLabel.Keyword.Range;
+        }
+
+        // Fallback: shouldn't reach here, but return a default range
+        return new Range();
+    }
+
+    /// <summary>
+    /// Extracts a range from an AST node. Handles different node types appropriately.
+    /// </summary>
+    private static Range GetNodeRange(AstNode node)
+    {
+        return node switch
+        {
+            ControlFlowActionNode action => action.Range,
+            ReturnStmtNode ret when ret.Value != null => ret.Value.Range,
+            ExprNode expr => expr.Range,
+            _ => new Range() // Default fallback
+        };
     }
 }
-
-#endif

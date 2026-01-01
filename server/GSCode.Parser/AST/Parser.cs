@@ -3,7 +3,6 @@ using GSCode.Data;
 using GSCode.Parser.Data;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.SPA;
-using GSCode.Parser.SPA.Sense;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Parser.AST;
@@ -270,8 +269,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 CurrentTokenType != TokenType.Function &&
                 CurrentTokenType != TokenType.Class &&
                 CurrentTokenType != TokenType.Namespace &&
-                // Can't open a dev block if we're already in one
-                (CurrentTokenType != TokenType.OpenDevBlock || InDevBlock()) &&
+                // Can't open a dev block - stop recovery when encountered
+                CurrentTokenType != TokenType.OpenDevBlock &&
                 // Can't be closing a dev block if we're not in one
                 (CurrentTokenType != TokenType.CloseDevBlock || !InDevBlock()) &&
                 CurrentTokenType != TokenType.Eof
@@ -281,8 +280,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
                 // We've recovered, so we can try to parse the next script definition.
                 if (CurrentTokenType is TokenType.Precache or TokenType.UsingAnimTree or TokenType.Function or TokenType.Class or TokenType.Namespace ||
-                   // Newly opening a dev block
-                   (CurrentTokenType == TokenType.OpenDevBlock && !InDevBlock()))
+                   // Opening a dev block (including nested)
+                   CurrentTokenType == TokenType.OpenDevBlock)
                 {
                     ExitRecovery();
                     break;
@@ -313,7 +312,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
                 return FunDefn();
             case TokenType.Class:
                 return ClassDefn();
-            case TokenType.OpenDevBlock when !InDevBlock():
+            case TokenType.OpenDevBlock:
                 return DefnDevBlock();
             case TokenType.Using:
                 // The GSC compiler doesn't allow this, but we'll still attempt to parse it to get dependency info.
@@ -338,7 +337,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// Parses and outputs a script precache node.
     /// </summary>
     /// <remarks>
-    /// PrecacheDir := PRECACHE OPENPAREN STRING COMMA STRING CLOSEPAREN SEMICOLON
+    /// PrecacheDir := PRECACHE OPENPAREN STRING COMMA STRING [COMMA] [STRING] CLOSEPAREN SEMICOLON
     /// </remarks>
     /// <returns></returns>
     private PrecacheNode? PrecacheDir()
@@ -376,6 +375,20 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             return null;
         }
 
+        // Optional COMMA
+        if (AdvanceIfType(TokenType.Comma))
+        {
+            // Optional third STRING
+            if (CurrentTokenType == TokenType.String)
+            {
+                // We don't care about the third string, so just advance past it.
+                Advance();
+            }
+            else
+            {
+                AddError(GSCErrorCodes.ExpectedPrecachePath, CurrentToken.Lexeme);
+            }
+        }
         // Check for CLOSEPAREN
         if (!AdvanceIfType(TokenType.CloseParen))
         {
@@ -865,7 +878,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             case TokenType.WaitRealTime:
             // Misc
             case TokenType.Const:
-            case TokenType.OpenDevBlock when !InDevBlock():
+            case TokenType.OpenDevBlock:
             case TokenType.OpenBrace:
             case TokenType.Semicolon:
             // Contextual
@@ -981,9 +994,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Parse the then branch
         AstNode? then = Stmt();
 
-        return new()
+        return new(condition)
         {
-            Condition = condition,
             Then = then
         };
     }
@@ -1030,7 +1042,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         // Case 2: just an else clause
         AstNode? then = Stmt();
 
-        return new()
+        return new(null)
         {
             Then = then
         };
@@ -1235,9 +1247,9 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         if (valueIdentifierToken is not null)
         {
-            return new ForeachStmtNode(valueIdentifierToken, firstIdentifierToken, collection, then);
+            return new ForeachStmtNode(new IdentifierExprNode(valueIdentifierToken), new IdentifierExprNode(firstIdentifierToken), collection, then);
         }
-        return new ForeachStmtNode(firstIdentifierToken, null, collection, then);
+        return new ForeachStmtNode(new IdentifierExprNode(firstIdentifierToken), null, collection, then);
     }
 
     /// <summary>
@@ -1395,18 +1407,18 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private CaseLabelNode CaseOrDefaultLabel()
     {
         // Default label
-        if (AdvanceIfType(TokenType.Default))
+        if (ConsumeIfType(TokenType.Default, out Token? defaultToken))
         {
             // Check for COLON
             if (!AdvanceIfType(TokenType.Colon))
             {
                 AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
             }
-            return new(AstNodeType.DefaultLabel);
+            return new(AstNodeType.DefaultLabel, defaultToken);
         }
 
         // Case label
-        if (!AdvanceIfType(TokenType.Case))
+        if (!ConsumeIfType(TokenType.Case, out Token? caseToken))
         {
             AddError(GSCErrorCodes.ExpectedToken, "case", CurrentToken.Lexeme);
         }
@@ -1420,7 +1432,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             AddError(GSCErrorCodes.ExpectedToken, ':', CurrentToken.Lexeme);
         }
 
-        return new(AstNodeType.CaseLabel, expression);
+        // In practice, this method is only ever hit if we've already detected a case label.
+        return new(AstNodeType.CaseLabel, caseToken!, expression);
     }
 
     /// <summary>
@@ -2490,12 +2503,26 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Check for CLOSEBRACKET, twice
-        if (!AdvanceIfType(TokenType.CloseBracket) || !AdvanceIfType(TokenType.CloseBracket))
+        Position derefEnd = CurrentToken.Range.End;
+        if (!AdvanceIfType(TokenType.CloseBracket))
         {
             AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
         }
+        else
+        {
+            derefEnd = CurrentToken.Range.End;
+            if (!AdvanceIfType(TokenType.CloseBracket))
+            {
+                AddError(GSCErrorCodes.ExpectedToken, ']', CurrentToken.Lexeme);
+            }
+        }
 
-        ExprNode? result = DerefCallOp(openBracket, derefExpr);
+        // Wrap the expression in a DerefExprNode to indicate it came from [[ ]]
+        DerefExprNode? wrappedDeref = derefExpr is not null
+            ? new DerefExprNode(RangeHelper.From(openBracket.Range.Start, derefEnd), derefExpr)
+            : null;
+
+        ExprNode? result = DerefCallOp(openBracket, wrappedDeref);
         ExitRecovery();
 
         return result;
@@ -2546,14 +2573,11 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// </summary>
     /// <remarks>
     /// CallOrAccessOpRhs := CallOpRhs | THREAD CalledOnCallOpRhs | CalledOnCallOpRhs | AccessOpRhs
-    /// 
-    /// TODO TODO TODO: not sure CallOrAccessOp here (for parsing patterns like self foo::bar()) is correct - this might be a left-recursive loop
     /// </remarks>
     /// <param name="left"></param>
     /// <returns></returns>
     private ExprNode? CallOrAccessOpRhs(ExprNode left)
     {
-        // TODO: current grammar won't handle self thread ... but we can bolt this on later
         if (CurrentTokenType == TokenType.ScopeResolution || CurrentTokenType == TokenType.OpenParen)
         {
             return CallOpRhs(left);
@@ -2572,7 +2596,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Called-on ent call
-        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
+        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket || CurrentTokenType == TokenType.Waittill || CurrentTokenType == TokenType.WaittillMatch)
         {
             return CalledOnRhs(left);
         }
@@ -2586,7 +2610,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         }
 
         // Which itself could still be a called-on target
-        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket)
+        if (CurrentTokenType == TokenType.Identifier || CurrentTokenType == TokenType.OpenBracket || CurrentTokenType == TokenType.Waittill || CurrentTokenType == TokenType.WaittillMatch)
         {
             return CalledOnRhs(newLeft);
         }
@@ -2597,12 +2621,24 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// Parses the right-hand side of a called-on function call or an array indexer.
     /// </summary>
     /// <remarks>
-    /// CalledOnRhs := IDENTIFIER CallOpRhs | OPENBRACKET CalledOnDerefOrIndexerOp
+    /// CalledOnRhs := WAITTILL WaittillRhs | WAITTILLMATCH WaittillMatchRhs | IDENTIFIER CallOpRhs | OPENBRACKET CalledOnDerefOrIndexerOp
     /// </remarks>
     /// <param name="left"></param>
     /// <returns></returns>
     private ExprNode? CalledOnRhs(ExprNode left)
     {
+        // Waittill operation
+        if (ConsumeIfType(TokenType.Waittill, out Token? waitTillToken))
+        {
+            return WaittillRhs(left, waitTillToken);
+        }
+
+        // WaittillMatch operation
+        if (ConsumeIfType(TokenType.WaittillMatch, out Token? waitTillMatchToken))
+        {
+            return WaittillMatchRhs(left, waitTillMatchToken);
+        }
+
         // Called-on with identifier, so it's self foo::bar() or self foo()
         if (ConsumeIfType(TokenType.Identifier, out Token? functionQualifier))
         {
@@ -2629,6 +2665,117 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 
         AddError(GSCErrorCodes.ExpectedFunctionIdentifier, CurrentToken.Lexeme);
         return null;
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a wait till operation.
+    /// </summary>
+    /// <param name="left"></param>
+    /// <param name="waitTillToken"></param>
+    /// <remarks>
+    /// WaittillRhs := OPENPAREN Expr WaittillVariables CLOSEPAREN
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? WaittillRhs(ExprNode left, Token waitTillToken)
+    {
+        // Check for OPENPAREN
+        if (!ConsumeIfType(TokenType.OpenParen, out Token? openParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+            return null;
+        }
+
+        // Parse the expression that gives us the wait till condition
+        ExprNode? expr = Expr();
+        if (expr is null)
+        {
+            return null;
+        }
+
+        // Then find any variable declarations that are populated when this wait till is hit.
+        WaittillVariablesNode variables = WaittillVariables();
+
+        if (!ConsumeIfType(TokenType.CloseParen, out Token? closeParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+            return new WaittillNode(left, expr, variables, RangeHelper.From(left.Range.Start, expr.Range.End));
+        }
+
+        return new WaittillNode(left, expr, variables, RangeHelper.From(left.Range.Start, closeParen.Range.End));
+    }
+
+    /// <summary>
+    /// Parses zero-or-more wait till variable declarations.
+    /// </summary>
+    /// <remarks>
+    /// WaittillVariables := COMMA IDENTIFIER WaittillVariables | ε
+    /// </remarks>
+    /// <returns></returns>
+    private WaittillVariablesNode WaittillVariables()
+    {
+        // If no commas, then at the end of the list.
+        if (!AdvanceIfType(TokenType.Comma))
+        {
+            return new();
+        }
+
+        // Seek to the next identifier
+        if (!ConsumeIfType(TokenType.Identifier, out Token? identifierToken))
+        {
+            AddError(GSCErrorCodes.ExpectedWaittillIdentifier, CurrentToken.Lexeme);
+            return new();
+        }
+
+        // Recurse to find any other waittill parameter names.
+        WaittillVariablesNode others = WaittillVariables();
+        others.Variables.AddFirst(new IdentifierExprNode(identifierToken));
+
+        return others;
+    }
+
+    /// <summary>
+    /// Parses the right-hand side of a waittillmatch operation.
+    /// </summary>
+    /// <param name="left"></param>
+    /// <param name="waitTillMatchToken"></param>
+    /// <remarks>
+    /// WaittillMatchRhs := OPENPAREN Expr (COMMA Expr)? CLOSEPAREN
+    /// </remarks>
+    /// <returns></returns>
+    private ExprNode? WaittillMatchRhs(ExprNode left, Token waitTillMatchToken)
+    {
+        // Check for OPENPAREN
+        if (!ConsumeIfType(TokenType.OpenParen, out Token? openParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, '(', CurrentToken.Lexeme);
+            return null;
+        }
+
+        // First required argument: notify name (string)
+        ExprNode? notifyName = Expr();
+        if (notifyName is null)
+        {
+            return null;
+        }
+
+        // Optional second argument: match value (string)
+        ExprNode? matchValue = null;
+        if (ConsumeIfType(TokenType.Comma, out _))
+        {
+            matchValue = Expr();
+            if (matchValue is null)
+            {
+                return null;
+            }
+        }
+
+        if (!ConsumeIfType(TokenType.CloseParen, out Token? closeParen))
+        {
+            AddError(GSCErrorCodes.ExpectedToken, ')', CurrentToken.Lexeme);
+            return new WaittillMatchNode(left, notifyName, matchValue, RangeHelper.From(left.Range.Start, (matchValue ?? notifyName).Range.End));
+        }
+
+        return new WaittillMatchNode(left, notifyName, matchValue, RangeHelper.From(left.Range.Start, closeParen.Range.End));
     }
 
     /// <summary>
@@ -2718,10 +2865,10 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             FunCallNode call = new FunCallNode(left, functionArgs);
 
             // TODO: HACK - create permanent function hoverable solution at SPA-stage in a future version
-            if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunctionDefinition function)
-            {
-                Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
-            }
+            //if (left is IdentifierExprNode identifierExprNode && _scriptAnalyserData.GetApiFunction(identifierExprNode.Identifier) is ScrFunction function)
+            //{
+            //    Sense.AddSenseToken(identifierExprNode.Token, new DumbFunctionSymbol(identifierExprNode.Token, function));
+            //}
             return CallOrAccessOpRhs(call);
         }
 
@@ -2912,6 +3059,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
             case TokenType.AnimIdentifier:
                 Token identifierToken = CurrentToken;
                 Advance();
+                // TODO: doesn't actually use the anim identifier type
                 return new IdentifierExprNode(identifierToken);
         }
 
@@ -3146,25 +3294,25 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
 /// Records the definition of a function parameter for semantics & hovers
 /// </summary>
 /// <param name="Source">The parameter source</param>
-internal record DumbFunctionSymbol(Token Token, ScrFunctionDefinition Source) : ISenseDefinition
-{
-    // I'm pretty sure this is redundant
-    public bool IsFromPreprocessor { get; } = false;
-    public Range Range { get; } = Token.Range;
+// internal record DumbFunctionSymbol(Token Token, ScrFunctionDefinition Source) : ISenseDefinition
+// {
+//     // I'm pretty sure this is redundant
+//     public bool IsFromPreprocessor { get; } = false;
+//     public Range Range { get; } = Token.Range;
 
-    public string SemanticTokenType { get; } = "function";
-    public string[] SemanticTokenModifiers { get; } = [];
+//     public string SemanticTokenType { get; } = "function";
+//     public string[] SemanticTokenModifiers { get; } = [];
 
-    public Hover GetHover()
-    {
-        return new()
-        {
-            Range = Range,
-            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
-            {
-                Kind = MarkupKind.Markdown,
-                Value = Source.Documentation
-            })
-        };
-    }
-}
+//     public Hover GetHover()
+//     {
+//         return new()
+//         {
+//             Range = Range,
+//             Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+//             {
+//                 Kind = MarkupKind.Markdown,
+//                 Value = Source.Documentation
+//             })
+//         };
+//     }
+// }

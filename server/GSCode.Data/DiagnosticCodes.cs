@@ -8,135 +8,143 @@ internal record class DiagnosticCode(string Message, DiagnosticSeverity Category
 
 public static class DiagnosticSources
 {
-    public const string Lexer = "gscode-lex"; // Lexical token creation
-    public const string Preprocessor = "gscode-mac"; // Preprocessor transformations
-    public const string Ast = "gscode-ast"; // Syntax tree generation
-    public const string Spa = "gscode-spa"; // Static program analysis
-    public const string Ide = "gscode-ide"; // IDE/Language Server enforced conventions
+        public const string Lexer = "gscode-lex"; // Lexical token creation
+        public const string Preprocessor = "gscode-mac"; // Preprocessor transformations
+        public const string Ast = "gscode-ast"; // Syntax tree generation
+        public const string Spa = "gscode-spa"; // Static program analysis
+        public const string Ide = "gscode-ide"; // IDE/Language Server enforced conventions
 }
 
 public enum GSCErrorCodes
 {
-    // 1xxx errors are issued by the preprocessor
-    ExpectedPreprocessorToken = 1000,
-    UnexpectedCharacter = 1001,
-    ExpectedInsertPath = 1002,
-    ExpectedMacroParameter = 1003,
-    DuplicateMacroParameter = 1004,
-    MissingInsertFile = 1005,
-    TooManyMacroArguments = 1006,
-    TooFewMacroArguments = 1007,
-    MisplacedPreprocessorDirective = 1008,
-    MultilineStringLiteral = 1009,
-    ExpectedMacroIdentifier = 1010,
-    UnterminatedPreprocessorDirective = 1011,
-    InvalidInsertPath = 1012,
-    InvalidLineContinuation = 1013,
-    DuplicateMacroDefinition = 1014,
-    UserDefinedMacroIgnored = 1015,
-    MissingMacroParameterList = 1016,
-    InactivePreprocessorBranch = 1017,
+        // 1xxx errors are issued by the preprocessor
+        ExpectedPreprocessorToken = 1000,
+        UnexpectedCharacter = 1001,
+        ExpectedInsertPath = 1002,
+        ExpectedMacroParameter = 1003,
+        DuplicateMacroParameter = 1004,
+        MissingInsertFile = 1005,
+        TooManyMacroArguments = 1006,
+        TooFewMacroArguments = 1007,
+        MisplacedPreprocessorDirective = 1008,
+        MultilineStringLiteral = 1009,
+        ExpectedMacroIdentifier = 1010,
+        UnterminatedPreprocessorDirective = 1011,
+        InvalidInsertPath = 1012,
+        InvalidLineContinuation = 1013,
+        DuplicateMacroDefinition = 1014,
+        UserDefinedMacroIgnored = 1015,
+        MissingMacroParameterList = 1016,
+        InactivePreprocessorBranch = 1017,
 
-    // 2xxx errors are issued by the parser
-    ExpectedPathSegment = 2000,
-    ExpectedSemiColon = 2001,
-    UnexpectedUsing = 2002,
-    ExpectedScriptDefn = 2003,
-    ExpectedToken = 2004,
-    ExpectedPrecacheType = 2005,
-    ExpectedPrecachePath = 2006,
-    ExpectedAnimTreeName = 2007,
-    ExpectedNamespaceIdentifier = 2008,
-    ExpectedFunctionIdentifier = 2009,
-    UnexpectedFunctionModifier = 2010,
-    ExpectedParameterIdentifier = 2011,
-    ExpectedConstantIdentifier = 2012,
-    ExpectedForeachIdentifier = 2013,
-    ExpectedAssignmentOperator = 2014,
-    ExpectedClassIdentifier = 2015,
-    ExpectedMethodIdentifier = 2016,
-    ExpectedFunctionQualification = 2017,
-    ExpectedExpressionTerm = 2018,
-    ExpectedConstructorParenthesis = 2019,
-    UnexpectedConstructorParameter = 2020,
-    ExpectedClassBodyDefinition = 2021,
-    ExpectedMemberIdentifier = 2022,
+        // 2xxx errors are issued by the parser
+        ExpectedPathSegment = 2000,
+        ExpectedSemiColon = 2001,
+        UnexpectedUsing = 2002,
+        ExpectedScriptDefn = 2003,
+        ExpectedToken = 2004,
+        ExpectedPrecacheType = 2005,
+        ExpectedPrecachePath = 2006,
+        ExpectedAnimTreeName = 2007,
+        ExpectedNamespaceIdentifier = 2008,
+        ExpectedFunctionIdentifier = 2009,
+        UnexpectedFunctionModifier = 2010,
+        ExpectedParameterIdentifier = 2011,
+        ExpectedConstantIdentifier = 2012,
+        ExpectedForeachIdentifier = 2013,
+        ExpectedAssignmentOperator = 2014,
+        ExpectedClassIdentifier = 2015,
+        ExpectedMethodIdentifier = 2016,
+        ExpectedFunctionQualification = 2017,
+        ExpectedExpressionTerm = 2018,
+        ExpectedConstructorParenthesis = 2019,
+        UnexpectedConstructorParameter = 2020,
+        ExpectedClassBodyDefinition = 2021,
+        ExpectedMemberIdentifier = 2022,
+        ExpectedWaittillIdentifier = 2023,
 
-    // 3xxx errors are issued by static analysis
-    ObjectTokenNotValid = 3000,
-    InvalidDereference = 3001,
-    DuplicateModifier = 3002,
-    IdentifierExpected = 3003,
-    IntegerTooLarge = 3004,
-    OperatorNotSupportedOnTypes = 3005,
-    CannotAssignToConstant = 3006,
-    StoreFunctionAsPointer = 3007,
-    IntegerTooSmall = 3008,
-    MissingAccompanyingConditional = 3009,
-    RedefinitionOfSymbol = 3010,
-    InvalidAssignmentTarget = 3011,
-    InvalidExpressionFollowingConstDeclaration = 3012,
-    VariableDeclarationExpected = 3013,
-    OperatorNotSupportedOn = 3014,
-    InvalidExpressionStatement = 3015,
-    NoImplicitConversionExists = 3016,
-    UnreachableCodeDetected = 3017,
-    DivisionByZero = 3018,
-    MissingDoLoop = 3019,
-    BelowVmRefreshRate = 3020,
-    CannotWaitNegativeDuration = 3021,
-    SquareBracketInitialisationNotSupported = 3022,
-    ExpressionExpected = 3023,
-    DoesNotContainMember = 3024,
-    VarargNotLastParameter = 3025,
-    ParameterNameReserved = 3026,
-    DuplicateFunction = 3027,
-    CannotUseAsIndexer = 3028,
-    IndexerExpected = 3029,
-    NotDefined = 3030,
-    NoEnclosingLoop = 3031,
-    CannotAssignToReadOnlyProperty = 3032,
-    MissingUsingFile = 3033,
+        // 3xxx errors are issued by static analysis
+        ObjectTokenNotValid = 3000,
+        InvalidDereference = 3001,
+        DuplicateModifier = 3002,
+        IdentifierExpected = 3003,
+        IntegerTooLarge = 3004,
+        OperatorNotSupportedOnTypes = 3005,
+        CannotAssignToConstant = 3006,
+        StoreFunctionAsPointer = 3007,
+        IntegerTooSmall = 3008,
+        MissingAccompanyingConditional = 3009,
+        RedefinitionOfSymbol = 3010,
+        InvalidAssignmentTarget = 3011,
+        InvalidExpressionFollowingConstDeclaration = 3012,
+        VariableDeclarationExpected = 3013,
+        OperatorNotSupportedOn = 3014,
+        InvalidExpressionStatement = 3015,
+        NoImplicitConversionExists = 3016,
+        UnreachableCodeDetected = 3017,
+        DivisionByZero = 3018,
+        MissingDoLoop = 3019,
+        BelowVmRefreshRate = 3020,
+        CannotWaitNegativeDuration = 3021,
+        SquareBracketInitialisationNotSupported = 3022,
+        ExpressionExpected = 3023,
+        DoesNotContainMember = 3024,
+        VarargNotLastParameter = 3025,
+        ParameterNameReserved = 3026,
+        DuplicateFunction = 3027,
+        CannotUseAsIndexer = 3028,
+        IndexerExpected = 3029,
+        NotDefined = 3030,
+        NoEnclosingLoop = 3031,
+        CannotAssignToReadOnlyProperty = 3032,
+        MissingUsingFile = 3033,
+        CannotEnumerateType = 3034,
+        FunctionDoesNotExist = 3035,
+        ExpectedFunction = 3036,
+        ReservedSymbol = 3037,
+        UnusedVariable = 3038,
+        UnusedParameter = 3039,
+        TooManyArguments = 3040,
+        TooFewArguments = 3041,
+        ArgumentTypeMismatch = 3042,
+        PossibleUndefinedAccess = 3043,
+        UnknownNamespace = 3044,
+        DuplicateCaseLabel = 3045,
+        MultipleDefaultLabels = 3046,
+        FallthroughCase = 3047,
+        UnreachableCase = 3048,
+        ShadowedSymbol = 3049,
+        UnusedUsing = 3050,
+        CircularDependency = 3051,
+        NoMatchingOverload = 3052,
+        CalledOnInvalidTarget = 3053,
+        InvalidThreadCall = 3054,
+        AssignOnThreadedFunction = 3055,
+        PossibleUndefinedComparison = 3056,
+        InvalidVectorComponent = 3057,
+        TooManyArgumentsUnverified = 3058,
+        TooFewArgumentsUnverified = 3059,
+        ExpectedConstantExpression = 3060,
 
-    // Newly added SPA diagnostics
-    UnusedVariable = 3034,
-    UnusedParameter = 3035,
-    TooManyArguments = 3036,
-    TooFewArguments = 3037,
-    ArgumentTypeMismatch = 3038,
-    PossibleUndefinedAccess = 3039,
-    UnknownNamespace = 3040,
-    DuplicateCaseLabel = 3041,
-    MultipleDefaultLabels = 3042,
-    FallthroughCase = 3043,
-    UnreachableCase = 3044,
-    ShadowedSymbol = 3045,
-    UnusedUsing = 3046,
-    CircularDependency = 3047,
-    NoMatchingOverload = 3048,
-    CalledOnInvalidTarget = 3049,
-    InvalidThreadCall = 3050,
-    AssignOnThreadedFunction = 3051,
+        // 8xxx errors are issued by the IDE for conventions
+        UnterminatedRegion = 8000,
 
-    // 8xxx errors are issued by the IDE for conventions
-    UnterminatedRegion = 8000,
+        // 9xxx errors are issued by the IDE for GSCode.NET faults
+        UnhandledLexError = 9000,
+        UnhandledMacError = 9001,
+        UnhandledAstError = 9002,
+        UnhandledSaError = 9003,
+        UnhandledFraError = 9004,
+        UnhandledSpaError = 9005,
+        UnhandledIdeError = 9006,
+        FailedToReadInsertFile = 9007,
 
-    // 9xxx errors are issued by the IDE for GSCode.NET faults
-    UnhandledLexError = 9000,
-    UnhandledMacError = 9001,
-    UnhandledAstError = 9002,
-    UnhandledSaError = 9003,
-    UnhandledFraError = 9004,
-    UnhandledSpaError = 9005,
-    UnhandledIdeError = 9006,
-    FailedToReadInsertFile = 9007,
-
-    PreprocessorIfAnalysisUnsupported = 9900,
+        PreprocessorIfAnalysisUnsupported = 9900,
 }
 
 public static class DiagnosticCodes
 {
-    private static readonly Dictionary<GSCErrorCodes, DiagnosticCode> diagnosticsDictionary = new()
+        private static readonly Dictionary<GSCErrorCodes, DiagnosticCode> diagnosticsDictionary = new()
     {
         // 1xxx
         { GSCErrorCodes.ExpectedPreprocessorToken, new("'{0}' expected, but instead got '{1}'.", DiagnosticSeverity.Error) },
@@ -182,6 +190,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.UnexpectedConstructorParameter, new("Expected ')' to complete constructor definition, but instead got '{0}'. If this was intentional, constructor parameters are not supported by GSC.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedClassBodyDefinition, new("Expected a member, method or constructor definition, but instead got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ExpectedMemberIdentifier, new("Expected an identifier corresponding to a member name, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ExpectedWaittillIdentifier, new("Expected an identifier corresponding to a wait till variable name, but instead got '{0}'.", DiagnosticSeverity.Error) },
 
         // 3xxx
         { GSCErrorCodes.ObjectTokenNotValid, new("The operator '{0}' is not valid on non-object type '{1}'.", DiagnosticSeverity.Error) },
@@ -191,7 +200,7 @@ public static class DiagnosticCodes
         { GSCErrorCodes.IntegerTooLarge, new("The integer '{0}' exceeds the maximum integer value supported.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.OperatorNotSupportedOnTypes, new("The operator '{0}' is not supported on types '{1}' and '{2}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotAssignToConstant, new("The variable '{0}' cannot be assigned to, it is a constant.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.StoreFunctionAsPointer, new("Function '{0}' cannot be assigned directly to a variable, it must be pointed to.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.StoreFunctionAsPointer, new("A direct function reference cannot be assigned to a variable, it must be pointed to using the ampersand operator '&'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.IntegerTooSmall, new("The integer '{0}' is less than the minimum integer value supported.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingAccompanyingConditional, new("'else' conditional used without an accompanying 'if' statement.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.RedefinitionOfSymbol, new("The name '{0}' already exists in this context.", DiagnosticSeverity.Error) },
@@ -218,16 +227,19 @@ public static class DiagnosticCodes
         { GSCErrorCodes.NoEnclosingLoop, new("No enclosing loop out of which to break or continue.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CannotAssignToReadOnlyProperty, new("The property '{0}' cannot be assigned to, it is read-only.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.MissingUsingFile, new("Unable to locate file '{0}' in the workspace or in the shared scripts directory.", DiagnosticSeverity.Error) },
-        // Newly added SPA diagnostics
+        { GSCErrorCodes.CannotEnumerateType, new("Type '{0}' is not enumerable.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.FunctionDoesNotExist, new("The function '{0}' could not be resolved in this context and may not exist in built-ins.\nNote: Built-in function checking is based on Treyarch's API, which contains errors. Report falsely flagged functions.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.ExpectedFunction, new("Expected a function, but instead got '{0}'.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.ReservedSymbol, new("The symbol '{0}' is reserved.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.UnusedVariable, new("The variable '{0}' is declared but never used.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
         { GSCErrorCodes.UnusedParameter, new("The parameter '{0}' is never used.", DiagnosticSeverity.Hint, new[] { DiagnosticTag.Unnecessary }) },
-        { GSCErrorCodes.TooManyArguments, new("Function '{0}' called with {1} arguments, but expects {2}.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.TooFewArguments, new("Function '{0}' called with {1} arguments, but expects at least {2}.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.TooManyArguments, new("Function '{0}' called with {1} arguments, but expects at most {2}.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.TooFewArguments, new("Function '{0}' called with {1} arguments, but expects at least {2}.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.ArgumentTypeMismatch, new("Argument {0} to '{1}' expects '{2}', got '{3}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.PossibleUndefinedAccess, new("Possible dereference of 'undefined' value.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.UnknownNamespace, new("The namespace '{0}' does not exist.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.DuplicateCaseLabel, new("Duplicate 'case' label.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.MultipleDefaultLabels, new("Multiple 'default' labels in this switch.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.MultipleDefaultLabels, new("The switch statement contains multiple cases with the label value 'default'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.FallthroughCase, new("Control falls through from 'case' to the next 'case'.", DiagnosticSeverity.Information) },
         { GSCErrorCodes.UnreachableCase, new("'case' is unreachable.", DiagnosticSeverity.Warning, new[] { DiagnosticTag.Unnecessary }) },
         { GSCErrorCodes.ShadowedSymbol, new("Local '{0}' shadows a symbol from an outer scope.", DiagnosticSeverity.Information) },
@@ -236,8 +248,13 @@ public static class DiagnosticCodes
         { GSCErrorCodes.NoMatchingOverload, new("No overload of '{0}' matches argument types ({1}).", DiagnosticSeverity.Error) },
         { GSCErrorCodes.CalledOnInvalidTarget, new("Called-on target must be an entity/struct; got '{0}'.", DiagnosticSeverity.Error) },
         { GSCErrorCodes.InvalidThreadCall, new("Only function calls can be threaded.", DiagnosticSeverity.Error) },
-        { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it", DiagnosticSeverity.Warning) },
-  
+        { GSCErrorCodes.AssignOnThreadedFunction, new("Assigning a value on a threaded function can be undefined behavior if the function has a wait inside of it.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.PossibleUndefinedComparison, new("Possible comparison of 'undefined' value, which is not allowed.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.InvalidVectorComponent, new("Cannot use type '{0}' as a vector component.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.TooManyArgumentsUnverified, new("Function '{0}' called with {1} arguments, but expects at most {2}.\nNote: Argument count is derived from Treyarch's API, which may contain errors.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.TooFewArgumentsUnverified, new("Function '{0}' called with {1} arguments, but expects at least {2}.\nNote: Argument count is derived from Treyarch's API, which may contain errors.", DiagnosticSeverity.Warning) },
+        { GSCErrorCodes.ExpectedConstantExpression, new("A constant declaration must have a compile-time constant expression on the right-hand side.", DiagnosticSeverity.Error) },
+
         // 8xxx
         { GSCErrorCodes.UnterminatedRegion, new("No corresponding '/* endregion */' found to terminate '{0}' region.", DiagnosticSeverity.Warning) },
       
@@ -254,29 +271,29 @@ public static class DiagnosticCodes
         { GSCErrorCodes.PreprocessorIfAnalysisUnsupported, new("Preprocessor-if analysis is not currently supported. This might lead to incorrect labelling of syntax errors.", DiagnosticSeverity.Information) },
     };
 
-    public static Diagnostic GetDiagnostic(Range range, string source, GSCErrorCodes key, params object?[] arguments)
-    {
-        if (diagnosticsDictionary.ContainsKey(key))
+        public static Diagnostic GetDiagnostic(Range range, string source, GSCErrorCodes key, params object?[] arguments)
         {
-            DiagnosticCode result = diagnosticsDictionary[key];
-            return new()
-            {
-                Message = string.Format(result.Message, arguments),
-                Range = range,
-                Severity = result.Category,
-                Code = (int)key,
-                Source = source,
-                Tags = result.Tags
-            };
-        }
+                if (diagnosticsDictionary.ContainsKey(key))
+                {
+                        DiagnosticCode result = diagnosticsDictionary[key];
+                        return new()
+                        {
+                                Message = string.Format(result.Message, arguments),
+                                Range = range,
+                                Severity = result.Category,
+                                Code = (int)key,
+                                Source = source,
+                                Tags = result.Tags
+                        };
+                }
 
-        return new()
-        {
-            Message = "GSCode.NET Error: could not find an error matching this code.",
-            Range = range,
-            Severity = DiagnosticSeverity.Error,
-            Code = (int)key,
-            Source = source
-        };
-    }
+                return new()
+                {
+                        Message = "GSCode.NET Error: could not find an error matching this code.",
+                        Range = range,
+                        Severity = DiagnosticSeverity.Error,
+                        Code = (int)key,
+                        Source = source
+                };
+        }
 }

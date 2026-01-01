@@ -1,5 +1,4 @@
 ﻿using GSCode.Data;
-using GSCode.Parser.AST.Expressions;
 using GSCode.Parser.Lexical;
 using GSCode.Parser.Util;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -73,6 +72,12 @@ internal sealed class ParserIntelliSense
     public List<Diagnostic> Diagnostics { get; } = new();
 
     /// <summary>
+    /// When true, AddSenseToken calls are suppressed. Used during dataflow analysis
+    /// worklist phase to prevent incomplete type information from being recorded.
+    /// </summary>
+    public bool SilentSenseTokens { get; set; } = false;
+
+    /// <summary>
     /// List of dependencies to request from the Language Server.
     /// </summary>
     public List<DocumentUri> Dependencies { get; } = new();
@@ -123,6 +128,12 @@ internal sealed class ParserIntelliSense
 
     public void AddSenseToken(Token token, ISenseDefinition definition)
     {
+        // Suppress during dataflow worklist phase to avoid recording incomplete type info.
+        if (SilentSenseTokens)
+        {
+            return;
+        }
+
         // The token is from an insert (which we don't show) or it's already had a definition pushed.
         // In these cases, skip (for existing, the first gets precedence).
         if (token.IsFromPreprocessor || token.SenseDefinition is not null)

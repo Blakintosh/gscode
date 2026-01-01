@@ -78,7 +78,9 @@ internal static class ScrDataTypeNames
     public const string Bool = "bool";
     public const string Int = "int";
     public const string Float = "float";
+    public const string Number = "number";
     public const string String = "string";
+    public const string IString = "istring";
     public const string Array = "array";
     public const string Vec3 = "vector";
     public const string Struct = "struct";
@@ -90,6 +92,97 @@ internal static class ScrDataTypeNames
     public const string Function = "function";
     public const string FunctionPointer = "function*";
     public const string Undefined = "undefined";
+
+    public static string TypeToString(ScrDataTypes type)
+    {
+        if (IsAny(type))
+        {
+            return ScrDataTypeNames.Any;
+        }
+
+        StringBuilder result = new();
+        bool first = true;
+
+        foreach (ScrDataTypes value in Enum.GetValues(typeof(ScrDataTypes)))
+        {
+            // Skip the "None" and "Unknown" values
+            if (value == ScrDataTypes.Void || value == ScrDataTypes.Any)
+            {
+                continue;
+            }
+
+            if ((type & value) == value)
+            {
+                // Skip the Error marker type
+                if (value == ScrDataTypes.Error)
+                {
+                    continue;
+                }
+                // Skip base types when superset/union types are present
+                // Number is Int | Float, so skip Int and Float if Number is present
+                if (value == ScrDataTypes.Int && (type & ScrDataTypes.Number) == ScrDataTypes.Number)
+                {
+                    continue;
+                }
+                if (value == ScrDataTypes.Float && (type & ScrDataTypes.Number) == ScrDataTypes.Number)
+                {
+                    continue;
+                }
+                // Entity is a superset of Struct, so skip Struct if Entity is present
+                if (value == ScrDataTypes.Struct && (type & ScrDataTypes.Entity) == ScrDataTypes.Entity)
+                {
+                    continue;
+                }
+                // IString is a superset of String, so skip String if IString is present
+                if (value == ScrDataTypes.String && (type & ScrDataTypes.IString) == ScrDataTypes.IString)
+                {
+                    continue;
+                }
+
+                if (!first)
+                {
+                    result.Append(" | ");
+                }
+
+                first = false;
+                result.Append(value switch
+                {
+                    ScrDataTypes.Int => ScrDataTypeNames.Int,
+                    ScrDataTypes.Float => ScrDataTypeNames.Float,
+                    ScrDataTypes.Number => ScrDataTypeNames.Number,
+                    ScrDataTypes.Bool => ScrDataTypeNames.Bool,
+                    ScrDataTypes.String => ScrDataTypeNames.String,
+                    ScrDataTypes.IString => ScrDataTypeNames.IString,
+                    ScrDataTypes.Array => ScrDataTypeNames.Array,
+                    ScrDataTypes.Vec3 => ScrDataTypeNames.Vec3,
+                    ScrDataTypes.Struct => ScrDataTypeNames.Struct,
+                    ScrDataTypes.Entity => ScrDataTypeNames.Entity,
+                    ScrDataTypes.Object => ScrDataTypeNames.Object,
+                    ScrDataTypes.Hash => ScrDataTypeNames.Hash,
+                    ScrDataTypes.AnimTree => ScrDataTypeNames.AnimTree,
+                    ScrDataTypes.Anim => ScrDataTypeNames.Anim,
+                    ScrDataTypes.Function => ScrDataTypeNames.Function,
+                    ScrDataTypes.FunctionPointer => ScrDataTypeNames.FunctionPointer,
+                    ScrDataTypes.Undefined => ScrDataTypeNames.Undefined,
+                    _ => ScrDataTypeNames.Any,
+                });
+            }
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Returns whether this data instance is of type any.
+    /// </summary>
+    /// <returns></returns>
+    private static bool IsAny(ScrDataTypes type)
+    {
+        // "Any" is our unknown-type marker. We also treat "Any except undefined" as unknown,
+        // which is how flow analysis can represent "unknown but definitely defined".
+        return type == ScrDataTypes.Any ||
+               type == (ScrDataTypes.Any & ~ScrDataTypes.Undefined);
+    }
 }
 
 internal enum ScrInstanceTypes
@@ -232,65 +325,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
     public string TypeToString()
     {
-        if (IsAny())
-        {
-            return "?";
-        }
-
-        StringBuilder result = new();
-        bool first = true;
-
-        foreach (ScrDataTypes value in Enum.GetValues(typeof(ScrDataTypes)))
-        {
-            // Skip the "None" and "Unknown" values
-            if (value == ScrDataTypes.Void || value == ScrDataTypes.Any)
-            {
-                continue;
-            }
-
-            if ((Type & value) == value)
-            {
-                // Skip base types when superset types are present
-                // Entity is a superset of Struct, so skip Struct if Entity is present
-                if (value == ScrDataTypes.Struct && (Type & ScrDataTypes.Entity) == ScrDataTypes.Entity)
-                {
-                    continue;
-                }
-                // IString is a superset of String, so skip String if IString is present
-                if (value == ScrDataTypes.String && (Type & ScrDataTypes.IString) == ScrDataTypes.IString)
-                {
-                    continue;
-                }
-
-                if (!first)
-                {
-                    result.Append(" | ");
-                }
-
-                first = false;
-                result.Append(value switch
-                {
-                    ScrDataTypes.Int => ScrDataTypeNames.Int,
-                    ScrDataTypes.Float => ScrDataTypeNames.Float,
-                    ScrDataTypes.Bool => ScrDataTypeNames.Bool,
-                    ScrDataTypes.String => ScrDataTypeNames.String,
-                    ScrDataTypes.Array => ScrDataTypeNames.Array,
-                    ScrDataTypes.Vec3 => ScrDataTypeNames.Vec3,
-                    ScrDataTypes.Struct => ScrDataTypeNames.Struct,
-                    ScrDataTypes.Entity => ScrDataTypeNames.Entity,
-                    ScrDataTypes.Object => ScrDataTypeNames.Object,
-                    ScrDataTypes.Hash => ScrDataTypeNames.Hash,
-                    ScrDataTypes.AnimTree => ScrDataTypeNames.AnimTree,
-                    ScrDataTypes.Anim => ScrDataTypeNames.Anim,
-                    ScrDataTypes.Function => ScrDataTypeNames.Function,
-                    ScrDataTypes.FunctionPointer => ScrDataTypeNames.FunctionPointer,
-                    ScrDataTypes.Undefined => ScrDataTypeNames.Undefined,
-                    _ => ScrDataTypeNames.Any,
-                });
-            }
-        }
-
-        return result.ToString();
+        return ScrDataTypeNames.TypeToString(Type);
     }
 
     /// <summary>
@@ -336,7 +371,9 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
     public readonly bool IsNumeric()
     {
-        return Type == ScrDataTypes.Int || Type == ScrDataTypes.Float;
+        // True if type contains only numeric types (Int and/or Float, but nothing else)
+        // This handles union types like Int | Float from CFG merges
+        return Type != ScrDataTypes.Void && (Type & ~ScrDataTypes.Number) == ScrDataTypes.Void;
     }
 
     public readonly bool TypeUnknown()

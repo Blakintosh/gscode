@@ -54,6 +54,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
     public void AnalyseFunction(ScrFunction function, ControlFlowGraph functionGraph)
     {
         Silent = true;
+        Sense.SilentSenseTokens = true;
 
         // Clear state at the start of each function analysis
         SwitchContexts.Clear();
@@ -217,8 +218,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                 maxIterations, function.Name ?? "<anonymous>");
         }
 
-        // Now that analysis is done, do one final pass to add diagnostics.
+        // Now that analysis is done, do one final pass to add diagnostics and sense tokens.
         Silent = false;
+        Sense.SilentSenseTokens = false;
 
         foreach (CfgNode node in visited)
         {
@@ -259,6 +261,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
     public void AnalyseClass(ScrClass scrClass, ControlFlowGraph classGraph)
     {
         Silent = true;
+        Sense.SilentSenseTokens = true;
 
         // Clear state at the start of each class analysis
         SwitchContexts.Clear();
@@ -424,8 +427,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                 maxIterations, scrClass.Name ?? "<anonymous>");
         }
 
-        // Now that analysis is done, do one final pass to add diagnostics.
+        // Now that analysis is done, do one final pass to add diagnostics and sense tokens.
         Silent = false;
+        Sense.SilentSenseTokens = false;
 
         foreach (CfgNode node in visited)
         {
@@ -1034,7 +1038,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         if (!duration.TypeUnknown() && !duration.IsNumeric())
         {
             AddDiagnostic(statement.Expr.Range, GSCErrorCodes.NoImplicitConversionExists,
-                duration.TypeToString(), ScrDataTypeNames.Int, ScrDataTypeNames.Float);
+                duration.TypeToString(), ScrDataTypeNames.Number);
         }
     }
 

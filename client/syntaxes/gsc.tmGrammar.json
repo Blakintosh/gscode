@@ -375,7 +375,7 @@
         "doc-data-types": {
             "name": "entity.name.type.documentation.gsc",
             "comment": "GSC/CSC data types to show in documentation",
-            "match": "(void|bool|int|float|vector|string|entity|struct|object|array)"
+            "match": "(void|bool|int|float|number|vector|string|istring|entity|struct|object|array)"
         },
         "doc-data-modifiers": {
             "name": "storage.modifier.documentation.gsc",

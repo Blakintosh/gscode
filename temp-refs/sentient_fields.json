@@ -1,0 +1,75 @@
+[
+  { "name": "script_owner", "type": "enthandle", "readonly": true },
+  { "name": "threatbias", "type": "int" },
+  { "name": "threatbiasgroup", "type": "int", "readonly": true },
+  { "name": "attacker", "type": "enthandle", "readonly": true },
+  { "name": "attackercount", "type": "int", "readonly": true },
+  { "name": "node", "type": "pathnode", "readonly": true },
+  { "name": "prevnode", "type": "pathnode", "readonly": true },
+  { "name": "enemy", "type": "enthandle", "readonly": true },
+  { "name": "enemylastseenpos", "type": "vector", "readonly": true },
+  { "name": "scriptenemy", "type": "enthandle", "readonly": true },
+  { "name": "scriptenemytag", "type": "string", "readonly": true },
+
+  { "name": "syncedmeleetarget", "type": "enthandle" },
+
+  { "name": "ignoreme", "type": "bool" },
+  { "name": "ignoreall", "type": "bool" },
+  { "name": "ignoreforfriendlyfire", "type": "bool" },
+  { "name": "ignorevortices", "type": "bool" },
+
+  { "name": "maxvisibledist", "type": "float" },
+  { "name": "maxseenfovcosine", "type": "float" },
+  { "name": "maxseenfovcosinez", "type": "float" },
+
+  { "name": "silentshot", "type": "bool" },
+
+  { "name": "surprisedbymedistsq", "type": "float" },
+
+  { "name": "attackeraccuracy", "type": "float" },
+
+  { "name": "ignorenavmeshtriggers", "type": "bool" },
+  { "name": "ignorebulletdamage", "type": "bool" },
+
+  { "name": "inmeleecharge", "type": "bool" },
+  { "name": "updatesight", "type": "bool" },
+
+  { "name": "fovcosine", "type": "float" },
+  { "name": "fovcosinebusy", "type": "float" },
+  { "name": "fovcosinez", "type": "float" },
+  { "name": "maxsightdistsqrd", "type": "float" },
+
+  { "name": "sightlatency", "type": "float" },
+  { "name": "ignoreclosefoliage", "type": "bool" },
+
+  { "name": "pacifist", "type": "bool" },
+  { "name": "pacifistwait", "type": "int" },
+
+  { "name": "goodenemyonly", "type": "bool" },
+
+  { "name": "ignoreexplosionevents", "type": "bool" },
+
+  { "name": "favoriteenemy", "type": "sentienthandle" },
+  { "name": "highlyawareradius", "type": "float" },
+
+  { "name": "drawoncompass", "type": "bool" },
+  { "name": "activatecrosshair", "type": "bool" },
+
+  { "name": "attackercountthreatscale", "type": "float" },
+  { "name": "currentenemythreatscale", "type": "float" },
+  { "name": "recentattackerthreatscale", "type": "float" },
+  { "name": "coverthreatscale", "type": "float" },
+
+  { "name": "goalradius", "type": "float" },
+  { "name": "goalheight", "type": "float" },
+  { "name": "goalpos", "type": "vector", "readonly": true },
+  { "name": "goalent", "type": "enthandle", "readonly": true },
+  { "name": "goalforced", "type": "bool", "readonly": true },
+
+  { "name": "fixednode", "type": "bool" },
+  { "name": "fixednodesaferadius", "type": "float" },
+
+  { "name": "goalangle", "type": "vector", "readonly": true },
+
+  { "name": "isatanchor", "type": "bool" }
+]

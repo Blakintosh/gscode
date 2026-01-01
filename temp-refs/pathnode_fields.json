@@ -1,0 +1,15 @@
+[
+  { "name": "targetname", "type": "string" },          // F_STRING
+  { "name": "target", "type": "string" },              // F_STRING
+  { "name": "animscript", "type": "string" },          // F_STRING
+  { "name": "script_linkname", "type": "string" },     // F_STRING
+  { "name": "script_noteworthy", "type": "string" },   // F_STRING
+  { "name": "origin", "type": "vector" },              // F_VECTOR
+  { "name": "angles", "type": "vector" },              // F_VECTORHACK -> vector
+  { "name": "spawnflags", "type": "int" },             // (packed ofs/size, type field zeroed; treated as int)
+  { "name": "movementtype_ignore", "type": "int" },    // (same)
+  { "name": "movementtype_require", "type": "int" },   // (same)
+  { "name": "type", "type": "int" },                   // F_INT
+  { "name": "suspended", "type": "bool" },             // F_BITFLAG -> bool
+  { "name": "cost_modifier", "type": "float" }         // F_FLOAT
+]

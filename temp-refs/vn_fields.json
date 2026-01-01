@@ -1,0 +1,14 @@
+[
+  {"name": "targetname", "type": "string"},
+  {"name": "target", "type": "string"},
+  {"name": "target2", "type": "string"},
+  {"name": "script_linkname", "type": "string"},
+  {"name": "script_noteworthy", "type": "string"},
+  {"name": "origin", "type": "vector"},
+  {"name": "angles", "type": "vector"},
+  {"name": "speed", "type": "float"},
+  {"name": "radius", "type": "float"},
+  {"name": "lookahead", "type": "float"},
+  {"name": "tension", "type": "float"},
+  {"name": "spawnflags", "type": "int"}
+]

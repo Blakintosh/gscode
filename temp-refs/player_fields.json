@@ -1,0 +1,94 @@
+[
+  { "name": "playername", "type": "string", "readonly": true },
+  { "name": "sessionteam", "type": "string" },
+  { "name": "name", "type": "string", "readonly": true },
+  { "name": "maxhealth", "type": "int" },
+  { "name": "weaponhealth", "type": "int" },
+
+  { "name": "hasspyplane", "type": "int" },
+  { "name": "hassatellite", "type": "int" },
+  { "name": "disallowvehicleusage", "type": "bool" },
+
+  { "name": "downs", "type": "int" },
+  { "name": "revives", "type": "int" },
+  { "name": "kills", "type": "int" },
+  { "name": "deaths", "type": "int" },
+  { "name": "assists", "type": "int" },
+  { "name": "defends", "type": "int" },
+  { "name": "plants", "type": "int" },
+  { "name": "defuses", "type": "int" },
+  { "name": "returns", "type": "int" },
+  { "name": "captures", "type": "int" },
+  { "name": "objtime", "type": "int" },
+  { "name": "destructions", "type": "int" },
+  { "name": "disables", "type": "int" },
+  { "name": "escorts", "type": "int" },
+  { "name": "carries", "type": "int" },
+  { "name": "throws", "type": "int" },
+  { "name": "survived", "type": "int" },
+  { "name": "stabs", "type": "int" },
+  { "name": "tomahawks", "type": "int" },
+  { "name": "humiliated", "type": "int" },
+  { "name": "x2score", "type": "int" },
+  { "name": "headshots", "type": "int" },
+  { "name": "agrkills", "type": "int" },
+  { "name": "hacks", "type": "int" },
+  { "name": "pointstowin", "type": "int" },
+  { "name": "killsconfirmed", "type": "int" },
+  { "name": "killsdenied", "type": "int" },
+  { "name": "shotsmissed", "type": "int" },
+  { "name": "shotshit", "type": "int" },
+  { "name": "victory", "type": "int" },
+  { "name": "sbtimeplayed", "type": "int" },
+  { "name": "incaps", "type": "int" },
+  { "name": "gems", "type": "int" },
+  { "name": "skulls", "type": "int" },
+  { "name": "chickens", "type": "int" },
+
+  { "name": "killcamentity", "type": "int" },
+  { "name": "killcamtargetentity", "type": "int" },
+  { "name": "killcamweapon", "type": "weapon" },
+  { "name": "killcammod", "type": "int" },
+  { "name": "spectatekillcam", "type": "int" },
+  { "name": "score", "type": "int" },
+
+  { "name": "sessionstate", "type": "string" },
+  { "name": "statusicon", "type": "string" },
+
+  { "name": "spectatorclient", "type": "int" },
+  { "name": "currentspectatingclient", "type": "int", "readonly": true },
+
+  { "name": "archivetime", "type": "float" },
+  { "name": "psoffsettime", "type": "int" },
+
+  { "name": "pers", "type": "object", "readonly": true },
+
+  { "name": "usingvehicle", "type": "bool", "readonly": true },
+  { "name": "vehicleposition", "type": "int", "readonly": true },
+
+  { "name": "headicon", "type": "string" },
+
+  { "name": "momentum", "type": "int" },
+
+  { "name": "divetoprone", "type": "bool" },
+  { "name": "sprinting", "type": "bool" },
+  { "name": "animViewUnlock", "type": "bool" },
+  { "name": "animInputUnlock", "type": "bool" },
+  { "name": "animNoClientTransform", "type": "bool" },
+  { "name": "topdowncamera", "type": "bool" },
+
+  { "name": "groundentity", "type": "entity", "readonly": true },
+  { "name": "viewlockedentity", "type": "entity", "readonly": true },
+  { "name": "cursorhintent", "type": "entity", "readonly": true },
+
+  { "name": "groundsurfacetype", "type": "string", "readonly": true },
+
+  { "name": "lookatent", "type": "enthandle", "readonly": true },
+
+  { "name": "chargeshotlevel", "type": "int", "readonly": true },
+
+  { "name": "lockonentity", "type": "entity" },
+  { "name": "pivotentity", "type": "entity" },
+
+  { "name": "lastdamagetime", "type": "int", "readonly": true }
+]

@@ -1488,17 +1488,29 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // Assigning to a property on a struct
-        if (operand is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && target.Owner is ScrStruct destination)
+        if (operand is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && target.Owner is ScrObject destination)
         {
             string fieldName = target.FieldName ?? throw new NullReferenceException("Sanity check failed: Target data has no field name.");
 
-            if (target.ReadOnly)
+            SetResult setResult = destination.Set(fieldName, newValue);
+
+            if (setResult != SetResult.Success && setResult != SetResult.NewField)
             {
-                AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                switch (setResult)
+                {
+                    case SetResult.ReadOnly:
+                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                        break;
+                    case SetResult.Immutable:
+                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToImmutableEntity, ((ScrEntity)destination).EntityType);
+                        break;
+                    case SetResult.TypeMismatch:
+                        var predefinedType = destination.Get(fieldName).TypeToString();
+                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.PredefinedFieldTypeMismatch, newValue.TypeToString(), predefinedType);
+                        break;
+                }
                 return false;
             }
-
-            destination.Set(fieldName, newValue);
 
             if (binaryExprNode.Right is IdentifierExprNode identifierNode)
             {
@@ -1639,17 +1651,29 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // Assigning to a property on a struct
-        if (node.Left is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && left.Owner is ScrStruct destination)
+        if (node.Left is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && left.Owner is ScrObject destination)
         {
             string fieldName = left.FieldName ?? throw new NullReferenceException("Sanity check failed: Left data has no field name.");
 
-            if (left.ReadOnly)
+            SetResult setResult = destination.Set(fieldName, right);
+
+            if (setResult != SetResult.Success && setResult != SetResult.NewField)
             {
-                AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                switch (setResult)
+                {
+                    case SetResult.ReadOnly:
+                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                        break;
+                    case SetResult.Immutable:
+                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToImmutableEntity, ((ScrEntity)destination).EntityType);
+                        break;
+                    case SetResult.TypeMismatch:
+                        var predefinedType = destination.Get(fieldName).TypeToString();
+                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.PredefinedFieldTypeMismatch, right.TypeToString(), predefinedType);
+                        break;
+                }
                 return ScrData.Default;
             }
-
-            destination.Set(fieldName, right);
 
             if (binaryExprNode.Right is IdentifierExprNode identifierNode)
             {
@@ -1741,10 +1765,10 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // If both are vectors, we can add them together.
-        if (left.Type == ScrDataTypes.Vec3 && right.Type == ScrDataTypes.Vec3)
+        if (left.Type == ScrDataTypes.Vector && right.Type == ScrDataTypes.Vector)
         {
             // TODO: add vec3d addition
-            return new ScrData(ScrDataTypes.Vec3);
+            return new ScrData(ScrDataTypes.Vector);
         }
 
         // At least one is a string, so do string concatenation. Won't be both numbers, as we checked that earlier.
@@ -1780,10 +1804,10 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return new ScrData(ScrDataTypes.Float, left.GetNumericValue() - right.GetNumericValue());
         }
 
-        if (left.Type == ScrDataTypes.Vec3 && right.Type == ScrDataTypes.Vec3)
+        if (left.Type == ScrDataTypes.Vector && right.Type == ScrDataTypes.Vector)
         {
             // TODO: add vec3d subtraction
-            return new ScrData(ScrDataTypes.Vec3);
+            return new ScrData(ScrDataTypes.Vector);
         }
 
         // ERROR: Operator '-' cannot be applied on operands of type ...
@@ -1810,10 +1834,10 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // TODO: not sure whether multiply can be done on vec3d, etc., need to check.
-        if (left.Type == ScrDataTypes.Vec3 && right.IsNumeric())
+        if (left.Type == ScrDataTypes.Vector && right.IsNumeric())
         {
             // TODO: add vec3d multiplication by scalar value
-            return new ScrData(ScrDataTypes.Vec3);
+            return new ScrData(ScrDataTypes.Vector);
         }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "*", left.TypeToString(), right.TypeToString());
@@ -1833,10 +1857,10 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         //     return new ScrData(ScrDataTypes.Int, left.Get<int?>() / right.Get<int?>());
         // }
 
-        if (left.Type == ScrDataTypes.Vec3 && right.IsNumeric())
+        if (left.Type == ScrDataTypes.Vector && right.IsNumeric())
         {
             // TODO: add vec3d division by scalar value
-            return new ScrData(ScrDataTypes.Vec3);
+            return new ScrData(ScrDataTypes.Vector);
         }
 
         if (left.IsNumeric() && right.IsNumeric())
@@ -2396,7 +2420,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (x.TypeUnknown() || y.TypeUnknown() || z.TypeUnknown() || x.ValueUnknown() || y.ValueUnknown() || z.ValueUnknown())
         {
-            return new ScrData(ScrDataTypes.Vec3);
+            return new ScrData(ScrDataTypes.Vector);
         }
 
         if (!x.IsNumeric())
@@ -2415,7 +2439,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        return new ScrData(ScrDataTypes.Vec3, new Vector3(x.GetNumericValue()!.Value, y.GetNumericValue()!.Value, z.GetNumericValue()!.Value));
+        return new ScrData(ScrDataTypes.Vector, new Vector3(x.GetNumericValue()!.Value, y.GetNumericValue()!.Value, z.GetNumericValue()!.Value));
     }
 
     private ScrData AnalyseIndexerExpr(ArrayIndexNode expr, SymbolTable symbolTable)

@@ -180,12 +180,12 @@ internal class SymbolTable
         if (symbol.Equals("self", StringComparison.OrdinalIgnoreCase))
         {
             flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+            return new ScrData(ScrDataTypes.Entity, ScrEntity.NonDeterministic());
         }
         if (symbol.Equals("level", StringComparison.OrdinalIgnoreCase))
         {
             flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+            return new ScrData(ScrDataTypes.Entity, ScrEntity.NonDeterministic());
         }
         if (symbol.Equals("game", StringComparison.OrdinalIgnoreCase))
         {
@@ -195,7 +195,7 @@ internal class SymbolTable
         if (symbol.Equals("anim", StringComparison.OrdinalIgnoreCase))
         {
             flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+            return new ScrData(ScrDataTypes.Entity, ScrEntity.NonDeterministic());
         }
 
         // If the symbol doesn't exist, return undefined.

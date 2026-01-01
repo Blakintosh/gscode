@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
@@ -125,6 +125,8 @@ public enum GSCErrorCodes
         TooManyArgumentsUnverified = 3058,
         TooFewArgumentsUnverified = 3059,
         ExpectedConstantExpression = 3060,
+        CannotAssignToImmutableEntity = 3061,
+        PredefinedFieldTypeMismatch = 3062,
 
         // 8xxx errors are issued by the IDE for conventions
         UnterminatedRegion = 8000,
@@ -254,6 +256,8 @@ public static class DiagnosticCodes
         { GSCErrorCodes.TooManyArgumentsUnverified, new("Function '{0}' called with {1} arguments, but expects at most {2}.\nNote: Argument count is derived from Treyarch's API, which may contain errors.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.TooFewArgumentsUnverified, new("Function '{0}' called with {1} arguments, but expects at least {2}.\nNote: Argument count is derived from Treyarch's API, which may contain errors.", DiagnosticSeverity.Warning) },
         { GSCErrorCodes.ExpectedConstantExpression, new("A constant declaration must have a compile-time constant expression on the right-hand side.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.CannotAssignToImmutableEntity, new("The entity type '{0}' is immutable and cannot be assigned to.", DiagnosticSeverity.Error) },
+        { GSCErrorCodes.PredefinedFieldTypeMismatch, new("Cannot assign value of type '{0}' to entity field of type '{1}'.", DiagnosticSeverity.Error) },
 
         // 8xxx
         { GSCErrorCodes.UnterminatedRegion, new("No corresponding '/* endregion */' found to terminate '{0}' region.", DiagnosticSeverity.Warning) },

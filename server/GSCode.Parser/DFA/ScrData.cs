@@ -43,7 +43,7 @@ internal enum ScrDataTypes : uint
 
     // Value types
     Bool = 1 << 0,
-    Int = 1 << 1,      // this may get changed to include bool
+    Int = 1 << 1 | Bool,      // this may get changed to include bool
     Float = 1 << 2,
     Number = Int | Float, // int or float
 
@@ -52,9 +52,9 @@ internal enum ScrDataTypes : uint
     // ReSharper disable once InconsistentNaming
     IString = (1 << 4) | String, // falls back to being a regular string if not found
     Array = 1 << 5,
-    Vec3 = 1 << 6,
+    Vector = 1 << 6,
     Struct = 1 << 7,
-    Entity = (1 << 8) | Struct, // extension of the struct type
+    Entity = 1 << 8,
     Object = 1 << 9,
 
     // Misc types
@@ -66,6 +66,9 @@ internal enum ScrDataTypes : uint
 
     // Undefined
     Undefined = 1 << 15,
+
+    // UInt64
+    UInt64 = 1 << 16,
 
     // Error marker
     Error = 1 << 60
@@ -82,7 +85,7 @@ internal static class ScrDataTypeNames
     public const string String = "string";
     public const string IString = "istring";
     public const string Array = "array";
-    public const string Vec3 = "vector";
+    public const string Vector = "vector";
     public const string Struct = "struct";
     public const string Entity = "entity";
     public const string Object = "object";
@@ -128,8 +131,8 @@ internal static class ScrDataTypeNames
                 {
                     continue;
                 }
-                // Entity is a superset of Struct, so skip Struct if Entity is present
-                if (value == ScrDataTypes.Struct && (type & ScrDataTypes.Entity) == ScrDataTypes.Entity)
+                // Int is a superset of Bool, so skip Bool if Int is present
+                if (value == ScrDataTypes.Bool && (type & ScrDataTypes.Int) == ScrDataTypes.Int)
                 {
                     continue;
                 }
@@ -154,7 +157,7 @@ internal static class ScrDataTypeNames
                     ScrDataTypes.String => ScrDataTypeNames.String,
                     ScrDataTypes.IString => ScrDataTypeNames.IString,
                     ScrDataTypes.Array => ScrDataTypeNames.Array,
-                    ScrDataTypes.Vec3 => ScrDataTypeNames.Vec3,
+                    ScrDataTypes.Vector => ScrDataTypeNames.Vector,
                     ScrDataTypes.Struct => ScrDataTypeNames.Struct,
                     ScrDataTypes.Entity => ScrDataTypeNames.Entity,
                     ScrDataTypes.Object => ScrDataTypeNames.Object,
@@ -205,7 +208,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
     public static ScrData Default { get; } = new(ScrDataTypes.Any);
     public static ScrData Error { get; } = new(ScrDataTypes.Error);
 
-    public ScrStruct? Owner { get; set; } = null;
+    public ScrObject? Owner { get; set; } = null;
     public string? FieldName { get; set; } = null;
 
     public static ScrData Undefined()
@@ -222,9 +225,9 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         object? value = default;
 
         // Clone the struct members, if any, if it's a struct type
-        if (IsStructType(Type) && Value is ScrStruct structData)
+        if (IsStructType(Type) && Value is ScrObject objectData)
         {
-            value = structData.Copy();
+            value = objectData.Copy();
         }
 
         return new ScrData(Type, value, ReadOnly);
@@ -241,12 +244,12 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
         // If the value is null, we know nothing about it... assume any
         // TODO: keep this, but prefer non-deterministic empty structs to null Value
-        if (Value is not ScrStruct structData)
+        if (Value is not ScrObject objectData)
         {
             return Default;
         }
 
-        return structData.Get(name);
+        return objectData.Get(name);
     }
 
     /// <summary>
@@ -286,21 +289,35 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         object? value = default;
         if (IsStructType(type))
         {
-            ScrStruct[] dataStructs = new ScrStruct[incoming.Length];
+            ScrObject[] dataObjects = new ScrObject[incoming.Length];
 
             // Establish whether we can merge all struct contents
             for (int i = 0; i < incoming.Length; i++)
             {
-                if (incoming[i].Value is not ScrStruct incomingStruct)
+                if (incoming[i].Value is not ScrObject incomingObject)
                 {
                     return new(type, value, isReadOnly);
                 }
 
-                dataStructs[i] = incomingStruct;
+                dataObjects[i] = incomingObject;
             }
 
             // OK, proceed
-            value = ScrStruct.Merge(dataStructs);
+            if (dataObjects.All(o => o is ScrStruct))
+            {
+                value = ScrStruct.Merge(dataObjects.Cast<ScrStruct>().ToArray());
+            }
+            else if (dataObjects.All(o => o is ScrEntity))
+            {
+                // If they are all entities, merge them into a generic entity
+                // Note: This casts to ScrGenericEntity if possible, otherwise copies to a new one
+                value = ScrStruct.Merge(dataObjects.Select(e => e as ScrEntity ?? (ScrEntity)e.Copy()).ToArray());
+            }
+            else
+            {
+                // Fallback: if they aren't all same type, we can't easily merge fields rn
+                value = null; 
+            }
         }
 
         return new(type, value, isReadOnly);
@@ -355,7 +372,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
             ScrDataTypes.Bool => (bool)Value,
             ScrDataTypes.String => (string)Value != "",
             ScrDataTypes.Array => true,
-            ScrDataTypes.Vec3 => true,
+            ScrDataTypes.Vector => true,
             ScrDataTypes.Struct => true,
             ScrDataTypes.Entity => true,
             ScrDataTypes.Object => true,

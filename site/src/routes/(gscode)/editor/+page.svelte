@@ -8,6 +8,14 @@
 	import Check from 'lucide-svelte/icons/check';
 	// @ts-ignore
 	import FileJson from 'lucide-svelte/icons/file-json';
+	// @ts-ignore
+	import Trash2 from 'lucide-svelte/icons/trash-2';
+	// @ts-ignore
+	import Plus from 'lucide-svelte/icons/plus';
+	// @ts-ignore
+	import Copy from 'lucide-svelte/icons/copy';
+	// @ts-ignore
+	import X from 'lucide-svelte/icons/x';
 	import Button from '$components/ui/button/button.svelte';
 	import CopyButton from '$components/ui/copy-button/copy-button.svelte';
 	import ValidationStatus from '$components/app/pages/editor/article/ValidationStatus.svelte';
@@ -125,15 +133,57 @@
 
 				<div class="grid grid-cols-1 3xl:grid-cols-5 3xl:gap-8 gap-16 py-8 min-h-0">
 					<div class="3xl:col-span-3 flex flex-col gap-8 min-h-0">
+						<div class="flex items-center justify-between">
+							<h2 class="font-medium text-lg lg:text-xl">
+								{#if overloads.length === 1}
+									Overload
+								{:else}
+									Overloads ({overloads.length})
+								{/if}
+							</h2>
+							<Button
+								variant="outline"
+								size="sm"
+								onclick={() => functionEditor?.addOverload()}
+							>
+								<Plus class="h-4 w-4 mr-2" />
+								Add Overload
+							</Button>
+						</div>
+
 						{#each overloads as overload, index}
 							<div class="flex flex-col gap-4">
-								<h2 class="font-medium text-lg lg:text-xl border-b py-2">
-									{#if overloads.length === 1}
-										Specification
-									{:else}
-										Specification (Overload {index + 1})
-									{/if}
-								</h2>
+								<div class="flex items-center justify-between border-b py-2">
+									<h2 class="font-medium text-lg lg:text-xl">
+										{#if overloads.length === 1}
+											Specification
+										{:else}
+											Specification (Overload {index + 1})
+										{/if}
+									</h2>
+									<div class="flex items-center gap-1">
+										<Button
+											variant="ghost"
+											size="sm"
+											class="h-7 w-7 p-0"
+											title="Duplicate overload"
+											onclick={() => functionEditor?.duplicateOverload(index)}
+										>
+											<Copy class="h-4 w-4" />
+										</Button>
+										{#if overloads.length > 1}
+											<Button
+												variant="ghost"
+												size="sm"
+												class="h-7 w-7 p-0 text-destructive hover:text-destructive"
+												title="Remove overload"
+												onclick={() => functionEditor?.removeOverload(index)}
+											>
+												<X class="h-4 w-4" />
+											</Button>
+										{/if}
+									</div>
+								</div>
 								<code class="font-mono bg-background border rounded-lg px-4 py-3 text-sm lg:text-lg">
 									{overloadToSyntacticString(name, overload)}
 								</code>
@@ -153,6 +203,10 @@
 								<h3 class="font-medium text-base lg:text-lg border-b py-2">Returns</h3>
 								<EditReturns {functionEditor} overloadIndex={index} />
 							</div>
+
+							{#if index < overloads.length - 1}
+								<Separator class="my-4" />
+							{/if}
 						{/each}
 					</div>
 
@@ -179,6 +233,23 @@
 			<ValidationStatus {functionEditor} />
 			<Separator />
 			<FlagEditor {functionEditor} />
+			<Separator />
+			<div class="flex flex-col gap-2">
+				<h3 class="font-medium text-sm">Actions</h3>
+				<Button
+					variant="destructive"
+					size="sm"
+					class="w-full"
+					onclick={() => {
+						if (name && confirm(`Are you sure you want to delete "${name}"? This can be undone before saving.`)) {
+							editor.deleteFunction(name);
+						}
+					}}
+				>
+					<Trash2 class="w-4 h-4 mr-2" />
+					Delete Function
+				</Button>
+			</div>
 		</div>
 	</div>
 {/if}

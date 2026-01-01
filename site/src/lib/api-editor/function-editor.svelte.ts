@@ -1,6 +1,7 @@
 import type {
 	ScrDataType,
 	ScrFunction,
+	ScrFunctionOverload,
 	ScrFunctionParameter,
 	ScrReturnValue
 } from '$lib/models/library';
@@ -12,6 +13,12 @@ import { validateFunction } from './validation';
 export class FunctionEditor {
 	function: ScrFunction = $state() as any;
 	private readonly _originalFunction: string;
+
+	/** Whether this function was newly created in this session (not in original library) */
+	readonly isNew: boolean;
+
+	/** Whether this function is marked for deletion (soft-delete) */
+	deleted = $state(false);
 
 	/** List of validation error messages for this function */
 	readonly validationErrors = $derived(validateFunction(this.function));
@@ -29,13 +36,25 @@ export class FunctionEditor {
 	readonly isInvalid = $derived(!this.isValid);
 
 	readonly edited = $derived.by(() => {
+		if (this.deleted) return true;
 		if (!this.function || !this._originalFunction) return false;
 		return JSON.stringify(this.function) !== this._originalFunction;
 	});
 
-	constructor(fn: ScrFunction) {
+	constructor(fn: ScrFunction, isNew = false) {
 		this.function = fn;
 		this._originalFunction = JSON.stringify(fn);
+		this.isNew = isNew;
+	}
+
+	/** Mark this function for deletion */
+	markDeleted() {
+		this.deleted = true;
+	}
+
+	/** Restore this function from deletion */
+	restore() {
+		this.deleted = false;
 	}
 
 	setName(name: string) {
@@ -194,5 +213,29 @@ export class FunctionEditor {
 		[params[paramIndex], params[newIndex]] = [params[newIndex], params[paramIndex]];
 		overload.parameters = params;
 		this.function.overloads = [...this.function.overloads];
+	}
+
+	// --- Overload editing methods ---
+
+	addOverload() {
+		const newOverload: ScrFunctionOverload = {
+			calledOn: null,
+			parameters: [],
+			returns: { void: true }
+		};
+		this.function.overloads = [...this.function.overloads, newOverload];
+	}
+
+	removeOverload(overloadIndex: number) {
+		if (this.function.overloads.length <= 1) return;
+		this.function.overloads = this.function.overloads.filter((_, i) => i !== overloadIndex);
+	}
+
+	duplicateOverload(overloadIndex: number) {
+		const source = this.function.overloads[overloadIndex];
+		const duplicate: ScrFunctionOverload = JSON.parse(JSON.stringify(source));
+		const newOverloads = [...this.function.overloads];
+		newOverloads.splice(overloadIndex + 1, 0, duplicate);
+		this.function.overloads = newOverloads;
 	}
 }

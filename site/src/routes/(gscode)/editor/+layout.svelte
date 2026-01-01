@@ -10,11 +10,40 @@
 	import type { Snippet } from 'svelte';
 	import type { LayoutData } from './$types';
 	import { setEditorContext } from '$lib/api-editor/editor.svelte';
+	import { onMount } from 'svelte';
 
 	let sidebarOpen = $state(true);
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
-	setEditorContext(data.editor);
+	const editor = data.editor;
+	setEditorContext(editor);
+
+	let initialized = $state(false);
+
+	// Restore from localStorage on mount, then enable auto-save
+	onMount(() => {
+		editor.restoreFromStorage();
+		initialized = true;
+	});
+
+	// Auto-save to localStorage when there are changes (only after initial restore)
+	$effect(() => {
+		if (!initialized) {
+			return;
+		}
+
+		// Track all the state we want to persist
+		const _ = editor.stats.editedCount;
+		const __ = editor.selectedFunction;
+		const hasLibrary = editor.hasLibrary;
+
+		// Also track function map changes
+		const fnCount = editor.functions.size;
+
+		if (hasLibrary) {
+			editor.saveToStorage();
+		}
+	});
 </script>
 
 <svelte:head>

@@ -1,0 +1,939 @@
+// all read-only
+[
+  {
+    "name": "aifusetime",
+    "type": "int"
+  },
+  {
+    "name": "projexplosionsound",
+    "type": "string"
+  },
+  {
+    "name": "projexplosionsoundplayer",
+    "type": "string"
+  },
+  {
+    "name": "projSmokeStartSound",
+    "type": "string"
+  },
+  {
+    "name": "projSmokeLoopSound",
+    "type": "string"
+  },
+  {
+    "name": "projSmokeEndSound",
+    "type": "string"
+  },
+  {
+    "name": "meleechargerange",
+    "type": "float"
+  },
+  {
+    "name": "meleelungerange",
+    "type": "float"
+  },
+  {
+    "name": "dogibbing",
+    "type": "bool"
+  },
+  {
+    "name": "dogibbingonmelee",
+    "type": "bool"
+  },
+  {
+    "name": "doannihilate",
+    "type": "bool"
+  },
+  {
+    "name": "doblowback",
+    "type": "bool"
+  },
+  {
+    "name": "maxgibdistance",
+    "type": "float"
+  },
+  {
+    "name": "leftarc",
+    "type": "float"
+  },
+  {
+    "name": "rightarc",
+    "type": "float"
+  },
+  {
+    "name": "toparc",
+    "type": "float"
+  },
+  {
+    "name": "bottomarc",
+    "type": "float"
+  },
+  {
+    "name": "clipmodel",
+    "type": "string"
+  },
+  {
+    "name": "fightdist",
+    "type": "float"
+  },
+  {
+    "name": "maxdist",
+    "type": "float"
+  },
+  {
+    "name": "spinuptime",
+    "type": "int"
+  },
+  {
+    "name": "spindowntime",
+    "type": "int"
+  },
+  {
+    "name": "fuellife",
+    "type": "int"
+  },
+  {
+    "name": "isboltaction",
+    "type": "bool"
+  },
+  {
+    "name": "isdisallowatmatchstart",
+    "type": "bool"
+  },
+  {
+    "name": "firesound",
+    "type": "string"
+  },
+  {
+    "name": "firesoundplayer",
+    "type": "string"
+  },
+  {
+    "name": "blocksprone",
+    "type": "bool"
+  },
+  {
+    "name": "iscliponly",
+    "type": "bool"
+  },
+  {
+    "name": "lockOnRadius",
+    "type": "int"
+  },
+  {
+    "name": "lockOnLossRadius",
+    "type": "int"
+  },
+  {
+    "name": "requirelockontofire",
+    "type": "bool"
+  },
+  {
+    "name": "setusedstat",
+    "type": "bool"
+  },
+  {
+    "name": "maxinstancesallowed",
+    "type": "int"
+  },
+  {
+    "name": "isemp",
+    "type": "bool"
+  },
+  {
+    "name": "isflash",
+    "type": "bool"
+  },
+  {
+    "name": "isstun",
+    "type": "bool"
+  },
+  {
+    "name": "bulletImpactExplode",
+    "type": "bool"
+  },
+  {
+    "name": "doempdestroyfx",
+    "type": "bool"
+  },
+  {
+    "name": "dostun",
+    "type": "bool"
+  },
+  {
+    "name": "dodamagefeedback",
+    "type": "bool"
+  },
+  {
+    "name": "dohackedstats",
+    "type": "bool"
+  },
+  {
+    "name": "hackertriggerorigintag",
+    "type": "string"
+  },
+  {
+    "name": "spawnInfluencer",
+    "type": "string"
+  },
+  {
+    "name": "anyplayercanretrieve",
+    "type": "bool"
+  },
+  {
+    "name": "istacticalinsertion",
+    "type": "bool"
+  },
+  {
+    "name": "isvaluable",
+    "type": "bool"
+  },
+  {
+    "name": "destroyablebytrophysystem",
+    "type": "bool"
+  },
+  {
+    "name": "drawoffhandmodelinhand",
+    "type": "bool"
+  },
+  {
+    "name": "disallowatmatchstart",
+    "type": "bool"
+  },
+  {
+    "name": "nonstowedweapon",
+    "type": "bool"
+  },
+  {
+    "name": "isscavengable",
+    "type": "bool"
+  },
+  {
+    "name": "doesfiredamage",
+    "type": "bool"
+  },
+  {
+    "name": "ignoresflakjacket",
+    "type": "bool"
+  },
+  {
+    "name": "notkillstreak",
+    "type": "bool"
+  },
+  {
+    "name": "isgameplayweapon",
+    "type": "bool"
+  },
+  {
+    "name": "issupplydropweapon",
+    "type": "bool"
+  },
+  {
+    "name": "skipbattlechatterkill",
+    "type": "bool"
+  },
+  {
+    "name": "skipbattlechatterreload",
+    "type": "bool"
+  },
+  {
+    "name": "doNotDamageOwner",
+    "type": "bool"
+  },
+  {
+    "name": "destroysEquipment",
+    "type": "bool"
+  },
+  {
+    "name": "forcedamageshellshockandrumble",
+    "type": "bool"
+  },
+  {
+    "name": "isaikillstreakdamage",
+    "type": "bool"
+  },
+  {
+    "name": "ignoreteamkills",
+    "type": "bool"
+  },
+  {
+    "name": "teamkillpenaltyscale",
+    "type": "float"
+  },
+  {
+    "name": "vehicleprojectiledamagescalar",
+    "type": "float"
+  },
+  {
+    "name": "vehicleprojectilesplashdamagescalar",
+    "type": "float"
+  },
+  {
+    "name": "isballisticknife",
+    "type": "bool"
+  },
+  {
+    "name": "isperkbottle",
+    "type": "bool"
+  },
+  {
+    "name": "skiplowammovox",
+    "type": "bool"
+  },
+  {
+    "name": "isflourishweapon",
+    "type": "bool"
+  },
+  {
+    "name": "ishybridweapon",
+    "type": "bool"
+  },
+  {
+    "name": "disableDeploy",
+    "type": "bool"
+  },
+  {
+    "name": "issniperweapon",
+    "type": "bool"
+  },
+  {
+    "name": "ishacktoolweapon",
+    "type": "bool"
+  },
+  {
+    "name": "meleeIgnoresLightArmor",
+    "type": "bool"
+  },
+  {
+    "name": "ignoresLightArmor",
+    "type": "bool"
+  },
+  {
+    "name": "ignoresPowerArmor",
+    "type": "bool"
+  },
+  {
+    "name": "soundRattleRangeMin",
+    "type": "int"
+  },
+  {
+    "name": "soundRattleRangeMax",
+    "type": "int"
+  },
+  {
+    "name": "grappleweapon",
+    "type": "bool"
+  },
+  {
+    "name": "burstCount",
+    "type": "int"
+  },
+  {
+    "name": "weaponHeadObjectiveHeight",
+    "type": "float"
+  },
+  {
+    "name": "enemycrosshairrange",
+    "type": "float"
+  },
+  {
+    "name": "unlimitedammo",
+    "type": "bool"
+  },
+  {
+    "name": "isnotdroppable",
+    "type": "bool"
+  },
+  {
+    "name": "damageAlwaysKillsPlayer",
+    "type": "bool"
+  },
+  {
+    "name": "damageToOwnerScalar",
+    "type": "float"
+  },
+  {
+    "name": "viewmodels",
+    "type": "string"
+  },
+  {
+    "name": "frontendmodel",
+    "type": "string"
+  },
+  {
+    "name": "worldmodel",
+    "type": "string"
+  },
+  {
+    "name": "worlddamagedmodel1",
+    "type": "string"
+  },
+  {
+    "name": "worlddamagedmodel2",
+    "type": "string"
+  },
+  {
+    "name": "worlddamagedmodel3",
+    "type": "string"
+  },
+  {
+    "name": "stowedmodel",
+    "type": "string"
+  },
+  {
+    "name": "shownenemyequip",
+    "type": "bool"
+  },
+  {
+    "name": "shownenemyexplo",
+    "type": "bool"
+  },
+  {
+    "name": "shownretrievable",
+    "type": "bool"
+  },
+  {
+    "name": "lockonminrange",
+    "type": "int"
+  },
+  {
+    "name": "lockonscreenradius",
+    "type": "int"
+  },
+  {
+    "name": "lockonanglehorizontal",
+    "type": "float"
+  },
+  {
+    "name": "lockonanglevertical",
+    "type": "float"
+  },
+  {
+    "name": "lockonlossanglehorizontal",
+    "type": "float"
+  },
+  {
+    "name": "lockonlossanglevertical",
+    "type": "float"
+  },
+  {
+    "name": "isvalid",
+    "type": "int"
+  },
+  {
+    "name": "rootweapon",
+    "type": "int"
+  },
+  {
+    "name": "attachments",
+    "type": "int"
+  },
+  {
+    "name": "supportedattachments",
+    "type": "int"
+  },
+  {
+    "name": "startammo",
+    "type": "int"
+  },
+  {
+    "name": "maxammo",
+    "type": "int"
+  },
+  {
+    "name": "guidedmissiletype",
+    "type": "int"
+  },
+  {
+    "name": "lockontype",
+    "type": "int"
+  },
+  {
+    "name": "isrocketlauncher",
+    "type": "bool"
+  },
+  {
+    "name": "lockonSeekerSearchSound",
+    "type": "string"
+  },
+  {
+    "name": "lockonSeekerSearchSoundLoops",
+    "type": "bool"
+  },
+  {
+    "name": "lockonSeekerLockedSound",
+    "type": "string"
+  },
+  {
+    "name": "lockonSeekerLockedSoundLoops",
+    "type": "bool"
+  },
+  {
+    "name": "lockonTargetLockedSound",
+    "type": "string"
+  },
+  {
+    "name": "lockonTargetLockedSoundLoops",
+    "type": "bool"
+  },
+  {
+    "name": "lockonTargetFiredOnSound",
+    "type": "string"
+  },
+  {
+    "name": "lockonTargetFiredOnSoundLoops",
+    "type": "bool"
+  },
+  {
+    "name": "type",
+    "type": "int"
+  },
+  {
+    "name": "isbulletweapon",
+    "type": "int"
+  },
+  {
+    "name": "isgrenadeweapon",
+    "type": "int"
+  },
+  {
+    "name": "isprojectileweapon",
+    "type": "int"
+  },
+  {
+    "name": "isgasweapon",
+    "type": "int"
+  },
+  {
+    "name": "isriotshield",
+    "type": "int"
+  },
+  {
+    "name": "weapclass",
+    "type": "int"
+  },
+  {
+    "name": "iskillstreak",
+    "type": "int"
+  },
+  {
+    "name": "iscarriedkillstreak",
+    "type": "bool"
+  },
+  {
+    "name": "offhandclass",
+    "type": "int"
+  },
+  {
+    "name": "offhandslot",
+    "type": "int"
+  },
+  {
+    "name": "islethalgrenade",
+    "type": "int"
+  },
+  {
+    "name": "istacticalgrenade",
+    "type": "int"
+  },
+  {
+    "name": "isequipment",
+    "type": "int"
+  },
+  {
+    "name": "isspecificuse",
+    "type": "int"
+  },
+  {
+    "name": "inventorytype",
+    "type": "int"
+  },
+  {
+    "name": "isprimary",
+    "type": "int"
+  },
+  {
+    "name": "isitem",
+    "type": "int"
+  },
+  {
+    "name": "isaltmode",
+    "type": "int"
+  },
+  {
+    "name": "projexplosiontype",
+    "type": "int"
+  },
+  {
+    "name": "isgadget",
+    "type": "int"
+  },
+  {
+    "name": "isheroweapon",
+    "type": "int"
+  },
+  {
+    "name": "gadget_heroversion_2_0",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_breadcrumbduration",
+    "type": "int"
+  },
+  {
+    "name": "gadget_flickerondamage",
+    "type": "int"
+  },
+  {
+    "name": "gadget_flickeronpowerloss",
+    "type": "int"
+  },
+  {
+    "name": "gadget_flickeronpowerlow",
+    "type": "int"
+  },
+  {
+    "name": "gadget_max_hitpoints",
+    "type": "int"
+  },
+  {
+    "name": "gadget_power_consume_on_ammo_use",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_powermoveloss",
+    "type": "int"
+  },
+  {
+    "name": "gadget_powermovespeed",
+    "type": "float"
+  },
+  {
+    "name": "gadget_powergainscorefactor",
+    "type": "float"
+  },
+  {
+    "name": "gadget_powergainscoreignoreself",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_powergainscoreignorewhenactive",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_powerofflossondamage",
+    "type": "float"
+  },
+  {
+    "name": "gadget_poweronlossondamage",
+    "type": "float"
+  },
+  {
+    "name": "gadget_powerreplenishfactor",
+    "type": "float"
+  },
+  {
+    "name": "gadget_power_reset_on_spawn",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_power_reset_on_class_change",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_power_reset_on_team_change",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_power_reset_on_round_switch",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_power_round_end_active_penalty",
+    "type": "bool"
+  },
+  {
+    "name": "gadget_power_usage_rate",
+    "type": "float"
+  },
+  {
+    "name": "gadget_powertakedowngain",
+    "type": "int"
+  },
+  {
+    "name": "gadget_takedownrevealtime",
+    "type": "int"
+  },
+  {
+    "name": "gadget_type",
+    "type": "int"
+  },
+  {
+    "name": "gadget_shieldreflectpowergain",
+    "type": "int"
+  },
+  {
+    "name": "gadget_shieldreflectpowerloss",
+    "type": "int"
+  },
+  {
+    "name": "gadget_shockfield_radius",
+    "type": "float"
+  },
+  {
+    "name": "gadget_shockfield_damage",
+    "type": "float"
+  },
+  {
+    "name": "gadget_turnoff_onempjammed",
+    "type": "bool"
+  },
+  {
+    "name": "name",
+    "type": "string"
+  },
+  {
+    "name": "displayname",
+    "type": "string"
+  },
+  {
+    "name": "firetype",
+    "type": "int"
+  },
+  {
+    "name": "isfullauto",
+    "type": "bool"
+  },
+  {
+    "name": "issemiauto",
+    "type": "bool"
+  },
+  {
+    "name": "isburstfire",
+    "type": "bool"
+  },
+  {
+    "name": "isstackedfire",
+    "type": "bool"
+  },
+  {
+    "name": "isalllockedfire",
+    "type": "bool"
+  },
+  {
+    "name": "ischargeshot",
+    "type": "bool"
+  },
+  {
+    "name": "islauncher",
+    "type": "bool"
+  },
+  {
+    "name": "clipsize",
+    "type": "int"
+  },
+  {
+    "name": "shotcount",
+    "type": "int"
+  },
+  {
+    "name": "ismeleeweapon",
+    "type": "bool"
+  },
+  {
+    "name": "deathcamtime",
+    "type": "int"
+  },
+  {
+    "name": "firetime",
+    "type": "int"
+  },
+  {
+    "name": "reloadtime",
+    "type": "int"
+  },
+  {
+    "name": "meleetime",
+    "type": "int"
+  },
+  {
+    "name": "meleepowertime",
+    "type": "int"
+  },
+  {
+    "name": "meleepowertimeLeft",
+    "type": "int"
+  },
+  {
+    "name": "meleechargetime",
+    "type": "int"
+  },
+  {
+    "name": "meleedamage",
+    "type": "int"
+  },
+  {
+    "name": "altweapon",
+    "type": "string"
+  },
+  {
+    "name": "dualwieldweapon",
+    "type": "string"
+  },
+  {
+    "name": "isdualwield",
+    "type": "bool"
+  },
+  {
+    "name": "fusetime",
+    "type": "int"
+  },
+  {
+    "name": "istimeddetonation",
+    "type": "bool"
+  },
+  {
+    "name": "allowsDetonationDuringReload",
+    "type": "bool"
+  },
+  {
+    "name": "proximitydetonation",
+    "type": "int"
+  },
+  {
+    "name": "proximityalarminnerradius",
+    "type": "int"
+  },
+  {
+    "name": "proximityalarmouterradius",
+    "type": "int"
+  },
+  {
+    "name": "proximityalarmactivationdelay",
+    "type": "int"
+  },
+  {
+    "name": "chaineventradius",
+    "type": "int"
+  },
+  {
+    "name": "chaineventtime",
+    "type": "int"
+  },
+  {
+    "name": "chaineventmax",
+    "type": "int"
+  },
+  {
+    "name": "cookoffholdtime",
+    "type": "int"
+  },
+  {
+    "name": "multidetonation",
+    "type": "int"
+  },
+  {
+    "name": "multidetonationfragmentspeed",
+    "type": "int"
+  },
+  {
+    "name": "explosionradius",
+    "type": "int"
+  },
+  {
+    "name": "explosioninnerradius",
+    "type": "int"
+  },
+  {
+    "name": "lockonmaxrange",
+    "type": "int"
+  },
+  {
+    "name": "lockonmaxrangenolineofsight",
+    "type": "int"
+  },
+  {
+    "name": "lockonspeed",
+    "type": "int"
+  },
+  {
+    "name": "ammocountequipment",
+    "type": "int"
+  },
+  {
+    "name": "gadget_powersprintloss",
+    "type": "int"
+  },
+  {
+    "name": "gadget_pulse_duration",
+    "type": "int"
+  },
+  {
+    "name": "gadget_pulse_margin",
+    "type": "int"
+  },
+  {
+    "name": "gadget_pulse_max_range",
+    "type": "int"
+  },
+  {
+    "name": "gadget_powermax",
+    "type": "int"
+  },
+  {
+    "name": "weaponstarthitpoints",
+    "type": "int"
+  },
+  {
+    "name": "weapondamage1hitpoints",
+    "type": "int"
+  },
+  {
+    "name": "weapondamage2hitpoints",
+    "type": "int"
+  },
+  {
+    "name": "weapondamage3hitpoints",
+    "type": "int"
+  },
+  {
+    "name": "nohitmarker",
+    "type": "bool"
+  },
+  {
+    "name": "specialpain",
+    "type": "bool"
+  },
+  {
+    "name": "decoy",
+    "type": "bool"
+  },
+  {
+    "name": "altoffhand",
+    "type": "bool"
+  },
+  {
+    "name": "dniweapon",
+    "type": "bool"
+  },
+  {
+    "name": "pickupsound",
+    "type": "int"
+  },
+  {
+    "name": "pickupsoundplayer",
+    "type": "int"
+  },
+  {
+    "name": "burnDuration",
+    "type": "int"
+  },
+  {
+    "name": "burnDamageInterval",
+    "type": "int"
+  },
+  {
+    "name": "burnDamage",
+    "type": "int"
+  }
+]

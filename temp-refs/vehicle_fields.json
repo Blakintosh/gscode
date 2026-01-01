@@ -1,0 +1,80 @@
+[
+  { "name": "vehicleclass", "type": "string", "readonly": true },
+  { "name": "vehicletype", "type": "string" },
+  { "name": "scriptvehicletype", "type": "string", "readonly": true },
+  { "name": "playerdrivenversion", "type": "string", "readonly": true },
+
+  { "name": "vehspeed", "type": "float", "readonly": true },
+  { "name": "velocity", "type": "vector", "readonly": true },
+
+  { "name": "radius", "type": "float", "readonly": true },
+  { "name": "height", "type": "float", "readonly": true },
+
+  { "name": "turretrotscale", "type": "float" },
+  { "name": "accuracy_turret", "type": "float" },
+  { "name": "accuracy_gunner1", "type": "float" },
+  { "name": "accuracy_gunner2", "type": "float" },
+  { "name": "accuracy_gunner3", "type": "float" },
+  { "name": "accuracy_gunner4", "type": "float" },
+
+  { "name": "vehmodel", "type": "xmodel", "readonly": true },
+  { "name": "vehmodelenemy", "type": "xmodel", "readonly": true },
+  { "name": "deathmodel", "type": "xmodel", "readonly": true },
+  { "name": "vehviewmodel", "type": "xmodel", "readonly": true },
+
+  { "name": "modelswapdelay", "type": "float", "readonly": true },
+
+  { "name": "radiusdamagemin", "type": "float", "readonly": true },
+  { "name": "radiusdamagemax", "type": "float", "readonly": true },
+  { "name": "radiusdamageradius", "type": "float", "readonly": true },
+
+  { "name": "shootshock", "type": "string", "readonly": true },
+  { "name": "rumbletype", "type": "string", "readonly": true },
+  { "name": "rumblescale", "type": "float", "readonly": true },
+  { "name": "rumbleduration", "type": "float", "readonly": true },
+  { "name": "rumbleradius", "type": "float", "readonly": true },
+  { "name": "rumblebasetime", "type": "float", "readonly": true },
+  { "name": "rumbleadditionaltime", "type": "float", "readonly": true },
+
+  { "name": "healthdefault", "type": "int", "readonly": true },
+
+  { "name": "turretweapon", "type": "weapon", "readonly": true },
+
+  { "name": "addtocompass", "type": "bool", "readonly": true },
+  { "name": "isphysicsvehicle", "type": "bool", "readonly": true },
+
+  { "name": "pathpos", "type": "vector", "readonly": true },
+  { "name": "pathlookpos", "type": "vector", "readonly": true },
+  { "name": "pathwidth", "type": "float", "readonly": true },
+  { "name": "pathwidthlookaheadfrac", "type": "float" },
+  { "name": "pathdistancetraveled", "type": "float", "readonly": true },
+
+  { "name": "heliheightlockoffset", "type": "float" },
+
+  { "name": "drivebysoundtime0", "type": "float", "readonly": true },
+  { "name": "drivebysoundtime1", "type": "float", "readonly": true },
+
+  { "name": "scriptbundlesettings", "type": "string", "readonly": true },
+  { "name": "assassinationbundle", "type": "string", "readonly": true },
+  { "name": "vehicleridersbundle", "type": "string", "readonly": true },
+  { "name": "vehicleridersrobotbundle", "type": "string", "readonly": true },
+
+  { "name": "vehkilloccupantsondeath", "type": "bool" },
+  { "name": "vehunlinkoccupantsondeath", "type": "bool" },
+  { "name": "vehcheckforpredictedcrash", "type": "bool" },
+  { "name": "vehonpath", "type": "bool", "readonly": true },
+  { "name": "vehaircraftcollisionenabled", "type": "bool" },
+
+  { "name": "turretontarget", "type": "bool", "readonly": true },
+  { "name": "turretonvistarget", "type": "bool", "readonly": true },
+  { "name": "gunner1ontarget", "type": "bool", "readonly": true },
+  { "name": "gunner2ontarget", "type": "bool", "readonly": true },
+
+  { "name": "physicslaunchdeathscale", "type": "float", "readonly": true },
+
+  { "name": "jumpforce", "type": "float", "readonly": true },
+
+  { "name": "predictedCollisionTime", "type": "float" },
+
+  { "name": "glasscollision_alt", "type": "bool" }
+]

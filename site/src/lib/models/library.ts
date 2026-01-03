@@ -1,9 +1,27 @@
 import { z } from 'zod';
 
+// Known entity types
+export const ScrEntityTypes = [
+	'weapon',
+	'vehicle',
+	'player',
+	'actor',
+	'aitype',
+	'pathnode',
+	'sentient',
+	'vehiclenode',
+	'hudelem'
+] as const;
+
+export type ScrEntityType = (typeof ScrEntityTypes)[number];
+
 // Base schema without union (used for lazy reference)
 const ScrDataTypeBaseSchema = z.object({
 	dataType: z.string(),
+	// Legacy field - preserved for backwards compatibility, will be removed later
 	instanceType: z.string().nullish(),
+	// New unified field for entity/enum/class sub-types (prioritized over instanceType)
+	subType: z.string().nullish(),
 	isArray: z.boolean().nullish()
 });
 
@@ -21,7 +39,8 @@ export const ScrFunctionParameterSchema = z.object({
 	name: z.string().nullish(),
 	description: z.string().nullish(),
 	mandatory: z.boolean().nullish(),
-	type: ScrDataTypeSchema.nullish()
+	type: ScrDataTypeSchema.nullish(),
+	variadic: z.boolean().nullish()
 });
 export type ScrFunctionParameter = z.infer<typeof ScrFunctionParameterSchema>;
 

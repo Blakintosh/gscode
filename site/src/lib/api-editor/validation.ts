@@ -1,4 +1,5 @@
-import type { ScrFunction, ScrFunctionOverload } from '$lib/models/library';
+import type { ScrDataType, ScrFunction, ScrFunctionOverload } from '$lib/models/library';
+import { ScrEntityTypes } from '$lib/models/library';
 
 /**
  * Validates a function definition and returns a list of error messages.
@@ -65,6 +66,24 @@ function isSentence(str: string): boolean {
 	return str[0] === str[0].toUpperCase() && str.endsWith('.');
 }
 
+function validateType(type: ScrDataType | null | undefined, label: string): string[] {
+	const errors: string[] = [];
+	if (!type) {
+		return errors;
+	}
+
+	// Validate entity subtypes - if specified, must be a known type
+	// Empty/null subtype means "any" which is valid
+	if (type.dataType === 'entity') {
+		const subType = type.subType ?? type.instanceType;
+		if (subType && !ScrEntityTypes.includes(subType as typeof ScrEntityTypes[number])) {
+			errors.push(`${label}: '${subType}' is not a valid entity type.`);
+		}
+	}
+
+	return errors;
+}
+
 function validateOverload(overload: ScrFunctionOverload, isVerified: boolean, prefix: string): string[] {
 	const errors: string[] = [];
 
@@ -94,6 +113,7 @@ function validateCalledOn(overload: ScrFunctionOverload, isVerified: boolean, pr
 				errors.push(`${label}: type missing.`);
 			}
 		}
+		errors.push(...validateType(overload.calledOn.type, label));
 	}
 	return errors;
 }
@@ -131,6 +151,8 @@ function validateParameters(overload: ScrFunctionOverload, isVerified: boolean, 
 				errors.push(`${pLabel}: type missing.`);
 			}
 		}
+
+		errors.push(...validateType(param.type, pLabel));
 	});
 	return errors;
 }
@@ -149,6 +171,7 @@ function validateReturns(overload: ScrFunctionOverload, isVerified: boolean, pre
 				errors.push(`${label}: type missing.`);
 			}
 		}
+		errors.push(...validateType(overload.returns.type, label));
 	} else if (isVerified) {
 		errors.push(`${label} section: missing.`);
 	}

@@ -74,6 +74,27 @@ internal enum ScrDataTypes : uint
     Error = 1 << 60
 }
 
+internal class ScrDataSubType
+{
+    public static ScrDataSubType ObjectInstance(int classId)
+    {
+        return new ScrDataSubType 
+        { 
+            ClassId = classId 
+        };
+    }
+    public static ScrDataSubType Entity(ScrEntityTypes entityType)
+    {
+        return new ScrDataSubType 
+        { 
+            EntityType = entityType 
+        };
+    }
+
+    public int? ClassId { get; init; }
+    public ScrEntityTypes? EntityType { get; init; }
+}
+
 internal static class ScrDataTypeNames
 {
     public const string Any = "any";
@@ -307,11 +328,11 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
             {
                 value = ScrStruct.Merge(dataObjects.Cast<ScrStruct>().ToArray());
             }
-            else if (dataObjects.All(o => o is ScrEntity))
+            else if (dataObjects.All(o => o is ScrEntityRegistry))
             {
                 // If they are all entities, merge them into a generic entity
                 // Note: This casts to ScrGenericEntity if possible, otherwise copies to a new one
-                value = ScrStruct.Merge(dataObjects.Select(e => e as ScrEntity ?? (ScrEntity)e.Copy()).ToArray());
+                value = ScrStruct.Merge(dataObjects.Select(e => e as ScrEntityRegistry ?? (ScrEntityRegistry)e.Copy()).ToArray());
             }
             else
             {

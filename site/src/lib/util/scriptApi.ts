@@ -1,17 +1,44 @@
 import type { ScrDataType, ScrFunction, ScrFunctionOverload, ScrFunctionParameter } from "$lib/models/library";
 
-export function typeToString(type: ScrDataType | undefined) {
-    if(!type || !type.dataType) {
+export function singleTypeToString(type: ScrDataType | undefined): string {
+    if (!type || !type.dataType) {
         return "";
     }
 
-    // this could've been avoided with a better design, but alas
-    const prefix = type.instanceType ? `${type.dataType} ` : "";
+    const subType = type.subType ?? type.instanceType;
+
+    // For entity types, show the entity subtype (e.g., "player", "weapon")
+    // If no subtype or subtype is empty, just show "entity"
+    if (type.dataType === "entity") {
+        if (subType) {
+            return subType;
+        }
+        return "entity";
+    }
+
+    // For enum types, show the enum name if available
+    if (type.dataType === "enum" && subType) {
+        return subType;
+    }
+
+    // For struct and other types, just show the dataType
+    return type.dataType;
+}
+
+export function typeToString(type: ScrDataType | undefined): string {
+    if (!type || !type.dataType) {
+        return "";
+    }
+
     const suffix = type.isArray ? "[]" : "";
 
-    const dataString = type.instanceType ? type.instanceType : type.dataType;
+    // Handle union types
+    if (type.unionOf && type.unionOf.length > 0) {
+        const unionParts = type.unionOf.map(t => singleTypeToString(t));
+        return unionParts.join(" | ") + suffix;
+    }
 
-    return prefix + dataString + suffix;
+    return singleTypeToString(type) + suffix;
 }
 
 export function overloadToSyntacticString(functionName: string, overload: ScrFunctionOverload) {
@@ -28,11 +55,16 @@ export function overloadToSyntacticString(functionName: string, overload: ScrFun
 }
 
 export function parameterToSyntacticString(parameter: ScrFunctionParameter) {
+    if(parameter.type?.dataType === "vararg") {
+        return "...";
+    }
+
     const parameterType = typeToString(parameter.type);
     const name = parameter.name ? parameter.name : "unknown";
+    const prefix = parameter.variadic ? "..." : "";
 
-    if(!parameterType) {
-        return name;
+    if (!parameterType) {
+        return prefix + name;
     }
-    return `${parameterType} ${name}`;
+    return `${parameterType} ${prefix}${name}`;
 }

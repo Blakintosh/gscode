@@ -1,8 +1,10 @@
 <script lang="ts">
-	import type { ScrDataType } from '$lib/models/library';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
+	import { type ScrDataType } from '$lib/models/library';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import SingleTypePicker from './SingleTypePicker.svelte';
+	// @ts-ignore
+	import Plus from 'lucide-svelte/icons/plus';
 
 	interface Props {
 		value: ScrDataType | null | undefined;
@@ -11,125 +13,110 @@
 
 	let { value, onchange }: Props = $props();
 
-	// Data type categories
-	const primitiveTypes = [
-		{ value: 'int', label: 'int' },
-		{ value: 'float', label: 'float' },
-		{ value: 'number', label: 'number' },
-		{ value: 'string', label: 'string' },
-		{ value: 'bool', label: 'bool' },
-		{ value: 'vec3', label: 'vec3' }
-	];
+	// Normalize the value into a list of types for the UI
+	// If unionOf exists and has items, use those as the types
+	// Otherwise, treat the value itself as a single type
+	let types = $derived.by(() => {
+		if (!value) {
+			return [{ dataType: '', isArray: false }];
+		}
 
-	const complexTypes = [
-		{ value: 'struct', label: 'struct', hasInstanceType: true },
-		{ value: 'entity', label: 'entity', hasInstanceType: true }
-	];
+		if (value.unionOf && value.unionOf.length > 0) {
+			return value.unionOf;
+		}
 
-	const specialTypes = [
-		{ value: 'any', label: 'any' },
-		{ value: 'enum', label: 'enum', hasInstanceType: true },
-		{ value: 'map', label: 'map' }
-	];
+		return [value];
+	});
 
-	// Derived state from value
-	let selectedType = $derived(value?.dataType ?? '');
-	let instanceType = $derived(value?.instanceType ?? '');
 	let isArray = $derived(value?.isArray ?? false);
+	let isUnion = $derived(types.length > 1);
 
-	// Check if current type needs an instance type input
-	let needsInstanceType = $derived(
-		complexTypes.some((t) => t.value === selectedType && t.hasInstanceType) ||
-			specialTypes.some((t) => t.value === selectedType && t.hasInstanceType)
-	);
+	function normalizeType(t: ScrDataType): ScrDataType {
+		// Ensure both instanceType and subType are set for backwards compatibility
+		const sub = t.subType ?? t.instanceType ?? null;
+		return {
+			dataType: t.dataType,
+			instanceType: sub,
+			subType: sub,
+			isArray: t.isArray ?? false,
+			unionOf: t.unionOf ?? null
+		};
+	}
 
-	function handleTypeChange(newType: string | undefined) {
-		if (!newType) {
+	function emitChange(newTypes: ScrDataType[], newIsArray: boolean) {
+		if (newTypes.length === 0 || !newTypes[0].dataType) {
 			onchange(null);
 			return;
 		}
 
-		onchange({
-			dataType: newType,
-			instanceType: needsInstanceType ? instanceType : null,
-			isArray
-		});
+		const normalizedTypes = newTypes.map(normalizeType);
+
+		if (normalizedTypes.length === 1) {
+			// Single type - no union
+			onchange({
+				...normalizedTypes[0],
+				isArray: newIsArray,
+				unionOf: null
+			});
+		} else {
+			// Union - store all types in unionOf, use first type's dataType for compat
+			onchange({
+				dataType: normalizedTypes[0].dataType,
+				instanceType: normalizedTypes[0].instanceType,
+				subType: normalizedTypes[0].subType,
+				isArray: newIsArray,
+				unionOf: normalizedTypes
+			});
+		}
 	}
 
-	function handleInstanceTypeChange(newInstanceType: string) {
-		if (!selectedType) return;
+	function handleTypeChange(index: number, newType: ScrDataType) {
+		const newTypes = [...types];
+		newTypes[index] = newType;
+		emitChange(newTypes, isArray);
+	}
 
-		onchange({
-			dataType: selectedType,
-			instanceType: newInstanceType || null,
-			isArray
-		});
+	function handleRemoveType(index: number) {
+		if (types.length <= 1) {
+			return;
+		}
+		const newTypes = types.filter((_, i) => i !== index);
+		emitChange(newTypes, isArray);
+	}
+
+	function handleAddType() {
+		const newTypes = [...types, { dataType: 'string', isArray: false }];
+		emitChange(newTypes, isArray);
 	}
 
 	function handleArrayChange(checked: boolean) {
-		if (!selectedType) return;
-
-		onchange({
-			dataType: selectedType,
-			instanceType: needsInstanceType ? instanceType : null,
-			isArray: checked
-		});
+		emitChange([...types], checked);
 	}
 </script>
 
 <div class="flex flex-col gap-3">
 	<div class="flex flex-col gap-2">
-		<div class="flex items-center gap-2">
-			<div class="flex flex-col gap-1">
-				<span class="text-xs text-muted-foreground">Data Type</span>
-				<Select.Root type="single" value={selectedType} onValueChange={handleTypeChange}>
-					<Select.Trigger class="w-40">
-						{#if selectedType}
-							<span>{selectedType}</span>
-						{:else}
-							<span class="text-muted-foreground">Select...</span>
-						{/if}
-					</Select.Trigger>
-					<Select.Content>
-						<Select.Group>
-							<Select.GroupHeading>Primitives</Select.GroupHeading>
-							{#each primitiveTypes as type (type.value)}
-								<Select.Item value={type.value}>{type.label}</Select.Item>
-							{/each}
-						</Select.Group>
-						<Select.Separator />
-						<Select.Group>
-							<Select.GroupHeading>Complex</Select.GroupHeading>
-							{#each complexTypes as type (type.value)}
-								<Select.Item value={type.value}>{type.label}</Select.Item>
-							{/each}
-						</Select.Group>
-						<Select.Separator />
-						<Select.Group>
-							<Select.GroupHeading>Special</Select.GroupHeading>
-							{#each specialTypes as type (type.value)}
-								<Select.Item value={type.value}>{type.label}</Select.Item>
-							{/each}
-						</Select.Group>
-					</Select.Content>
-				</Select.Root>
-			</div>
-
-			{#if needsInstanceType}
-				<div class="flex flex-col gap-1">
-					<span class="text-xs text-muted-foreground">
-						{selectedType === 'entity' ? 'Entity Type' : selectedType === 'enum' ? 'Enum Type' : 'Struct Type'}
-					</span>
-					<Input
-						type="text"
-						value={instanceType}
-						oninput={(e) => handleInstanceTypeChange(e.currentTarget.value)}
-						placeholder={selectedType === 'entity' ? 'e.g. Player' : 'e.g. WeaponDef'}
-						class="w-40"
-					/>
-				</div>
+		{#each types as type, index (index)}
+			{#if index > 0}
+				<div class="text-xs text-muted-foreground font-medium">OR</div>
 			{/if}
-		</div>
+			<SingleTypePicker
+				value={type}
+				onchange={(newType) => handleTypeChange(index, newType)}
+				onremove={() => handleRemoveType(index)}
+				showRemove={types.length > 1}
+			/>
+		{/each}
+
+		<Button
+			variant="outline"
+			size="sm"
+			class="w-fit text-xs"
+			onclick={handleAddType}
+		>
+			<Plus class="h-3 w-3 mr-1" />
+			Add alternative type
+		</Button>
 	</div>
 
 	<div class="flex items-center gap-2">
@@ -137,7 +124,7 @@
 			id="is-array"
 			checked={isArray}
 			onCheckedChange={(checked) => handleArrayChange(checked === true)}
-			disabled={!selectedType}
+			disabled={!types[0]?.dataType}
 		/>
 		<label
 			for="is-array"

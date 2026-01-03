@@ -1502,7 +1502,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                         AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
                         break;
                     case SetResult.Immutable:
-                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToImmutableEntity, ((ScrEntity)destination).EntityType);
+                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToImmutableEntity, ((ScrEntityRegistry)destination).EntityType);
                         break;
                     case SetResult.TypeMismatch:
                         var predefinedType = destination.Get(fieldName).TypeToString();
@@ -1665,7 +1665,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                         AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
                         break;
                     case SetResult.Immutable:
-                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToImmutableEntity, ((ScrEntity)destination).EntityType);
+                        AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToImmutableEntity, ((ScrEntityRegistry)destination).EntityType);
                         break;
                     case SetResult.TypeMismatch:
                         var predefinedType = destination.Get(fieldName).TypeToString();

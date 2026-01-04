@@ -2432,27 +2432,22 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         // We might not know which collection type it is, but it won't be indexable.
         if (collection.TypeUnknown())
         {
-            if (indexer.Type != ScrDataTypes.Int && indexer.Type != ScrDataTypes.String)
+            if (!indexer.IsArrayIndexer())
             {
                 AddDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
             }
             return ScrData.Default;
         }
 
-        // TODO: I'm not sure 100% how GSC differentiates between array and map.
-        // It might be that it implicitly converts an array to a map as soon as it first gets
-        // a non-int index.
-        // We'll do it like this for now, and adjust later if needed.
-
+        // Arrays aren't strongly typed (right now), so we can just return default.
         if (collection.Type == ScrDataTypes.Array)
         {
-            if (indexer.Type != ScrDataTypes.Int && indexer.Type != ScrDataTypes.String)
+            if (!indexer.IsArrayIndexer())
             {
                 AddDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
                 return ScrData.Default;
             }
 
-            // return collection.GetArrayElement(indexer.Get<int>());
             return ScrData.Default;
         }
 

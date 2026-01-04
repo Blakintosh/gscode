@@ -763,6 +763,71 @@ internal record struct ScrData
         return Type != ScrDataTypes.Void && (Type & ~ScrDataTypes.Number) == ScrDataTypes.Void;
     }
 
+    /// <summary>
+    /// Returns whether this value can be used as an array indexer (e.g. <c>arr[index]</c>).
+    /// Allowed indexer types:
+    /// - <see cref="ScrDataTypes.Bool"/> (casts to int)
+    /// - <see cref="ScrDataTypes.Int"/>
+    /// - <see cref="ScrDataTypes.String"/>
+    /// - <see cref="ScrDataTypes.Hash"/>
+    /// - <see cref="ScrDataTypes.Anim"/> (animation)
+    /// - <see cref="ScrDataTypes.Entity"/> when the entity subtype is unknown, or when the only known entity sub-type is <see cref="ScrEntityTypes.Weapon"/>
+    /// </summary>
+    public readonly bool IsArrayIndexer()
+    {
+        // Unknown types are allowed (caller may choose to skip diagnostics).
+        if (IsAny())
+        {
+            return true;
+        }
+
+        // First, ensure no disallowed base types are present.
+        const ScrDataTypes allowedMask =
+            ScrDataTypes.Bool |
+            ScrDataTypes.Int |
+            ScrDataTypes.String |
+            ScrDataTypes.Hash |
+            ScrDataTypes.Anim |
+            ScrDataTypes.Entity;
+
+        ScrDataTypes residual = Type & ~allowedMask;
+        if (residual != ScrDataTypes.Void)
+        {
+            return false;
+        }
+
+        // If entity is present, it must be concretely known to be weapon (and only weapon).
+        if (HasType(ScrDataTypes.Entity))
+        {
+            // If we have no subtype info, treat as unknown and accept.
+            if (SubTypes is null || SubTypes.Count == 0)
+            {
+                return true;
+            }
+
+            bool sawEntitySubType = false;
+            foreach (IScrDataSubType subType in SubTypes)
+            {
+                if (subType is ScrDataEntityType entityType)
+                {
+                    sawEntitySubType = true;
+                    if (entityType.EntityType != ScrEntityTypes.Weapon)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            // If we have subtypes, but none are entity subtypes, then entity subtype is effectively unknown.
+            if (!sawEntitySubType)
+            {
+                return true;
+            }
+        }
+
+        return true;
+    }
+
     public readonly bool TypeUnknown()
     {
         return IsAny();

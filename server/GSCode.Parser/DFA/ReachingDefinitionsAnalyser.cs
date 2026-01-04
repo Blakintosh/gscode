@@ -1523,12 +1523,14 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return false;
         }
 
+        // Check for array size readonly first (it can exist alongside entity failures)
+        bool anyReadOnly = failure.Value.ArraySizeReadOnly;
+
         if (failure.Value.EntityFailures is { } entityFailures)
         {
             // Single pass: collect flags + any extra info we may want for the chosen diagnostic.
             // We intentionally emit ONE diagnostic (highest priority) to avoid spam and repeated passes.
             bool anyImmutable = false;
-            bool anyReadOnly = false;
             bool anyTypeMismatch = false;
             HashSet<ScrEntityTypes>? immutableEntityTypes = null;
             ScrDataTypes expectedForMismatch = ScrDataTypes.Void;
@@ -1582,6 +1584,12 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                 AddDiagnostic(dotExpr.Right!.Range, GSCErrorCodes.PredefinedFieldTypeMismatch, value.TypeToString(), expectedType);
                 return false;
             }
+        }
+        // Handle array size readonly when there are no entity failures
+        else if (anyReadOnly)
+        {
+            AddDiagnostic(dotExpr.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+            return false;
         }
 
         AddDiagnostic(dotExpr.Range, GSCErrorCodes.InvalidAssignmentTarget);
@@ -1780,7 +1788,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
         ScrDataTypes addOpMask = ScrDataTypes.Number | ScrDataTypes.Vector | ScrDataTypes.String | ScrDataTypes.Hash;
-        if((left.Type & addOpMask) != addOpMask || (right.Type & addOpMask) != addOpMask)
+        if((left.Type & addOpMask) == ScrDataTypes.Void || (right.Type & addOpMask) == ScrDataTypes.Void)
         {
             AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", left.TypeToString(), right.TypeToString());
             return ScrData.Default;
@@ -1873,7 +1881,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         
         ScrDataTypes numericMask = ScrDataTypes.Number | ScrDataTypes.Vector;
-        if((left.Type & numericMask) != numericMask || (right.Type & numericMask) != numericMask)
+        if((left.Type & numericMask) == ScrDataTypes.Void || (right.Type & numericMask) == ScrDataTypes.Void)
         {
             AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "/", left.TypeToString(), right.TypeToString());
             return ScrData.Default;
@@ -2295,11 +2303,11 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         if(result == ScrData.Void)
         {
             AddDiagnostic(node.Range, GSCErrorCodes.DoesNotContainMember, identifierNode.Identifier, ScrDataTypeNames.TypeToString(incompatibleTypes!.Value));
-            return ScrData.Default;
+            // FieldName is already set by TryGetField, return a default with it preserved
+            ScrData errorResult = ScrData.Default;
+            errorResult.FieldName = identifierNode.Identifier;
+            return errorResult;
         }
-        
-        // Stamp the field name onto the result so callers (especially assignments) can use it.
-        result.FieldName = identifierNode.Identifier;
 
         bool isClassMember = symbolTable.CurrentClass is not null &&
             symbolTable.CurrentClass.Members.Any(m => m.Name.Equals(identifierNode.Identifier, StringComparison.OrdinalIgnoreCase));
@@ -3026,7 +3034,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
     private static bool TryHandleNumericBinaryOperation(ScrData left, ScrData right, [NotNullWhen(true)] out ScrData? result)
     {
         ScrDataTypes numericMask = ScrDataTypes.Number | ScrDataTypes.Vector;
-        if((left.Type & numericMask) != numericMask || (right.Type & numericMask) != numericMask)
+        if((left.Type & numericMask) == ScrDataTypes.Void || (right.Type & numericMask) == ScrDataTypes.Void)
         {
             result = null;
             return false;

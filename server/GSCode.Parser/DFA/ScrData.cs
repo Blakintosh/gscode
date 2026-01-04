@@ -109,7 +109,8 @@ internal record class ScrDataFunctionReferenceType : IScrDataSubType
 
 internal record struct ScrSetFieldFailure(
     ScrDataTypes? IncompatibleBaseTypes,
-    ImmutableList<ScrEntitySetFieldFailureInfo>? EntityFailures
+    ImmutableList<ScrEntitySetFieldFailureInfo>? EntityFailures,
+    bool ArraySizeReadOnly = false
 );
 
 internal record struct ScrEntitySetFieldFailureInfo(
@@ -516,59 +517,84 @@ internal record struct ScrData
     [return: NotNullIfNotNull(nameof(incompatibleType))]
     public ScrData TryGetField(string name, out ScrDataTypes? incompatibleType)
     {
+        // Helper to set FieldName on result
+        ScrData WithFieldName(ScrData result)
+        {
+            result.FieldName = name;
+            return result;
+        }
+
         // If it's any, then assume it's compatible with any field.
         if(IsAny())
         {
             incompatibleType = null;
-            return Default;
+            return WithFieldName(Default);
         }
 
         // Compute what types are left after removing struct, entity and object types.
         // If there are any types left, then the data is incompatible with the field.
-        ScrDataTypes residualTypes = Type & ~(ScrDataTypes.Struct | ScrDataTypes.Entity | ScrDataTypes.Object);
+        // Special case: arrays have a readonly "size" field, so include Array in the mask when accessing "size".
+        ScrDataTypes fieldMask = ScrDataTypes.Struct | ScrDataTypes.Entity | ScrDataTypes.Object;
+        if (name == "size")
+        {
+            fieldMask |= ScrDataTypes.Array;
+        }
+        ScrDataTypes residualTypes = Type & ~fieldMask;
         if (residualTypes != ScrDataTypes.Void)
         {
             incompatibleType = residualTypes;
-            return Void;
+            return WithFieldName(Void);
         }
         incompatibleType = null;
 
         // If it's a struct, assume any field is compatible.
         if(HasType(ScrDataTypes.Struct))
         {
-            return Default;
+            return WithFieldName(Default);
         }
         // If it's an object, assume any field is compatible, because (at least as of now) all fields are any, and you can add custom fields to it too.
         if(HasType(ScrDataTypes.Object))
         {
-            return Default;
-        }
-
-        if(SubTypes?.IsEmpty ?? true)
-        {
-            return Default;
+            return WithFieldName(Default);
         }
 
         // For Entity, we'll have their sub-type records to check.
+        // For Array accessing "size", it's a readonly integer.
         ScrDataTypes compositeType = ScrDataTypes.Void;
         // Start as true, as if any is not readonly, then we'll represent it as not.
         bool isReadOnly = true;
 
-        foreach(IScrDataSubType subType in SubTypes!)
+        // Handle array "size" field
+        if (name == "size" && HasType(ScrDataTypes.Array))
         {
-            if(subType.Kind == ScrDataSubTypeKind.Entity)
+            compositeType |= ScrDataTypes.Int;
+            // isReadOnly stays true - size is always readonly
+        }
+
+        if(SubTypes is not null)
+        {
+            foreach(IScrDataSubType subType in SubTypes)
             {
-                ScrDataEntityType entityType = (ScrDataEntityType)subType;
+                if(subType.Kind == ScrDataSubTypeKind.Entity)
+                {
+                    ScrDataEntityType entityType = (ScrDataEntityType)subType;
 
-                ScrData field = ScrEntityRegistry.GetField(entityType.EntityType, name);
-                compositeType |= field.Type;
-                isReadOnly &= field.ReadOnly;
+                    ScrData field = ScrEntityRegistry.GetField(entityType.EntityType, name);
+                    compositeType |= field.Type;
+                    isReadOnly &= field.ReadOnly;
 
-                // Tracking boolean unnecessary, as we'll never receive a not-null boolean value from this location.
+                    // Tracking boolean unnecessary, as we'll never receive a not-null boolean value from this location.
+                }
             }
         }
 
-        return new ScrData(compositeType, readOnly: isReadOnly);
+        // If we didn't find any fields, return default
+        if (compositeType == ScrDataTypes.Void)
+        {
+            return WithFieldName(Default);
+        }
+
+        return WithFieldName(new ScrData(compositeType, readOnly: isReadOnly));
     }
 
     public bool TrySetField(string name, ScrData value, out ScrSetFieldFailure? failure)
@@ -583,7 +609,13 @@ internal record struct ScrData
 
         // Compute what types are left after removing struct, entity and object types.
         // If there are any types left, then the data is incompatible with the field.
-        ScrDataTypes residualTypes = Type & ~(ScrDataTypes.Struct | ScrDataTypes.Entity | ScrDataTypes.Object);
+        // Special case: arrays have a readonly "size" field, so include Array in the mask when accessing "size".
+        ScrDataTypes fieldMask = ScrDataTypes.Struct | ScrDataTypes.Entity | ScrDataTypes.Object;
+        if (name == "size")
+        {
+            fieldMask |= ScrDataTypes.Array;
+        }
+        ScrDataTypes residualTypes = Type & ~fieldMask;
         if (residualTypes != ScrDataTypes.Void)
         {
             failure = new(IncompatibleBaseTypes: residualTypes, EntityFailures: null);
@@ -597,7 +629,10 @@ internal record struct ScrData
             return true;
         }
 
-        // 3. Check each entity sub-type
+        // 3. Check for array "size" field - it's readonly
+        bool arraySizeReadOnly = name == "size" && HasType(ScrDataTypes.Array);
+
+        // 4. Check each entity sub-type
         List<ScrEntitySetFieldFailureInfo>? failures = null;
 
         if (SubTypes != null)
@@ -616,9 +651,9 @@ internal record struct ScrData
             }
         }
 
-        if (failures is not null)
+        if (failures is not null || arraySizeReadOnly)
         {
-            failure = new(IncompatibleBaseTypes: null, EntityFailures: failures.ToImmutableList());
+            failure = new(IncompatibleBaseTypes: null, EntityFailures: failures?.ToImmutableList(), ArraySizeReadOnly: arraySizeReadOnly);
             return false;
         }
 

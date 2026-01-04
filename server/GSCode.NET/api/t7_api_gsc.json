@@ -743,7 +743,8 @@
                     "calledOn": null,
                     "parameters": [],
                     "returns": {
-                        "void": false,
+                        "name": "slot",
+                        "description": "The current arena slot.",
                         "type": {
                             "dataType": "int",
                             "instanceType": null,
@@ -751,8 +752,7 @@
                             "isArray": false,
                             "unionOf": null
                         },
-                        "description": "The current arena slot.",
-                        "name": "slot"
+                        "void": false
                     }
                 }
             ],
@@ -769,7 +769,8 @@
                     "calledOn": null,
                     "parameters": [],
                     "returns": {
-                        "void": false,
+                        "name": "loaded",
+                        "description": "Whether textures are loaded.",
                         "type": {
                             "dataType": "bool",
                             "instanceType": null,
@@ -777,8 +778,7 @@
                             "isArray": false,
                             "unionOf": null
                         },
-                        "description": "Whether textures are loaded.",
-                        "name": "loaded"
+                        "void": false
                     }
                 }
             ],
@@ -1548,14 +1548,14 @@
             "overloads": [
                 {
                     "calledOn": {
+                        "name": "entity",
+                        "description": "The actor to check the pathing of.",
                         "type": {
                             "dataType": "entity",
                             "instanceType": "actor",
                             "subType": "actor",
                             "isArray": false
-                        },
-                        "name": "entity",
-                        "description": "The actor to check the pathing of."
+                        }
                     },
                     "parameters": [
                         {
@@ -1582,7 +1582,8 @@
                         }
                     ],
                     "returns": {
-                        "void": false,
+                        "name": "canPath",
+                        "description": "Whether the entity can path between the two locations.",
                         "type": {
                             "dataType": "bool",
                             "instanceType": null,
@@ -1590,8 +1591,7 @@
                             "isArray": false,
                             "unionOf": null
                         },
-                        "description": "Whether the entity can path between the two locations.",
-                        "name": "canPath"
+                        "void": false
                     }
                 }
             ],
@@ -2778,8 +2778,8 @@
                     "parameters": [
                         {
                             "name": "owner",
-                            "mandatory": true,
                             "description": "The owner of the riot shield.",
+                            "mandatory": true,
                             "type": {
                                 "dataType": "entity",
                                 "instanceType": "player",
@@ -2790,8 +2790,8 @@
                         },
                         {
                             "name": "shield",
-                            "mandatory": true,
                             "description": "The shield weapon.",
+                            "mandatory": true,
                             "type": {
                                 "dataType": "entity",
                                 "instanceType": "weapon",
@@ -2802,7 +2802,8 @@
                         }
                     ],
                     "returns": {
-                        "void": false,
+                        "name": "deployed",
+                        "description": "The deployed shield.",
                         "type": {
                             "dataType": "entity",
                             "instanceType": null,
@@ -2810,8 +2811,7 @@
                             "isArray": false,
                             "unionOf": null
                         },
-                        "description": "The deployed shield.",
-                        "name": "deployed"
+                        "void": false
                     }
                 }
             ],
@@ -12403,7 +12403,8 @@
                     "calledOn": null,
                     "parameters": [],
                     "returns": {
-                        "void": false,
+                        "name": "inUse",
+                        "description": "Whether the T7 melee system is in use.",
                         "type": {
                             "dataType": "bool",
                             "instanceType": null,
@@ -12411,8 +12412,7 @@
                             "isArray": false,
                             "unionOf": null
                         },
-                        "description": "Whether the T7 melee system is in use.",
-                        "name": "inUse"
+                        "void": false
                     }
                 }
             ],
@@ -13114,7 +13114,7 @@
             "example": "guy LookAtPos( pos )"
         },
         {
-            "name": "LuiNotifyEvent",
+            "name": "LUINotifyEvent",
             "description": "Sends a notify from script to LUI.",
             "overloads": [
                 {
@@ -13167,10 +13167,10 @@
                         }
                     ],
                     "returns": {
-                        "void": true,
-                        "type": null,
                         "name": null,
-                        "description": null
+                        "description": null,
+                        "type": null,
+                        "void": true
                     }
                 }
             ],
@@ -13738,7 +13738,8 @@
                     "calledOn": null,
                     "parameters": [],
                     "returns": {
-                        "void": false,
+                        "name": "canSpawn",
+                        "description": "Whether there is space remaining to spawn an entity.",
                         "type": {
                             "dataType": "bool",
                             "instanceType": null,
@@ -13746,8 +13747,7 @@
                             "isArray": false,
                             "unionOf": null
                         },
-                        "description": "Whether there is space remaining to spawn an entity.",
-                        "name": "canSpawn"
+                        "void": false
                     }
                 }
             ],
@@ -13763,7 +13763,8 @@
                     "calledOn": null,
                     "parameters": [],
                     "returns": {
-                        "void": false,
+                        "name": "canSpawn",
+                        "description": "Whether there is space remaining to spawn a fake entity.",
                         "type": {
                             "dataType": "bool",
                             "instanceType": null,
@@ -13771,8 +13772,7 @@
                             "isArray": false,
                             "unionOf": null
                         },
-                        "description": "Whether there is space remaining to spawn a fake entity.",
-                        "name": "canSpawn"
+                        "void": false
                     }
                 }
             ],
@@ -20345,8 +20345,8 @@
                     "parameters": [
                         {
                             "name": "owner",
-                            "mandatory": true,
                             "description": "The player that owns the entity.",
+                            "mandatory": true,
                             "type": {
                                 "dataType": "entity",
                                 "instanceType": "player",
@@ -20357,10 +20357,10 @@
                         }
                     ],
                     "returns": {
-                        "void": true,
-                        "type": null,
                         "name": null,
-                        "description": null
+                        "description": null,
+                        "type": null,
+                        "void": true
                     }
                 }
             ],
@@ -21048,10 +21048,10 @@
                         }
                     ],
                     "returns": {
-                        "void": true,
-                        "type": null,
                         "name": null,
-                        "description": null
+                        "description": null,
+                        "type": null,
+                        "void": true
                     }
                 }
             ],
@@ -23183,21 +23183,21 @@
             "overloads": [
                 {
                     "calledOn": {
+                        "name": "player",
+                        "description": "The player to stop binoculars on.",
                         "type": {
                             "dataType": "entity",
                             "instanceType": "player",
                             "subType": "player",
                             "isArray": false
-                        },
-                        "name": "player",
-                        "description": "The player to stop binoculars on."
+                        }
                     },
                     "parameters": [],
                     "returns": {
-                        "void": true,
-                        "type": null,
                         "name": null,
-                        "description": null
+                        "description": null,
+                        "type": null,
+                        "void": true
                     }
                 }
             ],
@@ -27614,19 +27614,38 @@
                 {
                     "calledOn": {
                         "name": "actor",
-                        "description": null
+                        "description": "The actor to set this on.",
+                        "type": {
+                            "dataType": "entity",
+                            "instanceType": "actor",
+                            "subType": "actor",
+                            "isArray": false
+                        }
                     },
                     "parameters": [
                         {
-                            "name": "can push player",
-                            "description": "(bool) True if this character can push the player.",
-                            "mandatory": true
+                            "name": "canPush",
+                            "description": "Whether this actor can push the player.",
+                            "mandatory": true,
+                            "type": {
+                                "dataType": "bool",
+                                "instanceType": null,
+                                "subType": null,
+                                "isArray": false,
+                                "unionOf": null
+                            }
                         }
-                    ]
+                    ],
+                    "returns": {
+                        "void": true,
+                        "type": null,
+                        "name": null,
+                        "description": null
+                    }
                 }
             ],
             "flags": [
-                "autogenerated"
+                "verified"
             ],
             "example": "level.elder PushPlayer( true )"
         },
@@ -38326,7 +38345,8 @@
                         }
                     ],
                     "returns": {
-                        "void": false,
+                        "name": "array",
+                        "description": "The created array.",
                         "type": {
                             "dataType": "any",
                             "instanceType": null,
@@ -38334,8 +38354,7 @@
                             "isArray": true,
                             "unionOf": null
                         },
-                        "description": "The created array.",
-                        "name": "array"
+                        "void": false
                     }
                 }
             ],
@@ -38639,7 +38658,8 @@
                         }
                     ],
                     "returns": {
-                        "void": false,
+                        "name": "array",
+                        "description": "The created array.",
                         "type": {
                             "dataType": "any",
                             "instanceType": null,
@@ -38647,8 +38667,7 @@
                             "isArray": true,
                             "unionOf": null
                         },
-                        "description": "The created array.",
-                        "name": "array"
+                        "void": false
                     }
                 }
             ],
@@ -39183,7 +39202,8 @@
                         }
                     ],
                     "returns": {
-                        "void": false,
+                        "name": "result",
+                        "description": "The casted istring.",
                         "type": {
                             "dataType": "istring",
                             "instanceType": null,
@@ -39191,8 +39211,7 @@
                             "isArray": false,
                             "unionOf": null
                         },
-                        "description": "The casted istring.",
-                        "name": "result"
+                        "void": false
                     }
                 }
             ],
@@ -44047,10 +44066,51 @@
             "example": "totalDeaths = player GetDStat( \"playerstatslist\", \"deaths\", \"statValue\" );",
             "verifiedInRevision": null,
             "remarks": null
+        },
+        {
+            "name": "PushActors",
+            "description": "Set whether this character can push actors. Don't call this unless you know what you are doing.",
+            "overloads": [
+                {
+                    "calledOn": {
+                        "type": {
+                            "dataType": "entity",
+                            "instanceType": "actor",
+                            "subType": "actor",
+                            "isArray": false
+                        },
+                        "name": "actor",
+                        "description": "The actor to set this on."
+                    },
+                    "parameters": [
+                        {
+                            "name": "canPush",
+                            "description": "Whether this actor can push actors.",
+                            "mandatory": true,
+                            "type": {
+                                "dataType": "bool",
+                                "instanceType": null,
+                                "subType": null,
+                                "isArray": false,
+                                "unionOf": null
+                            }
+                        }
+                    ],
+                    "returns": {
+                        "void": true
+                    }
+                }
+            ],
+            "flags": [
+                "verified"
+            ],
+            "example": "self PushActors(false);",
+            "verifiedInRevision": null,
+            "remarks": null
         }
     ],
     "gameId": "t7",
     "languageId": "gsc",
-    "revisedOn": "2026-01-02T01:01:26.656Z",
-    "revision": 12
+    "revisedOn": "2026-01-04T15:06:51.670Z",
+    "revision": 13
 }

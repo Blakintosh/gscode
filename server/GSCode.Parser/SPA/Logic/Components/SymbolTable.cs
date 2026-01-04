@@ -60,7 +60,8 @@ internal class SymbolTable
         "waittillmatch",
         "notify",
         "isdefined",
-        "endon"
+        "endon",
+        "vectorscale"
     };
 
     public int LexicalScope { get; } = 0;

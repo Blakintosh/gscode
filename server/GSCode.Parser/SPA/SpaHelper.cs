@@ -164,7 +164,7 @@ public class ScrFieldSymbol : ISenseDefinition
             Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
             {
                 Kind = MarkupKind.Markdown,
-                Value = string.Format("```gsc\n(field) /* {0} */ {1}\n```",
+                Value = string.Format("```gsc\n(field) /@ {0} @/ {1}\n```",
                    typeValue, Node.Identifier!)
             })
         };

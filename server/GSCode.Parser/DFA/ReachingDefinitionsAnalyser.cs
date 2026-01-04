@@ -2576,6 +2576,103 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         return new ScrData(ScrDataTypes.Function);
     }
 
+    private ScrData? TryAnalyseReservedFunction(FunCallNode call, string functionName, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        // Handle vectorscale(vector, number) -> vector
+        if (functionName.Equals("vectorscale", StringComparison.OrdinalIgnoreCase))
+        {
+            return AnalyseVectorScaleCall(call, symbolTable, sense);
+        }
+
+        // Handle isdefined(value) -> bool
+        if (functionName.Equals("isdefined", StringComparison.OrdinalIgnoreCase))
+        {
+            return AnalyseIsDefinedCall(call, symbolTable, sense);
+        }
+
+        return null; // Not a specially handled reserved function
+    }
+
+    private ScrData AnalyseVectorScaleCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        int argCount = call.Arguments.Arguments.Count;
+
+        // Validate argument count (exactly 2)
+        if (argCount < 2)
+        {
+            AddDiagnostic(call.Arguments.Range, GSCErrorCodes.TooFewArguments, "vectorscale", argCount, 2);
+        }
+        else if (argCount > 2)
+        {
+            AddDiagnostic(call.Arguments.Range, GSCErrorCodes.TooManyArguments, "vectorscale", argCount, 2);
+        }
+
+        int index = 0;
+        foreach (ExprNode? arg in call.Arguments.Arguments)
+        {
+            if (arg is null)
+            {
+                index++;
+                continue;
+            }
+
+            // Analyze first argument (should be Vector)
+            if (index == 0)
+            {
+                ScrData vecData = AnalyseExpr(arg, symbolTable, sense);
+                if (!vecData.TypeUnknown() && vecData.Type != ScrDataTypes.Vector)
+                {
+                    AddDiagnostic(arg.Range, GSCErrorCodes.NoImplicitConversionExists, vecData.TypeToString(), ScrDataTypeNames.Vector);
+                }
+            }
+            // Analyze second argument (should be Int or Float / Number)
+            else if (index == 1)
+            {
+                ScrData scaleData = AnalyseExpr(arg, symbolTable, sense);
+                if (!scaleData.TypeUnknown() && !scaleData.IsNumeric())
+                {
+                    AddDiagnostic(arg.Range, GSCErrorCodes.NoImplicitConversionExists, scaleData.TypeToString(), ScrDataTypeNames.Number);
+                }
+            }
+            // Analyze remaining arguments to ensure they are processed for side effects/references
+            else
+            {
+                AnalyseExpr(arg, symbolTable, sense);
+            }
+
+            index++;
+        }
+
+        return new ScrData(ScrDataTypes.Vector);
+    }
+
+    private ScrData AnalyseIsDefinedCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        int argCount = call.Arguments.Arguments.Count;
+
+        // Validate argument count (exactly 1)
+        if (argCount < 1)
+        {
+            AddDiagnostic(call.Arguments.Range, GSCErrorCodes.TooFewArguments, "isdefined", argCount, 1);
+        }
+        else if (argCount > 1)
+        {
+            AddDiagnostic(call.Arguments.Range, GSCErrorCodes.TooManyArguments, "isdefined", argCount, 1);
+        }
+
+        // Analyze all arguments to ensure side effects/references are processed
+        foreach (var arg in call.Arguments.Arguments)
+        {
+            if (arg != null)
+            {
+                AnalyseExpr(arg, symbolTable, sense);
+            }
+        }
+
+        // isdefined takes 1 argument. Return bool.
+        return new ScrData(ScrDataTypes.Bool);
+    }
+
     private ScrData AnalyseFunctionCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
     {
         ScrData targetValue = target ?? ScrData.Default;
@@ -2636,6 +2733,16 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         functionTarget.TryGetFunction(out ScrFunction? function);
+
+        // Handle reserved functions with special semantics
+        if (functionFlags.HasFlag(SymbolFlags.Reserved) && call.Function is IdentifierExprNode reservedId)
+        {
+            ScrData? reservedResult = TryAnalyseReservedFunction(call, reservedId.Identifier, symbolTable, sense);
+            if (reservedResult is not null)
+            {
+                return reservedResult.Value;
+            }
+        }
 
         // Analyse arguments
         foreach (ExprNode? argument in call.Arguments.Arguments)

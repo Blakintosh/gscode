@@ -10,7 +10,7 @@ internal record class ScrEntityField(ScrDataTypes Type, bool ReadOnly = false);
 /// <summary>
 /// A registry that tracks entity types and their fields.
 /// </summary>
-internal class ScrEntityRegistry
+internal static class ScrEntityRegistry
 {
     private static readonly Dictionary<string, ScrEntityField> _weaponFields = new([
         new("aifusetime", new(ScrDataTypes.Int, ReadOnly: true)),
@@ -667,12 +667,12 @@ internal class ScrEntityRegistry
         new("lastdamagetime", new(ScrDataTypes.Int, ReadOnly: true))
     ]);
 
-    public ScrData GetField(ScrEntityTypes entityType, string fieldName)
+    public static ScrData GetField(ScrEntityTypes entityType, string fieldName)
     {
         // Find the field amongst the preset fields.
         if(TryFindFieldForEntityType(entityType, fieldName, out ScrEntityField? field))
         {
-            return new(field.Type, field.ReadOnly);
+            return new ScrData(field.Type, readOnly: field.ReadOnly);
         }
 
         // Otherwise, if it's immutable, then any other field must not be present.
@@ -685,7 +685,7 @@ internal class ScrEntityRegistry
         return ScrData.Default;
     }
 
-    public ScrEntitySetFieldResult SetField(ScrEntityTypes entityType, string fieldName, ScrData value)
+    public static ScrEntitySetFieldResult SetField(ScrEntityTypes entityType, string fieldName, ScrData value)
     {
         // Weapon and path node entities are completely immutable.
         if(entityType == ScrEntityTypes.Weapon || entityType == ScrEntityTypes.PathNode)
@@ -713,7 +713,7 @@ internal class ScrEntityRegistry
         return ScrEntitySetFieldResult.Success;
     }
 
-    private bool TryFindFieldForEntityType(ScrEntityTypes entityType, string fieldName, [NotNullWhen(true)] out ScrEntityField? field)
+    private static bool TryFindFieldForEntityType(ScrEntityTypes entityType, string fieldName, [NotNullWhen(true)] out ScrEntityField? field)
     {
         field = null;
         return entityType switch
@@ -743,6 +743,23 @@ internal static class ScrEntityTypeNames
     public const string Sentient = "sentient";
     public const string VehicleNode = "vehiclenode";
     public const string HudElem = "hudelem";
+
+    public static string TypeToString(ScrEntityTypes type)
+    {
+        return type switch
+        {
+            ScrEntityTypes.Weapon => Weapon,
+            ScrEntityTypes.Vehicle => Vehicle,
+            ScrEntityTypes.Player => Player,
+            ScrEntityTypes.Actor => Actor,
+            ScrEntityTypes.AiType => AiType,
+            ScrEntityTypes.PathNode => PathNode,
+            ScrEntityTypes.Sentient => Sentient,
+            ScrEntityTypes.VehicleNode => VehicleNode,
+            ScrEntityTypes.HudElem => HudElem,
+            _ => "unknown"
+        };
+    }
 }
 
 internal enum ScrEntityTypes

@@ -22,6 +22,7 @@ internal class ScrClassRegistry
 
     public ScrClassSetFieldResult SetField(string className, string fieldName, ScrData value)
     {
+        // TODO: implement.
         return ScrClassSetFieldResult.Success;
     }
 }

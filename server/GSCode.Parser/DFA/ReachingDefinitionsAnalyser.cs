@@ -1,5 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using GSCode.Data;
+using GSCode.Data.Models;
 using GSCode.Parser.AST;
 using GSCode.Parser.CFA;
 using GSCode.Parser.Data;
@@ -1227,7 +1229,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
     {
         if (binary.Operation == TokenType.Dot)
         {
-            return AnalyseDotOp(binary, symbolTable, createSenseTokenForRhs);
+            return AnalyseDotOp(binary, symbolTable, createSenseTokenForRhs, out _);
         }
 
         if (TryAnalyseAssignmentBinaryExpr(binary, symbolTable, out ScrData assignmentResult))
@@ -1346,13 +1348,15 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // Add sense token for the function reference
-        if (!flags.HasFlag(SymbolFlags.Reserved) && !functionData.ValueUnknown())
+        if (!flags.HasFlag(SymbolFlags.Reserved) && functionData.TryGetFunction(out var func))
         {
-            AddFunctionReferenceToken(identifier.Token, functionData.Get<ScrFunction>(), symbolTable);
+            AddFunctionReferenceToken(identifier.Token, func, symbolTable);
+            // Return as a FunctionPointer type (a pointer to the function, not the function itself)
+            return ScrData.FunctionPointer(func);
         }
 
         // Return as a FunctionPointer type (a pointer to the function, not the function itself)
-        return new ScrData(ScrDataTypes.FunctionPointer, functionData.Value);
+        return new ScrData(ScrDataTypes.FunctionPointer);
     }
 
     private ScrData AnalyseNotOp(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
@@ -1391,6 +1395,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
+        // Must be a number.
         if (!operand.IsNumeric())
         {
             AddDiagnostic(prefix.Range, GSCErrorCodes.NoImplicitConversionExists,
@@ -1400,23 +1405,11 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (operand.Type == ScrDataTypes.Int)
         {
-            if (operand.ValueUnknown())
-            {
-                return new ScrData(ScrDataTypes.Int);
-            }
-
-            int? value = operand.GetIntegerValue();
-            return value.HasValue ? new ScrData(ScrDataTypes.Int, -value.Value) : new ScrData(ScrDataTypes.Int);
+            return new ScrData(ScrDataTypes.Int, booleanValue: operand.BooleanValue);
         }
 
-        // Must be float if numeric and not int
-        if (operand.ValueUnknown())
-        {
-            return new ScrData(ScrDataTypes.Float);
-        }
-
-        float? numericValue = operand.GetNumericValue();
-        return numericValue.HasValue ? new ScrData(ScrDataTypes.Float, -numericValue.Value) : new ScrData(ScrDataTypes.Float);
+        // If it's not int, then it's a float.
+        return new ScrData(ScrDataTypes.Float);
     }
 
     private ScrData AnalyseBitwiseNegationOp(PrefixExprNode prefix, SymbolTable symbolTable, ParserIntelliSense sense)
@@ -1440,13 +1433,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (operand.ValueUnknown())
-        {
-            return new ScrData(ScrDataTypes.Int);
-        }
-
-        int? value = operand.GetIntegerValue();
-        return value.HasValue ? new ScrData(ScrDataTypes.Int, ~value.Value) : new ScrData(ScrDataTypes.Int);
+        return new ScrData(ScrDataTypes.Int, booleanValue: null);
     }
 
     private ScrData AnalysePostfixExpr(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)
@@ -1487,18 +1474,16 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return true;
         }
 
-        // Assigning to a property on a struct
-        if (operand is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && target.Owner is ScrStruct destination)
+        // Assigning to a property on a struct/entity/object - use AnalyseDotOp to get the owner
+        if (operand is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot)
         {
-            string fieldName = target.FieldName ?? throw new NullReferenceException("Sanity check failed: Target data has no field name.");
+            ScrData dotResult = AnalyseDotOp(binaryExprNode, symbolTable, false, out ScrData owner);
+            string fieldName = dotResult.FieldName ?? throw new NullReferenceException("Sanity check failed: Dot result has no field name.");
 
-            if (target.ReadOnly)
+            if (!TryAssignField(binaryExprNode, owner, fieldName, newValue))
             {
-                AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
                 return false;
             }
-
-            destination.Set(fieldName, newValue);
 
             if (binaryExprNode.Right is IdentifierExprNode identifierNode)
             {
@@ -1518,24 +1503,112 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         return false;
     }
 
+    private bool TryAssignField(BinaryExprNode dotExpr, ScrData owner, string fieldName, ScrData value)
+    {
+        bool success = owner.TrySetField(fieldName, value, out ScrSetFieldFailure? failure);
+        if (success)
+        {
+            return true;
+        }
+
+        if (failure is null)
+        {
+            AddDiagnostic(dotExpr.Range, GSCErrorCodes.InvalidAssignmentTarget);
+            return false;
+        }
+
+        if (failure.Value.IncompatibleBaseTypes is ScrDataTypes incompatibleBaseTypes)
+        {
+            AddDiagnostic(dotExpr.Range, GSCErrorCodes.DoesNotContainMember, fieldName, ScrDataTypeNames.TypeToString(incompatibleBaseTypes));
+            return false;
+        }
+
+        // Check for array size readonly first (it can exist alongside entity failures)
+        bool anyReadOnly = failure.Value.ArraySizeReadOnly;
+
+        if (failure.Value.EntityFailures is { } entityFailures)
+        {
+            // Single pass: collect flags + any extra info we may want for the chosen diagnostic.
+            // We intentionally emit ONE diagnostic (highest priority) to avoid spam and repeated passes.
+            bool anyImmutable = false;
+            bool anyTypeMismatch = false;
+            HashSet<ScrEntityTypes>? immutableEntityTypes = null;
+            ScrDataTypes expectedForMismatch = ScrDataTypes.Void;
+
+            foreach (ScrEntitySetFieldFailureInfo fail in entityFailures)
+            {
+                switch (fail.Reason)
+                {
+                    case ScrEntitySetFieldResult.EntityImmutable:
+                        anyImmutable = true;
+                        immutableEntityTypes ??= new HashSet<ScrEntityTypes>();
+                        immutableEntityTypes.Add(fail.EntityType);
+                        break;
+                    case ScrEntitySetFieldResult.FieldReadOnly:
+                        anyReadOnly = true;
+                        break;
+                    case ScrEntitySetFieldResult.FieldTypeMismatch:
+                        anyTypeMismatch = true;
+                        expectedForMismatch |= ScrEntityRegistry.GetField(fail.EntityType, fieldName).Type;
+                        break;
+                }
+            }
+
+            // Prefer a single, high-signal diagnostic.
+            // Priority (most actionable first):
+            // 1) Immutable entity (can't ever work)
+            // 2) Readonly property (can't ever work)
+            // 3) Type mismatch (might work with cast/change)
+            if (anyImmutable)
+            {
+                string immutableTypes = immutableEntityTypes is null || immutableEntityTypes.Count == 0
+                    ? ScrDataTypeNames.Entity
+                    : string.Join(" | ", immutableEntityTypes.Select(ScrEntityTypeNames.TypeToString));
+
+                AddDiagnostic(dotExpr.Range, GSCErrorCodes.CannotAssignToImmutableEntity, immutableTypes);
+                return false;
+            }
+
+            if (anyReadOnly)
+            {
+                AddDiagnostic(dotExpr.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+                return false;
+            }
+
+            if (anyTypeMismatch)
+            {
+                string expectedType = expectedForMismatch == ScrDataTypes.Void
+                    ? ScrDataTypeNames.Any
+                    : ScrDataTypeNames.TypeToString(expectedForMismatch);
+
+                AddDiagnostic(dotExpr.Right!.Range, GSCErrorCodes.PredefinedFieldTypeMismatch, value.TypeToString(), expectedType);
+                return false;
+            }
+        }
+        // Handle array size readonly when there are no entity failures
+        else if (anyReadOnly)
+        {
+            AddDiagnostic(dotExpr.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
+            return false;
+        }
+
+        AddDiagnostic(dotExpr.Range, GSCErrorCodes.InvalidAssignmentTarget);
+        return false;
+    }
+
     private ScrData AnalysePostIncrementOp(PostfixExprNode postfix, SymbolTable symbolTable, ParserIntelliSense sense)
     {
         ScrData target = AnalyseExpr(postfix.Operand!, symbolTable, sense, false);
 
-        // TODO: Does it have to be int, or can it also be float?
+        // Must be an int.
         if (target.Type != ScrDataTypes.Int && !target.IsAny())
         {
             AddDiagnostic(postfix.Operand!.Range, GSCErrorCodes.NoImplicitConversionExists, target.TypeToString(), ScrDataTypeNames.Int);
             return ScrData.Default;
         }
 
-        // Calculate the incremented value
-        ScrData incrementedValue = target.ValueUnknown()
-            ? new ScrData(target.Type)
-            : new ScrData(target.Type, target.Get<int>() + 1);
-
         // Perform the assignment using the shared helper
-        if (!TryAssignToTarget(postfix.Operand!, target, incrementedValue, symbolTable))
+        if (!TryAssignToTarget(postfix.Operand!, target, new ScrData(target.Type), symbolTable))
         {
             return ScrData.Default;
         }
@@ -1548,20 +1621,15 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
     {
         ScrData target = AnalyseExpr(postfix.Operand!, symbolTable, sense, false);
 
-        // TODO: Does it have to be int, or can it also be float?
+        // Must be an int.
         if (target.Type != ScrDataTypes.Int && !target.IsAny())
         {
             AddDiagnostic(postfix.Operand!.Range, GSCErrorCodes.NoImplicitConversionExists, target.TypeToString(), ScrDataTypeNames.Int);
             return ScrData.Default;
         }
 
-        // Calculate the decremented value
-        ScrData decrementedValue = target.ValueUnknown()
-            ? new ScrData(target.Type)
-            : new ScrData(target.Type, target.Get<int>() - 1);
-
         // Perform the assignment using the shared helper
-        if (!TryAssignToTarget(postfix.Operand!, target, decrementedValue, symbolTable))
+        if (!TryAssignToTarget(postfix.Operand!, target, new ScrData(target.Type), symbolTable))
         {
             return ScrData.Default;
         }
@@ -1572,11 +1640,28 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
     private ScrData AnalyseAssignOp(BinaryExprNode node, SymbolTable symbolTable)
     {
-        // TODO: decouple this from the general binary handler, then when it's an identifier, manually resolve either it to be a declaration
-        // or a mutation. Check for const too.
-        // actually, might not be necessary. undefined doesn't highlight, so the isNew check should suffice.
-        ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense, false);
         ScrData right = AnalyseExpr(node.Right!, symbolTable, Sense);
+
+        // If left is a dot expression, analyse it directly so we can get trace of the owner.
+        if (node.Left is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot)
+        {
+            ScrData dotLeft = AnalyseDotOp(binaryExprNode, symbolTable, false, out ScrData leftOwner);
+            string fieldName = dotLeft.FieldName ?? throw new NullReferenceException("Sanity check failed: Dot result has no field name.");
+
+            if (!TryAssignField(binaryExprNode, leftOwner, fieldName, right))
+            {
+                return ScrData.Default;
+            }
+
+            // Success - emit the sense token.
+            IdentifierExprNode identifierNode = (IdentifierExprNode)binaryExprNode.Right!;
+            Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, right));
+
+            return right;
+        }
+
+        // Otherwise, any other type of assignment.
+        ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense, false);
 
         // Assigning to a local variable or class member
         if (node.Left is IdentifierExprNode identifier)
@@ -1638,32 +1723,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return right;
         }
 
-        // Assigning to a property on a struct
-        if (node.Left is BinaryExprNode binaryExprNode && binaryExprNode.Operation == TokenType.Dot && left.Owner is ScrStruct destination)
-        {
-            string fieldName = left.FieldName ?? throw new NullReferenceException("Sanity check failed: Left data has no field name.");
-
-            if (left.ReadOnly)
-            {
-                AddDiagnostic(binaryExprNode.Right!.Range, GSCErrorCodes.CannotAssignToReadOnlyProperty, fieldName);
-                return ScrData.Default;
-            }
-
-            destination.Set(fieldName, right);
-
-            if (binaryExprNode.Right is IdentifierExprNode identifierNode)
-            {
-                bool isClassMember = symbolTable.CurrentClass is not null &&
-                    symbolTable.CurrentClass.Members.Any(m => m.Name.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
-
-                if (isClassMember)
-                    Sense.AddSenseToken(identifierNode.Token, new ScrClassPropertySymbol(identifierNode, right, symbolTable.CurrentClass!));
-                else
-                    Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, right));
-            }
-
-            return right;
-        }
+        // NOTE: Dot expressions are handled at the top of this method via AnalyseDotOp
 
         // TODO: once all cases are covered, we should enable this.
         // sense.AddSpaDiagnostic(node.Left!.Range, GSCErrorCodes.InvalidAssignmentTarget);
@@ -1727,39 +1787,55 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         {
             return ScrData.Default;
         }
+        ScrDataTypes addOpMask = ScrDataTypes.Number | ScrDataTypes.Vector | ScrDataTypes.String | ScrDataTypes.Hash;
+        if((left.Type & addOpMask) == ScrDataTypes.Void || (right.Type & addOpMask) == ScrDataTypes.Void)
+        {
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
+        }
 
         // If both are numeric, we can add them together.
         if (left.IsNumeric() && right.IsNumeric())
         {
             if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
             {
-                // Adds the values if they exist, otherwise is just null (ie Value Unknown)
-                return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() + right.GetIntegerValue());
+                return new ScrData(ScrDataTypes.Int);
             }
 
-            return new ScrData(ScrDataTypes.Float, left.GetNumericValue() + right.GetNumericValue());
+            return new ScrData(ScrDataTypes.Float);
         }
 
         // If both are vectors, we can add them together.
-        if (left.Type == ScrDataTypes.Vec3 && right.Type == ScrDataTypes.Vec3)
+        if (left.Type == ScrDataTypes.Vector && right.Type == ScrDataTypes.Vector)
         {
             // TODO: add vec3d addition
-            return new ScrData(ScrDataTypes.Vec3);
+            return new ScrData(ScrDataTypes.Vector);
         }
 
+        ScrDataTypes vectorOrNumericMask = ScrDataTypes.Vector | ScrDataTypes.Number;
         // At least one is a string, so do string concatenation. Won't be both numbers, as we checked that earlier.
-        if (left.Type == ScrDataTypes.String || right.Type == ScrDataTypes.String || left.IsNumeric() || right.IsNumeric())
+        if (left.Type == ScrDataTypes.String || right.Type == ScrDataTypes.String || (left.Type & vectorOrNumericMask) == vectorOrNumericMask || (right.Type & vectorOrNumericMask) == vectorOrNumericMask)
         {
-            if (left.ValueUnknown() || right.ValueUnknown())
-            {
-                return new ScrData(ScrDataTypes.String);
-            }
-
-            return new ScrData(ScrDataTypes.String, left.Value!.ToString() + right.Value!.ToString());
+            return new ScrData(ScrDataTypes.String);
         }
 
-        // ERROR: Operator '+' cannot be applied on operands of type ...
-        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", left.TypeToString(), right.TypeToString());
+        // If one or both are hashes, we can add them together.
+        if (left.Type == ScrDataTypes.Hash || right.Type == ScrDataTypes.Hash)
+        {
+            // But the other must be a string if they aren't both hashes.
+            if (left.Type == ScrDataTypes.Hash && right.Type == ScrDataTypes.String)
+            {
+                return new ScrData(ScrDataTypes.Hash);
+            }
+            if (right.Type == ScrDataTypes.Hash && left.Type == ScrDataTypes.String)
+            {
+                return new ScrData(ScrDataTypes.Hash);
+            }
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "+", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
+        }
+
+        // Some union of types, but we won't compute it here for the moment. TODO change
         return ScrData.Default;
     }
 
@@ -1770,20 +1846,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        if(TryHandleNumericBinaryOperation(left, right, out ScrData? result))
         {
-            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() - right.GetIntegerValue());
-        }
-
-        if (left.IsNumeric() && right.IsNumeric())
-        {
-            return new ScrData(ScrDataTypes.Float, left.GetNumericValue() - right.GetNumericValue());
-        }
-
-        if (left.Type == ScrDataTypes.Vec3 && right.Type == ScrDataTypes.Vec3)
-        {
-            // TODO: add vec3d subtraction
-            return new ScrData(ScrDataTypes.Vec3);
+            return result!.Value;
         }
 
         // ERROR: Operator '-' cannot be applied on operands of type ...
@@ -1798,22 +1863,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        // TODO: double check if GSC even does integer multiplication, i'm not sure.
-        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        if(TryHandleNumericBinaryOperation(left, right, out ScrData? result))
         {
-            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() * right.GetIntegerValue());
-        }
-
-        if (left.IsNumeric() && right.IsNumeric())
-        {
-            return new ScrData(ScrDataTypes.Float, left.GetNumericValue() * right.GetNumericValue());
-        }
-
-        // TODO: not sure whether multiply can be done on vec3d, etc., need to check.
-        if (left.Type == ScrDataTypes.Vec3 && right.IsNumeric())
-        {
-            // TODO: add vec3d multiplication by scalar value
-            return new ScrData(ScrDataTypes.Vec3);
+            return result!.Value;
         }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "*", left.TypeToString(), right.TypeToString());
@@ -1827,24 +1879,33 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        // don't think gsc does integer division
-        // if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
-        // {
-        //     return new ScrData(ScrDataTypes.Int, left.Get<int?>() / right.Get<int?>());
-        // }
-
-        if (left.Type == ScrDataTypes.Vec3 && right.IsNumeric())
+        
+        ScrDataTypes numericMask = ScrDataTypes.Number | ScrDataTypes.Vector;
+        if((left.Type & numericMask) == ScrDataTypes.Void || (right.Type & numericMask) == ScrDataTypes.Void)
         {
-            // TODO: add vec3d division by scalar value
-            return new ScrData(ScrDataTypes.Vec3);
+            AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "/", left.TypeToString(), right.TypeToString());
+            return ScrData.Default;
         }
 
+        // Both are numeric, so result is a float.
         if (left.IsNumeric() && right.IsNumeric())
         {
-            return new ScrData(ScrDataTypes.Float, left.GetNumericValue() / right.GetNumericValue());
+            // If the right isn't truthy, then this is an attempted divide by zero.
+            if(right.BooleanValue == false)
+            {
+                AddDiagnostic(node.Range, GSCErrorCodes.DivisionByZero);
+                return ScrData.Default;
+            }
+            return new ScrData(ScrDataTypes.Float);
         }
 
-        AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "/", left.TypeToString(), right.TypeToString());
+        // If left OR right is a vector, and the other is numeric, then they cast upward to vector.
+        if ((left.Type == ScrDataTypes.Vector || right.Type == ScrDataTypes.Vector) && (left.IsNumeric() || right.IsNumeric()))
+        {
+            return new ScrData(ScrDataTypes.Vector);
+        }
+
+        // There's some union of types, but we won't compute it here for the moment. TODO change
         return ScrData.Default;
     }
 
@@ -1857,7 +1918,13 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() % right.GetIntegerValue());
+            // If the right isn't truthy, then this is an attempted divide by zero.
+            if (right.BooleanValue == false)
+            {
+                AddDiagnostic(node.Range, GSCErrorCodes.DivisionByZero);
+                return ScrData.Default;
+            }
+            return new ScrData(ScrDataTypes.Int);
         }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "%", left.TypeToString(), right.TypeToString());
@@ -1873,7 +1940,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() << right.GetIntegerValue());
+            return new ScrData(ScrDataTypes.Int);
         }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "<<", left.TypeToString(), right.TypeToString());
@@ -1889,7 +1956,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() >> right.GetIntegerValue());
+            return new ScrData(ScrDataTypes.Int);
         }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, ">>", left.TypeToString(), right.TypeToString());
@@ -1903,7 +1970,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
+        if (left.BooleanValue is null || right.BooleanValue is null)
         {
             return new ScrData(ScrDataTypes.Bool);
         }
@@ -1928,7 +1995,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // TODO: this is a blunt instrument and I don't think it's correct
-        return new ScrData(ScrDataTypes.Bool, left.Value == right.Value);
+        return new ScrData(ScrDataTypes.Bool, booleanValue: left.BooleanValue == right.BooleanValue);
     }
 
     private ScrData AnalyseNotEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
@@ -1938,7 +2005,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
+        if (left.BooleanValue is null || right.BooleanValue is null)
         {
             return new ScrData(ScrDataTypes.Bool);
         }
@@ -1963,7 +2030,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // TODO: this is a blunt instrument and I don't think it's correct
-        return new ScrData(ScrDataTypes.Bool, left.Value != right.Value);
+        return new ScrData(ScrDataTypes.Bool, booleanValue: left.BooleanValue != right.BooleanValue);
     }
 
     private ScrData AnalyseIdentityEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
@@ -1973,7 +2040,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
+        if (left.BooleanValue is null || right.BooleanValue is null)
         {
             return new ScrData(ScrDataTypes.Bool);
         }
@@ -1998,7 +2065,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // TODO: this is definitely not right.
-        return new ScrData(ScrDataTypes.Bool, left.Value == right.Value && left.Type == right.Type);
+        return new ScrData(ScrDataTypes.Bool, booleanValue: left.BooleanValue == right.BooleanValue && left.Type == right.Type);
     }
 
     private ScrData AnalyseIdentityNotEqualsOp(BinaryExprNode node, ScrData left, ScrData right)
@@ -2008,7 +2075,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
+        if (left.BooleanValue is null || right.BooleanValue is null)
         {
             return new ScrData(ScrDataTypes.Bool);
         }
@@ -2033,7 +2100,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // TODO: this is definitely not right.
-        return new ScrData(ScrDataTypes.Bool, left.Value != right.Value || left.Type != right.Type);
+        return new ScrData(ScrDataTypes.Bool, booleanValue: left.BooleanValue != right.BooleanValue || left.Type != right.Type);
     }
 
     private ScrData AnalyseAndOp(BinaryExprNode node, ScrData left, ScrData right)
@@ -2043,7 +2110,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
+        if (left.BooleanValue is null || right.BooleanValue is null)
         {
             return new ScrData(ScrDataTypes.Bool);
         }
@@ -2068,7 +2135,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // TODO: evaluate more intelligently - ie check if both are booleanish.
-        return new ScrData(ScrDataTypes.Bool);
+        return new ScrData(ScrDataTypes.Bool, booleanValue: left.BooleanValue == right.BooleanValue);
     }
 
     private ScrData AnalyseOrOp(BinaryExprNode node, ScrData left, ScrData right)
@@ -2077,7 +2144,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         {
             return ScrData.Default;
         }
-        if (left.ValueUnknown() || right.ValueUnknown())
+        if (left.BooleanValue is null || right.BooleanValue is null)
         {
             return new ScrData(ScrDataTypes.Bool);
         }
@@ -2114,7 +2181,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() & right.GetIntegerValue());
+            return new ScrData(ScrDataTypes.Int);
         }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "&", left.TypeToString(), right.TypeToString());
@@ -2130,7 +2197,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() | right.GetIntegerValue());
+            return new ScrData(ScrDataTypes.Int);
         }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "|", left.TypeToString(), right.TypeToString());
@@ -2146,7 +2213,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
         {
-            return new ScrData(ScrDataTypes.Int, left.GetIntegerValue() ^ right.GetIntegerValue());
+            return new ScrData(ScrDataTypes.Int);
         }
 
         AddDiagnostic(node.Range, GSCErrorCodes.OperatorNotSupportedOnTypes, "^", left.TypeToString(), right.TypeToString());
@@ -2160,21 +2227,8 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
-        {
-            // If we can't determine values but types are numeric, still return bool
-            if (left.IsNumeric() && right.IsNumeric())
-            {
-                return new ScrData(ScrDataTypes.Bool);
-            }
-        }
-
         if (left.IsNumeric() && right.IsNumeric())
         {
-            if (!left.ValueUnknown() && !right.ValueUnknown())
-            {
-                return new ScrData(ScrDataTypes.Bool, left.GetNumericValue() > right.GetNumericValue());
-            }
             return new ScrData(ScrDataTypes.Bool);
         }
 
@@ -2189,21 +2243,8 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
-        {
-            // If we can't determine values but types are numeric, still return bool
-            if (left.IsNumeric() && right.IsNumeric())
-            {
-                return new ScrData(ScrDataTypes.Bool);
-            }
-        }
-
         if (left.IsNumeric() && right.IsNumeric())
         {
-            if (!left.ValueUnknown() && !right.ValueUnknown())
-            {
-                return new ScrData(ScrDataTypes.Bool, left.GetNumericValue() < right.GetNumericValue());
-            }
             return new ScrData(ScrDataTypes.Bool);
         }
 
@@ -2218,21 +2259,8 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
-        {
-            // If we can't determine values but types are numeric, still return bool
-            if (left.IsNumeric() && right.IsNumeric())
-            {
-                return new ScrData(ScrDataTypes.Bool);
-            }
-        }
-
         if (left.IsNumeric() && right.IsNumeric())
         {
-            if (!left.ValueUnknown() && !right.ValueUnknown())
-            {
-                return new ScrData(ScrDataTypes.Bool, left.GetNumericValue() >= right.GetNumericValue());
-            }
             return new ScrData(ScrDataTypes.Bool);
         }
 
@@ -2247,21 +2275,8 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        if (left.ValueUnknown() || right.ValueUnknown())
-        {
-            // If we can't determine values but types are numeric, still return bool
-            if (left.IsNumeric() && right.IsNumeric())
-            {
-                return new ScrData(ScrDataTypes.Bool);
-            }
-        }
-
         if (left.IsNumeric() && right.IsNumeric())
         {
-            if (!left.ValueUnknown() && !right.ValueUnknown())
-            {
-                return new ScrData(ScrDataTypes.Bool, left.GetNumericValue() <= right.GetNumericValue());
-            }
             return new ScrData(ScrDataTypes.Bool);
         }
 
@@ -2269,73 +2284,53 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         return ScrData.Default;
     }
 
-    private ScrData AnalyseDotOp(BinaryExprNode node, SymbolTable symbolTable, bool createSenseTokenForField = true)
+    private ScrData AnalyseDotOp(BinaryExprNode node, SymbolTable symbolTable, bool createSenseTokenForField, out ScrData owner)
     {
+        owner = ScrData.Default;
+
         if (node.Right!.OperatorType != ExprOperatorType.IdentifierOperand || node.Right is not IdentifierExprNode identifierNode)
         {
+
             AddDiagnostic(node.Right!.Range, GSCErrorCodes.IdentifierExpected);
             return ScrData.Default;
         }
 
         ScrData left = AnalyseExpr(node.Left!, symbolTable, Sense);
+        owner = left;
+
+        ScrData result = left.TryGetField(identifierNode.Identifier, out ScrDataTypes? incompatibleTypes);
+
+        if(result == ScrData.Void)
+        {
+            AddDiagnostic(node.Range, GSCErrorCodes.DoesNotContainMember, identifierNode.Identifier, ScrDataTypeNames.TypeToString(incompatibleTypes!.Value));
+            // FieldName is already set by TryGetField, return a default with it preserved
+            ScrData errorResult = ScrData.Default;
+            errorResult.FieldName = identifierNode.Identifier;
+            return errorResult;
+        }
 
         bool isClassMember = symbolTable.CurrentClass is not null &&
             symbolTable.CurrentClass.Members.Any(m => m.Name.Equals(identifierNode.Identifier, StringComparison.OrdinalIgnoreCase));
 
-        if (left.TypeUnknown())
-        {
-            if (createSenseTokenForField)
-            {
-                if (isClassMember)
-                    Sense.AddSenseToken(identifierNode.Token, new ScrClassPropertySymbol(identifierNode, ScrData.Default, symbolTable.CurrentClass!));
-                else
-                    Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, ScrData.Default));
-            }
-            return ScrData.Default;
-        }
-
-        if (left.Type == ScrDataTypes.Array && identifierNode.Identifier == "size")
-        {
-            ScrData sizeValue = new(ScrDataTypes.Int, ReadOnly: true);
-            if (createSenseTokenForField)
-                Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, sizeValue, true));
-            return sizeValue;
-        }
-
-        if (left.Type != ScrDataTypes.Object && left.Type != ScrDataTypes.Struct && left.Type != ScrDataTypes.Entity)
-        {
-            AddDiagnostic(node.Range, GSCErrorCodes.DoesNotContainMember, identifierNode.Identifier, left.TypeToString());
-            return ScrData.Default;
-        }
-
-        if (left.ValueUnknown())
-        {
-            if (createSenseTokenForField)
-            {
-                if (isClassMember)
-                    Sense.AddSenseToken(identifierNode.Token, new ScrClassPropertySymbol(identifierNode, ScrData.Default, symbolTable.CurrentClass!));
-                else
-                    Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, ScrData.Default));
-            }
-            return ScrData.Default;
-        }
-
-        ScrData value = left.GetField(identifierNode.Identifier);
-
+        // Emit sense tokens for the field.
         if (createSenseTokenForField)
         {
             if (isClassMember)
-                Sense.AddSenseToken(identifierNode.Token, new ScrClassPropertySymbol(identifierNode, value, symbolTable.CurrentClass!));
+            {
+                Sense.AddSenseToken(identifierNode.Token, new ScrClassPropertySymbol(identifierNode, result, symbolTable.CurrentClass!, isReadOnly: result.ReadOnly));
+            }
             else
-                Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, value));
+            {
+                Sense.AddSenseToken(identifierNode.Token, new ScrFieldSymbol(identifierNode, result, isReadOnly: result.ReadOnly));
+            }
         }
 
-        return value;
+        return result;
     }
 
     private ScrData AnalyseDataExpr(DataExprNode expr)
     {
-        return new ScrData(expr.Type, expr.Value);
+        return ScrData.FromDataExprNode(expr);
     }
 
     private ScrData AnalyseIdentifierExpr(IdentifierExprNode expr, SymbolTable symbolTable, bool createSenseTokenForRhs = true)
@@ -2394,9 +2389,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         ScrData y = AnalyseExpr(expr.Y, symbolTable, Sense);
         ScrData z = AnalyseExpr(expr.Z, symbolTable, Sense);
 
-        if (x.TypeUnknown() || y.TypeUnknown() || z.TypeUnknown() || x.ValueUnknown() || y.ValueUnknown() || z.ValueUnknown())
+        if (x.TypeUnknown() || y.TypeUnknown() || z.TypeUnknown())
         {
-            return new ScrData(ScrDataTypes.Vec3);
+            return new ScrData(ScrDataTypes.Vector);
         }
 
         if (!x.IsNumeric())
@@ -2415,7 +2410,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        return new ScrData(ScrDataTypes.Vec3, new Vector3(x.GetNumericValue()!.Value, y.GetNumericValue()!.Value, z.GetNumericValue()!.Value));
+        return new ScrData(ScrDataTypes.Vector);
     }
 
     private ScrData AnalyseIndexerExpr(ArrayIndexNode expr, SymbolTable symbolTable)
@@ -2437,27 +2432,22 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         // We might not know which collection type it is, but it won't be indexable.
         if (collection.TypeUnknown())
         {
-            if (indexer.Type != ScrDataTypes.Int && indexer.Type != ScrDataTypes.String)
+            if (!indexer.IsArrayIndexer())
             {
                 AddDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
             }
             return ScrData.Default;
         }
 
-        // TODO: I'm not sure 100% how GSC differentiates between array and map.
-        // It might be that it implicitly converts an array to a map as soon as it first gets
-        // a non-int index.
-        // We'll do it like this for now, and adjust later if needed.
-
+        // Arrays aren't strongly typed (right now), so we can just return default.
         if (collection.Type == ScrDataTypes.Array)
         {
-            if (indexer.Type != ScrDataTypes.Int && indexer.Type != ScrDataTypes.String)
+            if (!indexer.IsArrayIndexer())
             {
                 AddDiagnostic(expr.Index!.Range, GSCErrorCodes.CannotUseAsIndexer, indexer.TypeToString());
                 return ScrData.Default;
             }
 
-            // return collection.GetArrayElement(indexer.Get<int>());
             return ScrData.Default;
         }
 
@@ -2527,18 +2517,19 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         if (flags.HasFlag(SymbolFlags.Global) && symbol.Type == ScrDataTypes.Function)
         {
-            ScrFunction function = symbol.Get<ScrFunction>();
-
-            // Check if the namespace is a class
-            if (symbolTable.GlobalSymbolTable.TryGetValue(namespaceNode.Identifier, out IExportedSymbol? classSymbol)
-                && classSymbol.Type == ExportedSymbolType.Class)
+            if (symbol.TryGetFunction(out ScrFunction? function))
             {
-                ScrClass scrClass = (ScrClass)classSymbol;
-                Sense.AddSenseToken(memberNode.Token, new ScrMethodReferenceSymbol(memberNode.Token, function, scrClass));
-            }
-            else
-            {
-                Sense.AddSenseToken(memberNode.Token, new ScrFunctionReferenceSymbol(memberNode.Token, function));
+                // Check if the namespace is a class
+                if (symbolTable.GlobalSymbolTable.TryGetValue(namespaceNode.Identifier, out IExportedSymbol? classSymbol)
+                    && classSymbol.Type == ExportedSymbolType.Class)
+                {
+                    ScrClass scrClass = (ScrClass)classSymbol;
+                    Sense.AddSenseToken(memberNode.Token, new ScrMethodReferenceSymbol(memberNode.Token, function, scrClass));
+                }
+                else
+                {
+                    Sense.AddSenseToken(memberNode.Token, new ScrFunctionReferenceSymbol(memberNode.Token, function));
+                }
             }
         }
 
@@ -2573,7 +2564,108 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // Dereference: FunctionPointer → Function
-        return new ScrData(ScrDataTypes.Function, functionPtrData.Value);
+        if (functionPtrData.TryGetFunction(out var func))
+        {
+            return ScrData.Function(func);
+        }
+        return new ScrData(ScrDataTypes.Function);
+    }
+
+    private ScrData? TryAnalyseReservedFunction(FunCallNode call, string functionName, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        // Handle vectorscale(vector, number) -> vector
+        if (functionName.Equals("vectorscale", StringComparison.OrdinalIgnoreCase))
+        {
+            return AnalyseVectorScaleCall(call, symbolTable, sense);
+        }
+
+        // Handle isdefined(value) -> bool
+        if (functionName.Equals("isdefined", StringComparison.OrdinalIgnoreCase))
+        {
+            return AnalyseIsDefinedCall(call, symbolTable, sense);
+        }
+
+        return null; // Not a specially handled reserved function
+    }
+
+    private ScrData AnalyseVectorScaleCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        int argCount = call.Arguments.Arguments.Count;
+
+        // Validate argument count (exactly 2)
+        if (argCount < 2)
+        {
+            AddDiagnostic(call.Arguments.Range, GSCErrorCodes.TooFewArguments, "vectorscale", argCount, 2);
+        }
+        else if (argCount > 2)
+        {
+            AddDiagnostic(call.Arguments.Range, GSCErrorCodes.TooManyArguments, "vectorscale", argCount, 2);
+        }
+
+        int index = 0;
+        foreach (ExprNode? arg in call.Arguments.Arguments)
+        {
+            if (arg is null)
+            {
+                index++;
+                continue;
+            }
+
+            // Analyze first argument (should be Vector)
+            if (index == 0)
+            {
+                ScrData vecData = AnalyseExpr(arg, symbolTable, sense);
+                if (!vecData.TypeUnknown() && vecData.Type != ScrDataTypes.Vector)
+                {
+                    AddDiagnostic(arg.Range, GSCErrorCodes.NoImplicitConversionExists, vecData.TypeToString(), ScrDataTypeNames.Vector);
+                }
+            }
+            // Analyze second argument (should be Int or Float / Number)
+            else if (index == 1)
+            {
+                ScrData scaleData = AnalyseExpr(arg, symbolTable, sense);
+                if (!scaleData.TypeUnknown() && !scaleData.IsNumeric())
+                {
+                    AddDiagnostic(arg.Range, GSCErrorCodes.NoImplicitConversionExists, scaleData.TypeToString(), ScrDataTypeNames.Number);
+                }
+            }
+            // Analyze remaining arguments to ensure they are processed for side effects/references
+            else
+            {
+                AnalyseExpr(arg, symbolTable, sense);
+            }
+
+            index++;
+        }
+
+        return new ScrData(ScrDataTypes.Vector);
+    }
+
+    private ScrData AnalyseIsDefinedCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense)
+    {
+        int argCount = call.Arguments.Arguments.Count;
+
+        // Validate argument count (exactly 1)
+        if (argCount < 1)
+        {
+            AddDiagnostic(call.Arguments.Range, GSCErrorCodes.TooFewArguments, "isdefined", argCount, 1);
+        }
+        else if (argCount > 1)
+        {
+            AddDiagnostic(call.Arguments.Range, GSCErrorCodes.TooManyArguments, "isdefined", argCount, 1);
+        }
+
+        // Analyze all arguments to ensure side effects/references are processed
+        foreach (var arg in call.Arguments.Arguments)
+        {
+            if (arg != null)
+            {
+                AnalyseExpr(arg, symbolTable, sense);
+            }
+        }
+
+        // isdefined takes 1 argument. Return bool.
+        return new ScrData(ScrDataTypes.Bool);
     }
 
     private ScrData AnalyseFunctionCall(FunCallNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
@@ -2607,9 +2699,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             }
 
             // Add sense token for the function reference
-            if (!functionFlags.HasFlag(SymbolFlags.Reserved) && !functionTarget.ValueUnknown())
+            if (!functionFlags.HasFlag(SymbolFlags.Reserved) && functionTarget.TryGetFunction(out var func))
             {
-                AddFunctionReferenceToken(identifierNode.Token, functionTarget.Get<ScrFunction>(), symbolTable);
+                AddFunctionReferenceToken(identifierNode.Token, func, symbolTable);
             }
         }
         // Namespaced function call namespace::func() - analyze as scope resolution
@@ -2635,7 +2727,17 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             return ScrData.Default;
         }
 
-        ScrFunction function = functionTarget.Get<ScrFunction>();
+        functionTarget.TryGetFunction(out ScrFunction? function);
+
+        // Handle reserved functions with special semantics
+        if (functionFlags.HasFlag(SymbolFlags.Reserved) && call.Function is IdentifierExprNode reservedId)
+        {
+            ScrData? reservedResult = TryAnalyseReservedFunction(call, reservedId.Identifier, symbolTable, sense);
+            if (reservedResult is not null)
+            {
+                return reservedResult.Value;
+            }
+        }
 
         // Analyse arguments
         foreach (ExprNode? argument in call.Arguments.Arguments)
@@ -2654,10 +2756,39 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         int argCount = call.Arguments.Arguments.Count;
         string functionName = call.Function is IdentifierExprNode idNode ? idNode.Identifier :
                              call.Function is NamespacedMemberNode nmNode && nmNode.Member is IdentifierExprNode memberId ? memberId.Identifier :
-                             function.Name;
+                             function?.Name ?? "<unknown>";
         ValidateArgumentCount(function, argCount, call.Arguments.Range, functionName, functionFlags);
 
-        return ScrData.Default;
+        // Return the function's return type if known
+        return GetFunctionReturnType(function);
+    }
+
+    /// <summary>
+    /// Gets the return type of a function from its API specification.
+    /// </summary>
+    private static ScrData GetFunctionReturnType(ScrFunction? function)
+    {
+        if (function is null)
+        {
+            return ScrData.Default;
+        }
+
+        // Get the first overload's return type (TODO: handle multiple overloads)
+        if (function.Overloads.Count == 0)
+        {
+            return ScrData.Default;
+        }
+
+        ScrFunctionReturn? returnSpec = function.Overloads[0].Returns;
+
+        // If explicitly void, return void
+        if (returnSpec?.Void == true)
+        {
+            return ScrData.Void;
+        }
+
+        // Convert the API return type to ScrData
+        return ScrData.FromApiType(returnSpec?.Type);
     }
 
     private ScrData AnalyseThreadedFunctionCall(PrefixExprNode call, SymbolTable symbolTable, ParserIntelliSense sense, ScrData? target = null)
@@ -2684,9 +2815,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             }
 
             // Add sense token for the function reference
-            if (!flags.HasFlag(SymbolFlags.Reserved) && !functionTarget.ValueUnknown())
+            if (!flags.HasFlag(SymbolFlags.Reserved) && functionTarget.TryGetFunction(out var func))
             {
-                AddFunctionReferenceToken(identifierNode.Token, functionTarget.Get<ScrFunction>(), symbolTable);
+                AddFunctionReferenceToken(identifierNode.Token, func, symbolTable);
             }
         }
         // If it's a namespaced function, analyze it as scope resolution
@@ -3000,6 +3131,41 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             // Runtime operators like increment/decrement are not compile-time constants
             _ => false
         };
+    }
+
+    private static bool TryHandleNumericBinaryOperation(ScrData left, ScrData right, [NotNullWhen(true)] out ScrData? result)
+    {
+        ScrDataTypes numericMask = ScrDataTypes.Number | ScrDataTypes.Vector;
+        if((left.Type & numericMask) == ScrDataTypes.Void || (right.Type & numericMask) == ScrDataTypes.Void)
+        {
+            result = null;
+            return false;
+        }
+
+        // Both are ints, so result is an int.
+        if (left.Type == ScrDataTypes.Int && right.Type == ScrDataTypes.Int)
+        {
+            result = new ScrData(ScrDataTypes.Int);
+            return true;
+        }
+
+        // At least one is a float, both numeric, so result is a float.
+        if (left.IsNumeric() && right.IsNumeric())
+        {
+            result = new ScrData(ScrDataTypes.Float);
+            return true;
+        }
+
+        // If left OR right is a vector, and the other is numeric, then they cast upward to vector.
+        if ((left.Type == ScrDataTypes.Vector || right.Type == ScrDataTypes.Vector) && (left.IsNumeric() || right.IsNumeric()))
+        {
+            result = new ScrData(ScrDataTypes.Vector);
+            return true;
+        }
+
+        // There's some union of types, but we won't compute it here for the moment. TODO change
+        result = ScrData.Default;
+        return true;
     }
 }
 

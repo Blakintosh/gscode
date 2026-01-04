@@ -1,7 +1,10 @@
-﻿using GSCode.Parser.AST;
+﻿using GSCode.Data.Models;
+using GSCode.Parser.AST;
 using GSCode.Parser.Lexical;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -43,7 +46,7 @@ internal enum ScrDataTypes : uint
 
     // Value types
     Bool = 1 << 0,
-    Int = 1 << 1,      // this may get changed to include bool
+    Int = 1 << 1 | Bool,      // this may get changed to include bool
     Float = 1 << 2,
     Number = Int | Float, // int or float
 
@@ -52,9 +55,9 @@ internal enum ScrDataTypes : uint
     // ReSharper disable once InconsistentNaming
     IString = (1 << 4) | String, // falls back to being a regular string if not found
     Array = 1 << 5,
-    Vec3 = 1 << 6,
+    Vector = 1 << 6,
     Struct = 1 << 7,
-    Entity = (1 << 8) | Struct, // extension of the struct type
+    Entity = 1 << 8,
     Object = 1 << 9,
 
     // Misc types
@@ -67,9 +70,53 @@ internal enum ScrDataTypes : uint
     // Undefined
     Undefined = 1 << 15,
 
+    // UInt64
+    UInt64 = 1 << 16,
+
     // Error marker
     Error = 1 << 60
 }
+
+internal enum ScrDataSubTypeKind
+{
+    ObjectInstance,
+    Entity,
+    FunctionReference
+}
+
+internal interface IScrDataSubType
+{
+    public ScrDataSubTypeKind Kind { get; }
+}
+
+internal record class ScrDataObjectInstanceType : IScrDataSubType
+{
+    public ScrDataSubTypeKind Kind => ScrDataSubTypeKind.ObjectInstance;
+    public int ClassId { get; init; }
+}
+
+internal record class ScrDataEntityType : IScrDataSubType
+{
+    public ScrDataSubTypeKind Kind => ScrDataSubTypeKind.Entity;
+    public ScrEntityTypes EntityType { get; init; }
+}
+
+internal record class ScrDataFunctionReferenceType : IScrDataSubType
+{
+    public ScrDataSubTypeKind Kind => ScrDataSubTypeKind.FunctionReference;
+    public required ScrFunction Function { get; init; }
+}
+
+internal record struct ScrSetFieldFailure(
+    ScrDataTypes? IncompatibleBaseTypes,
+    ImmutableList<ScrEntitySetFieldFailureInfo>? EntityFailures,
+    bool ArraySizeReadOnly = false
+);
+
+internal record struct ScrEntitySetFieldFailureInfo(
+    ScrEntityTypes EntityType,
+    ScrEntitySetFieldResult Reason
+);
 
 internal static class ScrDataTypeNames
 {
@@ -82,7 +129,7 @@ internal static class ScrDataTypeNames
     public const string String = "string";
     public const string IString = "istring";
     public const string Array = "array";
-    public const string Vec3 = "vector";
+    public const string Vector = "vector";
     public const string Struct = "struct";
     public const string Entity = "entity";
     public const string Object = "object";
@@ -128,8 +175,8 @@ internal static class ScrDataTypeNames
                 {
                     continue;
                 }
-                // Entity is a superset of Struct, so skip Struct if Entity is present
-                if (value == ScrDataTypes.Struct && (type & ScrDataTypes.Entity) == ScrDataTypes.Entity)
+                // Int is a superset of Bool, so skip Bool if Int is present
+                if (value == ScrDataTypes.Bool && (type & ScrDataTypes.Int) == ScrDataTypes.Int)
                 {
                     continue;
                 }
@@ -154,7 +201,7 @@ internal static class ScrDataTypeNames
                     ScrDataTypes.String => ScrDataTypeNames.String,
                     ScrDataTypes.IString => ScrDataTypeNames.IString,
                     ScrDataTypes.Array => ScrDataTypeNames.Array,
-                    ScrDataTypes.Vec3 => ScrDataTypeNames.Vec3,
+                    ScrDataTypes.Vector => ScrDataTypeNames.Vector,
                     ScrDataTypes.Struct => ScrDataTypeNames.Struct,
                     ScrDataTypes.Entity => ScrDataTypeNames.Entity,
                     ScrDataTypes.Object => ScrDataTypeNames.Object,
@@ -199,18 +246,263 @@ internal enum ScrInstanceTypes
 /// <param name="Type">The type of the data</param>
 /// <param name="Value">An associated value, which could be a constant or a structure for reference types</param>
 /// <param name="ReadOnly">Whether the field or variable on which this is accessed on is read-only/constant</param>
-internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool ReadOnly = false)
+internal record struct ScrData
 {
+    /// <summary>
+    /// The type of the data, which could be a single type or a union of types.
+    /// </summary>
+    public ScrDataTypes Type { get; init; }
+
+    /// <summary>
+    /// Whether the field or variable on which this is accessed on is read-only/constant.
+    /// </summary>
+    public bool ReadOnly { get; init; }
+
+    /// <summary>
+    /// The boolean value of the data, if known.
+    /// </summary>
+    public bool? BooleanValue { get; }
+
+    /// <summary>
+    /// When <see cref="Type"/> is <see cref="ScrDataTypes.Struct"/> or <see cref="ScrDataTypes.Entity"/>,
+    /// this set contains the sub-types that this data instance can be, if known.
+    /// </summary>
+    public ImmutableHashSet<IScrDataSubType>? SubTypes { get; }
+
+    public ScrData(ScrDataTypes type, bool readOnly = false)
+    {
+        Type = type;
+        BooleanValue = type switch
+        {
+            // Always truthy
+            ScrDataTypes.Array => true,
+            ScrDataTypes.Vector => true,
+            ScrDataTypes.Struct => true,
+            ScrDataTypes.Entity => true,
+            ScrDataTypes.Object => true,
+            // Always falsy
+            ScrDataTypes.Undefined => false,
+            // Unknown
+            _ => null,
+        };
+        ReadOnly = readOnly;
+    }
+
+    public ScrData(ScrDataTypes type, bool? booleanValue, bool readOnly = false)
+    {
+        Type = type;
+        BooleanValue = booleanValue;
+        ReadOnly = readOnly;
+    }
+
+    public ScrData(ScrDataTypes type, IEnumerable<IScrDataSubType>? subTypes, bool? booleanValue = null, bool readOnly = false)
+    {
+        Type = type;
+        BooleanValue = booleanValue;
+        SubTypes = subTypes?.ToImmutableHashSet();
+        ReadOnly = readOnly;
+    }
+
     public static ScrData Void { get; } = new(ScrDataTypes.Void);
     public static ScrData Default { get; } = new(ScrDataTypes.Any);
     public static ScrData Error { get; } = new(ScrDataTypes.Error);
 
-    public ScrStruct? Owner { get; set; } = null;
     public string? FieldName { get; set; } = null;
 
     public static ScrData Undefined()
     {
-        return new(ScrDataTypes.Undefined, null, false);
+        return new(ScrDataTypes.Undefined);
+    }
+
+    public static ScrData Function(ScrFunction function)
+    {
+        return new(ScrDataTypes.Function, 
+            [new ScrDataFunctionReferenceType { Function = function }]);
+    }
+
+    public static ScrData FunctionPointer(ScrFunction function)
+    {
+        return new(ScrDataTypes.FunctionPointer,
+            [new ScrDataFunctionReferenceType { Function = function }]);
+    }
+
+    /// <summary>
+    /// Converts an API data type specification to an internal ScrData instance.
+    /// </summary>
+    /// <param name="apiType">The API type specification</param>
+    /// <returns>The corresponding ScrData</returns>
+    public static ScrData FromApiType(ScrFunctionDataType? apiType)
+    {
+        if (apiType is null)
+        {
+            return Default;
+        }
+
+        // Handle array types - map any array to just 'array' regardless of element type
+        if (apiType.IsArray)
+        {
+            return new ScrData(ScrDataTypes.Array);
+        }
+
+        return ParseSingleApiType(apiType.DataType, apiType.InstanceType);
+    }
+
+    /// <summary>
+    /// Converts a list of API data types (union) to an internal ScrData instance.
+    /// Types are BitOr'd together and subtypes are collected.
+    /// </summary>
+    /// <param name="apiTypes">The list of API type specifications</param>
+    /// <returns>The corresponding ScrData representing the union</returns>
+    public static ScrData FromApiTypes(IEnumerable<ScrFunctionDataType>? apiTypes)
+    {
+        if (apiTypes is null)
+        {
+            return Default;
+        }
+
+        ScrDataTypes combinedType = ScrDataTypes.Void;
+        List<IScrDataSubType>? subTypes = null;
+
+        foreach (var apiType in apiTypes)
+        {
+            // Handle array types - map any array to just 'array'
+            if (apiType.IsArray)
+            {
+                combinedType |= ScrDataTypes.Array;
+                continue;
+            }
+
+            var (type, subType) = ParseSingleApiTypeWithSubType(apiType.DataType, apiType.InstanceType);
+            combinedType |= type;
+
+            if (subType is not null)
+            {
+                subTypes ??= new();
+                subTypes.Add(subType);
+            }
+        }
+
+        if (combinedType == ScrDataTypes.Void)
+        {
+            return Default;
+        }
+
+        return new ScrData(combinedType, subTypes);
+    }
+
+    /// <summary>
+    /// Parses a single API data type string to the corresponding ScrDataTypes.
+    /// </summary>
+    private static ScrData ParseSingleApiType(string dataType, string? instanceType)
+    {
+        var (type, subType) = ParseSingleApiTypeWithSubType(dataType, instanceType);
+
+        if (subType is not null)
+        {
+            return new ScrData(type, [subType]);
+        }
+
+        return new ScrData(type);
+    }
+
+    /// <summary>
+    /// Parses a single API data type string to the corresponding ScrDataTypes and optional subtype.
+    /// </summary>
+    private static (ScrDataTypes Type, IScrDataSubType? SubType) ParseSingleApiTypeWithSubType(string dataType, string? instanceType)
+    {
+        // Normalize the type name
+        string normalizedType = dataType.ToLowerInvariant().Trim();
+
+        return normalizedType switch
+        {
+            // Primitives
+            "int" or "integer" => (ScrDataTypes.Int, null),
+            "float" => (ScrDataTypes.Float, null),
+            "bool" or "boolean" => (ScrDataTypes.Bool, null),
+            "string" => (ScrDataTypes.String, null),
+            "istring" or "localizedstring" => (ScrDataTypes.IString, null),
+            "number" => (ScrDataTypes.Number, null), // int | float
+            "vector" or "vec3" => (ScrDataTypes.Vector, null),
+            "hash" => (ScrDataTypes.Hash, null),
+            "undefined" => (ScrDataTypes.Undefined, null),
+            "void" => (ScrDataTypes.Void, null),
+
+            // Complex types
+            "array" => (ScrDataTypes.Array, null),
+            "struct" => (ScrDataTypes.Struct, null),
+            "function" => (ScrDataTypes.Function, null),
+            "function*" or "functionpointer" => (ScrDataTypes.FunctionPointer, null),
+
+            // Entity types - check for instance type
+            "entity" => ParseEntityType(instanceType),
+
+            // Enums map to any
+            "enum" => (ScrDataTypes.Any, null),
+
+            // Any/unknown
+            "any" or "" => (ScrDataTypes.Any, null),
+
+            // Default fallback for unknown types
+            _ => (ScrDataTypes.Any, null)
+        };
+    }
+
+    /// <summary>
+    /// Parses an entity type, potentially with an instance type subtype.
+    /// </summary>
+    private static (ScrDataTypes Type, IScrDataSubType? SubType) ParseEntityType(string? instanceType)
+    {
+        // If no instance type or 'any', just return entity with no subtype
+        if (string.IsNullOrWhiteSpace(instanceType) ||
+            instanceType.Equals("any", StringComparison.OrdinalIgnoreCase))
+        {
+            return (ScrDataTypes.Entity, null);
+        }
+
+        // Try to map the instance type to a known entity type
+        ScrEntityTypes? entityType = instanceType.ToLowerInvariant() switch
+        {
+            "weapon" => ScrEntityTypes.Weapon,
+            "vehicle" => ScrEntityTypes.Vehicle,
+            "player" => ScrEntityTypes.Player,
+            "actor" => ScrEntityTypes.Actor,
+            "aitype" or "ai_type" => ScrEntityTypes.AiType,
+            "pathnode" or "path_node" => ScrEntityTypes.PathNode,
+            "sentient" => ScrEntityTypes.Sentient,
+            "vehiclenode" or "vehicle_node" => ScrEntityTypes.VehicleNode,
+            "hudelem" or "hud_elem" => ScrEntityTypes.HudElem,
+            _ => null
+        };
+
+        if (entityType.HasValue)
+        {
+            return (ScrDataTypes.Entity, new ScrDataEntityType { EntityType = entityType.Value });
+        }
+
+        // Unknown instance type - return entity without subtype
+        return (ScrDataTypes.Entity, null);
+    }
+
+    public bool TryGetFunction([NotNullWhen(true)] out ScrFunction? function)
+    {
+        if (SubTypes is not null)
+        {
+            foreach (var subType in SubTypes)
+            {
+                if (subType is ScrDataFunctionReferenceType funcRef)
+                {
+                    function = funcRef.Function;
+                    return true;
+                }
+            }
+        }
+        function = null;
+        return false;
+    }
+
+    public bool FunctionUnknown()
+    {
+        return !TryGetFunction(out _);
     }
 
     /// <summary>
@@ -219,34 +511,154 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
     /// <returns>A deep-copied ScrData instance</returns>
     public ScrData Copy()
     {
-        object? value = default;
-
-        // Clone the struct members, if any, if it's a struct type
-        if (IsStructType(Type) && Value is ScrStruct structData)
-        {
-            value = structData.Copy();
-        }
-
-        return new ScrData(Type, value, ReadOnly);
+        return new(Type, SubTypes, BooleanValue, ReadOnly);
     }
 
-    public ScrData GetField(string name)
+    [return: NotNullIfNotNull(nameof(incompatibleType))]
+    public ScrData TryGetField(string name, out ScrDataTypes? incompatibleType)
     {
-        // This is probably a failsafe, a struct check should occur earlier and be handled appropriately.
-        // TODO: or it just becomes cannot get member {name} of type {type} diagnostic when the caller receives void.
-        if (!IsStructType(Type))
+        // Helper to set FieldName on result
+        ScrData WithFieldName(ScrData result)
         {
-            return Void;
+            result.FieldName = name;
+            return result;
         }
 
-        // If the value is null, we know nothing about it... assume any
-        // TODO: keep this, but prefer non-deterministic empty structs to null Value
-        if (Value is not ScrStruct structData)
+        // If it's any, then assume it's compatible with any field.
+        if(IsAny())
         {
-            return Default;
+            incompatibleType = null;
+            return WithFieldName(Default);
         }
 
-        return structData.Get(name);
+        // Compute what types are left after removing struct, entity and object types.
+        // If there are any types left, then the data is incompatible with the field.
+        // Special case: arrays have a readonly "size" field, so include Array in the mask when accessing "size".
+        ScrDataTypes fieldMask = ScrDataTypes.Struct | ScrDataTypes.Entity | ScrDataTypes.Object;
+        if (name == "size")
+        {
+            fieldMask |= ScrDataTypes.Array;
+        }
+        ScrDataTypes residualTypes = Type & ~fieldMask;
+        if (residualTypes != ScrDataTypes.Void)
+        {
+            incompatibleType = residualTypes;
+            return WithFieldName(Void);
+        }
+        incompatibleType = null;
+
+        // If it's a struct, assume any field is compatible.
+        if(HasType(ScrDataTypes.Struct))
+        {
+            return WithFieldName(Default);
+        }
+        // If it's an object, assume any field is compatible, because (at least as of now) all fields are any, and you can add custom fields to it too.
+        if(HasType(ScrDataTypes.Object))
+        {
+            return WithFieldName(Default);
+        }
+
+        // For Entity, we'll have their sub-type records to check.
+        // For Array accessing "size", it's a readonly integer.
+        ScrDataTypes compositeType = ScrDataTypes.Void;
+        // Start as true, as if any is not readonly, then we'll represent it as not.
+        bool isReadOnly = true;
+
+        // Handle array "size" field
+        if (name == "size" && HasType(ScrDataTypes.Array))
+        {
+            compositeType |= ScrDataTypes.Int;
+            // isReadOnly stays true - size is always readonly
+        }
+
+        if(SubTypes is not null)
+        {
+            foreach(IScrDataSubType subType in SubTypes)
+            {
+                if(subType.Kind == ScrDataSubTypeKind.Entity)
+                {
+                    ScrDataEntityType entityType = (ScrDataEntityType)subType;
+
+                    ScrData field = ScrEntityRegistry.GetField(entityType.EntityType, name);
+                    compositeType |= field.Type;
+                    isReadOnly &= field.ReadOnly;
+
+                    // Tracking boolean unnecessary, as we'll never receive a not-null boolean value from this location.
+                }
+            }
+        }
+
+        // If we didn't find any fields, return default
+        if (compositeType == ScrDataTypes.Void)
+        {
+            return WithFieldName(Default);
+        }
+
+        return WithFieldName(new ScrData(compositeType, readOnly: isReadOnly));
+    }
+
+    public bool TrySetField(string name, ScrData value, out ScrSetFieldFailure? failure)
+    {
+        // 1. Check for incompatible base types (same as TryGetField)
+        // If it's any, then assume it's compatible with any field.
+        if (IsAny())
+        {
+            failure = null;
+            return true;
+        }
+
+        // Compute what types are left after removing struct, entity and object types.
+        // If there are any types left, then the data is incompatible with the field.
+        // Special case: arrays have a readonly "size" field, so include Array in the mask when accessing "size".
+        ScrDataTypes fieldMask = ScrDataTypes.Struct | ScrDataTypes.Entity | ScrDataTypes.Object;
+        if (name == "size")
+        {
+            fieldMask |= ScrDataTypes.Array;
+        }
+        ScrDataTypes residualTypes = Type & ~fieldMask;
+        if (residualTypes != ScrDataTypes.Void)
+        {
+            failure = new(IncompatibleBaseTypes: residualTypes, EntityFailures: null);
+            return false;
+        }
+
+        // 2. If Struct or Object - they accept any field assignment
+        if (HasType(ScrDataTypes.Struct) || HasType(ScrDataTypes.Object))
+        {
+            failure = null;
+            return true;
+        }
+
+        // 3. Check for array "size" field - it's readonly
+        bool arraySizeReadOnly = name == "size" && HasType(ScrDataTypes.Array);
+
+        // 4. Check each entity sub-type
+        List<ScrEntitySetFieldFailureInfo>? failures = null;
+
+        if (SubTypes != null)
+        {
+            foreach (IScrDataSubType subType in SubTypes)
+            {
+                if (subType is ScrDataEntityType entityType)
+                {
+                    var result = ScrEntityRegistry.SetField(entityType.EntityType, name, value);
+                    if (result != ScrEntitySetFieldResult.Success)
+                    {
+                        failures ??= new();
+                        failures.Add(new(entityType.EntityType, result));
+                    }
+                }
+            }
+        }
+
+        if (failures is not null || arraySizeReadOnly)
+        {
+            failure = new(IncompatibleBaseTypes: null, EntityFailures: failures?.ToImmutableList(), ArraySizeReadOnly: arraySizeReadOnly);
+            return false;
+        }
+
+        failure = null;
+        return true;
     }
 
     /// <summary>
@@ -266,6 +678,8 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         // Perform type inference, establish whether we'll look at values too.
         ScrDataTypes type = ScrDataTypes.Void;
         bool isReadOnly = true;
+        bool? booleanValue = true;
+        List<IScrDataSubType>? subTypes = null;
 
         foreach (ScrData data in incoming)
         {
@@ -281,29 +695,20 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
             {
                 isReadOnly = false;
             }
-        }
 
-        object? value = default;
-        if (IsStructType(type))
-        {
-            ScrStruct[] dataStructs = new ScrStruct[incoming.Length];
-
-            // Establish whether we can merge all struct contents
-            for (int i = 0; i < incoming.Length; i++)
+            if(data.SubTypes is not null)
             {
-                if (incoming[i].Value is not ScrStruct incomingStruct)
-                {
-                    return new(type, value, isReadOnly);
-                }
-
-                dataStructs[i] = incomingStruct;
+                subTypes ??= new();
+                subTypes.AddRange(data.SubTypes);
             }
 
-            // OK, proceed
-            value = ScrStruct.Merge(dataStructs);
+            if(data.BooleanValue is not null)
+            {
+                booleanValue = ComposeBooleanValues(booleanValue, data.BooleanValue);
+            }
         }
 
-        return new(type, value, isReadOnly);
+        return new(type, subTypes, booleanValue, isReadOnly);
     }
 
     /// <summary>
@@ -343,25 +748,7 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
 
     public bool? IsTruthy()
     {
-        if (Value is null)
-        {
-            return null;
-        }
-
-        return Type switch
-        {
-            ScrDataTypes.Int => (int)Value != 0,
-            ScrDataTypes.Float => (float)Value != 0,
-            ScrDataTypes.Bool => (bool)Value,
-            ScrDataTypes.String => (string)Value != "",
-            ScrDataTypes.Array => true,
-            ScrDataTypes.Vec3 => true,
-            ScrDataTypes.Struct => true,
-            ScrDataTypes.Entity => true,
-            ScrDataTypes.Object => true,
-            ScrDataTypes.Undefined => false,
-            _ => null,
-        };
+       return BooleanValue;
     }
 
     public readonly bool IsVoid()
@@ -376,14 +763,74 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         return Type != ScrDataTypes.Void && (Type & ~ScrDataTypes.Number) == ScrDataTypes.Void;
     }
 
+    /// <summary>
+    /// Returns whether this value can be used as an array indexer (e.g. <c>arr[index]</c>).
+    /// Allowed indexer types:
+    /// - <see cref="ScrDataTypes.Bool"/> (casts to int)
+    /// - <see cref="ScrDataTypes.Int"/>
+    /// - <see cref="ScrDataTypes.String"/>
+    /// - <see cref="ScrDataTypes.Hash"/>
+    /// - <see cref="ScrDataTypes.Anim"/> (animation)
+    /// - <see cref="ScrDataTypes.Entity"/> when the entity subtype is unknown, or when the only known entity sub-type is <see cref="ScrEntityTypes.Weapon"/>
+    /// </summary>
+    public readonly bool IsArrayIndexer()
+    {
+        // Unknown types are allowed (caller may choose to skip diagnostics).
+        if (IsAny())
+        {
+            return true;
+        }
+
+        // First, ensure no disallowed base types are present.
+        const ScrDataTypes allowedMask =
+            ScrDataTypes.Bool |
+            ScrDataTypes.Int |
+            ScrDataTypes.String |
+            ScrDataTypes.Hash |
+            ScrDataTypes.Anim |
+            ScrDataTypes.Entity;
+
+        ScrDataTypes residual = Type & ~allowedMask;
+        if (residual != ScrDataTypes.Void)
+        {
+            return false;
+        }
+
+        // If entity is present, it must be concretely known to be weapon (and only weapon).
+        if (HasType(ScrDataTypes.Entity))
+        {
+            // If we have no subtype info, treat as unknown and accept.
+            if (SubTypes is null || SubTypes.Count == 0)
+            {
+                return true;
+            }
+
+            bool sawEntitySubType = false;
+            foreach (IScrDataSubType subType in SubTypes)
+            {
+                if (subType is ScrDataEntityType entityType)
+                {
+                    sawEntitySubType = true;
+                    if (entityType.EntityType != ScrEntityTypes.Weapon)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            // If we have subtypes, but none are entity subtypes, then entity subtype is effectively unknown.
+            if (!sawEntitySubType)
+            {
+                return true;
+            }
+        }
+
+        return true;
+    }
+
     public readonly bool TypeUnknown()
     {
         return IsAny();
-    }
-
-    public readonly bool ValueUnknown()
-    {
-        return Value is null || TypeUnknown();
     }
 
     /// <summary>
@@ -412,72 +859,31 @@ internal record struct ScrData(ScrDataTypes Type, object? Value = default, bool 
         return (Type & combinedType) == Type;
     }
 
-    public readonly float? GetNumericValue()
-    {
-        if (Value is null)
-        {
-            return null;
-        }
-
-        if (Type == ScrDataTypes.Int)
-        {
-            return (int)Value;
-        }
-        else if (Type == ScrDataTypes.Float)
-        {
-            return (float)Value;
-        }
-        throw new InvalidOperationException("Cannot get numeric value of non-numeric type.");
-    }
-
-    /// <summary>
-    /// Safely gets an integer value from ScrData, handling both int and int? stored values.
-    /// </summary>
-    /// <returns>The integer value as int?, or null if the value is unknown</returns>
-    public readonly int? GetIntegerValue()
-    {
-        if (ValueUnknown())
-        {
-            return null;
-        }
-
-        // TODO: this isn't an ideal solution, need a better way of handling ints.
-
-        // Try to get as int first (non-nullable)
-        if (Value is int intValue)
-        {
-            return (int)intValue;
-        }
-
-        // Check if it's a nullable int that contains a value
-        if (Value is int? && ((int?)Value).HasValue)
-        {
-            return ((int?)Value).Value;
-        }
-
-        // Value exists but is not an integer type, or nullable int is null
-        return null;
-    }
-
-    public readonly T Get<T>()
-    {
-        return (T)Value!;
-    }
-
     public static ScrData FromDataExprNode(DataExprNode dataExprNode)
     {
-        return new(dataExprNode.Type, dataExprNode.Value);
+        return new(dataExprNode.Type, booleanValue: dataExprNode.Type switch
+        {
+            ScrDataTypes.Bool => (bool)dataExprNode.Value!,
+            ScrDataTypes.Int => (int)dataExprNode.Value! > 0,
+            ScrDataTypes.Float => (float)dataExprNode.Value! > 0,
+            ScrDataTypes.String => (string)dataExprNode.Value! != "",
+            ScrDataTypes.Array => true,
+            ScrDataTypes.Vector => true,
+            ScrDataTypes.Struct => true,
+            ScrDataTypes.Entity => true,
+            ScrDataTypes.Object => true,
+            ScrDataTypes.Undefined => false,
+            _ => null,
+        });
     }
 
-    /// <summary>
-    /// Returns whether this data instance is of type struct or entity.
-    /// </summary>
-    /// <returns></returns>
-    private static bool IsStructType(ScrDataTypes type)
+    private static bool? ComposeBooleanValues(bool? value1, bool? value2)
     {
-        // Must be *exclusively* struct or entity, otherwise we're uninterested in cloning its data (as this should error on member access anyway).
-        // TODO: This doesn't handle objects
-        return type == ScrDataTypes.Struct || type == ScrDataTypes.Entity;
+        if(value1 is null || value2 is null)
+        {
+            return null;
+        }
+        return value1.Value && value2.Value;
     }
 }
 

@@ -70,7 +70,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
         "class", "return", "wait", "thread", "classes", "if", "else", "do", "while",
         "for", "foreach", "in", "new", "waittill", "waittillmatch", "waittillframeend",
         "switch", "case", "default", "break", "continue", "notify", "endon",
-        "waitrealtime", "profilestart", "profilestop", "isdefined",
+        "waitrealtime", "profilestart", "profilestop", "isdefined", "vectorscale",
         // Additional keywords
         "true", "false", "undefined", "self", "level", "game", "world", "vararg", "anim",
         "var", "const", "function", "private", "autoexec", "constructor", "destructor"

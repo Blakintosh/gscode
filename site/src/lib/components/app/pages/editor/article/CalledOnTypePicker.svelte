@@ -1,7 +1,6 @@
 <script lang="ts">
-	import type { ScrDataType } from '$lib/models/library';
+	import { type ScrDataType, ScrEntityTypes } from '$lib/models/library';
 	import * as Select from '$lib/components/ui/select/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
 
 	interface Props {
 		value: ScrDataType | null | undefined;
@@ -10,35 +9,20 @@
 
 	let { value, onchange }: Props = $props();
 
-	// Only struct and entity are valid for calledOn
-	const allowedTypes = [
-		{ value: 'struct', label: 'struct' },
-		{ value: 'entity', label: 'entity' }
+	// Entity type options for dropdown
+	const entityTypeOptions = [
+		{ value: '', label: 'any' },
+		...ScrEntityTypes.map((t) => ({ value: t, label: t }))
 	];
 
-	// Derived state from value
-	let selectedType = $derived(value?.dataType ?? '');
-	let instanceType = $derived(value?.instanceType ?? '');
+	// Derived state - prioritize subType over instanceType
+	let subType = $derived(value?.subType ?? value?.instanceType ?? '');
 
-	function handleTypeChange(newType: string | undefined) {
-		if (!newType) {
-			onchange(null);
-			return;
-		}
-
+	function handleSubTypeChange(newSubType: string | undefined) {
 		onchange({
-			dataType: newType,
-			instanceType: instanceType || null,
-			isArray: false // Arrays are never valid for calledOn
-		});
-	}
-
-	function handleInstanceTypeChange(newInstanceType: string) {
-		if (!selectedType) return;
-
-		onchange({
-			dataType: selectedType,
-			instanceType: newInstanceType || null,
+			dataType: 'entity',
+			instanceType: newSubType || null,
+			subType: newSubType || null,
 			isArray: false
 		});
 	}
@@ -46,33 +30,20 @@
 
 <div class="flex items-center gap-2">
 	<div class="flex flex-col gap-1">
-		<span class="text-xs text-muted-foreground">Type</span>
-		<Select.Root type="single" value={selectedType} onValueChange={handleTypeChange}>
-			<Select.Trigger class="w-32">
-				{#if selectedType}
-					<span>{selectedType}</span>
+		<span class="text-xs text-muted-foreground">Entity Type</span>
+		<Select.Root type="single" value={subType} onValueChange={handleSubTypeChange}>
+			<Select.Trigger class="w-40">
+				{#if subType}
+					<span>{subType}</span>
 				{:else}
-					<span class="text-muted-foreground">Select...</span>
+					<span class="text-muted-foreground">any</span>
 				{/if}
 			</Select.Trigger>
 			<Select.Content>
-				{#each allowedTypes as type (type.value)}
-					<Select.Item value={type.value}>{type.label}</Select.Item>
+				{#each entityTypeOptions as option (option.value)}
+					<Select.Item value={option.value}>{option.label}</Select.Item>
 				{/each}
 			</Select.Content>
 		</Select.Root>
-	</div>
-
-	<div class="flex flex-col gap-1">
-		<span class="text-xs text-muted-foreground">
-			{selectedType === 'entity' ? 'Entity Type' : 'Struct Type'}
-		</span>
-		<Input
-			type="text"
-			value={instanceType}
-			oninput={(e) => handleInstanceTypeChange(e.currentTarget.value)}
-			placeholder={selectedType === 'entity' ? 'e.g. Player' : 'e.g. WeaponDef'}
-			class="w-40"
-		/>
 	</div>
 </div>

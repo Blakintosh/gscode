@@ -72,6 +72,15 @@ public class ScriptAnalyserData
             {
                 function.Namespace = "sys";
                 function.Implicit = true;
+
+                // Check for vararg parameters and set the Vararg flag on the overload
+                foreach (ScrFunctionOverload overload in function.Overloads)
+                {
+                    if (overload.Parameters.Any(p => p.Type?.DataType?.Equals("vararg", StringComparison.OrdinalIgnoreCase) == true))
+                    {
+                        overload.Vararg = true;
+                    }
+                }
             }
 
             if (_languageLibraries.TryGetValue(library.LanguageId, out ScrLibraryData? existingLibrary)

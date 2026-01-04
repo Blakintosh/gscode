@@ -10,7 +10,14 @@ GSCode's language server requires the .NET 8 Runtime, available at [Download .NE
 
 ## Release Notes
 
-### 1.0 (latest)
+### 1.1 (latest)
+
+- Various type system improvements, including new support for inference on entity fields.
+- Added type inference support for built-in functions (via the API).
+- Added `vectorscale` analysis.
+- Various bug fixes. 
+
+### 1.0
 
 - Adds semantic analysis steps & type inference associated validation.
 - Various bug fixes.

@@ -299,55 +299,57 @@
 							{@const apiFunction = fnEditor.function}
 							{@const isSelected = selectedFunction === apiFunction.name.toLowerCase()}
 							{@const isDeleted = fnEditor.deleted}
-							<Button
-								variant={isSelected ? 'secondary' : 'ghost'}
-								size={'sm'}
-								class="justify-start font-normal {isSelected
-									? 'text-foreground'
-									: 'text-muted-foreground'} {isDeleted ? 'opacity-50' : ''}"
-								onclick={() => handleSelectFunction(apiFunction.name)}
-								disabled={isDeleted}
-							>
-								{#if isDeleted}
-									<div
-										class="mr-2 h-2 w-2 shrink-0 rounded-full bg-zinc-500"
-										title="This function is marked for deletion"
-									></div>
-								{:else if fnEditor.isNew}
-									<div
-										class="mr-2 h-2 w-2 shrink-0 rounded-full bg-green-500"
-										title="This is a new function"
-									></div>
-								{:else if fnEditor.isInvalid}
-									<div
-										class="mr-2 h-2 w-2 shrink-0 rounded-full {fnEditor.isVerified
-											? 'bg-red-600'
-											: 'bg-amber-700'}"
-										title={fnEditor.isVerified
-											? 'This verified function has problems'
-											: 'This function has problems'}
-									></div>
-								{:else if fnEditor.isUnverified}
-									<div
-										class="mr-2 h-2 w-2 shrink-0 rounded-full bg-yellow-400"
-										title="This function is unverified"
-									></div>
-								{/if}
-								<span class={isDeleted ? 'line-through' : ''}>
-									{truncateString(apiFunction.name, 25)}
-								</span>
+							<div class="flex items-center">
+								<Button
+									variant={isSelected ? 'secondary' : 'ghost'}
+									size={'sm'}
+									class="flex-1 justify-start font-normal {isSelected
+										? 'text-foreground'
+										: 'text-muted-foreground'} {isDeleted ? 'opacity-50' : ''}"
+									onclick={() => !isDeleted && handleSelectFunction(apiFunction.name)}
+									disabled={isDeleted}
+								>
+									{#if isDeleted}
+										<div
+											class="mr-2 h-2 w-2 shrink-0 rounded-full bg-zinc-500"
+											title="This function is marked for deletion"
+										></div>
+									{:else if fnEditor.isNew}
+										<div
+											class="mr-2 h-2 w-2 shrink-0 rounded-full bg-green-500"
+											title="This is a new function"
+										></div>
+									{:else if fnEditor.isInvalid}
+										<div
+											class="mr-2 h-2 w-2 shrink-0 rounded-full {fnEditor.isVerified
+												? 'bg-red-600'
+												: 'bg-amber-700'}"
+											title={fnEditor.isVerified
+												? 'This verified function has problems'
+												: 'This function has problems'}
+										></div>
+									{:else if fnEditor.isUnverified}
+										<div
+											class="mr-2 h-2 w-2 shrink-0 rounded-full bg-yellow-400"
+											title="This function is unverified"
+										></div>
+									{/if}
+									<span class={isDeleted ? 'line-through' : ''}>
+										{truncateString(apiFunction.name, 25)}
+									</span>
+								</Button>
 								{#if isDeleted}
 									<Button
 										variant="ghost"
 										size="sm"
-										class="ml-auto h-5 w-5 p-0 opacity-100"
+										class="h-7 w-7 p-0 shrink-0"
 										title="Restore function"
-										onclick={(e) => handleRestoreFunction(apiFunction.name, e)}
+										onclick={() => editor.restoreFunction(apiFunction.name)}
 									>
 										<Undo2 class="h-3 w-3" />
 									</Button>
 								{/if}
-							</Button>
+							</div>
 						{/each}
 					</div>
 				</ScrollArea>

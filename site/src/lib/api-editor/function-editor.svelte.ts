@@ -203,6 +203,12 @@ export class FunctionEditor {
 		this.function.overloads = [...this.function.overloads];
 	}
 
+	setParameterVariadic(overloadIndex: number, paramIndex: number, variadic: boolean) {
+		const overload = this.function.overloads[overloadIndex];
+		overload.parameters[paramIndex].variadic = variadic;
+		this.function.overloads = [...this.function.overloads];
+	}
+
 	moveParameter(overloadIndex: number, paramIndex: number, direction: 'up' | 'down') {
 		const overload = this.function.overloads[overloadIndex];
 		const newIndex = direction === 'up' ? paramIndex - 1 : paramIndex + 1;

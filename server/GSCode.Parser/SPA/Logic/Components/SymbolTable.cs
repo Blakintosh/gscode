@@ -60,7 +60,8 @@ internal class SymbolTable
         "waittillmatch",
         "notify",
         "isdefined",
-        "endon"
+        "endon",
+        "vectorscale"
     };
 
     public int LexicalScope { get; } = 0;
@@ -180,12 +181,12 @@ internal class SymbolTable
         if (symbol.Equals("self", StringComparison.OrdinalIgnoreCase))
         {
             flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+            return new ScrData(ScrDataTypes.Entity);
         }
         if (symbol.Equals("level", StringComparison.OrdinalIgnoreCase))
         {
             flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+            return new ScrData(ScrDataTypes.Entity);
         }
         if (symbol.Equals("game", StringComparison.OrdinalIgnoreCase))
         {
@@ -195,7 +196,7 @@ internal class SymbolTable
         if (symbol.Equals("anim", StringComparison.OrdinalIgnoreCase))
         {
             flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-            return new ScrData(ScrDataTypes.Entity, ScrStruct.NonDeterministic());
+            return new ScrData(ScrDataTypes.Entity);
         }
 
         // If the symbol doesn't exist, return undefined.
@@ -231,7 +232,7 @@ internal class SymbolTable
             if (classMethod is not null)
             {
                 flags = SymbolFlags.Global;
-                return new ScrData(ScrDataTypes.Function, classMethod);
+                return ScrData.Function(classMethod);
             }
         }
 
@@ -241,13 +242,13 @@ internal class SymbolTable
             if (exportedSymbol.Type == ExportedSymbolType.Function)
             {
                 flags = SymbolFlags.Global;
-                return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
+                return ScrData.Function((ScrFunction)exportedSymbol);
             }
             else if (exportedSymbol.Type == ExportedSymbolType.Class)
             {
                 flags = SymbolFlags.Global;
-                // TODO: needs data
-                return new ScrData(ScrDataTypes.Object, null);
+                // TODO: represent class instances more precisely (subtype).
+                return new ScrData(ScrDataTypes.Object);
             }
         }
 
@@ -261,7 +262,7 @@ internal class SymbolTable
                 if (namespacedExportedSymbol.Type == ExportedSymbolType.Function)
                 {
                     flags = SymbolFlags.Global;
-                    return new ScrData(ScrDataTypes.Function, (ScrFunction)namespacedExportedSymbol);
+                    return ScrData.Function((ScrFunction)namespacedExportedSymbol);
                 }
             }
         }
@@ -273,7 +274,7 @@ internal class SymbolTable
             if (apiFunction is not null)
             {
                 flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-                return new ScrData(ScrDataTypes.Function, apiFunction);
+                return ScrData.Function(apiFunction);
             }
         }
 
@@ -296,7 +297,7 @@ internal class SymbolTable
             if (exportedSymbol.Type == ExportedSymbolType.Function)
             {
                 flags = SymbolFlags.Global;
-                return new ScrData(ScrDataTypes.Function, (ScrFunction)exportedSymbol);
+                return ScrData.Function((ScrFunction)exportedSymbol);
             }
         }
 
@@ -326,7 +327,7 @@ internal class SymbolTable
                 if (apiFunction is not null)
                 {
                     flags = SymbolFlags.Global | SymbolFlags.BuiltIn;
-                    return new ScrData(ScrDataTypes.Function, apiFunction);
+                    return ScrData.Function(apiFunction);
                 }
             }
             return ScrData.Undefined();
@@ -344,7 +345,7 @@ internal class SymbolTable
             if (method is not null)
             {
                 flags = SymbolFlags.Global;
-                return new ScrData(ScrDataTypes.Function, method);
+                return ScrData.Function(method);
             }
             return ScrData.Undefined();
         }
@@ -364,7 +365,7 @@ internal class SymbolTable
             {
                 namespaceExists = true;
                 flags = SymbolFlags.Global;
-                return new ScrData(ScrDataTypes.Function, scrFunction);
+                return ScrData.Function(scrFunction);
             }
         }
 

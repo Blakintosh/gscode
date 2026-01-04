@@ -41,7 +41,7 @@
 			rel="noopener noreferrer"
 		>
 			<Download class="w-6 h-6" />
-			<span>v1.0.0</span>
+			<span>v1.1.0</span>
 		</a>
 	</div>
 	<!-- <div class="flex items-center flex-col py-8 bg-background">

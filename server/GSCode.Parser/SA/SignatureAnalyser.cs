@@ -134,8 +134,14 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Overloads[0].Parameters ?? new List<ScrFunctionArg>()).Select(a => a.Name));
         // Record flags (private, autoexec)
         var flags = new List<string>();
-        if (function.Private) flags.Add("private");
-        if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
+        if (function.Private)
+        {
+            flags.Add("private");
+        }
+        if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec))
+        {
+            flags.Add("autoexec");
+        }
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
         // Record doc comment if present
@@ -261,8 +267,14 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.RecordFunctionParameters(DefinitionsTable.CurrentNamespace, name, (function.Overloads[0].Parameters ?? new List<ScrFunctionArg>()).Select(a => a.Name));
         // Record flags (private, autoexec)
         var flags = new List<string>();
-        if (function.Private) flags.Add("private");
-        if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec)) flags.Add("autoexec");
+        if (function.Private)
+        {
+            flags.Add("private");
+        }
+        if (functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Autoexec))
+        {
+            flags.Add("autoexec");
+        }
         DefinitionsTable.RecordFunctionFlags(DefinitionsTable.CurrentNamespace, name, flags);
 
         // Record doc comment if present

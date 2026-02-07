@@ -519,8 +519,6 @@ public class Script(DocumentUri ScriptUri, string languageId)
         try
         {
             EmitUnusedParameterDiagnostics();
-            // EmitCallArityDiagnostics(); // Now handled in ReachingDefinitionsAnalyser
-            // EmitUnknownNamespaceDiagnostics(); // Now handled in ReachingDefinitionsAnalyser
             EmitUnusedUsingDiagnostics();
             EmitUnusedVariableDiagnostics();
             EmitAssignOnThreadDiagnostics();

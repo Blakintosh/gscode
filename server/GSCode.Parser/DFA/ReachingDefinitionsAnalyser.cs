@@ -1073,8 +1073,8 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         ScrData notifyCondition = AnalyseExpr(expr.NotifyCondition, symbolTable, sense);
         ScrData entity = AnalyseExpr(expr.Entity, symbolTable, sense);
 
-        // The called-on must be an entity.
-        if (entity.Type != ScrDataTypes.Entity && !entity.IsAny())
+        // The called-on must be an entity or struct.
+        if (entity.Type != ScrDataTypes.Entity && entity.Type != ScrDataTypes.Struct && !entity.IsAny())
         {
             AddDiagnostic(expr.Entity.Range, GSCErrorCodes.NoImplicitConversionExists, entity.TypeToString(), ScrDataTypeNames.Entity);
             return ScrData.Default;
@@ -1103,8 +1103,8 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         ScrData notifyName = AnalyseExpr(expr.NotifyName, symbolTable, sense);
         ScrData entity = AnalyseExpr(expr.Entity, symbolTable, sense);
 
-        // The called-on must be an entity.
-        if (entity.Type != ScrDataTypes.Entity && !entity.IsAny())
+        // The called-on must be an entity or struct.
+        if (entity.Type != ScrDataTypes.Entity && entity.Type != ScrDataTypes.Struct && !entity.IsAny())
         {
             AddDiagnostic(expr.Entity.Range, GSCErrorCodes.NoImplicitConversionExists, entity.TypeToString(), ScrDataTypeNames.Entity);
             return ScrData.Default;

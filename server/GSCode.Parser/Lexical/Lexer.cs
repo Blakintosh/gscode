@@ -11,6 +11,12 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     private int _line = 0;
     private int _linePosition = 0;
 
+    /// <summary>
+    /// Tracks the last non-whitespace token type for context-sensitive lexing decisions.
+    /// Used to distinguish animation identifiers (%anim) from the modulo operator (%).
+    /// </summary>
+    private TokenType _lastSignificantTokenType = TokenType.Sof;
+
     private readonly Range? _forcedRange = forcedRange;
 
     public TokenList Transform()
@@ -36,6 +42,16 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
             // Goto the new locations given by the token
             _line = next.Range.End.Line;
             _linePosition = next.Range.End.Character;
+
+            // Track last significant token for context-sensitive lexing (skip whitespace/comments)
+            if (next.Type != TokenType.Whitespace && 
+                next.Type != TokenType.LineComment && 
+                next.Type != TokenType.MultilineComment &&
+                next.Type != TokenType.DocComment &&
+                next.Type != TokenType.LineBreak)
+            {
+                _lastSignificantTokenType = next.Type;
+            }
 
             // Link the tokens
             current.Next = next;
@@ -431,20 +447,52 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     {
         char second = InputAt(1);
 
-        // Anim identifier
+        // Check for potential animation identifier (%animname)
+        // Animation identifiers appear when there's NO operand to the left:
+        // - After simple assignment: x = %anim (NOT compound assignments like +=, -=)
+        // - After open paren (function args): func(%anim)  
+        // - After comma (function args, array elements): func(a, %anim)
+        // - After colon in ternary: x ? y : %anim
+        // - After question mark in ternary: x ? %anim : y
+        // - After return keyword: return %anim
+        // - At start of file/expression (Sof)
+        //
+        // Modulo operator appears when there IS an operand to the left:
+        // - After identifiers: x%y
+        // - After numbers: 10%3
+        // - After close paren: (x)%y
+        // - After close bracket: arr[i]%y where i is the operand
+        // - After open bracket: arr[x%y] where x is the operand
+        // - After compound assignments: x += 10%3 (the 10 is the operand)
         if (IsWordChar(second))
         {
-            int length = 2;
+            // Animation identifier: nothing to the left that could be an operand
+            // These tokens indicate start of a new value/expression
+            bool isAnimContext = _lastSignificantTokenType is 
+                TokenType.Assign or           // = %anim (simple assignment only)
+                TokenType.OpenParen or        // func(%anim)
+                TokenType.Comma or            // func(a, %anim)
+                TokenType.Colon or            // ternary ? x : %anim
+                TokenType.QuestionMark or     // ternary x ? %anim : y
+                TokenType.Return or           // return %anim
+                TokenType.Sof;                // Start of file
 
-            while (IsWordChar(InputAt(length)))
+            if (isAnimContext)
             {
-                length++;
+                // This is an animation identifier
+                int length = 2;
+                while (IsWordChar(InputAt(length)))
+                {
+                    length++;
+                }
+                return CreateToken(TokenType.AnimIdentifier, _input[..length].ToString(), _line, _linePosition, _line, _linePosition + length);
             }
 
-            return CreateToken(TokenType.AnimIdentifier, _input[..length].ToString(), _line, _linePosition, _line, _linePosition + length);
+            // Previous token was an operand or not in anim context, so this is modulo
+            // Fall through to operator handling
         }
 
-        // Otherwise an operator
+        // Modulo operator or modulo-assign
         return second switch
         {
             '=' => CharMatch(TokenType.ModuloAssign, "%="),

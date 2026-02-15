@@ -31,8 +31,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
 
     // TODO: temp hack to add function hoverables in current version.
-    // todo: remove language ID once we have a permanent solution.
-    private readonly ScriptAnalyserData _scriptAnalyserData = new(languageId);
+    // Use shared API instance to avoid redundant allocations
+    private readonly ScriptAnalyserData? _scriptAnalyserData = ScriptAnalyserData.GetShared(languageId);
 
     public ParserIntelliSense Sense { get; } = sense;
 

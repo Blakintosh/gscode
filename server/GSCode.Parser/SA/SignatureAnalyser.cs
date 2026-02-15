@@ -121,7 +121,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                 }
             ],
 
-            Flags = ["userdefined"],
+            Flags = [],
             Private = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private)
         };
 
@@ -247,7 +247,7 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
                     Vararg = functionDefn.Parameters.Vararg
                 }
             ],
-            Flags = ["userdefined"],
+            Flags = [],
             Private = functionDefn.Keywords.Keywords.Any(t => t.Type == TokenType.Private),
             DocComment = ExtractDocCommentBefore(nameToken)
         };

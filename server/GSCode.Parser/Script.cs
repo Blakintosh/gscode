@@ -24,7 +24,7 @@ namespace GSCode.Parser;
 
 using SymbolKindSA = GSCode.Parser.SA.SymbolKind;
 
-public class Script(DocumentUri ScriptUri, string languageId)
+public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationProvider? globalSymbolProvider = null)
 {
     public bool Failed { get; private set; } = false;
     public bool Parsed { get; private set; } = false;
@@ -39,6 +39,11 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
     private ScriptNode? RootNode { get; set; } = null;
 
+    /// <summary>
+    /// Optional global symbol location provider for workspace-wide O(1) lookups.
+    /// </summary>
+    private ISymbolLocationProvider? GlobalSymbolProvider { get; } = globalSymbolProvider;
+
     public DefinitionsTable? DefinitionsTable { get; private set; } = default;
 
     public IEnumerable<Uri> Dependencies => DefinitionsTable?.Dependencies ?? [];
@@ -50,14 +55,9 @@ public class Script(DocumentUri ScriptUri, string languageId)
     private readonly Dictionary<SymbolKey, List<Range>> _references = new();
     public IReadOnlyDictionary<SymbolKey, List<Range>> References => _references;
 
-    // Cache for language API to avoid repeated construction in hot paths
-    private ScriptAnalyserData? _api;
-    private ScriptAnalyserData? TryGetApi()
-    {
-        if (_api is not null) return _api;
-        try { _api = new(LanguageId); } catch { _api = null; }
-        return _api;
-    }
+    // Use shared API instance to avoid redundant allocations across scripts
+    private ScriptAnalyserData? TryGetApi() => ScriptAnalyserData.GetShared(LanguageId);
+
     private bool IsBuiltinFunction(string name)
     {
         var api = TryGetApi();
@@ -143,7 +143,7 @@ public class Script(DocumentUri ScriptUri, string languageId)
 
         // Gather signatures for all functions and classes.
         string initialNamespace = Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
-        DefinitionsTable = new(initialNamespace);
+        DefinitionsTable = new(initialNamespace, GlobalSymbolProvider);
 
         SignatureAnalyser signatureAnalyser = new(RootNode, DefinitionsTable, Sense);
         try

@@ -49,6 +49,12 @@ internal class SymbolTable
     internal string? CurrentNamespace { get; }
 
     /// <summary>
+    /// The name of the function currently being analyzed. Used to prevent self-shadowing
+    /// (e.g., user function 'earthquake()' shouldn't shadow API 'Earthquake()' within its own body).
+    /// </summary>
+    internal string? CurrentFunction { get; }
+
+    /// <summary>
     /// Set of all known namespaces (from function/class definitions and dependencies).
     /// Used to validate namespace existence in scope resolution.
     /// </summary>
@@ -66,7 +72,7 @@ internal class SymbolTable
 
     public int LexicalScope { get; } = 0;
 
-    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope, ScriptAnalyserData? apiData = null, ScrClass? currentClass = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null)
+    public SymbolTable(Dictionary<string, IExportedSymbol> exportedSymbolTable, Dictionary<string, ScrVariable> inSet, int lexicalScope, ScriptAnalyserData? apiData = null, ScrClass? currentClass = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null, string? currentFunction = null)
     {
         GlobalSymbolTable = exportedSymbolTable;
         VariableSymbols = new Dictionary<string, ScrVariable>(inSet, StringComparer.OrdinalIgnoreCase);
@@ -75,6 +81,7 @@ internal class SymbolTable
         CurrentClass = currentClass;
         CurrentNamespace = currentNamespace;
         KnownNamespaces = knownNamespaces;
+        CurrentFunction = currentFunction;
     }
 
     /// <summary>
@@ -208,11 +215,13 @@ internal class SymbolTable
     /// This is used for function calls (e.g., b()), function pointers (e.g., &b), and namespaced functions.
     /// All functions are global - looks up in the global symbol table, then API functions as fallback.
     /// Reserved functions (waittill, notify, isdefined, endon) take precedence.
+    /// When argumentCount is provided, checks signature compatibility and falls back to API if script function doesn't match.
     /// </summary>
     /// <param name="symbol">The function symbol to look for</param>
     /// <param name="flags">The flags for the symbol</param>
+    /// <param name="argumentCount">Optional: the number of arguments in the call site (for signature matching)</param>
     /// <returns>The associated ScrData if the function exists, undefined otherwise</returns>
-    public ScrData TryGetFunction(string symbol, out SymbolFlags flags)
+    public ScrData TryGetFunction(string symbol, out SymbolFlags flags, int? argumentCount = null)
     {
         flags = SymbolFlags.None;
 
@@ -231,8 +240,16 @@ internal class SymbolTable
 
             if (classMethod is not null)
             {
-                flags = SymbolFlags.Global;
-                return ScrData.Function(classMethod);
+                // If argument count provided, check if signature matches
+                if (argumentCount.HasValue && !SignatureMatches(classMethod, argumentCount.Value))
+                {
+                    // Signature mismatch, continue to other lookups
+                }
+                else
+                {
+                    flags = SymbolFlags.Global;
+                    return ScrData.Function(classMethod);
+                }
             }
         }
 
@@ -241,19 +258,27 @@ internal class SymbolTable
         {
             if (exportedSymbol.Type == ExportedSymbolType.Function)
             {
-                flags = SymbolFlags.Global;
-                return ScrData.Function((ScrFunction)exportedSymbol);
+                var func = (ScrFunction)exportedSymbol;
+
+                // If argument count provided, check if signature matches
+                if (argumentCount.HasValue && !SignatureMatches(func, argumentCount.Value))
+                {
+                    // Signature mismatch, fall through to check API functions
+                }
+                else
+                {
+                    flags = SymbolFlags.Global;
+                    return ScrData.Function(func);
+                }
             }
             else if (exportedSymbol.Type == ExportedSymbolType.Class)
             {
                 flags = SymbolFlags.Global;
-                // TODO: represent class instances more precisely (subtype).
                 return new ScrData(ScrDataTypes.Object);
             }
         }
 
-        // 4. Check current namespace functions implicitly (e.g., if we're in namespace "a",
-        //    we can call "a::foo" as just "foo")
+        // 4. Check current namespace functions implicitly
         if (CurrentNamespace is not null)
         {
             string namespacedSymbol = $"{CurrentNamespace}::{symbol}";
@@ -261,8 +286,18 @@ internal class SymbolTable
             {
                 if (namespacedExportedSymbol.Type == ExportedSymbolType.Function)
                 {
-                    flags = SymbolFlags.Global;
-                    return ScrData.Function((ScrFunction)namespacedExportedSymbol);
+                    var func = (ScrFunction)namespacedExportedSymbol;
+
+                    // If argument count provided, check if signature matches
+                    if (argumentCount.HasValue && !SignatureMatches(func, argumentCount.Value))
+                    {
+                        // Signature mismatch, fall through to API
+                    }
+                    else
+                    {
+                        flags = SymbolFlags.Global;
+                        return ScrData.Function(func);
+                    }
                 }
             }
         }
@@ -280,6 +315,38 @@ internal class SymbolTable
 
         // If the function doesn't exist, return undefined
         return ScrData.Undefined();
+    }
+
+    /// <summary>
+    /// Checks if a function signature matches the given argument count.
+    /// Returns true if the function can accept the given number of arguments.
+    /// </summary>
+    private bool SignatureMatches(ScrFunction function, int argumentCount)
+    {
+        if (function.Overloads == null || function.Overloads.Count == 0)
+            return true; // No signature info, assume match
+
+        foreach (var overload in function.Overloads)
+        {
+            // If function has vararg, it can accept any number >= minimum required
+            if (overload.Vararg)
+            {
+                int minRequired = overload.Parameters?.Count(p => p.Mandatory == true) ?? 0;
+                if (argumentCount >= minRequired)
+                    return true;
+            }
+            else
+            {
+                // Check if argument count matches parameter count
+                int paramCount = overload.Parameters?.Count ?? 0;
+                int minRequired = overload.Parameters?.Count(p => p.Mandatory == true) ?? 0;
+
+                if (argumentCount >= minRequired && argumentCount <= paramCount)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

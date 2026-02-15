@@ -2690,7 +2690,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         // Direct identifier call foo() - look up in global function table
         else if (call.Function is IdentifierExprNode identifierNode)
         {
-            functionTarget = symbolTable.TryGetFunction(identifierNode.Identifier, out functionFlags);
+            // Pass argument count to enable signature-based fallback to API functions
+            int argumentCount = call.Arguments?.Arguments?.Count ?? 0;
+            functionTarget = symbolTable.TryGetFunction(identifierNode.Identifier, out functionFlags, argumentCount);
 
             if (functionTarget.Type == ScrDataTypes.Undefined)
             {

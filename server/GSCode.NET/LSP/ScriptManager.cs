@@ -1,4 +1,5 @@
-﻿using GSCode.Data.Models.Interfaces;
+﻿using GSCode.Data.Models;
+using GSCode.Data.Models.Interfaces;
 using GSCode.Parser;
 using GSCode.Parser.SA;
 using Serilog;
@@ -95,6 +96,26 @@ public class CachedScript
     // Thread-safe set of dependents
     public ConcurrentDictionary<DocumentUri, byte> Dependents { get; } = new();
     public required Script Script { get; init; }
+
+    /// <summary>
+    /// Hash of the last parsed content. Used to detect if content actually changed.
+    /// </summary>
+    public int LastContentHash { get; set; } = 0;
+
+    /// <summary>
+    /// Hash of exported symbols from last parse. Used to detect if dependents need re-analysis.
+    /// </summary>
+    public int LastExportedSymbolsHash { get; set; } = 0;
+
+    /// <summary>
+    /// Timestamp of last successful parse.
+    /// </summary>
+    public DateTime LastParsedAt { get; set; } = DateTime.MinValue;
+
+    /// <summary>
+    /// Whether exported symbols changed during the last parse, requiring dependent re-analysis.
+    /// </summary>
+    public bool ExportedSymbolsChanged { get; set; } = true;
 }
 
 public readonly record struct LoadedScript(DocumentUri Uri, Script Script);
@@ -106,6 +127,16 @@ public class ScriptManager
     private readonly ILanguageServerFacade? _facade; // added
 
     private ConcurrentDictionary<DocumentUri, CachedScript> Scripts { get; } = new();
+
+    /// <summary>
+    /// Global symbol registry for workspace-wide symbol deduplication and O(1) lookup.
+    /// </summary>
+    private readonly GlobalSymbolRegistry _symbolRegistry = new();
+
+    /// <summary>
+    /// Provides read-only access to the global symbol registry for other components.
+    /// </summary>
+    public GlobalSymbolRegistry SymbolRegistry => _symbolRegistry;
 
     // Ensure only one parse per script at a time
     private readonly ConcurrentDictionary<DocumentUri, SemaphoreSlim> _parseLocks = new();
@@ -130,6 +161,17 @@ public class ScriptManager
     public async Task<IEnumerable<Diagnostic>> UpdateEditorAsync(OptionalVersionedTextDocumentIdentifier document, IEnumerable<TextDocumentContentChangeEvent> changes, CancellationToken cancellationToken = default)
     {
         string updatedContent = _cache.UpdateCache(document, changes);
+
+        // Check if content actually changed using hash comparison
+        var docUri = document.Uri;
+        int contentHash = updatedContent.GetHashCode();
+
+        if (Scripts.TryGetValue(docUri, out var cached) && cached.LastContentHash == contentHash)
+        {
+            // Content unchanged, return cached diagnostics
+            return await cached.Script.GetDiagnosticsAsync(cancellationToken);
+        }
+
         Script script = GetEditor(document);
 
         return await ProcessEditorAsync(document.Uri.ToUri(), script, updatedContent, cancellationToken);
@@ -137,7 +179,27 @@ public class ScriptManager
 
     private async Task<IEnumerable<Diagnostic>> ProcessEditorAsync(Uri documentUri, Script script, string content, CancellationToken cancellationToken = default)
     {
+        string filePath = documentUri.LocalPath;
+        var docUri = DocumentUri.From(documentUri);
+        int contentHash = content.GetHashCode();
+
+        // Update cached script metadata
+        if (Scripts.TryGetValue(docUri, out var cached))
+        {
+            cached.LastContentHash = contentHash;
+            cached.LastParsedAt = DateTime.UtcNow;
+        }
+
         await script.ParseAsync(content);
+
+        // Populate global symbol registry with this script's definitions (returns true if changed)
+        bool symbolsChanged = PopulateSymbolRegistry(filePath, script);
+
+        // Track if exported symbols changed for dependency invalidation
+        if (cached is not null)
+        {
+            cached.ExportedSymbolsChanged = symbolsChanged;
+        }
 
         List<Task> dependencyTasks = new();
 
@@ -201,9 +263,75 @@ public class ScriptManager
         return await script.GetDiagnosticsAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Populates the global symbol registry with definitions from a parsed script.
+    /// Uses incremental update to detect if symbols actually changed.
+    /// </summary>
+    /// <param name="filePath">The file path being updated.</param>
+    /// <param name="script">The parsed script.</param>
+    /// <returns>True if exported symbols changed (requiring dependent re-analysis), false otherwise.</returns>
+    private bool PopulateSymbolRegistry(string filePath, Script script)
+    {
+        if (script.DefinitionsTable is null)
+            return false;
+
+        var defTable = script.DefinitionsTable;
+        var currentNamespace = defTable.CurrentNamespace;
+
+        // Build the list of new symbols
+        var newSymbols = new List<SymbolDefinition>();
+
+        // Add exported functions to the list
+        foreach (var func in defTable.ExportedFunctions)
+        {
+            var loc = defTable.GetFunctionLocation(func.Namespace, func.Name);
+            var range = loc?.Range ?? new Range();
+            var actualFilePath = loc?.FilePath ?? filePath;
+
+            newSymbols.Add(new SymbolDefinition(
+                Namespace: func.Namespace,
+                Name: func.Name,
+                Type: ExportedSymbolType.Function,
+                FilePath: actualFilePath,
+                Range: range,
+                Parameters: func.Overloads.FirstOrDefault()?.Parameters?.Select(p => p.Name).ToArray(),
+                Flags: func.Flags?.ToArray(),
+                Documentation: func.Description,
+                Symbol: func
+            ));
+        }
+
+        // Add exported classes to the list
+        // Note: ScrClass doesn't have a Namespace property, so we use the script's CurrentNamespace
+        foreach (var cls in defTable.ExportedClasses)
+        {
+            var loc = defTable.GetClassLocation(currentNamespace, cls.Name);
+            var range = loc?.Range ?? new Range();
+            var actualFilePath = loc?.FilePath ?? filePath;
+
+            newSymbols.Add(new SymbolDefinition(
+                Namespace: currentNamespace,
+                Name: cls.Name,
+                Type: ExportedSymbolType.Class,
+                FilePath: actualFilePath,
+                Range: range,
+                Documentation: cls.Description,
+                Symbol: cls
+            ));
+        }
+
+        // Use incremental update which returns whether symbols changed
+        return _symbolRegistry.UpdateSymbolsForFile(filePath, newSymbols);
+    }
+
     public void RemoveEditor(TextDocumentIdentifier document)
     {
         DocumentUri documentUri = document.Uri;
+
+        // Remove symbols from global registry when file is closed
+        string filePath = documentUri.ToUri().LocalPath;
+        _symbolRegistry.RemoveSymbolsFromFile(filePath);
+
         Scripts.Remove(documentUri, out _);
 
         RemoveDependent(documentUri);
@@ -223,11 +351,20 @@ public class ScriptManager
     }
 
     /// <summary>
-    /// Try to find a symbol (function or class) in any cached script. If ns is provided, search that namespace first.
+    /// Try to find a symbol (function or class) in the global symbol registry. O(1) lookup.
+    /// If ns is provided, search that namespace first. Falls back to name-only search.
     /// Returns a Location or null.
     /// </summary>
     public Location? FindSymbolLocation(string? ns, string name)
     {
+        // Use global registry for O(1) lookup instead of O(n) iteration
+        var symbol = _symbolRegistry.FindSymbol(ns, name);
+        if (symbol is not null && File.Exists(symbol.FilePath))
+        {
+            return new Location() { Uri = new Uri(symbol.FilePath), Range = symbol.Range };
+        }
+
+        // Fallback to legacy per-script lookup for symbols not yet in registry
         foreach (KeyValuePair<DocumentUri, CachedScript> kvp in Scripts)
         {
             CachedScript cached = kvp.Value;
@@ -335,13 +472,31 @@ public class ScriptManager
     private async Task<Script> AddDependencyAsync(Uri dependentUri, Uri uri, string languageId)
     {
         var docUri = DocumentUri.From(uri);
-        var cached = Scripts.GetOrAdd(docUri, key => new CachedScript
+        bool isNewDependency = false;
+
+        var cached = Scripts.GetOrAdd(docUri, key =>
         {
-            Type = CachedScriptType.Dependency,
-            Script = new Script(key, languageId)
+            isNewDependency = true;
+            return new CachedScript
+            {
+                Type = CachedScriptType.Dependency,
+                Script = new Script(key, languageId, _symbolRegistry)
+            };
         });
 
-        await EnsureParsedAsync(docUri, cached.Script, languageId, CancellationToken.None);
+        // Only parse if new dependency or not yet parsed
+        if (isNewDependency || !cached.Script.Parsed)
+        {
+            await EnsureParsedAsync(docUri, cached.Script, languageId, CancellationToken.None);
+
+            // Populate global symbol registry with dependency's definitions
+            string filePath = uri.LocalPath;
+            bool symbolsChanged = PopulateSymbolRegistry(filePath, cached.Script);
+
+            // Track change state
+            cached.ExportedSymbolsChanged = symbolsChanged;
+            cached.LastParsedAt = DateTime.UtcNow;
+        }
 
         cached.Dependents.TryAdd(DocumentUri.From(dependentUri), 0);
 
@@ -381,7 +536,7 @@ public class ScriptManager
             Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
-                Script = new Script(uri, languageId ?? "gsc")
+                Script = new Script(uri, languageId ?? "gsc", _symbolRegistry)
             };
         }
 
@@ -392,7 +547,7 @@ public class ScriptManager
             script = Scripts[uri] = new CachedScript()
             {
                 Type = CachedScriptType.Editor,
-                Script = new Script(uri, languageId ?? "gsc")
+                Script = new Script(uri, languageId ?? "gsc", _symbolRegistry)
             };
         }
 
@@ -491,13 +646,29 @@ public class ScriptManager
 
         DocumentUri docUri = DocumentUri.FromFileSystemPath(filePath);
 
-        var cached = Scripts.GetOrAdd(docUri, key => new CachedScript
+        bool isNewFile = false;
+        var cached = Scripts.GetOrAdd(docUri, key =>
         {
-            Type = CachedScriptType.Dependency,
-            Script = new Script(key, languageId)
+            isNewFile = true;
+            return new CachedScript
+            {
+                Type = CachedScriptType.Dependency,
+                Script = new Script(key, languageId, _symbolRegistry)
+            };
         });
 
+        // Skip if already parsed (unless it's a new file)
+        if (!isNewFile && cached.Script.Parsed)
+        {
+            return;
+        }
+
         await EnsureParsedAsync(docUri, cached.Script, languageId, cancellationToken);
+
+        // Populate global symbol registry
+        bool symbolsChanged = PopulateSymbolRegistry(filePath, cached.Script);
+        cached.ExportedSymbolsChanged = symbolsChanged;
+        cached.LastParsedAt = DateTime.UtcNow;
 
         // Parse and include dependencies
         foreach (Uri dep in cached.Script.Dependencies)

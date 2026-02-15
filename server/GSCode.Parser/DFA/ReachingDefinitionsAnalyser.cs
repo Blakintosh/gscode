@@ -216,8 +216,15 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         // Check if we hit the iteration limit
         if (iterations >= maxIterations)
         {
-            Log.Warning("Reaching definitions analysis hit iteration limit ({maxIterations}) for function {functionName}. This may indicate convergence issues.",
-                maxIterations, function.Name ?? "<anonymous>");
+            // Only warn if we're very close to limit (>90%) or have an unusually high iteration ratio
+            double iterationRatio = (double)iterations / Math.Max(1, totalNodes);
+            bool likelyConvergenceIssue = iterationRatio > 80; // >80 iterations per node suggests issues
+
+            if (likelyConvergenceIssue || iterations > maxIterations * 0.9)
+            {
+                Log.Warning("Reaching definitions analysis hit iteration limit ({MaxIterations}) for function {FunctionName} ({NodeCount} nodes, {Iterations} iterations, {IterationRatio:F1}x per node). This may indicate convergence issues.",
+                    maxIterations, function.Name ?? "<anonymous>", totalNodes, iterations, iterationRatio);
+            }
         }
 
         // Now that analysis is done, do one final pass to add diagnostics and sense tokens.
@@ -281,7 +288,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
         // Calculate iteration limit based on graph size to prevent infinite loops
         int totalNodes = CountAllNodes(classGraph);
-        int maxIterations = Math.Max(100, totalNodes * 5); // At least 100, or 5x nodes
+        int maxIterations = Math.Max(100, totalNodes * 20); // At least 100, or 20x nodes
         int iterations = 0;
 
         while (worklist.Count > 0 && iterations < maxIterations)
@@ -425,8 +432,8 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         // Check if we hit the iteration limit
         if (iterations >= maxIterations)
         {
-            Log.Warning("Reaching definitions analysis hit iteration limit ({maxIterations}) for class {className}. This may indicate convergence issues.",
-                maxIterations, scrClass.Name ?? "<anonymous>");
+            Log.Warning("Reaching definitions analysis hit iteration limit ({MaxIterations}) for class {ClassName} ({NodeCount} nodes, {Iterations} iterations). This may indicate convergence issues.",
+                maxIterations, scrClass.Name ?? "<anonymous>", totalNodes, iterations);
         }
 
         // Now that analysis is done, do one final pass to add diagnostics and sense tokens.

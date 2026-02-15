@@ -411,7 +411,10 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             return;
         }
 
-        // Check if the inserted file is empty (only contains SOF and EOF)
+        // Strip comments from inserted tokens - they shouldn't carry over
+        StripCommentsFromTokenList(insertTokens);
+
+        // Check if the inserted file is empty (only contains SOF and EOF, or only comments)
         // If empty, just remove the insert directive and continue
         if (insertTokens.Start!.Next == insertTokens.End)
         {
@@ -438,6 +441,30 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             return;
         }
         ConnectTokens(insertTokens.End!.Previous, terminatorToken);
+    }
+
+    /// <summary>
+    /// Removes all comment tokens from a token list by unlinking them.
+    /// Comments from inserted files shouldn't carry over to the main script.
+    /// </summary>
+    private void StripCommentsFromTokenList(TokenList tokenList)
+    {
+        if (tokenList.Start is null || tokenList.End is null)
+            return;
+
+        Token current = tokenList.Start.Next!; // Skip SOF
+        while (current != tokenList.End)
+        {
+            Token next = current.Next;
+
+            if (current.IsComment())
+            {
+                // Unlink the comment token
+                ConnectTokens(current.Previous, next);
+            }
+
+            current = next;
+        }
     }
 
     private TokenList Path(out Token? terminatorIfMatched)

@@ -411,6 +411,22 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             return;
         }
 
+        // Check if the inserted file is empty (only contains SOF and EOF)
+        // If empty, just remove the insert directive and continue
+        if (insertTokens.Start!.Next == insertTokens.End)
+        {
+            // Empty file - skip past the insert directive
+            if (terminatorToken!.Type == TokenType.Semicolon)
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken.Next);
+                CurrentToken = terminatorToken.Next;
+                return;
+            }
+            ConnectTokens(insertToken.Previous, terminatorToken);
+            CurrentToken = terminatorToken;
+            return;
+        }
+
         // Otherwise, it's a unique instance so connect its boundaries (exc. the SOF and EOF) to the insert directive
         ConnectTokens(insertToken.Previous, insertTokens.Start!.Next);
         CurrentToken = insertTokens.Start.Next;

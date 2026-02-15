@@ -348,16 +348,32 @@ public sealed class GlobalSymbolRegistry : ISymbolLocationProvider
     /// <summary>
     /// Compares two symbol definitions for equality (ignoring IExportedSymbol reference).
     /// </summary>
-    private static bool SymbolsEqual(SymbolDefinition a, SymbolDefinition b)
+    private static bool SymbolsEqual(SymbolDefinition? a, SymbolDefinition? b)
     {
+        if (a is null || b is null)
+        {
+            return false;
+        }
+
+        // Handle potentially null Range.Start/End from default Range()
+        var aStart = a.Range?.Start;
+        var bStart = b.Range?.Start;
+        var aEnd = a.Range?.End;
+        var bEnd = b.Range?.End;
+
+        if ((aStart is null) != (bStart is null) || (aEnd is null) != (bEnd is null))
+            return false;
+
+        bool rangeEqual = (aStart is null && bStart is null) ||
+                          (aStart?.Line == bStart?.Line && aStart?.Character == bStart?.Character);
+        rangeEqual &= (aEnd is null && bEnd is null) ||
+                      (aEnd?.Line == bEnd?.Line && aEnd?.Character == bEnd?.Character);
+
         return a.Namespace == b.Namespace &&
                a.Name == b.Name &&
                a.Type == b.Type &&
                string.Equals(a.FilePath, b.FilePath, StringComparison.OrdinalIgnoreCase) &&
-               a.Range.Start.Line == b.Range.Start.Line &&
-               a.Range.Start.Character == b.Range.Start.Character &&
-               a.Range.End.Line == b.Range.End.Line &&
-               a.Range.End.Character == b.Range.End.Character &&
+               rangeEqual &&
                SequenceEqual(a.Parameters, b.Parameters) &&
                SequenceEqual(a.Flags, b.Flags) &&
                a.Documentation == b.Documentation;

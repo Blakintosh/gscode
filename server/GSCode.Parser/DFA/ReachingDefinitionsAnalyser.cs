@@ -1088,8 +1088,13 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         // Now emit the variables, all as type any.
-        foreach (IdentifierExprNode variable in expr.Variables.Variables)
+        foreach (IdentifierExprNode? variable in expr.Variables.Variables)
         {
+            if (variable is null)
+            {
+                continue; // Skip ignored parameters (undefined)
+            }
+
             symbolTable.AddOrSetVariableSymbol(variable.Identifier, ScrData.Default, definitionSource: expr);
             Sense.AddSenseToken(variable.Token, ScrVariableSymbol.Declaration(variable, ScrData.Default));
         }

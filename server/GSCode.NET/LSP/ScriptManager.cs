@@ -201,10 +201,13 @@ public class ScriptManager
             cached.ExportedSymbolsChanged = symbolsChanged;
         }
 
+        // Snapshot dependencies to avoid collection modification during enumeration
+        var dependencies = script.Dependencies.ToList();
+
         List<Task> dependencyTasks = new();
 
         // Now, get their dependencies and parse them.
-        foreach (Uri dependency in script.Dependencies)
+        foreach (Uri dependency in dependencies)
         {
             dependencyTasks.Add(AddDependencyAsync(documentUri, dependency, script.LanguageId));
         }
@@ -213,7 +216,7 @@ public class ScriptManager
 
         // Build exported symbols
         List<IExportedSymbol> exportedSymbols = new();
-        foreach (Uri dependency in script.Dependencies)
+        foreach (Uri dependency in dependencies)
         {
             var depDoc = DocumentUri.From(dependency);
             if (Scripts.TryGetValue(depDoc, out CachedScript? cachedScript))
@@ -226,7 +229,7 @@ public class ScriptManager
         // Snapshot dependency locations while locking each dependency individually
         var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
         var mergeClassLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-        foreach (Uri dependency in script.Dependencies)
+        foreach (Uri dependency in dependencies)
         {
             var depDoc = DocumentUri.From(dependency);
             if (!Scripts.TryGetValue(depDoc, out CachedScript? depScript)) continue;
@@ -670,14 +673,17 @@ public class ScriptManager
         cached.ExportedSymbolsChanged = symbolsChanged;
         cached.LastParsedAt = DateTime.UtcNow;
 
+        // Snapshot dependencies to avoid collection modification during enumeration
+        var dependencies = cached.Script.Dependencies.ToList();
+
         // Parse and include dependencies
-        foreach (Uri dep in cached.Script.Dependencies)
+        foreach (Uri dep in dependencies)
         {
             await AddDependencyAsync(docUri.ToUri(), dep, languageId);
         }
 
         // Ensure dependencies are parsed before exporting/merging
-        foreach (Uri dep in cached.Script.Dependencies)
+        foreach (Uri dep in dependencies)
         {
             var depDoc = DocumentUri.From(dep);
             if (Scripts.TryGetValue(depDoc, out CachedScript? depScript))
@@ -688,7 +694,7 @@ public class ScriptManager
 
         // Build exported symbols
         List<IExportedSymbol> exportedSymbols = new();
-        foreach (Uri dep in cached.Script.Dependencies)
+        foreach (Uri dep in dependencies)
         {
             var depDoc = DocumentUri.From(dep);
             if (Scripts.TryGetValue(depDoc, out CachedScript? depScript))
@@ -700,7 +706,7 @@ public class ScriptManager
         // Snapshot dependency locations under dep locks
         var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
         var mergeClassLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
-        foreach (Uri dep in cached.Script.Dependencies)
+        foreach (Uri dep in dependencies)
         {
             var depDoc = DocumentUri.From(dep);
             if (!Scripts.TryGetValue(depDoc, out CachedScript? depScript)) continue;
@@ -730,8 +736,7 @@ public class ScriptManager
                     cached.Script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
                 }
             }
-            // TODO: temp - we don't want to use compute to fully analyse unopened scripts.
-            // await cached.Script.AnalyseAsync(exportedSymbols, cancellationToken);
+            await cached.Script.AnalyseAsync(exportedSymbols, cancellationToken);
 
             // Publish diagnostics for indexed file (if LSP facade is available)
             await PublishDiagnosticsAsync(docUri, cached.Script, cancellationToken: cancellationToken);

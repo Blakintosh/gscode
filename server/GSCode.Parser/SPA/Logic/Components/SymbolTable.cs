@@ -316,6 +316,15 @@ internal class SymbolTable
             }
         }
 
+        // 6. If we found a script function but it had signature mismatch, return it anyway
+        // This allows the function to be recognized as existing, and argument count validation
+        // will handle the warning (but only for built-in functions, not script functions)
+        if (scriptFunction is not null)
+        {
+            flags = SymbolFlags.Global;
+            return ScrData.Function(scriptFunction);
+        }
+
         // If the function doesn't exist, return undefined
         return ScrData.Undefined();
     }

@@ -574,9 +574,9 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                 AddDiagnostic(callRange, GSCErrorCodes.TooFewArguments, functionName, argCount, globalMinArgs);
             }
         }
-        else if (!anyOverloadHasVararg && argCount > globalMaxArgs)
+        else if (isBuiltIn && !anyOverloadHasVararg && argCount > globalMaxArgs)
         {
-            // Too many arguments - report the maximum allowed (only if no vararg)
+            // Too many arguments - report the maximum allowed (only if no vararg, built-ins only)
             if (isUnverifiedBuiltIn)
             {
                 AddDiagnostic(callRange, GSCErrorCodes.TooManyArgumentsUnverified, functionName, argCount, globalMaxArgs);

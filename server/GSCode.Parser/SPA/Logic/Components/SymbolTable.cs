@@ -233,17 +233,19 @@ internal class SymbolTable
         }
 
         // 2. Check current class methods if we're inside a class
+        ScrFunction? scriptFunction = null;
         if (CurrentClass is not null)
         {
-            ScrFunction? classMethod = CurrentClass.Methods
-                .FirstOrDefault(m => m.Name.Equals(symbol, StringComparison.OrdinalIgnoreCase));
+            // Look for the method in the current class or its base classes
+            ScrFunction? classMethod = FindMethodInClassHierarchy(CurrentClass, symbol);
 
             if (classMethod is not null)
             {
                 // If argument count provided, check if signature matches
                 if (argumentCount.HasValue && !SignatureMatches(classMethod, argumentCount.Value))
                 {
-                    // Signature mismatch, continue to other lookups
+                    // Signature mismatch, remember the class method but fall through to check other lookups
+                    scriptFunction = classMethod;
                 }
                 else
                 {
@@ -254,7 +256,6 @@ internal class SymbolTable
         }
 
         // 3. Check global symbol table (script-defined functions)
-        ScrFunction? scriptFunction = null;
         if (GlobalSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
         {
             if (exportedSymbol.Type == ExportedSymbolType.Function)
@@ -265,7 +266,8 @@ internal class SymbolTable
                 if (argumentCount.HasValue && !SignatureMatches(func, argumentCount.Value))
                 {
                     // Signature mismatch, remember the function but fall through to check API functions
-                    scriptFunction = func;
+                    // Use ??= so we don't overwrite a class method that was already found
+                    scriptFunction ??= func;
                 }
                 else
                 {
@@ -362,6 +364,39 @@ internal class SymbolTable
     }
 
     /// <summary>
+    /// Finds a method in the class hierarchy by walking up the inheritance chain.
+    /// </summary>
+    /// <param name="scrClass">The class to search</param>
+    /// <param name="methodName">The method name to find</param>
+    /// <returns>The method if found, null otherwise</returns>
+    private ScrFunction? FindMethodInClassHierarchy(ScrClass scrClass, string methodName)
+    {
+        // Check the current class
+        ScrFunction? method = scrClass.Methods
+            .FirstOrDefault(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+
+        if (method is not null)
+        {
+            return method;
+        }
+
+        // Check base class if it exists
+        if (!string.IsNullOrEmpty(scrClass.InheritsFrom))
+        {
+            // Look up the base class in the global symbol table
+            if (GlobalSymbolTable.TryGetValue(scrClass.InheritsFrom, out IExportedSymbol? baseSymbol)
+                && baseSymbol.Type == ExportedSymbolType.Class)
+            {
+                ScrClass baseClass = (ScrClass)baseSymbol;
+                // Recursively search the base class
+                return FindMethodInClassHierarchy(baseClass, methodName);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Tries to get the associated ScrData for a function symbol if it exists.
     /// </summary>
     /// <param name="symbol">The symbol to look for</param>
@@ -418,8 +453,8 @@ internal class SymbolTable
         {
             namespaceExists = true;
             ScrClass scrClass = (ScrClass)classSymbol;
-            ScrFunction? method = scrClass.Methods
-                .FirstOrDefault(m => m.Name.Equals(symbol, StringComparison.OrdinalIgnoreCase));
+            // Use the helper method to search the class hierarchy
+            ScrFunction? method = FindMethodInClassHierarchy(scrClass, symbol);
 
             if (method is not null)
             {

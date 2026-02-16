@@ -577,12 +577,27 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         try
         {
             EmitUnusedParameterDiagnostics();
+#if FLAG_PERFORMANCE_TRACKING
+            Log.Debug("[PERF CHECKPOINT] SPA-Analysis - After-UnusedParameter: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
             // EmitCallArityDiagnostics(); // Now handled in ReachingDefinitionsAnalyser
             // EmitUnknownNamespaceDiagnostics(); // Now handled in ReachingDefinitionsAnalyser
             EmitUnusedUsingDiagnostics();
+#if FLAG_PERFORMANCE_TRACKING
+            Log.Debug("[PERF CHECKPOINT] SPA-Analysis - After-UnusedUsing: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
             EmitUnusedVariableDiagnostics();
+#if FLAG_PERFORMANCE_TRACKING
+            Log.Debug("[PERF CHECKPOINT] SPA-Analysis - After-UnusedVariable: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
             EmitSwitchCaseDiagnostics();
+#if FLAG_PERFORMANCE_TRACKING
+            Log.Debug("[PERF CHECKPOINT] SPA-Analysis - After-SwitchCase: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
             EmitAssignOnThreadDiagnostics();
+#if FLAG_PERFORMANCE_TRACKING
+            Log.Debug("[PERF CHECKPOINT] SPA-Analysis - After-AssignOnThread: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
         }
         catch (Exception ex)
         {
@@ -1870,6 +1885,25 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
     private void EmitAssignOnThreadDiagnostics()
     {
         if (RootNode is null) return;
+
+        // Early exit: Check if there are any thread calls in the entire file first
+        // This avoids expensive nested enumeration if there's nothing to check
+        bool hasAnyThreadCalls = false;
+        foreach (var node in EnumerateChildren(RootNode))
+        {
+            if (ContainsThreadCallQuickCheck(node))
+            {
+                hasAnyThreadCalls = true;
+                break;
+            }
+        }
+
+        if (!hasAnyThreadCalls)
+        {
+            return; // No thread calls in file, skip expensive analysis
+        }
+
+        // Proceed with full analysis only if thread calls exist
         var cache = new Dictionary<AstNode, bool>(ReferenceEqualityComparer.Instance);
         foreach (var fn in EnumerateFunctions(RootNode))
         {
@@ -1884,6 +1918,24 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
                 }
             }
         }
+    }
+
+    // Quick shallow check for thread token without deep recursion
+    private static bool ContainsThreadCallQuickCheck(AstNode node)
+    {
+        if (node is PrefixExprNode pe && pe.Operation == TokenType.Thread)
+        {
+            return true;
+        }
+        // Only check immediate children, not deep recursion
+        foreach (var child in EnumerateChildren(node))
+        {
+            if (child is PrefixExprNode pec && pec.Operation == TokenType.Thread)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static IEnumerable<AstNode> EnumerateChildren(AstNode node)

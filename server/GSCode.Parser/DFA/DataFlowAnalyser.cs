@@ -22,10 +22,26 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
 
     public void Run()
     {
+#if FLAG_PERFORMANCE_TRACKING
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long checkpoint1, checkpoint2;
+#endif
+
         ReachingDefinitionsAnalyser reachingDefinitionsAnalyser = new(FunctionGraphs, ClassGraphs, Sense, ExportedSymbolTable, ApiData, CurrentNamespace, KnownNamespaces);
         reachingDefinitionsAnalyser.Run();
 
+#if FLAG_PERFORMANCE_TRACKING
+        checkpoint1 = sw.ElapsedMilliseconds;
+#endif
+
         SemanticSenseGenerator semanticSenseGenerator = new(FunctionGraphs, Sense, ExportedSymbolTable, reachingDefinitionsAnalyser);
         semanticSenseGenerator.Run();
+
+#if FLAG_PERFORMANCE_TRACKING
+        checkpoint2 = sw.ElapsedMilliseconds;
+        sw.Stop();
+        Log.Debug("[PERF DETAIL] DataFlow - ReachingDefinitions: {RDA}ms, SemanticSense: {SSG}ms, Total: {Total}ms", 
+            checkpoint1, checkpoint2 - checkpoint1, checkpoint2);
+#endif
     }
 }

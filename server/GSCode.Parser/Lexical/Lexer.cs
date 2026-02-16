@@ -809,16 +809,44 @@ internal ref partial struct Lexer(ReadOnlySpan<char> input, Range? forcedRange =
     {
         Range range = RangeHelper.From(startLine, startPosition, endLine, endPosition);
 
+        // Intern identifiers and other frequently duplicated strings to reduce memory usage.
+        // This is especially beneficial for insert files that define many macros with common identifiers.
+        string pooledLexeme = type switch
+        {
+            // Identifiers are the most frequently duplicated (macro names, variable names, function names)
+            TokenType.Identifier => StringPool.Intern(lexeme),
+            TokenType.AnimIdentifier => StringPool.Intern(lexeme),
+            // String literals often contain repeated values like file paths, entity names, event names
+            TokenType.String => StringPool.Intern(lexeme),
+            TokenType.IString => StringPool.Intern(lexeme),
+            TokenType.CompilerHash => StringPool.Intern(lexeme),
+            // Keywords are fixed strings that benefit from pooling
+            _ when IsKeywordType(type) => StringPool.Intern(lexeme),
+            _ => lexeme
+        };
+
         // If this lexer task is for a preprocessor insert, keep track of this & the original range even though we spoof the range otherwise.
         if (_forcedRange is not null)
         {
-            return new Token(type, _forcedRange, lexeme)
+            return new Token(type, _forcedRange, pooledLexeme)
             {
                 IsFromPreprocessor = true,
                 SourceRange = range
             };
         }
 
-        return new Token(type, range, lexeme);
+        return new Token(type, range, pooledLexeme);
+    }
+
+    private static bool IsKeywordType(TokenType type)
+    {
+        return type is TokenType.Function or TokenType.Var or TokenType.Return or TokenType.Thread
+            or TokenType.Class or TokenType.If or TokenType.Else or TokenType.Do or TokenType.While
+            or TokenType.Foreach or TokenType.For or TokenType.In or TokenType.New or TokenType.Switch
+            or TokenType.Case or TokenType.Default or TokenType.Break or TokenType.Continue
+            or TokenType.Constructor or TokenType.Destructor or TokenType.Autoexec or TokenType.Private
+            or TokenType.Const or TokenType.True or TokenType.False or TokenType.Undefined
+            or TokenType.Anim or TokenType.Classes or TokenType.Wait or TokenType.Waittill 
+            or TokenType.WaittillMatch or TokenType.WaittillFrameEnd or TokenType.WaitRealTime;
     }
 }

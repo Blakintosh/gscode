@@ -38,11 +38,11 @@ public class DefinitionsTable
     private readonly ISymbolLocationProvider? _globalProvider;
 
     private static (string Namespace, string Name) NK(string ns, string name)
-        => (ns?.ToLowerInvariant() ?? string.Empty, name?.ToLowerInvariant() ?? string.Empty);
+        => (StringPool.Intern(ns?.ToLowerInvariant() ?? string.Empty), StringPool.Intern(name?.ToLowerInvariant() ?? string.Empty));
 
     public DefinitionsTable(string currentNamespace, ISymbolLocationProvider? globalProvider = null)
     {
-        CurrentNamespace = currentNamespace;
+        CurrentNamespace = StringPool.Intern(currentNamespace);
         _globalProvider = globalProvider;
     }
 
@@ -83,17 +83,17 @@ public class DefinitionsTable
 
     public void AddFunctionLocation(string ns, string name, string filePath, Range range)
     {
-        _functionLocations[NK(ns, name)] = (filePath, range);
+        _functionLocations[NK(ns, name)] = (StringPool.Intern(filePath), range);
     }
 
     public void AddClassLocation(string ns, string name, string filePath, Range range)
     {
-        _classLocations[NK(ns, name)] = (filePath, range);
+        _classLocations[NK(ns, name)] = (StringPool.Intern(filePath), range);
     }
 
     public void RecordFunctionParameters(string ns, string name, IEnumerable<string> parameterNames)
     {
-        _functionParameters[NK(ns, name)] = parameterNames?.Select(p => p?.ToLowerInvariant() ?? string.Empty).ToArray() ?? Array.Empty<string>();
+        _functionParameters[NK(ns, name)] = parameterNames?.Select(p => StringPool.Intern(p?.ToLowerInvariant() ?? string.Empty)).ToArray() ?? Array.Empty<string>();
     }
 
     public string[]? GetFunctionParameters(string ns, string name)
@@ -111,7 +111,7 @@ public class DefinitionsTable
 
     public void RecordFunctionFlags(string ns, string name, IEnumerable<string> flags)
     {
-        _functionFlags[NK(ns, name)] = flags?.Select(f => f?.ToLowerInvariant() ?? string.Empty).ToArray() ?? Array.Empty<string>();
+        _functionFlags[NK(ns, name)] = flags?.Select(f => StringPool.Intern(f?.ToLowerInvariant() ?? string.Empty)).ToArray() ?? Array.Empty<string>();
     }
 
     public string[]? GetFunctionFlags(string ns, string name)

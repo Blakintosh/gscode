@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using GSCode.Data.Models.Interfaces;
+using GSCode.Parser.Lexical;
 using GSCode.Parser.SA;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
@@ -42,7 +43,7 @@ public sealed class GlobalSymbolRegistry : ISymbolLocationProvider
     private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.SupportsRecursion);
 
     private static (string Namespace, string Name) NormalizeKey(string ns, string name)
-        => (ns?.ToLowerInvariant() ?? string.Empty, name?.ToLowerInvariant() ?? string.Empty);
+        => (StringPool.Intern(ns?.ToLowerInvariant() ?? string.Empty), StringPool.Intern(name?.ToLowerInvariant() ?? string.Empty));
 
     /// <summary>
     /// Adds or updates a symbol definition in the registry.
@@ -51,26 +52,30 @@ public sealed class GlobalSymbolRegistry : ISymbolLocationProvider
     {
         var key = NormalizeKey(definition.Namespace, definition.Name);
 
+        // Intern the file path to reduce memory for repeated paths
+        var internedFilePath = StringPool.Intern(definition.FilePath);
+        var internedDefinition = definition with { FilePath = internedFilePath };
+
         _lock.EnterWriteLock();
         try
         {
             // Remove from old file index if symbol existed with different file
             if (_symbols.TryGetValue(key, out var existing) &&
-                !string.Equals(existing.FilePath, definition.FilePath, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(existing.FilePath, internedFilePath, StringComparison.OrdinalIgnoreCase))
             {
                 RemoveFromFileIndex(existing.FilePath, key);
             }
 
             // Update main symbol store
-            _symbols[key] = definition;
+            _symbols[key] = internedDefinition;
 
             // Update file index
-            var fileSymbols = _fileIndex.GetOrAdd(definition.FilePath,
+            var fileSymbols = _fileIndex.GetOrAdd(internedFilePath,
                 _ => new ConcurrentDictionary<(string Namespace, string Name), byte>());
             fileSymbols[key] = 0;
 
             // Update name index
-            var nameSymbols = _nameIndex.GetOrAdd(definition.Name.ToLowerInvariant(),
+            var nameSymbols = _nameIndex.GetOrAdd(StringPool.Intern(definition.Name.ToLowerInvariant()),
                 _ => new ConcurrentDictionary<(string Namespace, string Name), byte>());
             nameSymbols[key] = 0;
         }

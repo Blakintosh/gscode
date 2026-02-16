@@ -236,7 +236,9 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 string dir = System.IO.Path.GetDirectoryName(fullPath) ?? string.Empty;
                 string file = System.IO.Path.GetFileName(fullPath);
                 string lastDir = string.IsNullOrEmpty(dir) ? string.Empty : System.IO.Path.GetFileName(dir);
-                return string.IsNullOrEmpty(lastDir) ? file : System.IO.Path.Combine(lastDir, file).Replace('\\', '/');
+                string result = string.IsNullOrEmpty(lastDir) ? file : System.IO.Path.Combine(lastDir, file).Replace('\\', '/');
+                // Intern the result since the same display path will be used by many macros from the same file
+                return Lexical.StringPool.Intern(result);
             }
             catch { return fullPath; }
         }

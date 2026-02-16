@@ -886,7 +886,9 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
     {
         await WaitUntilParsedAsync(cancellationToken);
 
-        return DefinitionsTable!.ExportedFunctions ?? [];
+        var functions = DefinitionsTable!.ExportedFunctions ?? [];
+        var classes = DefinitionsTable!.ExportedClasses ?? [];
+        return functions.Cast<IExportedSymbol>().Concat(classes);
     }
 
     /// <summary>

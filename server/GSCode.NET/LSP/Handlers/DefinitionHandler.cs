@@ -61,9 +61,9 @@ internal class DefinitionHandler : DefinitionHandlerBase
         }
 
         // If it's a builtin API function, do not return a file location
-        try
+        var api = ScriptAnalyserData.GetShared(script.LanguageId);
+        if (api is not null)
         {
-            ScriptAnalyserData api = new(script.LanguageId);
             var apiFn = api.GetApiFunction(name);
             if (apiFn is not null)
             {
@@ -71,10 +71,6 @@ internal class DefinitionHandler : DefinitionHandlerBase
                 _logger.LogInformation("Definition finished in {ElapsedMs} ms: builtin API {name}", sw.ElapsedMilliseconds, name);
                 return new LocationOrLocationLinks();
             }
-        }
-        catch
-        {
-            // ignore API lookup failures
         }
 
         Location? remote = _scriptManager.FindSymbolLocation(ns, name);

@@ -518,7 +518,10 @@ internal sealed class WaittillNode(ExprNode entity, ExprNode notifyCondition, Wa
 
 internal sealed class WaittillVariablesNode() : AstNode(AstNodeType.WaittillVariables)
 {
-    public LinkedList<IdentifierExprNode> Variables { get; } = new();
+    /// <summary>
+    /// Variables populated by the waittill. Null entries represent ignored parameters (using undefined).
+    /// </summary>
+    public LinkedList<IdentifierExprNode?> Variables { get; } = new();
 }
 
 internal sealed class WaittillMatchNode(ExprNode entity, ExprNode notifyName, ExprNode? matchValue, Range range)

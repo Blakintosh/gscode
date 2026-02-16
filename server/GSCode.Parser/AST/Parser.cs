@@ -31,8 +31,8 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     private ParserContextFlags ContextFlags { get; set; } = ParserContextFlags.None;
 
     // TODO: temp hack to add function hoverables in current version.
-    // todo: remove language ID once we have a permanent solution.
-    private readonly ScriptAnalyserData _scriptAnalyserData = new(languageId);
+    // Use shared API instance to avoid redundant allocations
+    private readonly ScriptAnalyserData? _scriptAnalyserData = ScriptAnalyserData.GetShared(languageId);
 
     public ParserIntelliSense Sense { get; } = sense;
 
@@ -2708,7 +2708,7 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
     /// Parses zero-or-more wait till variable declarations.
     /// </summary>
     /// <remarks>
-    /// WaittillVariables := COMMA IDENTIFIER WaittillVariables | ε
+    /// WaittillVariables := COMMA (IDENTIFIER | UNDEFINED) WaittillVariables | ε
     /// </remarks>
     /// <returns></returns>
     private WaittillVariablesNode WaittillVariables()
@@ -2717,6 +2717,15 @@ internal ref struct Parser(Token startToken, ParserIntelliSense sense, string la
         if (!AdvanceIfType(TokenType.Comma))
         {
             return new();
+        }
+
+        // Check for undefined (ignored parameter placeholder)
+        if (AdvanceIfType(TokenType.Undefined))
+        {
+            // Recurse to find any other waittill parameter names.
+            WaittillVariablesNode rest = WaittillVariables();
+            rest.Variables.AddFirst((IdentifierExprNode?)null);
+            return rest;
         }
 
         // Seek to the next identifier

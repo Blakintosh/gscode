@@ -57,6 +57,15 @@ public record class ScrFunction : IExportedSymbol
                 return documentation;
             }
 
+            // If DocComment is present (from user-defined script doc), use it directly
+            // as it's already fully formatted by SanitizeDocForMarkdown
+            if (!string.IsNullOrWhiteSpace(DocComment))
+            {
+                _cachedDocumentation = DocComment;
+                return _cachedDocumentation;
+            }
+
+            // Otherwise, generate documentation from API-defined properties
             string calledOnString = Overloads.First().CalledOn is ScrFunctionArg calledOn ? $"{calledOn.Name} " : string.Empty;
 
             _cachedDocumentation =
@@ -76,7 +85,7 @@ public record class ScrFunction : IExportedSymbol
 
     private string GetDescriptionString()
     {
-        if (Description is string description)
+        if (Description is string description && !string.IsNullOrWhiteSpace(description))
         {
             return $"""
                 {description}
@@ -97,12 +106,17 @@ public record class ScrFunction : IExportedSymbol
         List<string> parameters = new();
         foreach (ScrFunctionArg parameter in Overloads.First().Parameters)
         {
-            if (parameter.Mandatory.HasValue && parameter.Mandatory.Value)
+            // Include all parameters - mandatory ones as-is, optional ones with brackets
+            bool isMandatory = parameter.Mandatory.HasValue && parameter.Mandatory.Value;
+            if (isMandatory)
             {
                 parameters.Add(parameter.Name);
-                continue;
             }
-            // Defaults?
+            else
+            {
+                // Show optional parameters with brackets to indicate they have defaults
+                parameters.Add($"[{parameter.Name}]");
+            }
         }
 
         return string.Join(", ", parameters);

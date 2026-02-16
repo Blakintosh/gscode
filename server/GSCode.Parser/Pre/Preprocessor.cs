@@ -236,7 +236,9 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
                 string dir = System.IO.Path.GetDirectoryName(fullPath) ?? string.Empty;
                 string file = System.IO.Path.GetFileName(fullPath);
                 string lastDir = string.IsNullOrEmpty(dir) ? string.Empty : System.IO.Path.GetFileName(dir);
-                return string.IsNullOrEmpty(lastDir) ? file : System.IO.Path.Combine(lastDir, file).Replace('\\', '/');
+                string result = string.IsNullOrEmpty(lastDir) ? file : System.IO.Path.Combine(lastDir, file).Replace('\\', '/');
+                // Intern the result since the same display path will be used by many macros from the same file
+                return Lexical.StringPool.Intern(result);
             }
             catch { return fullPath; }
         }
@@ -392,6 +394,12 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         string? resolvedInsertPath = Sense.ResolveInsertPath(filePath, path.Range!);
         Sense.AddInsertRegion(path.Range!, filePath, resolvedInsertPath);
 
+        // If the path couldn't be resolved, the error was already added by ResolveInsertPath
+        if (resolvedInsertPath is null)
+        {
+            return;
+        }
+
         // Get the file contents
         TokenList? insertTokensResult;
         try
@@ -404,10 +412,28 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             return;
         }
 
-        // If we got null back then the file doesn't exist
-        if(insertTokensResult is not TokenList insertTokens)
+        // If we got null back then the file doesn't exist (shouldn't happen since we checked resolvedInsertPath)
+        if (insertTokensResult is not TokenList insertTokens)
         {
-            AddErrorAtRange(GSCErrorCodes.MissingInsertFile, path.Range!, filePath);
+            return;
+        }
+
+        // Strip comments from inserted tokens - they shouldn't carry over
+        StripCommentsFromTokenList(insertTokens);
+
+        // Check if the inserted file is empty (only contains SOF and EOF, or only comments)
+        // If empty, just remove the insert directive and continue
+        if (insertTokens.Start!.Next == insertTokens.End)
+        {
+            // Empty file - skip past the insert directive
+            if (terminatorToken!.Type == TokenType.Semicolon)
+            {
+                ConnectTokens(insertToken.Previous, terminatorToken.Next);
+                CurrentToken = terminatorToken.Next;
+                return;
+            }
+            ConnectTokens(insertToken.Previous, terminatorToken);
+            CurrentToken = terminatorToken;
             return;
         }
 
@@ -422,6 +448,30 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             return;
         }
         ConnectTokens(insertTokens.End!.Previous, terminatorToken);
+    }
+
+    /// <summary>
+    /// Removes all comment tokens from a token list by unlinking them.
+    /// Comments from inserted files shouldn't carry over to the main script.
+    /// </summary>
+    private void StripCommentsFromTokenList(TokenList tokenList)
+    {
+        if (tokenList.Start is null || tokenList.End is null)
+            return;
+
+        Token current = tokenList.Start.Next!; // Skip SOF
+        while (current != tokenList.End)
+        {
+            Token next = current.Next;
+
+            if (current.IsComment())
+            {
+                // Unlink the comment token
+                ConnectTokens(current.Previous, next);
+            }
+
+            current = next;
+        }
     }
 
     private TokenList Path(out Token? terminatorIfMatched)

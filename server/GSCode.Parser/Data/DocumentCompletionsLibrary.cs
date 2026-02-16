@@ -18,7 +18,8 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
     /// </summary>
     public DocumentTokensLibrary Tokens { get; } = tokens;
 
-    private readonly ScriptAnalyserData _scriptAnalyserData = new(languageId);
+    // Use shared API instance to avoid redundant allocations
+    private readonly ScriptAnalyserData? _scriptAnalyserData = ScriptAnalyserData.GetShared(languageId);
 
     public CompletionList GetCompletionsFromPosition(Position position)
     {
@@ -56,7 +57,7 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
 
     private List<CompletionItem> GetGlobalScopeCompletions(CompletionContext context)
     {
-        List<ScrFunction> functions = _scriptAnalyserData.GetApiFunctions(context.Filter);
+        List<ScrFunction> functions = _scriptAnalyserData?.GetApiFunctions(context.Filter) ?? [];
 
         List<CompletionItem> completions = new();
 
@@ -130,6 +131,12 @@ public sealed class DocumentCompletionsLibrary(DocumentTokensLibrary tokens, str
         {
             if (token.Type == TokenType.Identifier && !seenIdentifiers.Contains(token.Lexeme))
             {
+                // Skip identifiers that are API function names to avoid duplicates
+                if (_scriptAnalyserData?.GetApiFunction(token.Lexeme) is not null)
+                {
+                    continue;
+                }
+
                 completions.Add(new CompletionItem()
                 {
                     Kind = CompletionItemKind.Variable,

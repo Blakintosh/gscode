@@ -34,6 +34,49 @@ public class ScriptAnalyserData
 
     private static readonly Dictionary<string, ScrLibraryData> _languageLibraries = new();
 
+    /// <summary>
+    /// Static cache of ScriptAnalyserData instances by language ID.
+    /// This eliminates redundant instance creation across scripts.
+    /// </summary>
+    private static readonly Dictionary<string, ScriptAnalyserData> _sharedInstances = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object _sharedInstancesLock = new();
+
+    /// <summary>
+    /// Gets a shared ScriptAnalyserData instance for the specified language ID.
+    /// This avoids creating redundant instances across scripts while maintaining thread safety.
+    /// </summary>
+    /// <param name="languageId">The language identifier (e.g., "gsc", "csc").</param>
+    /// <returns>A shared instance for the language, or null if the language is not loaded.</returns>
+    public static ScriptAnalyserData? GetShared(string languageId)
+    {
+        if (string.IsNullOrEmpty(languageId))
+            return null;
+
+        lock (_sharedInstancesLock)
+        {
+            if (_sharedInstances.TryGetValue(languageId, out var existing))
+                return existing;
+
+            // Only create if the language library is loaded
+            if (!_languageLibraries.ContainsKey(languageId))
+                return null;
+
+            var instance = new ScriptAnalyserData(languageId);
+            _sharedInstances[languageId] = instance;
+            return instance;
+        }
+    }
+
+    /// <summary>
+    /// Checks if a language API library is loaded and available.
+    /// </summary>
+    /// <param name="languageId">The language identifier to check.</param>
+    /// <returns>True if the library is loaded, false otherwise.</returns>
+    public static bool IsLanguageLoaded(string languageId)
+    {
+        return !string.IsNullOrEmpty(languageId) && _languageLibraries.ContainsKey(languageId);
+    }
+
     public static async Task<bool> LoadLanguageApiAsync(string url, string filePathFallback)
     {
         // Try to load from URL

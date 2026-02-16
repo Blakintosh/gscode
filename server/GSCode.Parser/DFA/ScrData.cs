@@ -788,6 +788,7 @@ internal record struct ScrData
             ScrDataTypes.String |
             ScrDataTypes.Hash |
             ScrDataTypes.Anim |
+            ScrDataTypes.Undefined |
             ScrDataTypes.Entity;
 
         ScrDataTypes residual = Type & ~allowedMask;

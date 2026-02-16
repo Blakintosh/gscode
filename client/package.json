@@ -16,10 +16,10 @@
 		"Other"
 	],
 	"activationEvents": [
-	"onStartupFinished",
-	"workspaceContains:**/*.gsc",
-	"workspaceContains:**/*.csc",
-	"workspaceContains:**/*.gsh"
+		"onStartupFinished",
+		"workspaceContains:**/*.gsc",
+		"workspaceContains:**/*.csc",
+		"workspaceContains:**/*.gsh"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -112,15 +112,22 @@
 		"configuration": {
 			"title": "GSCode",
 			"properties": {
-				"gsc.trace.server": {
-					"scope": "window",
+				"gscode.trace.server": {
 					"type": "string",
 					"enum": [
 						"off",
 						"messages",
 						"verbose"
 					],
-					"default": "off"
+					"default": "off",
+					"description": "Traces the communication between VS Code and the GSCode language server.",
+					"scope": "window"
+				},
+				"gscode.enableWorkspaceIndexing": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable workspace-wide indexing of all script files on startup.",
+					"scope": "window"
 				}
 			}
 		}

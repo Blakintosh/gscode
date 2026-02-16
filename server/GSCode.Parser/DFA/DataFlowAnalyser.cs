@@ -10,7 +10,7 @@ using Serilog;
 
 namespace GSCode.Parser.DFA;
 
-internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null)
+internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null, string? fileName = null)
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = functionGraphs;
     public List<Tuple<ScrClass, ControlFlowGraph>> ClassGraphs { get; } = classGraphs;
@@ -19,13 +19,38 @@ internal ref struct DataFlowAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> 
     public ScriptAnalyserData? ApiData { get; } = apiData;
     public string? CurrentNamespace { get; } = currentNamespace;
     public HashSet<string>? KnownNamespaces { get; } = knownNamespaces;
+    public string? FileName { get; } = fileName;
 
     public void Run()
     {
-        ReachingDefinitionsAnalyser reachingDefinitionsAnalyser = new(FunctionGraphs, ClassGraphs, Sense, ExportedSymbolTable, ApiData, CurrentNamespace, KnownNamespaces);
+#if FLAG_PERFORMANCE_TRACKING
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long checkpoint1, checkpoint2;
+#endif
+
+        ReachingDefinitionsAnalyser reachingDefinitionsAnalyser = new(FunctionGraphs, ClassGraphs, Sense, ExportedSymbolTable, ApiData, CurrentNamespace, KnownNamespaces, FileName);
         reachingDefinitionsAnalyser.Run();
+
+#if FLAG_PERFORMANCE_TRACKING
+        checkpoint1 = sw.ElapsedMilliseconds;
+#endif
 
         SemanticSenseGenerator semanticSenseGenerator = new(FunctionGraphs, Sense, ExportedSymbolTable, reachingDefinitionsAnalyser);
         semanticSenseGenerator.Run();
+
+#if FLAG_PERFORMANCE_TRACKING
+        checkpoint2 = sw.ElapsedMilliseconds;
+        sw.Stop();
+        if (!string.IsNullOrEmpty(FileName))
+        {
+            Log.Debug("[PERF DETAIL] DataFlow - ReachingDefinitions: {RDA}ms, SemanticSense: {SSG}ms, Total: {Total}ms - File={File}", 
+                checkpoint1, checkpoint2 - checkpoint1, checkpoint2, FileName);
+        }
+        else
+        {
+            Log.Debug("[PERF DETAIL] DataFlow - ReachingDefinitions: {RDA}ms, SemanticSense: {SSG}ms, Total: {Total}ms", 
+                checkpoint1, checkpoint2 - checkpoint1, checkpoint2);
+        }
+#endif
     }
 }

@@ -26,8 +26,6 @@ Log.Logger = new LoggerConfiguration()
 #endif
 				.CreateLogger();
 
-//IObserver<WorkDoneProgressReport> workDone = null!;
-
 Log.Information("GSCode Language Server");
 
 // Determine the base directory of the executing assembly
@@ -60,6 +58,7 @@ LanguageServer server = await LanguageServer.From(options =>
 	options
 		.WithInput(input)
 		.WithOutput(output)
+		.WithConfigurationSection("gscode")
 		.ConfigureLogging(
 			x => x
 				.AddSerilog(Log.Logger)
@@ -77,48 +76,108 @@ LanguageServer server = await LanguageServer.From(options =>
 				return new ScriptManager(logger, facade);
 			});
 			services.AddSingleton(new TextDocumentSelector(
-				new TextDocumentFilter()
-				{
-					Pattern = "**/*.gsc"
-				},
-				new TextDocumentFilter()
-				{
-					Pattern = "**/*.csc"
-				}
-			));
+                new TextDocumentFilter { Pattern = "**/*.gsc" },
+                new TextDocumentFilter { Pattern = "**/*.csc" },
+                new TextDocumentFilter { Pattern = "**/*.gsh" }
+            ));
 		})
-		// Disabled for now, indexing is too punishing on performance.
-		// .OnInitialize(async (server, request, ct) =>
-		// {
-		// 	try
-		// 	{
-		// 		var sm = server.Services.GetRequiredService<ScriptManager>();
+		.OnInitialize(async (server, request, ct) =>
+		{
+			try
+			{
+				// Check if workspace indexing is enabled via InitializationOptions
+				// This is passed by the client during the initialize request, so no need
+				// to make a request back to the client (which would cause warnings)
+				bool enableIndexing = false;
 
-		// 		// Use a long-lived CTS for indexing; do not tie to Initialize request token
-		// 		var indexingCts = new CancellationTokenSource();
-		// 		options.RegisterForDisposal(indexingCts);
-		// 		var indexingToken = indexingCts.Token;
+				if (request.InitializationOptions is JToken initOptions)
+				{
+					var gscodeSection = initOptions.SelectToken("gscode");
+					if (gscodeSection is not null)
+					{
+						var indexingSetting = gscodeSection.SelectToken("enableWorkspaceIndexing");
+						if (indexingSetting is not null)
+						{
+							enableIndexing = indexingSetting.Value<bool>();
+						}
+					}
+				}
 
-		// 		if (request.WorkspaceFolders is not null && request.WorkspaceFolders.Any())
-		// 		{
-		// 			foreach (var wf in request.WorkspaceFolders)
-		// 			{
-		// 				string root = wf.Uri.ToUri().LocalPath;
-		// 				_ = Task.Run(() => sm.IndexWorkspaceAsync(root, indexingToken), CancellationToken.None);
-		// 			}
-		// 		}
-		// 		else if (request.RootUri is not null)
-		// 		{
-		// 			string root = request.RootUri.ToUri().LocalPath;
-		// 			// Disabled for now, indexing is too punishing on performance.
-		// 			_ = Task.Run(() => sm.IndexWorkspaceAsync(root, indexingToken), CancellationToken.None);
-		// 		}
-		// 	}
-		// 	catch (Exception ex)
-		// 	{
-		// 		Log.Error(ex, "Failed to start workspace indexing");
-		// 	}
-		// })
+				if (!enableIndexing)
+				{
+					Log.Information("Workspace indexing is disabled (not enabled in initialization options)");
+					return;
+				}
+
+				Log.Information("Workspace indexing is enabled via initialization options");
+
+				var sm = server.Services.GetRequiredService<ScriptManager>();
+
+				// Use a long-lived CTS for indexing; do not tie to Initialize request token
+				var indexingCts = new CancellationTokenSource();
+				options.RegisterForDisposal(indexingCts);
+				var indexingToken = indexingCts.Token;
+
+				// Defer actual indexing to OnInitialized to ensure server is fully ready
+				await Task.CompletedTask;
+			}
+			catch (Exception ex)
+			{
+				Log.Error(ex, "Failed to process initialization options");
+			}
+		})
+		.OnInitialized(async (server, request, response, ct) =>
+		{
+			try
+			{
+				// Check initialization options again for workspace indexing
+				bool enableIndexing = false;
+
+				if (request.InitializationOptions is JToken initOptions)
+				{
+					var gscodeSection = initOptions.SelectToken("gscode");
+					if (gscodeSection is not null)
+					{
+						var indexingSetting = gscodeSection.SelectToken("enableWorkspaceIndexing");
+						if (indexingSetting is not null)
+						{
+							enableIndexing = indexingSetting.Value<bool>();
+						}
+					}
+				}
+
+				if (!enableIndexing)
+				{
+					return;
+				}
+
+				var sm = server.Services.GetRequiredService<ScriptManager>();
+
+				var indexingCts = new CancellationTokenSource();
+				options.RegisterForDisposal(indexingCts);
+				var indexingToken = indexingCts.Token;
+
+				if (request.WorkspaceFolders is not null && request.WorkspaceFolders.Any())
+				{
+					foreach (var wf in request.WorkspaceFolders)
+					{
+						string root = wf.Uri.ToUri().LocalPath;
+						Log.Information("Starting workspace indexing for: {Root}", root);
+						_ = Task.Run(() => sm.IndexWorkspaceAsync(root, indexingToken), CancellationToken.None);
+					}
+				}
+				else if (request.RootUri is not null)
+				{
+					string root = request.RootUri.ToUri().LocalPath;
+					Log.Information("Starting workspace indexing for: {Root}", root);
+					_ = Task.Run(() => sm.IndexWorkspaceAsync(root, indexingToken), CancellationToken.None);
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error(ex, "Failed to start workspace indexing");
+			}
+		})
 		.AddHandler<TextDocumentSyncHandler>()
 		.AddHandler<SemanticTokensHandler>()
 		.AddHandler<HoverHandler>()
@@ -138,4 +197,36 @@ LanguageServer server = await LanguageServer.From(options =>
 
 Log.Information("Language server connected successfully!");
 
+#if FLAG_MEMORY_DEBUG
+// Memory monitoring
+var memoryMonitorCts = new CancellationTokenSource();
+_ = Task.Run(async () =>
+{
+	while (!memoryMonitorCts.Token.IsCancellationRequested)
+	{
+		try
+		{
+			var process = Process.GetCurrentProcess();
+			var memoryMB = process.WorkingSet64 / 1024.0 / 1024.0;
+			var privateMemoryMB = process.PrivateMemorySize64 / 1024.0 / 1024.0;
+			Log.Debug("Memory Usage - Working Set: {WorkingSet:F2} MB, Private: {Private:F2} MB", memoryMB, privateMemoryMB);
+
+			await Task.Delay(250, memoryMonitorCts.Token);
+		}
+		catch (OperationCanceledException)
+		{
+			break;
+		}
+		catch (Exception ex)
+		{
+			Log.Error(ex, "Error monitoring memory");
+		}
+	}
+}, memoryMonitorCts.Token);
+#endif
+
 await server.WaitForExit;
+
+#if FLAG_MEMORY_DEBUG
+memoryMonitorCts.Cancel();
+#endif

@@ -1061,7 +1061,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         }
         bool looksLikeCall = nextNonWs is not null && nextNonWs.Type == TokenType.OpenParen;
         bool isQualified = token.Previous is not null && token.Previous.Type == TokenType.ScopeResolution && token.Previous.Previous is not null && token.Previous.Previous.Type == TokenType.Identifier;
-        bool hasDefinitionSymbol = token.SenseDefinition is ScrFunctionSymbol || token.SenseDefinition is ScrMethodSymbol || token.SenseDefinition is ScrClassSymbol;
+        bool hasDefinitionSymbol = token.SenseDefinition is ScrFunctionSymbol || token.SenseDefinition is ScrMethodSymbol || token.SenseDefinition is ScrClassSymbol || token.SenseDefinition is ScrClassReferenceSymbol;
         bool isAddressOf = IsAddressOfIdentifier(token);
         if (!looksLikeCall && !isQualified && !hasDefinitionSymbol && !isAddressOf)
         {

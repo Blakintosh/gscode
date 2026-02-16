@@ -88,6 +88,12 @@ internal ref struct SignatureAnalyser(ScriptNode rootNode, DefinitionsTable defi
         DefinitionsTable.AddClass(scrClass, classDefn);
 
         Sense.AddSenseToken(nameToken, new ScrClassSymbol(nameToken, scrClass));
+
+        // Enable GoTo Definition for base class name
+        if (classDefn.InheritsFromToken is Token baseClassToken)
+        {
+            Sense.AddSenseToken(baseClassToken, new ScrClassReferenceSymbol(baseClassToken, baseClassToken.Lexeme));
+        }
     }
 
     private void AnalyseClassFunction(ScrClass scrClass, FunDefnNode functionDefn)
@@ -645,6 +651,28 @@ internal record ScrClassSymbol(Token NameToken, ScrClass Source) : ISenseDefinit
             {
                 Kind = MarkupKind.Markdown,
                 Value = "```gsc\nclass " + Source.Name + "\n```"
+            })
+        };
+    }
+}
+
+internal record ScrClassReferenceSymbol(Token NameToken, string ClassName) : ISenseDefinition
+{
+    public bool IsFromPreprocessor { get; } = false;
+    public Range Range { get; } = NameToken.Range;
+
+    public string SemanticTokenType { get; } = "class";
+    public string[] SemanticTokenModifiers { get; } = [];
+
+    public Hover GetHover()
+    {
+        return new()
+        {
+            Range = Range,
+            Contents = new MarkedStringsOrMarkupContent(new MarkupContent()
+            {
+                Kind = MarkupKind.Markdown,
+                Value = "```gsc\nclass " + ClassName + "\n```"
             })
         };
     }

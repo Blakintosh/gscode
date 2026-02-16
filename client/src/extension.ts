@@ -6,6 +6,7 @@
 "use strict";
 
 import * as path from "path";
+import * as vscode from 'vscode';
 
 import { workspace, Disposable, ExtensionContext, window } from "vscode";
 import {
@@ -125,6 +126,19 @@ export function activate(context: ExtensionContext) {
   // client can be deactivated on extension deactivation
   client.start();
 }
+
+vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('gscode.enableWorkspaceIndexing')) {
+        vscode.window.showInformationMessage(
+            'Changing gscode.enableWorkspaceIndexing requires reloading the GSCode language server.',
+            'Reload'
+        ).then(sel => {
+            if (sel === 'Reload') {
+                vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+        });
+    }
+});
 
 export function deactivate(): Thenable<void> | undefined {
   if (!client) {

@@ -1,7 +1,4 @@
-﻿// Define a compilation symbol for memory debugging; can be enabled via project settings or command line
-//#define FLAG_MEMORY_DEBUG
-
-using GSCode.NET;
+﻿using GSCode.NET;
 using GSCode.Parser.SPA;
 using Serilog;
 using StreamJsonRpc;

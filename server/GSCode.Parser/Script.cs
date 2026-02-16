@@ -504,6 +504,11 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
 
     public Task DoAnalyseAsync(IEnumerable<IExportedSymbol> exportedSymbols, CancellationToken cancellationToken = default)
     {
+#if FLAG_PERFORMANCE_TRACKING
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        string fileName = System.IO.Path.GetFileName(ScriptUri.ToUri().LocalPath);
+        Log.Debug("[PERF START] SPA-Analysis - File={File}", fileName);
+#endif
 
         // Get a comprehensive list of symbols available in this context.
         Dictionary<string, IExportedSymbol> allSymbols = new(DefinitionsTable!.InternalSymbols, StringComparer.OrdinalIgnoreCase);
@@ -528,6 +533,9 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         foreach (var kv in DefinitionsTable.GetAllClassLocations()) knownNamespaces.Add(kv.Key.Namespace);
         knownNamespaces.Add(DefinitionsTable.CurrentNamespace);
 
+#if FLAG_PERFORMANCE_TRACKING
+        Log.Debug("[PERF CHECKPOINT] SPA-Analysis - Pre-ControlFlow: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
         ControlFlowAnalyser controlFlowAnalyser = new(Sense, DefinitionsTable!);
         try
         {
@@ -542,6 +550,10 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
             return Task.CompletedTask;
         }
 
+#if FLAG_PERFORMANCE_TRACKING
+        Log.Debug("[PERF CHECKPOINT] SPA-Analysis - Post-ControlFlow: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+        Log.Debug("[PERF CHECKPOINT] SPA-Analysis - Pre-DataFlow: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
         DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, controlFlowAnalyser.ClassGraphs, Sense, allSymbols, TryGetApi(), DefinitionsTable.CurrentNamespace, knownNamespaces);
         try
         {
@@ -556,6 +568,10 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
             return Task.CompletedTask;
         }
 
+#if FLAG_PERFORMANCE_TRACKING
+        Log.Debug("[PERF CHECKPOINT] SPA-Analysis - Post-DataFlow: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+        Log.Debug("[PERF CHECKPOINT] SPA-Analysis - Pre-BasicDiagnostics: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
         // TODO: fit this within the analysers above, or a later step.
         // Basic SPA diagnostics
         try
@@ -573,6 +589,12 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
             // Do not fail analysis entirely; surface as SPA failure
             Sense.AddIdeDiagnostic(RangeHelper.From(0, 0, 0, 1), GSCErrorCodes.UnhandledSpaError, ex.GetType().Name);
         }
+
+#if FLAG_PERFORMANCE_TRACKING
+        Log.Debug("[PERF CHECKPOINT] SPA-Analysis - Post-BasicDiagnostics: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+        sw.Stop();
+        Log.Debug("[PERF END] SPA-Analysis completed in {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
+#endif
 
         Analysed = true;
         return Task.CompletedTask;

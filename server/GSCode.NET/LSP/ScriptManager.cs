@@ -179,6 +179,12 @@ public class ScriptManager
 
     private async Task<IEnumerable<Diagnostic>> ProcessEditorAsync(Uri documentUri, Script script, string content, CancellationToken cancellationToken = default)
     {
+        using var perfTracker = new PerformanceTracker("ProcessEditor", new Dictionary<string, object>
+        {
+            ["File"] = Path.GetFileName(documentUri.LocalPath),
+            ["ContentLength"] = content.Length
+        });
+
         string filePath = documentUri.LocalPath;
         var docUri = DocumentUri.From(documentUri);
         int contentHash = content.GetHashCode();
@@ -190,7 +196,9 @@ public class ScriptManager
             cached.LastParsedAt = DateTime.UtcNow;
         }
 
+        perfTracker.Checkpoint("Pre-Parse");
         await script.ParseAsync(content);
+        perfTracker.Checkpoint("Post-Parse");
 
         // Populate global symbol registry with this script's definitions (returns true if changed)
         bool symbolsChanged = PopulateSymbolRegistry(filePath, script);
@@ -203,6 +211,7 @@ public class ScriptManager
 
         // Snapshot dependencies to avoid collection modification during enumeration
         var dependencies = script.Dependencies.ToList();
+        perfTracker.AddMetadata("DependencyCount", dependencies.Count);
 
         List<Task> dependencyTasks = new();
 
@@ -212,7 +221,9 @@ public class ScriptManager
             dependencyTasks.Add(AddDependencyAsync(documentUri, dependency, script.LanguageId));
         }
 
+        perfTracker.Checkpoint("Pre-Dependencies");
         await Task.WhenAll(dependencyTasks);
+        perfTracker.Checkpoint("Post-Dependencies");
 
         // Build exported symbols
         List<IExportedSymbol> exportedSymbols = new();
@@ -243,6 +254,7 @@ public class ScriptManager
             });
         }
 
+        perfTracker.Checkpoint("Pre-Analysis");
         // Merge + analyse under this script's analysis lock
         var thisDoc = DocumentUri.From(documentUri);
         await WithAnalysisLockAsync(thisDoc, async () =>
@@ -262,8 +274,12 @@ public class ScriptManager
             }
             await script.AnalyseAsync(exportedSymbols, cancellationToken);
         });
+        perfTracker.Checkpoint("Post-Analysis");
 
-        return await script.GetDiagnosticsAsync(cancellationToken);
+        var diagnostics = await script.GetDiagnosticsAsync(cancellationToken);
+        perfTracker.AddMetadata("DiagnosticCount", diagnostics.Count());
+
+        return diagnostics;
     }
 
     /// <summary>
@@ -571,6 +587,11 @@ public class ScriptManager
 
     public async Task IndexWorkspaceAsync(string rootDirectory, CancellationToken cancellationToken = default)
     {
+        using var perfTracker = new PerformanceTracker("IndexWorkspace", new Dictionary<string, object>
+        {
+            ["RootDirectory"] = Path.GetFileName(rootDirectory)
+        });
+
         try
         {
             if (string.IsNullOrWhiteSpace(rootDirectory) || !Directory.Exists(rootDirectory))
@@ -579,12 +600,16 @@ public class ScriptManager
                 return;
             }
 
+            perfTracker.Checkpoint("Start-FileCollection");
             // Collect files first for count and deterministic iteration
             var filesList = Directory
                 .EnumerateFiles(rootDirectory, "*.*", SearchOption.AllDirectories)
                 .Where(p => p.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase) ||
                             p.EndsWith(".csc", StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
+            perfTracker.AddMetadata("FileCount", filesList.Count);
+            perfTracker.Checkpoint("End-FileCollection");
 
 #if DEBUG
             _logger.LogInformation("Indexing workspace under {Root}", rootDirectory);
@@ -593,9 +618,12 @@ public class ScriptManager
 #endif
 
             int maxDegree = Math.Max(1, Environment.ProcessorCount - 1);
+            perfTracker.AddMetadata("Parallelism", maxDegree);
+
             using SemaphoreSlim gate = new(maxDegree, maxDegree);
             List<Task> tasks = new();
 
+            perfTracker.Checkpoint("Start-Indexing");
             foreach (string file in filesList)
             {
                 await gate.WaitAsync(cancellationToken);
@@ -610,7 +638,13 @@ public class ScriptManager
 #if DEBUG
                         _logger.LogInformation("Indexing {File}", rel);
 #endif
+                        using var fileTracker = new PerformanceTracker("IndexFile", new Dictionary<string, object>
+                        {
+                            ["File"] = rel
+                        });
+
                         await IndexFileAsync(file, cancellationToken);
+
 #if DEBUG
                         fileSw.Stop();
                         _logger.LogInformation("Indexed {File} in {ElapsedMs} ms", rel, fileSw.ElapsedMilliseconds);
@@ -629,6 +663,8 @@ public class ScriptManager
             }
 
             await Task.WhenAll(tasks);
+            perfTracker.Checkpoint("End-Indexing");
+
 #if DEBUG
             swAll.Stop();
             _logger.LogInformation("Indexing completed in {ElapsedMs} ms for {Count} files", swAll.ElapsedMilliseconds, filesList.Count);
@@ -644,6 +680,11 @@ public class ScriptManager
 
     private async Task IndexFileAsync(string filePath, CancellationToken cancellationToken)
     {
+        using var perfTracker = new PerformanceTracker("IndexFile-Internal", new Dictionary<string, object>
+        {
+            ["File"] = Path.GetFileName(filePath)
+        });
+
         string ext = Path.GetExtension(filePath);
         string languageId = string.Equals(ext, ".csc", StringComparison.OrdinalIgnoreCase) ? "csc" : "gsc";
 
@@ -663,10 +704,13 @@ public class ScriptManager
         // Skip if already parsed (unless it's a new file)
         if (!isNewFile && cached.Script.Parsed)
         {
+            perfTracker.AddMetadata("Skipped", true);
             return;
         }
 
+        perfTracker.Checkpoint("Pre-Parse");
         await EnsureParsedAsync(docUri, cached.Script, languageId, cancellationToken);
+        perfTracker.Checkpoint("Post-Parse");
 
         // Populate global symbol registry
         bool symbolsChanged = PopulateSymbolRegistry(filePath, cached.Script);
@@ -675,7 +719,9 @@ public class ScriptManager
 
         // Snapshot dependencies to avoid collection modification during enumeration
         var dependencies = cached.Script.Dependencies.ToList();
+        perfTracker.AddMetadata("DependencyCount", dependencies.Count);
 
+        perfTracker.Checkpoint("Pre-Dependencies");
         // Parse and include dependencies
         foreach (Uri dep in dependencies)
         {
@@ -691,7 +737,9 @@ public class ScriptManager
                 await EnsureParsedAsync(depDoc, depScript.Script, languageId, cancellationToken);
             }
         }
+        perfTracker.Checkpoint("Post-Dependencies");
 
+        perfTracker.Checkpoint("Pre-ExportSymbols");
         // Build exported symbols
         List<IExportedSymbol> exportedSymbols = new();
         foreach (Uri dep in dependencies)
@@ -702,6 +750,7 @@ public class ScriptManager
                 exportedSymbols.AddRange(await depScript.Script.IssueExportedSymbolsAsync(cancellationToken));
             }
         }
+        perfTracker.Checkpoint("Post-ExportSymbols");
 
         // Snapshot dependency locations under dep locks
         var mergeFuncLocs = new List<KeyValuePair<(string Namespace, string Name), (string FilePath, Range Range)>>();
@@ -720,6 +769,7 @@ public class ScriptManager
             });
         }
 
+        perfTracker.Checkpoint("Pre-Analysis");
         // Merge + analyse under this script's analysis lock
         await WithAnalysisLockAsync(docUri, async () =>
         {
@@ -741,6 +791,10 @@ public class ScriptManager
             // Publish diagnostics for indexed file (if LSP facade is available)
             await PublishDiagnosticsAsync(docUri, cached.Script, cancellationToken: cancellationToken);
         });
+        perfTracker.Checkpoint("Post-Analysis");
+
+        var diagnostics = await cached.Script.GetDiagnosticsAsync(cancellationToken);
+        perfTracker.AddMetadata("DiagnosticCount", diagnostics.Count);
     }
 
     private async Task PublishDiagnosticsAsync(DocumentUri uri, Script script, int? version = null, CancellationToken cancellationToken = default)

@@ -254,6 +254,7 @@ internal class SymbolTable
         }
 
         // 3. Check global symbol table (script-defined functions)
+        ScrFunction? scriptFunction = null;
         if (GlobalSymbolTable.TryGetValue(symbol, out IExportedSymbol? exportedSymbol))
         {
             if (exportedSymbol.Type == ExportedSymbolType.Function)
@@ -263,7 +264,8 @@ internal class SymbolTable
                 // If argument count provided, check if signature matches
                 if (argumentCount.HasValue && !SignatureMatches(func, argumentCount.Value))
                 {
-                    // Signature mismatch, fall through to check API functions
+                    // Signature mismatch, remember the function but fall through to check API functions
+                    scriptFunction = func;
                 }
                 else
                 {
@@ -291,7 +293,8 @@ internal class SymbolTable
                     // If argument count provided, check if signature matches
                     if (argumentCount.HasValue && !SignatureMatches(func, argumentCount.Value))
                     {
-                        // Signature mismatch, fall through to API
+                        // Signature mismatch, remember the function but fall through to API
+                        scriptFunction ??= func;
                     }
                     else
                     {
@@ -400,7 +403,7 @@ internal class SymbolTable
             return ScrData.Undefined();
         }
 
-        // Check if namespace refers to a class
+        // Check if namespace refers to a class - if so, try to find the method first
         if (GlobalSymbolTable.TryGetValue(namespaceName, out IExportedSymbol? classSymbol)
             && classSymbol.Type == ExportedSymbolType.Class)
         {
@@ -414,7 +417,9 @@ internal class SymbolTable
                 flags = SymbolFlags.Global;
                 return ScrData.Function(method);
             }
-            return ScrData.Undefined();
+            // Don't return early - continue to check namespace-level functions
+            // This allows calling namespace::function() from within a class when the
+            // namespace name happens to match a class name
         }
 
         // Check if namespace exists in known namespaces
@@ -423,7 +428,7 @@ internal class SymbolTable
             namespaceExists = true;
         }
 
-        // Check global symbol table
+        // Check global symbol table for namespace-qualified function
         if (GlobalSymbolTable.TryGetValue($"{namespaceName}::{symbol}", out IExportedSymbol? exportedSymbol))
         {
             if (exportedSymbol.Type == ExportedSymbolType.Function &&

@@ -1,4 +1,7 @@
-﻿using GSCode.NET;
+﻿// Define a compilation symbol for memory debugging; can be enabled via project settings or command line
+//#define FLAG_MEMORY_DEBUG
+
+using GSCode.NET;
 using GSCode.Parser.SPA;
 using Serilog;
 using StreamJsonRpc;
@@ -25,8 +28,6 @@ Log.Logger = new LoggerConfiguration()
 				.WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
 #endif
 				.CreateLogger();
-
-//IObserver<WorkDoneProgressReport> workDone = null!;
 
 Log.Information("GSCode Language Server");
 
@@ -199,4 +200,36 @@ LanguageServer server = await LanguageServer.From(options =>
 
 Log.Information("Language server connected successfully!");
 
+#if FLAG_MEMORY_DEBUG
+// Memory monitoring
+var memoryMonitorCts = new CancellationTokenSource();
+_ = Task.Run(async () =>
+{
+	while (!memoryMonitorCts.Token.IsCancellationRequested)
+	{
+		try
+		{
+			var process = Process.GetCurrentProcess();
+			var memoryMB = process.WorkingSet64 / 1024.0 / 1024.0;
+			var privateMemoryMB = process.PrivateMemorySize64 / 1024.0 / 1024.0;
+			Log.Debug("Memory Usage - Working Set: {WorkingSet:F2} MB, Private: {Private:F2} MB", memoryMB, privateMemoryMB);
+
+			await Task.Delay(250, memoryMonitorCts.Token);
+		}
+		catch (OperationCanceledException)
+		{
+			break;
+		}
+		catch (Exception ex)
+		{
+			Log.Error(ex, "Error monitoring memory");
+		}
+	}
+}, memoryMonitorCts.Token);
+#endif
+
 await server.WaitForExit;
+
+#if FLAG_MEMORY_DEBUG
+memoryMonitorCts.Cancel();
+#endif

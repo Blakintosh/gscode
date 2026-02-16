@@ -786,10 +786,14 @@ public class ScriptManager
                     cached.Script.DefinitionsTable.AddClassLocation(key.Namespace, key.Name, val.FilePath, val.Range);
                 }
             }
+            perfTracker.Checkpoint("Pre-AnalyseAsync");
             await cached.Script.AnalyseAsync(exportedSymbols, cancellationToken);
+            perfTracker.Checkpoint("Post-AnalyseAsync");
+            perfTracker.Checkpoint("Pre-PublishDiagnostics");
 
             // Publish diagnostics for indexed file (if LSP facade is available)
             await PublishDiagnosticsAsync(docUri, cached.Script, cancellationToken: cancellationToken);
+            perfTracker.Checkpoint("Post-PublishDiagnostics");
         });
         perfTracker.Checkpoint("Post-Analysis");
 

@@ -21,7 +21,7 @@ internal class SwitchAnalysisContext
     public bool HasDefault { get; set; } = false;
 }
 
-internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null)
+internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, ControlFlowGraph>> functionGraphs, List<Tuple<ScrClass, ControlFlowGraph>> classGraphs, ParserIntelliSense sense, Dictionary<string, IExportedSymbol> exportedSymbolTable, ScriptAnalyserData? apiData = null, string? currentNamespace = null, HashSet<string>? knownNamespaces = null, string? fileName = null)
 {
     public List<Tuple<ScrFunction, ControlFlowGraph>> FunctionGraphs { get; } = functionGraphs;
     public List<Tuple<ScrClass, ControlFlowGraph>> ClassGraphs { get; } = classGraphs;
@@ -30,6 +30,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
     public ScriptAnalyserData? ApiData { get; } = apiData;
     public string? CurrentNamespace { get; } = currentNamespace;
     public HashSet<string>? KnownNamespaces { get; } = knownNamespaces;
+    public string? FileName { get; } = fileName;
 
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> InSets { get; } = new();
     public Dictionary<CfgNode, Dictionary<string, ScrVariable>> OutSets { get; } = new();
@@ -42,15 +43,43 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
     public void Run()
     {
+#if FLAG_PERFORMANCE_TRACKING
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        int functionCount = 0;
+        int classCount = 0;
+        long timeInFunctions = 0;
+        long timeInClasses = 0;
+#endif
+
         foreach (Tuple<ScrFunction, ControlFlowGraph> functionGraph in FunctionGraphs)
         {
+#if FLAG_PERFORMANCE_TRACKING
+            var funcStart = sw.ElapsedMilliseconds;
+#endif
             AnalyseFunction(functionGraph.Item1, functionGraph.Item2);
+#if FLAG_PERFORMANCE_TRACKING
+            functionCount++;
+            timeInFunctions += sw.ElapsedMilliseconds - funcStart;
+#endif
         }
 
         foreach (Tuple<ScrClass, ControlFlowGraph> classGraph in ClassGraphs)
         {
+#if FLAG_PERFORMANCE_TRACKING
+            var classStart = sw.ElapsedMilliseconds;
+#endif
             AnalyseClass(classGraph.Item1, classGraph.Item2);
+#if FLAG_PERFORMANCE_TRACKING
+            classCount++;
+            timeInClasses += sw.ElapsedMilliseconds - classStart;
+#endif
         }
+
+#if FLAG_PERFORMANCE_TRACKING
+        sw.Stop();
+        Log.Debug("[PERF DETAIL RDA] Functions: {FuncCount} ({FuncTime}ms), Classes: {ClassCount} ({ClassTime}ms), Total: {Total}ms - File={File}",
+            functionCount, timeInFunctions, classCount, timeInClasses, sw.ElapsedMilliseconds, FileName ?? "unknown");
+#endif
     }
 
     public void AnalyseFunction(ScrFunction function, ControlFlowGraph functionGraph)
@@ -63,6 +92,21 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         InSets.Clear();
         OutSets.Clear();
         OutEdgeSets.Clear();
+
+#if FLAG_PERFORMANCE_TRACKING
+        // Track time spent in different node types
+        long timeInBasicBlocks = 0;
+        long timeInDecisions = 0;
+        long timeInIterations = 0;
+        long timeInSwitches = 0;
+        long timeInMergeSets = 0;
+        long timeInUpdateEdges = 0;
+        int basicBlockCount = 0;
+        int decisionCount = 0;
+        int iterationCount = 0;
+        int switchCount = 0;
+        var perfSw = System.Diagnostics.Stopwatch.StartNew();
+#endif
 
         Stack<CfgNode> worklist = new();
         worklist.Push(functionGraph.Start);
@@ -80,6 +124,10 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
             CfgNode node = worklist.Pop();
             visited.Add(node);
 
+#if FLAG_PERFORMANCE_TRACKING
+            long nodeStart = perfSw.ElapsedTicks;
+#endif
+
             // Calculate the in set
             Dictionary<string, ScrVariable> inSet = new(StringComparer.OrdinalIgnoreCase);
             foreach (CfgNode incoming in node.Incoming)
@@ -95,6 +143,11 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                     inSet.MergeTables(nodeOut, node.Scope);
                 }
             }
+
+#if FLAG_PERFORMANCE_TRACKING
+            timeInMergeSets += perfSw.ElapsedTicks - nodeStart;
+            long processStart = perfSw.ElapsedTicks;
+#endif
 
             // Check if the in set has changed, if not, then we can skip this node.
             if (InSets.TryGetValue(node, out Dictionary<string, ScrVariable>? currentInSet) && currentInSet.VariableTableEquals(inSet))
@@ -140,6 +193,11 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                 AnalyseBasicBlock((BasicBlock)node, symbolTable);
 
                 OutSets[node] = symbolTable.VariableSymbols;
+#if FLAG_PERFORMANCE_TRACKING
+                basicBlockCount++;
+                timeInBasicBlocks += perfSw.ElapsedTicks - processStart;
+                processStart = perfSw.ElapsedTicks;
+#endif
             }
             else if (node.Type == CfgNodeType.ClassMembersBlock)
             {
@@ -164,6 +222,11 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
                 iterationCondition = AnalyseIterationInternal((IterationNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
+#if FLAG_PERFORMANCE_TRACKING
+                iterationCount++;
+                timeInIterations += perfSw.ElapsedTicks - processStart;
+                processStart = perfSw.ElapsedTicks;
+#endif
             }
             else if (node.Type == CfgNodeType.DecisionNode)
             {
@@ -172,6 +235,11 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
                 decisionCondition = AnalyseDecisionConditionInternal((DecisionNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
+#if FLAG_PERFORMANCE_TRACKING
+                decisionCount++;
+                timeInDecisions += perfSw.ElapsedTicks - processStart;
+                processStart = perfSw.ElapsedTicks;
+#endif
             }
             else if (node.Type == CfgNodeType.SwitchNode)
             {
@@ -180,6 +248,11 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
                 AnalyseSwitch((SwitchNode)node, symbolTable);
                 OutSets[node] = symbolTable.VariableSymbols;
+#if FLAG_PERFORMANCE_TRACKING
+                switchCount++;
+                timeInSwitches += perfSw.ElapsedTicks - processStart;
+                processStart = perfSw.ElapsedTicks;
+#endif
             }
             else if (node.Type == CfgNodeType.SwitchCaseDecisionNode)
             {
@@ -194,9 +267,17 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                 OutSets[node] = inSet;
             }
 
+#if FLAG_PERFORMANCE_TRACKING
+            long edgeStart = perfSw.ElapsedTicks;
+#endif
+
             // Update edge-specific out sets (used for branch-sensitive narrowing).
             bool edgeOutChanged = UpdateOutEdgeSetsForNode(node, OutSets[node],
                 node.Type == CfgNodeType.DecisionNode ? decisionCondition : node.Type == CfgNodeType.IterationNode ? iterationCondition : null);
+
+#if FLAG_PERFORMANCE_TRACKING
+            timeInUpdateEdges += perfSw.ElapsedTicks - edgeStart;
+#endif
 
             // Check if the outset has changed before queueing successors.
             bool outSetChanged = previousOutSet == null || !previousOutSet.VariableTableEquals(OutSets[node]) || edgeOutChanged;
@@ -212,6 +293,24 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
                 worklist.Push(successor);
             }
         }
+
+#if FLAG_PERFORMANCE_TRACKING
+        perfSw.Stop();
+        double msPerTick = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        if (basicBlockCount + decisionCount + iterationCount + switchCount > 10) // Only log for non-trivial functions
+        {
+            Log.Debug("[PERF DETAIL RDA Func] {FuncName}: BasicBlocks={BB}({BBms:F1}ms), Decisions={Dec}({Decms:F1}ms), Iterations={Iter}({Iterms:F1}ms), Switches={Sw}({Swms:F1}ms), MergeSets={Mergems:F1}ms, UpdateEdges={Edgems:F1}ms, Total={Total}ms - File={File}",
+                function.Name,
+                basicBlockCount, timeInBasicBlocks * msPerTick,
+                decisionCount, timeInDecisions * msPerTick,
+                iterationCount, timeInIterations * msPerTick,
+                switchCount, timeInSwitches * msPerTick,
+                timeInMergeSets * msPerTick,
+                timeInUpdateEdges * msPerTick,
+                perfSw.ElapsedMilliseconds,
+                FileName ?? "unknown");
+        }
+#endif
 
         // Check if we hit the iteration limit
         if (iterations >= maxIterations)

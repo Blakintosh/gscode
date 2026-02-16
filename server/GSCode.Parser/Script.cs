@@ -554,7 +554,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         Log.Debug("[PERF CHECKPOINT] SPA-Analysis - Post-ControlFlow: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
         Log.Debug("[PERF CHECKPOINT] SPA-Analysis - Pre-DataFlow: {ElapsedMs} ms - File={File}", sw.ElapsedMilliseconds, fileName);
 #endif
-        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, controlFlowAnalyser.ClassGraphs, Sense, allSymbols, TryGetApi(), DefinitionsTable.CurrentNamespace, knownNamespaces);
+        DataFlowAnalyser dataFlowAnalyser = new(controlFlowAnalyser.FunctionGraphs, controlFlowAnalyser.ClassGraphs, Sense, allSymbols, TryGetApi(), DefinitionsTable.CurrentNamespace, knownNamespaces, fileName);
         try
         {
             dataFlowAnalyser.Run();

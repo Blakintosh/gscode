@@ -394,6 +394,12 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
         string? resolvedInsertPath = Sense.ResolveInsertPath(filePath, path.Range!);
         Sense.AddInsertRegion(path.Range!, filePath, resolvedInsertPath);
 
+        // If the path couldn't be resolved, the error was already added by ResolveInsertPath
+        if (resolvedInsertPath is null)
+        {
+            return;
+        }
+
         // Get the file contents
         TokenList? insertTokensResult;
         try
@@ -406,10 +412,9 @@ internal ref partial struct Preprocessor(Token startToken, ParserIntelliSense se
             return;
         }
 
-        // If we got null back then the file doesn't exist
-        if(insertTokensResult is not TokenList insertTokens)
+        // If we got null back then the file doesn't exist (shouldn't happen since we checked resolvedInsertPath)
+        if (insertTokensResult is not TokenList insertTokens)
         {
-            AddErrorAtRange(GSCErrorCodes.MissingInsertFile, path.Range!, filePath);
             return;
         }
 

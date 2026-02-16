@@ -55,6 +55,21 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
     private readonly Dictionary<SymbolKey, List<Range>> _references = new();
     public IReadOnlyDictionary<SymbolKey, List<Range>> References => _references;
 
+    // Cached/interned strings for deduplication
+    private string? _scriptFileName;
+    private string ScriptFileName => _scriptFileName ??= Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+
+    // Common markdown format strings (interned for memory efficiency)
+    private static readonly string s_gscCodeBlockStart = string.Intern("```gsc\n");
+    private static readonly string s_codeBlockEnd = string.Intern("\n```");
+    private static readonly string s_markdownSeparator = string.Intern("\n---\n");
+
+    /// <summary>
+    /// Gets the effective namespace - either from DefinitionsTable or falls back to script filename.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private string GetEffectiveNamespace() => DefinitionsTable?.CurrentNamespace ?? ScriptFileName;
+
     // Use shared API instance to avoid redundant allocations across scripts
     private ScriptAnalyserData? TryGetApi() => ScriptAnalyserData.GetShared(LanguageId);
 
@@ -142,8 +157,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         }
 
         // Gather signatures for all functions and classes.
-        string initialNamespace = Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
-        DefinitionsTable = new(initialNamespace, GlobalSymbolProvider);
+        DefinitionsTable = new(ScriptFileName, GlobalSymbolProvider);
 
         SignatureAnalyser signatureAnalyser = new(RootNode, DefinitionsTable, Sense);
         try
@@ -286,13 +300,13 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
             // Recognize definition identifiers
             if (token.SenseDefinition is ScrFunctionSymbol)
             {
-                var defNamespace = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+                var defNamespace = GetEffectiveNamespace();
                 AddRef(new SymbolKey(SymbolKindSA.Function, defNamespace, token.Lexeme), token.Range);
                 continue;
             }
             if (token.SenseDefinition is ScrClassSymbol)
             {
-                var defNamespace = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+                var defNamespace = GetEffectiveNamespace();
                 AddRef(new SymbolKey(SymbolKindSA.Class, defNamespace, token.Lexeme), token.Range);
                 continue;
             }
@@ -314,7 +328,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
             }
 
             // Resolve to a namespace
-            string resolvedNamespace = qual ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+            string resolvedNamespace = qual ?? GetEffectiveNamespace();
             // Index as function reference for now (method support can be added later)
             AddRef(new SymbolKey(SymbolKindSA.Function, resolvedNamespace, name), token.Range);
         }
@@ -341,8 +355,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
             var bodyRange = GetStmtListRange(fn.Body);
             if (IsPositionInsideRange(position, bodyRange))
             {
-                string ns = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
-                return $"{ns}::{nameTok.Lexeme}";
+                return $"{GetEffectiveNamespace()}::{nameTok.Lexeme}";
             }
         }
         return null;
@@ -590,6 +603,31 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
     {
         await WaitUntilAnalysedAsync(cancellationToken);
 
+        // Check if position is on a namespace qualifier (followed by :: and identifier)
+        // If so, forward to the function token for hover resolution
+        Token? initialToken = Sense.Tokens.Get(position);
+        if (initialToken is not null && initialToken.Type == TokenType.Identifier)
+        {
+            Token? nextNonWsCheck = initialToken.Next;
+            while (nextNonWsCheck is not null && nextNonWsCheck.IsWhitespacey())
+            {
+                nextNonWsCheck = nextNonWsCheck.Next;
+            }
+            if (nextNonWsCheck is not null && nextNonWsCheck.Type == TokenType.ScopeResolution)
+            {
+                Token? afterScopeCheck = nextNonWsCheck.Next;
+                while (afterScopeCheck is not null && afterScopeCheck.IsWhitespacey())
+                {
+                    afterScopeCheck = afterScopeCheck.Next;
+                }
+                if (afterScopeCheck is not null && afterScopeCheck.Type == TokenType.Identifier)
+                {
+                    // Forward position to the function token for hover lookup
+                    position = afterScopeCheck.Range.Start;
+                }
+            }
+        }
+
         IHoverable? result = Sense.HoverLibrary.Get(position);
         if (result is not null)
         {
@@ -637,7 +675,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         }
 
         // Find function/method in current script tables
-        string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+        string ns = qualifier ?? GetEffectiveNamespace();
         string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
         string[]? parameters = DefinitionsTable?.GetFunctionParameters(ns, name);
 
@@ -655,7 +693,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
                     Contents = new MarkedStringsOrMarkupContent(new MarkupContent
                     {
                         Kind = MarkupKind.Markdown,
-                        Value = $"```gsc\n{proto}\n```"
+                        Value = $"{s_gscCodeBlockStart}{proto}{s_codeBlockEnd}"
                     })
                 };
             }
@@ -669,8 +707,8 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
 
         string formattedDoc = doc is not null ? NormalizeDocComment(doc) : string.Empty;
         string value = string.IsNullOrEmpty(formattedDoc)
-            ? $"```gsc\n{protoWithParams}\n```"
-            : $"```gsc\n{protoWithParams}\n```\n---\n{formattedDoc}";
+            ? $"{s_gscCodeBlockStart}{protoWithParams}{s_codeBlockEnd}"
+            : $"{s_gscCodeBlockStart}{protoWithParams}{s_codeBlockEnd}{s_markdownSeparator}{formattedDoc}";
 
         return new Hover
         {
@@ -699,21 +737,21 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
                     string[] names = paramSeq.Select(p => StripDefault(p.Name)).ToArray();
                     string sig = FormatSignature(name, names, activeParam, qualifier);
                     string desc = apiFn.Description ?? string.Empty;
-                    return string.IsNullOrEmpty(desc) ? sig : $"{sig}\n---\n{desc}";
+                    return string.IsNullOrEmpty(desc) ? sig : $"{sig}{s_markdownSeparator}{desc}";
                 }
             }
             catch { }
         }
 
         // Script-defined (local or imported)
-        string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+        string ns = qualifier ?? GetEffectiveNamespace();
         string[]? parms = DefinitionsTable?.GetFunctionParameters(ns, name);
         string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
         if (parms is not null)
         {
             string sig = FormatSignature(name, parms.Select(StripDefault).ToArray(), activeParam, qualifier);
             string formattedDoc = doc is not null ? NormalizeDocComment(doc) : string.Empty;
-            return string.IsNullOrEmpty(formattedDoc) ? sig : $"{sig}\n---\n{formattedDoc}";
+            return string.IsNullOrEmpty(formattedDoc) ? sig : $"{sig}{s_markdownSeparator}{formattedDoc}";
         }
 
         // Fallback: show empty params signature if symbol exists somewhere
@@ -730,10 +768,10 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         string nsPrefix = string.IsNullOrEmpty(qualifier) ? string.Empty : qualifier + "::";
         if (parameters.Count == 0)
         {
-            return $"```gsc\nfunction {nsPrefix}{name}()\n```";
+            return $"{s_gscCodeBlockStart}function {nsPrefix}{name}(){s_codeBlockEnd}";
         }
         var sb = new StringBuilder();
-        sb.Append("```gsc\nfunction ").Append(nsPrefix).Append(name).Append('(');
+        sb.Append(s_gscCodeBlockStart).Append("function ").Append(nsPrefix).Append(name).Append('(');
         for (int i = 0; i < parameters.Count; i++)
         {
             if (i > 0) sb.Append(", ");
@@ -747,7 +785,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
                 sb.Append(p);
             }
         }
-        sb.Append(")\n```");
+        sb.Append(')').Append(s_codeBlockEnd);
         return sb.ToString();
     }
 
@@ -961,6 +999,25 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         {
             nextNonWs = nextNonWs.Next;
         }
+        // If current token is namespace qualifier (followed by :: and identifier), forward to the function token
+        if (nextNonWs is not null && nextNonWs.Type == TokenType.ScopeResolution)
+        {
+            Token? afterScope = nextNonWs.Next;
+            while (afterScope is not null && afterScope.IsWhitespacey())
+            {
+                afterScope = afterScope.Next;
+            }
+            if (afterScope is not null && afterScope.Type == TokenType.Identifier)
+            {
+                token = afterScope;
+                // Re-evaluate nextNonWs for the new token
+                nextNonWs = token.Next;
+                while (nextNonWs is not null && nextNonWs.IsWhitespacey())
+                {
+                    nextNonWs = nextNonWs.Next;
+                }
+            }
+        }
         bool looksLikeCall = nextNonWs is not null && nextNonWs.Type == TokenType.OpenParen;
         bool isQualified = token.Previous is not null && token.Previous.Type == TokenType.ScopeResolution && token.Previous.Previous is not null && token.Previous.Previous.Type == TokenType.Identifier;
         bool hasDefinitionSymbol = token.SenseDefinition is ScrFunctionSymbol || token.SenseDefinition is ScrMethodSymbol || token.SenseDefinition is ScrClassSymbol;
@@ -984,7 +1041,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
                 var targetUri = new Uri(normalized); return new Location() { Uri = targetUri, Range = loc.Value.Range };
             }
         }
-        string ns = DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath);
+        string ns = GetEffectiveNamespace();
         var localLoc = DefinitionsTable?.GetFunctionLocation(ns, name)
                     ?? DefinitionsTable?.GetClassLocation(ns, name);
         if (localLoc is not null)
@@ -1242,7 +1299,7 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
         }
 
         // Then script-defined (local or imported) using DefinitionsTable
-        string ns = qualifier ?? (DefinitionsTable?.CurrentNamespace ?? Path.GetFileNameWithoutExtension(ScriptUri.ToUri().LocalPath));
+        string ns = qualifier ?? GetEffectiveNamespace();
         string[]? parms = DefinitionsTable?.GetFunctionParameters(ns, name) ?? DefinitionsTable?.GetFunctionParameters(qualifier ?? ns, name);
         string? doc = DefinitionsTable?.GetFunctionDoc(ns, name);
         if (parms is not null)

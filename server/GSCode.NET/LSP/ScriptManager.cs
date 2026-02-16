@@ -299,7 +299,7 @@ public class ScriptManager
                 Range: range,
                 Parameters: func.Overloads.FirstOrDefault()?.Parameters?.Select(p => p.Name).ToArray(),
                 Flags: func.Flags?.ToArray(),
-                Documentation: func.Description,
+                Documentation: func.DocComment ?? func.Description,
                 Symbol: func
             ));
         }

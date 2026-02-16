@@ -506,7 +506,9 @@ public class Script(DocumentUri ScriptUri, string languageId, ISymbolLocationPro
     {
 #if FLAG_PERFORMANCE_TRACKING
         var sw = System.Diagnostics.Stopwatch.StartNew();
+#endif
         string fileName = System.IO.Path.GetFileName(ScriptUri.ToUri().LocalPath);
+#if FLAG_PERFORMANCE_TRACKING
         Log.Debug("[PERF START] SPA-Analysis - File={File}", fileName);
 #endif
 

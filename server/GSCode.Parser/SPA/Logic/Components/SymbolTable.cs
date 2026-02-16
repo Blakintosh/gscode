@@ -397,6 +397,38 @@ internal class SymbolTable
     }
 
     /// <summary>
+    /// Checks if a member exists in the class hierarchy by walking up the inheritance chain.
+    /// </summary>
+    /// <param name="scrClass">The class to search</param>
+    /// <param name="memberName">The member name to find</param>
+    /// <returns>True if the member exists in the class or any base class, false otherwise</returns>
+    internal bool IsMemberInClassHierarchy(ScrClass scrClass, string memberName)
+    {
+        // Check the current class
+        bool hasMember = scrClass.Members.Any(m => m.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase));
+
+        if (hasMember)
+        {
+            return true;
+        }
+
+        // Check base class if it exists
+        if (!string.IsNullOrEmpty(scrClass.InheritsFrom))
+        {
+            // Look up the base class in the global symbol table
+            if (GlobalSymbolTable.TryGetValue(scrClass.InheritsFrom, out IExportedSymbol? baseSymbol)
+                && baseSymbol.Type == ExportedSymbolType.Class)
+            {
+                ScrClass baseClass = (ScrClass)baseSymbol;
+                // Recursively search the base class
+                return IsMemberInClassHierarchy(baseClass, memberName);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Tries to get the associated ScrData for a function symbol if it exists.
     /// </summary>
     /// <param name="symbol">The symbol to look for</param>

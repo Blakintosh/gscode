@@ -1682,7 +1682,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
 
             // Check if this is a class member being assigned
             bool isClassMember = symbolTable.CurrentClass is not null &&
-                symbolTable.CurrentClass.Members.Any(m => m.Name.Equals(symbolName, StringComparison.OrdinalIgnoreCase));
+                symbolTable.IsMemberInClassHierarchy(symbolTable.CurrentClass, symbolName);
 
             if (isClassMember)
             {
@@ -2322,7 +2322,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         }
 
         bool isClassMember = symbolTable.CurrentClass is not null &&
-            symbolTable.CurrentClass.Members.Any(m => m.Name.Equals(identifierNode.Identifier, StringComparison.OrdinalIgnoreCase));
+            symbolTable.IsMemberInClassHierarchy(symbolTable.CurrentClass, identifierNode.Identifier);
 
         // Emit sense tokens for the field.
         if (createSenseTokenForField)
@@ -2350,7 +2350,7 @@ internal ref partial struct ReachingDefinitionsAnalyser(List<Tuple<ScrFunction, 
         // Check if this identifier is a class member (before checking local variables)
         if (symbolTable.CurrentClass is not null)
         {
-            bool isClassMember = symbolTable.CurrentClass.Members.Any(m => m.Name.Equals(expr.Identifier, StringComparison.OrdinalIgnoreCase));
+            bool isClassMember = symbolTable.IsMemberInClassHierarchy(symbolTable.CurrentClass, expr.Identifier);
 
             if (isClassMember)
             {

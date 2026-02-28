@@ -6,6 +6,7 @@
 "use strict";
 
 import * as path from "path";
+import * as vscode from 'vscode';
 
 import { workspace, Disposable, ExtensionContext, window } from "vscode";
 import {
@@ -82,9 +83,12 @@ export function activate(context: ExtensionContext) {
   const gscWatcher = workspace.createFileSystemWatcher("**/*.gsc");
   const cscWatcher = workspace.createFileSystemWatcher("**/*.csc");
 
+  // Get configuration from workspace settings
+  const config = workspace.getConfiguration("gscode");
+  const enableWorkspaceIndexing = config.get<boolean>("enableWorkspaceIndexing", false);
+
   // Options to control the language client
   let clientOptions: LanguageClientOptions = {
-    // Register the server for plain text documents
     documentSelector: [
       {
         scheme: "file",
@@ -99,22 +103,21 @@ export function activate(context: ExtensionContext) {
     ],
     progressOnInitialization: true,
     synchronize: {
-      // Synchronize the setting section 'languageServerExample' to the server
-      configurationSection: "gsc",
       fileEvents: [gscWatcher, cscWatcher],
     },
-    middleware: {
-      didOpen: (document, next) => {
-        console.log("didOpen");
-        return next(document);
+    // Pass configuration via initializationOptions to avoid workspace/configuration request
+    initializationOptions: {
+      gscode: {
+        enableWorkspaceIndexing: enableWorkspaceIndexing,
       },
     },
+    outputChannel: window.createOutputChannel('GSCode Language Server'),
   };
 
   // Create the language client and start the client.
   client = new LanguageClient(
-    "gsc",
-    "GSCode.NET Language Server",
+    "gscode",
+    "GSCode Language Server",
     serverOptions,
     clientOptions
   );
@@ -123,6 +126,19 @@ export function activate(context: ExtensionContext) {
   // client can be deactivated on extension deactivation
   client.start();
 }
+
+vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('gscode.enableWorkspaceIndexing')) {
+        vscode.window.showInformationMessage(
+            'Changing gscode.enableWorkspaceIndexing requires reloading the GSCode language server.',
+            'Reload'
+        ).then(sel => {
+            if (sel === 'Reload') {
+                vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+        });
+    }
+});
 
 export function deactivate(): Thenable<void> | undefined {
   if (!client) {

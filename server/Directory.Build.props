@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <!-- Centralized Preprocessor Directives -->
+
+    <DefineConstants>$(DefineConstants);FLAG_MEMORY_DEBUG</DefineConstants>
+    <DefineConstants>$(DefineConstants);FLAG_PERFORMANCE_TRACKING</DefineConstants>
+  </PropertyGroup>
+</Project>

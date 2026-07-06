@@ -284,12 +284,23 @@ public sealed class DocumentTokensLibrary
     /// <param name="startNode">The first linked token (SOF) in the chain</param>
     internal void AddRange(LinkedToken startNode)
     {
-        // Skip SOF and EOF
+        // Skip SOF and EOF, and tokens spliced in wholesale from an #insert'd file. Those tokens
+        // keep the inserted file's own line/char coordinates (needed so macro go-to-definition can
+        // jump to the real #define line), which don't correspond to any real position in *this*
+        // document and would otherwise break the ascending-position order GetIndex's binary search
+        // assumes, sending position-based lookups (completions, hover) after the #insert to the
+        // wrong token. The AST parser and SignatureAnalyser walk the raw LinkedToken chain directly
+        // (see Script.cs), not this flat list, so excluding these tokens here doesn't affect parsing
+        // or signature analysis of #inserted functions/macros - only IDE position lookups, which
+        // can never legitimately land on content the host document doesn't actually display.
         LinkedToken? currentNode = startNode.Next;
 
         while(currentNode is not null && currentNode.Type != TokenType.Eof)
         {
-            TokenList.Add(currentNode.Token);
+            if (currentNode.Token.InsertSourcePath is null)
+            {
+                TokenList.Add(currentNode.Token);
+            }
             currentNode = currentNode.Next;
         }
         TokenList.TrimExcess();

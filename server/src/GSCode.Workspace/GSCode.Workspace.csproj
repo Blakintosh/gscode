@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Workspace layer: script database, path/mod-overlay resolution, indexing, cache,
+       and the bundled game data. LSP-free — GSCode.Server is the only protocol host. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\GSCode.Core\GSCode.Core.csproj" />
+    <ProjectReference Include="..\GSCode.Parser\GSCode.Parser.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Api\t7_api_gsc.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Api\t7_api_csc.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Api\t7_stock_scripts.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

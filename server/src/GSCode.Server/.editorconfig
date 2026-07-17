@@ -1,0 +1,5 @@
+# GSCode.Server opts out of the ConfigureAwait requirement: OmniSharp hosts no
+# SynchronizationContext, so handler code stays uncluttered (see the plan's async rules).
+
+[*.cs]
+dotnet_diagnostic.CA2007.severity = none

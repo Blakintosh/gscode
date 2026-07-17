@@ -1,16 +1,21 @@
 <Project>
 
-  <!-- Debug Configuration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
-  <!-- add any debug-specific properties or constants here -->
+  <!-- Shared build settings for every project in the v2 solution. LangVersion is pinned
+       (never 'latest') so builds are reproducible across SDK versions. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
 
-  <!-- Uncomment to enable performance tracking -->
-  <!--
-  <PropertyGroup>
-    <DefineConstants>$(DefineConstants);FLAG_PERFORMANCE_TRACKING</DefineConstants>
-    <DefineConstants>$(DefineConstants);FLAG_MEMORY_DEBUG</DefineConstants>
+  <!-- Opt-in perf instrumentation: build with -p:GscodeInstrumentation=true to compile in
+       the [Conditional("GSCODE_INSTRUMENTATION")] PerfTracker calls. Off in normal builds. -->
+  <PropertyGroup Condition="'$(GscodeInstrumentation)' == 'true'">
+    <DefineConstants>$(DefineConstants);GSCODE_INSTRUMENTATION</DefineConstants>
   </PropertyGroup>
-  -->
 
 </Project>

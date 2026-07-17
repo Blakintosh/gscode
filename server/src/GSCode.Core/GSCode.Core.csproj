@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Neutral foundation types shared by every layer. This project has ZERO dependencies:
+       no LSP types, no I/O, nothing game-install-specific. -->
+
+</Project>

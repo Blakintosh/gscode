@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The LSP host. This is the ONLY project allowed to reference OmniSharp packages;
+       all protocol/domain type mapping happens in Mapping/LspMapping. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommandLineParser" Version="2.9.1" />
+    <PackageReference Include="OmniSharp.Extensions.LanguageProtocol" Version="0.19.9" />
+    <PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.19.9" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GSCode.Workspace\GSCode.Workspace.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,54 @@
+using GSCode.Core.Paths;
+using GSCode.Workspace.Resolution;
+
+namespace GSCode.Workspace.Tests.Resolution;
+
+/// <summary>An in-memory file tree for resolver tests: add files, directories are implied.</summary>
+public sealed class FakeFileSystem : IFileSystem
+{
+    private readonly Dictionary<string, string> _files = new(StringComparer.Ordinal);
+
+    public FakeFileSystem AddFile(string absolutePath, string content = "")
+    {
+        _files[PathUtil.NormalizeAbsolute(absolutePath)] = content;
+        return this;
+    }
+
+    public bool FileExists(string absolutePath)
+    {
+        return _files.ContainsKey(PathUtil.NormalizeAbsolute(absolutePath));
+    }
+
+    public bool DirectoryExists(string absolutePath)
+    {
+        string directory = PathUtil.NormalizeAbsolute(absolutePath);
+        foreach ( string file in _files.Keys )
+        {
+            if ( PathUtil.IsUnder(file, directory) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public string ReadAllText(string absolutePath)
+    {
+        return _files[PathUtil.NormalizeAbsolute(absolutePath)];
+    }
+
+    public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
+    {
+        string normalizedDirectory = PathUtil.NormalizeAbsolute(directory);
+        string extension = searchPattern.TrimStart('*');
+
+        foreach ( string file in _files.Keys )
+        {
+            if ( PathUtil.IsUnder(file, normalizedDirectory) && file.EndsWith(extension, StringComparison.Ordinal) )
+            {
+                yield return file;
+            }
+        }
+    }
+}

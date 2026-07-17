@@ -4,7 +4,73 @@ The pure per-file analysis pipeline: lexer → preprocessor → parser → extra
 A deterministic function library — no I/O except through injected providers, and no
 LSP types anywhere.
 
-*(Lexing lands in P1 (below); preprocessor in P2, parser in P3, extraction in P4.)*
+*(Lexing = P1, Preprocessing = P2 (both below); parser lands in P3, extraction in P4.)*
+
+## Preprocessing/PToken.cs
+
+- `readonly record struct Provenance(string? SourceFile, TextRange? RootSite, TextRange? DefinitionSite)`
+  — where a preprocessed token really came from. All-null (`Provenance.Root`) = the root
+  file as written. `SourceFile` = the file holding the token's true location (a .gsh for
+  inserted tokens). `RootSite` = the root-file range to anchor diagnostics to (the
+  #insert directive or macro invocation). `DefinitionSite` = the #define name range for
+  macro-expanded tokens.
+- `readonly record struct PToken(TokenKind Kind, string Text, TextRange Range, Provenance Provenance)`
+  — one parse-stream token with materialized (interned) text, so the parser never juggles
+  multiple SourceTexts. `RootRange` = RootSite ?? Range. Trivia never reaches this stream.
+
+## Preprocessing/MacroTable.cs
+
+- `sealed record MacroDefinition(Name, SourceFile, NameRange, Parameters, Body, Documentation)`
+  — one #define: exact-case name, defining file (null = root), name-token range
+  (go-to-def target), null Parameters for object-like, provenance-stamped body tokens,
+  and any trailing same-line comment as documentation. `IsFunctionLike` derived.
+- `sealed class MacroTable` — CASE-SENSITIVE (ordinal) name → definition map; macro
+  names are the one case-sensitive identifier space. Redefinition silently replaces.
+
+## Preprocessing/IInsertProvider.cs
+
+- `sealed record InsertedFile(Path, Text, Tokens)` — a resolved, lexed insert target.
+- `interface IInsertProvider` — supplies #insert targets; Workspace implements it over
+  PathResolver + a lexed-GSH cache, keeping this project I/O-free.
+- `sealed class NullInsertProvider` — always misses (isolated parses, tests).
+
+## Preprocessing/PreprocessResult.cs
+
+- `sealed record InsertEdge(RawPath, ResolvedPath, DirectiveRange, ContainingFile)` —
+  one #insert dependency edge (ResolvedPath null on failure).
+- `sealed record MacroInvocation(Name, SourceFile, Range, Definition)` — one macro use
+  site; powers references/hover/signature help for macros.
+- `sealed record PreprocessResult(Tokens, Macros, MacroInvocations, Inserts, DisabledRegions, Diagnostics)`
+  — the full output: trivia-free EndOfFile-terminated parse stream, all macros, use
+  sites, insert edges, root-file ranges disabled by inactive #if branches, diagnostics.
+
+## Preprocessing/ConditionalEvaluator.cs
+
+- `static class ConditionalEvaluator` — evaluates #if/#elif conditions over expanded
+  tokens with the engine's exact grammar (verified against v1): `||` and `&&` chains,
+  SINGLE ==/!= and relational applications, parens, INTEGER literals only — no
+  defined(), no arithmetic. Unparseable → null → branch inactive; trailing junk ignored.
+
+## Preprocessing/Preprocessor.cs
+
+- `sealed class Preprocessor` — `static Process(rootFilePath, tokens, text, insertProvider, names)`.
+  One linear pass per file; inserts recurse (depth cap 16 + active-path cycle set).
+  - `#define`: keyword-or-identifier names; parameter list only when `(` is ADJACENT to
+    the name; `\` continuation must immediately precede the line break (else diagnostic,
+    backslash excluded); trailing comment captured as documentation.
+  - `#insert`: path text sliced verbatim until `;` (line break → missing-semicolon
+    diagnostic but the insert still proceeds); rooted/drive/`..` paths rejected; spliced
+    tokens keep their own gsh-local ranges with SourceFile + RootSite provenance;
+    diagnostics from inside inserts anchor at the root #insert site.
+  - `#if/#elif/#else/#endif`: condition line macro-expanded then evaluated; first true
+    branch processes, the rest record DisabledRegions (root file only, grey-out);
+    inactive branches register nothing (defines/inserts inside them don't exist).
+  - Macro expansion: exact-case lookup; keywords are candidates too (so `#define TRUE 1`
+    works); function-like without `(` → diagnostic, no expansion; blank arguments expand
+    to nothing; nested/argument expansion with a self-recursion guard; `__LINE__`
+    (1-based), `__FILE__` (real path string), `FASTFILE` (`__fastfile__` placeholder).
+  - Passes `#using`/`#namespace`/`#precache`/animtree directives through — those belong
+    to the parser.
 
 ## Lexing/TokenKind.cs
 

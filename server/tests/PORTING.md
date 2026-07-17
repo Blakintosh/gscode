@@ -29,16 +29,16 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | GlobalSymbolRegistryTests | ☐ P5 | Successor concept: LanguageStore + ReferenceIndex |
 | ScriptManagerNamespaceScopingTests | ☐ P5 | |
 | ScriptDependenciesReadyTests | ☐ P5 | |
-| ScriptInsertPathsTests | ☐ P2 | Insert resolution scenarios |
+| ScriptInsertPathsTests | ✔ P2 | Insert path collection/validation/edge scenarios in `Preprocessing/InsertTests` |
 | CompletionAfterInsertTests | ☐ P8 | |
 | ScriptReferencesSelectionEndTests | ☐ P7 | |
 | ScriptHoverQualifiedFunctionTests | ☐ P7 | |
 | ScriptDefinitionQualifiedIdentifierTests | ☐ P7 | |
 | MacroCallSiteModeTests | ☐ P7 | Macro expansion preview scenarios |
-| MacroGoToDefinitionWrongTargetTests | ☐ P2/P7 | The canonical provenance regression |
+| MacroGoToDefinitionWrongTargetTests | ✔ P2 | The canonical provenance regression: `InsertTests.Insert_SplicesTokens_WithGshProvenance` + `Insert_MacroFromGsh_DefinitionSitePointsIntoGsh` assert gsh-local ranges survive splicing (P7 wires it to go-to-def) |
 | DocumentHighlightCasingTests | ☐ P7 | |
 | StockScriptsTests | ☐ P5 | Stock list powers rawFileWarningMode=stock |
-| UsingDirectiveHelperTests | ☐ P2 | Resolver path scenarios |
+| UsingDirectiveHelperTests | ✔ P2 | Path resolution scenarios re-expressed in `Resolution/PathResolverTests` (overlay, probe order, slash styles, illegal paths) |
 | ReferenceIndexReconciliationTests | ☐ P5 | |
 | ReferencesHandlerTests | ☐ P7 | |
 | LexerTests (v1 TestHelper trivia filtering) | ✔ P1 | Superseded by trivia-as-tokens + `LexTestHelper.SignificantTokens` |

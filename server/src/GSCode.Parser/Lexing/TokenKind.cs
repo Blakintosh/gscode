@@ -30,7 +30,8 @@ public enum TokenKind
     HashString,
     AnimReference,
 
-    // Keywords (matched case-insensitively)
+    // Keywords (matched case-insensitively). ORDERING CONTRACT: this block must stay
+    // contiguous from Class through ProfileStop — TokenFacts.IsKeyword range-checks it.
     Class,
     Function,
     Var,

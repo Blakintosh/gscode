@@ -72,5 +72,5 @@ dotnet_diagnostic.CA2007.severity = error
 
 # --- Misc quality rules ---
 dotnet_style_readonly_field = true:error
-dotnet_style_require_accessibility_modifiers = always:error
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:error
 csharp_style_prefer_primary_constructors = false:suggestion

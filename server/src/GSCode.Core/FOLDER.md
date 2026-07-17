@@ -2,6 +2,26 @@
 
 Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install paths.
 
+## NameTable.cs
+
+- `sealed class NameTable` — the shared string-interning pool (NOT string.Intern, which
+  is uncollectable). `NameTable.Shared` is the process-wide instance; tests make private ones.
+  - `Intern(span)` — exact-case interning (display names, literal content). Span-based
+    lookup, so checking an existing entry allocates nothing.
+  - `InternLower(span)` — lowercase-canonical interning: the form every case-insensitive
+    lookup key (identifiers, namespaces, paths) uses, killing ignore-case comparers
+    downstream. Already-lowercase input skips the copy.
+
+## Paths/PathUtil.cs
+
+- `static class PathUtil` — THE path normalizer; nothing else calls Path.GetFullPath.
+  - `NormalizeAbsolute(path)` — full path, no trailing separator, lowercase, interned.
+    This is the ScriptDatabase key format.
+  - `NormalizeScriptPath(path)` — game-relative form: backslash separators, trimmed,
+    lowercase, interned.
+  - `IsUnder(path, directory)` — prefix containment with a separator-boundary check
+    (`c:\rootother` is not under `c:\root`).
+
 ## Text/Position.cs
 
 - `readonly record struct Position(int Line, int Character)` — zero-based document
@@ -43,7 +63,7 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 ## Diagnostics/GscDiagnosticCode.cs
 
 - `enum GscDiagnosticCode` — one stable code per reportable condition, grouped by
-  pipeline stage (lexing = 1xxx). Grows phase by phase.
+  pipeline stage (lexing = 1xxx, preprocessing = 2xxx). Grows phase by phase.
 
 ## Diagnostics/DiagnosticMessages.cs
 

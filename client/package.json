@@ -3,7 +3,7 @@
 	"displayName": "GSCode",
 	"description": "IntelliSense for Call of Duty: Black Ops III's GSC & CSC languages.",
 	"icon": "icons/gscode.png",
-	"version": "1.5.0",
+	"version": "2.0.0",
 	"publisher": "blakintosh",
 	"repository": {
 		"type": "git",
@@ -13,7 +13,7 @@
 		"vscode": "^1.85.0"
 	},
 	"categories": [
-		"Other"
+		"Programming Languages"
 	],
 	"activationEvents": [
 		"workspaceContains:**/*.gsc",
@@ -90,7 +90,6 @@
 				}
 			}
 		],
-		"commands": [],
 		"grammars": [
 			{
 				"language": "gsc",
@@ -108,6 +107,12 @@
 				"path": "./syntaxes/gsc.tmGrammar.json"
 			}
 		],
+		"commands": [
+			{
+				"command": "gscode.showOutput",
+				"title": "GSCode: Show Server Output"
+			}
+		],
 		"configuration": {
 			"title": "GSCode",
 			"properties": {
@@ -116,73 +121,30 @@
 					"default": "off",
 					"enum": [
 						"off",
-						"messages",
+						"error",
+						"warning",
+						"info",
 						"verbose"
 					],
-					"description": "Controls the verbosity of logging from the GSCode language server. Set to 'off' to disable logging, 'messages' for basic information, or 'verbose' for detailed debug output.",
-					"scope": "window"
-				},
-				"gscode.customRawPath": {
-					"type": "string",
-					"default": null,
-					"description": "Custom path to the 'raw' folder for script path completions. Overrides automatic detection via TA_GAME_PATH.",
-					"scope": "window"
-				},
-				"gscode.allowRawFolderWrites": {
-					"type": "boolean",
-					"default": false,
-					"description": "Allow saving/modifying files in raw folders (default or custom). When disabled, you'll be warned when editing files in protected raw folders to prevent accidental modifications to vanilla game files.",
-					"deprecationMessage": "Use 'gscode.rawFileWarningMode' instead. Setting this to true behaves like rawFileWarningMode: 'off'.",
-					"scope": "window"
-				},
-				"gscode.rawFileWarningMode": {
-					"type": "string",
-					"default": "stock",
-					"enum": [
-						"off",
-						"stock",
-						"all"
-					],
 					"enumDescriptions": [
-						"Never warn when saving files inside a raw folder.",
-						"Warn only when saving stock scripts that shipped with the mod tools. Your own scripts kept in share/raw stay quiet.",
-						"Warn when saving any file inside a protected raw folder."
+						"No server logging.",
+						"Errors only.",
+						"Warnings and errors.",
+						"General progress information (indexing, cache, lifecycle).",
+						"Detailed debug output, including per-request logging."
 					],
-					"description": "Controls when a warning is shown for saving files inside a protected raw folder (share/raw or the custom raw path).",
+					"description": "Verbosity of the GSCode language server's log output (the 'GSCode Server' channel). Applies live, no restart needed.",
 					"scope": "window"
 				},
-				"gscode.indexGameScripts": {
-					"type": "boolean",
-					"default": true,
-					"description": "Index every script in the workspace and the game's shared raw folder at startup (signatures only, no diagnostics). Powers namespace autocompletion, cross-script function completion with automatic #using insertion, and #using quick fixes for all scripts available to the map.",
-					"scope": "window"
-				},
-				"gscode.workspaceIndexingMode": {
+				"gscode.trace.server": {
 					"type": "string",
 					"default": "off",
 					"enum": [
 						"off",
-						"partial",
-						"full"
+						"messages",
+						"verbose"
 					],
-					"enumDescriptions": [
-						"Workspace indexing disabled. Only open files are analyzed.",
-						"Fast indexing with signature analysis only. Provides symbol navigation and completions without diagnostics for unopened files. Recommended for large workspaces.",
-						"Complete semantic analysis with diagnostics. Slower but provides full language features including diagnostics for all indexed files."
-					],
-					"description": "Controls workspace indexing. 'off' disables indexing, 'partial' performs fast signature analysis (recommended), 'full' runs complete semantic analysis with diagnostics.",
-					"scope": "window"
-				},
-				"gscode.warnLanguageMismatch": {
-					"type": "boolean",
-					"default": true,
-					"description": "Warn when a .csc file is opened as GSC or a .gsc file is opened as CSC.",
-					"scope": "window"
-				},
-				"gscode.enableWorkspaceCache": {
-					"type": "boolean",
-					"default": false,
-					"description": "Enable the persistent workspace parse cache. When enabled, previously indexed files are restored from cache on startup, significantly reducing indexing time. Disable if you experience stale analysis results.",
+					"description": "Trace the LSP protocol traffic between VSCode and the GSCode language server.",
 					"scope": "window"
 				}
 			}
@@ -208,15 +170,12 @@
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
 		"watch": "tsc -watch -p ./",
-		"pretest": "npm run compile && npm run lint",
-		"lint": "eslint src",
-		"test": "node ./out/test/runTest.js"
+		"lint": "eslint src"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.15.0",
 		"@types/node": "^20.17.0",
 		"@types/vscode": "^1.85.0",
-		"@vscode/test-electron": "^2.3.3",
 		"eslint": "^9.15.0",
 		"typescript": "^5.6.3",
 		"typescript-eslint": "^8.15.0"

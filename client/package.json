@@ -146,6 +146,46 @@
 					],
 					"description": "Trace the LSP protocol traffic between VSCode and the GSCode language server.",
 					"scope": "window"
+				},
+				"gscode.raw.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Master switch for reading the game's raw files. When disabled, no share/raw or mods folders are consulted at all (regardless of gscode.rawPath or TA_TOOLS_PATH) and resolution becomes workspace-only.",
+					"scope": "window"
+				},
+				"gscode.rawPath": {
+					"type": "string",
+					"default": "",
+					"description": "Overrides the game raw folder (normally %TA_TOOLS_PATH%\\share\\raw). Ignored when gscode.raw.enabled is false.",
+					"scope": "window"
+				},
+				"gscode.modsPath": {
+					"type": "string",
+					"default": "",
+					"description": "Overrides the mods folder (normally %TA_TOOLS_PATH%\\mods).",
+					"scope": "window"
+				},
+				"gscode.rawFileWarningMode": {
+					"type": "string",
+					"default": "stock",
+					"enum": [
+						"off",
+						"stock",
+						"all"
+					],
+					"enumDescriptions": [
+						"Never warn when saving files inside a raw folder.",
+						"Warn only when saving stock scripts that shipped with the mod tools.",
+						"Warn when saving any file inside a protected raw folder."
+					],
+					"description": "When to warn about saving files inside the protected raw folder.",
+					"scope": "window"
+				},
+				"gscode.outline.showAssignments": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show variable and field assignments as children of their function in the document outline.",
+					"scope": "window"
 				}
 			}
 		},

@@ -103,6 +103,15 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 - Full-document (and delta/range via the base class) semantic highlighting; the legend
   order mirrors `SemanticTokenType`. Pushes `SemanticTokenBuilder.Build` output in order.
 
+## Handlers/CompletionHandler.cs
+
+- Maps `CompletionEngine` entries to LSP items (kind, snippet insert text). Registers the
+  trigger characters `. : # & % \ /` so completion re-fires where it matters.
+
+## Handlers/SignatureHelpHandler.cs
+
+- Maps `SignatureEngine` results to LSP signature help; triggers on `(` and `,` (retrigger `,`).
+
 ## Program.cs
 
 Top-level entry point. Configures Serilog to STDERR (stdout must stay clean for the

@@ -30,7 +30,7 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | ScriptManagerNamespaceScopingTests | ☐ P5 | |
 | ScriptDependenciesReadyTests | ☐ P5 | |
 | ScriptInsertPathsTests | ✔ P2 | Insert path collection/validation/edge scenarios in `Preprocessing/InsertTests` |
-| CompletionAfterInsertTests | ☐ P8 | |
+| CompletionAfterInsertTests | ✔ P8 | Context-aware completion (ns::, member, precache, statement/top-level scope) in `Completion/CompletionEngineTests`; macros from inserts resolve via the preprocessor |
 | ScriptReferencesSelectionEndTests | ☐ P7 | |
 | ScriptHoverQualifiedFunctionTests | ✔ P7 | Qualified-function hover via `Api/ApiLoaderTests` (renderer) + the nav smoke; deeper cases as more hover tests land |
 | ScriptDefinitionQualifiedIdentifierTests | ✔ P7 | Cross-file qualified definition verified by the P7 navigation smoke |

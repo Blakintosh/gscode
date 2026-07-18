@@ -38,6 +38,28 @@ resolution, background indexing, the SQLite cache, and the bundled game data. LS
 
 ## Database/DatabaseQueries.cs
 
+## Completion/CompletionEntry.cs
+
+- `CompletionKind` + `CompletionEntry` — the LSP-free completion suggestion model.
+
+## Completion/GscKeywords.cs
+
+- `static GscKeywords` — the statement-scope and top-level keyword lists offered in completion.
+
+## Completion/CompletionEngine.cs
+
+- `sealed class CompletionEngine.Complete(result, contextId, position)` — context-aware
+  completion driven by the tokens around the cursor: `#precache(` asset types,
+  `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.`
+  fields (+ `.size`), and statement/top-level scope (keywords, file macros, namespace
+  functions, visible classes, namespace-less builtins as call snippets).
+
+## Completion/SignatureEngine.cs
+
+- `SignatureParameter`/`SignatureResult` + `SignatureEngine.Resolve(...)` — scans back from
+  the cursor to the enclosing '(', identifies the callee (script function / builtin) and
+  the active parameter (top-level comma count), and renders the signature + parameter docs.
+
 ## Database/SymbolAtPosition.cs
 
 - `HitKind` + `PositionHit` + `static SymbolAtPosition.Resolve` — the one resolver behind

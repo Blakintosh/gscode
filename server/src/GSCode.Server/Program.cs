@@ -6,6 +6,7 @@ using GSCode.Server.Logging;
 using GSCode.Server.Transport;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Cache;
+using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Indexing;
@@ -82,6 +83,13 @@ LanguageServer server = await LanguageServer.From(options =>
                 provider.GetRequiredService<DocumentStore>(),
                 provider.GetRequiredService<ScriptDatabase>(),
                 provider.GetRequiredService<ResolverHolder>()));
+            services.AddSingleton(provider => new CompletionEngine(
+                provider.GetRequiredService<ScriptDatabase>(),
+                provider.GetRequiredService<BuiltinApiSet>(),
+                provider.GetRequiredService<ObjectFields>()));
+            services.AddSingleton(provider => new SignatureEngine(
+                provider.GetRequiredService<ScriptDatabase>(),
+                provider.GetRequiredService<BuiltinApiSet>()));
 
             services.AddSingleton(provider => new WorkspaceIndexer(
                 provider.GetRequiredService<ScriptDatabase>(),
@@ -105,6 +113,8 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<DocumentHighlightHandler>()
         .AddHandler<DocumentLinkHandler>()
         .AddHandler<SemanticTokensHandler>()
+        .AddHandler<CompletionHandler>()
+        .AddHandler<SignatureHelpHandler>()
         .AddHandler<ConfigurationHandler>()
         .OnInitialize((languageServer, request, cancellationToken) =>
         {

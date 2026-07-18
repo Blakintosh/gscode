@@ -101,6 +101,62 @@ public static class DatabaseQueries
         return kept.ToImmutable();
     }
 
+    /// <summary>Every visible function in a namespace (for completion), deduplicated by name.</summary>
+    public static ImmutableArray<FunctionSymbol> FunctionsInNamespace(
+        LanguageStore store,
+        string askingContextId,
+        string askingPath,
+        string namespaceName)
+    {
+        Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
+
+        foreach ( ScriptRecord record in store.AllRecords )
+        {
+            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                if ( function.Namespace != namespaceName )
+                {
+                    continue;
+                }
+
+                if ( function.IsPrivate && record.Path != askingPath )
+                {
+                    continue;
+                }
+
+                byName.TryAdd(function.KeyName, function);
+            }
+        }
+
+        return [.. byName.Values];
+    }
+
+    /// <summary>Every visible class (for completion), deduplicated by name.</summary>
+    public static ImmutableArray<ClassSymbol> AllVisibleClasses(LanguageStore store, string askingContextId)
+    {
+        Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
+
+        foreach ( ScriptRecord record in store.AllRecords )
+        {
+            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            foreach ( ClassSymbol classSymbol in record.Classes )
+            {
+                byName.TryAdd(classSymbol.KeyName, classSymbol);
+            }
+        }
+
+        return [.. byName.Values];
+    }
+
     /// <summary>Every visible class matching the name (namespace optional).</summary>
     public static ImmutableArray<ResolvedClass> LookupClasses(
         LanguageStore store,

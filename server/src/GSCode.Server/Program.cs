@@ -4,7 +4,9 @@ using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Server.Logging;
 using GSCode.Server.Transport;
+using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
+using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json.Linq;
@@ -67,6 +69,8 @@ LanguageServer server = await LanguageServer.From(options =>
 
             services.AddSingleton(provider =>
                 new DiagnosticsPublisher(provider.GetRequiredService<ILanguageServerFacade>()));
+
+            services.AddSingleton<ScriptDatabase>();
         })
         .AddHandler<TextSyncHandler>()
         .AddHandler<DocumentSymbolHandler>()
@@ -121,6 +125,40 @@ LanguageServer server = await LanguageServer.From(options =>
         .OnInitialized((languageServer, request, response, cancellationToken) =>
         {
             Log.Information("GSCode v2 server initialized");
+            return Task.CompletedTask;
+        })
+        .OnStarted((languageServer, cancellationToken) =>
+        {
+            // Kick off cold-start indexing only once the server is fully started — the
+            // client connection is ready to receive gscode/indexing* notifications now
+            // (sending them during OnInitialized drops them). Editor traffic is unaffected.
+            IndexingMode mode = settings.WorkspaceIndexingMode.ToLowerInvariant() switch
+            {
+                "off" => IndexingMode.Off,
+                "full" => IndexingMode.Full,
+                _ => IndexingMode.Partial,
+            };
+
+            if ( mode != IndexingMode.Off )
+            {
+                ScriptDatabase database = languageServer.Services.GetRequiredService<ScriptDatabase>();
+                WorkspaceIndexer indexer = new(database, resolverHolder.Current, fileSystem, NameTable.Shared);
+                IndexProgressNotifier notifier = new(languageServer.Services.GetRequiredService<ILanguageServerFacade>());
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        int indexed = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
+                        Log.Information("Workspace indexing complete: {Count} files", indexed);
+                    }
+                    catch ( Exception exception )
+                    {
+                        Log.Error(exception, "Workspace indexing failed");
+                    }
+                }, CancellationToken.None);
+            }
+
             return Task.CompletedTask;
         });
 });

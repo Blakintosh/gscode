@@ -10,6 +10,7 @@ namespace GSCode.Server.Configuration;
 public sealed class ServerSettings
 {
     public string ServerLogLevel { get; set; } = "off";
+    public string WorkspaceIndexingMode { get; set; } = "partial";
     public bool RawEnabled { get; set; } = true;
     public string RawPathOverride { get; set; } = "";
     public string ModsPathOverride { get; set; } = "";
@@ -26,6 +27,7 @@ public sealed class ServerSettings
         }
 
         ServerLogLevel = section.Value<string>("serverLogLevel") ?? ServerLogLevel;
+        WorkspaceIndexingMode = section.Value<string>("workspaceIndexingMode") ?? WorkspaceIndexingMode;
         RawEnabled = section.Value<bool?>("raw.enabled") ?? section["raw"]?.Value<bool?>("enabled") ?? RawEnabled;
         RawPathOverride = section.Value<string>("rawPath") ?? RawPathOverride;
         ModsPathOverride = section.Value<string>("modsPath") ?? ModsPathOverride;

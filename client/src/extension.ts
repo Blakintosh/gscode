@@ -23,8 +23,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
+    registerIndexingStatusBar(context, created);
+
     await created.start();
     log.info("GSCode language client started");
+}
+
+/** The live indexing counter: a spinner whose number races upward as files complete. */
+function registerIndexingStatusBar(context: vscode.ExtensionContext, languageClient: LanguageClient): void {
+    const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+    statusBar.name = "GSCode Indexing";
+    statusBar.command = "gscode.showOutput";
+    context.subscriptions.push(statusBar);
+
+    const formatCount = (value: number) => value.toLocaleString();
+
+    languageClient.onNotification("gscode/indexingStarted", (params: { totalFiles: number }) => {
+        statusBar.text = `$(sync~spin) GSCode: indexing 0/${formatCount(params.totalFiles)}`;
+        statusBar.tooltip = `Indexing ${formatCount(params.totalFiles)} script files…`;
+        statusBar.show();
+    });
+
+    languageClient.onNotification("gscode/indexingProgress", (params: { filesIndexed: number; totalFiles: number }) => {
+        statusBar.text = `$(sync~spin) GSCode: indexing ${formatCount(params.filesIndexed)}/${formatCount(params.totalFiles)}`;
+    });
+
+    languageClient.onNotification(
+        "gscode/indexingComplete",
+        (params: { filesIndexed: number; totalFiles: number; elapsedMilliseconds: number }) => {
+            const seconds = (params.elapsedMilliseconds / 1000).toFixed(1);
+            statusBar.text = "$(check) GSCode: ready";
+            statusBar.tooltip = `Indexed ${formatCount(params.filesIndexed)} files in ${seconds}s`;
+        },
+    );
 }
 
 export function deactivate(): Thenable<void> | undefined {

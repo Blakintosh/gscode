@@ -87,6 +87,48 @@ public sealed class PathResolver
     }
 
     /// <summary>
+    /// The script-relative identity of a file under its context's root (the overlay
+    /// shadowing key), or "" when it sits outside every root.
+    /// </summary>
+    public string GetScriptRelativePath(string normalizedAbsolutePath, ResolutionContext context)
+    {
+        switch ( context.Kind )
+        {
+            case ResolutionContextKind.Raw:
+            {
+                if ( _config.RawRoot is not null && PathUtil.IsUnder(normalizedAbsolutePath, _config.RawRoot) )
+                {
+                    return normalizedAbsolutePath[(_config.RawRoot.Length + 1)..];
+                }
+
+                return "";
+            }
+            case ResolutionContextKind.Mod:
+            {
+                if ( _config.ModsRoot is not null && context.ModName is not null )
+                {
+                    string modRoot = Path.Combine(_config.ModsRoot, context.ModName);
+                    if ( PathUtil.IsUnder(normalizedAbsolutePath, modRoot) )
+                    {
+                        return normalizedAbsolutePath[(modRoot.Length + 1)..];
+                    }
+                }
+
+                return "";
+            }
+            default:
+            {
+                if ( context.BaseFolder is not null && PathUtil.IsUnder(normalizedAbsolutePath, context.BaseFolder) )
+                {
+                    return normalizedAbsolutePath[(context.BaseFolder.Length + 1)..];
+                }
+
+                return "";
+            }
+        }
+    }
+
+    /// <summary>
     /// Every script and header file the cold-start indexer should visit: raw, each mod,
     /// and all workspace folders (deduplicated by normalized path).
     /// </summary>

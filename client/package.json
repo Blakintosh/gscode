@@ -147,6 +147,22 @@
 					"description": "Trace the LSP protocol traffic between VSCode and the GSCode language server.",
 					"scope": "window"
 				},
+				"gscode.workspaceIndexingMode": {
+					"type": "string",
+					"default": "partial",
+					"enum": [
+						"off",
+						"partial",
+						"full"
+					],
+					"enumDescriptions": [
+						"No background indexing; only open files are analyzed.",
+						"Fast signature pass: symbols, navigation, and references work across the workspace.",
+						"Partial plus full semantic analysis and diagnostics across the whole index."
+					],
+					"description": "How much of the workspace (and game raw/mods folders) to index at startup.",
+					"scope": "window"
+				},
 				"gscode.raw.enabled": {
 					"type": "boolean",
 					"default": true,

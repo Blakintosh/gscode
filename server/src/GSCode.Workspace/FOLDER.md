@@ -3,7 +3,55 @@
 Workspace layer: the script database (separate GSC/CSC stores), path/mod-overlay
 resolution, background indexing, the SQLite cache, and the bundled game data. LSP-free.
 
-*(Resolution = P2, Documents = P4 (below); database/indexing land P5, cache P6.)*
+*(Resolution = P2, Documents = P4, Database/Indexing = P5 (all below); cache lands P6.)*
+
+## Database/ScriptRecord.cs
+
+- `MacroRecord(Name, IsFunctionLike, Parameters, NameRange, Documentation)` — a macro
+  surfaced from a file (exact-case name; bodies stay parser-side).
+- `DependencyEdge(RawPath, ResolvedPath, IsInsert, Range)` — one #using/#insert edge.
+- `sealed record ScriptRecord` — the complete immutable knowledge about one file:
+  path (the database key), language, ContextId ("raw"/"mod:x"/"workspace:f"),
+  RelativePath (the overlay-shadowing identity), content hash, namespaces, functions,
+  classes, macros, dependencies, references, diagnostics, IsDirty (unsaved editor
+  state, never persisted). Closed files keep ONLY this record.
+
+## Database/LanguageStore.cs
+
+- `sealed class LanguageStore` — ONE language world: path-keyed record map + its
+  ReferenceIndex. Upsert swaps records atomically and diffs the index; GSC/CSC
+  isolation is two instances of this class, never a filter.
+
+## Database/ReferenceIndex.cs
+
+- `sealed class ReferenceIndex` — the inverted key→files index. One lock, held per
+  file-diff; exact ranges come from scanning the named files' reference lists.
+
+## Database/ScriptDatabase.cs
+
+- `sealed class ScriptDatabase` — the façade: `Gsc`/`Csc` stores + the shared GSH
+  record map (headers serve both worlds). `Commit` builds and stores a record from a
+  ParseResult; `BuildRecord` is the pure builder (macros filtered to file-local,
+  dependency edges from inserts + usings, xxHash64 content hash). `CanSee` encodes the
+  visibility rule (raw←raw; mod M←{M,raw}; workspace←{workspaces,raw}); `ContextIdOf`
+  stringifies contexts.
+
+## Database/DatabaseQueries.cs
+
+- `ResolvedFunction`/`ResolvedClass` + `static DatabaseQueries` — context-filtered
+  lookups that MERGE namespaces across contributing files, hide private functions from
+  other files, and apply overlay shadowing (same RelativePath: overlay beats raw);
+  `FindReferences` returns visible (record, entry) pairs for a key.
+
+## Indexing/WorkspaceIndexer.cs
+
+- `IndexingMode` (Off/Partial/Full) + `IIndexProgressListener` (+Null impl) —
+  the server maps listener events onto gscode/indexing* notifications.
+- `sealed class WorkspaceIndexer` — cold start: enumerate targets → bounded
+  `Parallel.ForEachAsync` (cores−1) running the per-file pipeline → Commit records.
+  A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH exactly once no
+  matter how many scripts insert it; `InvalidateGsh` drops one on change. `IndexFile`
+  is the single-file path the watcher reuses.
 
 ## Documents/DocumentStore.cs
 

@@ -3,6 +3,7 @@ import { workspace } from "vscode";
 /** The payload sent to the server as initializationOptions and on configuration changes. */
 export interface GscodeSettings {
     serverLogLevel: string;
+    workspaceIndexingMode: string;
     "raw.enabled": boolean;
     rawPath: string;
     modsPath: string;
@@ -15,6 +16,7 @@ export function readSettings(): GscodeSettings {
     const config = workspace.getConfiguration("gscode");
     return {
         serverLogLevel: config.get<string>("serverLogLevel", "off"),
+        workspaceIndexingMode: config.get<string>("workspaceIndexingMode", "partial"),
         "raw.enabled": config.get<boolean>("raw.enabled", true),
         rawPath: config.get<string>("rawPath", ""),
         modsPath: config.get<string>("modsPath", ""),

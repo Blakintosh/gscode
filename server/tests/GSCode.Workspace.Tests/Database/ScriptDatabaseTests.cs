@@ -51,7 +51,7 @@ public class ScriptDatabaseTests
 
         PathResolver resolver = new(config, fileSystem);
         ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, resolver, fileSystem, new NameTable());
+        WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, new NameTable());
 
         await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
         return (database, resolver);
@@ -199,7 +199,7 @@ public class ScriptDatabaseTests
         RootConfig config = RootConfig.Create(true, null, null, ToolsRoot, [], fileSystem);
         PathResolver resolver = new(config, fileSystem);
         ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, resolver, fileSystem, new NameTable());
+        WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, new NameTable());
         await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
 
         string secretPath = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\secret.gsc");

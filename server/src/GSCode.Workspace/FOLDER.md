@@ -49,9 +49,18 @@ resolution, background indexing, the SQLite cache, and the bundled game data. LS
   the server maps listener events onto gscode/indexing* notifications.
 - `sealed class WorkspaceIndexer` — cold start: enumerate targets → bounded
   `Parallel.ForEachAsync` (cores−1) running the per-file pipeline → Commit records.
-  A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH exactly once no
-  matter how many scripts insert it; `InvalidateGsh` drops one on change. `IndexFile`
-  is the single-file path the watcher reuses.
+  Reads the current resolver via an injected `Func<PathResolver>` so resolver swaps take
+  effect immediately. A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH
+  exactly once no matter how many scripts insert it; `InvalidateGsh` drops one on change.
+  `IndexFile` is the single-file path the watcher reuses.
+
+## Indexing/WatchedFileUpdater.cs
+
+- `WatchedFileChange` (Created/Changed/Deleted) + `sealed class WatchedFileUpdater` —
+  applies on-disk changes to the database: re-index created/changed files, drop deleted
+  ones, and when a GSH changes invalidate its lex cache and re-index every file that
+  #inserts it (via `ScriptDatabase.FilesInserting`) so macro edits propagate. Returns
+  the touched paths for diagnostic republishing.
 
 ## Documents/DocumentStore.cs
 

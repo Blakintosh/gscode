@@ -50,6 +50,23 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 - didChangeConfiguration → ServerSettings.Apply + live Serilog level switch update.
 
+## Handlers/IndexProgressNotifier.cs
+
+- Maps indexer progress onto the gscode/indexingStarted|Progress|Complete notifications
+  (concrete record payloads), coalesced to ≤1 per ~40 ms so the status-bar counter
+  races without flooding the pipe; the final count always sends.
+
+## Handlers/WatchedFilesHandler.cs
+
+- didChangeWatchedFiles → applies each create/change/delete via WatchedFileUpdater
+  (registers **/*.gsc|csc|gsh watchers). A branch switch's whole batch applies before
+  returning.
+
+## Handlers/WorkspaceSymbolHandler.cs
+
+- workspace/symbol — spans BOTH language stores (no asking file), matching functions and
+  classes by case-insensitive substring, each result located at its file. Capped at 256.
+
 ## Program.cs
 
 Top-level entry point. Configures Serilog to STDERR (stdout must stay clean for the

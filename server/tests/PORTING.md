@@ -25,8 +25,8 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | CacheRestoreTests | ☐ P6 | |
 | GshInvalidationTests | ☐ P6 | |
 | MemoryOptimizationTests | ☐ P5/P6 | Re-express as record-retention assertions if still meaningful |
-| MultiNamespaceMergeTests | ☐ P5 | |
-| GlobalSymbolRegistryTests | ☐ P5 | Successor concept: LanguageStore + ReferenceIndex |
+| MultiNamespaceMergeTests | ✔ P5 | `ScriptDatabaseTests.NamespaceMerging_UnionsAcrossContributingFiles` |
+| GlobalSymbolRegistryTests | ✔ P5 | Successor concept: LanguageStore + ReferenceIndex; covered by `ScriptDatabaseTests` (store routing, isolation, shadowing, language guard) |
 | ScriptManagerNamespaceScopingTests | ☐ P5 | |
 | ScriptDependenciesReadyTests | ☐ P5 | |
 | ScriptInsertPathsTests | ✔ P2 | Insert path collection/validation/edge scenarios in `Preprocessing/InsertTests` |

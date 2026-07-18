@@ -57,19 +57,25 @@ public sealed class NullIndexProgressListener : IIndexProgressListener
 public sealed class WorkspaceIndexer
 {
     private readonly ScriptDatabase _database;
-    private readonly PathResolver _resolver;
+    private readonly Func<PathResolver> _resolverProvider;
     private readonly IFileSystem _fileSystem;
     private readonly NameTable _names;
 
     // path → lazily lexed insert target, shared by every file that inserts it.
     private readonly ConcurrentDictionary<string, Lazy<InsertedFile?>> _gshCache = new(StringComparer.Ordinal);
 
-    public WorkspaceIndexer(ScriptDatabase database, PathResolver resolver, IFileSystem fileSystem, NameTable names)
+    /// <summary>Reads the current resolver each call, so resolver swaps take effect immediately.</summary>
+    public WorkspaceIndexer(ScriptDatabase database, Func<PathResolver> resolverProvider, IFileSystem fileSystem, NameTable names)
     {
         _database = database;
-        _resolver = resolver;
+        _resolverProvider = resolverProvider;
         _fileSystem = fileSystem;
         _names = names;
+    }
+
+    private PathResolver Resolver
+    {
+        get { return _resolverProvider(); }
     }
 
     /// <summary>Indexes everything the resolver can reach. Returns the number of files indexed.</summary>
@@ -83,7 +89,7 @@ public sealed class WorkspaceIndexer
         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
         PerfTracker.Begin("index.total");
 
-        List<string> targets = [.. _resolver.EnumerateIndexTargets()];
+        List<string> targets = [.. Resolver.EnumerateIndexTargets()];
         progress.Started(targets.Count);
 
         int completed = 0;
@@ -125,7 +131,7 @@ public sealed class WorkspaceIndexer
             return null;
         }
 
-        ResolutionContext context = _resolver.GetContext(path);
+        ResolutionContext context = Resolver.GetContext(path);
         ParseResult result = ScriptAnalysis.Analyze(
             path,
             ScriptAnalysis.LanguageFromPath(path),
@@ -133,7 +139,7 @@ public sealed class WorkspaceIndexer
             new CachingInsertProvider(this, context),
             _names);
 
-        string relativePath = _resolver.GetScriptRelativePath(path, context);
+        string relativePath = Resolver.GetScriptRelativePath(path, context);
         return _database.Commit(result, context, isDirty: false, relativePath);
     }
 
@@ -145,7 +151,7 @@ public sealed class WorkspaceIndexer
 
     private InsertedFile? LoadInsert(string rawInsertPath, ResolutionContext context)
     {
-        string? resolved = _resolver.Resolve(context, rawInsertPath);
+        string? resolved = Resolver.Resolve(context, rawInsertPath);
         if ( resolved is null )
         {
             return null;

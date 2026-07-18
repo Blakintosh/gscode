@@ -57,6 +57,35 @@ public sealed class ScriptDatabase
         get { return _gshRecords.Values; }
     }
 
+    /// <summary>Removes a file from whichever store holds it.</summary>
+    public void Remove(string normalizedPath, ScriptLanguage language)
+    {
+        if ( language == ScriptLanguage.Gsh )
+        {
+            RemoveGsh(normalizedPath);
+        }
+        else
+        {
+            StoreFor(language).Remove(normalizedPath);
+        }
+    }
+
+    /// <summary>Normalized paths of every non-GSH file that #inserts the given GSH.</summary>
+    public IEnumerable<string> FilesInserting(string normalizedGshPath)
+    {
+        foreach ( ScriptRecord record in Gsc.AllRecords.Concat(Csc.AllRecords) )
+        {
+            foreach ( DependencyEdge edge in record.Dependencies )
+            {
+                if ( edge.IsInsert && string.Equals(edge.ResolvedPath, normalizedGshPath, StringComparison.Ordinal) )
+                {
+                    yield return record.Path;
+                    break;
+                }
+            }
+        }
+    }
+
     /// <summary>Stores a completed analysis as the file's current record.</summary>
     public ScriptRecord Commit(ParseResult result, ResolutionContext context, bool isDirty, string relativePath = "")
     {

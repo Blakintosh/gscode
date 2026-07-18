@@ -71,11 +71,23 @@ LanguageServer server = await LanguageServer.From(options =>
                 new DiagnosticsPublisher(provider.GetRequiredService<ILanguageServerFacade>()));
 
             services.AddSingleton<ScriptDatabase>();
+
+            services.AddSingleton(provider => new WorkspaceIndexer(
+                provider.GetRequiredService<ScriptDatabase>(),
+                () => resolverHolder.Current,
+                provider.GetRequiredService<IFileSystem>(),
+                provider.GetRequiredService<NameTable>()));
+
+            services.AddSingleton(provider => new WatchedFileUpdater(
+                provider.GetRequiredService<ScriptDatabase>(),
+                provider.GetRequiredService<WorkspaceIndexer>()));
         })
         .AddHandler<TextSyncHandler>()
         .AddHandler<DocumentSymbolHandler>()
         .AddHandler<FoldingRangeHandler>()
         .AddHandler<SelectionRangeHandler>()
+        .AddHandler<WorkspaceSymbolHandler>()
+        .AddHandler<WatchedFilesHandler>()
         .AddHandler<ConfigurationHandler>()
         .OnInitialize((languageServer, request, cancellationToken) =>
         {
@@ -141,14 +153,17 @@ LanguageServer server = await LanguageServer.From(options =>
 
             if ( mode != IndexingMode.Off )
             {
-                ScriptDatabase database = languageServer.Services.GetRequiredService<ScriptDatabase>();
-                WorkspaceIndexer indexer = new(database, resolverHolder.Current, fileSystem, NameTable.Shared);
+                WorkspaceIndexer indexer = languageServer.Services.GetRequiredService<WorkspaceIndexer>();
                 IndexProgressNotifier notifier = new(languageServer.Services.GetRequiredService<ILanguageServerFacade>());
 
                 _ = Task.Run(async () =>
                 {
                     try
                     {
+                        // Let the connection's output pump settle before the first progress
+                        // notification; sending in the initialize/initialized window can drop
+                        // notifications on a workspace small enough to index in a few ms.
+                        await Task.Delay(500, CancellationToken.None);
                         int indexed = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
                         Log.Information("Workspace indexing complete: {Count} files", indexed);
                     }

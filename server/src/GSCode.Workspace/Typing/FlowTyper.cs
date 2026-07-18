@@ -3,13 +3,20 @@ using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
+using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Api;
 
 namespace GSCode.Workspace.Typing;
 
 /// <summary>The inferred type of a local at its assignment site (for inlay hints).</summary>
-public readonly record struct InferredAssignment(TextRange NameRange, ScrType Type);
+/// <param name="NameRange">Root-file range of the assigned local's name.</param>
+/// <param name="Type">The inferred concrete type.</param>
+/// <param name="Name">Display-case local name (lets hover match an identifier by name).</param>
+public readonly record struct InferredAssignment(TextRange NameRange, ScrType Type, string Name);
+
+/// <summary>The inferred type of the local identifier under a cursor (for hover).</summary>
+public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrType Type);
 
 /// <summary>
 /// A deliberately-small forward type-flow pass, per function. It types each assignment's
@@ -50,6 +57,57 @@ public sealed class FlowTyper
         }
 
         return hints.ToImmutable();
+    }
+
+    /// <summary>
+    /// Resolves the inferred type of the local variable identifier under a cursor, for hover.
+    /// Returns false when the position isn't on a local, the local has no concrete type, or it
+    /// is a field/parameter (those aren't inferred here). Reuses the same per-function pass so a
+    /// hover always agrees with the inlay hint shown at the assignment.
+    /// </summary>
+    public bool TryGetLocalTypeAt(ParseResult result, Position position, out LocalTypeHover hover)
+    {
+        hover = default;
+
+        // Find the innermost identifier under the cursor and the function that encloses it.
+        List<AstNode> chain = AstSearch.ChainAt(result.Tree.Root, position);
+        IdentifierNode? identifier = null;
+        FunctionNode? function = null;
+        foreach ( AstNode node in chain )
+        {
+            if ( node is FunctionNode enclosingFunction )
+            {
+                function = enclosingFunction;
+            }
+            else if ( node is IdentifierNode identifierNode )
+            {
+                identifier = identifierNode;
+            }
+        }
+
+        if ( identifier is null || function is null )
+        {
+            return false;
+        }
+
+        // The identifier is only a local if the flow pass typed an assignment to that name
+        // inside this same function.
+        string name = identifier.Token.Text;
+        foreach ( InferredAssignment assignment in InferAssignments(result) )
+        {
+            if ( !function.Range.Contains(assignment.NameRange.Start) )
+            {
+                continue;
+            }
+
+            if ( string.Equals(assignment.Name, name, StringComparison.OrdinalIgnoreCase) )
+            {
+                hover = new LocalTypeHover(name, identifier.Range, assignment.Type);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void TypeFunction(FunctionNode function, ImmutableArray<InferredAssignment>.Builder hints)
@@ -133,7 +191,7 @@ public sealed class FlowTyper
 
         if ( type.IsKnown() && hinted.Add(name) )
         {
-            hints.Add(new InferredAssignment(target.Token.RootRange, type));
+            hints.Add(new InferredAssignment(target.Token.RootRange, type, name));
         }
     }
 

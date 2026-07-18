@@ -176,13 +176,19 @@ Typing lands P10.)*
 
 ## Typing/FlowTyper.cs
 
-- `readonly record struct InferredAssignment(NameRange, Type)` — the inferred `ScrType` of
-  a local at its assignment site, consumed by the inlay-hint handler.
+- `readonly record struct InferredAssignment(NameRange, Type, Name)` — the inferred `ScrType`
+  of a local at its assignment site (with its display-case name), consumed by the inlay-hint
+  handler and the hover lookup.
+- `readonly record struct LocalTypeHover(Name, Range, Type)` — the inferred type of the local
+  identifier under a cursor, consumed by hover.
 - `sealed class FlowTyper` — a deliberately-small forward type-flow pass, per function.
   `InferAssignments(ParseResult)` walks each function/method body with a per-function
   local environment (`name → ScrType`), recording the FIRST assignment of each local that
   resolves to a concrete type; later assignments update the environment but never add a
-  second hint. `TypeOf` types literals, parenthesised/vector/array/`new` expressions,
+  second hint. `TryGetLocalTypeAt(result, position)` finds the innermost identifier under a
+  cursor and its enclosing function (via `AstSearch.ChainAt`) and returns the local's inferred
+  type when one exists — so a hover always agrees with the inlay hint at the assignment.
+  `TypeOf` types literals, parenthesised/vector/array/`new` expressions,
   identifiers (earlier locals, then the globals `self`/`level`/`world`/`anim`/`game`),
   prefix ops (`!`→bool, `&`→function, `~`→int, `-`→numeric), binary ops (comparisons and
   logicals→bool, `+` string-concatenation vs numeric widening, shifts/bitwise→int), and

@@ -98,4 +98,34 @@ public class FlowTyperTests
         // First assignment (int) is the recorded hint; the reassignment does not add another.
         Assert.Equal(ScrType.Int, types["a"]);
     }
+
+    [Fact]
+    public void HoverLookup_ReturnsLocalType_AtUsageSite()
+    {
+        string source = "function f()\n{\n    count = 5;\n    other = count;\n}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc));
+
+        // Position on 'count' where it is READ in `other = count;` (line 3, char 12).
+        bool found = typer.TryGetLocalTypeAt(result, new Position(3, 12), out LocalTypeHover hover);
+
+        Assert.True(found);
+        Assert.Equal("count", hover.Name);
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void HoverLookup_ReturnsFalse_ForUntypedParameter()
+    {
+        string source = "function f( amount )\n{\n    use( amount );\n}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc));
+
+        // 'amount' is a parameter, never assigned a concrete type -> no hover.
+        bool found = typer.TryGetLocalTypeAt(result, new Position(2, 9), out LocalTypeHover hover);
+
+        Assert.False(found);
+    }
 }

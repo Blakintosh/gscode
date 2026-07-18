@@ -78,7 +78,9 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 - Markdown hover: script functions and builtins (fallback), classes, macros, and fields —
   rendered via MarkdownDocRenderer over SymbolAtPosition + DatabaseQueries. Field hover is
   enriched with known engine-field types (every entity kind declaring the name, since the
-  owner type isn't inferred until FlowTyper).
+  owner type isn't inferred until FlowTyper). When the cursor is NOT on a classified
+  reference, it falls back to FlowTyper's `TryGetLocalTypeAt` to show `(local) name: type`
+  for an inferred local variable.
 
 ## Handlers/DefinitionHandler.cs
 

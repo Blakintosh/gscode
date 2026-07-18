@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
+using GSCode.Workspace.Typing;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
@@ -40,22 +41,34 @@ public sealed class HoverHandler : HoverHandlerBase
         }
 
         PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
-        if ( hit.Kind != HitKind.Reference )
+        if ( hit.Kind == HitKind.Reference )
         {
-            return Task.FromResult<Hover?>(null);
+            string? markdown = RenderHover(target, hit.Key);
+            if ( markdown is null )
+            {
+                return Task.FromResult<Hover?>(null);
+            }
+
+            return Task.FromResult<Hover?>(new Hover
+            {
+                Range = hit.Range.ToLsp(),
+                Contents = new MarkedStringsOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = markdown }),
+            });
         }
 
-        string? markdown = RenderHover(target, hit.Key);
-        if ( markdown is null )
+        // Not a classified reference: fall back to an inferred-type hover on a local variable.
+        FlowTyper typer = new(_builtins.For(target.Language));
+        if ( typer.TryGetLocalTypeAt(target.Result, request.Position.ToCore(), out LocalTypeHover local) )
         {
-            return Task.FromResult<Hover?>(null);
+            string markdown = $"```gsc\n(local) {local.Name}: {local.Type.DisplayName()}\n```";
+            return Task.FromResult<Hover?>(new Hover
+            {
+                Range = local.Range.ToLsp(),
+                Contents = new MarkedStringsOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = markdown }),
+            });
         }
 
-        return Task.FromResult<Hover?>(new Hover
-        {
-            Range = hit.Range.ToLsp(),
-            Contents = new MarkedStringsOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = markdown }),
-        });
+        return Task.FromResult<Hover?>(null);
     }
 
     private string? RenderHover(NavigationTarget target, SymbolKey key)

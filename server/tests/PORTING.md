@@ -9,9 +9,9 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | LexerTests | ✔ P1 | Scenarios re-expressed in `Lexing/LexerBasicsTests` (identifiers, numerics, keywords, operators, delimiters, member access, comments) + `LexerDirectiveTests` |
 | TokenRangeTests | ✔ P1 | The half-open (end-exclusive) contract is `SourceTextTests.Range_Contains_IsHalfOpen` |
 | StringSizeAndBreakTests | ☐ P10 | `.size` on strings/istrings is FlowTyper behavior (readonly int, write → diagnostic); the unterminated-string lexing half is covered now by `LexerStringTests` |
-| ParserTests | ☐ P3 | |
-| BrokenFunctionTests | ☐ P3 | Error-recovery scenarios |
-| DevBlockTests | ☐ P3 | |
+| ParserTests | ✔ P3 | Scenarios re-expressed as S-expression goldens in `Syntax/DeclarationTests`, `StatementTests`, `ExpressionTests` |
+| BrokenFunctionTests | ✔ P3 | Error-recovery scenarios in `Syntax/RecoveryTests` (garbage between functions, broken statements, missing braces/semicolons, class-member garbage) |
+| DevBlockTests | ✔ P3 | Top-level + statement-level dev blocks in `DeclarationTests`/`StatementTests`; lexer-level delimiters in `LexerTriviaTests` |
 | SwitchSemanticTokenTests | ☐ P8 | |
 | CfaTests | ☐ P10 | Control-flow scenarios inform FlowTyper's per-function walk |
 | TypeFlowConvergenceTests | ☐ P10 | The accuracy baseline |

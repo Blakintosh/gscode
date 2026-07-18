@@ -4,7 +4,78 @@ The pure per-file analysis pipeline: lexer → preprocessor → parser → extra
 A deterministic function library — no I/O except through injected providers, and no
 LSP types anywhere.
 
-*(Lexing = P1, Preprocessing = P2 (both below); parser lands in P3, extraction in P4.)*
+*(Lexing = P1, Preprocessing = P2, Syntax = P3 (all below); extraction lands in P4.)*
+
+## Syntax/Ast/AstNode.cs
+
+- `abstract record AstNode(TextRange Range)` — base of every node. Range is in ROOT-file
+  coordinates (inserted/expanded content collapses onto its root site); true locations
+  of names come from their PTokens' provenance.
+- `abstract record ExprNode` — base of expressions. `ErrorNode` — stands in for
+  unparseable source so the tree always covers the file.
+
+## Syntax/Ast/Declarations.cs
+
+- `ScriptNode(Elements)` — every top-level element in source order (namespace state is
+  positional). `UsingNode(Path, PathRange)`, `NamespaceNode(NameToken)`,
+  `PrecacheNode(Arguments raw)`, `UsingAnimTreeNode(TreeNameToken)`.
+- `FunctionNode(NameToken, IsPrivate, IsAutoexec, Parameters, HasVarargs, Body)` and
+  `ParameterNode(NameToken, ByRef, DefaultValue)`.
+- `ClassNode(NameToken, ParentToken, Members)` with `VarDeclNode`, `ConstructorNode`,
+  `DestructorNode` (parameters parsed for P4 diagnostics — the spec forbids them).
+- `DevBlockDeclNode(Declarations)` — top-level /# #/ wrapper.
+
+## Syntax/Ast/Statements.cs
+
+- `BlockNode`, `IfNode`, `WhileNode`, `DoWhileNode`, `ForNode`, `ForeachNode`
+  (KeyToken null in the one-variable form), `SwitchNode` + `CaseGroupNode` (stacked
+  labels share one body; null label = default), `ReturnNode`, `BreakNode`,
+  `ContinueNode`, `WaitNode` (IsRealTime flags waitrealtime), `WaitTillFrameEndNode`,
+  `ConstDeclNode`, `ExprStatementNode`, `DevBlockStmtNode`, `EmptyStatementNode`.
+
+## Syntax/Ast/Expressions.cs
+
+- Literals/names: `LiteralNode` (numbers, all three string kinds, anim refs,
+  true/false/undefined, #animtree), `IdentifierNode`, `QualifiedNode` (ns::name).
+- Structure: `ParenNode`, `VectorNode` ((x,y,z)), `ArrayLiteralNode` ([]),
+  `BinaryNode`, `TernaryNode`, `PrefixNode` (! ~ - &), `PostfixNode` (++ --),
+  `AssignmentNode`, `MemberNode` (.field), `IndexNode` ([i]).
+- Calls: `PointerDerefNode` ([[p]]), `CallNode(Target?, IsThread, Callee, Arguments)` —
+  one shape for every call form incl. method notation `ent foo()` and `thread` —
+  `ArrowCallNode` ([[obj]]->m(args)), `NewNode` (new C()).
+
+## Syntax/Parser.cs (+ .Declarations / .Statements / .Expressions partials)
+
+- `sealed partial class Parser` — recursive descent over PTokens; `static Parse(tokens)
+  → ParseTree`. Panic-mode recovery: one diagnostic then silent skip to a sync token
+  (declaration keywords / ';' / '}' / '#/'), always guaranteeing progress.
+- Declarations: #using path joining (+ using-after-declaration diagnostic), #namespace,
+  #precache (raw args for P4 validation), #using_animtree, functions (private/autoexec,
+  defaults, &byRef, ... varargs), classes (single inheritance, var members, ctor/dtor,
+  methods), top-level dev blocks.
+- Statements: the full set incl. all wait forms, const, stacked switch labels,
+  statement-level dev blocks, single-statement (braceless) bodies.
+- Expressions: precedence climbing (|| < && < | < ^ < & < equality(incl. ===/!==) <
+  relational < shifts < additive < multiplicative), right-assoc assignment + ternary,
+  method-notation call chains (`ent [thread] callee(...)` where callee = identifier
+  with '(' / ns::name / [[deref]] / call-shaped keyword like waittill/notify), pointer
+  deref via TWO ADJACENT brackets (so a[b[1]] is unambiguous), arrow calls, new,
+  vectors, & function references.
+
+## Syntax/ParseTree.cs
+
+- `sealed record ParseTree(ScriptNode Root, ImmutableArray<Diagnostic> Diagnostics)`.
+
+## Syntax/PrecacheAssetTypes.cs
+
+- `record PrecacheAssetType(Name, MinValues, MaxValues)` + `static PrecacheAssetTypes` —
+  the declarative asset-type table from the language reference (string-family types
+  accept extra values). P4 validates PrecacheNodes against it; P8 completes from it.
+
+## Syntax/AstPrinter.cs
+
+- `static class AstPrinter.Print(node)` — deterministic S-expression rendering; the
+  golden format for parser tests and a debugging aid.
 
 ## Preprocessing/PToken.cs
 

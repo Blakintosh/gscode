@@ -191,10 +191,13 @@ Typing lands P10.)*
   `TypeOf` types literals, parenthesised/vector/array/`new` expressions,
   identifiers (earlier locals, then the globals `self`/`level`/`world`/`anim`/`game`),
   prefix ops (`!`→bool, `&`→function, `~`→int, `-`→numeric), binary ops (comparisons and
-  logicals→bool, `+` string-concatenation vs numeric widening, shifts/bitwise→int), and
-  builtin call return types via `MapReturnType`. Anything uncertain stays `Unknown` and
-  produces no hint — the zero-false-positive rule. Script-function return inference is out
-  of scope (their bodies aren't re-typed here).
+  logicals→bool, `+` string-concatenation vs numeric widening, shifts/bitwise→int),
+  builtin call return types via `MapReturnType`, and field access `owner.field` (`.size`→int;
+  else the engine object-field data seeds a type, but only when every entity kind declaring
+  the field name agrees — the owner's kind isn't inferred). Anything uncertain stays `Unknown`
+  and produces no hint — the zero-false-positive rule. Script-function return inference is out
+  of scope (their bodies aren't re-typed here). Constructed with the per-language `BuiltinApi`
+  and the shared `ObjectFields`.
 
 ## Api/
 

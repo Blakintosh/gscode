@@ -14,13 +14,18 @@ public class FlowTyperTests
 {
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
+    private static FlowTyper NewTyper()
+    {
+        return new FlowTyper(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc), ObjectFields.Load(ApiDirectory));
+    }
+
     private static Dictionary<string, ScrType> InferByFirstToken(string body)
     {
         string source = "function f()\n{\n" + body + "\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
-        FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc));
+        FlowTyper typer = NewTyper();
         ImmutableArray<InferredAssignment> inferred = typer.InferAssignments(result);
 
         // Key each inferred type by the source text under its name range for easy asserting.
@@ -100,12 +105,19 @@ public class FlowTyperTests
     }
 
     [Fact]
+    public void SizeProperty_IsInt()
+    {
+        Dictionary<string, ScrType> types = InferByFirstToken("    players = level.players;\n    n = players.size;");
+        Assert.Equal(ScrType.Int, types["n"]);
+    }
+
+    [Fact]
     public void HoverLookup_ReturnsLocalType_AtUsageSite()
     {
         string source = "function f()\n{\n    count = 5;\n    other = count;\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-        FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc));
+        FlowTyper typer = NewTyper();
 
         // Position on 'count' where it is READ in `other = count;` (line 3, char 12).
         bool found = typer.TryGetLocalTypeAt(result, new Position(3, 12), out LocalTypeHover hover);
@@ -121,7 +133,7 @@ public class FlowTyperTests
         string source = "function f( amount )\n{\n    use( amount );\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-        FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc));
+        FlowTyper typer = NewTyper();
 
         // 'amount' is a parameter, never assigned a concrete type -> no hover.
         bool found = typer.TryGetLocalTypeAt(result, new Position(2, 9), out LocalTypeHover hover);

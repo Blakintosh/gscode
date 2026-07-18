@@ -27,13 +27,15 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
 {
     private readonly NavigationSupport _support;
     private readonly BuiltinApiSet _builtins;
+    private readonly ObjectFields _objectFields;
     private readonly ServerSettings _settings;
     private readonly TextDocumentSelector _selector;
 
-    public InlayHintHandler(NavigationSupport support, BuiltinApiSet builtins, ServerSettings settings, TextDocumentSelector selector)
+    public InlayHintHandler(NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields, ServerSettings settings, TextDocumentSelector selector)
     {
         _support = support;
         _builtins = builtins;
+        _objectFields = objectFields;
         _settings = settings;
         _selector = selector;
     }
@@ -62,7 +64,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
 
         if ( _settings.InlayInferredTypes )
         {
-            FlowTyper typer = new(_builtins.For(target.Language));
+            FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
             foreach ( InferredAssignment inferred in typer.InferAssignments(target.Result) )
             {
                 if ( window.Contains(inferred.NameRange.Start) )

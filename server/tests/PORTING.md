@@ -8,14 +8,14 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 |---|---|---|
 | LexerTests | ✔ P1 | Scenarios re-expressed in `Lexing/LexerBasicsTests` (identifiers, numerics, keywords, operators, delimiters, member access, comments) + `LexerDirectiveTests` |
 | TokenRangeTests | ✔ P1 | The half-open (end-exclusive) contract is `SourceTextTests.Range_Contains_IsHalfOpen` |
-| StringSizeAndBreakTests | ☐ P10 | `.size` on strings/istrings is FlowTyper behavior (readonly int, write → diagnostic); the unterminated-string lexing half is covered now by `LexerStringTests` |
+| StringSizeAndBreakTests | ◐ P10 | `.size` types as int in FlowTyper (`SizeProperty_IsInt`); the unterminated-string lexing half is covered by `LexerStringTests`. The readonly-`.size`-write diagnostic is still pending |
 | ParserTests | ✔ P3 | Scenarios re-expressed as S-expression goldens in `Syntax/DeclarationTests`, `StatementTests`, `ExpressionTests` |
 | BrokenFunctionTests | ✔ P3 | Error-recovery scenarios in `Syntax/RecoveryTests` (garbage between functions, broken statements, missing braces/semicolons, class-member garbage) |
 | DevBlockTests | ✔ P3 | Top-level + statement-level dev blocks in `DeclarationTests`/`StatementTests`; lexer-level delimiters in `LexerTriviaTests` |
 | SwitchSemanticTokenTests | ✔ P8 | Semantic classification covered by `Extraction/SemanticTokenBuilderTests` (keywords/numbers/strings/functions/property/macro/comments) |
 | CfaTests | ☐ P10 | FlowTyper's per-function walk visits every branch now; branch-join convergence (the `ScrType.Join` lattice) not yet wired into the walk |
 | TypeFlowConvergenceTests | ◐ P10 | Assignment-inference accuracy baseline established in `Typing/FlowTyperTests` (literals, arithmetic widening/concat, globals, builtin returns, first-assignment-wins); branch-convergence cases still pending |
-| ScrDataApiTypeTests | ☐ P10 | Engine object-field type seeds (`t7_object_fields.json` → FlowTyper) not yet wired |
+| ScrDataApiTypeTests | ◐ P10 | Engine object-field type seeds wired into FlowTyper (`owner.field` types when every declaring entity kind agrees); the ReadOnly-field write diagnostic is still pending |
 | DiagnosticsTests | ☐ P4/P5 | |
 | NamespaceDiagnosticsTests | ☐ P5 | Namespace-usage lint |
 | PreferBooleanLiteralTests | ☐ P4 | Carried lint rule |

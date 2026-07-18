@@ -27,10 +27,12 @@ public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrTy
 public sealed class FlowTyper
 {
     private readonly BuiltinApi _builtins;
+    private readonly ObjectFields _objectFields;
 
-    public FlowTyper(BuiltinApi builtins)
+    public FlowTyper(BuiltinApi builtins, ObjectFields objectFields)
     {
         _builtins = builtins;
+        _objectFields = objectFields;
     }
 
     /// <summary>Infers a type for the first assignment of each local that resolves to a concrete type.</summary>
@@ -217,9 +219,42 @@ public sealed class FlowTyper
                 return TypeOfBinary(binary, environment);
             case CallNode call:
                 return TypeOfCall(call);
+            case MemberNode member:
+                return TypeOfField(member);
             default:
                 return ScrType.Unknown;
         }
+    }
+
+    /// <summary>
+    /// Types a field access `owner.field`. `.size` is always int; otherwise the engine
+    /// object-field data seeds a type, but only when every entity kind that declares the
+    /// field name agrees (the owner's entity kind isn't inferred, so disagreement → Unknown).
+    /// </summary>
+    private ScrType TypeOfField(MemberNode member)
+    {
+        string fieldName = member.NameToken.Text;
+        if ( string.Equals(fieldName, "size", StringComparison.OrdinalIgnoreCase) )
+        {
+            return ScrType.Int;
+        }
+
+        ImmutableArray<ObjectField> fields = _objectFields.FindField(fieldName);
+        if ( fields.Length == 0 )
+        {
+            return ScrType.Unknown;
+        }
+
+        ScrType agreed = MapReturnType(fields[0].Type.ToLowerInvariant());
+        for ( int index = 1; index < fields.Length; index++ )
+        {
+            if ( MapReturnType(fields[index].Type.ToLowerInvariant()) != agreed )
+            {
+                return ScrType.Unknown;
+            }
+        }
+
+        return agreed;
     }
 
     private static ScrType TypeOfLiteral(TokenKind kind)

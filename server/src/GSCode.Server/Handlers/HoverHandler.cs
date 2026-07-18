@@ -57,7 +57,7 @@ public sealed class HoverHandler : HoverHandlerBase
         }
 
         // Not a classified reference: fall back to an inferred-type hover on a local variable.
-        FlowTyper typer = new(_builtins.For(target.Language));
+        FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
         if ( typer.TryGetLocalTypeAt(target.Result, request.Position.ToCore(), out LocalTypeHover local) )
         {
             string markdown = $"```gsc\n(local) {local.Name}: {local.Type.DisplayName()}\n```";

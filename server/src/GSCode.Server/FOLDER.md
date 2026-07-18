@@ -143,6 +143,7 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
   inlayHints.inferredTypes), and parameter-name hints (`amount:`) before each call argument,
   resolving the callee's parameter names from the database (script functions in the file's
   namespaces, else builtins) and qualified `ns::fn` calls (gated by inlayHints.parameterNames).
+  The FlowTyper it builds is seeded with the shared ObjectFields for field-type inference.
   ResolveProvider is false, so the resolve handler is a passthrough.
 
 ## Program.cs

@@ -37,10 +37,9 @@ public sealed class WatchedFileUpdater
 
         if ( change == WatchedFileChange.Deleted )
         {
-            _database.Remove(normalized, language);
+            _indexer.RemoveFile(normalized, language);
             if ( language == ScriptLanguage.Gsh )
             {
-                _indexer.InvalidateGsh(normalized);
                 return ReindexInserters(normalized);
             }
 

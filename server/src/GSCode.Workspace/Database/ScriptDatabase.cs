@@ -103,6 +103,19 @@ public sealed class ScriptDatabase
         return record;
     }
 
+    /// <summary>Stores a pre-built record (from the cache) without re-analysing.</summary>
+    public void CommitRecord(ScriptRecord record)
+    {
+        if ( record.Language == ScriptLanguage.Gsh )
+        {
+            UpsertGsh(record);
+        }
+        else
+        {
+            StoreFor(record.Language).Upsert(record);
+        }
+    }
+
     /// <summary>Builds the immutable record from a pipeline result.</summary>
     public static ScriptRecord BuildRecord(ParseResult result, ResolutionContext context, bool isDirty, string relativePath = "")
     {
@@ -144,7 +157,7 @@ public sealed class ScriptDatabase
             Language = result.Language,
             ContextId = ContextIdOf(context),
             RelativePath = relativePath,
-            ContentHash = XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(result.Text.Text)),
+            ContentHash = ComputeContentHash(result.Text.Text),
             Namespaces = result.Extraction.Namespaces,
             Functions = result.Extraction.Functions,
             Classes = result.Extraction.Classes,
@@ -154,6 +167,12 @@ public sealed class ScriptDatabase
             Diagnostics = result.AllDiagnostics,
             IsDirty = isDirty,
         };
+    }
+
+    /// <summary>The content-hash function used for cache invalidation (xxHash64 of the UTF-8 text).</summary>
+    public static ulong ComputeContentHash(string text)
+    {
+        return XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(text));
     }
 
     /// <summary>The stable string form of a context ("raw", "mod:name", "workspace:folder").</summary>

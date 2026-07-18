@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace GSCode.Core.Docs;
@@ -25,6 +26,7 @@ public sealed record ScriptDocComment
     public ImmutableArray<ScriptDocArgument> Arguments { get; init; } = [];
     public ImmutableArray<string> Examples { get; init; } = [];
 
+    [JsonIgnore]
     public bool IsNone
     {
         get { return ReferenceEquals(this, None) || (RawText.Length == 0 && Summary.Length == 0 && Name.Length == 0); }

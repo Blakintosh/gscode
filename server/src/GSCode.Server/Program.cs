@@ -4,6 +4,7 @@ using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Server.Logging;
 using GSCode.Server.Transport;
+using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Indexing;
@@ -38,6 +39,9 @@ Log.Information("Transport connected (pipe={Pipe}, socket={Socket}, stdio fallba
 ServerSettings settings = new();
 PhysicalFileSystem fileSystem = new();
 ResolverHolder resolverHolder = new(fileSystem);
+
+// Owns the lifetime of the persistent cache; created in OnStarted, drained on exit.
+SqliteCache? workspaceCache = null;
 
 LanguageServer server = await LanguageServer.From(options =>
 {
@@ -156,6 +160,35 @@ LanguageServer server = await LanguageServer.From(options =>
                 WorkspaceIndexer indexer = languageServer.Services.GetRequiredService<WorkspaceIndexer>();
                 IndexProgressNotifier notifier = new(languageServer.Services.GetRequiredService<ILanguageServerFacade>());
 
+                // Open the persistent cache and prime the indexer with its restored records.
+                if ( settings.EnableWorkspaceCache )
+                {
+                    try
+                    {
+                        SqliteCache.CleanUpLegacyCache();
+                        RootConfig roots = resolverHolder.Current.Config;
+                        List<string> cacheKeyRoots = [.. roots.WorkspaceFolders];
+                        if ( roots.RawRoot is not null )
+                        {
+                            cacheKeyRoots.Add(roots.RawRoot);
+                        }
+
+                        if ( roots.ModsRoot is not null )
+                        {
+                            cacheKeyRoots.Add(roots.ModsRoot);
+                        }
+
+                        string databasePath = SqliteCache.ResolveDatabasePath(cacheKeyRoots);
+                        string identity = ServerBuildIdentity.Compute(BundledDataFilePaths());
+                        workspaceCache = SqliteCache.Open(databasePath, identity);
+                        indexer.UseCache(workspaceCache, workspaceCache.LoadAll());
+                    }
+                    catch ( Exception exception )
+                    {
+                        Log.Error(exception, "Failed to open the workspace cache; continuing without it");
+                    }
+                }
+
                 _ = Task.Run(async () =>
                 {
                     try
@@ -180,6 +213,21 @@ LanguageServer server = await LanguageServer.From(options =>
 
 await server.WaitForExit;
 
+// Drain the cache writer so the last records land before we close.
+if ( workspaceCache is not null )
+{
+    await workspaceCache.DisposeAsync();
+}
+
 transport.Owner?.Dispose();
 Log.Information("GSCode v2 server exited");
 await Log.CloseAndFlushAsync();
+
+// Locates the bundled data files whose contents feed the server build identity.
+static IEnumerable<string> BundledDataFilePaths()
+{
+    string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
+    yield return Path.Combine(apiDirectory, "t7_api_gsc.json");
+    yield return Path.Combine(apiDirectory, "t7_api_csc.json");
+    yield return Path.Combine(apiDirectory, "t7_stock_scripts.txt");
+}

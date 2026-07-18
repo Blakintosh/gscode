@@ -4,6 +4,7 @@ import { workspace } from "vscode";
 export interface GscodeSettings {
     serverLogLevel: string;
     workspaceIndexingMode: string;
+    enableWorkspaceCache: boolean;
     "raw.enabled": boolean;
     rawPath: string;
     modsPath: string;
@@ -17,6 +18,7 @@ export function readSettings(): GscodeSettings {
     return {
         serverLogLevel: config.get<string>("serverLogLevel", "off"),
         workspaceIndexingMode: config.get<string>("workspaceIndexingMode", "partial"),
+        enableWorkspaceCache: config.get<boolean>("enableWorkspaceCache", true),
         "raw.enabled": config.get<boolean>("raw.enabled", true),
         rawPath: config.get<string>("rawPath", ""),
         modsPath: config.get<string>("modsPath", ""),

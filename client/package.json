@@ -163,6 +163,12 @@
 					"description": "How much of the workspace (and game raw/mods folders) to index at startup.",
 					"scope": "window"
 				},
+				"gscode.enableWorkspaceCache": {
+					"type": "boolean",
+					"default": true,
+					"description": "Persist analysed scripts to a per-workspace cache so cold starts restore unchanged files instead of re-parsing them.",
+					"scope": "window"
+				},
 				"gscode.raw.enabled": {
 					"type": "boolean",
 					"default": true,

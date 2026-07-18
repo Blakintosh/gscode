@@ -52,7 +52,39 @@ resolution, background indexing, the SQLite cache, and the bundled game data. LS
   Reads the current resolver via an injected `Func<PathResolver>` so resolver swaps take
   effect immediately. A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH
   exactly once no matter how many scripts insert it; `InvalidateGsh` drops one on change.
-  `IndexFile` is the single-file path the watcher reuses.
+  `IndexFile` is the single-file path the watcher reuses. `UseCache` enables cold-restore:
+  the two-pass `IndexAsync` restores files whose on-disk content hash matches the cached
+  record (skipping the parse), then re-parses restored files that #insert a header which
+  itself changed (phase two), and write-throughs every fresh analysis to the cache.
+  `RemoveFile` drops a deleted file from the database, the cache, and the GSH lex cache.
+
+## Cache/CacheSchema.cs
+
+- `static CacheSchema` — SchemaVersion + RecordFormatVersion (the hand-bumped gates),
+  the meta keys, and the `meta`/`files`/`deps` table DDL. Either version mismatch (or a
+  build-identity mismatch) wipes the cache; there are no migrations.
+
+## Cache/ServerBuildIdentity.cs
+
+- `static ServerBuildIdentity.Compute(dataFilePaths)` — a SHA-256 fingerprint of the
+  engine assembly MVIDs + the bundled data-file hashes. Any rebuild that could change
+  analysis output changes this, invalidating the cache automatically.
+
+## Cache/RecordSerializer.cs
+
+- Source-generated STJ context (`CacheJsonContext`) + `Serialize`/`Deserialize` — a
+  ScriptRecord to/from a gzipped JSON blob (no runtime reflection). Deserialize returns
+  null on a corrupt blob so one bad row never fails the restore.
+
+## Cache/SqliteCache.cs
+
+- `sealed class SqliteCache : IAsyncDisposable` — the per-workspace cache.
+  `ResolveDatabasePath` (→ %APPDATA%/gscode/cache/&lt;hash&gt;.db), `CleanUpLegacyCache`
+  (deletes the old single-file gzip-JSON cache), `Open` (WAL + busy_timeout, creates
+  tables, wipes on version/identity mismatch), `LoadAll` (cold-restore input),
+  `Enqueue`/`EnqueueDelete` (never block — a single background writer drains a bounded
+  channel, coalescing batches into transactions; dirty records are skipped), and
+  `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing).
 
 ## Indexing/WatchedFileUpdater.cs
 

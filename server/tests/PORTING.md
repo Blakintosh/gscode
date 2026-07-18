@@ -21,9 +21,9 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | PreferBooleanLiteralTests | ☐ P4 | Carried lint rule |
 | GlobalObjectOwnersTests | ☐ P8 | Field aggregation |
 | SymbolTableTests | ☐ P4/P5 | |
-| WorkspaceCacheManagerTests | ☐ P6 | |
-| CacheRestoreTests | ☐ P6 | |
-| GshInvalidationTests | ☐ P6 | |
+| WorkspaceCacheManagerTests | ✔ P6 | `Cache/SqliteCacheTests` (round-trip, identity-mismatch wipe, dirty-skip, delete) |
+| CacheRestoreTests | ✔ P6 | `Cache/SqliteCacheTests.ColdRestoreTests` (unchanged files restore from cache) |
+| GshInvalidationTests | ✔ P6 | `ColdRestoreTests.ChangedGshBetweenStarts_ReindexesDependents` (phase-two propagation) + P5 `WatchedFileUpdaterTests` |
 | MemoryOptimizationTests | ☐ P5/P6 | Re-express as record-retention assertions if still meaningful |
 | MultiNamespaceMergeTests | ✔ P5 | `ScriptDatabaseTests.NamespaceMerging_UnionsAcrossContributingFiles` |
 | GlobalSymbolRegistryTests | ✔ P5 | Successor concept: LanguageStore + ReferenceIndex; covered by `ScriptDatabaseTests` (store routing, isolation, shadowing, language guard) |

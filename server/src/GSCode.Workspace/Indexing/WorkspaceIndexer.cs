@@ -2,11 +2,13 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
+using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 
@@ -64,6 +66,10 @@ public sealed class WorkspaceIndexer
     // path → lazily lexed insert target, shared by every file that inserts it.
     private readonly ConcurrentDictionary<string, Lazy<InsertedFile?>> _gshCache = new(StringComparer.Ordinal);
 
+    // Optional persistent cache and its cold-restore snapshot (set via UseCache).
+    private SqliteCache? _cache;
+    private IReadOnlyDictionary<string, ScriptRecord> _restored = new Dictionary<string, ScriptRecord>();
+
     /// <summary>Reads the current resolver each call, so resolver swaps take effect immediately.</summary>
     public WorkspaceIndexer(ScriptDatabase database, Func<PathResolver> resolverProvider, IFileSystem fileSystem, NameTable names)
     {
@@ -71,6 +77,13 @@ public sealed class WorkspaceIndexer
         _resolverProvider = resolverProvider;
         _fileSystem = fileSystem;
         _names = names;
+    }
+
+    /// <summary>Enables persistent caching: unchanged files restore from <paramref name="restored"/>, fresh analyses are written to <paramref name="cache"/>.</summary>
+    public void UseCache(SqliteCache cache, IReadOnlyDictionary<string, ScriptRecord> restored)
+    {
+        _cache = cache;
+        _restored = restored;
     }
 
     private PathResolver Resolver
@@ -99,54 +112,123 @@ public sealed class WorkspaceIndexer
             CancellationToken = cancellationToken,
         };
 
+        // GSH headers that were re-parsed (content changed since the cache was written);
+        // restored files that #insert one of these must be re-parsed in phase two.
+        ConcurrentDictionary<string, byte> changedHeaders = new(StringComparer.Ordinal);
+        ConcurrentBag<ScriptRecord> restoredRecords = [];
+
         await Parallel.ForEachAsync(targets, options, (path, token) =>
         {
             token.ThrowIfCancellationRequested();
-            IndexFile(path);
+
+            FileOutcome outcome = ProcessFile(path, allowRestore: true);
+            if ( outcome.Restored && outcome.Record is not null )
+            {
+                restoredRecords.Add(outcome.Record);
+            }
+            else if ( outcome.Record is { Language: ScriptLanguage.Gsh } )
+            {
+                changedHeaders.TryAdd(outcome.Record.Path, 0);
+            }
 
             int done = Interlocked.Increment(ref completed);
             progress.Progressed(done, targets.Count);
             return ValueTask.CompletedTask;
         }).ConfigureAwait(false);
 
+        // Phase two: re-parse restored files whose inserted headers actually changed.
+        if ( !changedHeaders.IsEmpty )
+        {
+            List<string> stale = [];
+            foreach ( ScriptRecord record in restoredRecords )
+            {
+                foreach ( DependencyEdge edge in record.Dependencies )
+                {
+                    if ( edge.IsInsert && changedHeaders.ContainsKey(edge.ResolvedPath) )
+                    {
+                        stale.Add(record.Path);
+                        break;
+                    }
+                }
+            }
+
+            foreach ( string path in stale )
+            {
+                ProcessFile(path, allowRestore: false);
+            }
+        }
+
         PerfTracker.End();
         progress.Completed(completed, targets.Count, stopwatch.Elapsed);
         return completed;
     }
 
+    /// <summary>Outcome of processing one file: whether it came from cache, and the resulting record.</summary>
+    private readonly record struct FileOutcome(bool Restored, ScriptRecord? Record);
+
     /// <summary>Analyses one file from disk and commits its record (also used by the watcher).</summary>
     public ScriptRecord? IndexFile(string path)
     {
+        return ProcessFile(path, allowRestore: false).Record;
+    }
+
+    private FileOutcome ProcessFile(string path, bool allowRestore)
+    {
+        string normalized = PathUtil.NormalizeAbsolute(path);
+
         string content;
         try
         {
-            content = _fileSystem.ReadAllText(path);
+            content = _fileSystem.ReadAllText(normalized);
         }
         catch ( IOException )
         {
-            return null;
+            return new FileOutcome(Restored: false, Record: null);
         }
         catch ( UnauthorizedAccessException )
         {
-            return null;
+            return new FileOutcome(Restored: false, Record: null);
         }
 
-        ResolutionContext context = Resolver.GetContext(path);
+        // Restore from cache when the on-disk content matches what was analysed before.
+        if ( allowRestore && _restored.TryGetValue(normalized, out ScriptRecord? cached) )
+        {
+            if ( cached.ContentHash == ScriptDatabase.ComputeContentHash(content) )
+            {
+                _database.CommitRecord(cached);
+                return new FileOutcome(Restored: true, Record: cached);
+            }
+        }
+
+        ResolutionContext context = Resolver.GetContext(normalized);
         ParseResult result = ScriptAnalysis.Analyze(
-            path,
-            ScriptAnalysis.LanguageFromPath(path),
+            normalized,
+            ScriptAnalysis.LanguageFromPath(normalized),
             SourceText.From(content),
             new CachingInsertProvider(this, context),
             _names);
 
-        string relativePath = Resolver.GetScriptRelativePath(path, context);
-        return _database.Commit(result, context, isDirty: false, relativePath);
+        string relativePath = Resolver.GetScriptRelativePath(normalized, context);
+        ScriptRecord record = _database.Commit(result, context, isDirty: false, relativePath);
+        _cache?.Enqueue(record);
+        return new FileOutcome(Restored: false, Record: record);
     }
 
     /// <summary>Drops a GSH from the lex cache (called when the file changes on disk).</summary>
     public void InvalidateGsh(string normalizedPath)
     {
         _gshCache.TryRemove(normalizedPath, out _);
+    }
+
+    /// <summary>Removes a deleted file from the database, persistent cache, and GSH lex cache.</summary>
+    public void RemoveFile(string normalizedPath, ScriptLanguage language)
+    {
+        _database.Remove(normalizedPath, language);
+        _cache?.EnqueueDelete(normalizedPath);
+        if ( language == ScriptLanguage.Gsh )
+        {
+            _gshCache.TryRemove(normalizedPath, out _);
+        }
     }
 
     private InsertedFile? LoadInsert(string rawInsertPath, ResolutionContext context)

@@ -98,6 +98,11 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 - Turns resolved #using/#insert paths into ctrl-clickable links to their target files.
 
+## Handlers/SemanticTokensHandler.cs
+
+- Full-document (and delta/range via the base class) semantic highlighting; the legend
+  order mirrors `SemanticTokenType`. Pushes `SemanticTokenBuilder.Build` output in order.
+
 ## Program.cs
 
 Top-level entry point. Configures Serilog to STDERR (stdout must stay clean for the

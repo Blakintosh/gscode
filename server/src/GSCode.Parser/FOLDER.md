@@ -29,6 +29,18 @@ LSP types anywhere.
   keying, address-of, class uses, field accesses, macro def/use, literal references with
   the case rules), and /@ @/ doc association by line adjacency.
 
+## Extraction/SemanticTokenType.cs
+
+- `enum SemanticTokenType` (integer values are the LSP legend index contract) +
+  `SemanticToken(Line, StartChar, Length, Type)`.
+
+## Extraction/SemanticTokenBuilder.cs
+
+- `static SemanticTokenBuilder.Build(ParseResult)` — ordered, non-overlapping semantic
+  tokens: identifiers classified from the reference list (function/class/macro/property),
+  keywords/numbers/strings/comments from the raw stream; multi-line comments split per
+  line. Unclassified identifiers are left to the TextMate grammar.
+
 ## Extraction/FoldingRegions.cs
 
 - `FoldingRegion(StartLine, EndLine, Kind)` + `static FoldingRegions.Compute(ParseResult)`

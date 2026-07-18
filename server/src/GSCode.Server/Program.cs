@@ -104,6 +104,7 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<ReferencesHandler>()
         .AddHandler<DocumentHighlightHandler>()
         .AddHandler<DocumentLinkHandler>()
+        .AddHandler<SemanticTokensHandler>()
         .AddHandler<ConfigurationHandler>()
         .OnInitialize((languageServer, request, cancellationToken) =>
         {

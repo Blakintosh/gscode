@@ -31,6 +31,27 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.UnexpectedConditionalDirective] = "'{0}' without a matching '#if'.",
         [GscDiagnosticCode.MissingMacroArguments] = "Macro '{0}' expects an argument list.",
         [GscDiagnosticCode.UnterminatedMacroArguments] = "The argument list for macro '{0}' is missing its closing ')'.",
+
+        // Parsing
+        [GscDiagnosticCode.ExpectedToken] = "Expected '{0}' but found '{1}'.",
+        [GscDiagnosticCode.ExpectedDeclaration] = "Expected a function, class, or directive but found '{0}'.",
+        [GscDiagnosticCode.ExpectedExpression] = "Expected an expression but found '{0}'.",
+        [GscDiagnosticCode.ExpectedStatement] = "Expected a statement but found '{0}'.",
+        [GscDiagnosticCode.ExpectedParameterName] = "Expected a parameter name but found '{0}'.",
+        [GscDiagnosticCode.ExpectedClassMember] = "Expected 'var', 'constructor', 'destructor', or 'function' but found '{0}'.",
+        [GscDiagnosticCode.ExpectedCaseLabel] = "Expected 'case' or 'default' but found '{0}'.",
+        [GscDiagnosticCode.UnterminatedBlock] = "Block is missing its closing '}}'.",
+        [GscDiagnosticCode.UnterminatedDevBlock] = "Dev block is missing its closing '#/'.",
+        [GscDiagnosticCode.UsingAfterDeclaration] = "'#using' directives must appear before the first function or class declaration.",
+        [GscDiagnosticCode.ExpectedScriptPath] = "Expected a script path after '{0}'.",
+        [GscDiagnosticCode.ExpectedNamespaceName] = "Expected a namespace name after '#namespace'.",
+
+        // Extraction / per-file semantics
+        [GscDiagnosticCode.UnknownPrecacheType] = "'{0}' is not a known #precache asset type.",
+        [GscDiagnosticCode.WrongPrecacheArgumentCount] = "#precache type '{0}' expects {1} value(s) after the type but got {2}.",
+        [GscDiagnosticCode.ConstructorHasParameters] = "Constructors cannot declare parameters.",
+        [GscDiagnosticCode.DestructorHasParameters] = "Destructors cannot declare parameters.",
+        [GscDiagnosticCode.NonValueDefaultParameter] = "Default value for '{0}' must be a plain value (literals and vectors only).",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

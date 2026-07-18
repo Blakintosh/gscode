@@ -77,6 +77,7 @@ LanguageServer server = await LanguageServer.From(options =>
 
             services.AddSingleton<ScriptDatabase>();
             services.AddSingleton(BuiltinApiSet.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
+            services.AddSingleton(ObjectFields.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
             services.AddSingleton(provider => new NavigationSupport(
                 provider.GetRequiredService<DocumentStore>(),
                 provider.GetRequiredService<ScriptDatabase>(),

@@ -15,12 +15,14 @@ public sealed class HoverHandler : HoverHandlerBase
 {
     private readonly NavigationSupport _support;
     private readonly BuiltinApiSet _builtins;
+    private readonly ObjectFields _objectFields;
     private readonly TextDocumentSelector _selector;
 
-    public HoverHandler(NavigationSupport support, BuiltinApiSet builtins, TextDocumentSelector selector)
+    public HoverHandler(NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields, TextDocumentSelector selector)
     {
         _support = support;
         _builtins = builtins;
+        _objectFields = objectFields;
         _selector = selector;
     }
 
@@ -85,7 +87,7 @@ public sealed class HoverHandler : HoverHandlerBase
                 return macro is not null ? MarkdownDocRenderer.RenderMacro(macro) : null;
             }
             case SymbolKind.Field:
-                return $"```gsc\n(field) {key.Name}\n```";
+                return RenderField(key.Name);
             case SymbolKind.StringLiteral:
             case SymbolKind.HashString:
             case SymbolKind.LocalizedString:
@@ -113,6 +115,32 @@ public sealed class HoverHandler : HoverHandlerBase
         }
 
         return null;
+    }
+
+    private string RenderField(string name)
+    {
+        // Enrich with known engine field types (the owner's entity kind isn't inferred
+        // until FlowTyper, so list every kind that declares this field name).
+        ImmutableArray<ObjectField> known = _objectFields.FindField(name);
+        if ( known.Length == 0 )
+        {
+            return $"```gsc\n(field) {name}\n```";
+        }
+
+        System.Text.StringBuilder markdown = new();
+        markdown.Append("```gsc\n(field) ").Append(name).Append("\n```\n\n---\n\nEngine field:\n");
+        foreach ( ObjectField field in known )
+        {
+            markdown.Append("* `").Append(field.EntityKind).Append("`: ").Append(field.Type);
+            if ( field.ReadOnly )
+            {
+                markdown.Append(" *(read-only)*");
+            }
+
+            markdown.Append('\n');
+        }
+
+        return markdown.ToString();
     }
 
     private static string RenderClass(ClassSymbol classSymbol)

@@ -36,7 +36,7 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | ScriptDefinitionQualifiedIdentifierTests | ✔ P7 | Cross-file qualified definition verified by the P7 navigation smoke |
 | MacroCallSiteModeTests | ☐ P7 | Macro expansion preview scenarios |
 | MacroGoToDefinitionWrongTargetTests | ✔ P2 | The canonical provenance regression: `InsertTests.Insert_SplicesTokens_WithGshProvenance` + `Insert_MacroFromGsh_DefinitionSitePointsIntoGsh` assert gsh-local ranges survive splicing (P7 wires it to go-to-def) |
-| DocumentHighlightCasingTests | ☐ P7 | |
+| DocumentHighlightCasingTests | ✔ P7 | Same-file highlight verified by the P7 navigation smoke; keys are lowercase-canonical so casing is inherently handled |
 | StockScriptsTests | ☐ P5 | Stock list powers rawFileWarningMode=stock |
 | UsingDirectiveHelperTests | ✔ P2 | Path resolution scenarios re-expressed in `Resolution/PathResolverTests` (overlay, probe order, slash styles, illegal paths) |
 | ReferenceIndexReconciliationTests | ☐ P5 | |

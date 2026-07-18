@@ -1,0 +1,2900 @@
+{
+  "ai": [
+    {
+      "Name": "accuracy",
+      "Type": "float"
+    },
+    {
+      "Name": "accuratefire",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "actor_id",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "aggressivemode",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "alertlevel",
+      "Type": "int"
+    },
+    {
+      "Name": "alertlevelint",
+      "Type": "float"
+    },
+    {
+      "Name": "allowpain",
+      "Type": "bool"
+    },
+    {
+      "Name": "ammopouch",
+      "Type": "weapon"
+    },
+    {
+      "Name": "animtranslationscale",
+      "Type": "float"
+    },
+    {
+      "Name": "arrivalfinalpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "arrivalfinalyaw",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "awarenesslevelcurrent",
+      "Type": "int"
+    },
+    {
+      "Name": "awarenesslevelprevious",
+      "Type": "int"
+    },
+    {
+      "Name": "badplaceawareness",
+      "Type": "float"
+    },
+    {
+      "Name": "blindaim",
+      "Type": "bool"
+    },
+    {
+      "Name": "blockingpain",
+      "Type": "bool"
+    },
+    {
+      "Name": "bulletsinclip",
+      "Type": "float"
+    },
+    {
+      "Name": "canflank",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "clamptonavmesh",
+      "Type": "int"
+    },
+    {
+      "Name": "combatmode",
+      "Type": "int"
+    },
+    {
+      "Name": "coversearchinterval",
+      "Type": "float"
+    },
+    {
+      "Name": "damagedir",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "damagelocation",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "damagemod",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "damagetaken",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "damageweapon",
+      "Type": "weapon",
+      "ReadOnly": true
+    },
+    {
+      "Name": "damageyaw",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "desiredangle",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "diequietly",
+      "Type": "bool"
+    },
+    {
+      "Name": "doingambush",
+      "Type": "bool"
+    },
+    {
+      "Name": "dontavoidplayer",
+      "Type": "bool"
+    },
+    {
+      "Name": "dropweapon",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "enableterrainik",
+      "Type": "int"
+    },
+    {
+      "Name": "engagemaxdist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "engagemaxfalloffdist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "engagemindist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "engageminfalloffdist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "exitPos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "exposedduration",
+      "Type": "float"
+    },
+    {
+      "Name": "finalaccuracy",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "firemode",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "fixedlinkyawonly",
+      "Type": "bool"
+    },
+    {
+      "Name": "flashbangimmunity",
+      "Type": "bool"
+    },
+    {
+      "Name": "forcefire",
+      "Type": "bool"
+    },
+    {
+      "Name": "gibbed",
+      "Type": "int"
+    },
+    {
+      "Name": "goodshootpos",
+      "Type": "vector"
+    },
+    {
+      "Name": "goodshootposvalid",
+      "Type": "bool"
+    },
+    {
+      "Name": "grenade",
+      "Type": "enthandle",
+      "ReadOnly": true
+    },
+    {
+      "Name": "grenadeammo",
+      "Type": "float"
+    },
+    {
+      "Name": "grenadeawareness",
+      "Type": "float"
+    },
+    {
+      "Name": "grenadethrowback",
+      "Type": "bool"
+    },
+    {
+      "Name": "grenadeweapon",
+      "Type": "weapon",
+      "ReadOnly": true
+    },
+    {
+      "Name": "groundrelativepose",
+      "Type": "int"
+    },
+    {
+      "Name": "groundtype",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gunblockedbywall",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "hero",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "holdfire",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignorepathenemyfightdist",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignorerunandgundist",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignoresuppression",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignoretriggers",
+      "Type": "int"
+    },
+    {
+      "Name": "isarrivalpending",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isarriving",
+      "Type": "bool"
+    },
+    {
+      "Name": "isdog",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "keepclaimednode",
+      "Type": "bool"
+    },
+    {
+      "Name": "keepclaimednodeifvalid",
+      "Type": "bool"
+    },
+    {
+      "Name": "lastenemysightpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lastpathtime",
+      "Type": "float"
+    },
+    {
+      "Name": "lastscriptstate",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lookaheaddir",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lookaheaddist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "manualtraversemode",
+      "Type": "bool"
+    },
+    {
+      "Name": "maxfaceenemydist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleeattackdist",
+      "Type": "float"
+    },
+    {
+      "Name": "meleeweapon",
+      "Type": "weapon"
+    },
+    {
+      "Name": "missinglegs",
+      "Type": "int"
+    },
+    {
+      "Name": "movementtype",
+      "Type": "string"
+    },
+    {
+      "Name": "movemode",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "newenemyreaction",
+      "Type": "bool"
+    },
+    {
+      "Name": "newenemyreactiondistsq",
+      "Type": "float"
+    },
+    {
+      "Name": "newenemyreactionpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "nextFindBestCoverTime",
+      "Type": "float"
+    },
+    {
+      "Name": "noattackeraccuracymod",
+      "Type": "bool"
+    },
+    {
+      "Name": "nodeoffsetpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "nogrenadereturnthrow",
+      "Type": "bool"
+    },
+    {
+      "Name": "noplayermeleeblood",
+      "Type": "int"
+    },
+    {
+      "Name": "pathablematerial",
+      "Type": "int"
+    },
+    {
+      "Name": "pathenemyfightdist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pathenemylookahead",
+      "Type": "float"
+    },
+    {
+      "Name": "pathgoalpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pathrandompercent",
+      "Type": "int"
+    },
+    {
+      "Name": "pathstartpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pathwaittime",
+      "Type": "float"
+    },
+    {
+      "Name": "perfectaim",
+      "Type": "bool"
+    },
+    {
+      "Name": "predictedArrivalDirectionValid",
+      "Type": "bool"
+    },
+    {
+      "Name": "predictedExitPos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "prevanimdelta",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "prevrelativedir",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "primaryweapon",
+      "Type": "weapon"
+    },
+    {
+      "Name": "proneok",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "properName",
+      "Type": "string"
+    },
+    {
+      "Name": "pushable",
+      "Type": "int"
+    },
+    {
+      "Name": "relativedir",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "runandgundist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "safetochangescript",
+      "Type": "bool"
+    },
+    {
+      "Name": "script_accuracy",
+      "Type": "float"
+    },
+    {
+      "Name": "scriptstate",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "secondaryweapon",
+      "Type": "weapon"
+    },
+    {
+      "Name": "sidearm",
+      "Type": "weapon"
+    },
+    {
+      "Name": "skipDeath",
+      "Type": "bool"
+    },
+    {
+      "Name": "statechangereason",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "suppressionduration",
+      "Type": "float"
+    },
+    {
+      "Name": "suppressionmeter",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "suppressionstarttime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "suppressionwait",
+      "Type": "float"
+    },
+    {
+      "Name": "traversalendpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "traversalstartpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "traverseendnode",
+      "Type": "pathnode",
+      "ReadOnly": true
+    },
+    {
+      "Name": "traversestartnode",
+      "Type": "pathnode",
+      "ReadOnly": true
+    },
+    {
+      "Name": "usechokepoints",
+      "Type": "bool"
+    },
+    {
+      "Name": "usecombatscriptatcover",
+      "Type": "bool"
+    },
+    {
+      "Name": "usegoalanimweight",
+      "Type": "bool"
+    },
+    {
+      "Name": "walkdist",
+      "Type": "float"
+    },
+    {
+      "Name": "weapon",
+      "Type": "weapon"
+    },
+    {
+      "Name": "weaponaccuracy",
+      "Type": "float",
+      "ReadOnly": true
+    }
+  ],
+  "aitype": [
+    {
+      "Name": "accuratefire",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "aggressivemode",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "canflank",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "hero",
+      "Type": "bool",
+      "ReadOnly": true
+    }
+  ],
+  "entity": [
+    {
+      "Name": "aitype",
+      "Type": "object"
+    },
+    {
+      "Name": "aitypevariant",
+      "Type": "object"
+    },
+    {
+      "Name": "allowdeath",
+      "Type": "bool"
+    },
+    {
+      "Name": "angles",
+      "Type": "vector"
+    },
+    {
+      "Name": "animname",
+      "Type": "string"
+    },
+    {
+      "Name": "archetype",
+      "Type": "object"
+    },
+    {
+      "Name": "birthtime",
+      "Type": "int"
+    },
+    {
+      "Name": "classname",
+      "Type": "string"
+    },
+    {
+      "Name": "count",
+      "Type": "int"
+    },
+    {
+      "Name": "dmg",
+      "Type": "int"
+    },
+    {
+      "Name": "health",
+      "Type": "int"
+    },
+    {
+      "Name": "index",
+      "Type": "int"
+    },
+    {
+      "Name": "item",
+      "Type": "weapon"
+    },
+    {
+      "Name": "lerp_to_darker",
+      "Type": "float"
+    },
+    {
+      "Name": "lerp_to_lighter",
+      "Type": "float"
+    },
+    {
+      "Name": "model",
+      "Type": "string"
+    },
+    {
+      "Name": "origin",
+      "Type": "vector"
+    },
+    {
+      "Name": "scoretype",
+      "Type": "object"
+    },
+    {
+      "Name": "script_animname",
+      "Type": "string"
+    },
+    {
+      "Name": "script_noteworthy",
+      "Type": "string"
+    },
+    {
+      "Name": "spawnflags",
+      "Type": "int"
+    },
+    {
+      "Name": "species",
+      "Type": "object"
+    },
+    {
+      "Name": "takedamage",
+      "Type": "bool"
+    },
+    {
+      "Name": "target",
+      "Type": "string"
+    },
+    {
+      "Name": "targetname",
+      "Type": "string"
+    },
+    {
+      "Name": "team",
+      "Type": "int"
+    }
+  ],
+  "hudelem": [
+    {
+      "Name": "alignx",
+      "Type": "int"
+    },
+    {
+      "Name": "aligny",
+      "Type": "int"
+    },
+    {
+      "Name": "alpha",
+      "Type": "int"
+    },
+    {
+      "Name": "archived",
+      "Type": "bool"
+    },
+    {
+      "Name": "color",
+      "Type": "int"
+    },
+    {
+      "Name": "fadewhentargeted",
+      "Type": "bool"
+    },
+    {
+      "Name": "font",
+      "Type": "int"
+    },
+    {
+      "Name": "font3duseglowcolor",
+      "Type": "bool"
+    },
+    {
+      "Name": "fontscale",
+      "Type": "float"
+    },
+    {
+      "Name": "fontstyle3d",
+      "Type": "int"
+    },
+    {
+      "Name": "foreground",
+      "Type": "bool"
+    },
+    {
+      "Name": "glowalpha",
+      "Type": "int"
+    },
+    {
+      "Name": "glowcolor",
+      "Type": "int"
+    },
+    {
+      "Name": "hidewhendead",
+      "Type": "bool"
+    },
+    {
+      "Name": "hidewhenindemo",
+      "Type": "bool"
+    },
+    {
+      "Name": "hidewheninkillcam",
+      "Type": "bool"
+    },
+    {
+      "Name": "hidewheninmenu",
+      "Type": "bool"
+    },
+    {
+      "Name": "hidewheninscope",
+      "Type": "bool"
+    },
+    {
+      "Name": "hidewhileremotecontrolling",
+      "Type": "bool"
+    },
+    {
+      "Name": "horzalign",
+      "Type": "int"
+    },
+    {
+      "Name": "immunetodemofreecamera",
+      "Type": "bool"
+    },
+    {
+      "Name": "immunetodemogamehudsettings",
+      "Type": "bool"
+    },
+    {
+      "Name": "label",
+      "Type": "int"
+    },
+    {
+      "Name": "showplayerteamhudelemtospectator",
+      "Type": "bool"
+    },
+    {
+      "Name": "sort",
+      "Type": "float"
+    },
+    {
+      "Name": "vertalign",
+      "Type": "int"
+    },
+    {
+      "Name": "x",
+      "Type": "float"
+    },
+    {
+      "Name": "y",
+      "Type": "float"
+    },
+    {
+      "Name": "z",
+      "Type": "float"
+    }
+  ],
+  "pathnode": [
+    {
+      "Name": "angles",
+      "Type": "vector"
+    },
+    {
+      "Name": "animscript",
+      "Type": "string"
+    },
+    {
+      "Name": "cost_modifier",
+      "Type": "float"
+    },
+    {
+      "Name": "movementtype_ignore",
+      "Type": "int"
+    },
+    {
+      "Name": "movementtype_require",
+      "Type": "int"
+    },
+    {
+      "Name": "origin",
+      "Type": "vector"
+    },
+    {
+      "Name": "script_linkname",
+      "Type": "string"
+    },
+    {
+      "Name": "script_noteworthy",
+      "Type": "string"
+    },
+    {
+      "Name": "spawnflags",
+      "Type": "int"
+    },
+    {
+      "Name": "suspended",
+      "Type": "bool"
+    },
+    {
+      "Name": "target",
+      "Type": "string"
+    },
+    {
+      "Name": "targetname",
+      "Type": "string"
+    },
+    {
+      "Name": "type",
+      "Type": "int"
+    }
+  ],
+  "player": [
+    {
+      "Name": "agrkills",
+      "Type": "int"
+    },
+    {
+      "Name": "animInputUnlock",
+      "Type": "bool"
+    },
+    {
+      "Name": "animNoClientTransform",
+      "Type": "bool"
+    },
+    {
+      "Name": "animViewUnlock",
+      "Type": "bool"
+    },
+    {
+      "Name": "archivetime",
+      "Type": "float"
+    },
+    {
+      "Name": "assists",
+      "Type": "int"
+    },
+    {
+      "Name": "captures",
+      "Type": "int"
+    },
+    {
+      "Name": "carries",
+      "Type": "int"
+    },
+    {
+      "Name": "chargeshotlevel",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "chickens",
+      "Type": "int"
+    },
+    {
+      "Name": "currentspectatingclient",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "cursorhintent",
+      "Type": "entity",
+      "ReadOnly": true
+    },
+    {
+      "Name": "deaths",
+      "Type": "int"
+    },
+    {
+      "Name": "defends",
+      "Type": "int"
+    },
+    {
+      "Name": "defuses",
+      "Type": "int"
+    },
+    {
+      "Name": "destructions",
+      "Type": "int"
+    },
+    {
+      "Name": "disables",
+      "Type": "int"
+    },
+    {
+      "Name": "disallowvehicleusage",
+      "Type": "bool"
+    },
+    {
+      "Name": "divetoprone",
+      "Type": "bool"
+    },
+    {
+      "Name": "downs",
+      "Type": "int"
+    },
+    {
+      "Name": "escorts",
+      "Type": "int"
+    },
+    {
+      "Name": "gems",
+      "Type": "int"
+    },
+    {
+      "Name": "groundentity",
+      "Type": "entity",
+      "ReadOnly": true
+    },
+    {
+      "Name": "groundsurfacetype",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "hacks",
+      "Type": "int"
+    },
+    {
+      "Name": "hassatellite",
+      "Type": "int"
+    },
+    {
+      "Name": "hasspyplane",
+      "Type": "int"
+    },
+    {
+      "Name": "headicon",
+      "Type": "string"
+    },
+    {
+      "Name": "headshots",
+      "Type": "int"
+    },
+    {
+      "Name": "humiliated",
+      "Type": "int"
+    },
+    {
+      "Name": "incaps",
+      "Type": "int"
+    },
+    {
+      "Name": "killcamentity",
+      "Type": "int"
+    },
+    {
+      "Name": "killcammod",
+      "Type": "int"
+    },
+    {
+      "Name": "killcamtargetentity",
+      "Type": "int"
+    },
+    {
+      "Name": "killcamweapon",
+      "Type": "weapon"
+    },
+    {
+      "Name": "kills",
+      "Type": "int"
+    },
+    {
+      "Name": "killsconfirmed",
+      "Type": "int"
+    },
+    {
+      "Name": "killsdenied",
+      "Type": "int"
+    },
+    {
+      "Name": "lastdamagetime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonentity",
+      "Type": "entity"
+    },
+    {
+      "Name": "lookatent",
+      "Type": "enthandle",
+      "ReadOnly": true
+    },
+    {
+      "Name": "maxhealth",
+      "Type": "int"
+    },
+    {
+      "Name": "momentum",
+      "Type": "int"
+    },
+    {
+      "Name": "name",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "objtime",
+      "Type": "int"
+    },
+    {
+      "Name": "pers",
+      "Type": "object",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pivotentity",
+      "Type": "entity"
+    },
+    {
+      "Name": "plants",
+      "Type": "int"
+    },
+    {
+      "Name": "playername",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pointstowin",
+      "Type": "int"
+    },
+    {
+      "Name": "psoffsettime",
+      "Type": "int"
+    },
+    {
+      "Name": "returns",
+      "Type": "int"
+    },
+    {
+      "Name": "revives",
+      "Type": "int"
+    },
+    {
+      "Name": "sbtimeplayed",
+      "Type": "int"
+    },
+    {
+      "Name": "score",
+      "Type": "int"
+    },
+    {
+      "Name": "sessionstate",
+      "Type": "string"
+    },
+    {
+      "Name": "sessionteam",
+      "Type": "string"
+    },
+    {
+      "Name": "shotshit",
+      "Type": "int"
+    },
+    {
+      "Name": "shotsmissed",
+      "Type": "int"
+    },
+    {
+      "Name": "skulls",
+      "Type": "int"
+    },
+    {
+      "Name": "spectatekillcam",
+      "Type": "int"
+    },
+    {
+      "Name": "spectatorclient",
+      "Type": "int"
+    },
+    {
+      "Name": "sprinting",
+      "Type": "bool"
+    },
+    {
+      "Name": "stabs",
+      "Type": "int"
+    },
+    {
+      "Name": "statusicon",
+      "Type": "string"
+    },
+    {
+      "Name": "survived",
+      "Type": "int"
+    },
+    {
+      "Name": "throws",
+      "Type": "int"
+    },
+    {
+      "Name": "tomahawks",
+      "Type": "int"
+    },
+    {
+      "Name": "topdowncamera",
+      "Type": "bool"
+    },
+    {
+      "Name": "usingvehicle",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehicleposition",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "victory",
+      "Type": "int"
+    },
+    {
+      "Name": "viewlockedentity",
+      "Type": "entity",
+      "ReadOnly": true
+    },
+    {
+      "Name": "weaponhealth",
+      "Type": "int"
+    },
+    {
+      "Name": "x2score",
+      "Type": "int"
+    }
+  ],
+  "sentient": [
+    {
+      "Name": "activatecrosshair",
+      "Type": "bool"
+    },
+    {
+      "Name": "attacker",
+      "Type": "enthandle",
+      "ReadOnly": true
+    },
+    {
+      "Name": "attackeraccuracy",
+      "Type": "float"
+    },
+    {
+      "Name": "attackercount",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "attackercountthreatscale",
+      "Type": "float"
+    },
+    {
+      "Name": "coverthreatscale",
+      "Type": "float"
+    },
+    {
+      "Name": "currentenemythreatscale",
+      "Type": "float"
+    },
+    {
+      "Name": "drawoncompass",
+      "Type": "bool"
+    },
+    {
+      "Name": "enemy",
+      "Type": "enthandle",
+      "ReadOnly": true
+    },
+    {
+      "Name": "enemylastseenpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "favoriteenemy",
+      "Type": "sentienthandle"
+    },
+    {
+      "Name": "fixednode",
+      "Type": "bool"
+    },
+    {
+      "Name": "fixednodesaferadius",
+      "Type": "float"
+    },
+    {
+      "Name": "fovcosine",
+      "Type": "float"
+    },
+    {
+      "Name": "fovcosinebusy",
+      "Type": "float"
+    },
+    {
+      "Name": "fovcosinez",
+      "Type": "float"
+    },
+    {
+      "Name": "goalangle",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "goalent",
+      "Type": "enthandle",
+      "ReadOnly": true
+    },
+    {
+      "Name": "goalforced",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "goalheight",
+      "Type": "float"
+    },
+    {
+      "Name": "goalpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "goalradius",
+      "Type": "float"
+    },
+    {
+      "Name": "goodenemyonly",
+      "Type": "bool"
+    },
+    {
+      "Name": "highlyawareradius",
+      "Type": "float"
+    },
+    {
+      "Name": "ignoreall",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignorebulletdamage",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignoreclosefoliage",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignoreexplosionevents",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignoreforfriendlyfire",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignoreme",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignorenavmeshtriggers",
+      "Type": "bool"
+    },
+    {
+      "Name": "ignorevortices",
+      "Type": "bool"
+    },
+    {
+      "Name": "inmeleecharge",
+      "Type": "bool"
+    },
+    {
+      "Name": "isatanchor",
+      "Type": "bool"
+    },
+    {
+      "Name": "maxseenfovcosine",
+      "Type": "float"
+    },
+    {
+      "Name": "maxseenfovcosinez",
+      "Type": "float"
+    },
+    {
+      "Name": "maxsightdistsqrd",
+      "Type": "float"
+    },
+    {
+      "Name": "maxvisibledist",
+      "Type": "float"
+    },
+    {
+      "Name": "node",
+      "Type": "pathnode",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pacifist",
+      "Type": "bool"
+    },
+    {
+      "Name": "pacifistwait",
+      "Type": "int"
+    },
+    {
+      "Name": "prevnode",
+      "Type": "pathnode",
+      "ReadOnly": true
+    },
+    {
+      "Name": "recentattackerthreatscale",
+      "Type": "float"
+    },
+    {
+      "Name": "script_owner",
+      "Type": "enthandle",
+      "ReadOnly": true
+    },
+    {
+      "Name": "scriptenemy",
+      "Type": "enthandle",
+      "ReadOnly": true
+    },
+    {
+      "Name": "scriptenemytag",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "sightlatency",
+      "Type": "float"
+    },
+    {
+      "Name": "silentshot",
+      "Type": "bool"
+    },
+    {
+      "Name": "surprisedbymedistsq",
+      "Type": "float"
+    },
+    {
+      "Name": "syncedmeleetarget",
+      "Type": "enthandle"
+    },
+    {
+      "Name": "threatbias",
+      "Type": "int"
+    },
+    {
+      "Name": "threatbiasgroup",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "updatesight",
+      "Type": "bool"
+    }
+  ],
+  "vehicle": [
+    {
+      "Name": "accuracy_gunner1",
+      "Type": "float"
+    },
+    {
+      "Name": "accuracy_gunner2",
+      "Type": "float"
+    },
+    {
+      "Name": "accuracy_gunner3",
+      "Type": "float"
+    },
+    {
+      "Name": "accuracy_gunner4",
+      "Type": "float"
+    },
+    {
+      "Name": "accuracy_turret",
+      "Type": "float"
+    },
+    {
+      "Name": "addtocompass",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "assassinationbundle",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "deathmodel",
+      "Type": "xmodel",
+      "ReadOnly": true
+    },
+    {
+      "Name": "drivebysoundtime0",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "drivebysoundtime1",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "glasscollision_alt",
+      "Type": "bool"
+    },
+    {
+      "Name": "gunner1ontarget",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gunner2ontarget",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "healthdefault",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "height",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "heliheightlockoffset",
+      "Type": "float"
+    },
+    {
+      "Name": "isphysicsvehicle",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "jumpforce",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "modelswapdelay",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pathdistancetraveled",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pathlookpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pathpos",
+      "Type": "vector",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pathwidth",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pathwidthlookaheadfrac",
+      "Type": "float"
+    },
+    {
+      "Name": "physicslaunchdeathscale",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "playerdrivenversion",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "predictedCollisionTime",
+      "Type": "float"
+    },
+    {
+      "Name": "radius",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "radiusdamagemax",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "radiusdamagemin",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "radiusdamageradius",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "rumbleadditionaltime",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "rumblebasetime",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "rumbleduration",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "rumbleradius",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "rumblescale",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "rumbletype",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "scriptbundlesettings",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "scriptvehicletype",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "shootshock",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "turretontarget",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "turretonvistarget",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "turretrotscale",
+      "Type": "float"
+    },
+    {
+      "Name": "turretweapon",
+      "Type": "weapon",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehaircraftcollisionenabled",
+      "Type": "bool"
+    },
+    {
+      "Name": "vehcheckforpredictedcrash",
+      "Type": "bool"
+    },
+    {
+      "Name": "vehicleclass",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehicleridersbundle",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehicleridersrobotbundle",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehicletype",
+      "Type": "string"
+    },
+    {
+      "Name": "vehkilloccupantsondeath",
+      "Type": "bool"
+    },
+    {
+      "Name": "vehmodel",
+      "Type": "xmodel",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehmodelenemy",
+      "Type": "xmodel",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehonpath",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehspeed",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehunlinkoccupantsondeath",
+      "Type": "bool"
+    },
+    {
+      "Name": "vehviewmodel",
+      "Type": "xmodel",
+      "ReadOnly": true
+    },
+    {
+      "Name": "velocity",
+      "Type": "vector",
+      "ReadOnly": true
+    }
+  ],
+  "vn": [
+    {
+      "Name": "angles",
+      "Type": "vector"
+    },
+    {
+      "Name": "lookahead",
+      "Type": "float"
+    },
+    {
+      "Name": "origin",
+      "Type": "vector"
+    },
+    {
+      "Name": "radius",
+      "Type": "float"
+    },
+    {
+      "Name": "script_linkname",
+      "Type": "string"
+    },
+    {
+      "Name": "script_noteworthy",
+      "Type": "string"
+    },
+    {
+      "Name": "spawnflags",
+      "Type": "int"
+    },
+    {
+      "Name": "speed",
+      "Type": "float"
+    },
+    {
+      "Name": "target",
+      "Type": "string"
+    },
+    {
+      "Name": "target2",
+      "Type": "string"
+    },
+    {
+      "Name": "targetname",
+      "Type": "string"
+    },
+    {
+      "Name": "tension",
+      "Type": "float"
+    }
+  ],
+  "weapon": [
+    {
+      "Name": "aifusetime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "allowsDetonationDuringReload",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "altoffhand",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "altweapon",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ammocountequipment",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "anyplayercanretrieve",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "attachments",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "blocksprone",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "bottomarc",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "bulletImpactExplode",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "burnDamage",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "burnDamageInterval",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "burnDuration",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "burstCount",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "chaineventmax",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "chaineventradius",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "chaineventtime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "clipmodel",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "clipsize",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "cookoffholdtime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "damageAlwaysKillsPlayer",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "damageToOwnerScalar",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "deathcamtime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "decoy",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "destroyablebytrophysystem",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "destroysEquipment",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "disableDeploy",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "disallowatmatchstart",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "displayname",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "dniweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "doNotDamageOwner",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "doannihilate",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "doblowback",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "dodamagefeedback",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "doempdestroyfx",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "doesfiredamage",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "dogibbing",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "dogibbingonmelee",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "dohackedstats",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "dostun",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "drawoffhandmodelinhand",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "dualwieldweapon",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "enemycrosshairrange",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "explosioninnerradius",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "explosionradius",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "fightdist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "firesound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "firesoundplayer",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "firetime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "firetype",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "forcedamageshellshockandrumble",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "frontendmodel",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "fuellife",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "fusetime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_breadcrumbduration",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_flickerondamage",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_flickeronpowerloss",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_flickeronpowerlow",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_heroversion_2_0",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_max_hitpoints",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_power_consume_on_ammo_use",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_power_reset_on_class_change",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_power_reset_on_round_switch",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_power_reset_on_spawn",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_power_reset_on_team_change",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_power_round_end_active_penalty",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_power_usage_rate",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powergainscorefactor",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powergainscoreignoreself",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powergainscoreignorewhenactive",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powermax",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powermoveloss",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powermovespeed",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powerofflossondamage",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_poweronlossondamage",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powerreplenishfactor",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powersprintloss",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_powertakedowngain",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_pulse_duration",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_pulse_margin",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_pulse_max_range",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_shieldreflectpowergain",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_shieldreflectpowerloss",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_shockfield_damage",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_shockfield_radius",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_takedownrevealtime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_turnoff_onempjammed",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "gadget_type",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "grappleweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "guidedmissiletype",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "hackertriggerorigintag",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ignoresLightArmor",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ignoresPowerArmor",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ignoresflakjacket",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ignoreteamkills",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "inventorytype",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isaikillstreakdamage",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isalllockedfire",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isaltmode",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isballisticknife",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isboltaction",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isbulletweapon",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isburstfire",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "iscarriedkillstreak",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ischargeshot",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "iscliponly",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isdisallowatmatchstart",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isdualwield",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isemp",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isequipment",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isflash",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isflourishweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isfullauto",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isgadget",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isgameplayweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isgasweapon",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isgrenadeweapon",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ishacktoolweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isheroweapon",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ishybridweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isitem",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "iskillstreak",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "islauncher",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "islethalgrenade",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "ismeleeweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isnotdroppable",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isperkbottle",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isprimary",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isprojectileweapon",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isriotshield",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isrocketlauncher",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isscavengable",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "issemiauto",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "issniperweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isspecificuse",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isstackedfire",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isstun",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "issupplydropweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "istacticalgrenade",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "istacticalinsertion",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "istimeddetonation",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isvalid",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "isvaluable",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "leftarc",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockOnLossRadius",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockOnRadius",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonSeekerLockedSound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonSeekerLockedSoundLoops",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonSeekerSearchSound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonSeekerSearchSoundLoops",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonTargetFiredOnSound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonTargetFiredOnSoundLoops",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonTargetLockedSound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonTargetLockedSoundLoops",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonanglehorizontal",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonanglevertical",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonlossanglehorizontal",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonlossanglevertical",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonmaxrange",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonmaxrangenolineofsight",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonminrange",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonscreenradius",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockonspeed",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "lockontype",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "maxammo",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "maxdist",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "maxgibdistance",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "maxinstancesallowed",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleeIgnoresLightArmor",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleechargerange",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleechargetime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleedamage",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleelungerange",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleepowertime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleepowertimeLeft",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "meleetime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "multidetonation",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "multidetonationfragmentspeed",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "name",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "nohitmarker",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "nonstowedweapon",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "notkillstreak",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "offhandclass",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "offhandslot",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pickupsound",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "pickupsoundplayer",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "projSmokeEndSound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "projSmokeLoopSound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "projSmokeStartSound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "projexplosionsound",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "projexplosionsoundplayer",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "projexplosiontype",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "proximityalarmactivationdelay",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "proximityalarminnerradius",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "proximityalarmouterradius",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "proximitydetonation",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "reloadtime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "requirelockontofire",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "rightarc",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "rootweapon",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "setusedstat",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "shotcount",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "shownenemyequip",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "shownenemyexplo",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "shownretrievable",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "skipbattlechatterkill",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "skipbattlechatterreload",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "skiplowammovox",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "soundRattleRangeMax",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "soundRattleRangeMin",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "spawnInfluencer",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "specialpain",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "spindowntime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "spinuptime",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "startammo",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "stowedmodel",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "supportedattachments",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "teamkillpenaltyscale",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "toparc",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "type",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "unlimitedammo",
+      "Type": "bool",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehicleprojectiledamagescalar",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "vehicleprojectilesplashdamagescalar",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "viewmodels",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "weapclass",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "weaponHeadObjectiveHeight",
+      "Type": "float",
+      "ReadOnly": true
+    },
+    {
+      "Name": "weapondamage1hitpoints",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "weapondamage2hitpoints",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "weapondamage3hitpoints",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "weaponstarthitpoints",
+      "Type": "int",
+      "ReadOnly": true
+    },
+    {
+      "Name": "worlddamagedmodel1",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "worlddamagedmodel2",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "worlddamagedmodel3",
+      "Type": "string",
+      "ReadOnly": true
+    },
+    {
+      "Name": "worldmodel",
+      "Type": "string",
+      "ReadOnly": true
+    }
+  ]
+}

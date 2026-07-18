@@ -30,9 +30,16 @@ extensible beyond stock data. Entry shape: `{ "name", "type", "readonly"? }`.
   `"readonly": true` (normalized from the old file's `// all read-only` comment).
 - `clientfield_enums.txt` — clientfield enum reference material.
 
-## The tool (lands in P7)
+## The tool (P7)
 
-- `import` — parses `sources/originals/` into per-tab curated JSONs (adds the CSC-side
-  tabs the curated layer lacks) and the parsed keys list.
-- `generate` — builds `t7_object_fields.json` + `t7_radiant_keys.json` in
-  `GSCode.Workspace/Api/` from `sources/curated/` alone, deterministically (stable sort).
+`GSCode.FieldData.csproj` + `Program.cs` — a dev-time console generator, deliberately
+kept OUT of `GSCode.slnx` so it is never a server build/runtime dependency. Run it by
+hand with `dotnet run` from this folder after editing the curated sources.
+
+- Merges every `sources/curated/*_fields.json` into `GSCode.Workspace/Api/t7_object_fields.json`
+  (a `{ entityKind: [ {name, type, readOnly} ] }` document, entries sorted for clean diffs).
+  Entity kind is the file stem minus `_fields`/`_simple` (`entity_generic` → `entity`).
+- Parses `sources/originals/keys.txt` (`[client] <type> <field> // comment`) into
+  `t7_radiant_keys.json` (`[ {name, type, side, comment} ]`, sorted).
+- The `import` step (xlsx → curated) is manual for now; the curated JSON is the source of
+  truth and already covers the entity kinds.

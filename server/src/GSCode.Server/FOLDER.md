@@ -74,8 +74,10 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 ## Handlers/HoverHandler.cs
 
-- Markdown hover: script functions and builtins (fallback), classes, macros, fields —
-  rendered via MarkdownDocRenderer over SymbolAtPosition + DatabaseQueries.
+- Markdown hover: script functions and builtins (fallback), classes, macros, and fields —
+  rendered via MarkdownDocRenderer over SymbolAtPosition + DatabaseQueries. Field hover is
+  enriched with known engine-field types (every entity kind declaring the name, since the
+  owner type isn't inferred until FlowTyper).
 
 ## Handlers/DefinitionHandler.cs
 

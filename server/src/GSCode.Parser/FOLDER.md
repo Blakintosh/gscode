@@ -4,7 +4,43 @@ The pure per-file analysis pipeline: lexer → preprocessor → parser → extra
 A deterministic function library — no I/O except through injected providers, and no
 LSP types anywhere.
 
-*(Lexing = P1, Preprocessing = P2, Syntax = P3 (all below); extraction lands in P4.)*
+## ParseResult.cs
+
+- `sealed record ParseResult` — every stage's product (text, lexed, preprocessed, tree,
+  extraction) plus the merged diagnostic list.
+- `static class ScriptAnalysis` — THE per-file pipeline entry: `Analyze(path, language,
+  text, insertProvider, names)` runs lex → preprocess → parse → extract, pure and
+  synchronous. GSH lenient mode suppresses parse-stage (3xxx) diagnostics for
+  injectable fragments while macros still extract fully. `LanguageFromPath` helper.
+
+## Extraction/ExtractionResult.cs
+
+- `sealed record ExtractionResult(Namespaces, Functions, Classes, References, Diagnostics)`
+  — the extracted symbol surface the Workspace layer builds ScriptRecords from.
+
+## Extraction/SymbolExtractor.cs
+
+- `sealed class SymbolExtractor.Extract(...)` — one AST walk producing: namespace spans
+  (default = file stem; positional #namespace switching), FunctionSymbols with contained
+  assignments (locals, any-owner fields, foreach variables, const), ClassSymbols
+  (members/methods/ctor-dtor flags + parameter-rule diagnostics), #precache validation
+  against PrecacheAssetTypes, plain-value default enforcement, the classified reference
+  list (definitions, calls with unqualified-under-current-namespace and sys::→builtin
+  keying, address-of, class uses, field accesses, macro def/use, literal references with
+  the case rules), and /@ @/ doc association by line adjacency.
+
+## Extraction/FoldingRegions.cs
+
+- `FoldingRegion(StartLine, EndLine, Kind)` + `static FoldingRegions.Compute(ParseResult)`
+  — declarations/blocks/switches/dev blocks from the AST, multi-line comments and doc
+  blocks from raw tokens, and case-insensitive nestable `/* region */`…`/* endregion */`
+  user regions.
+
+## Syntax/AstSearch.cs
+
+- `static AstSearch` — `ChainAt(root, position)` (containing-node chain, outermost →
+  innermost; the basis of selection ranges) and `ChildrenOf(node)` (full structural
+  child enumeration).
 
 ## Syntax/Ast/AstNode.cs
 

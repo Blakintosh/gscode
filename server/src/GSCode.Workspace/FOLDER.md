@@ -3,7 +3,23 @@
 Workspace layer: the script database (separate GSC/CSC stores), path/mod-overlay
 resolution, background indexing, the SQLite cache, and the bundled game data. LSP-free.
 
-*(Resolution = P2 (below); database/indexing land P5, cache P6.)*
+*(Resolution = P2, Documents = P4 (below); database/indexing land P5, cache P6.)*
+
+## Documents/DocumentStore.cs
+
+- `sealed class OpenDocument` — one open editor file: normalized path, language, live
+  SourceText, version, latest ParseResult, and the pending-analysis CTS (newer edits
+  cancel in-flight debounced runs).
+- `sealed class DocumentStore` — open-document tracking keyed by normalized path.
+  `Open`/`Close`/`TryGet`, `ApplyChange` (LSP incremental splice or full replace), and
+  `Analyze` (runs ScriptAnalysis with an insert provider bound to the file's context
+  via the injected factory).
+
+## Resolution/ResolverInsertProvider.cs
+
+- `sealed class ResolverInsertProvider` — the real #insert provider: resolves the raw
+  path through the asking file's ResolutionContext, reads and lexes the target. The
+  shared lexed-GSH cache arrives with the indexer (P5).
 
 ## Resolution/IFileSystem.cs
 

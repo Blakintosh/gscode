@@ -1,8 +1,54 @@
 # GSCode.Server
 
-The LSP host — the only project referencing OmniSharp. At P0 it is a walking skeleton:
-it connects a transport, answers `initialize`/`initialized`, and honors the client's
-log-level setting. Handlers arrive with their features (P4+).
+The LSP host — the only project referencing OmniSharp. P4 lights up the first live
+features: diagnostics while typing, the hierarchical outline, folding, selection ranges.
+
+## Mapping/LspMapping.cs
+
+- `static class LspMapping` — the ONLY place Core and protocol types meet: structural
+  Position/TextRange conversions (both UTF-16 zero-based) and Diagnostic mapping
+  (severity cast, numeric code, source "gscode").
+
+## Configuration/ServerSettings.cs
+
+- `sealed class ServerSettings` — the parsed gscode.* view (serverLogLevel, raw.enabled,
+  rawPath/modsPath overrides, rawFileWarningMode, outline.showAssignments). `Apply(JToken)`
+  merges a settings payload; missing keys keep current values.
+
+## Configuration/ResolverHolder.cs
+
+- `sealed class ResolverHolder` — holds the current PathResolver (starts empty; the real
+  one is built at initialize when settings + workspace folders exist). Consumers read
+  `Current` at call time, so swaps/rebuilds need no re-wiring.
+
+## Handlers/TextSyncHandler.cs
+
+- Incremental text sync. didOpen → immediate analysis; didChange → ~250 ms debounced
+  re-analysis with per-document cancellation (superseded runs are cancelled, silently);
+  didSave → immediate (bypasses debounce); didClose → clears diagnostics.
+
+## Handlers/DiagnosticsPublisher.cs
+
+- `Publish`/`Clear` — push-model publishDiagnostics wrapper.
+
+## Handlers/DocumentSymbolHandler.cs
+
+- The hierarchical outline: explicit `#namespace` directives become containers (the
+  file-default span stays flat) → classes (members + methods) → functions →
+  deduplicated assignments (behind outline.showAssignments) — plus macros literally
+  #defined in the file (insert-provided ones excluded via provenance).
+
+## Handlers/FoldingRangeHandler.cs
+
+- Maps FoldingRegions.Compute onto LSP folding ranges (code/comment/region kinds).
+
+## Handlers/SelectionRangeHandler.cs
+
+- Expand-selection: the AstSearch ancestor chain per position, linked innermost→parent.
+
+## Handlers/ConfigurationHandler.cs
+
+- didChangeConfiguration → ServerSettings.Apply + live Serilog level switch update.
 
 ## Program.cs
 

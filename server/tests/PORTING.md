@@ -32,8 +32,8 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | ScriptInsertPathsTests | ✔ P2 | Insert path collection/validation/edge scenarios in `Preprocessing/InsertTests` |
 | CompletionAfterInsertTests | ☐ P8 | |
 | ScriptReferencesSelectionEndTests | ☐ P7 | |
-| ScriptHoverQualifiedFunctionTests | ☐ P7 | |
-| ScriptDefinitionQualifiedIdentifierTests | ☐ P7 | |
+| ScriptHoverQualifiedFunctionTests | ✔ P7 | Qualified-function hover via `Api/ApiLoaderTests` (renderer) + the nav smoke; deeper cases as more hover tests land |
+| ScriptDefinitionQualifiedIdentifierTests | ✔ P7 | Cross-file qualified definition verified by the P7 navigation smoke |
 | MacroCallSiteModeTests | ☐ P7 | Macro expansion preview scenarios |
 | MacroGoToDefinitionWrongTargetTests | ✔ P2 | The canonical provenance regression: `InsertTests.Insert_SplicesTokens_WithGshProvenance` + `Insert_MacroFromGsh_DefinitionSitePointsIntoGsh` assert gsh-local ranges survive splicing (P7 wires it to go-to-def) |
 | DocumentHighlightCasingTests | ☐ P7 | |

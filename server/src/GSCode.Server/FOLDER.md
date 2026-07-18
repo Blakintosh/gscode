@@ -67,6 +67,35 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 - workspace/symbol — spans BOTH language stores (no asking file), matching functions and
   classes by case-insensitive substring, each result located at its file. Capped at 256.
 
+## Handlers/NavigationSupport.cs
+
+- `NavigationTarget` + `NavigationSupport.Resolve(uri)` — shared plumbing turning a
+  document URI into its live analysis + the language store and context id to query.
+
+## Handlers/HoverHandler.cs
+
+- Markdown hover: script functions and builtins (fallback), classes, macros, fields —
+  rendered via MarkdownDocRenderer over SymbolAtPosition + DatabaseQueries.
+
+## Handlers/DefinitionHandler.cs
+
+- Go-to-definition: functions/classes/macros via their Definition references across the
+  visible context; #using/#insert paths jump to the resolved target file.
+
+## Handlers/ReferencesHandler.cs
+
+- Find-all-references across the visible context (functions/classes/macros/fields and
+  string/hash/istring/anim literals), honoring includeDeclaration.
+
+## Handlers/DocumentHighlightHandler.cs
+
+- Highlights every occurrence of the symbol under the cursor within the current file
+  (definition sites as Write, others as Read).
+
+## Handlers/DocumentLinkHandler.cs
+
+- Turns resolved #using/#insert paths into ctrl-clickable links to their target files.
+
 ## Program.cs
 
 Top-level entry point. Configures Serilog to STDERR (stdout must stay clean for the

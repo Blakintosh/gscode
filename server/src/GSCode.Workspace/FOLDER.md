@@ -38,6 +38,15 @@ resolution, background indexing, the SQLite cache, and the bundled game data. LS
 
 ## Database/DatabaseQueries.cs
 
+## Database/SymbolAtPosition.cs
+
+- `HitKind` + `PositionHit` + `static SymbolAtPosition.Resolve` — the one resolver behind
+  hover/definition/references/highlight/documentLink: finds the classified reference
+  (function/class/macro/field/literal) or #using/#insert dependency path at a position,
+  working from either a stored ScriptRecord or an open document's live ParseResult.
+
+## Database/DatabaseQueries.cs
+
 - `ResolvedFunction`/`ResolvedClass` + `static DatabaseQueries` — context-filtered
   lookups that MERGE namespaces across contributing files, hide private functions from
   other files, and apply overlay shadowing (same RelativePath: overlay beats raw);
@@ -144,10 +153,16 @@ resolution, background indexing, the SQLite cache, and the bundled game data. LS
 
 ## Api/
 
-Bundled game data, copied to the build output and loaded at runtime:
+Bundled game data (copied to the build output) plus the loaders and doc renderer.
 
-- `t7_api_gsc.json` — builtin (engine) function library for GSC: names, overloads,
-  parameters, descriptions. Builtins are namespace-less in v2.
-- `t7_api_csc.json` — same, for CSC.
-- `t7_stock_scripts.txt` — list of script files that shipped with the mod tools;
-  powers the `rawFileWarningMode = "stock"` save warning (P5).
+- `t7_api_gsc.json` / `t7_api_csc.json` — builtin (engine) function libraries;
+  namespace-less in v2. `t7_stock_scripts.txt` — shipped-file list for the stock warning.
+- `BuiltinApi.cs` — `BuiltinFunction`/`BuiltinOverload`/`BuiltinParameter` model + the
+  case-insensitive per-language library (`Find`, `All`).
+- `ApiLoader.cs` — source-generated STJ DTOs + `Load(apiDir, language)` mapping the JSON
+  to the clean model; missing/corrupt files yield an empty library.
+- `BuiltinApiSet.cs` — both languages' libraries; `For(language)` selects one.
+- `MarkdownDocRenderer.cs` — the one hover/completion/signature renderer:
+  `RenderFunction` (script functions: prototype + ScriptDoc summary/region/params/
+  examples), `RenderBuiltin` (prototype + description + overloads + example),
+  `RenderMacro` (#define form + trailing-comment doc).

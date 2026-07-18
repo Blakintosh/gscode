@@ -4,6 +4,7 @@ using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Server.Logging;
 using GSCode.Server.Transport;
+using GSCode.Workspace.Api;
 using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
@@ -75,6 +76,11 @@ LanguageServer server = await LanguageServer.From(options =>
                 new DiagnosticsPublisher(provider.GetRequiredService<ILanguageServerFacade>()));
 
             services.AddSingleton<ScriptDatabase>();
+            services.AddSingleton(BuiltinApiSet.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
+            services.AddSingleton(provider => new NavigationSupport(
+                provider.GetRequiredService<DocumentStore>(),
+                provider.GetRequiredService<ScriptDatabase>(),
+                provider.GetRequiredService<ResolverHolder>()));
 
             services.AddSingleton(provider => new WorkspaceIndexer(
                 provider.GetRequiredService<ScriptDatabase>(),
@@ -92,6 +98,11 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<SelectionRangeHandler>()
         .AddHandler<WorkspaceSymbolHandler>()
         .AddHandler<WatchedFilesHandler>()
+        .AddHandler<HoverHandler>()
+        .AddHandler<DefinitionHandler>()
+        .AddHandler<ReferencesHandler>()
+        .AddHandler<DocumentHighlightHandler>()
+        .AddHandler<DocumentLinkHandler>()
         .AddHandler<ConfigurationHandler>()
         .OnInitialize((languageServer, request, cancellationToken) =>
         {

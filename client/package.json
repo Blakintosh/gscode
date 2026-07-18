@@ -208,6 +208,12 @@
 					"default": true,
 					"description": "Show variable and field assignments as children of their function in the document outline.",
 					"scope": "window"
+				},
+				"gscode.codeLens.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show a 'N references' code lens above each function and class declaration.",
+					"scope": "window"
 				}
 			}
 		},

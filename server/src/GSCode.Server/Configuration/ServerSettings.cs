@@ -17,6 +17,7 @@ public sealed class ServerSettings
     public string ModsPathOverride { get; set; } = "";
     public string RawFileWarningMode { get; set; } = "stock";
     public bool OutlineShowAssignments { get; set; } = true;
+    public bool CodeLensEnabled { get; set; } = true;
 
     /// <summary>Applies a { "gscode": { ... } } payload; missing keys keep their current values.</summary>
     public void Apply(JToken settingsRoot)
@@ -37,5 +38,8 @@ public sealed class ServerSettings
         OutlineShowAssignments = section.Value<bool?>("outline.showAssignments")
             ?? section["outline"]?.Value<bool?>("showAssignments")
             ?? OutlineShowAssignments;
+        CodeLensEnabled = section.Value<bool?>("codeLens.enabled")
+            ?? section["codeLens"]?.Value<bool?>("enabled")
+            ?? CodeLensEnabled;
     }
 }

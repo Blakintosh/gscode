@@ -23,6 +23,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
+    // Bridge for code-lens "N references" clicks: the server sends plain JSON args, which
+    // VSCode's editor.action.showReferences rejects via instanceof checks, so we re-fetch
+    // references through the provider and hand it real Location instances.
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "gscode.showReferences",
+            async (uriString: string, position: { line: number; character: number }) => {
+                const uri = vscode.Uri.parse(uriString);
+                const pos = new vscode.Position(position.line, position.character);
+                const locations = await vscode.commands.executeCommand<vscode.Location[]>(
+                    "vscode.executeReferenceProvider", uri, pos) ?? [];
+                await vscode.commands.executeCommand("editor.action.showReferences", uri, pos, locations);
+            },
+        ),
+    );
+
     registerIndexingStatusBar(context, created);
 
     await created.start();

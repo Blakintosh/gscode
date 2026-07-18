@@ -115,6 +115,11 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<SemanticTokensHandler>()
         .AddHandler<CompletionHandler>()
         .AddHandler<SignatureHelpHandler>()
+        .AddHandler<CodeLensHandler>()
+        .AddHandler<RenameHandler>()
+        .AddHandler<PrepareRenameHandler>()
+        .AddHandler<CallHierarchyHandler>()
+        .AddHandler<TypeHierarchyHandler>()
         .AddHandler<ConfigurationHandler>()
         .OnInitialize((languageServer, request, cancellationToken) =>
         {

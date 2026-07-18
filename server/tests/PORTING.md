@@ -39,6 +39,6 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | DocumentHighlightCasingTests | ✔ P7 | Same-file highlight verified by the P7 navigation smoke; keys are lowercase-canonical so casing is inherently handled |
 | StockScriptsTests | ☐ P5 | Stock list powers rawFileWarningMode=stock |
 | UsingDirectiveHelperTests | ✔ P2 | Path resolution scenarios re-expressed in `Resolution/PathResolverTests` (overlay, probe order, slash styles, illegal paths) |
-| ReferenceIndexReconciliationTests | ☐ P5 | |
-| ReferencesHandlerTests | ☐ P7 | |
+| ReferenceIndexReconciliationTests | ✔ P5 | Index diff-on-swap covered by `ScriptDatabaseTests` (reference queries after re-index) + `WatchedFileUpdaterTests` |
+| ReferencesHandlerTests | ✔ P7 | Cross-file references verified by the P7 navigation smoke; code-lens counts by the P9 smoke |
 | LexerTests (v1 TestHelper trivia filtering) | ✔ P1 | Superseded by trivia-as-tokens + `LexTestHelper.SignificantTokens` |

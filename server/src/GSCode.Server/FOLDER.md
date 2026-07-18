@@ -112,6 +112,27 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 - Maps `SignatureEngine` results to LSP signature help; triggers on `(` and `,` (retrigger `,`).
 
+## Handlers/CodeLensHandler.cs
+
+- "N references" lenses above function/class declarations (counts from the reference index,
+  gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge.
+
+## Handlers/RenameHandler.cs + PrepareRenameHandler.cs
+
+- Rename functions/classes/macros across every reference in the visible context (mods can't
+  see each other, so a rename never leaks across them). prepareRename returns the symbol
+  range only for renameable kinds — builtins, keywords, and literals get "cannot rename".
+
+## Handlers/CallHierarchyHandler.cs
+
+- prepare → the function at the cursor; incoming → callers (grouped by containing function);
+  outgoing → the functions called inside the body. All from the reference index.
+
+## Handlers/TypeHierarchyHandler.cs
+
+- prepare → the class at the cursor; supertypes → its parent (single inheritance);
+  subtypes → classes whose parent is this class.
+
 ## Program.cs
 
 Top-level entry point. Configures Serilog to STDERR (stdout must stay clean for the

@@ -10,6 +10,7 @@ export interface GscodeSettings {
     modsPath: string;
     rawFileWarningMode: string;
     "outline.showAssignments": boolean;
+    "codeLens.enabled": boolean;
 }
 
 /** Reads the current gscode.* settings into the shape the server expects. */
@@ -24,5 +25,6 @@ export function readSettings(): GscodeSettings {
         modsPath: config.get<string>("modsPath", ""),
         rawFileWarningMode: config.get<string>("rawFileWarningMode", "stock"),
         "outline.showAssignments": config.get<boolean>("outline.showAssignments", true),
+        "codeLens.enabled": config.get<boolean>("codeLens.enabled", true),
     };
 }

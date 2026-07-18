@@ -1,0 +1,78 @@
+namespace GSCode.Core.Symbols;
+
+/// <summary>
+/// The small abstract value lattice for GSC's typeless-but-typed values. Deliberately
+/// coarse: the flow typer only asserts a concrete type when it is certain, otherwise
+/// Unknown (which never produces a hint or diagnostic — the zero-false-positive rule).
+/// </summary>
+public enum ScrType
+{
+    Unknown = 0,
+    Undefined,
+    Int,
+    Float,
+    Bool,
+    String,
+    IString,
+    Vector,
+    Struct,
+    Array,
+    Entity,
+    Function,
+}
+
+/// <summary>Helpers for the type lattice.</summary>
+public static class ScrTypes
+{
+    /// <summary>The lowercase display name used in inlay hints and hovers.</summary>
+    public static string DisplayName(this ScrType type)
+    {
+        switch ( type )
+        {
+            case ScrType.Undefined: return "undefined";
+            case ScrType.Int: return "int";
+            case ScrType.Float: return "float";
+            case ScrType.Bool: return "bool";
+            case ScrType.String: return "string";
+            case ScrType.IString: return "istring";
+            case ScrType.Vector: return "vector";
+            case ScrType.Struct: return "struct";
+            case ScrType.Array: return "array";
+            case ScrType.Entity: return "entity";
+            case ScrType.Function: return "function";
+            default: return "";
+        }
+    }
+
+    /// <summary>True for a concrete, hint-worthy type (Unknown/Undefined are not shown).</summary>
+    public static bool IsKnown(this ScrType type)
+    {
+        return type is not ScrType.Unknown and not ScrType.Undefined;
+    }
+
+    /// <summary>
+    /// Merges two types at a control-flow join: equal types survive; int+float widen to
+    /// float; anything else disagreeing collapses to Unknown (we never guess a union).
+    /// </summary>
+    public static ScrType Join(ScrType left, ScrType right)
+    {
+        if ( left == right )
+        {
+            return left;
+        }
+
+        if ( left == ScrType.Unknown || right == ScrType.Unknown )
+        {
+            return ScrType.Unknown;
+        }
+
+        bool numericPair = (left == ScrType.Int || left == ScrType.Float)
+            && (right == ScrType.Int || right == ScrType.Float);
+        if ( numericPair )
+        {
+            return ScrType.Float;
+        }
+
+        return ScrType.Unknown;
+    }
+}

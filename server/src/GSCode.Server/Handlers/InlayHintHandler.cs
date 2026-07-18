@@ -1,0 +1,176 @@
+using System.Collections.Immutable;
+using GSCode.Core.Symbols;
+using GSCode.Core.Text;
+using GSCode.Parser.Syntax;
+using GSCode.Parser.Syntax.Ast;
+using GSCode.Workspace.Api;
+using GSCode.Workspace.Database;
+using GSCode.Workspace.Typing;
+using GSCode.Server.Configuration;
+using GSCode.Server.Mapping;
+using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+
+// The implicit string -> InlayHint.Label conversion is nullable-annotated, so assigning a
+// non-null string trips CS8601; suppressed for this file (the values are always non-null).
+#pragma warning disable CS8601
+
+namespace GSCode.Server.Handlers;
+
+/// <summary>
+/// Inlay hints: inferred local types after assignments (FlowTyper) and parameter names
+/// before call arguments. Each family is independently toggleable and only shown when the
+/// underlying fact is certain.
+/// </summary>
+public sealed class InlayHintHandler : InlayHintsHandlerBase
+{
+    private readonly NavigationSupport _support;
+    private readonly BuiltinApiSet _builtins;
+    private readonly ServerSettings _settings;
+    private readonly TextDocumentSelector _selector;
+
+    public InlayHintHandler(NavigationSupport support, BuiltinApiSet builtins, ServerSettings settings, TextDocumentSelector selector)
+    {
+        _support = support;
+        _builtins = builtins;
+        _settings = settings;
+        _selector = selector;
+    }
+
+    protected override InlayHintRegistrationOptions CreateRegistrationOptions(InlayHintClientCapabilities capability, ClientCapabilities clientCapabilities)
+    {
+        return new InlayHintRegistrationOptions { DocumentSelector = _selector, ResolveProvider = false };
+    }
+
+    // Hints are complete up front (ResolveProvider = false), so resolve is a passthrough.
+    public override Task<InlayHint> Handle(InlayHint request, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(request);
+    }
+
+    public override Task<InlayHintContainer?> Handle(InlayHintParams request, CancellationToken cancellationToken)
+    {
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        if ( target is null )
+        {
+            return Task.FromResult<InlayHintContainer?>(null);
+        }
+
+        TextRange window = request.Range.ToCore();
+        List<InlayHint> hints = [];
+
+        if ( _settings.InlayInferredTypes )
+        {
+            FlowTyper typer = new(_builtins.For(target.Language));
+            foreach ( InferredAssignment inferred in typer.InferAssignments(target.Result) )
+            {
+                if ( window.Contains(inferred.NameRange.Start) )
+                {
+                    hints.Add(new InlayHint
+                    {
+                        Position = inferred.NameRange.End.ToLsp(),
+                        Label = ": " + inferred.Type.DisplayName(),
+                        Kind = InlayHintKind.Type,
+                        PaddingLeft = false,
+                    });
+                }
+            }
+        }
+
+        if ( _settings.InlayParameterNames )
+        {
+            AddParameterNameHints(target, window, hints);
+        }
+
+        return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
+    }
+
+    private void AddParameterNameHints(NavigationTarget target, TextRange window, List<InlayHint> hints)
+    {
+        foreach ( CallNode call in CollectCalls(target.Result.Tree.Root) )
+        {
+            if ( call.Arguments.Length == 0 || !window.Contains(call.Range.Start) )
+            {
+                continue;
+            }
+
+            ImmutableArray<string> parameters = ResolveParameterNames(target, call);
+            if ( parameters.IsDefaultOrEmpty )
+            {
+                continue;
+            }
+
+            int count = Math.Min(parameters.Length, call.Arguments.Length);
+            for ( int index = 0; index < count; index++ )
+            {
+                hints.Add(new InlayHint
+                {
+                    Position = call.Arguments[index].Range.Start.ToLsp(),
+                    Label = parameters[index] + ":",
+                    Kind = InlayHintKind.Parameter,
+                    PaddingRight = true,
+                });
+            }
+        }
+    }
+
+    private ImmutableArray<string> ResolveParameterNames(NavigationTarget target, CallNode call)
+    {
+        if ( call.Callee is IdentifierNode identifier )
+        {
+            // A script function in one of the file's namespaces, else a builtin.
+            foreach ( NamespaceSpan span in target.Result.Extraction.Namespaces )
+            {
+                ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
+                    target.Store, target.ContextId, target.Path, span.KeyName, identifier.Token.Text.ToLowerInvariant());
+                if ( found.Length > 0 )
+                {
+                    return [.. found[0].Function.Parameters.Select(static p => p.Name)];
+                }
+            }
+
+            BuiltinFunction? builtin = _builtins.For(target.Language).Find(identifier.Token.Text);
+            if ( builtin is not null && builtin.Overloads.Length > 0 )
+            {
+                return [.. builtin.Overloads[0].Parameters.Select(static p => p.Name)];
+            }
+
+            return default;
+        }
+
+        if ( call.Callee is QualifiedNode qualified )
+        {
+            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
+                target.Store, target.ContextId, target.Path,
+                qualified.NamespaceToken.Text.ToLowerInvariant(),
+                qualified.NameToken.Text.ToLowerInvariant());
+            if ( found.Length > 0 )
+            {
+                return [.. found[0].Function.Parameters.Select(static p => p.Name)];
+            }
+        }
+
+        return default;
+    }
+
+    private static IEnumerable<CallNode> CollectCalls(AstNode root)
+    {
+        Stack<AstNode> stack = new();
+        stack.Push(root);
+
+        while ( stack.Count > 0 )
+        {
+            AstNode node = stack.Pop();
+            if ( node is CallNode call )
+            {
+                yield return call;
+            }
+
+            foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+            {
+                stack.Push(child);
+            }
+        }
+    }
+}

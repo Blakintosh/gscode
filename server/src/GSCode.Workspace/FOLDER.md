@@ -3,7 +3,8 @@
 Workspace layer: the script database (separate GSC/CSC stores), path/mod-overlay
 resolution, background indexing, the SQLite cache, and the bundled game data. LSP-free.
 
-*(Resolution = P2, Documents = P4, Database/Indexing = P5 (all below); cache lands P6.)*
+*(Resolution = P2, Documents = P4, Database/Indexing = P5 (all below); cache lands P6;
+Typing lands P10.)*
 
 ## Database/ScriptRecord.cs
 
@@ -172,6 +173,22 @@ resolution, background indexing, the SQLite cache, and the bundled game data. LS
     drive letters, and ".." are rejected. Both slash styles accepted.
   - `EnumerateIndexTargets()` — every .gsc/.csc/.gsh under raw + mods + workspace
     folders, deduplicated (cold-start indexing input).
+
+## Typing/FlowTyper.cs
+
+- `readonly record struct InferredAssignment(NameRange, Type)` — the inferred `ScrType` of
+  a local at its assignment site, consumed by the inlay-hint handler.
+- `sealed class FlowTyper` — a deliberately-small forward type-flow pass, per function.
+  `InferAssignments(ParseResult)` walks each function/method body with a per-function
+  local environment (`name → ScrType`), recording the FIRST assignment of each local that
+  resolves to a concrete type; later assignments update the environment but never add a
+  second hint. `TypeOf` types literals, parenthesised/vector/array/`new` expressions,
+  identifiers (earlier locals, then the globals `self`/`level`/`world`/`anim`/`game`),
+  prefix ops (`!`→bool, `&`→function, `~`→int, `-`→numeric), binary ops (comparisons and
+  logicals→bool, `+` string-concatenation vs numeric widening, shifts/bitwise→int), and
+  builtin call return types via `MapReturnType`. Anything uncertain stays `Unknown` and
+  produces no hint — the zero-false-positive rule. Script-function return inference is out
+  of scope (their bodies aren't re-typed here).
 
 ## Api/
 

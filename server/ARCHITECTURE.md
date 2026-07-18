@@ -1,7 +1,9 @@
 # GSCode v2 — Server Architecture
 
 End-to-end map of the GSCode language server and its VSCode client. Updated in every
-phase that changes structure. (Phase status: **P0 — walking skeleton.**)
+phase that changes structure. (Phase status: **P10 — FlowTyper + inlay hints.** The full
+navigation/completion/lens/rename/hierarchy suite is live; type-flow inference now powers
+inferred-type and parameter-name inlay hints.)
 
 ## Required toolchain
 

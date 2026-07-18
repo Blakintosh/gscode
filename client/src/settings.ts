@@ -11,6 +11,8 @@ export interface GscodeSettings {
     rawFileWarningMode: string;
     "outline.showAssignments": boolean;
     "codeLens.enabled": boolean;
+    "inlayHints.parameterNames": boolean;
+    "inlayHints.inferredTypes": boolean;
 }
 
 /** Reads the current gscode.* settings into the shape the server expects. */
@@ -26,5 +28,7 @@ export function readSettings(): GscodeSettings {
         rawFileWarningMode: config.get<string>("rawFileWarningMode", "stock"),
         "outline.showAssignments": config.get<boolean>("outline.showAssignments", true),
         "codeLens.enabled": config.get<boolean>("codeLens.enabled", true),
+        "inlayHints.parameterNames": config.get<boolean>("inlayHints.parameterNames", true),
+        "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", true),
     };
 }

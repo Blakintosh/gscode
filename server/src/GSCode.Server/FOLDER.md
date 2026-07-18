@@ -12,8 +12,9 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 ## Configuration/ServerSettings.cs
 
 - `sealed class ServerSettings` — the parsed gscode.* view (serverLogLevel, raw.enabled,
-  rawPath/modsPath overrides, rawFileWarningMode, outline.showAssignments). `Apply(JToken)`
-  merges a settings payload; missing keys keep current values.
+  rawPath/modsPath overrides, rawFileWarningMode, outline.showAssignments, codeLens.enabled,
+  inlayHints.parameterNames, inlayHints.inferredTypes). `Apply(JToken)` merges a settings
+  payload (accepting both dotted and nested key forms); missing keys keep current values.
 
 ## Configuration/ResolverHolder.cs
 
@@ -132,6 +133,15 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 - prepare → the class at the cursor; supertypes → its parent (single inheritance);
   subtypes → classes whose parent is this class.
+
+## Handlers/InlayHintHandler.cs
+
+- Inlay hints, two independently-toggleable families over the visible range: inferred-type
+  hints (`: int`) at each FlowTyper `InferredAssignment` name-range end (gated by
+  inlayHints.inferredTypes), and parameter-name hints (`amount:`) before each call argument,
+  resolving the callee's parameter names from the database (script functions in the file's
+  namespaces, else builtins) and qualified `ns::fn` calls (gated by inlayHints.parameterNames).
+  ResolveProvider is false, so the resolve handler is a passthrough.
 
 ## Program.cs
 

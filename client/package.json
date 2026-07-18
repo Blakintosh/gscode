@@ -214,6 +214,18 @@
 					"default": true,
 					"description": "Show a 'N references' code lens above each function and class declaration.",
 					"scope": "window"
+				},
+				"gscode.inlayHints.parameterNames": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show parameter-name hints before arguments at call sites.",
+					"scope": "window"
+				},
+				"gscode.inlayHints.inferredTypes": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show inferred-type hints on local variable assignments.",
+					"scope": "window"
 				}
 			}
 		},

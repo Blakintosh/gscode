@@ -22,6 +22,43 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   - `IsUnder(path, directory)` — prefix containment with a separator-boundary check
     (`c:\rootother` is not under `c:\root`).
 
+## Symbols/ScriptLanguage.cs
+
+- `enum ScriptLanguage` — Gsc / Csc; picks which structurally-isolated store a file belongs to.
+
+## Symbols/SymbolKey.cs
+
+- `enum SymbolKind` — what a key identifies: Function/Class/Macro/Field plus the four
+  literal kinds (StringLiteral/HashString/LocalizedString/AnimReference).
+- `readonly record struct SymbolKey(Namespace, Name, Kind)` — the cross-file lookup key.
+  Namespace/Name are lowercase-canonical interned strings (macros and string literals keep
+  exact case); Namespace is null for builtins, macros, fields, and literals. Language is
+  NOT in the key — GSC/CSC isolation is structural (separate stores).
+
+## Symbols/SymbolModels.cs
+
+- The extracted symbol surface of one file, all records fully populated (empty collections
+  and sentinels over nullable "not provided" members):
+  - `ParameterSymbol(Name, ByRef, DefaultValueText)` — one declared parameter.
+  - `AssignmentSymbol(OwnerName, Name, KeyName, Range)` — one tracked local or field write.
+  - `FunctionSymbol` — a top-level function or class method: name/keyname/namespace,
+    private/autoexec flags, parameters + varargs, name and full ranges, source file,
+    ScriptDoc, and the contained assignments.
+  - `MemberSymbol` / `ClassSymbol` — a class `var` member; a class with parent, members,
+    methods, ctor/dtor flags, and ranges.
+  - `NamespaceSpan(Name, KeyName, NameRange, GovernedRange)` — one #namespace region.
+  - `enum ReferenceKind` + `readonly record struct ReferenceEntry(Key, Range, Kind)` — one
+    classified reference site; no text stored beyond the interned key.
+
+## Symbols/ScrType.cs
+
+- `enum ScrType` — the small abstract value lattice (Unknown, Undefined, Int, Float, Bool,
+  String, IString, Vector, Struct, Array, Entity, Function). Coarse by design: the flow
+  typer only asserts a concrete type when certain, else Unknown.
+- `static class ScrTypes` — lattice helpers: `DisplayName` (lowercase name for hints/hovers),
+  `IsKnown` (concrete and hint-worthy — excludes Unknown/Undefined), and `Join` (control-flow
+  merge: equal survives, int+float widen to float, any other disagreement collapses to Unknown).
+
 ## Text/Position.cs
 
 - `readonly record struct Position(int Line, int Character)` — zero-based document

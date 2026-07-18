@@ -2,7 +2,7 @@
 
 Every test class from the v1 suite (36 classes), tracked as its scenarios get
 re-expressed against the v2 API (old test code is never copied) or consciously dropped.
-Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
+Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with reason).
 
 | Old test class | Status | Where / why |
 |---|---|---|
@@ -13,9 +13,9 @@ Status: ☐ pending · ✔ ported · ✘ dropped (with reason).
 | BrokenFunctionTests | ✔ P3 | Error-recovery scenarios in `Syntax/RecoveryTests` (garbage between functions, broken statements, missing braces/semicolons, class-member garbage) |
 | DevBlockTests | ✔ P3 | Top-level + statement-level dev blocks in `DeclarationTests`/`StatementTests`; lexer-level delimiters in `LexerTriviaTests` |
 | SwitchSemanticTokenTests | ✔ P8 | Semantic classification covered by `Extraction/SemanticTokenBuilderTests` (keywords/numbers/strings/functions/property/macro/comments) |
-| CfaTests | ☐ P10 | Control-flow scenarios inform FlowTyper's per-function walk |
-| TypeFlowConvergenceTests | ☐ P10 | The accuracy baseline |
-| ScrDataApiTypeTests | ☐ P10 | |
+| CfaTests | ☐ P10 | FlowTyper's per-function walk visits every branch now; branch-join convergence (the `ScrType.Join` lattice) not yet wired into the walk |
+| TypeFlowConvergenceTests | ◐ P10 | Assignment-inference accuracy baseline established in `Typing/FlowTyperTests` (literals, arithmetic widening/concat, globals, builtin returns, first-assignment-wins); branch-convergence cases still pending |
+| ScrDataApiTypeTests | ☐ P10 | Engine object-field type seeds (`t7_object_fields.json` → FlowTyper) not yet wired |
 | DiagnosticsTests | ☐ P4/P5 | |
 | NamespaceDiagnosticsTests | ☐ P5 | Namespace-usage lint |
 | PreferBooleanLiteralTests | ☐ P4 | Carried lint rule |

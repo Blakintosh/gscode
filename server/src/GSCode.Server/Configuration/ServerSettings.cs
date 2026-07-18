@@ -18,6 +18,8 @@ public sealed class ServerSettings
     public string RawFileWarningMode { get; set; } = "stock";
     public bool OutlineShowAssignments { get; set; } = true;
     public bool CodeLensEnabled { get; set; } = true;
+    public bool InlayParameterNames { get; set; } = true;
+    public bool InlayInferredTypes { get; set; } = true;
 
     /// <summary>Applies a { "gscode": { ... } } payload; missing keys keep their current values.</summary>
     public void Apply(JToken settingsRoot)
@@ -41,5 +43,11 @@ public sealed class ServerSettings
         CodeLensEnabled = section.Value<bool?>("codeLens.enabled")
             ?? section["codeLens"]?.Value<bool?>("enabled")
             ?? CodeLensEnabled;
+        InlayParameterNames = section.Value<bool?>("inlayHints.parameterNames")
+            ?? section["inlayHints"]?.Value<bool?>("parameterNames")
+            ?? InlayParameterNames;
+        InlayInferredTypes = section.Value<bool?>("inlayHints.inferredTypes")
+            ?? section["inlayHints"]?.Value<bool?>("inferredTypes")
+            ?? InlayInferredTypes;
     }
 }

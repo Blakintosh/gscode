@@ -98,6 +98,31 @@ public class ExpressionTests
     }
 
     [Fact]
+    public void PointerDeref_ToleratesSpacingBetweenBrackets()
+    {
+        // `[ [ ptr ] ]` must read the same as `[[ptr]]` — bracket spacing is irrelevant.
+        Assert.Equal("(call (deref func) a)", ParserTestHelper.PrintExpr("[ [ func ] ](a)"));
+
+        // The reported method-notation form: ent thread [ [ ptr ] ]().
+        Assert.Equal(
+            "(call thread on:spawn (deref (. level startup)))",
+            ParserTestHelper.PrintExpr("spawn thread [ [ level.startup ] ]()"));
+
+        // Spacing must not turn a nested index into a pointer deref.
+        Assert.Equal("(= x (index a (index b 1)))", ParserTestHelper.PrintExpr("x = a[ b[ 1 ] ]"));
+    }
+
+    [Fact]
+    public void SpacedPointerDerefThreadCall_ProducesNoDiagnostics()
+    {
+        // The exact reported line that previously errored with 3000.
+        ParseTree spaced = ParserTestHelper.Parse(
+            "function test()\n{\n    spawn thread [ [ level.friendly_startup_thread ] ]();\n}\n");
+
+        Assert.Empty(spaced.Diagnostics);
+    }
+
+    [Fact]
     public void CallResult_CanBeIndexedOrMemberAccessed()
     {
         // players[q] getplayerangles()[ 1 ] — index a method-call result used as a temporary.

@@ -107,7 +107,9 @@ LSP types anywhere.
   relational < shifts < additive < multiplicative), right-assoc assignment + ternary,
   method-notation call chains (`ent [thread] callee(...)` where callee = identifier
   with '(' / ns::name / [[deref]] / call-shaped keyword like waittill/notify), pointer
-  deref via TWO ADJACENT brackets (so a[b[1]] is unambiguous), arrow calls, new,
+  deref via two consecutive '[' in the trivia-free stream — spacing is irrelevant, so
+  `[ [ ptr ] ]` == `[[ptr]]`, while `a[b[1]]` stays a nested index (its operand sits between
+  the brackets and non-empty `[...]` array literals don't exist) — arrow calls, new,
   vectors, & function references. A `ParsePostfixChain` helper applies `.field`/`[index]`/
   `++`/`--` to a call result (a call used as a temporary), so both plain and method-notation
   calls can be indexed or member-accessed — e.g. `players[q] getangles()[1]`.

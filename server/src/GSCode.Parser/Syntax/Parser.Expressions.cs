@@ -171,9 +171,12 @@ public sealed partial class Parser
 
     private bool IsPointerDerefAhead()
     {
+        // Two consecutive '[' in the trivia-free stream are always a pointer deref ([[ptr]]):
+        // a nested index like a[b[1]] has its operand between the brackets, and non-empty
+        // '[...]' array literals don't exist in the language. Spacing is therefore irrelevant,
+        // so `[ [ ptr ] ]` reads the same as `[[ptr]]`.
         return Kind == TokenKind.OpenBracket
-            && Peek(1).Kind == TokenKind.OpenBracket
-            && AreAdjacent(Current, Peek(1));
+            && Peek(1).Kind == TokenKind.OpenBracket;
     }
 
     /// <summary>Parses callee + argument list into a call node (target/thread supplied by the caller).</summary>

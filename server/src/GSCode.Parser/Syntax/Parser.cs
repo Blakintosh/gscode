@@ -133,11 +133,4 @@ public sealed partial class Parser
 
         return new TextRange(start.Start, end.End);
     }
-
-    /// <summary>True when two tokens touch with nothing between them (in the same file).</summary>
-    private static bool AreAdjacent(PToken first, PToken second)
-    {
-        return first.Range.End == second.Range.Start
-            && string.Equals(first.Provenance.SourceFile, second.Provenance.SourceFile, StringComparison.Ordinal);
-    }
 }

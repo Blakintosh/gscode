@@ -174,6 +174,18 @@ Typing lands P10.)*
   - `EnumerateIndexTargets()` — every .gsc/.csc/.gsh under raw + mods + workspace
     folders, deduplicated (cold-start indexing input).
 
+## Analysis/NamespaceUsageLint.cs
+
+- `static NamespaceUsageLint.Analyze(result, store, language, resolver, askingPath)` — a
+  cross-file lint: a qualified call `ns::foo()` should have a `#using` that imports a file
+  declaring namespace `ns` (or `ns` be one of the file's own namespaces). Returns Warning
+  diagnostics (`NamespaceNotImported`). Zero false positives by construction: it builds the set
+  of available namespaces from the file's own `#namespace` blocks plus every `#using` target
+  resolved to an INDEXED record, and if any `#using` can't be resolved to a record it suppresses
+  the whole lint (a not-yet-known import might supply the namespace). Unqualified calls key under
+  the current namespace so they never trip it; `sys::` builtin calls have a null namespace and
+  are skipped. Merged into open-document diagnostics by the server's TextSyncHandler.
+
 ## Typing/FlowTyper.cs
 
 - `readonly record struct InferredAssignment(NameRange, Type, Name)` — the inferred `ScrType`

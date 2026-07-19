@@ -17,7 +17,7 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 | TypeFlowConvergenceTests | ◐ P10 | Assignment-inference accuracy baseline established in `Typing/FlowTyperTests` (literals, arithmetic widening/concat, globals, builtin returns, first-assignment-wins); branch-convergence cases still pending |
 | ScrDataApiTypeTests | ◐ P10 | Engine object-field type seeds wired into FlowTyper (`owner.field` types when every declaring entity kind agrees); the ReadOnly-field write diagnostic is still pending |
 | DiagnosticsTests | ☐ P4/P5 | |
-| NamespaceDiagnosticsTests | ☐ P5 | Namespace-usage lint |
+| NamespaceDiagnosticsTests | ✔ P11 | Namespace-usage lint re-expressed in `Analysis/NamespaceUsageLintTests` (warns on unimported qualified-call namespace; suppressed when a #using is unresolved); merged into open-doc diagnostics by TextSyncHandler |
 | PreferBooleanLiteralTests | ☐ P4 | Carried lint rule |
 | GlobalObjectOwnersTests | ☐ P8 | Field aggregation |
 | SymbolTableTests | ☐ P4/P5 | |

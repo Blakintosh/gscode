@@ -99,8 +99,9 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 
 ## Diagnostics/GscDiagnosticCode.cs
 
-- `enum GscDiagnosticCode` — one stable code per reportable condition, grouped by
-  pipeline stage (lexing = 1xxx, preprocessing = 2xxx). Grows phase by phase.
+- `enum GscDiagnosticCode` — one stable code per reportable condition, grouped by pipeline
+  stage: lexing 1xxx, preprocessing 2xxx, parsing 3xxx, per-file semantics 4xxx, cross-file /
+  workspace semantics 5xxx (e.g. NamespaceNotImported). Grows phase by phase.
 
 ## Diagnostics/DiagnosticMessages.cs
 

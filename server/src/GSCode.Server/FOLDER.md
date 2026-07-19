@@ -26,7 +26,8 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 - Incremental text sync. didOpen → immediate analysis; didChange → ~250 ms debounced
   re-analysis with per-document cancellation (superseded runs are cancelled, silently);
-  didSave → immediate (bypasses debounce); didClose → clears diagnostics.
+  didSave → immediate (bypasses debounce); didClose → clears diagnostics. Before publishing,
+  it merges the parse diagnostics with cross-file lints (`NamespaceUsageLint`) for GSC/CSC docs.
 
 ## Handlers/DiagnosticsPublisher.cs
 

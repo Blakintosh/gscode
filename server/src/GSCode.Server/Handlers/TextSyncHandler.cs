@@ -1,5 +1,10 @@
+using System.Collections.Immutable;
+using GSCode.Core.Symbols;
+using GSCode.Workspace.Analysis;
+using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Parser;
+using GSCode.Server.Configuration;
 using GSCode.Server.Mapping;
 using MediatR;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -21,12 +26,21 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     private readonly DocumentStore _documents;
     private readonly DiagnosticsPublisher _diagnostics;
+    private readonly ScriptDatabase _database;
+    private readonly ResolverHolder _resolver;
     private readonly TextDocumentSelector _selector;
 
-    public TextSyncHandler(DocumentStore documents, DiagnosticsPublisher diagnostics, TextDocumentSelector selector)
+    public TextSyncHandler(
+        DocumentStore documents,
+        DiagnosticsPublisher diagnostics,
+        ScriptDatabase database,
+        ResolverHolder resolver,
+        TextDocumentSelector selector)
     {
         _documents = documents;
         _diagnostics = diagnostics;
+        _database = database;
+        _resolver = resolver;
         _selector = selector;
     }
 
@@ -133,6 +147,27 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private void AnalyzeAndPublish(OpenDocument document, DocumentUri uri)
     {
         ParseResult result = _documents.Analyze(document);
-        _diagnostics.Publish(uri, document.Version, result.AllDiagnostics);
+        _diagnostics.Publish(uri, document.Version, WithWorkspaceLints(document, result));
+    }
+
+    /// <summary>Merges the parse diagnostics with the cross-file lints (namespace-usage).</summary>
+    private ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> WithWorkspaceLints(OpenDocument document, ParseResult result)
+    {
+        // GSH fragments have no language store of their own and no #using semantics to lint.
+        if ( document.Language != ScriptLanguage.Gsc && document.Language != ScriptLanguage.Csc )
+        {
+            return result.AllDiagnostics;
+        }
+
+        LanguageStore store = _database.StoreFor(document.Language);
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> lints = NamespaceUsageLint.Analyze(
+            result, store, document.Language, _resolver.Current, document.Path);
+
+        if ( lints.Length == 0 )
+        {
+            return result.AllDiagnostics;
+        }
+
+        return result.AllDiagnostics.AddRange(lints);
     }
 }

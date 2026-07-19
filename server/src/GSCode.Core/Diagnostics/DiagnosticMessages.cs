@@ -52,6 +52,9 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.ConstructorHasParameters] = "Constructors cannot declare parameters.",
         [GscDiagnosticCode.DestructorHasParameters] = "Destructors cannot declare parameters.",
         [GscDiagnosticCode.NonValueDefaultParameter] = "Default value for '{0}' must be a plain value (literals and vectors only).",
+
+        // Cross-file / workspace semantics
+        [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

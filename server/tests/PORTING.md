@@ -43,9 +43,9 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 | ReferencesHandlerTests | ✔ P7 | Cross-file references verified by the P7 navigation smoke; code-lens counts by the P9 smoke |
 | LexerTests (v1 TestHelper trivia filtering) | ✔ P1 | Superseded by trivia-as-tokens + `LexTestHelper.SignificantTokens` |
 
-## P11 code-action mining (pending)
+## P11 code-action mining (deferred to P13)
 
-Landed so far: remove-duplicate-#using and auto-add-#using (`CodeActionHandlerTests`), plus the
-whole/range/on-type formatter (`GscFormatterTests`). Still to do: mine the v1
-`CodeActionHandler.cs` (1,081 lines) via git history for any OTHER quick fixes worth porting and
-record keep/drop decisions here.
+Landed: remove-duplicate-#using and auto-add-#using (`CodeActionHandlerTests`), plus the
+whole/range/on-type formatter (`GscFormatterTests`) and the namespace-usage lint
+(`NamespaceUsageLintTests`). Deferred to P13: mine the v1 `CodeActionHandler.cs` (1,081 lines) via
+git history for any OTHER quick fixes worth porting and record keep/drop decisions here.

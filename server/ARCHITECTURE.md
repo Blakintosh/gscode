@@ -1,9 +1,12 @@
 # GSCode v2 — Server Architecture
 
 End-to-end map of the GSCode language server and its VSCode client. Updated in every
-phase that changes structure. (Phase status: **P12 — Client polish + hardening + release.** The
-full LSP feature suite is live end to end; this phase finalizes the client command surface,
-documentation, and packaging.)
+phase that changes structure. (Phase status: **P0–P12 complete.** The full LSP feature suite is
+live end to end — analysis pipeline, database + SQLite cache, navigation, completion (incl.
+literals), signature help, semantic tokens, code lens, rename, call/type hierarchy, inlay hints,
+type-flow inference, formatting, and code actions — plus the client command surface, docs, and
+packaging. Remaining work is tracked as optional/blocked P13 follow-ups: apiUpdate.ts,
+completion.fieldScope, old-CodeActionHandler mining, and the perf-corpus tooling.)
 
 ## Required toolchain
 

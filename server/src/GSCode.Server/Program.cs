@@ -230,8 +230,14 @@ LanguageServer server = await LanguageServer.From(options =>
                         // notification; sending in the initialize/initialized window can drop
                         // notifications on a workspace small enough to index in a few ms.
                         await Task.Delay(500, CancellationToken.None);
+                        System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
                         int indexed = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
-                        Log.Information("Workspace indexing complete: {Count} files", indexed);
+                        stopwatch.Stop();
+                        Log.Information("Workspace indexing complete: {Count} files in {Seconds:F1}s", indexed, stopwatch.Elapsed.TotalSeconds);
+
+                        // Start reporting memory only now — during indexing it climbs steadily and
+                        // would spam. The monitor logs only on >= 1 MB changes from here on.
+                        _ = RunMemoryMonitorAsync(CancellationToken.None);
                     }
                     catch ( Exception exception )
                     {
@@ -255,6 +261,39 @@ if ( workspaceCache is not null )
 transport.Owner?.Dispose();
 Log.Information("GSCode v2 server exited");
 await Log.CloseAndFlushAsync();
+
+// Reports the server's working set after indexing completes, but only when it moves by at
+// least 1 MB, so a stable process stays quiet instead of spamming the log. Runs for the
+// server's lifetime; its own try/catch keeps any fault from going unobserved.
+static async Task RunMemoryMonitorAsync(CancellationToken cancellationToken)
+{
+    const long reportThresholdBytes = 1024 * 1024;
+    long lastReportedBytes = long.MinValue; // Force the first sample to log a baseline.
+
+    try
+    {
+        while ( !cancellationToken.IsCancellationRequested )
+        {
+            long workingSetBytes = Environment.WorkingSet;
+            if ( Math.Abs(workingSetBytes - lastReportedBytes) >= reportThresholdBytes )
+            {
+                lastReportedBytes = workingSetBytes;
+                double megabytes = workingSetBytes / (1024.0 * 1024.0);
+                Log.Information("Server memory: {Megabytes:F1} MB", megabytes);
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+        }
+    }
+    catch ( OperationCanceledException )
+    {
+        // Shutting down — not an error.
+    }
+    catch ( Exception exception )
+    {
+        Log.Error(exception, "Memory monitor stopped unexpectedly");
+    }
+}
 
 // Locates the bundled data files whose contents feed the server build identity.
 static IEnumerable<string> BundledDataFilePaths()

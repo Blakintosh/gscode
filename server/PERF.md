@@ -13,34 +13,46 @@ table below is filled from a run on the local BO3-tools machine, since the corpu
 | Steady-state memory | < 400 MB | Records-only retention for closed files; NameTable interning. |
 | Keystroke re-analysis | interactive | Debounced ~250 ms, per-document cancellation; a single file lexes+parses in low single-digit ms. |
 
-## Instrumentation
+## What the server logs (no special build needed)
 
-Timing scopes are compiled in only when the `GscodeInstrumentation` property is set, so normal
-builds pay nothing (`Core/Instrumentation/PerfTracker.cs`, `[Conditional("GSCODE_INSTRUMENTATION")]`).
+At `gscode.serverLogLevel = info`, the "GSCode Server" output channel logs the two headline
+numbers directly:
+
+- `Workspace indexing complete: N files in X.Xs` — the cold/warm index time (also mirrored to the
+  client "GSCode" channel and the status-bar tooltip).
+- `Server memory: N MB` — the working set, sampled every 2 s but logged only when it moves by
+  >= 1 MB, and only AFTER indexing completes (so it never spams while memory is climbing).
+
+## Deeper timing (optional instrumentation)
+
+Per-stage timing scopes are compiled in only when the `GscodeInstrumentation` property is set, so
+normal builds pay nothing (`Core/Instrumentation/PerfTracker.cs`,
+`[Conditional("GSCODE_INSTRUMENTATION")]`):
 
 ```
 dotnet build server/GSCode.slnx -c Release -p:GscodeInstrumentation=true
 ```
 
-`PerfTracker.Report(writeLine)` dumps per-scope call counts and total/mean milliseconds. Scopes
-cover the per-file pipeline stages (lex/preprocess/parse/extract), the indexer fan-out, and cache
-read/write.
+The indexer wraps its fan-out in an `index.total` scope. NOTE: a `PerfTracker.Report(...)` dump
+is not yet surfaced automatically — the two logged numbers above are the current perf signal;
+wiring a report dump + a `TA_TOOLS_PATH` corpus test is a tracked follow-up.
 
-## How to run the corpus pass
+## How to run the pass
 
-1. Set `TA_TOOLS_PATH` to the BO3 mod-tools install (so `share\raw` and `mods\` resolve).
-2. Build the instrumented Release server (above).
-3. Run the CI-skipped corpus test category (it auto-skips when `TA_TOOLS_PATH` is unset), or launch
-   the extension against the tools root and watch the indexing status counter.
-4. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm).
-5. Record `PerfTracker` output and peak working set below.
+1. Set `TA_TOOLS_PATH` to the BO3 mod-tools install (so `share\raw` and `mods\` resolve), set
+   `gscode.serverLogLevel = info` and `gscode.workspaceIndexingMode = full`.
+2. Launch the extension against the tools root (see the client `.env` debug flow, or install the
+   packaged extension).
+3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and
+   read the "indexing complete" line each time.
+4. Read the steady-state "Server memory" line once the process settles.
 
 ## Results
 
-_To be recorded on the local BO3-tools machine (corpus not committed)._
+Measured on the local BO3-tools machine (corpus not committed):
 
-| Scenario | Corpus size | Measured | Within budget |
-|---|---|---|---|
-| Cold index | (files) | (s) | |
-| Warm start | (files) | (s) | |
-| Steady-state memory | — | (MB) | |
+| Scenario | Corpus size | Measured | Budget | Within budget |
+|---|---|---|---|---|
+| Cold index | 1,105 files | 5.5 s | < 60 s | yes |
+| Warm start | 1,105 files | 2.6 s | < 5 s | yes |
+| Steady-state memory | — | (read "Server memory" line) | < 400 MB | |

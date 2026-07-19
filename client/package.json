@@ -245,6 +245,12 @@
 					"default": true,
 					"description": "Show inferred-type hints on local variable assignments.",
 					"scope": "window"
+				},
+				"gscode.completion.literals": {
+					"type": "boolean",
+					"default": true,
+					"description": "Offer known strings, localized strings, and hash strings while typing inside a \"...\" / &\"...\" / #\"...\" literal (great for notify/waittill names).",
+					"scope": "window"
 				}
 			}
 		},

@@ -28,10 +28,24 @@ public sealed class CompletionEngine
     }
 
     /// <summary>Produces completion suggestions for a position in an analysed document.</summary>
-    public ImmutableArray<CompletionEntry> Complete(ParseResult result, string contextId, Position position)
+    /// <param name="includeLiterals">Whether to offer known literals inside a "..."/&amp;"..."/#"..." string (the gscode.completion.literals setting).</param>
+    public ImmutableArray<CompletionEntry> Complete(ParseResult result, string contextId, Position position, bool includeLiterals = true)
     {
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
         int offset = result.Text.GetOffset(position);
+
+        // Inside a string/istring/hash literal: offer known literals of that kind (or nothing,
+        // since statement-scope suggestions never make sense inside a string).
+        int literalIndex = FindLiteralAtOffset(tokens, offset);
+        if ( literalIndex >= 0 )
+        {
+            if ( !includeLiterals )
+            {
+                return [];
+            }
+
+            return LiteralCompletions(result, contextId, LiteralKindOf(tokens[literalIndex].Kind));
+        }
 
         // The token being typed (if the cursor sits in/just after an identifier) and the
         // trigger token before it drive the context decision.
@@ -130,6 +144,62 @@ public sealed class CompletionEngine
         }
 
         return entries.ToImmutable();
+    }
+
+    private ImmutableArray<CompletionEntry> LiteralCompletions(ParseResult result, string contextId, SymbolKind literalKind)
+    {
+        LanguageStore store = _database.StoreFor(result.Language);
+
+        // String literals are content-exact; hash/istring names are already lowercase-canonical,
+        // so an ordinal set dedups every kind correctly.
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+
+        // The current file's live literals first, then every visible record's.
+        CollectLiterals(result.Extraction.References, literalKind, seen, entries);
+        foreach ( ScriptRecord record in store.AllRecords )
+        {
+            if ( ScriptDatabase.CanSee(contextId, record.ContextId) )
+            {
+                CollectLiterals(record.References, literalKind, seen, entries);
+            }
+        }
+
+        return entries.ToImmutable();
+    }
+
+    private static void CollectLiterals(
+        ImmutableArray<ReferenceEntry> references,
+        SymbolKind literalKind,
+        HashSet<string> seen,
+        ImmutableArray<CompletionEntry>.Builder entries)
+    {
+        string detail = LiteralDetail(literalKind);
+        foreach ( ReferenceEntry entry in references )
+        {
+            if ( entry.Kind != ReferenceKind.Literal || entry.Key.Kind != literalKind )
+            {
+                continue;
+            }
+
+            if ( entry.Key.Name.Length > 0 && seen.Add(entry.Key.Name) )
+            {
+                entries.Add(new CompletionEntry(entry.Key.Name, CompletionKind.Literal, detail));
+            }
+        }
+    }
+
+    private static string LiteralDetail(SymbolKind literalKind)
+    {
+        switch ( literalKind )
+        {
+            case SymbolKind.LocalizedString:
+                return "localized string";
+            case SymbolKind.HashString:
+                return "hash string";
+            default:
+                return "string";
+        }
     }
 
     private ImmutableArray<CompletionEntry> NamespaceFunctionCompletions(ParseResult result, string contextId, string ns)
@@ -252,6 +322,40 @@ public sealed class CompletionEngine
 
         int before = PreviousSignificant(tokens, triggerIndex);
         return before >= 0 && tokens[before].Kind == TokenKind.PrecacheDirective && kind == TokenKind.OpenParen;
+    }
+
+    /// <summary>Index of the string/istring/hash literal the cursor is typing inside, else -1.</summary>
+    private static int FindLiteralAtOffset(ImmutableArray<Token> tokens, int offset)
+    {
+        for ( int index = 0; index < tokens.Length; index++ )
+        {
+            Token token = tokens[index];
+            bool isLiteral = token.Kind == TokenKind.String
+                || token.Kind == TokenKind.LocalizedString
+                || token.Kind == TokenKind.HashString;
+
+            // Strictly past the opening quote, up to and including the end (handles a still-open
+            // string that runs to the end of the line).
+            if ( isLiteral && offset > token.Start && offset <= token.End )
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static SymbolKind LiteralKindOf(TokenKind kind)
+    {
+        switch ( kind )
+        {
+            case TokenKind.LocalizedString:
+                return SymbolKind.LocalizedString;
+            case TokenKind.HashString:
+                return SymbolKind.HashString;
+            default:
+                return SymbolKind.StringLiteral;
+        }
     }
 
     /// <summary>Index of the identifier token the cursor is inside or just after, else -1.</summary>

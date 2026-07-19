@@ -49,11 +49,14 @@ Typing lands P10.)*
 
 ## Completion/CompletionEngine.cs
 
-- `sealed class CompletionEngine.Complete(result, contextId, position)` — context-aware
-  completion driven by the tokens around the cursor: `#precache(` asset types,
-  `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.`
-  fields (+ `.size`), and statement/top-level scope (keywords, file macros, namespace
-  functions, visible classes, namespace-less builtins as call snippets).
+- `sealed class CompletionEngine.Complete(result, contextId, position, includeLiterals)` —
+  context-aware completion driven by the tokens around the cursor: inside a
+  `"..."`/`&"..."`/`#"..."` literal it offers the known literals of that kind from the visible
+  reference index (gated by `includeLiterals` = the completion.literals setting; disabled →
+  nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
+  `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
+  (+ `.size`), and statement/top-level scope (keywords, file macros, namespace functions, visible
+  classes, namespace-less builtins as call snippets).
 
 ## Completion/SignatureEngine.cs
 

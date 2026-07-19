@@ -13,8 +13,9 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 - `sealed class ServerSettings` — the parsed gscode.* view (serverLogLevel, raw.enabled,
   rawPath/modsPath overrides, rawFileWarningMode, outline.showAssignments, codeLens.enabled,
-  inlayHints.parameterNames, inlayHints.inferredTypes). `Apply(JToken)` merges a settings
-  payload (accepting both dotted and nested key forms); missing keys keep current values.
+  inlayHints.parameterNames, inlayHints.inferredTypes, completion.literals). `Apply(JToken)`
+  merges a settings payload (accepting both dotted and nested key forms); missing keys keep
+  current values.
 
 ## Configuration/ResolverHolder.cs
 
@@ -110,7 +111,8 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 ## Handlers/CompletionHandler.cs
 
 - Maps `CompletionEngine` entries to LSP items (kind, snippet insert text). Registers the
-  trigger characters `. : # & % \ /` so completion re-fires where it matters.
+  trigger characters `. : # & % \ / "` so completion re-fires where it matters (the `"` fires
+  literal completion inside a string). Passes the completion.literals setting through to the engine.
 
 ## Handlers/SignatureHelpHandler.cs
 

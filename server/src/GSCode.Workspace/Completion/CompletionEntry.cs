@@ -12,6 +12,7 @@ public enum CompletionKind
     Namespace,
     AssetType,
     PathSegment,
+    Literal,
     Snippet,
 }
 

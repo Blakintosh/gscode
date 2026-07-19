@@ -1,4 +1,5 @@
 using GSCode.Workspace.Completion;
+using GSCode.Server.Configuration;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
@@ -11,12 +12,14 @@ public sealed class CompletionHandler : CompletionHandlerBase
 {
     private readonly NavigationSupport _support;
     private readonly CompletionEngine _engine;
+    private readonly ServerSettings _settings;
     private readonly TextDocumentSelector _selector;
 
-    public CompletionHandler(NavigationSupport support, CompletionEngine engine, TextDocumentSelector selector)
+    public CompletionHandler(NavigationSupport support, CompletionEngine engine, ServerSettings settings, TextDocumentSelector selector)
     {
         _support = support;
         _engine = engine;
+        _settings = settings;
         _selector = selector;
     }
 
@@ -26,7 +29,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
         {
             DocumentSelector = _selector,
             // The characters that should re-trigger completion (the "feels dead" fix).
-            TriggerCharacters = new Container<string>(".", ":", "#", "&", "%", "\\", "/"),
+            TriggerCharacters = new Container<string>(".", ":", "#", "&", "%", "\\", "/", "\""),
             ResolveProvider = false,
         };
     }
@@ -40,7 +43,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
         }
 
         List<CompletionItem> items = [];
-        foreach ( CompletionEntry entry in _engine.Complete(target.Result, target.ContextId, request.Position.ToCore()) )
+        foreach ( CompletionEntry entry in _engine.Complete(target.Result, target.ContextId, request.Position.ToCore(), _settings.CompletionLiterals) )
         {
             items.Add(ToItem(entry));
         }
@@ -94,6 +97,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
                 return CompletionItemKind.EnumMember;
             case CompletionKind.PathSegment:
                 return CompletionItemKind.File;
+            case CompletionKind.Literal:
+                return CompletionItemKind.Text;
             default:
                 return CompletionItemKind.Snippet;
         }

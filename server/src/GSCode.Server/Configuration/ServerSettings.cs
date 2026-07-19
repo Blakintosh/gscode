@@ -20,6 +20,7 @@ public sealed class ServerSettings
     public bool CodeLensEnabled { get; set; } = true;
     public bool InlayParameterNames { get; set; } = true;
     public bool InlayInferredTypes { get; set; } = true;
+    public bool CompletionLiterals { get; set; } = true;
 
     /// <summary>Applies a { "gscode": { ... } } payload; missing keys keep their current values.</summary>
     public void Apply(JToken settingsRoot)
@@ -49,5 +50,8 @@ public sealed class ServerSettings
         InlayInferredTypes = section.Value<bool?>("inlayHints.inferredTypes")
             ?? section["inlayHints"]?.Value<bool?>("inferredTypes")
             ?? InlayInferredTypes;
+        CompletionLiterals = section.Value<bool?>("completion.literals")
+            ?? section["completion"]?.Value<bool?>("literals")
+            ?? CompletionLiterals;
     }
 }

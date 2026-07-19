@@ -61,6 +61,40 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void InsideStringLiteral_OffersKnownStringLiterals()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\events.gsc", "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        // main.gsc: cursor inside the empty string on line 3 (between the quotes).
+        string text = "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position insideString = new(3, 9);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", insideString);
+
+        Assert.True(HasLabel(entries, "player_spawned"));
+        Assert.All(entries, e => Assert.Equal(CompletionKind.Literal, e.Kind));
+    }
+
+    [Fact]
+    public void InsideStringLiteral_OffersNothing_WhenLiteralsDisabled()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\events.gsc", "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position insideString = new(3, 9);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", insideString, includeLiterals: false);
+
+        Assert.Empty(entries);
+    }
+
+    [Fact]
     public void StatementScope_OffersKeywordsMacrosAndBuiltins()
     {
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");

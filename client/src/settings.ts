@@ -13,6 +13,7 @@ export interface GscodeSettings {
     "codeLens.enabled": boolean;
     "inlayHints.parameterNames": boolean;
     "inlayHints.inferredTypes": boolean;
+    "completion.literals": boolean;
 }
 
 /** Reads the current gscode.* settings into the shape the server expects. */
@@ -30,5 +31,6 @@ export function readSettings(): GscodeSettings {
         "codeLens.enabled": config.get<boolean>("codeLens.enabled", true),
         "inlayHints.parameterNames": config.get<boolean>("inlayHints.parameterNames", true),
         "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", true),
+        "completion.literals": config.get<boolean>("completion.literals", true),
     };
 }

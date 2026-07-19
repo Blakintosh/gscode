@@ -152,6 +152,14 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
   full-range text edit when the result differs. Syntax errors or an unsafe reflow (see the
   formatter's corruption guard) yield no edits.
 
+## Handlers/CodeActionHandler.cs
+
+- Quick fixes over the open document. `FindRemovableDuplicates(result, selection)` returns the
+  #using directives whose (case-insensitive) path was already imported earlier in the file and
+  whose line overlaps the selection; each becomes a "Remove duplicate #using" QuickFix whose
+  WorkspaceEdit deletes the redundant line. Resolve is a passthrough (edits are carried up
+  front). More actions (auto-add #using) build on the same shape.
+
 ## Formatting/GscFormatter.cs
 
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits

@@ -21,4 +21,9 @@
     <ProjectReference Include="..\GSCode.Workspace\GSCode.Workspace.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The test project exercises internal handler helpers (e.g. code-action detection). -->
+    <InternalsVisibleTo Include="GSCode.Server.Tests" />
+  </ItemGroup>
+
 </Project>

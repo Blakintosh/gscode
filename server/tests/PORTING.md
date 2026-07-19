@@ -42,3 +42,10 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 | ReferenceIndexReconciliationTests | ✔ P5 | Index diff-on-swap covered by `ScriptDatabaseTests` (reference queries after re-index) + `WatchedFileUpdaterTests` |
 | ReferencesHandlerTests | ✔ P7 | Cross-file references verified by the P7 navigation smoke; code-lens counts by the P9 smoke |
 | LexerTests (v1 TestHelper trivia filtering) | ✔ P1 | Superseded by trivia-as-tokens + `LexTestHelper.SignificantTokens` |
+
+## P11 code-action mining (pending)
+
+The v1 `CodeActionHandler.cs` (1,081 lines) has not yet been mined for additional quick fixes
+worth porting. Landed so far: remove-duplicate-#using (`CodeActionHandlerTests`). Still to do:
+review the old handler via git history and record keep/drop decisions here (auto-add #using is
+the next planned action; the formatter's fidelity gates are covered by `GscFormatterTests`).

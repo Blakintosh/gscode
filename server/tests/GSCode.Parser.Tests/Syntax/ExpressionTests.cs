@@ -1,9 +1,20 @@
+using GSCode.Parser.Syntax;
 using Xunit;
 
 namespace GSCode.Parser.Tests.Syntax;
 
 public class ExpressionTests
 {
+    [Fact]
+    public void CallResultIndex_InVectorArgument_ProducesNoDiagnostics()
+    {
+        // The exact real-world line that previously errored with 3000/3002.
+        ParseTree tree = ParserTestHelper.Parse(
+            "function test()\n{\n    forward = anglesToForward(( 0, players[q] getplayerangles()[ 1 ], 0 ) );\n}\n");
+
+        Assert.Empty(tree.Diagnostics);
+    }
+
     [Fact]
     public void Precedence_MultiplicationBindsTighter()
     {
@@ -84,6 +95,23 @@ public class ExpressionTests
     public void MethodNotation_PointerCallOnTarget()
     {
         Assert.Equal("(call on:ent (deref ptr) 1)", ParserTestHelper.PrintExpr("ent [[ptr]](1)"));
+    }
+
+    [Fact]
+    public void CallResult_CanBeIndexedOrMemberAccessed()
+    {
+        // players[q] getplayerangles()[ 1 ] — index a method-call result used as a temporary.
+        Assert.Equal(
+            "(index (call on:(index players q) getplayerangles) 1)",
+            ParserTestHelper.PrintExpr("players[q] getplayerangles()[ 1 ]"));
+
+        // ent getstruct().field — member-access a method-call result.
+        Assert.Equal(
+            "(. (call on:ent getstruct) field)",
+            ParserTestHelper.PrintExpr("ent getstruct().field"));
+
+        // A plain (non-method) call result stays indexable too.
+        Assert.Equal("(index (call getangles) 1)", ParserTestHelper.PrintExpr("getangles()[ 1 ]"));
     }
 
     [Fact]

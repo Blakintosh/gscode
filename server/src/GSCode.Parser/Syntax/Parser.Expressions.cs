@@ -120,12 +120,16 @@ public sealed partial class Parser
             {
                 Advance();
                 expression = ParseCallCore(expression, isThread: true);
+                expression = ParsePostfixChain(expression);
                 continue;
             }
 
             if ( IsMethodCalleeAhead() )
             {
                 expression = ParseCallCore(expression, isThread: false);
+                // A call result can be indexed or member-accessed directly (used as a temporary),
+                // e.g. players[q] getplayerangles()[1] or ent getstruct().field.
+                expression = ParsePostfixChain(expression);
                 continue;
             }
 
@@ -303,8 +307,16 @@ public sealed partial class Parser
 
     private ExprNode ParsePostfix()
     {
-        ExprNode expression = ParsePrimary();
+        return ParsePostfixChain(ParsePrimary());
+    }
 
+    /// <summary>
+    /// Applies postfix operators (.field, [index], call-of-name, ++/--, [[ptr]]->method) to an
+    /// already-parsed expression. Shared by the primary level and the method-call level so a
+    /// call result can be indexed or member-accessed directly.
+    /// </summary>
+    private ExprNode ParsePostfixChain(ExprNode expression)
+    {
         while ( true )
         {
             switch ( Kind )

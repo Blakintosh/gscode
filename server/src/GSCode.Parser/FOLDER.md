@@ -208,6 +208,13 @@ LSP types anywhere.
   text; `GetText(SourceText)` returns a span view. `End` is one-past-last (half-open).
   `IsTrivia` marks the kinds the parser skips.
 
+## Lexing/TokenFacts.cs
+
+- `static class TokenFacts` — `IsKeyword(kind)` (range-check over the contiguous keyword block
+  in TokenKind) and `GetStaticText(kind)` (the canonical lexeme for fixed-text kinds —
+  operators, punctuation, directives — or null when the source span must be sliced). Lets
+  fixed-text tokens materialize their text without allocating.
+
 ## Lexing/Keywords.cs
 
 - `static class Keywords` — frozen lookup tables with span-based (allocation-free) lookup.

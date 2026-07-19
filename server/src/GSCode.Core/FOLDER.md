@@ -109,6 +109,14 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   `Format(code, args)` renders a message; a code without a template cannot ship because
   formatting it would throw in tests.
 
+## Docs/ScriptDocComment.cs
+
+- `sealed record ScriptDocArgument(Name, Description, Optional)` — one documented parameter.
+- `sealed record ScriptDocComment` — the structured `/@ @/` doc block: Name, Summary, Module,
+  CallOn, Spmp, Arguments, Examples (all fully populated, never null). `None` is the empty
+  sentinel and `IsNone` the check consumers use instead of null-checking. `Parse(docBlockText)`
+  turns a raw doc block into the structured form; the shared MarkdownDocRenderer renders it.
+
 ## GameProfile.cs
 
 - `record GameProfile` — the portability seam: all game-specific knowledge (extensions,

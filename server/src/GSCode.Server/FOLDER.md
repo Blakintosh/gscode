@@ -200,9 +200,11 @@ channel) behind a `LoggingLevelSwitch`, parses transport options, connects the
 transport, and starts the OmniSharp `LanguageServer` with `OnInitialize` (reads
 `initializationOptions.gscode.serverLogLevel` into the level switch) and
 `OnInitialized` hooks. Waits for exit, then disposes the transport owner and flushes logs.
-On indexing completion it logs `Workspace indexing complete: N files in X.Xs` (info) and then
-starts `RunMemoryMonitorAsync` — a lifetime background loop that samples the working set every
-2 s and logs `Server memory: N MB` only on >= 1 MB changes (so a stable process stays quiet).
+On indexing completion it logs `Workspace indexing complete: N files in X.Xs` (info), a
+`LogIndexBreakdown` line (`Index contents: N GSC, N CSC, N GSH files; N functions, N classes,
+N macros`), and then starts `RunMemoryMonitorAsync` — a lifetime background loop that samples the
+working set every 2 s and logs `Server memory: N MB` only on >= 1 MB changes (so a stable process
+stays quiet).
 
 ## Transport/TransportOptions.cs
 

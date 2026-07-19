@@ -234,6 +234,7 @@ LanguageServer server = await LanguageServer.From(options =>
                         int indexed = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
                         stopwatch.Stop();
                         Log.Information("Workspace indexing complete: {Count} files in {Seconds:F1}s", indexed, stopwatch.Elapsed.TotalSeconds);
+                        LogIndexBreakdown(languageServer.Services.GetRequiredService<ScriptDatabase>());
 
                         // Start reporting memory only now — during indexing it climbs steadily and
                         // would spam. The monitor logs only on >= 1 MB changes from here on.
@@ -261,6 +262,40 @@ if ( workspaceCache is not null )
 transport.Owner?.Dispose();
 Log.Information("GSCode v2 server exited");
 await Log.CloseAndFlushAsync();
+
+// Logs a one-line breakdown of what the index holds: file counts per language plus the total
+// declared functions, classes, and macros — the richer signal the old server printed.
+static void LogIndexBreakdown(ScriptDatabase database)
+{
+    int gshFiles = 0;
+    int functions = 0;
+    int classes = 0;
+    int macros = 0;
+
+    foreach ( ScriptRecord record in database.Gsc.AllRecords )
+    {
+        functions += record.Functions.Length;
+        classes += record.Classes.Length;
+        macros += record.Macros.Length;
+    }
+
+    foreach ( ScriptRecord record in database.Csc.AllRecords )
+    {
+        functions += record.Functions.Length;
+        classes += record.Classes.Length;
+        macros += record.Macros.Length;
+    }
+
+    foreach ( ScriptRecord record in database.AllGshRecords )
+    {
+        gshFiles++;
+        macros += record.Macros.Length;
+    }
+
+    Log.Information(
+        "Index contents: {Gsc} GSC, {Csc} CSC, {Gsh} GSH files; {Functions} functions, {Classes} classes, {Macros} macros",
+        database.Gsc.Count, database.Csc.Count, gshFiles, functions, classes, macros);
+}
 
 // Reports the server's working set after indexing completes, but only when it moves by at
 // least 1 MB, so a stable process stays quiet instead of spamming the log. Runs for the

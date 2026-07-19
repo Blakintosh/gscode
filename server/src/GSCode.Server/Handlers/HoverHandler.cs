@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
+using GSCode.Parser;
+using GSCode.Parser.Lexing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Typing;
@@ -7,7 +9,9 @@ using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using Position = GSCode.Core.Text.Position;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -53,6 +57,16 @@ public sealed class HoverHandler : HoverHandlerBase
             {
                 Range = hit.Range.ToLsp(),
                 Contents = new MarkedStringsOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = markdown }),
+            });
+        }
+
+        // A documented keyword or directive (isdefined, notify, #using, …).
+        if ( TryKeywordDocHover(target.Result, request.Position.ToCore(), out string keywordMarkdown, out TextRange keywordRange) )
+        {
+            return Task.FromResult<Hover?>(new Hover
+            {
+                Range = keywordRange.ToLsp(),
+                Contents = new MarkedStringsOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = keywordMarkdown }),
             });
         }
 
@@ -130,8 +144,59 @@ public sealed class HoverHandler : HoverHandlerBase
         return null;
     }
 
+    /// <summary>
+    /// Renders a keyword/directive doc when the cursor is on a documented keyword or directive
+    /// token (isdefined, notify, #using, …). Returns false for undocumented tokens and non-keywords.
+    /// </summary>
+    private static bool TryKeywordDocHover(ParseResult result, Position position, out string markdown, out TextRange range)
+    {
+        markdown = "";
+        range = TextRange.Empty;
+
+        int offset = result.Text.GetOffset(position);
+        foreach ( Token token in result.Lexed.Tokens )
+        {
+            if ( offset < token.Start || offset >= token.End )
+            {
+                continue;
+            }
+
+            if ( !TokenFacts.IsKeyword(token.Kind) && !IsDirective(token.Kind) )
+            {
+                return false;
+            }
+
+            string? doc = KeywordDocs.Find(token.GetText(result.Text).ToString());
+            if ( doc is null )
+            {
+                return false;
+            }
+
+            markdown = doc;
+            range = token.Range;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsDirective(TokenKind kind)
+    {
+        return kind >= TokenKind.UsingDirective && kind <= TokenKind.EndifDirective;
+    }
+
     private string RenderField(string name)
     {
+        // The .size pseudo-member has its own documentation.
+        if ( string.Equals(name, "size", StringComparison.OrdinalIgnoreCase) )
+        {
+            string? sizeDoc = KeywordDocs.Find("size");
+            if ( sizeDoc is not null )
+            {
+                return sizeDoc;
+            }
+        }
+
         // Enrich with known engine field types (the owner's entity kind isn't inferred
         // until FlowTyper, so list every kind that declares this field name).
         ImmutableArray<ObjectField> known = _objectFields.FindField(name);

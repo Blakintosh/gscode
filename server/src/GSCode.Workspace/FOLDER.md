@@ -45,7 +45,9 @@ Typing lands P10.)*
 
 ## Completion/GscKeywords.cs
 
-- `static GscKeywords` — the statement-scope and top-level keyword lists offered in completion.
+- `static GscKeywords` — the statement-scope and top-level keyword/directive lists offered in
+  completion (assert/assertmsg excluded — they come from the builtin API instead). Documented
+  entries get their KeywordDocs blurb as the completion's documentation.
 
 ## Completion/CompletionEngine.cs
 
@@ -232,6 +234,11 @@ Bundled game data (copied to the build output) plus the loaders and doc renderer
   `RenderFunction` (script functions: prototype + ScriptDoc summary/region/params/
   examples), `RenderBuiltin` (prototype + description + overloads + example),
   `RenderMacro` (#define form + trailing-comment doc).
+- `KeywordDocs.cs` — `static KeywordDocs.Find(word)` — documentation (from the GSC language PDF)
+  for the evaluation/function-usage keywords (wait, waittill, notify, endon, isdefined,
+  vectorscale, gettime, profilestart/stop, `.size`) and the preprocessor directives (keyed with
+  their leading `#`). Powers keyword/directive hover and completion detail. assert/assertmsg are
+  deliberately absent — they are engine builtins served by the API library, not keywords.
 - `ObjectFields.cs` — `ObjectField`/`RadiantKey` model + `ObjectFields.Load(apiDir)`;
   `FindField(name)` returns every entity kind declaring that field (owner type isn't
   inferred until FlowTyper), `FindRadiantKey(name)` returns the map key. Source-gen JSON.

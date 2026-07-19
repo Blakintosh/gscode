@@ -249,7 +249,9 @@ public sealed class CompletionEngine
 
         foreach ( string keyword in insideFunction ? GscKeywords.StatementKeywords : GscKeywords.TopLevelKeywords )
         {
-            entries.Add(new CompletionEntry(keyword, CompletionKind.Keyword));
+            // Documented keywords/directives (isdefined, notify, #using, …) carry their PDF blurb.
+            string documentation = KeywordDocs.Find(keyword) ?? "";
+            entries.Add(new CompletionEntry(keyword, CompletionKind.Keyword, "", "", documentation));
         }
 
         if ( !insideFunction )

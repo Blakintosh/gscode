@@ -61,6 +61,24 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void Keywords_CarryDocumentation_AndAssertIsNotAKeyword()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 4));
+
+        CompletionEntry isdefined = entries.First(e => e.Label == "isdefined" && e.Kind == CompletionKind.Keyword);
+        Assert.Contains("undefined", isdefined.Documentation);
+
+        // assert / assertmsg are engine builtins, not keywords — they must not appear as keyword items.
+        Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.Keyword && e.Label == "assert");
+        Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.Keyword && e.Label == "assertmsg");
+    }
+
+    [Fact]
     public void InsideStringLiteral_OffersKnownStringLiterals()
     {
         FakeFileSystem files = new FakeFileSystem()

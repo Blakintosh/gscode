@@ -10,7 +10,7 @@ public static class GscKeywords
     [
         "if", "else", "for", "foreach", "while", "do", "switch", "case", "default",
         "return", "break", "continue", "wait", "waitrealtime", "waittill", "waittillmatch",
-        "waittillframeend", "thread", "notify", "endon", "isdefined", "assert", "assertmsg",
+        "waittillframeend", "thread", "notify", "endon", "isdefined",
         "true", "false", "undefined", "self", "level", "game", "world", "anim", "const", "new",
     ];
 

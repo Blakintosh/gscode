@@ -265,7 +265,9 @@
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
 		"watch": "tsc -watch -p ./",
-		"lint": "eslint src"
+		"lint": "eslint src",
+		"bundle-server": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -o ./service",
+		"package": "npm run compile && npm run bundle-server && npx --yes @vscode/vsce package"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.15.0",

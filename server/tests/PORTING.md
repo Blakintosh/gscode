@@ -45,7 +45,7 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 
 ## P11 code-action mining (pending)
 
-The v1 `CodeActionHandler.cs` (1,081 lines) has not yet been mined for additional quick fixes
-worth porting. Landed so far: remove-duplicate-#using (`CodeActionHandlerTests`). Still to do:
-review the old handler via git history and record keep/drop decisions here (auto-add #using is
-the next planned action; the formatter's fidelity gates are covered by `GscFormatterTests`).
+Landed so far: remove-duplicate-#using and auto-add-#using (`CodeActionHandlerTests`), plus the
+whole/range/on-type formatter (`GscFormatterTests`). Still to do: mine the v1
+`CodeActionHandler.cs` (1,081 lines) via git history for any OTHER quick fixes worth porting and
+record keep/drop decisions here.

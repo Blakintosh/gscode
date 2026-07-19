@@ -168,10 +168,13 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 ## Handlers/CodeActionHandler.cs
 
 - Quick fixes over the open document. `FindRemovableDuplicates(result, selection)` returns the
-  #using directives whose (case-insensitive) path was already imported earlier in the file and
-  whose line overlaps the selection; each becomes a "Remove duplicate #using" QuickFix whose
-  WorkspaceEdit deletes the redundant line. Resolve is a passthrough (edits are carried up
-  front). More actions (auto-add #using) build on the same shape.
+  #using directives whose (case-insensitive) path was already imported earlier and whose line
+  overlaps the selection → a "Remove duplicate #using" QuickFix deleting the line.
+  `FindMissingUsings(result, store, contextId, askingPath, selection)` returns the distinct
+  script-relative paths (extension stripped) of visible files defining a qualified call whose
+  namespace the file doesn't import (own-namespace calls and already-imported files skipped) →
+  an "Add #using ..." QuickFix inserting the directive after the last existing #using (or at the
+  file top). This is the natural fix for the NamespaceNotImported lint. Resolve is a passthrough.
 
 ## Formatting/GscFormatter.cs
 

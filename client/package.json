@@ -111,6 +111,21 @@
 			{
 				"command": "gscode.showOutput",
 				"title": "GSCode: Show Server Output"
+			},
+			{
+				"command": "gscode.restartServer",
+				"title": "GSCode: Restart Language Server"
+			},
+			{
+				"command": "gscode.openApiLibrary",
+				"title": "GSCode: Open Script API Library"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "gscode.openApiLibrary",
+				"key": "shift+f1",
+				"when": "editorTextFocus && (editorLangId == gsc || editorLangId == csc)"
 			}
 		],
 		"configuration": {

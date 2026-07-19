@@ -23,6 +23,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
+    // Restart the language server (e.g. after changing an environment variable it reads).
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.restartServer", async () => {
+            log.info("Restarting GSCode language server");
+            await created.restart();
+        }),
+    );
+
+    // Open the gscode.net script API library for the active editor's language (default gsc).
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.openApiLibrary", () => {
+            const languageId = vscode.window.activeTextEditor?.document.languageId;
+            const library = languageId === "csc" ? "csc" : "gsc";
+            vscode.env.openExternal(vscode.Uri.parse(`https://www.gscode.net/library/${library}`));
+        }),
+    );
+
     // Bridge for code-lens "N references" clicks: the server sends plain JSON args, which
     // VSCode's editor.action.showReferences rejects via instanceof checks, so we re-fetch
     // references through the provider and hand it real Location instances.

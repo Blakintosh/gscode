@@ -146,6 +146,25 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
   The FlowTyper it builds is seeded with the shared ObjectFields for field-type inference.
   ResolveProvider is false, so the resolve handler is a passthrough.
 
+## Handlers/DocumentFormattingHandler.cs
+
+- Whole-document formatting: runs GscFormatter over the open document and returns a single
+  full-range text edit when the result differs. Syntax errors or an unsafe reflow (see the
+  formatter's corruption guard) yield no edits.
+
+## Formatting/GscFormatter.cs
+
+- `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
+  every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman
+  braces, one statement per line, 4-space indent from brace/dev-block depth, padded
+  control-flow and non-empty parens (`( x )`, `()` stays tight), hugging `.`/`::`/`->`/`[ ]`
+  and backslash paths, and blank lines capped at two. Line breaks are forced structurally
+  (Allman) but original breaks are otherwise preserved, which keeps newline-terminated
+  directives (`#define`, `#if`) intact; trailing comments stay glued to their line. Two
+  safety properties make corruption impossible: it refuses files with lexer (1xxx) or parser
+  (3xxx) errors, and it re-lexes its own output and returns null (no edits) unless the
+  non-trivia token stream is byte-for-byte identical to the input's.
+
 ## Program.cs
 
 Top-level entry point. Configures Serilog to STDERR (stdout must stay clean for the

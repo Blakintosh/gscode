@@ -121,6 +121,7 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<CallHierarchyHandler>()
         .AddHandler<TypeHierarchyHandler>()
         .AddHandler<InlayHintHandler>()
+        .AddHandler<DocumentFormattingHandler>()
         .AddHandler<ConfigurationHandler>()
         .OnInitialize((languageServer, request, cancellationToken) =>
         {

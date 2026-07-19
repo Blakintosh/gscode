@@ -1,5 +1,6 @@
 using CommandLine;
 using GSCode.Core;
+using GSCode.Core.Symbols;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Server.Logging;
@@ -263,38 +264,106 @@ transport.Owner?.Dispose();
 Log.Information("GSCode v2 server exited");
 await Log.CloseAndFlushAsync();
 
-// Logs a one-line breakdown of what the index holds: file counts per language plus the total
-// declared functions, classes, and macros — the richer signal the old server printed.
+// Logs a formatted breakdown of what the index holds: per-language file counts with a
+// raw/mod/workspace split, plus total declared functions, classes, macros, and distinct
+// namespaces — the richer signal the old server printed.
 static void LogIndexBreakdown(ScriptDatabase database)
 {
-    int gshFiles = 0;
+    int gscRaw = 0;
+    int gscMod = 0;
+    int gscWorkspace = 0;
+    int cscRaw = 0;
+    int cscMod = 0;
+    int cscWorkspace = 0;
     int functions = 0;
     int classes = 0;
     int macros = 0;
+    HashSet<string> namespaces = new(StringComparer.Ordinal);
 
     foreach ( ScriptRecord record in database.Gsc.AllRecords )
     {
+        CategorizeContext(record.ContextId, ref gscRaw, ref gscMod, ref gscWorkspace);
         functions += record.Functions.Length;
         classes += record.Classes.Length;
         macros += record.Macros.Length;
+        foreach ( NamespaceSpan span in record.Namespaces )
+        {
+            namespaces.Add(span.KeyName);
+        }
     }
 
     foreach ( ScriptRecord record in database.Csc.AllRecords )
     {
+        CategorizeContext(record.ContextId, ref cscRaw, ref cscMod, ref cscWorkspace);
         functions += record.Functions.Length;
         classes += record.Classes.Length;
         macros += record.Macros.Length;
+        foreach ( NamespaceSpan span in record.Namespaces )
+        {
+            namespaces.Add(span.KeyName);
+        }
     }
 
+    int gshFiles = 0;
     foreach ( ScriptRecord record in database.AllGshRecords )
     {
         gshFiles++;
         macros += record.Macros.Length;
     }
 
-    Log.Information(
-        "Index contents: {Gsc} GSC, {Csc} CSC, {Gsh} GSH files; {Functions} functions, {Classes} classes, {Macros} macros",
-        database.Gsc.Count, database.Csc.Count, gshFiles, functions, classes, macros);
+    System.Text.StringBuilder report = new();
+    report.Append("Index contents:");
+    report.Append('\n').Append(FormatLanguageLine("GSC", gscRaw, gscMod, gscWorkspace));
+    report.Append('\n').Append(FormatLanguageLine("CSC", cscRaw, cscMod, cscWorkspace));
+    report.Append('\n').Append($"    GSH  {gshFiles,6:N0} files");
+    report.Append('\n').Append("    ─────────────────────────────────────────────");
+    report.Append('\n').Append(
+        $"    {functions,6:N0} functions · {classes:N0} classes · {macros:N0} macros · {namespaces.Count:N0} namespaces");
+
+    Log.Information("{IndexReport}", report.ToString());
+}
+
+// Tallies one record's context into the raw / mod / workspace buckets for its language.
+static void CategorizeContext(string contextId, ref int raw, ref int mod, ref int workspace)
+{
+    if ( contextId == "raw" )
+    {
+        raw++;
+    }
+    else if ( contextId.StartsWith("mod:", StringComparison.Ordinal) )
+    {
+        mod++;
+    }
+    else
+    {
+        workspace++;
+    }
+}
+
+// Renders one aligned "GSC  1,234 files  (1,000 raw · 200 mod · 34 workspace)" line, omitting
+// any bucket that is empty.
+static string FormatLanguageLine(string label, int raw, int mod, int workspace)
+{
+    int total = raw + mod + workspace;
+
+    List<string> parts = [];
+    if ( raw > 0 )
+    {
+        parts.Add($"{raw:N0} raw");
+    }
+
+    if ( mod > 0 )
+    {
+        parts.Add($"{mod:N0} mod");
+    }
+
+    if ( workspace > 0 )
+    {
+        parts.Add($"{workspace:N0} workspace");
+    }
+
+    string split = parts.Count > 0 ? "  (" + string.Join(" · ", parts) + ")" : "";
+    return $"    {label}  {total,6:N0} files{split}";
 }
 
 // Reports the server's working set after indexing completes, but only when it moves by at

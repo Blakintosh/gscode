@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { createLanguageClient } from "./server";
@@ -28,6 +31,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand("gscode.restartServer", async () => {
             log.info("Restarting GSCode language server");
             await created.restart();
+        }),
+    );
+
+    // Clear the persistent cache and re-index: stop the server (releasing the SQLite lock),
+    // delete the cache directory, then reload the window for a fresh cold index.
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.clearCacheAndReindex", async () => {
+            const choice = await vscode.window.showWarningMessage(
+                "Clear the GSCode cache and re-index? The language server will restart.",
+                { modal: true },
+                "Clear and Reindex",
+            );
+            if (choice !== "Clear and Reindex") {
+                return;
+            }
+
+            log.info("Clearing cache and reindexing");
+            try {
+                await created.stop();
+                // Give the server a moment to release the SQLite file handles.
+                await new Promise((resolve) => setTimeout(resolve, 300));
+                // Mirrors the server's cache location (Environment.SpecialFolder.ApplicationData:
+                // %APPDATA% on Windows, ~/.config elsewhere).
+                const appData = process.env.APPDATA ?? path.join(os.homedir(), ".config");
+                const cacheDir = path.join(appData, "gscode", "cache");
+                await fs.promises.rm(cacheDir, { recursive: true, force: true });
+            } catch (error) {
+                log.error(`Failed to clear cache: ${String(error)}`);
+            }
+            await vscode.commands.executeCommand("workbench.action.reloadWindow");
         }),
     );
 

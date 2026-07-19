@@ -21,6 +21,50 @@ public static class GscFormatter
 {
     private const int IndentWidth = 4;
 
+    /// <summary>A single text edit: the source range to replace and its replacement text.</summary>
+    public readonly record struct FormatEdit(TextRange Range, string NewText);
+
+    /// <summary>
+    /// Formats the document and returns the MINIMAL edit that turns the original into the
+    /// formatted text (common leading/trailing characters are trimmed), or null when there is
+    /// nothing to change or formatting is refused. All three formatting requests (whole,
+    /// range, on-type) share this so edits stay small and churn-free.
+    /// </summary>
+    public static FormatEdit? FormatMinimal(ParseResult result)
+    {
+        string? formatted = Format(result);
+        if ( formatted is null )
+        {
+            return null;
+        }
+
+        string original = result.Text.Text;
+        if ( string.Equals(original, formatted, StringComparison.Ordinal) )
+        {
+            return null;
+        }
+
+        // Trim the common prefix and suffix so the edit spans only what actually changed.
+        int start = 0;
+        int maxPrefix = Math.Min(original.Length, formatted.Length);
+        while ( start < maxPrefix && original[start] == formatted[start] )
+        {
+            start++;
+        }
+
+        int originalEnd = original.Length;
+        int formattedEnd = formatted.Length;
+        while ( originalEnd > start && formattedEnd > start && original[originalEnd - 1] == formatted[formattedEnd - 1] )
+        {
+            originalEnd--;
+            formattedEnd--;
+        }
+
+        TextRange range = new(result.Text.GetPosition(start), result.Text.GetPosition(originalEnd));
+        string replacement = formatted.Substring(start, formattedEnd - start);
+        return new FormatEdit(range, replacement);
+    }
+
     /// <summary>
     /// Produces the formatted document text, or null when formatting is refused (syntax
     /// errors) or would not be safe (the token stream would change). A null result means

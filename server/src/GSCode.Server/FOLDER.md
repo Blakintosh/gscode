@@ -148,9 +148,21 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 ## Handlers/DocumentFormattingHandler.cs
 
-- Whole-document formatting: runs GscFormatter over the open document and returns a single
-  full-range text edit when the result differs. Syntax errors or an unsafe reflow (see the
-  formatter's corruption guard) yield no edits.
+- Whole-document formatting: runs `GscFormatter.FormatMinimal` over the open document and
+  returns its minimal edit (common prefix/suffix trimmed). Syntax errors or an unsafe reflow
+  (see the formatter's corruption guard) yield no edits.
+
+## Handlers/DocumentRangeFormattingHandler.cs
+
+- "Format Selection". GSC formatting is holistic, so this runs the same formatter and returns
+  the minimal edit only when the changed region overlaps the requested range — formatting an
+  already-clean selection does nothing.
+
+## Handlers/DocumentOnTypeFormattingHandler.cs
+
+- On-type formatting after `}` or `;`. Reuses the whole-document formatter's minimal edit;
+  because the formatter refuses files with syntax errors, a half-typed document is left alone
+  until it parses again.
 
 ## Handlers/CodeActionHandler.cs
 
@@ -162,6 +174,9 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 
 ## Formatting/GscFormatter.cs
 
+- `FormatMinimal(ParseResult)` returns a `FormatEdit` (range + replacement) that trims the
+  common leading/trailing characters so the edit spans only what changed; all three formatting
+  handlers share it. `Format(ParseResult)` returns the full formatted text (or null).
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
   every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman
   braces, one statement per line, 4-space indent from brace/dev-block depth, padded

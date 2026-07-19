@@ -101,6 +101,30 @@ public class GscFormatterTests
     }
 
     [Fact]
+    public void FormatMinimal_TrimsToTheChangedRegion()
+    {
+        // Only the "a=0;" line needs spacing; the edit must not span the whole file.
+        string source = "function f()\n{\n    a=0;\n}\n";
+
+        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(Analyze(source));
+
+        Assert.NotNull(edit);
+        Assert.Equal(2, edit.Value.Range.Start.Line);
+        // The reflow only reinserts spacing around '='; the edit is that small.
+        Assert.Contains(" = ", edit.Value.NewText);
+    }
+
+    [Fact]
+    public void FormatMinimal_ReturnsNull_WhenAlreadyFormatted()
+    {
+        string source = "function f()\n{\n    a = 0;\n}\n";
+
+        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(Analyze(source));
+
+        Assert.Null(edit);
+    }
+
+    [Fact]
     public void Format_RefusesFileWithSyntaxErrors()
     {
         // A missing close paren/brace leaves the parser with error diagnostics.

@@ -236,8 +236,8 @@ Bundled game data (copied to the build output) plus the loaders and doc renderer
   `RenderMacro` (#define form + trailing-comment doc).
 - `KeywordDocs.cs` — `static KeywordDocs.Find(word)` — documentation (from the GSC language PDF)
   for the evaluation/function-usage keywords (wait, waittill, notify, endon, isdefined,
-  vectorscale, gettime, profilestart/stop, `.size`) and the preprocessor directives (keyed with
-  their leading `#`). Powers keyword/directive hover and completion detail. assert/assertmsg are
+  vectorscale, profilestart/stop, `.size`) and the preprocessor directives (keyed with their
+  leading `#`). Powers keyword/directive hover and completion detail. assert/assertmsg/gettime are
   deliberately absent — they are engine builtins served by the API library, not keywords.
 - `ObjectFields.cs` — `ObjectField`/`RadiantKey` model + `ObjectFields.Load(apiDir)`;
   `FindField(name)` returns every entity kind declaring that field (owner type isn't

@@ -249,7 +249,6 @@ public sealed partial class Parser
             or TokenKind.Notify
             or TokenKind.Endon
             or TokenKind.IsDefined
-            or TokenKind.GetTime
             or TokenKind.VectorScale
             or TokenKind.ProfileStart
             or TokenKind.ProfileStop

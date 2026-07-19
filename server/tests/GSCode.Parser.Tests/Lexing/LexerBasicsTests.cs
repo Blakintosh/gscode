@@ -13,6 +13,7 @@ public class LexerBasicsTests
     [InlineData("level", TokenKind.Identifier)]
     [InlineData("game", TokenKind.Identifier)]
     [InlineData("world", TokenKind.Identifier)]
+    [InlineData("gettime", TokenKind.Identifier)] // a builtin, not a keyword — lexes as an identifier
     public void Lex_Identifiers_IncludingGlobals(string source, TokenKind expected)
     {
         LexTestHelper.AssertSingle(source, expected);

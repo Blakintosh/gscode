@@ -23,7 +23,6 @@ public static class KeywordDocs
         ["endon"] = "Ends the current thread if the entity sends the named notify.\n\n```gsc\nself endon( \"event\" );\n```",
         ["isdefined"] = "Returns true when the value is defined (not `undefined`).\n\n```gsc\nif ( isdefined( value ) )\n```",
         ["vectorscale"] = "Returns the vector multiplied by the scalar.\n\n```gsc\nvectorscale( vector, scale );\n```",
-        ["gettime"] = "Returns the current server time in milliseconds.",
         ["profilestart"] = "Begins a named profiling scope for performance measurement (paired with `profilestop`).",
         ["profilestop"] = "Ends the most recent profiling scope opened by `profilestart`.",
         ["size"] = "The number of elements in an array or characters in a string (read-only `int`).\n\n```gsc\ncount = array.size;\n```",

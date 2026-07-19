@@ -69,7 +69,6 @@ public enum TokenKind
     True,
     False,
     VectorScale,
-    GetTime,
     ProfileStart,
     ProfileStop,
 

@@ -48,7 +48,6 @@ public static class Keywords
         ["true"] = TokenKind.True,
         ["false"] = TokenKind.False,
         ["vectorscale"] = TokenKind.VectorScale,
-        ["gettime"] = TokenKind.GetTime,
         ["profilestart"] = TokenKind.ProfileStart,
         ["profilestop"] = TokenKind.ProfileStop,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);

@@ -10,7 +10,20 @@ GSCode's language server requires the .NET 10 Runtime, available at [Download .N
 
 ## Release Notes
 
-### 1.5.0 (latest)
+### 2.0.0 (latest)
+
+A complete ground-up rewrite of the language server and extension for speed, low memory use, and accuracy.
+
+- Rebuilt the entire pipeline from scratch: a span-based lexer, a provenance-tracking preprocessor (`#define`/`#insert`/`#if`), a hand-written recursive-descent parser with error recovery, and symbol extraction — none of it ever throws, so a broken file still gets a full outline and diagnostics.
+- Added first-class mod-tools support: `share/raw` plus every mod under `mods/` is indexed in isolation, mod folders overlay raw without crossing each other, and a workspace-only mode works with no game install at all.
+- Centralised everything in one script database with structurally isolated GSC and CSC worlds and a shared GSH (header) store, backed by a persistent SQLite cache so cold starts restore unchanged files in seconds.
+- Full modern LSP suite: live diagnostics, hover, completion, signature help, go-to-definition, find-all-references (including string/hash/localized/anim literals), document highlight, semantic tokens, folding, selection ranges, document/workspace symbols, code lens, rename, call and type hierarchy, inlay hints, document links, formatting, and code actions.
+- Type-flow inference powers inferred-type inlay hints and local-variable hovers, seeded with engine object-field types.
+- Formatting (whole document, selection, and on-type) is whitespace-only and corruption-proof: it refuses files with syntax errors and re-checks its own output so it can never alter your tokens.
+- Code actions cover remove-duplicate-`#using` and add-missing-`#using`, backed by a namespace-usage lint.
+- Macros defined in `.gsh` headers are first-class symbols with go-to-definition, references, and hover via token provenance.
+
+### 1.5.0
 
 - Added game script indexing so GSCode can discover namespaces and functions across the workspace and shared raw scripts without every file needing to be opened first.
 - Added workspace-wide namespace and `namespace::function` completions, including `sys::` API completions and automatic `#using` insertion for functions from unimported scripts.

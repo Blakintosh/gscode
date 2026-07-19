@@ -1,10 +1,9 @@
 # GSCode v2 — Server Architecture
 
 End-to-end map of the GSCode language server and its VSCode client. Updated in every
-phase that changes structure. (Phase status: **P11 — Formatter + code actions.** The full
-navigation/completion/lens/rename/hierarchy suite and type-flow inlay hints are live; formatting
-(whole/range/on-type) runs through a corruption-proof whitespace-only formatter; code actions
-cover remove-duplicate and auto-add #using, backed by the cross-file namespace-usage lint.)
+phase that changes structure. (Phase status: **P12 — Client polish + hardening + release.** The
+full LSP feature suite is live end to end; this phase finalizes the client command surface,
+documentation, and packaging.)
 
 ## Required toolchain
 
@@ -41,13 +40,38 @@ immutable record snapshots; open documents keep their full `ParseResult` in the
 `DocumentStore`. Path/mod-overlay questions (`share\raw` vs `mods\<name>` vs workspace)
 are answered solely by the `PathResolver`.
 
+## Language features (LSP handlers)
+
+All handlers live in `GSCode.Server/Handlers`, each thin over a Workspace query and mapping
+through `Mapping/LspMapping`. The query brain is `Database/DatabaseQueries` + `SymbolAtPosition`;
+GSC/CSC isolation is enforced by resolving the store once from the asking file's language.
+
+- **Sync + diagnostics**: incremental text sync with debounced re-analysis (`TextSyncHandler`),
+  push-model `publishDiagnostics` merging parse diagnostics with cross-file lints
+  (`Analysis/NamespaceUsageLint`).
+- **Read**: hover (with inferred local types), definition, references (incl. literals),
+  document highlight, document links, document/workspace symbols, folding, selection ranges,
+  semantic tokens (full/delta/range).
+- **Assist**: completion + signature help, code lens (reference counts), rename (+prepareRename),
+  call and type hierarchy, inlay hints (inferred types + parameter names).
+- **Edit**: formatting (whole/range/on-type) via `Formatting/GscFormatter`; code actions
+  (remove-duplicate and add-missing `#using`).
+
+Type inference is `Workspace/Typing/FlowTyper`, a small per-function forward type-flow pass over
+the `ScrType` lattice, seeded with engine object-field types; it feeds inlay hints and hovers.
+
 ## The client (`client/`)
 
-TypeScript VSCode extension. Spawns the server framework-dependent
-(`dotnet GSCode.Server.dll`) over a named pipe (stdio fallback), after verifying the
-.NET 10 runtime is installed. Carries the GSC/CSC/GSH language registrations, TextMate
-grammar, semantic-token scope mapping, and quick-suggestion defaults. Settings flow to
-the server via `initializationOptions.gscode` and `workspace/didChangeConfiguration`.
+TypeScript VSCode extension (`src/extension.ts`, `server.ts`, `settings.ts`). Spawns the server
+framework-dependent (`dotnet GSCode.Server.dll`) over a named pipe (stdio fallback), after
+verifying the .NET 10 runtime is installed (prompting a download if missing). Carries the
+GSC/CSC/GSH language registrations, TextMate grammar, semantic-token scope mapping, and
+quick-suggestion defaults. Two log channels: "GSCode" (`LogOutputChannel`, extension-host
+lifecycle) and "GSCode Server" (the server's stderr/Serilog). A status-bar item shows the live
+indexing counter driven by `gscode/indexingStarted|Progress|Complete` notifications. Commands:
+`gscode.showOutput`, `gscode.restartServer`, `gscode.openApiLibrary` (`shift+f1`), and the
+`gscode.showReferences` bridge for code-lens clicks. Settings flow to the server via
+`initializationOptions.gscode` and `workspace/didChangeConfiguration`.
 
 ## Dev-time tooling
 

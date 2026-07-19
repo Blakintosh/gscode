@@ -1,9 +1,10 @@
 # GSCode v2 — Server Architecture
 
 End-to-end map of the GSCode language server and its VSCode client. Updated in every
-phase that changes structure. (Phase status: **P11 — Formatter + code actions (in progress).**
-The full navigation/completion/lens/rename/hierarchy suite and type-flow inlay hints are live;
-whole-document formatting has landed via a corruption-proof whitespace-only formatter.)
+phase that changes structure. (Phase status: **P11 — Formatter + code actions.** The full
+navigation/completion/lens/rename/hierarchy suite and type-flow inlay hints are live; formatting
+(whole/range/on-type) runs through a corruption-proof whitespace-only formatter; code actions
+cover remove-duplicate and auto-add #using, backed by the cross-file namespace-usage lint.)
 
 ## Required toolchain
 

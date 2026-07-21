@@ -56,4 +56,6 @@ public enum GscDiagnosticCode
     UnusedUsing = 5001,
     PreferBooleanLiteral = 5002,
     PrivateFunctionNotVisible = 5003,
+    ReadOnlyFieldWrite = 5004,
+    SizeIsReadOnly = 5005,
 }

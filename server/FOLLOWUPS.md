@@ -46,10 +46,19 @@ three features, and the grey-out is the most visible missing behavior in the edi
    table gets revisited. Engine object fields carry no side data at all — if per-language
    field accuracy ever matters, that is where the real gap is.
 
-**Wave 3 — diagnostics carries.** All user-confirmed carries from the plan.
-7. prefer-boolean-literal lint (P14 #2).
-8. Cross-file `private` function diagnostic (P14 #3).
-9. ReadOnly-field write + `.size` write diagnostics (P14 #4, #5) — one commit, same shape.
+**Wave 3 — diagnostics carries. ✔ DONE.** All user-confirmed carries from the plan.
+7. ✔ prefer-boolean-literal lint (P14 #2) — `Analysis/PreferBooleanLiteralLint.cs`. Scope
+   recovered from the v1 regression test in git history: declared-`bool` parameters only.
+   Lives in the workspace layer, not extraction, because it needs the builtin API.
+8. ✔ Cross-file `private` function diagnostic (P14 #3) — `Analysis/PrivateAccessLint.cs`.
+   Also fixed a latent bug this exposed: `ScriptRecord.Path` was assigned the raw analysed
+   path despite being documented as the normalized store key, so private visibility (a
+   record-path vs asking-path comparison) could be defeated by casing or slash style.
+9. ✔ ReadOnly-field write + `.size` write diagnostics (P14 #4, #5) —
+   `Analysis/ReadOnlyWriteLint.cs`. `.size` is an Error (language-spec fact); engine fields
+   are a Warning (curated data can carry mistakes, as `classname` proved). Only flags a field
+   when every declaring entity kind agrees it is read-only — exactly 2 names in the current
+   data (`type`, `radius`) are mixed and stay silent.
 
 **Wave 4 — FlowTyper carries.** Ordered so the lattice lands before its consumers.
 10. Branch-join convergence — wire `ScrType.Join` into the walk (P14 #9). Unblocks the

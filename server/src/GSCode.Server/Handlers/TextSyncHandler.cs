@@ -38,6 +38,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ServerSettings _settings;
     private readonly StockScripts _stockScripts;
     private readonly BuiltinApiSet _builtins;
+    private readonly ObjectFields _objectFields;
     private readonly ILanguageServerFacade _server;
 
     public TextSyncHandler(
@@ -49,9 +50,11 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         ServerSettings settings,
         StockScripts stockScripts,
         BuiltinApiSet builtins,
+        ObjectFields objectFields,
         ILanguageServerFacade server)
     {
         _builtins = builtins;
+        _objectFields = objectFields;
         _documents = documents;
         _diagnostics = diagnostics;
         _database = database;
@@ -220,6 +223,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         lints.AddRange(UnusedUsingLint.Analyze(result, store, document.Language, resolver, document.Path));
         lints.AddRange(PreferBooleanLiteralLint.Analyze(result, builtins));
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, document.Path, builtins));
+        lints.AddRange(ReadOnlyWriteLint.Analyze(result, _objectFields));
 
         if ( lints.Count == 0 )
         {

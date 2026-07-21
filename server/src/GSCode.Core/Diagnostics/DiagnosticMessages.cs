@@ -60,6 +60,8 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.UnusedUsing] = "'{0}' is imported but nothing from it is used.",
         [GscDiagnosticCode.PreferBooleanLiteral] = "Parameter '{0}' is a bool; prefer '{1}' over the integer literal.",
         [GscDiagnosticCode.PrivateFunctionNotVisible] = "'{0}' is private to '{1}' and cannot be called from another file.",
+        [GscDiagnosticCode.ReadOnlyFieldWrite] = "Engine field '{0}' is read-only; assigning to it has no effect.",
+        [GscDiagnosticCode.SizeIsReadOnly] = "'.size' is read-only and cannot be assigned.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

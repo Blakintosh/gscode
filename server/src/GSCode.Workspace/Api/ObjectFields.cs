@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Api;
 
@@ -44,6 +45,54 @@ public sealed class ObjectFields
     public RadiantKey? FindRadiantKey(string name)
     {
         return _radiantByName.TryGetValue(name, out RadiantKey? key) ? key : null;
+    }
+
+    /// <summary>
+    /// The radiant map key with this name as visible to the asking language, or null. Keys
+    /// marked "client" in keys.txt exist only on the CSC side.
+    /// </summary>
+    public RadiantKey? FindRadiantKey(string name, ScriptLanguage language)
+    {
+        RadiantKey? key = FindRadiantKey(name);
+        if ( key is null )
+        {
+            return null;
+        }
+
+        if ( IsClientOnly(key) && language != ScriptLanguage.Csc )
+        {
+            return null;
+        }
+
+        return key;
+    }
+
+    /// <summary>Every distinct engine field name, for completion.</summary>
+    public ImmutableArray<string> FieldNames()
+    {
+        return _fieldsByName.Keys;
+    }
+
+    /// <summary>Every radiant key visible to the asking language, for field completion.</summary>
+    public ImmutableArray<RadiantKey> RadiantKeysFor(ScriptLanguage language)
+    {
+        ImmutableArray<RadiantKey>.Builder visible = ImmutableArray.CreateBuilder<RadiantKey>();
+        foreach ( RadiantKey key in _radiantByName.Values )
+        {
+            if ( IsClientOnly(key) && language != ScriptLanguage.Csc )
+            {
+                continue;
+            }
+
+            visible.Add(key);
+        }
+
+        return visible.ToImmutable();
+    }
+
+    private static bool IsClientOnly(RadiantKey key)
+    {
+        return string.Equals(key.Side, "client", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Loads the two artifacts from an Api directory (empty when absent/corrupt).</summary>

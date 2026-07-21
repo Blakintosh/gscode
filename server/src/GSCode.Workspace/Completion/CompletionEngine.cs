@@ -232,13 +232,64 @@ public sealed class CompletionEngine
             }
         }
 
-        // The .size pseudo-member and every known engine field name.
+        // The .size pseudo-member.
         if ( seen.Add("size") )
         {
             entries.Add(new CompletionEntry("size", CompletionKind.Field, "int (read-only)"));
         }
 
+        // Engine object fields. The owner's entity kind isn't known at this point, so every
+        // documented field name is offered with its type when the declaring kinds agree.
+        foreach ( string fieldName in _objectFields.FieldNames() )
+        {
+            if ( !seen.Add(fieldName) )
+            {
+                continue;
+            }
+
+            // A name can be both; take the radiant comment as documentation so the doc is not
+            // lost to the de-duplication below.
+            RadiantKey? alsoAKey = _objectFields.FindRadiantKey(fieldName, result.Language);
+            entries.Add(new CompletionEntry(
+                fieldName,
+                CompletionKind.Field,
+                DescribeField(_objectFields.FindField(fieldName)),
+                "",
+                alsoAKey?.Comment ?? ""));
+        }
+
+        // Radiant map-entity KVP keys, which scripts read straight off spawned entities.
+        foreach ( RadiantKey key in _objectFields.RadiantKeysFor(result.Language) )
+        {
+            if ( !seen.Add(key.Name) )
+            {
+                continue;
+            }
+
+            entries.Add(new CompletionEntry(key.Name, CompletionKind.Field, key.Type + " (map key)", "", key.Comment));
+        }
+
         return entries.ToImmutable();
+    }
+
+    /// <summary>The shared type of a field name's declarations, or a bare "field" when they disagree.</summary>
+    private static string DescribeField(ImmutableArray<ObjectField> declarations)
+    {
+        if ( declarations.Length == 0 )
+        {
+            return "field";
+        }
+
+        string type = declarations[0].Type;
+        foreach ( ObjectField declaration in declarations )
+        {
+            if ( !string.Equals(declaration.Type, type, StringComparison.OrdinalIgnoreCase) )
+            {
+                return "field";
+            }
+        }
+
+        return type;
     }
 
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(ParseResult result, string contextId, Position position)

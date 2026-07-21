@@ -26,10 +26,21 @@ three features, and the grey-out is the most visible missing behavior in the edi
 4. ✔ Duplicate-definition `relatedInformation` (P14 #1) — new `DuplicateFunction` (4005)
    rule in `SymbolExtractor`, file-local declarations only.
 
-**Wave 2 — no dead surfaces.** User-mandated; both are shipped-but-inert today.
-5. `gscode.rawFileWarningMode`: load `t7_stock_scripts.txt`, implement the
-   `gscode/rawFolderWriteWarning` notification + client handler (P14 #10).
-6. Radiant map-entity keys wired to hover + completion (P14 #6).
+**Wave 2 — no dead surfaces. ✔ DONE.** User-mandated; both were shipped-but-inert.
+5. ✔ `gscode.rawFileWarningMode`: `Api/StockScripts.cs` + `Resolution/RawWriteGuard.cs`,
+   the `gscode/rawFolderWriteWarning` notification on didSave, and a client handler that
+   warns once per file per session with a "Don't Warn Again" action (P14 #10).
+6. ✔ Radiant map-entity keys wired to hover + completion (P14 #6). Also fixed a second
+   dead-data case found while wiring it: engine object fields from `t7_object_fields.json`
+   were never offered in completion either, despite a comment claiming they were.
+   Measured contribution: 330 of 350 radiant keys are names the object-field data does not
+   cover, 245 of them carrying documentation.
+
+   Note for later: the `client`/`both` side filter on radiant keys has **no observable
+   effect in completion**, because every client-only key also exists as an engine object
+   field, and object fields carry no side data to filter on. The filter is still correct in
+   principle and does affect hover. If per-language field accuracy matters more later, the
+   fix is side data on object fields, not on the keys.
 
 **Wave 3 — diagnostics carries.** All user-confirmed carries from the plan.
 7. prefer-boolean-literal lint (P14 #2).

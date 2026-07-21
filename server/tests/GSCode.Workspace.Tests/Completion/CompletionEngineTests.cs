@@ -164,6 +164,46 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void MemberAccess_OffersEngineFieldsAndRadiantMapKeys()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    x = self.\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterDot = new(2, 13); // just past "self."
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterDot);
+
+        // An engine object field.
+        Assert.True(HasLabel(entries, "origin"));
+
+        // "ambient" exists only as a radiant KVP, so it proves the map keys reach completion,
+        // and its keys.txt comment becomes the item's documentation.
+        CompletionEntry ambient = entries.First(e => e.Label == "ambient");
+        Assert.Equal(CompletionKind.Field, ambient.Kind);
+        Assert.Contains("map key", ambient.Detail);
+        Assert.NotEmpty(ambient.Documentation);
+    }
+
+    [Fact]
+    public void MemberAccess_KeepsRadiantDocumentation_WhenANameIsAlsoAnEngineField()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    x = self.\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 13));
+
+        // script_noteworthy is both an engine field and a documented radiant key; the single
+        // de-duplicated entry must still carry the key's comment.
+        CompletionEntry noteworthy = entries.First(e => e.Label == "script_noteworthy");
+        Assert.NotEmpty(noteworthy.Documentation);
+    }
+
+    [Fact]
     public void PrecacheArgument_OffersAssetTypes()
     {
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");

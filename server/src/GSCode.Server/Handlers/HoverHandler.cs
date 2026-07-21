@@ -114,7 +114,7 @@ public sealed class HoverHandler : HoverHandlerBase
                 return macro is not null ? MarkdownDocRenderer.RenderMacro(macro) : null;
             }
             case SymbolKind.Field:
-                return RenderField(key.Name);
+                return RenderField(key.Name, target.Language);
             case SymbolKind.StringLiteral:
             case SymbolKind.HashString:
             case SymbolKind.LocalizedString:
@@ -185,7 +185,7 @@ public sealed class HoverHandler : HoverHandlerBase
         return kind >= TokenKind.UsingDirective && kind <= TokenKind.EndifDirective;
     }
 
-    private string RenderField(string name)
+    private string RenderField(string name, ScriptLanguage language)
     {
         // The .size pseudo-member has its own documentation.
         if ( string.Equals(name, "size", StringComparison.OrdinalIgnoreCase) )
@@ -197,25 +197,42 @@ public sealed class HoverHandler : HoverHandlerBase
             }
         }
 
-        // Enrich with known engine field types (the owner's entity kind isn't inferred
-        // until FlowTyper, so list every kind that declares this field name).
+        // A name can be both an engine field and a radiant map key (origin, classname, …),
+        // so both sections are appended rather than treated as alternatives.
         ImmutableArray<ObjectField> known = _objectFields.FindField(name);
-        if ( known.Length == 0 )
+        RadiantKey? radiant = _objectFields.FindRadiantKey(name, language);
+
+        if ( known.Length == 0 && radiant is null )
         {
             return $"```gsc\n(field) {name}\n```";
         }
 
         System.Text.StringBuilder markdown = new();
-        markdown.Append("```gsc\n(field) ").Append(name).Append("\n```\n\n---\n\nEngine field:\n");
-        foreach ( ObjectField field in known )
-        {
-            markdown.Append("* `").Append(field.EntityKind).Append("`: ").Append(field.Type);
-            if ( field.ReadOnly )
-            {
-                markdown.Append(" *(read-only)*");
-            }
+        markdown.Append("```gsc\n(field) ").Append(name).Append("\n```\n");
 
-            markdown.Append('\n');
+        // The owner's entity kind isn't inferred here, so list every kind declaring the name.
+        if ( known.Length > 0 )
+        {
+            markdown.Append("\n---\n\nEngine field:\n");
+            foreach ( ObjectField field in known )
+            {
+                markdown.Append("* `").Append(field.EntityKind).Append("`: ").Append(field.Type);
+                if ( field.ReadOnly )
+                {
+                    markdown.Append(" *(read-only)*");
+                }
+
+                markdown.Append('\n');
+            }
+        }
+
+        if ( radiant is not null )
+        {
+            markdown.Append("\n---\n\nRadiant map key: `").Append(radiant.Type).Append("`\n");
+            if ( radiant.Comment.Length > 0 )
+            {
+                markdown.Append('\n').Append(radiant.Comment).Append('\n');
+            }
         }
 
         return markdown.ToString();

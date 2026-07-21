@@ -219,15 +219,21 @@ accepts it. Likely fix: let `ParsePostfixChain` accept `(` as well as `[` and `.
 generalizes the call-result indexing fix already made for
 `players[q] getplayerangles()[1]`.
 
-**(b) `&` applied to a macro that expands to a string** — `_quadtank.gsc(1741)`,
+**(b) `&` applied to a macro that expands to a string — ✔ FIXED (user reversed the deferral:
+`&"..."` is istring syntax and must be supported regardless of the shipped-game argument).**
+`_quadtank.gsc(1741)`,
 "Expected an expression but found '\"tag_target_lower\"'".
 
 `#define WEAKSPOT_BONE_NAME "tag_target_lower"`, used as
 `... triggerWeakpointDamage( &WEAKSPOT_BONE_NAME )`. Written directly, `&"tag_target_lower"`
-lexes as a single localized-string (istring) token. Arriving via expansion, the `&` and the
-string are separate tokens, and the parser's prefix `&` expects a function name. Fix: accept
-`&` followed by a string literal as an istring in the expression grammar, not only in the
-lexer.
+lexes as a single localized-string token. Arriving via expansion, the `&` and the string are
+separate tokens, and the parser's prefix `&` expected a function name.
+
+Fixed in the parser (`ParseSplitLocalizedString`), which folds the pair into the same token the
+lexer would have produced. That also fixes the SPACED form `& "loc"`, which was equally broken
+and has nothing to do with macros — the lexer's istring rule requires the `&` and quote to be
+adjacent, and the parser stream is trivia-free, so one fix covers both. Corpus confirms:
+`_quadtank.gsc` no longer fails, 4 files down to 3.
 
 **(c) Unmatched `#/`** — `vehicle_shared.gsc(3932)`, "Expected a function, class, or directive
 but found '#/'".
@@ -287,15 +293,21 @@ accepts it. Likely fix: let `ParsePostfixChain` accept `(` as well as `[` and `.
 generalizes the call-result indexing fix already made for
 `players[q] getplayerangles()[1]`.
 
-**(b) `&` applied to a macro that expands to a string** — `_quadtank.gsc(1741)`,
+**(b) `&` applied to a macro that expands to a string — ✔ FIXED (user reversed the deferral:
+`&"..."` is istring syntax and must be supported regardless of the shipped-game argument).**
+`_quadtank.gsc(1741)`,
 "Expected an expression but found '\"tag_target_lower\"'".
 
 `#define WEAKSPOT_BONE_NAME "tag_target_lower"`, used as
 `... triggerWeakpointDamage( &WEAKSPOT_BONE_NAME )`. Written directly, `&"tag_target_lower"`
-lexes as a single localized-string (istring) token. Arriving via expansion, the `&` and the
-string are separate tokens, and the parser's prefix `&` expects a function name. Fix: accept
-`&` followed by a string literal as an istring in the expression grammar, not only in the
-lexer.
+lexes as a single localized-string token. Arriving via expansion, the `&` and the string are
+separate tokens, and the parser's prefix `&` expected a function name.
+
+Fixed in the parser (`ParseSplitLocalizedString`), which folds the pair into the same token the
+lexer would have produced. That also fixes the SPACED form `& "loc"`, which was equally broken
+and has nothing to do with macros — the lexer's istring rule requires the `&` and quote to be
+adjacent, and the parser stream is trivia-free, so one fix covers both. Corpus confirms:
+`_quadtank.gsc` no longer fails, 4 files down to 3.
 
 **(c) Unmatched `#/`** — `vehicle_shared.gsc(3932)`, "Expected a function, class, or directive
 but found '#/'".

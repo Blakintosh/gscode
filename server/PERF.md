@@ -109,7 +109,8 @@ lex/parse errors stay under 1% of the corpus, and the formatter's two property g
 token-stream equality and idempotence — hold over a 250-file sample.
 
 First run, 980 scripts: **zero crashes**, formatter gates clean, and **4 files with lex/parse
-errors (0.41%)** — three distinct genuine grammar gaps, listed in `FOLLOWUPS.md`. The listing
+errors (0.41%)** — three distinct genuine grammar gaps, listed in `FOLLOWUPS.md`. One (the
+`&"..."` istring) has since been fixed, taking it to 3. The listing
 in the test output is the real signal; the 1% budget exists only so one odd file cannot block
 the suite.
 

@@ -278,14 +278,52 @@ public sealed partial class Parser
             }
             case TokenKind.Ampersand:
             {
-                // Function address-of: &name or &ns::name.
                 PToken op = Advance();
+
+                // &"..." is a localized string, not address-of. The lexer folds the ADJACENT
+                // form into one token, so reaching here means the two arrived apart: written
+                // with a space, or the string supplied by a macro. Both are still istrings —
+                // `&` only means address-of in front of a function name.
+                if ( Kind == TokenKind.String )
+                {
+                    return ParseSplitLocalizedString(op);
+                }
+
+                // Function address-of: &name or &ns::name.
                 ExprNode reference = ParseFunctionReference();
                 return new PrefixNode(new TextRange(op.RootRange.Start, reference.Range.End), TokenKind.Ampersand, reference);
             }
             default:
                 return ParsePostfix();
         }
+    }
+
+    /// <summary>
+    /// Folds an `&` and a following string into the localized-string literal the lexer would
+    /// have produced had they been written adjacently.
+    ///
+    /// The token is rebuilt rather than wrapped so that everything downstream treats it exactly
+    /// like a lexed istring: extraction strips the leading `&` before unquoting, so the text
+    /// must carry it, and the flow typer keys off the LocalizedString kind. Provenance follows
+    /// the STRING, not the ampersand — when the string came from a macro body the literal
+    /// belongs to that `#define`, and taking the ampersand's provenance would attribute it to
+    /// the call site instead.
+    /// </summary>
+    private ExprNode ParseSplitLocalizedString(PToken ampersand)
+    {
+        PToken text = Advance();
+
+        // Spanning the two only makes sense when they really sit together in one file.
+        bool sameFile = ampersand.Provenance.SourceFile == text.Provenance.SourceFile
+            && ampersand.Provenance.RootSite is null
+            && text.Provenance.RootSite is null;
+
+        TextRange range = sameFile
+            ? new TextRange(ampersand.Range.Start, text.Range.End)
+            : text.Range;
+
+        PToken folded = new(TokenKind.LocalizedString, "&" + text.Text, range, text.Provenance);
+        return new LiteralNode(folded.RootRange, folded);
     }
 
     private ExprNode ParseFunctionReference()

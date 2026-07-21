@@ -23,6 +23,12 @@ public sealed class CompletionHandler : CompletionHandlerBase
         _selector = selector;
     }
 
+    /// <summary>Maps the client setting; anything unrecognised keeps the safer owner-scoped default.</summary>
+    private static FieldScope FieldScopeFromSetting(string value)
+    {
+        return string.Equals(value, "all", StringComparison.OrdinalIgnoreCase) ? FieldScope.All : FieldScope.Owner;
+    }
+
     protected override CompletionRegistrationOptions CreateRegistrationOptions(CompletionCapability capability, ClientCapabilities clientCapabilities)
     {
         return new CompletionRegistrationOptions
@@ -43,7 +49,12 @@ public sealed class CompletionHandler : CompletionHandlerBase
         }
 
         List<CompletionItem> items = [];
-        foreach ( CompletionEntry entry in _engine.Complete(target.Result, target.ContextId, request.Position.ToCore(), _settings.CompletionLiterals) )
+        foreach ( CompletionEntry entry in _engine.Complete(
+            target.Result,
+            target.ContextId,
+            request.Position.ToCore(),
+            _settings.CompletionLiterals,
+            FieldScopeFromSetting(_settings.CompletionFieldScope)) )
         {
             items.Add(ToItem(entry));
         }

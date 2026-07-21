@@ -22,6 +22,9 @@ public sealed class ServerSettings
     public bool InlayInferredTypes { get; set; } = true;
     public bool CompletionLiterals { get; set; } = true;
 
+    /// <summary>"owner" (default) or "all" — how widely assignment-derived fields are offered.</summary>
+    public string CompletionFieldScope { get; set; } = "owner";
+
     /// <summary>Applies a { "gscode": { ... } } payload; missing keys keep their current values.</summary>
     public void Apply(JToken settingsRoot)
     {
@@ -53,5 +56,8 @@ public sealed class ServerSettings
         CompletionLiterals = section.Value<bool?>("completion.literals")
             ?? section["completion"]?.Value<bool?>("literals")
             ?? CompletionLiterals;
+        CompletionFieldScope = section.Value<string>("completion.fieldScope")
+            ?? section["completion"]?.Value<string>("fieldScope")
+            ?? CompletionFieldScope;
     }
 }

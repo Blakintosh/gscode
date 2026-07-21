@@ -14,6 +14,7 @@ export interface GscodeSettings {
     "inlayHints.parameterNames": boolean;
     "inlayHints.inferredTypes": boolean;
     "completion.literals": boolean;
+    "completion.fieldScope": string;
 }
 
 /** Reads the current gscode.* settings into the shape the server expects. */
@@ -32,5 +33,6 @@ export function readSettings(): GscodeSettings {
         "inlayHints.parameterNames": config.get<boolean>("inlayHints.parameterNames", true),
         "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", true),
         "completion.literals": config.get<boolean>("completion.literals", true),
+        "completion.fieldScope": config.get<string>("completion.fieldScope", "owner"),
     };
 }

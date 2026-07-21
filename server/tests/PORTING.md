@@ -19,7 +19,7 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 | DiagnosticsTests | ✔ P14 | v2 spreads diagnostics across the layer that owns each rule rather than one class: lexer/preprocessor codes in `Lexing`/`Preprocessing` tests, spec rules in `Extraction` tests (incl. `DuplicateFunctionTests`), and the workspace lints in `Analysis/*LintTests` |
 | NamespaceDiagnosticsTests | ✔ P11 | Namespace-usage lint re-expressed in `Analysis/NamespaceUsageLintTests` (warns on unimported qualified-call namespace; suppressed when a #using is unresolved); merged into open-doc diagnostics by TextSyncHandler |
 | PreferBooleanLiteralTests | ✔ P14 | `Analysis/PreferBooleanLiteralLintTests`, scoped to declared-`bool` parameters only — the v1 rule's own regression scenario (int/number params must not be flagged) |
-| GlobalObjectOwnersTests | ◐ P14 | Field completion aggregates the current file's assignments plus engine fields and radiant keys (`CompletionEngineTests`). Cross-file owner-scoped aggregation is the `completion.fieldScope` work still open in FOLLOWUPS wave 6 |
+| GlobalObjectOwnersTests | ✔ P14 | Field completion aggregates assignments across every visible record, scoped to the owner by default (`CompletionEngineTests`: owner scoping, `all` widening, cross-file aggregation, unknown-owner fallback) |
 | SymbolTableTests | ✔ P14 | Successor concept: `ScriptRecord` + `LanguageStore`. Extraction surface covered by `Extraction/ExtractionTests`, storage and lookup by `Database/ScriptDatabaseTests` |
 | WorkspaceCacheManagerTests | ✔ P6 | `Cache/SqliteCacheTests` (round-trip, identity-mismatch wipe, dirty-skip, delete) |
 | CacheRestoreTests | ✔ P6 | `Cache/SqliteCacheTests.ColdRestoreTests` (unchanged files restore from cache) |
@@ -45,12 +45,10 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 
 ## Unresolved rows
 
-Every row is now resolved except two, both tracked in `server/FOLLOWUPS.md`:
+Every row is now resolved except one, tracked in `server/FOLLOWUPS.md`:
 
 - **MacroCallSiteModeTests** (☐) — macro expansion preview; needs the macro body carried on
   `MacroRecord` first.
-- **GlobalObjectOwnersTests** (◐) — cross-file owner-scoped field aggregation, which is the
-  `completion.fieldScope` item in wave 6.
 
 Resolutions favour pointing at where a scenario actually lives over inventing a same-named
 class, and one row is a conscious drop: `ScriptDependenciesReadyTests` tested a readiness gate

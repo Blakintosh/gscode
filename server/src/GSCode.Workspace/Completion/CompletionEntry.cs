@@ -1,5 +1,18 @@
 namespace GSCode.Workspace.Completion;
 
+/// <summary>
+/// How widely assignment-derived field names are offered after a `.` (the
+/// gscode.completion.fieldScope setting).
+/// </summary>
+public enum FieldScope
+{
+    /// <summary>Only fields seen assigned on THIS owner — `level.` offers level's fields.</summary>
+    Owner,
+
+    /// <summary>Every field name assigned on any owner: broader, and noisier.</summary>
+    All,
+}
+
 /// <summary>The kind of a completion item (maps onto LSP CompletionItemKind in the handler).</summary>
 public enum CompletionKind
 {

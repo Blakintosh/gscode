@@ -190,6 +190,72 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void MemberAccess_ScopesAssignedFieldsToTheOwner()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    level.round_number = 1;\n    self.player_score = 0;\n    x = level.\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterLevelDot = new(4, 14); // just past "level."
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterLevelDot);
+
+        Assert.True(HasLabel(entries, "round_number"));
+        Assert.False(HasLabel(entries, "player_score"));
+    }
+
+    [Fact]
+    public void MemberAccess_AllScope_OffersFieldsFromEveryOwner()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    level.round_number = 1;\n    self.player_score = 0;\n    x = level.\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            result, "raw", new Position(4, 14), includeLiterals: true, fieldScope: FieldScope.All);
+
+        Assert.True(HasLabel(entries, "round_number"));
+        Assert.True(HasLabel(entries, "player_score"));
+    }
+
+    [Fact]
+    public void MemberAccess_AggregatesOwnerFieldsAcrossFiles()
+    {
+        // The GlobalObjectOwners scenario: a field assigned on `level` in one file is offered
+        // when completing `level.` in another.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\other.gsc", "function setup()\n{\n    level.spawned_from_elsewhere = 1;\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    x = level.\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 14));
+
+        Assert.True(HasLabel(entries, "spawned_from_elsewhere"));
+    }
+
+    [Fact]
+    public void MemberAccess_UnknownOwner_WidensRatherThanNarrows()
+    {
+        // `players[0].` has no owner name to scope by; offering nothing would be worse than
+        // offering everything, so the scope quietly widens.
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    self.player_score = 0;\n    x = players[0].\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 19));
+
+        Assert.True(HasLabel(entries, "player_score"));
+    }
+
+    [Fact]
     public void MemberAccess_OffersEngineFieldsAndRadiantMapKeys()
     {
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");

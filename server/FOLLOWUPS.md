@@ -180,7 +180,12 @@ three features, and the grey-out is the most visible missing behavior in the edi
     move server-side with no change to the planner.
 
 **Wave 6 — P13 unblocked items.**
-16. `completion.fieldScope` owner/all (P13 #2).
+16. ✔ `completion.fieldScope` owner/all (P13 #2). Also closed the `GlobalObjectOwnersTests`
+    porting row, since owner scoping only means anything once fields aggregate across files.
+    Note the deliberate asymmetry: an unknown owner (`players[0].`, a call result) WIDENS rather
+    than narrows, because offering nothing is worse than offering too much. Engine object fields
+    and radiant keys are unaffected by the setting — it governs assignment-derived names only,
+    per the plan.
 17. Mine v1 `CodeActionHandler.cs` for portable quick fixes (P13 #3).
 18. Corpus test category + `PerfTracker.Report` surfacing (P13 #5).
 
@@ -201,8 +206,7 @@ three features, and the grey-out is the most visible missing behavior in the edi
 - **MacroCallSiteModeTests** — macro expansion preview. Hover renders the `#define` signature
   and doc comment, but `MacroRecord` does not carry the body (bodies stay parser-side), so the
   body must be plumbed through before a preview can exist.
-- **GlobalObjectOwnersTests** — cross-file owner-scoped field aggregation, which is the
-  `completion.fieldScope` item in wave 6.
+- (`GlobalObjectOwnersTests` closed by wave 6 item 16.)
 
 **Blocked / user-gated, not scheduled:** PERF.md memory number (needs a BO3 machine),
 `apiUpdate.ts` (needs the gscode.net endpoint format), headless CLI (ships only if wanted).

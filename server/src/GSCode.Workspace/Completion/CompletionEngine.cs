@@ -29,7 +29,13 @@ public sealed class CompletionEngine
 
     /// <summary>Produces completion suggestions for a position in an analysed document.</summary>
     /// <param name="includeLiterals">Whether to offer known literals inside a "..."/&amp;"..."/#"..." string (the gscode.completion.literals setting).</param>
-    public ImmutableArray<CompletionEntry> Complete(ParseResult result, string contextId, Position position, bool includeLiterals = true)
+    /// <param name="fieldScope">How widely assignment-derived fields are offered after a `.` (the gscode.completion.fieldScope setting).</param>
+    public ImmutableArray<CompletionEntry> Complete(
+        ParseResult result,
+        string contextId,
+        Position position,
+        bool includeLiterals = true,
+        FieldScope fieldScope = FieldScope.Owner)
     {
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
         int offset = result.Text.GetOffset(position);
@@ -79,7 +85,7 @@ public sealed class CompletionEngine
         // owner. — offer fields.
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Dot )
         {
-            return FieldCompletions(result);
+            return FieldCompletions(result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope);
         }
 
         return StatementScopeCompletions(result, contextId, position);
@@ -215,20 +221,46 @@ public sealed class CompletionEngine
         return entries.ToImmutable();
     }
 
-    private ImmutableArray<CompletionEntry> FieldCompletions(ParseResult result)
+    /// <summary>
+    /// The owner an `owner.` completion is being asked on, lowercased, or "" when it cannot be
+    /// determined. Globals like `self`/`level` lex as plain identifiers, so a bare identifier
+    /// before the dot IS the owner; anything else (an index or call result, e.g. `players[q].`)
+    /// has no name to scope by, and an unknown owner deliberately widens rather than narrows —
+    /// offering everything beats offering nothing.
+    /// </summary>
+    private static string OwnerBefore(ParseResult result, ImmutableArray<Token> tokens, int dotIndex)
+    {
+        int ownerIndex = PreviousSignificant(tokens, dotIndex);
+        if ( ownerIndex < 0 || tokens[ownerIndex].Kind != TokenKind.Identifier )
+        {
+            return "";
+        }
+
+        return tokens[ownerIndex].GetText(result.Text).ToString().ToLowerInvariant();
+    }
+
+    private ImmutableArray<CompletionEntry> FieldCompletions(
+        ParseResult result,
+        string contextId,
+        string ownerName,
+        FieldScope fieldScope)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        // Fields assigned anywhere in the current file (owner-agnostic for now).
-        foreach ( FunctionSymbol function in result.Extraction.Functions )
+        // Scope only when asked AND the owner is known; otherwise every owner contributes.
+        bool scopeToOwner = fieldScope == FieldScope.Owner && ownerName.Length > 0;
+
+        // The live file first, so unsaved edits are offered immediately, then every visible
+        // record — a field assigned on `level` in one file is reachable from all of them.
+        CollectAssignedFields(result.Extraction.Functions, scopeToOwner, ownerName, seen, entries);
+
+        LanguageStore fieldStore = _database.StoreFor(result.Language);
+        foreach ( ScriptRecord record in fieldStore.AllRecords )
         {
-            foreach ( AssignmentSymbol assignment in function.Assignments )
+            if ( ScriptDatabase.CanSee(contextId, record.ContextId) )
             {
-                if ( assignment.OwnerName.Length > 0 && seen.Add(assignment.Name) )
-                {
-                    entries.Add(new CompletionEntry(assignment.Name, CompletionKind.Field, "field"));
-                }
+                CollectAssignedFields(record.Functions, scopeToOwner, ownerName, seen, entries);
             }
         }
 
@@ -270,6 +302,37 @@ public sealed class CompletionEngine
         }
 
         return entries.ToImmutable();
+    }
+
+    /// <summary>Adds field names written as `owner.name = ...`, optionally only for one owner.</summary>
+    private static void CollectAssignedFields(
+        ImmutableArray<FunctionSymbol> functions,
+        bool scopeToOwner,
+        string ownerName,
+        HashSet<string> seen,
+        ImmutableArray<CompletionEntry>.Builder entries)
+    {
+        foreach ( FunctionSymbol function in functions )
+        {
+            foreach ( AssignmentSymbol assignment in function.Assignments )
+            {
+                // An empty owner marks a plain local, which is not a field at all.
+                if ( assignment.OwnerName.Length == 0 )
+                {
+                    continue;
+                }
+
+                if ( scopeToOwner && !string.Equals(assignment.OwnerName, ownerName, StringComparison.Ordinal) )
+                {
+                    continue;
+                }
+
+                if ( seen.Add(assignment.Name) )
+                {
+                    entries.Add(new CompletionEntry(assignment.Name, CompletionKind.Field, "field"));
+                }
+            }
+        }
     }
 
     /// <summary>The shared type of a field name's declarations, or a bare "field" when they disagree.</summary>

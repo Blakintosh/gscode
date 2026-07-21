@@ -10,14 +10,14 @@ Legend: **Missing** = no implementation at all · **Partial** = wired but incomp
 
 ---
 
-## Known bugs (reported in use, 2026-07-20)
+## Known bugs (reported in use, 2026-07-20) — ✔ BOTH FIXED
 
-Both are macro-navigation defects in shipped P7 behaviour, not plan gaps. **Recommended
-ahead of the remaining P14 waves**: they are daily-use paths (`IS_TRUE`, `REGISTER_SYSTEM`,
-`NEW_STATE` are everywhere in BO3 script), while waves 5–7 are lifecycle and cleanup. Nothing
-sequences between them either way.
+Both were macro-navigation defects in shipped P7 behaviour, not plan gaps, and both were
+fixed ahead of the remaining P14 waves because they sit on daily-use paths (`IS_TRUE`,
+`REGISTER_SYSTEM`, `NEW_STATE` are everywhere in BO3 script). They were two distinct bugs
+behind one symptom: B1 is a store-routing miss, B2 a range-attribution miss.
 
-### B1 — Go-to-definition fails for a macro defined in another file
+### B1 — Go-to-definition fails for a macro defined in another file — ✔ FIXED
 
 `IS_TRUE` in `shared.gsh`, used from `array_shared.gsc`: the call site resolves as a `Macro`
 reference, but the definition lookup returns nothing.
@@ -27,18 +27,20 @@ analysed standalone its macros have `SourceFile == null`, so `SymbolExtractor` r
 But `.gsh` records route to `ScriptDatabase._gshRecords`, while `DefinitionHandler` resolves
 via `DatabaseQueries.FindReferences(target.Store, …)` with `target.Store` being `Gsc`/`Csc`.
 **The GSH store is never consulted.** Find-all-references on a macro is broken identically,
-same cause. Hover is likely unaffected: `HoverHandler.FindMacro` reads
-`target.Result.Preprocessed.Macros.All`, a different path that includes inserted macros —
-confirm when fixing.
+same cause. Hover was never broken: `HoverHandler.FindMacro` reads
+`target.Result.Preprocessed.Macros.All`, a different path that includes inserted macros.
 
 The plan already specified this seam and it was never implemented — see the language-guard
 invariant: *"standalone GSH queries — a `.gsh` serves both languages, so macro
 references/rename from a GSH union BOTH stores"*.
 
-**Fix shape:** expose the GSH store through `NavigationSupport`; consult it for
-`SymbolKind.Macro` hits in definition and references.
+**Fixed:** `DatabaseQueries.FindGshReferences` scans the shared GSH store; definition and
+find-all-references union it in for `SymbolKind.Macro` hits. Covered by
+`Database/GshMacroLookupTests`. Hover was confirmed unaffected — it reads
+`Preprocessed.Macros.All`, whose inserted-macro resolution is already covered by
+`InsertTests.Insert_MacroFromGsh_DefinitionSitePointsIntoGsh`.
 
-### B2 — Macro-expanded content is attributed to the invocation site
+### B2 — Macro-expanded content is attributed to the invocation site — ✔ FIXED
 
 A multi-statement macro used in the same file, e.g. `NEW_STATE( "play" );` where the macro
 body opens with three `flagsys::clear( … )` calls:
@@ -59,11 +61,20 @@ call contributes its own parameter hints at that position.
 so those guards don't discriminate. The correct test for "came from an expansion" is
 `Provenance.DefinitionSite`/`RootSite`, not `SourceFile`.
 
-**Fix shape:** suppress references and inlay hints for tokens originating in a macro
-expansion — the body's internals belong to the `#define`, not the call site — keeping only
-the `MacroUse` reference for the invocation itself. Check semantic tokens for the same
-collapsing. B1 and B2 share the macro-navigation theme and should land together or
-back to back.
+**Fixed:** `SymbolExtractor.AddReference` drops any reference whose token carries a
+`DefinitionSite`; the inlay-hint handler skips calls from an expansion, and FlowTyper skips
+expanded assignments. Covered by `Extraction/MacroExpansionReferenceTests`.
+
+Accepted cost, recorded deliberately: a function named ONLY inside a macro body now has no
+reference anywhere, because the body is not parsed as code at its definition site either.
+Find-all-references on such a function will not list macro-body uses.
+
+Still open, same family: `#insert` frames also carry a `RootSite` (the directive's range), so
+content spliced from a `.gsh` that declares real code — not just macros — would collapse onto
+the `#insert` line in the including file's record. Not observed in practice, since headers
+are macro-only by convention, and not addressed here because suppressing it could drop
+function definitions that only reach a language store via an insert. Worth a decision if
+code-bearing headers ever appear.
 
 ---
 

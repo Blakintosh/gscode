@@ -274,6 +274,42 @@ public static class DatabaseQueries
     }
 
     /// <summary>All visible files (with exact ranges) referencing a key.</summary>
+    /// <summary>
+    /// References to a key inside GSH records. A <c>.gsh</c> serves BOTH languages, so its
+    /// records live in the shared GSH store rather than either LanguageStore — this is the
+    /// deliberate exception to the language-guard rule, and the only way a macro defined in a
+    /// header is reachable from the <c>.gsc</c>/<c>.csc</c> that inserts it.
+    ///
+    /// Scans linearly: the GSH store carries no reference index, and header counts are small
+    /// next to script counts. Callers should only reach for this on macro keys.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindGshReferences(
+        ScriptDatabase database,
+        string askingContextId,
+        SymbolKey key)
+    {
+        ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        foreach ( ScriptRecord record in database.AllGshRecords )
+        {
+            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            foreach ( ReferenceEntry entry in record.References )
+            {
+                if ( entry.Key == key )
+                {
+                    results.Add((record, entry));
+                }
+            }
+        }
+
+        return results.ToImmutable();
+    }
+
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferences(
         LanguageStore store,
         string askingContextId,

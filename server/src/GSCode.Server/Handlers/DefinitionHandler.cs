@@ -62,7 +62,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         }
 
         List<Location> definitions = [];
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in DatabaseQueries.FindReferences(target.Store, target.ContextId, hit.Key) )
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in DefinitionSources(target, hit.Key) )
         {
             if ( entry.Kind == ReferenceKind.Definition )
             {
@@ -81,6 +81,24 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         return Task.FromResult<LocationOrLocationLinks?>(
             new LocationOrLocationLinks(definitions.Select(location => new LocationOrLocationLink(location))));
+    }
+
+    /// <summary>
+    /// Where a definition may live. Macros additionally search the shared GSH store, because a
+    /// macro declared in a header is recorded there rather than in either language store —
+    /// without this, go-to-definition on an inserted macro finds nothing at all.
+    /// </summary>
+    private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(NavigationTarget target, SymbolKey key)
+    {
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> inLanguage =
+            DatabaseQueries.FindReferences(target.Store, target.ContextId, key);
+
+        if ( key.Kind != GSCode.Core.Symbols.SymbolKind.Macro )
+        {
+            return inLanguage;
+        }
+
+        return inLanguage.AddRange(DatabaseQueries.FindGshReferences(_support.Database, target.ContextId, key));
     }
 
     private string? ResolveDependencyPath(NavigationTarget target, PositionHit hit)

@@ -124,6 +124,29 @@ features: diagnostics while typing, the hierarchical outline, folding, selection
 - "N references" lenses above function/class declarations (counts from the reference index,
   gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge.
 
+## Handlers/WorkspaceFoldersHandler.cs
+
+- `sealed class WorkspaceFoldersHandler` — handles `didChangeWorkspaceFolders` so a multi-root
+  workspace needs no restart to pick up a folder. Order is load-bearing: the resolver swaps
+  first (every later query classifies paths through it), records under removed folders drop
+  next, and added folders index last; re-indexing runs only when something was added, and
+  unchanged files restore from cache so it costs a warm start. `NextFolderSet` and
+  `ShouldDropOnFolderRemoval` are pure statics so the decisions are testable without protocol
+  objects — the latter drops ONLY workspace-context records, since raw and mod files stay
+  reachable regardless of which folders are open. `BuildConfig` is shared with `Program.cs`, so
+  a rebuild cannot drift from what initialize constructed.
+
+## Handlers/PlanRenameHandler.cs
+
+- `PlanRenameParams`/`PlanRenameEdit`/`PlanRenameResponse` + `sealed class PlanRenameHandler` —
+  serves the custom `gscode/planRename` request, returning the `#using`/`#insert` edits a script
+  rename implies. A custom request rather than the standard `willRenameFiles` handler because
+  OmniSharp 0.19.9 models `FileRename` with a single `Uri` — the spec's `oldUri`/`newUri` pair
+  is absent, so a server-side handler cannot learn a rename's destination. The client sources
+  the event (which has both) and calls this; all path reasoning stays here via
+  `Workspace/Resolution/DependencyRewrite`. Yields nothing when the file is unknown or either
+  location sits outside every root.
+
 ## Handlers/RenameHandler.cs + PrepareRenameHandler.cs
 
 - Rename functions/classes/macros across every reference in the visible context (mods can't

@@ -37,8 +37,6 @@ Typing lands P10.)*
   visibility rule (raw←raw; mod M←{M,raw}; workspace←{workspaces,raw}); `ContextIdOf`
   stringifies contexts.
 
-## Database/DatabaseQueries.cs
-
 ## Completion/CompletionEntry.cs
 
 - `CompletionKind` + `CompletionEntry` — the LSP-free completion suggestion model.
@@ -76,9 +74,15 @@ Typing lands P10.)*
 ## Database/DatabaseQueries.cs
 
 - `ResolvedFunction`/`ResolvedClass` + `static DatabaseQueries` — context-filtered
-  lookups that MERGE namespaces across contributing files, hide private functions from
-  other files, and apply overlay shadowing (same RelativePath: overlay beats raw);
-  `FindReferences` returns visible (record, entry) pairs for a key.
+  lookups that MERGE namespaces across contributing files and apply overlay shadowing
+  (same RelativePath: overlay beats raw); `FindReferences` returns visible (record, entry)
+  pairs for a key. Private functions follow NAMESPACE privacy, not file privacy — a
+  namespace can be split across files, so any file declaring it may call in; callers pass
+  their namespaces via `askingNamespaces` (`DeclaredNamespaces(result)` reads them from the
+  live parse result so unsaved edits count), and one that cannot falls back to same-file
+  visibility. `FindGshReferences` is the deliberate language-guard exception: a `.gsh` serves
+  both languages, so macros declared in headers live in the shared GSH store and are
+  unreachable from either LanguageStore.
 
 ## Indexing/WorkspaceIndexer.cs
 
@@ -190,6 +194,67 @@ Typing lands P10.)*
   the whole lint (a not-yet-known import might supply the namespace). Unqualified calls key under
   the current namespace so they never trip it; `sys::` builtin calls have a null namespace and
   are skipped. Merged into open-document diagnostics by the server's TextSyncHandler.
+
+## Analysis/UnusedUsingLint.cs
+
+- `static UnusedUsingLint.Analyze(result, store, language, resolver, askingPath)` — flags a
+  `#using` whose target contributes nothing the file uses, as a Hint tagged `Unnecessary` so
+  the directive greys out. Deliberately conservative, since deleting a working import is far
+  worse than missing a stale one: three separate rules keep an import alive — it declares a
+  referenced function or class, it contributes a namespace some qualified reference mentions
+  (namespace merging means the called function may live in a sibling file), or it declares an
+  `autoexec` (the file is imported purely for side effects and legitimately references
+  nothing). One unresolvable `#using` suppresses the whole pass.
+
+## Analysis/PreferBooleanLiteralLint.cs
+
+- `static PreferBooleanLiteralLint.Analyze(result, builtins)` — hints that a literal `0`/`1`
+  passed to a builtin parameter declared `bool` should be `false`/`true`. Scoped to
+  declared-bool parameters ONLY: an int parameter legitimately takes 0 and 1, and flagging
+  those was the v1 bug this rule's original test existed to pin. Every overload must agree the
+  parameter is bool, since which overload the author meant is unknowable here.
+
+## Analysis/PrivateAccessLint.cs
+
+- `static PrivateAccessLint.Analyze(result, store, contextId, askingPath, builtins)` — reports
+  a call to a function that exists but is private to a namespace the calling file does not
+  declare, turning a silent resolution failure into its actual reason. Fires only when the
+  normal lookup finds nothing AND a privacy-ignoring lookup finds a private declaration
+  elsewhere; builtin names are skipped so a same-named private script function cannot make a
+  working builtin call look broken. Carries related information pointing at the declaration.
+
+## Analysis/ReadOnlyWriteLint.cs
+
+- `static ReadOnlyWriteLint.Analyze(result, objectFields)` — reports writes to `.size` (Error;
+  a language-spec fact) and to engine fields the curated data marks read-only (Warning, since
+  that data can carry mistakes). Assignments including compound forms and `++`/`--` all count
+  as writes. A field is only flagged when EVERY entity kind declaring the name agrees it is
+  read-only, because the owner's kind isn't inferred at this layer.
+
+## Resolution/RawWriteGuard.cs
+
+- `RawFileWarningMode` + `static RawWriteGuard` — decides whether saving a file deserves the
+  raw-folder warning. `ParseMode` maps the client setting, falling back to `stock`. `ShouldWarn`
+  protects only the raw context: mod and workspace files never warn even in `all` mode, because
+  shadowing a stock script from a mod is the correct workflow.
+
+## Resolution/DependencyRewrite.cs
+
+- `DependencyEdit` + `static DependencyRewrite` — plans the `#using`/`#insert` path edits a file
+  rename implies, so renaming a script does not silently break its importers. `PlanRename`
+  matches on the path AS WRITTEN rather than a resolved absolute path, because `#using` edges
+  carry no resolved path (they resolve lazily per asking context, so the same text can mean
+  different files in different contexts). Scans both language stores plus the shared headers,
+  since a `.gsh` can insert another. `ToDirectivePath` encodes the asymmetry that `#using` names
+  a script without its extension while `#insert` keeps the `.gsh`.
+
+## Typing/BuiltinEmulations.cs
+
+- `static BuiltinEmulations.TryGetReturnType(name, out type)` — return types for the callable
+  KEYWORDS, which carry no entry in the bundled API and would otherwise type as Unknown.
+  Deliberately two entries: of the keywords absent from the API, only `isdefined` (bool) and
+  `vectorscale` (vector) yield a value worth typing; the rest are statement-shaped, and in this
+  lattice a void result is indistinguishable from Unknown.
 
 ## Typing/FlowTyper.cs
 

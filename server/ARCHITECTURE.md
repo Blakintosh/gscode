@@ -83,6 +83,18 @@ files: ScriptObjectFields.xlsx, radiant keys.txt) and `sources/curated/` (editab
 JSON source of truth). A P7 tool converts curated → the bundled runtime artifacts in
 `GSCode.Workspace/Api/`.
 
+## Documentation convention
+
+`FOLDER.md` lives **one per project** (`GSCode.Core`, `GSCode.Parser`, `GSCode.Workspace`,
+`GSCode.Server`, `tools/field-data`, `client/src`) rather than one per directory, with a `##`
+section per source file named by its path within the project (`## Database/ScriptRecord.cs`).
+The plan said "every folder"; per-project was chosen because these projects' subfolders are
+small and a reader following a type across `Database/` → `Resolution/` → `Analysis/` would
+otherwise be opening four files to follow one thought. The full-dump requirement is unchanged:
+every file gets a section listing its types and what they actually do. Partial classes and
+tightly-paired handlers may share one heading (`Parser.cs (+ .Declarations / .Statements /
+.Expressions partials)`, `RenameHandler.cs + PrepareRenameHandler.cs`).
+
 ## Known gaps
 
 P0–P12 are complete. `FOLLOWUPS.md` tracks what did not ship: P13 (optional / externally

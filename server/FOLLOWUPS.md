@@ -184,10 +184,25 @@ three features, and the grey-out is the most visible missing behavior in the edi
 17. Mine v1 `CodeActionHandler.cs` for portable quick fixes (P13 #3).
 18. Corpus test category + `PerfTracker.Report` surfacing (P13 #5).
 
-**Wave 7 — cleanup and low priority.**
-19. Oversized-file guard (P14 #14, reduced scope — ANSI fallback dropped).
-20. `positionEncoding: utf-16` declaration + surrogate-pair test (P14 #15).
-21. `FOLDER.md` decision + fill gaps (P14 #16); resolve `PORTING.md` rows (P14 #17).
+**Wave 7 — cleanup and low priority. ✔ DONE.**
+19. ✔ Oversized-file guard (P14 #14). Smaller than the plan implied: v1's 65,535 cap existed
+    because it packed positions into narrow fields, but v2's `Position` holds ints, so there is
+    no correctness cliff. The 8 MB guard in `WorkspaceIndexer` only stops a pathological file
+    dominating a cold index; the count surfaces via `IndexOutcome.SkippedOversized`.
+20. ✔ `positionEncoding: utf-16` declared, plus `Text/SurrogatePairPositionTests`. Behaviour was
+    already correct — `SourceText` indexes UTF-16 code units throughout — so this was
+    declaration and proof, not repair.
+21. ✔ `FOLDER.md` layout ratified per-project in `ARCHITECTURE.md` (drift turned into a
+    documented decision) and all 12 real gaps filled, including a stray duplicate empty heading.
+    `PORTING.md` resolved: every row closed except the two below.
+
+**Still open from the porting ledger:**
+
+- **MacroCallSiteModeTests** — macro expansion preview. Hover renders the `#define` signature
+  and doc comment, but `MacroRecord` does not carry the body (bodies stay parser-side), so the
+  body must be plumbed through before a preview can exist.
+- **GlobalObjectOwnersTests** — cross-file owner-scoped field aggregation, which is the
+  `completion.fieldScope` item in wave 6.
 
 **Blocked / user-gated, not scheduled:** PERF.md memory number (needs a BO3 machine),
 `apiUpdate.ts` (needs the gscode.net endpoint format), headless CLI (ships only if wanted).

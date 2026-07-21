@@ -92,6 +92,18 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   — one reported problem. `Create(range, severity, code, args)` formats the code's
   message template from `DiagnosticMessages`.
 
+## Diagnostics/DiagnosticTag.cs
+
+- `enum DiagnosticTag` — editor presentation hints (`Unnecessary`, `Deprecated`), numbered to
+  match the LSP wire encoding so mapping stays a cast. `Unnecessary` is what greys a range out,
+  and drives both the excluded-`#if` branches and unused `#using` directives.
+
+## Diagnostics/DiagnosticRelation.cs
+
+- `sealed record DiagnosticRelation(FilePath, Range, Message)` — another location that helps
+  explain a diagnostic, such as the first of two competing definitions or the site of a private
+  declaration. Paths stay plain strings so Core remains LSP-free; the server maps them to URIs.
+
 ## Diagnostics/DiagnosticSeverity.cs
 
 - `enum DiagnosticSeverity` — Error/Warning/Information/Hint; values match the LSP wire

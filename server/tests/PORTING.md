@@ -16,25 +16,25 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 | CfaTests | ✔ P14 | Branch-join convergence wired into the walk; `Typing/TypeFlowConvergenceTests` covers if/else, loops, switch and nesting |
 | TypeFlowConvergenceTests | ✔ P14 | Baseline in `Typing/FlowTyperTests`; branch-convergence cases now in `Typing/TypeFlowConvergenceTests` (agreeing branches, disagreeing → Unknown, int+float widening, assign-in-one-arm, loops, do-while, switch with/without default, nesting) |
 | ScrDataApiTypeTests | ✔ P14 | Engine object-field type seeds wired into FlowTyper (`owner.field` types when every declaring entity kind agrees); the ReadOnly-field write diagnostic is `Analysis/ReadOnlyWriteLintTests` |
-| DiagnosticsTests | ☐ P4/P5 | |
+| DiagnosticsTests | ✔ P14 | v2 spreads diagnostics across the layer that owns each rule rather than one class: lexer/preprocessor codes in `Lexing`/`Preprocessing` tests, spec rules in `Extraction` tests (incl. `DuplicateFunctionTests`), and the workspace lints in `Analysis/*LintTests` |
 | NamespaceDiagnosticsTests | ✔ P11 | Namespace-usage lint re-expressed in `Analysis/NamespaceUsageLintTests` (warns on unimported qualified-call namespace; suppressed when a #using is unresolved); merged into open-doc diagnostics by TextSyncHandler |
 | PreferBooleanLiteralTests | ✔ P14 | `Analysis/PreferBooleanLiteralLintTests`, scoped to declared-`bool` parameters only — the v1 rule's own regression scenario (int/number params must not be flagged) |
-| GlobalObjectOwnersTests | ☐ P8 | Field aggregation |
-| SymbolTableTests | ☐ P4/P5 | |
+| GlobalObjectOwnersTests | ◐ P14 | Field completion aggregates the current file's assignments plus engine fields and radiant keys (`CompletionEngineTests`). Cross-file owner-scoped aggregation is the `completion.fieldScope` work still open in FOLLOWUPS wave 6 |
+| SymbolTableTests | ✔ P14 | Successor concept: `ScriptRecord` + `LanguageStore`. Extraction surface covered by `Extraction/ExtractionTests`, storage and lookup by `Database/ScriptDatabaseTests` |
 | WorkspaceCacheManagerTests | ✔ P6 | `Cache/SqliteCacheTests` (round-trip, identity-mismatch wipe, dirty-skip, delete) |
 | CacheRestoreTests | ✔ P6 | `Cache/SqliteCacheTests.ColdRestoreTests` (unchanged files restore from cache) |
 | GshInvalidationTests | ✔ P6 | `ColdRestoreTests.ChangedGshBetweenStarts_ReindexesDependents` (phase-two propagation) + P5 `WatchedFileUpdaterTests` |
-| MemoryOptimizationTests | ☐ P5/P6 | Re-express as record-retention assertions if still meaningful |
+| MemoryOptimizationTests | ✔ P14 | Superseded by measurement rather than assertions: `server/PERF.md` records a cold and warm index of 1,105 files with an identical live set (116.6 vs 112.7 MB), which is the records-only retention property this class asserted, proven on real data |
 | MultiNamespaceMergeTests | ✔ P5 | `ScriptDatabaseTests.NamespaceMerging_UnionsAcrossContributingFiles` |
 | GlobalSymbolRegistryTests | ✔ P5 | Successor concept: LanguageStore + ReferenceIndex; covered by `ScriptDatabaseTests` (store routing, isolation, shadowing, language guard) |
-| ScriptManagerNamespaceScopingTests | ☐ P5 | |
-| ScriptDependenciesReadyTests | ☐ P5 | |
+| ScriptManagerNamespaceScopingTests | ✔ P14 | Namespace scoping covered by `ScriptDatabaseTests` (merging across contributing files, private visibility scoped to the namespace) and `CompletionEngineTests` (`ns::` filtering, private functions offered only within the namespace) |
+| ScriptDependenciesReadyTests | ✘ P14 | Dropped: the failure mode no longer exists. v1 needed a readiness gate because records mutated in place; v2 records are immutable and swapped atomically, so a query always reads a coherent snapshot and there is nothing to wait for |
 | ScriptInsertPathsTests | ✔ P2 | Insert path collection/validation/edge scenarios in `Preprocessing/InsertTests` |
 | CompletionAfterInsertTests | ✔ P8 | Context-aware completion (ns::, member, precache, statement/top-level scope) in `Completion/CompletionEngineTests`; macros from inserts resolve via the preprocessor |
-| ScriptReferencesSelectionEndTests | ☐ P7 | |
+| ScriptReferencesSelectionEndTests | ✔ P14 | The underlying contract is half-open ranges, pinned by `SourceTextTests.Range_Contains_IsHalfOpen`; boundary behaviour at a selection end follows from it, and cross-file references are covered by the P7 navigation smoke |
 | ScriptHoverQualifiedFunctionTests | ✔ P7 | Qualified-function hover via `Api/ApiLoaderTests` (renderer) + the nav smoke; deeper cases as more hover tests land |
 | ScriptDefinitionQualifiedIdentifierTests | ✔ P7 | Cross-file qualified definition verified by the P7 navigation smoke |
-| MacroCallSiteModeTests | ☐ P7 | Macro expansion preview scenarios |
+| MacroCallSiteModeTests | ☐ P14 | GENUINELY OPEN. Macro hover renders the `#define` signature and doc comment but no expansion preview, and `MacroRecord` does not carry the body (bodies stay parser-side). Needs the body plumbed into the record before the preview can exist |
 | MacroGoToDefinitionWrongTargetTests | ✔ P2 | The canonical provenance regression: `InsertTests.Insert_SplicesTokens_WithGshProvenance` + `Insert_MacroFromGsh_DefinitionSitePointsIntoGsh` assert gsh-local ranges survive splicing (P7 wires it to go-to-def) |
 | DocumentHighlightCasingTests | ✔ P7 | Same-file highlight verified by the P7 navigation smoke; keys are lowercase-canonical so casing is inherently handled |
 | StockScriptsTests | ✔ P14 | `Api/StockScripts.cs` loads the list; `Resolution/RawWriteGuardTests` covers loading, slash/case-insensitive lookup, and every rawFileWarningMode branch |
@@ -45,8 +45,16 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 
 ## Unresolved rows
 
-The remaining ☐ rows are tracked as P14 item 17 in `server/FOLLOWUPS.md`; each needs a port
-or a conscious drop with a reason. Every ◐ row has since been completed by P14 waves 3 and 4.
+Every row is now resolved except two, both tracked in `server/FOLLOWUPS.md`:
+
+- **MacroCallSiteModeTests** (☐) — macro expansion preview; needs the macro body carried on
+  `MacroRecord` first.
+- **GlobalObjectOwnersTests** (◐) — cross-file owner-scoped field aggregation, which is the
+  `completion.fieldScope` item in wave 6.
+
+Resolutions favour pointing at where a scenario actually lives over inventing a same-named
+class, and one row is a conscious drop: `ScriptDependenciesReadyTests` tested a readiness gate
+that v2's immutable-record design removes entirely.
 
 ## P11 code-action mining (deferred to P13)
 

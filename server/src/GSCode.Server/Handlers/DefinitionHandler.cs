@@ -84,21 +84,13 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     }
 
     /// <summary>
-    /// Where a definition may live. Macros additionally search the shared GSH store, because a
-    /// macro declared in a header is recorded there rather than in either language store —
-    /// without this, go-to-definition on an inserted macro finds nothing at all.
+    /// Where a definition may live: the shared query, which already folds in the GSH store for
+    /// macro keys (a macro declared in a header is recorded there rather than in either language
+    /// store, and without it go-to-definition on an inserted macro finds nothing at all).
     /// </summary>
     private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(NavigationTarget target, SymbolKey key)
     {
-        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> inLanguage =
-            DatabaseQueries.FindReferences(target.Store, target.ContextId, key);
-
-        if ( key.Kind != GSCode.Core.Symbols.SymbolKind.Macro )
-        {
-            return inLanguage;
-        }
-
-        return inLanguage.AddRange(DatabaseQueries.FindGshReferences(_support.Database, target.ContextId, key));
+        return _support.FindAllReferences(target, key);
     }
 
     private string? ResolveDependencyPath(NavigationTarget target, PositionHit hit)

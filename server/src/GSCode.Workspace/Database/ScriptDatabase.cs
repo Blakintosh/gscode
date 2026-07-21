@@ -38,6 +38,27 @@ public sealed class ScriptDatabase
         return Gsc;
     }
 
+    /// <summary>
+    /// Every store a file of this language may see references in.
+    ///
+    /// A <c>.gsh</c> is inserted into BOTH worlds, so a macro it defines is used from <c>.gsc</c>
+    /// and <c>.csc</c> alike and neither store alone is the answer. <see cref="StoreFor"/> hands
+    /// GSH the GSC store — fine for picking one store to write into, but as a query scope it made
+    /// CSC uses of a header macro invisible from the header itself.
+    ///
+    /// GSC and CSC stay single-store: their separation is what stops a same-named symbol in the
+    /// other world from being conflated with this one.
+    /// </summary>
+    public ImmutableArray<LanguageStore> StoresFor(ScriptLanguage language)
+    {
+        if ( language == ScriptLanguage.Gsh )
+        {
+            return [Gsc, Csc];
+        }
+
+        return [StoreFor(language)];
+    }
+
     public void UpsertGsh(ScriptRecord record)
     {
         _gshRecords[record.Path] = record;

@@ -60,6 +60,19 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target));
         }
 
+        // Macros defined in THIS file. Headers are mostly macros, so without this a .gsh carried
+        // no lenses at all. Inserted macros belong to the header that defines them, not here.
+        foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in target.Result.Preprocessed.Macros.All )
+        {
+            if ( macro.SourceFile is not null )
+            {
+                continue;
+            }
+
+            SymbolKey key = new(null, macro.Name, SymbolKind.Macro);
+            lenses.Add(MakeLens(request.TextDocument.Uri, macro.NameRange, key, target));
+        }
+
         return Task.FromResult<CodeLensContainer?>(new CodeLensContainer(lenses));
     }
 
@@ -70,8 +83,11 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
 
     private CodeLens MakeLens(DocumentUri uri, GSCode.Core.Text.TextRange nameRange, SymbolKey key, NavigationTarget target)
     {
+        // The same query the peek list uses, so the number and the list cannot disagree. A
+        // single-store count under-reported a function called from CSC or a macro used from a
+        // header, while clicking the lens went through the client's reference provider.
         int count = 0;
-        foreach ( (ScriptRecord _, ReferenceEntry entry) in DatabaseQueries.FindReferences(target.Store, target.ContextId, key) )
+        foreach ( (ScriptRecord _, ReferenceEntry entry) in _support.FindAllReferences(target, key) )
         {
             if ( entry.Kind != ReferenceKind.Definition )
             {

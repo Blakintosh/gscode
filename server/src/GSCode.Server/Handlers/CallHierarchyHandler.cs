@@ -46,7 +46,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         // Anchor the item at the function's definition.
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in DatabaseQueries.FindReferences(target.Store, target.ContextId, hit.Key) )
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, hit.Key) )
         {
             if ( entry.Kind == ReferenceKind.Definition )
             {
@@ -69,7 +69,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 
         // Callers: group non-definition references of this function by their containing file.
         Dictionary<string, (ScriptRecord Record, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range> Ranges)> byCaller = new(StringComparer.Ordinal);
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in DatabaseQueries.FindReferences(target.Store, target.ContextId, key.Value) )
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, key.Value) )
         {
             if ( entry.Kind == ReferenceKind.Definition )
             {

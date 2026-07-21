@@ -373,6 +373,38 @@ public static class DatabaseQueries
         return results.ToImmutable();
     }
 
+    /// <summary>
+    /// Every reference to a key that the asking file can see: its own language world(s) plus the
+    /// shared GSH store for macro keys, which is where a header's own definition and uses live.
+    ///
+    /// This is the one place that assembles the full set. Callers that assembled it themselves
+    /// drifted apart — the CodeLens count queried a single store while clicking the lens went
+    /// through the client's reference provider, so the number and the peek list disagreed.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
+        ScriptDatabase database,
+        ImmutableArray<LanguageStore> stores,
+        string askingContextId,
+        SymbolKey key)
+    {
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        foreach ( LanguageStore store in stores )
+        {
+            results.AddRange(FindReferences(store, askingContextId, key));
+        }
+
+        // A macro declared in a .gsh lives in the shared GSH store, which serves both languages,
+        // so its declaration and any header-to-header uses are invisible to a store query.
+        if ( key.Kind == SymbolKind.Macro )
+        {
+            results.AddRange(FindGshReferences(database, askingContextId, key));
+        }
+
+        return results.ToImmutable();
+    }
+
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferences(
         LanguageStore store,
         string askingContextId,

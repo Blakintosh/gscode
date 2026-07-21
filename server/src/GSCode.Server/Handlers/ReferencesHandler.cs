@@ -48,14 +48,7 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         List<Location> locations = [];
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found =
-            DatabaseQueries.FindReferences(target.Store, target.ContextId, hit.Key);
-
-        // A macro declared in a .gsh lives in the shared GSH store, which serves both
-        // languages, so its declaration is invisible to a single-language query.
-        if ( hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Macro )
-        {
-            found = found.AddRange(DatabaseQueries.FindGshReferences(_support.Database, target.ContextId, hit.Key));
-        }
+            _support.FindAllReferences(target, hit.Key);
 
         foreach ( (ScriptRecord record, ReferenceEntry entry) in found )
         {

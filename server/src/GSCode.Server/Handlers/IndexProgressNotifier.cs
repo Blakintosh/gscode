@@ -54,5 +54,27 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
         _server.SendNotification(
             "gscode/indexingComplete",
             new IndexingCompleteParams(filesIndexed, totalFiles, (long)elapsed.TotalMilliseconds));
+
+        RequestCodeLensRefresh();
+    }
+
+    /// <summary>
+    /// Asks the client to re-request every code lens.
+    ///
+    /// Reference COUNTS are a whole-workspace fact, so a lens rendered before indexing finished
+    /// shows a number that was true only of the files seen so far — usually "0 references" on a
+    /// function that has plenty. Nothing else invalidates them: the client re-requests on edit,
+    /// which never covers a file the user is not looking at.
+    ///
+    /// Fire-and-forget: a client that does not support it just errors, and a failed refresh is
+    /// cosmetic — the next edit re-requests anyway.
+    /// </summary>
+    private void RequestCodeLensRefresh()
+    {
+        // A REQUEST per the spec, not a notification: the client answers with null. Not awaited,
+        // because Completed is called on the indexing path and must not block on the client.
+        _ = _server.SendRequest("workspace/codeLens/refresh")
+            .ReturningVoid(CancellationToken.None)
+            .ContinueWith(static _ => { }, TaskScheduler.Default);
     }
 }

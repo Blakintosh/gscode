@@ -27,6 +27,9 @@ public class GshMacroLookupTests
                 "#define IS_TRUE(__a) (isdefined(__a) && __a)\n#define REGISTER_SYSTEM(__n) register(__n)\n")
             .AddFile(
                 @$"{Raw}\scripts\shared\array_shared.gsc",
+                "#insert scripts\\shared\\shared.gsh;\n#namespace array;\nfunction run( v )\n{\n    if ( IS_TRUE( v ) )\n    {\n    }\n}\n")
+            .AddFile(
+                @$"{Raw}\scripts\shared\array_shared.csc",
                 "#insert scripts\\shared\\shared.gsh;\n#namespace array;\nfunction run( v )\n{\n    if ( IS_TRUE( v ) )\n    {\n    }\n}\n");
 
         RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
@@ -88,5 +91,63 @@ public class GshMacroLookupTests
         ScriptDatabase database = BuildWorkspace();
 
         Assert.Empty(DatabaseQueries.FindGshReferences(database, "raw", MacroKey("NOT_A_MACRO")));
+    }
+
+    // --- Both worlds, when the question is asked FROM the header ---
+    //
+    // StoreFor hands GSH the GSC store. That is fine for picking one store to write into, but as
+    // a query scope it made CSC uses of a header macro invisible from the header itself: find-all-
+    // references on IS_TRUE in shared.gsh listed the .gsc and never the .csc.
+
+    [Fact]
+    public void HeaderSeesBothLanguageStores()
+    {
+        ScriptDatabase database = new();
+
+        ImmutableArray<LanguageStore> stores = database.StoresFor(ScriptLanguage.Gsh);
+
+        // By reference: two empty stores are structurally equal, so identity is the real claim.
+        Assert.Equal(2, stores.Length);
+        Assert.Same(database.Gsc, stores[0]);
+        Assert.Same(database.Csc, stores[1]);
+    }
+
+    [Theory]
+    [InlineData(ScriptLanguage.Gsc)]
+    [InlineData(ScriptLanguage.Csc)]
+    public void ScriptsSeeOnlyTheirOwnStore(ScriptLanguage language)
+    {
+        // The separation between the worlds is what stops a same-named symbol in the other world
+        // from being conflated with this one, so only headers may span them.
+        ScriptDatabase database = new();
+
+        Assert.Single(database.StoresFor(language));
+    }
+
+    [Fact]
+    public void ReferencesFromTheHeader_SpanBothLanguages()
+    {
+        ScriptDatabase database = BuildWorkspace();
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found = DatabaseQueries.FindAllReferences(
+            database, database.StoresFor(ScriptLanguage.Gsh), "raw", MacroKey("IS_TRUE"));
+
+        Assert.Contains(found, f => f.Record.Path.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(found, f => f.Record.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(found, f => f.Entry.Kind == ReferenceKind.Definition);
+    }
+
+    [Fact]
+    public void ReferencesFromAScript_StayInThatLanguage()
+    {
+        // Asked from the .gsc, the .csc use is out of scope — but the header's own definition is
+        // still folded in, which is what makes go-to-definition on an inserted macro work.
+        ScriptDatabase database = BuildWorkspace();
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found = DatabaseQueries.FindAllReferences(
+            database, database.StoresFor(ScriptLanguage.Gsc), "raw", MacroKey("IS_TRUE"));
+
+        Assert.DoesNotContain(found, f => f.Record.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(found, f => f.Entry.Kind == ReferenceKind.Definition);
     }
 }

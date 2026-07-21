@@ -138,9 +138,10 @@ public sealed class FlowTyper
                 // The two arms are alternatives, so each walks its own copy and the results
                 // are joined. Sharing one environment would let whichever arm ran last win.
                 Dictionary<string, ScrType> thenEnvironment = Clone(environment);
-                WalkStatement(ifNode.Then, thenEnvironment, hinted, hints);
-
                 Dictionary<string, ScrType> elseEnvironment = Clone(environment);
+                ApplyIsDefinedNarrowing(ifNode.Condition, thenEnvironment, elseEnvironment);
+
+                WalkStatement(ifNode.Then, thenEnvironment, hinted, hints);
                 if ( ifNode.Else is not null )
                 {
                     WalkStatement(ifNode.Else, elseEnvironment, hinted, hints);
@@ -255,6 +256,84 @@ public sealed class FlowTyper
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Applies <c>isdefined(x)</c> narrowing to an if statement's two arms: x is defined in the
+    /// arm the guard selects and undefined in the other, with a leading <c>!</c> swapping them.
+    /// The undefined side is the one that matters — without it a stale type would be asserted
+    /// on a path where the value is known not to exist, as in
+    /// <c>x = 5; if ( !isdefined( x ) ) { y = x; }</c>.
+    /// </summary>
+    private static void ApplyIsDefinedNarrowing(
+        ExprNode condition,
+        Dictionary<string, ScrType> thenEnvironment,
+        Dictionary<string, ScrType> elseEnvironment)
+    {
+        bool negated = false;
+        ExprNode current = condition;
+
+        // Peel parentheses and negations; anything else ends the guard shape.
+        while ( true )
+        {
+            if ( current is ParenNode paren )
+            {
+                current = paren.Inner;
+                continue;
+            }
+
+            if ( current is PrefixNode prefix && prefix.Operator == TokenKind.Bang )
+            {
+                negated = !negated;
+                current = prefix.Operand;
+                continue;
+            }
+
+            break;
+        }
+
+        if ( !TryGetIsDefinedTarget(current, out string name) )
+        {
+            return;
+        }
+
+        Dictionary<string, ScrType> definedSide = negated ? elseEnvironment : thenEnvironment;
+        Dictionary<string, ScrType> undefinedSide = negated ? thenEnvironment : elseEnvironment;
+
+        // Known to exist, but the guard says nothing about which type it holds.
+        if ( definedSide.TryGetValue(name, out ScrType existing) && existing == ScrType.Undefined )
+        {
+            definedSide[name] = ScrType.Unknown;
+        }
+
+        undefinedSide[name] = ScrType.Undefined;
+    }
+
+    /// <summary>The local name inside <c>isdefined( name )</c>, when the expression is exactly that.</summary>
+    private static bool TryGetIsDefinedTarget(ExprNode expression, out string name)
+    {
+        name = "";
+
+        if ( expression is not CallNode call || call.Arguments.Length != 1 )
+        {
+            return false;
+        }
+
+        // Callable keywords parse as a call with an identifier callee carrying the keyword token.
+        if ( call.Callee is not IdentifierNode callee
+            || !string.Equals(callee.Token.Text, "isdefined", StringComparison.OrdinalIgnoreCase) )
+        {
+            return false;
+        }
+
+        // Only a bare local narrows; fields and indexes are not tracked in the environment.
+        if ( call.Arguments[0] is not IdentifierNode target )
+        {
+            return false;
+        }
+
+        name = target.Token.Text;
+        return true;
     }
 
     private static Dictionary<string, ScrType> Clone(Dictionary<string, ScrType> environment)
@@ -523,6 +602,13 @@ public sealed class FlowTyper
         if ( name is null )
         {
             return ScrType.Unknown;
+        }
+
+        // Callable keywords (isdefined, vectorscale) have no API entry, so their return types
+        // come from the emulation table instead.
+        if ( BuiltinEmulations.TryGetReturnType(name, out ScrType emulated) )
+        {
+            return emulated;
         }
 
         BuiltinFunction? builtin = _builtins.Find(name);

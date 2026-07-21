@@ -65,11 +65,24 @@ three features, and the grey-out is the most visible missing behavior in the edi
    when every declaring entity kind agrees it is read-only — exactly 2 names in the current
    data (`type`, `radius`) are mixed and stay silent.
 
-**Wave 4 — FlowTyper carries.** Ordered so the lattice lands before its consumers.
-10. Branch-join convergence — wire `ScrType.Join` into the walk (P14 #9). Unblocks the
-    `CfaTests` / `TypeFlowConvergenceTests` porting rows.
-11. `isdefined` narrowing (P14 #8).
-12. `BuiltinEmulations` table (P14 #7).
+**Wave 4 — FlowTyper carries. ✔ DONE.** Ordered so the lattice landed before its consumers.
+10. ✔ Branch-join convergence — `ScrType.Join` wired into the walk (P14 #9). Branches now
+    walk cloned environments that are merged afterwards; a name typed on only one path
+    becomes Unknown. Unblocked the `CfaTests` / `TypeFlowConvergenceTests` porting rows.
+11. ✔ `isdefined` narrowing (P14 #8). Note its value here is the NEGATIVE arm: with a lattice
+    this coarse, narrowing the positive arm changes no outcome, but narrowing
+    `!isdefined( x )` stops a stale type being asserted on a path where the value is known
+    not to exist. Only bare locals narrow; fields and indexes aren't tracked in the
+    environment.
+12. ✔ `BuiltinEmulations` table (P14 #7) — `Typing/BuiltinEmulations.cs`. Deliberately two
+    entries. The table exists to cover callable KEYWORDS, which carry no builtin-API entry;
+    of those, only `isdefined` (Bool) and `vectorscale` (Vector) yield a value worth typing.
+    `profilestart`/`profilestop`/`waittill`/`waittillmatch`/`notify`/`endon` are
+    statement-shaped, and in this lattice a void result is indistinguishable from Unknown,
+    so listing them would change no outcome. v1 also emitted arity diagnostics from its
+    emulation table; not carried, because checking arity for two keywords while every other
+    function goes unchecked would be arbitrary — arity checking belongs to a general rule
+    driven by the API's parameter lists.
 
 **Wave 5 — workspace lifecycle.**
 13. Untitled documents (P14 #13) — **verify first**: `PathUtil.NormalizeAbsolute` runs

@@ -89,6 +89,27 @@ public class FlowTyperTests
     }
 
     [Fact]
+    public void CallableKeywords_AreTypedByTheEmulationTable()
+    {
+        // isdefined and vectorscale are keywords with no builtin-API entry, so without the
+        // emulation table they would type as Unknown and produce no hint at all.
+        Dictionary<string, ScrType> types = InferByFirstToken(
+            "    ok = isdefined( self );\n    scaled = vectorscale( ( 0, 0, 1 ), 5 );");
+
+        Assert.Equal(ScrType.Bool, types["ok"]);
+        Assert.Equal(ScrType.Vector, types["scaled"]);
+    }
+
+    [Fact]
+    public void StatementShapedKeywords_StillProduceNoHint()
+    {
+        // profilestart yields no value, so it is deliberately absent from the table.
+        Dictionary<string, ScrType> types = InferByFirstToken("    nothing = profilestart( \"x\" );");
+
+        Assert.False(types.ContainsKey("nothing"));
+    }
+
+    [Fact]
     public void UnknownExpressions_ProduceNoHint()
     {
         // A call to an unknown function is Unknown -> no hint recorded.

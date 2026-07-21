@@ -149,6 +149,44 @@ public class TypeFlowConvergenceTests
     }
 
     [Fact]
+    public void NegatedIsDefined_NarrowsTheGuardedArmToUndefined()
+    {
+        // Without narrowing this asserts int on a path where x is known not to exist.
+        ScrType type = TypeOfProbe(
+            "    x = 5;\n    if ( !isdefined( x ) )\n    {\n        probe_target = x;\n    }\n    else\n    {\n        probe_target = 1;\n    }");
+
+        Assert.Equal(ScrType.Unknown, type);
+    }
+
+    [Fact]
+    public void IsDefined_LeavesTheGuardedArmUsable()
+    {
+        // The positive arm keeps whatever type flow already knew.
+        ScrType type = TypeOfProbe(
+            "    x = 5;\n    if ( isdefined( x ) )\n    {\n        probe_target = x;\n    }\n    else\n    {\n        probe_target = 7;\n    }");
+
+        Assert.Equal(ScrType.Int, type);
+    }
+
+    [Fact]
+    public void IsDefinedNarrowing_SurvivesParenthesesAndDoubleNegation()
+    {
+        ScrType type = TypeOfProbe(
+            "    x = 5;\n    if ( !( !isdefined( x ) ) )\n    {\n        probe_target = x;\n    }\n    else\n    {\n        probe_target = 7;\n    }");
+
+        Assert.Equal(ScrType.Int, type);
+    }
+
+    [Fact]
+    public void UnrelatedCondition_DoesNotNarrow()
+    {
+        ScrType type = TypeOfProbe(
+            "    x = 5;\n    if ( other_thing( x ) )\n    {\n        probe_target = x;\n    }\n    else\n    {\n        probe_target = 7;\n    }");
+
+        Assert.Equal(ScrType.Int, type);
+    }
+
+    [Fact]
     public void NestedBranches_ConvergeThroughBothLevels()
     {
         ScrType type = TypeOfProbe(

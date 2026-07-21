@@ -134,42 +134,170 @@ public sealed class FlowTyper
                 TypeExpressionForEffects(exprStatement.Expression, environment, hinted, hints);
                 return;
             case IfNode ifNode:
-                WalkStatement(ifNode.Then, environment, hinted, hints);
+            {
+                // The two arms are alternatives, so each walks its own copy and the results
+                // are joined. Sharing one environment would let whichever arm ran last win.
+                Dictionary<string, ScrType> thenEnvironment = Clone(environment);
+                WalkStatement(ifNode.Then, thenEnvironment, hinted, hints);
+
+                Dictionary<string, ScrType> elseEnvironment = Clone(environment);
                 if ( ifNode.Else is not null )
                 {
-                    WalkStatement(ifNode.Else, environment, hinted, hints);
+                    WalkStatement(ifNode.Else, elseEnvironment, hinted, hints);
                 }
 
+                MergeAlternatives(environment, thenEnvironment, elseEnvironment);
                 return;
+            }
             case WhileNode whileNode:
-                WalkStatement(whileNode.Body, environment, hinted, hints);
+                MergeLoopBody(whileNode.Body, environment, hinted, hints);
                 return;
             case DoWhileNode doWhile:
+                // The body always runs at least once, so its effects apply directly.
                 WalkStatement(doWhile.Body, environment, hinted, hints);
                 return;
             case ForNode forNode:
                 if ( forNode.Initializer is not null )
                 {
+                    // The initializer runs unconditionally, before the loop can be skipped.
                     WalkStatement(forNode.Initializer, environment, hinted, hints);
                 }
 
-                WalkStatement(forNode.Body, environment, hinted, hints);
+                MergeLoopBody(forNode.Body, environment, hinted, hints);
                 return;
             case ForeachNode foreachNode:
-                WalkStatement(foreachNode.Body, environment, hinted, hints);
+                MergeLoopBody(foreachNode.Body, environment, hinted, hints);
                 return;
             case SwitchNode switchNode:
-                foreach ( CaseGroupNode group in switchNode.Cases )
-                {
-                    foreach ( AstNode child in group.Statements )
-                    {
-                        WalkStatement(child, environment, hinted, hints);
-                    }
-                }
-
+                WalkSwitch(switchNode, environment, hinted, hints);
                 return;
             default:
                 return;
+        }
+    }
+
+    /// <summary>
+    /// Walks a loop body as an alternative path: the body may run zero times, so its effects
+    /// are joined with the environment as it stood before the loop.
+    /// </summary>
+    private void MergeLoopBody(
+        AstNode body,
+        Dictionary<string, ScrType> environment,
+        HashSet<string> hinted,
+        ImmutableArray<InferredAssignment>.Builder hints)
+    {
+        Dictionary<string, ScrType> bodyEnvironment = Clone(environment);
+        WalkStatement(body, bodyEnvironment, hinted, hints);
+
+        // One join suffices: Join only ever moves toward Unknown, so iterating to a fixpoint
+        // could never yield a more precise answer than this single pass.
+        MergeAlternatives(environment, environment, bodyEnvironment);
+    }
+
+    /// <summary>
+    /// Walks each case group as its own alternative path. Without a default label no group
+    /// need run at all, so the pre-switch environment joins in as a further alternative.
+    /// </summary>
+    private void WalkSwitch(
+        SwitchNode switchNode,
+        Dictionary<string, ScrType> environment,
+        HashSet<string> hinted,
+        ImmutableArray<InferredAssignment>.Builder hints)
+    {
+        List<Dictionary<string, ScrType>> paths = new();
+
+        foreach ( CaseGroupNode group in switchNode.Cases )
+        {
+            Dictionary<string, ScrType> caseEnvironment = Clone(environment);
+            foreach ( AstNode child in group.Statements )
+            {
+                WalkStatement(child, caseEnvironment, hinted, hints);
+            }
+
+            paths.Add(caseEnvironment);
+        }
+
+        if ( !HasDefaultLabel(switchNode) )
+        {
+            paths.Add(Clone(environment));
+        }
+
+        if ( paths.Count == 0 )
+        {
+            return;
+        }
+
+        Dictionary<string, ScrType> merged = paths[0];
+        for ( int index = 1; index < paths.Count; index++ )
+        {
+            MergeAlternatives(merged, merged, paths[index]);
+        }
+
+        environment.Clear();
+        foreach ( KeyValuePair<string, ScrType> entry in merged )
+        {
+            environment[entry.Key] = entry.Value;
+        }
+    }
+
+    /// <summary>A null label marks the default group.</summary>
+    private static bool HasDefaultLabel(SwitchNode switchNode)
+    {
+        foreach ( CaseGroupNode group in switchNode.Cases )
+        {
+            foreach ( ExprNode? label in group.Labels )
+            {
+                if ( label is null )
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static Dictionary<string, ScrType> Clone(Dictionary<string, ScrType> environment)
+    {
+        return new Dictionary<string, ScrType>(environment, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="destination"/> with the join of two alternative paths. A name
+    /// typed on only one path becomes Unknown: it may be undefined on the other, and the
+    /// lattice never guesses a union.
+    /// </summary>
+    private static void MergeAlternatives(
+        Dictionary<string, ScrType> destination,
+        Dictionary<string, ScrType> first,
+        Dictionary<string, ScrType> second)
+    {
+        Dictionary<string, ScrType> joined = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach ( KeyValuePair<string, ScrType> entry in first )
+        {
+            if ( second.TryGetValue(entry.Key, out ScrType other) )
+            {
+                joined[entry.Key] = ScrTypes.Join(entry.Value, other);
+            }
+            else
+            {
+                joined[entry.Key] = ScrType.Unknown;
+            }
+        }
+
+        foreach ( KeyValuePair<string, ScrType> entry in second )
+        {
+            if ( !joined.ContainsKey(entry.Key) )
+            {
+                joined[entry.Key] = ScrType.Unknown;
+            }
+        }
+
+        destination.Clear();
+        foreach ( KeyValuePair<string, ScrType> entry in joined )
+        {
+            destination[entry.Key] = entry.Value;
         }
     }
 

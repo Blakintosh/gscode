@@ -41,6 +41,31 @@ public sealed record ScriptDocComment
         @"^(?<name><[^>]+>|\[[^\]]+\]|[^:\s]+)\s*:?\s*(?<desc>.*)$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// Strips the double quotes the stock convention wraps every ScriptDoc line in:
+    ///
+    ///     /@
+    ///     "Name: empty( &lt;a&gt; )"
+    ///     "Summary: Empty function, used as a default function pointer."
+    ///     @/
+    ///
+    /// The key regex starts at <c>\w</c>, so a leading quote stopped every stock block from
+    /// matching a single line — 15,226 of the 15,231 functions in the shipped scripts parsed to an
+    /// empty doc, and hovers showed no documentation at all. Unquoted lines are left as they are,
+    /// since both forms appear in the wild.
+    /// </summary>
+    private static string Unwrap(string line)
+    {
+        string trimmed = line.Trim();
+
+        if ( trimmed.Length >= 2 && trimmed.StartsWith('"') && trimmed.EndsWith('"') )
+        {
+            return trimmed[1..^1];
+        }
+
+        return trimmed;
+    }
+
     /// <summary>Parses the text of a doc block (delimiters included or not).</summary>
     public static ScriptDocComment Parse(string docBlockText)
     {
@@ -65,7 +90,7 @@ public sealed record ScriptDocComment
 
         foreach ( string line in body.Split('\n') )
         {
-            Match match = s_keyValue.Match(line.TrimEnd());
+            Match match = s_keyValue.Match(Unwrap(line));
             if ( !match.Success )
             {
                 continue;

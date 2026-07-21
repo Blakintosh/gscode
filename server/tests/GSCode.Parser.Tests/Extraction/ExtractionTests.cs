@@ -258,6 +258,44 @@ public class ExtractionTests
     }
 
     [Fact]
+    public void DocComment_ReadsTheQuotedStockFormat()
+    {
+        // How every shipped script actually writes it: each line wrapped in double quotes. The
+        // key regex starts at \w, so the leading quote made the whole block parse to nothing
+        // while the unquoted test above kept passing — 15,226 of 15,231 corpus functions ended
+        // up with an empty doc.
+        string source = """
+            /@
+            "Name: do_thing( <target> )"
+            "Summary: Does the thing carefully."
+            "Module: Utility"
+            "MandatoryArg: <target> : who to affect"
+            "OptionalArg: <force> : skip the check"
+            "Example: do_thing( self );"
+            "SPMP: both"
+            @/
+            function do_thing( target, force )
+            {
+            }
+            """;
+
+        ParseResult result = Analyze(source);
+        FunctionSymbol function = Assert.Single(result.Extraction.Functions);
+
+        Assert.Equal("Does the thing carefully.", function.Doc.Summary);
+        Assert.Equal("Utility", function.Doc.Module);
+        Assert.Equal("both", function.Doc.Spmp);
+        Assert.Equal("do_thing( <target> )", function.Doc.Name);
+        Assert.Equal("do_thing( self );", Assert.Single(function.Doc.Examples));
+
+        Assert.Equal(2, function.Doc.Arguments.Length);
+        Assert.Equal("target", function.Doc.Arguments[0].Name);
+        Assert.Equal("who to affect", function.Doc.Arguments[0].Description);
+        Assert.False(function.Doc.Arguments[0].Optional);
+        Assert.True(function.Doc.Arguments[1].Optional);
+    }
+
+    [Fact]
     public void Gsh_LenientMode_SuppressesParseDiagnosticsKeepsMacros()
     {
         // A GSH fragment: bare statements, no enclosing function — invalid as a script.

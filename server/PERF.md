@@ -27,15 +27,17 @@ numbers directly:
 
 ### Reading the memory breakdown
 
+An actual cold reading:
+
 ```
 Memory after indexing:
     files              1,105  (0 restored · 1,105 analysed)
-    working set        400.0 MB   (what the OS reports)
-    managed live       180.0 MB   (retained objects)
-    heap size          350.0 MB
-    committed          390.0 MB
-    fragmented          40.0 MB   (mostly large-object heap)
-    collections     gen0 120 · gen1 40 · gen2 6
+    working set        390.3 MB   (what the OS reports)
+    managed live       116.6 MB   (retained objects)
+    heap size          282.1 MB
+    committed          303.9 MB
+    fragmented         183.1 MB   (mostly large-object heap)
+    collections     gen0 182 · gen1 100 · gen2 19
 ```
 
 **The number that matters is the gap between "managed live" and "working set."**
@@ -45,24 +47,43 @@ AST, extraction builders — at `ProcessorCount - 1` way parallelism, and all of
 once the `ScriptRecord` is built. A warm start only deserializes records from SQLite, so it
 never allocates at that scale.
 
-The open question this exists to settle (observed 2026-07-20: ~400 MB cold vs ~200 MB warm on
-1,105 files):
+### Measured answer (2026-07-20, 1,105 files)
 
-- If **managed live is similar** across a cold and a warm start while the working set differs,
-  the extra footprint is grown, uncompacted heap rather than retained data. A high
-  `fragmented` figure points at the large-object heap specifically, which is not compacted by
-  default. The fix is a one-time compacting collect at this transition
-  (`GCLargeObjectHeapCompactionMode.CompactOnce` plus a blocking gen2 collect) — v1 reached
-  the same conclusion in `cfccd26`, "Force aggressive GC after workspace indexing completes".
-- If **managed live is genuinely higher** after a cold start, something in the analysis path is
-  being retained that should not be, and the answer is a leak hunt, not a GC call.
+| | Cold | Warm | Delta |
+|---|---|---|---|
+| managed live | 116.6 MB | 112.7 MB | **+3.9 MB** |
+| fragmented | 183.1 MB | 1.0 MB | **+182.1 MB** |
+| heap size | 282.1 MB | 100.9 MB | +181.2 MB |
+| working set | 390.3 MB | 212.2 MB | +178.1 MB |
+| gen2 collections | 19 | 8 | |
 
-Do not switch to Server GC to chase this: per-core heaps would make the footprint worse, and
-Workstation GC is the right choice for a language server.
+**The live object graph is the same** — 3.9 MB apart, about 3%. There is no leak and nothing
+is over-retained; records-only retention works as designed. The entire gap is fragmentation:
+182.1 MB of it explains 178.1 MB of working set, and a cold heap is 65% holes. Native/runtime
+overhead is a constant across both (86 MB cold, 92 MB warm), as expected.
 
-Worth checking while measuring: whether the cache-restore path interns strings through
-`NameTable`. If it does not, a warm start looks leaner but carries duplicate strings that
-interning exists to eliminate — making the warm number flattering rather than genuinely better.
+The cause is the large-object heap. A `PToken` is roughly 48 bytes, so the 85,000-byte LOH
+threshold lands at about 1,770 tokens — which most real GSC files clear, meaning the majority
+of scripts allocate their token arrays straight onto a heap that is never compacted by
+default. Nineteen gen2 collections still left 183 MB fragmented, because ordinary collections
+reclaim LOH memory without moving anything.
+
+**Fix in place:** `CompactIfFragmented` in `Program.cs` runs one `CompactOnce` gen2 collect at
+the indexing → serving transition, gated on measured fragmentation (32 MB) so a warm start
+skips the pause. The report is logged again afterwards as "Memory after compaction", so any
+run shows its own before/after. v1 reached the same conclusion in `cfccd26`, "Force aggressive
+GC after workspace indexing completes".
+
+Two things this measurement also settled:
+
+- **Do not switch to Server GC.** Per-core heaps would multiply the fragmentation, and
+  Workstation GC is the right choice for a language server.
+- **Cache restore is not skipping `NameTable` interning.** That worry predicted a warm start
+  carrying duplicate strings, which would show up as a *higher* warm live set. It came in 3.9
+  MB *lower*, so the concern is closed.
+
+If cold ever climbs again without fragmentation climbing with it, that is the leak-hunt
+signal — a genuinely higher live set means the analysis path is retaining something.
 
 ## Deeper timing (optional instrumentation)
 
@@ -96,4 +117,6 @@ Measured on the local BO3-tools machine (corpus not committed):
 |---|---|---|---|---|
 | Cold index | 1,105 files | 5.5 s | < 60 s | yes |
 | Warm start | 1,105 files | 2.6 s | < 5 s | yes |
-| Steady-state memory | — | (read "Server memory" line) | < 400 MB | |
+| Steady-state memory (cold, before compaction) | 1,105 files | 390.3 MB | < 400 MB | just inside |
+| Steady-state memory (warm) | 1,105 files | 212.2 MB | < 400 MB | yes |
+| Live managed set (either path) | 1,105 files | ~115 MB | — | — |

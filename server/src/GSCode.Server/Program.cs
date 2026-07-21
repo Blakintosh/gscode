@@ -246,6 +246,11 @@ LanguageServer server = await LanguageServer.From(options =>
                         // indexing left behind rather than anything steady-state traffic did.
                         LogMemoryReport("indexing", outcome);
 
+                        if ( CompactIfFragmented() )
+                        {
+                            LogMemoryReport("compaction", outcome);
+                        }
+
                         // Start reporting memory only now — during indexing it climbs steadily and
                         // would spam. The monitor logs only on >= 1 MB changes from here on.
                         _ = RunMemoryMonitorAsync(CancellationToken.None);
@@ -373,6 +378,37 @@ static string FormatLanguageLine(string label, int raw, int mod, int workspace)
 
     string split = parts.Count > 0 ? "  (" + string.Join(" · ", parts) + ")" : "";
     return $"    {label}  {total,6:N0} files{split}";
+}
+
+// Compacts the heap once, at the indexing -> serving transition, when indexing left enough
+// fragmentation to be worth it.
+//
+// Calling GC.Collect is normally wrong, but this is the case that justifies it: a one-off
+// phase change after which the allocation profile is completely different. Analysing a file
+// allocates token and PToken arrays that clear the 85 KB large-object threshold, so most
+// scripts put theirs straight on the LOH — which is NOT compacted by default. Measured on
+// 1,105 files: a cold index left 183 MB fragmented out of a 282 MB heap (65% holes) even
+// after 19 gen2 collections, because ordinary collections reclaim LOH memory without moving
+// anything. Serving requests allocates nothing like that, so the holes would simply persist.
+//
+// Gated on measured fragmentation so a warm start, which restores records and fragments
+// almost nothing, skips the pause entirely.
+static bool CompactIfFragmented()
+{
+    const long fragmentationThresholdBytes = 32L * 1024 * 1024;
+
+    long fragmented = GC.GetGCMemoryInfo().FragmentedBytes;
+    if ( fragmented < fragmentationThresholdBytes )
+    {
+        return false;
+    }
+
+    System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+    GC.WaitForPendingFinalizers();
+    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+
+    return true;
 }
 
 // A one-shot memory breakdown, logged at the indexing -> serving transition.

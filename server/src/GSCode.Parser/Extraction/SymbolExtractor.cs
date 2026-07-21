@@ -135,7 +135,7 @@ public sealed class SymbolExtractor
     private FunctionSymbol ExtractFunction(FunctionNode function, string namespaceName)
     {
         SymbolKey key = new(namespaceName, _names.InternLower(function.NameToken.Text), SymbolKind.Function);
-        _references.Add(new ReferenceEntry(key, function.NameToken.RootRange, ReferenceKind.Definition));
+        AddReference(key, function.NameToken, ReferenceKind.Definition);
 
         ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
         WalkStatement(function.Body, assignments);
@@ -168,12 +168,12 @@ public sealed class SymbolExtractor
     private void ExtractClass(ClassNode classNode)
     {
         SymbolKey classKey = new(_currentNamespace, _names.InternLower(classNode.NameToken.Text), SymbolKind.Class);
-        _references.Add(new ReferenceEntry(classKey, classNode.NameToken.RootRange, ReferenceKind.Definition));
+        AddReference(classKey, classNode.NameToken, ReferenceKind.Definition);
 
         if ( classNode.ParentToken is not null )
         {
             SymbolKey parentKey = new(null, _names.InternLower(classNode.ParentToken.Value.Text), SymbolKind.Class);
-            _references.Add(new ReferenceEntry(parentKey, classNode.ParentToken.Value.RootRange, ReferenceKind.ClassUse));
+            AddReference(parentKey, classNode.ParentToken.Value, ReferenceKind.ClassUse);
         }
 
         ImmutableArray<MemberSymbol>.Builder members = ImmutableArray.CreateBuilder<MemberSymbol>();
@@ -496,7 +496,7 @@ public sealed class SymbolExtractor
             {
                 WalkExpression(arrow.Object.Pointer, assignments);
                 SymbolKey methodKey = new(null, _names.InternLower(arrow.MethodToken.Text), SymbolKind.Function);
-                _references.Add(new ReferenceEntry(methodKey, arrow.MethodToken.RootRange, ReferenceKind.Call));
+                AddReference(methodKey, arrow.MethodToken, ReferenceKind.Call);
 
                 foreach ( ExprNode argument in arrow.Arguments )
                 {
@@ -508,7 +508,7 @@ public sealed class SymbolExtractor
             case NewNode newNode:
             {
                 SymbolKey classKey = new(null, _names.InternLower(newNode.ClassToken.Text), SymbolKind.Class);
-                _references.Add(new ReferenceEntry(classKey, newNode.ClassToken.RootRange, ReferenceKind.ClassUse));
+                AddReference(classKey, newNode.ClassToken, ReferenceKind.ClassUse);
 
                 foreach ( ExprNode argument in newNode.Arguments )
                 {
@@ -566,7 +566,7 @@ public sealed class SymbolExtractor
                 // Unqualified: keyed under the current namespace state (its primary
                 // resolution target; builtin fallback is a query-time concern).
                 SymbolKey key = new(_currentNamespace, _names.InternLower(identifier.Token.Text), SymbolKind.Function);
-                _references.Add(new ReferenceEntry(key, identifier.Token.RootRange, kind));
+                AddReference(key, identifier.Token, kind);
                 return;
             }
             case QualifiedNode qualified:
@@ -576,7 +576,7 @@ public sealed class SymbolExtractor
                 string? namespaceKey = namespaceText == "sys" ? null : namespaceText;
 
                 SymbolKey key = new(namespaceKey, _names.InternLower(qualified.NameToken.Text), SymbolKind.Function);
-                _references.Add(new ReferenceEntry(key, qualified.NameToken.RootRange, kind));
+                AddReference(key, qualified.NameToken, kind);
                 return;
             }
             default:
@@ -587,7 +587,7 @@ public sealed class SymbolExtractor
     private void RecordFieldReference(PToken nameToken)
     {
         SymbolKey key = new(null, _names.InternLower(nameToken.Text), SymbolKind.Field);
-        _references.Add(new ReferenceEntry(key, nameToken.RootRange, ReferenceKind.FieldAccess));
+        AddReference(key, nameToken, ReferenceKind.FieldAccess);
     }
 
     private void RecordLiteralReference(LiteralNode literal)
@@ -598,25 +598,25 @@ public sealed class SymbolExtractor
             {
                 // Strings are content-exact (case-sensitive).
                 SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text)), SymbolKind.StringLiteral);
-                _references.Add(new ReferenceEntry(key, literal.Token.RootRange, ReferenceKind.Literal));
+                AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
             case TokenKind.HashString:
             {
                 SymbolKey key = new(null, _names.InternLower(Unquote(literal.Token.Text[1..])), SymbolKind.HashString);
-                _references.Add(new ReferenceEntry(key, literal.Token.RootRange, ReferenceKind.Literal));
+                AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
             case TokenKind.LocalizedString:
             {
                 SymbolKey key = new(null, _names.InternLower(Unquote(literal.Token.Text[1..])), SymbolKind.LocalizedString);
-                _references.Add(new ReferenceEntry(key, literal.Token.RootRange, ReferenceKind.Literal));
+                AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
             case TokenKind.AnimReference:
             {
                 SymbolKey key = new(null, _names.InternLower(literal.Token.Text.AsSpan(1)), SymbolKind.AnimReference);
-                _references.Add(new ReferenceEntry(key, literal.Token.RootRange, ReferenceKind.Literal));
+                AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
             default:
@@ -673,6 +673,29 @@ public sealed class SymbolExtractor
         }
 
         return trimmed;
+    }
+
+    /// <summary>
+    /// Records a reference at the token's root-file range, unless the token came out of a
+    /// macro body.
+    ///
+    /// Expanded tokens report the INVOCATION's range, so recording them would stack a macro's
+    /// whole body onto the one call site: go-to-definition would land on whatever the body
+    /// mentions first, and every expanded call would contribute its own parameter hints there.
+    /// Arguments passed at the call site keep their own provenance and so are still recorded,
+    /// as is the MacroUse reference for the invocation itself.
+    ///
+    /// The cost is that a function named only inside a macro body gets no reference anywhere,
+    /// since the body is never parsed as code at its definition site either.
+    /// </summary>
+    private void AddReference(SymbolKey key, PToken token, ReferenceKind kind)
+    {
+        if ( token.Provenance.DefinitionSite is not null )
+        {
+            return;
+        }
+
+        _references.Add(new ReferenceEntry(key, token.RootRange, kind));
     }
 
     private void AddDiagnostic(GscDiagnosticCode code, TextRange range, params object[] arguments)

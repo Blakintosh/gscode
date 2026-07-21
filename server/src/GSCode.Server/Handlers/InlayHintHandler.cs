@@ -88,11 +88,32 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
     }
 
+    /// <summary>True when the call's callee token was produced by expanding a macro body.</summary>
+    private static bool IsFromMacroExpansion(CallNode call)
+    {
+        switch ( call.Callee )
+        {
+            case IdentifierNode identifier:
+                return identifier.Token.Provenance.DefinitionSite is not null;
+            case QualifiedNode qualified:
+                return qualified.NameToken.Provenance.DefinitionSite is not null;
+            default:
+                return false;
+        }
+    }
+
     private void AddParameterNameHints(NavigationTarget target, TextRange window, List<InlayHint> hints)
     {
         foreach ( CallNode call in CollectCalls(target.Result.Tree.Root) )
         {
             if ( call.Arguments.Length == 0 || !window.Contains(call.Range.Start) )
+            {
+                continue;
+            }
+
+            // A call inside a macro body reports the INVOCATION's range, so hinting it would
+            // stamp the whole expansion's parameter names onto the one call site.
+            if ( IsFromMacroExpansion(call) )
             {
                 continue;
             }

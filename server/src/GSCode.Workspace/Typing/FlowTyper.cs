@@ -398,6 +398,14 @@ public sealed class FlowTyper
         string name = target.Token.Text;
         environment[name] = type;
 
+        // An assignment inside a macro body reports the INVOCATION's range, so hinting it
+        // would label the call site with a type the user never wrote there. The environment
+        // still updates, since the assignment does happen.
+        if ( target.Token.Provenance.DefinitionSite is not null )
+        {
+            return;
+        }
+
         if ( type.IsKnown() && hinted.Add(name) )
         {
             hints.Add(new InferredAssignment(target.Token.RootRange, type, name));

@@ -32,6 +32,9 @@ public sealed class SymbolExtractor
     // Namespace state while walking (default = the file name stem).
     private string _currentNamespace;
 
+    // How many dev blocks enclose the walk right now; > 0 means release builds drop this code.
+    private int _devBlockDepth;
+
     private SymbolExtractor(string rootFilePath, NameTable names, SourceText text, ImmutableArray<Token> rawTokens)
     {
         _rootFilePath = rootFilePath;
@@ -124,7 +127,10 @@ public sealed class SymbolExtractor
                     ValidatePrecache(precache);
                     continue;
                 case DevBlockDeclNode devBlock:
+                    // Everything declared in here is stripped from a release build.
+                    _devBlockDepth++;
                     WalkDeclarations(devBlock.Declarations, devBlock.Range);
+                    _devBlockDepth--;
                     continue;
                 default:
                     continue;
@@ -155,6 +161,7 @@ public sealed class SymbolExtractor
             Namespace = namespaceName,
             IsPrivate = function.IsPrivate,
             IsAutoexec = function.IsAutoexec,
+            IsDevOnly = _devBlockDepth > 0,
             Parameters = parameters.ToImmutable(),
             HasVarargs = function.HasVarargs,
             NameRange = function.NameToken.Range,

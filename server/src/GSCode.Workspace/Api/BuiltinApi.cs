@@ -23,6 +23,12 @@ public sealed record BuiltinFunction(
     ImmutableArray<BuiltinOverload> Overloads,
     string Example)
 {
+    /// <summary>
+    /// Exists only in a development build, so calling it outside a `/# #/` block breaks a
+    /// shipped mod. Populated by the loader — see DevOnlyBuiltins for where the truth lives.
+    /// </summary>
+    public bool IsDevOnly { get; init; }
+
     /// <summary>True when any overload is called on an object (method-notation builtin).</summary>
     public bool IsMethod
     {

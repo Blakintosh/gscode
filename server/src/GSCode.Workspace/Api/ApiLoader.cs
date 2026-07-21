@@ -8,7 +8,7 @@ namespace GSCode.Workspace.Api;
 
 // DTOs mirroring the t7_api_*.json shape, deserialized via source generation.
 internal sealed record ApiFile(List<ApiEntry>? Api);
-internal sealed record ApiEntry(string? Name, string? Description, List<ApiOverload>? Overloads, string? Example);
+internal sealed record ApiEntry(string? Name, string? Description, List<ApiOverload>? Overloads, string? Example, bool? DevOnly);
 internal sealed record ApiOverload(ApiCalledOn? CalledOn, List<ApiParameter>? Parameters, ApiReturn? Returns);
 internal sealed record ApiCalledOn(string? Name);
 internal sealed record ApiParameter(string? Name, string? Description, bool Mandatory, ApiType? Type);
@@ -85,11 +85,18 @@ public static class ApiLoader
                 overload.Returns?.Void ?? false));
         }
 
+        string name = entry.Name ?? "";
+
         return new BuiltinFunction(
-            entry.Name ?? "",
+            name,
             entry.Description ?? "",
             overloads.ToImmutable(),
-            entry.Example ?? "");
+            entry.Example ?? "")
+        {
+            // The data wins when it says anything, so a future `devOnly` field needs no code
+            // change here; until then the curated list is the only source that is accurate.
+            IsDevOnly = entry.DevOnly ?? DevOnlyBuiltins.Contains(name),
+        };
     }
 
     private static string FormatType(ApiType? type)

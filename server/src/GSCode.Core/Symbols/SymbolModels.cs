@@ -34,6 +34,12 @@ public sealed record FunctionSymbol
 
     public bool IsPrivate { get; init; }
     public bool IsAutoexec { get; init; }
+
+    /// <summary>
+    /// Declared inside a <c>/# #/</c> dev block, so it does not exist in a release build.
+    /// Callers outside a dev block are reported.
+    /// </summary>
+    public bool IsDevOnly { get; init; }
     public ImmutableArray<ParameterSymbol> Parameters { get; init; } = [];
     public bool HasVarargs { get; init; }
 

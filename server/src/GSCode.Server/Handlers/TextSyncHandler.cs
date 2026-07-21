@@ -224,6 +224,8 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         lints.AddRange(PreferBooleanLiteralLint.Analyze(result, builtins));
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, document.Path, builtins));
         lints.AddRange(ReadOnlyWriteLint.Analyze(result, _objectFields));
+        lints.AddRange(DevBlockCallLint.Analyze(
+            result, store, contextId, document.Path, DatabaseQueries.DeclaredNamespaces(result), builtins));
 
         if ( lints.Count == 0 )
         {

@@ -62,6 +62,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.PrivateFunctionNotVisible] = "'{0}' is private to namespace '{1}'; only files declaring that namespace can call it.",
         [GscDiagnosticCode.ReadOnlyFieldWrite] = "Engine field '{0}' is read-only; assigning to it has no effect.",
         [GscDiagnosticCode.SizeIsReadOnly] = "'.size' is read-only and cannot be assigned.",
+        [GscDiagnosticCode.DevOnlyFunctionCalledFromRelease] = "'{0}' is declared inside a '/# #/' dev block and will not exist in a release build.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

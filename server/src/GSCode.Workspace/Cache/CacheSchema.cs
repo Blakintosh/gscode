@@ -12,7 +12,7 @@ public static class CacheSchema
     public const int SchemaVersion = 1;
 
     /// <summary>Bumped when the ScriptRecord blob serialization changes.</summary>
-    public const int RecordFormatVersion = 1;
+    public const int RecordFormatVersion = 2;
 
     // meta keys.
     public const string MetaSchemaVersion = "schema_version";

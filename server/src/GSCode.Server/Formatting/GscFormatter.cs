@@ -128,6 +128,11 @@ public static class GscFormatter
         StringBuilder output = new();
         int depth = 0;
 
+        // Brace depth alone cannot indent an unbraced control-flow body — `if ( x )` with its
+        // statement on the next line opens no brace, so the body would land in the `if`'s own
+        // column. This tracks bodies that are owed an indent without one.
+        UnbracedBodyTracker unbraced = new();
+
         for ( int index = 0; index < significant.Count; index++ )
         {
             Token token = significant[index].Token;
@@ -138,6 +143,8 @@ public static class GscFormatter
             {
                 depth = Math.Max(0, depth - 1);
             }
+
+            unbraced.BeforeToken(token.Kind);
 
             if ( index == 0 )
             {
@@ -152,7 +159,7 @@ public static class GscFormatter
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, 1);
                     output.Append('\n', 1 + blankLines);
-                    output.Append(' ', depth * IndentWidth);
+                    output.Append(' ', (depth + unbraced.PendingIndents) * IndentWidth);
                 }
                 else
                 {
@@ -167,10 +174,100 @@ public static class GscFormatter
             {
                 depth++;
             }
+
+            unbraced.AfterToken(token.Kind);
         }
 
         output.Append('\n');
         return output.ToString();
+    }
+
+    /// <summary>
+    /// Tracks control-flow bodies written without braces, which carry no brace depth of their own.
+    ///
+    /// A header (`if (…)`, `while (…)`, `for (…)`, `foreach (…)`) or a bare `else`/`do` is followed
+    /// by either `{` — in which case brace depth already handles it — or a single statement that
+    /// needs one extra level. Nested headers stack, and all of them end at the same statement, so
+    /// a terminator releases every pending level at once:
+    ///
+    ///     if ( a )
+    ///         if ( b )
+    ///             doThing();   &lt;- two pending levels, both released by this `;`
+    /// </summary>
+    private sealed class UnbracedBodyTracker
+    {
+        private bool _expectingHeader;
+        private int _headerParenDepth;
+        private bool _awaitingBody;
+
+        /// <summary>Extra indent levels owed to unbraced bodies currently open.</summary>
+        public int PendingIndents { get; private set; }
+
+        /// <summary>Called before the token is written, so its own line uses the right indent.</summary>
+        public void BeforeToken(TokenKind kind)
+        {
+            if ( !_awaitingBody )
+            {
+                return;
+            }
+
+            _awaitingBody = false;
+
+            // A braced body needs nothing: brace depth already covers it.
+            if ( kind != TokenKind.OpenBrace )
+            {
+                PendingIndents++;
+            }
+        }
+
+        /// <summary>Called after the token is written, to arm or release the next body.</summary>
+        public void AfterToken(TokenKind kind)
+        {
+            // A statement terminator ends every unbraced body stacked above it. `}` is reset
+            // rather than decremented: a brace closing here means the body was braced after all,
+            // or the tracker is out of step, and dropping to zero is the safe direction.
+            if ( kind == TokenKind.Semicolon || kind == TokenKind.CloseBrace )
+            {
+                PendingIndents = 0;
+                _expectingHeader = false;
+                _awaitingBody = false;
+                return;
+            }
+
+            if ( kind is TokenKind.If or TokenKind.While or TokenKind.For or TokenKind.Foreach )
+            {
+                _expectingHeader = true;
+                _headerParenDepth = 0;
+                return;
+            }
+
+            // `else` and `do` take a body directly, with no parenthesised header between.
+            if ( kind is TokenKind.Else or TokenKind.Do )
+            {
+                _awaitingBody = true;
+                return;
+            }
+
+            if ( !_expectingHeader )
+            {
+                return;
+            }
+
+            if ( kind == TokenKind.OpenParen )
+            {
+                _headerParenDepth++;
+            }
+            else if ( kind == TokenKind.CloseParen )
+            {
+                _headerParenDepth--;
+                if ( _headerParenDepth <= 0 )
+                {
+                    // The header is complete, so whatever comes next is the body.
+                    _expectingHeader = false;
+                    _awaitingBody = true;
+                }
+            }
+        }
     }
 
     /// <summary>

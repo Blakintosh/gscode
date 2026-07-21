@@ -76,6 +76,8 @@ static void GenerateRadiantKeys(string keysPath, string outputPath)
     }
 
     List<RadiantKey> keys = [];
+    int corrected = 0;
+
     foreach ( string rawLine in File.ReadAllLines(keysPath) )
     {
         string line = rawLine.Trim();
@@ -111,12 +113,35 @@ static void GenerateRadiantKeys(string keysPath, string outputPath)
             continue;
         }
 
-        keys.Add(new RadiantKey(parts[cursor + 1].ToLowerInvariant(), parts[cursor].ToLowerInvariant(), side, comment));
+        string name = parts[cursor + 1].ToLowerInvariant();
+        string correctedSide = CorrectSide(name, side);
+        if ( !string.Equals(correctedSide, side, StringComparison.Ordinal) )
+        {
+            corrected++;
+        }
+
+        keys.Add(new RadiantKey(name, parts[cursor].ToLowerInvariant(), correctedSide, comment));
     }
 
     List<RadiantKey> sorted = [.. keys.OrderBy(static k => k.Name, StringComparer.Ordinal)];
-    Console.WriteLine($"  radiant keys: {sorted.Count}");
+    Console.WriteLine($"  radiant keys: {sorted.Count} ({corrected} side corrections applied)");
     WriteJson(outputPath, sorted);
+}
+
+// keys.txt mismarks a few keys as client-only that are in fact readable from both sides.
+// The file is committed verbatim as upstream provenance, so it cannot be edited; shipping our
+// own generated artifacts is precisely what lets us correct mistakes like this. Fixing it here
+// rather than at runtime means every consumer (hover, completion, future type seeds) is simply
+// right without special-casing. Add a line per key as more are confirmed.
+static string CorrectSide(string name, string parsedSide)
+{
+    // classname is read by GSC just as much as CSC (e.g. spawner and trigger classification).
+    if ( string.Equals(name, "classname", StringComparison.OrdinalIgnoreCase) )
+    {
+        return "both";
+    }
+
+    return parsedSide;
 }
 
 static string EntityKindFromFileName(string fileName)

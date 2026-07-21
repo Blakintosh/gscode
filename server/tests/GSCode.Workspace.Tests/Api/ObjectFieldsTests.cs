@@ -39,12 +39,11 @@ public class ObjectFieldsTests
         Assert.NotNull(origin);
         Assert.Equal("vector", origin!.Type);
 
-        // classname is a client-only key in keys.txt.
+        // keys.txt marks classname client-only; the generator corrects that to "both".
+        // See RadiantKeyVisibilityTests for the full side-filtering behaviour.
         RadiantKey? classname = fields.FindRadiantKey("classname");
-        if ( classname is not null )
-        {
-            Assert.Equal("client", classname.Side);
-        }
+        Assert.NotNull(classname);
+        Assert.Equal("both", classname!.Side);
     }
 
     [Fact]

@@ -20,7 +20,7 @@
   {
     "Name": "classname",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {

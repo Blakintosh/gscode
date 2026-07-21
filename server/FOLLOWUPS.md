@@ -36,11 +36,15 @@ three features, and the grey-out is the most visible missing behavior in the edi
    Measured contribution: 330 of 350 radiant keys are names the object-field data does not
    cover, 245 of them carrying documentation.
 
-   Note for later: the `client`/`both` side filter on radiant keys has **no observable
-   effect in completion**, because every client-only key also exists as an engine object
-   field, and object fields carry no side data to filter on. The filter is still correct in
-   principle and does affect hover. If per-language field accuracy matters more later, the
-   fix is side data on object fields, not on the keys.
+   Note for later: `classname` was the **only** key `keys.txt` marked client-only, and that
+   marking is wrong — GSC reads it constantly. The field-data generator now corrects it to
+   `both` (`CorrectSide` in `tools/field-data/Program.cs`), so the bundled artifact contains
+   **zero** client-only keys and the `client`/`both` side filter is currently dormant. The
+   mechanism is kept because the `client` prefix is still valid `keys.txt` syntax a tools
+   update could reintroduce: it is unit-tested against synthetic data, and
+   `BundledKeys_CarryNoClientOnlyEntries` fails loudly if one reappears so the correction
+   table gets revisited. Engine object fields carry no side data at all — if per-language
+   field accuracy ever matters, that is where the real gap is.
 
 **Wave 3 — diagnostics carries.** All user-confirmed carries from the plan.
 7. prefer-boolean-literal lint (P14 #2).

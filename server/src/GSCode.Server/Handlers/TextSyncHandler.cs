@@ -5,6 +5,7 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
+using GSCode.Workspace.Typing;
 using GSCode.Parser;
 using GSCode.Server.Configuration;
 using GSCode.Server.Mapping;
@@ -223,7 +224,8 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         lints.AddRange(UnusedUsingLint.Analyze(result, store, document.Language, resolver, document.Path));
         lints.AddRange(PreferBooleanLiteralLint.Analyze(result, builtins));
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, document.Path, builtins));
-        lints.AddRange(ReadOnlyWriteLint.Analyze(result, _objectFields));
+        lints.AddRange(ReadOnlyWriteLint.Analyze(
+            result, _objectFields, new FlowTyper(builtins, _objectFields)));
         lints.AddRange(DevBlockCallLint.Analyze(
             result, store, contextId, document.Path, DatabaseQueries.DeclaredNamespaces(result), builtins));
 

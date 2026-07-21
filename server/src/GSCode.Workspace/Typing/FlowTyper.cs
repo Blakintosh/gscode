@@ -19,6 +19,13 @@ public readonly record struct InferredAssignment(TextRange NameRange, ScrType Ty
 public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrType Type);
 
 /// <summary>
+/// One `owner.field = …` write with the owner's inferred type AT THAT POINT. Lets a lint decide
+/// whether a field is read-only without re-deriving types: `SpawnStruct()` gives Struct, `self`
+/// gives Entity, and an owner the flow cannot type gives Unknown.
+/// </summary>
+public readonly record struct FieldWrite(TextRange NameRange, string FieldName, ScrType OwnerType);
+
+/// <summary>
 /// A deliberately-small forward type-flow pass, per function. It types each assignment's
 /// right-hand side from literals, arithmetic, globals, and known builtin return types,
 /// threading a local environment so later assignments can use earlier ones. It only ever
@@ -38,13 +45,23 @@ public sealed class FlowTyper
     /// <summary>Infers a type for the first assignment of each local that resolves to a concrete type.</summary>
     public ImmutableArray<InferredAssignment> InferAssignments(ParseResult result)
     {
+        return InferAssignments(result, out _);
+    }
+
+    /// <summary>
+    /// The same single pass, additionally reporting every `owner.field = …` write with the
+    /// owner's inferred type. One walk feeds both so a lint can never disagree with a hint.
+    /// </summary>
+    public ImmutableArray<InferredAssignment> InferAssignments(ParseResult result, out ImmutableArray<FieldWrite> fieldWrites)
+    {
         ImmutableArray<InferredAssignment>.Builder hints = ImmutableArray.CreateBuilder<InferredAssignment>();
+        ImmutableArray<FieldWrite>.Builder writes = ImmutableArray.CreateBuilder<FieldWrite>();
 
         foreach ( AstNode element in result.Tree.Root.Elements )
         {
             if ( element is FunctionNode function )
             {
-                TypeFunction(function, hints);
+                TypeFunction(function, hints, writes);
             }
             else if ( element is ClassNode classNode )
             {
@@ -52,12 +69,13 @@ public sealed class FlowTyper
                 {
                     if ( member is FunctionNode method )
                     {
-                        TypeFunction(method, hints);
+                        TypeFunction(method, hints, writes);
                     }
                 }
             }
         }
 
+        fieldWrites = writes.ToImmutable();
         return hints.ToImmutable();
     }
 
@@ -112,26 +130,26 @@ public sealed class FlowTyper
         return false;
     }
 
-    private void TypeFunction(FunctionNode function, ImmutableArray<InferredAssignment>.Builder hints)
+    private void TypeFunction(FunctionNode function, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
     {
         Dictionary<string, ScrType> environment = new(StringComparer.OrdinalIgnoreCase);
         HashSet<string> hinted = new(StringComparer.OrdinalIgnoreCase);
-        WalkStatement(function.Body, environment, hinted, hints);
+        WalkStatement(function.Body, environment, hinted, hints, writes);
     }
 
-    private void WalkStatement(AstNode statement, Dictionary<string, ScrType> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints)
+    private void WalkStatement(AstNode statement, Dictionary<string, ScrType> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
     {
         switch ( statement )
         {
             case BlockNode block:
                 foreach ( AstNode child in block.Statements )
                 {
-                    WalkStatement(child, environment, hinted, hints);
+                    WalkStatement(child, environment, hinted, hints, writes);
                 }
 
                 return;
             case ExprStatementNode exprStatement:
-                TypeExpressionForEffects(exprStatement.Expression, environment, hinted, hints);
+                TypeExpressionForEffects(exprStatement.Expression, environment, hinted, hints, writes);
                 return;
             case IfNode ifNode:
             {
@@ -141,36 +159,36 @@ public sealed class FlowTyper
                 Dictionary<string, ScrType> elseEnvironment = Clone(environment);
                 ApplyIsDefinedNarrowing(ifNode.Condition, thenEnvironment, elseEnvironment);
 
-                WalkStatement(ifNode.Then, thenEnvironment, hinted, hints);
+                WalkStatement(ifNode.Then, thenEnvironment, hinted, hints, writes);
                 if ( ifNode.Else is not null )
                 {
-                    WalkStatement(ifNode.Else, elseEnvironment, hinted, hints);
+                    WalkStatement(ifNode.Else, elseEnvironment, hinted, hints, writes);
                 }
 
                 MergeAlternatives(environment, thenEnvironment, elseEnvironment);
                 return;
             }
             case WhileNode whileNode:
-                MergeLoopBody(whileNode.Body, environment, hinted, hints);
+                MergeLoopBody(whileNode.Body, environment, hinted, hints, writes);
                 return;
             case DoWhileNode doWhile:
                 // The body always runs at least once, so its effects apply directly.
-                WalkStatement(doWhile.Body, environment, hinted, hints);
+                WalkStatement(doWhile.Body, environment, hinted, hints, writes);
                 return;
             case ForNode forNode:
                 if ( forNode.Initializer is not null )
                 {
                     // The initializer runs unconditionally, before the loop can be skipped.
-                    WalkStatement(forNode.Initializer, environment, hinted, hints);
+                    WalkStatement(forNode.Initializer, environment, hinted, hints, writes);
                 }
 
-                MergeLoopBody(forNode.Body, environment, hinted, hints);
+                MergeLoopBody(forNode.Body, environment, hinted, hints, writes);
                 return;
             case ForeachNode foreachNode:
-                MergeLoopBody(foreachNode.Body, environment, hinted, hints);
+                MergeLoopBody(foreachNode.Body, environment, hinted, hints, writes);
                 return;
             case SwitchNode switchNode:
-                WalkSwitch(switchNode, environment, hinted, hints);
+                WalkSwitch(switchNode, environment, hinted, hints, writes);
                 return;
             default:
                 return;
@@ -185,10 +203,11 @@ public sealed class FlowTyper
         AstNode body,
         Dictionary<string, ScrType> environment,
         HashSet<string> hinted,
-        ImmutableArray<InferredAssignment>.Builder hints)
+        ImmutableArray<InferredAssignment>.Builder hints,
+        ImmutableArray<FieldWrite>.Builder writes)
     {
         Dictionary<string, ScrType> bodyEnvironment = Clone(environment);
-        WalkStatement(body, bodyEnvironment, hinted, hints);
+        WalkStatement(body, bodyEnvironment, hinted, hints, writes);
 
         // One join suffices: Join only ever moves toward Unknown, so iterating to a fixpoint
         // could never yield a more precise answer than this single pass.
@@ -203,7 +222,8 @@ public sealed class FlowTyper
         SwitchNode switchNode,
         Dictionary<string, ScrType> environment,
         HashSet<string> hinted,
-        ImmutableArray<InferredAssignment>.Builder hints)
+        ImmutableArray<InferredAssignment>.Builder hints,
+        ImmutableArray<FieldWrite>.Builder writes)
     {
         List<Dictionary<string, ScrType>> paths = new();
 
@@ -212,7 +232,7 @@ public sealed class FlowTyper
             Dictionary<string, ScrType> caseEnvironment = Clone(environment);
             foreach ( AstNode child in group.Statements )
             {
-                WalkStatement(child, caseEnvironment, hinted, hints);
+                WalkStatement(child, caseEnvironment, hinted, hints, writes);
             }
 
             paths.Add(caseEnvironment);
@@ -380,15 +400,38 @@ public sealed class FlowTyper
         }
     }
 
-    private void TypeExpressionForEffects(ExprNode expression, Dictionary<string, ScrType> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints)
+    private void TypeExpressionForEffects(ExprNode expression, Dictionary<string, ScrType> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
     {
+        // ++ and -- read and write in one step, so they are field writes too.
+        MemberNode? incremented = IncrementedMember(expression);
+        if ( incremented is not null )
+        {
+            writes.Add(new FieldWrite(
+                incremented.NameToken.RootRange,
+                incremented.NameToken.Text,
+                TypeOf(incremented.Object, environment)));
+            return;
+        }
+
         if ( expression is not AssignmentNode assignment )
         {
             return;
         }
 
+        // `owner.field = …` is not a local, but the owner's type is exactly what a read-only
+        // lint needs, and this is the one place it is known. Compound writes count too: `+=` on
+        // a read-only field is just as wrong as `=`.
+        if ( assignment.Target is MemberNode member )
+        {
+            writes.Add(new FieldWrite(
+                member.NameToken.RootRange,
+                member.NameToken.Text,
+                TypeOf(member.Object, environment)));
+            return;
+        }
+
         // Only plain `local = value` (the '=' operator) yields a type; compound ops keep
-        // the existing type and field/index targets aren't locals.
+        // the existing type.
         if ( assignment.Operator != TokenKind.Assign || assignment.Target is not IdentifierNode target )
         {
             return;
@@ -410,6 +453,27 @@ public sealed class FlowTyper
         {
             hints.Add(new InferredAssignment(target.Token.RootRange, type, name));
         }
+    }
+
+    /// <summary>The member a ++/-- applies to, or null when the expression is not one.</summary>
+    private static MemberNode? IncrementedMember(ExprNode expression)
+    {
+        if ( expression is PostfixNode postfix && IsIncrementOrDecrement(postfix.Operator) )
+        {
+            return postfix.Operand as MemberNode;
+        }
+
+        if ( expression is PrefixNode prefix && IsIncrementOrDecrement(prefix.Operator) )
+        {
+            return prefix.Operand as MemberNode;
+        }
+
+        return null;
+    }
+
+    private static bool IsIncrementOrDecrement(TokenKind kind)
+    {
+        return kind == TokenKind.PlusPlus || kind == TokenKind.MinusMinus;
     }
 
     private ScrType TypeOf(ExprNode expression, Dictionary<string, ScrType> environment)

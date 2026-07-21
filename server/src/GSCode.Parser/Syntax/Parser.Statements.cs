@@ -89,6 +89,14 @@ public sealed partial class Parser
             }
             case TokenKind.DevBlockOpen:
                 return ParseDevBlockStatements();
+            case TokenKind.DevBlockClose:
+            {
+                // Same tolerance as at declaration level: a `#/` with nothing open is skipped
+                // rather than reported, since the engine accepts it and the surrounding
+                // statements are unaffected either way.
+                PToken stray = Advance();
+                return new EmptyStatementNode(stray.RootRange);
+            }
             default:
                 return ParseExpressionStatement();
         }

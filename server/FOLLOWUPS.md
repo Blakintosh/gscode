@@ -60,7 +60,7 @@ mod-project CI. Cheap to build because the layering already isolates OmniSharp i
 
 ## Decided — not doing
 
-### Corpus grammar gaps (2 of the 3 found)
+### Corpus grammar gaps (1 of the 3 found)
 
 The corpus run over real `share\raw` found 4 failing files out of 980. One — `&"..."` parsing
 as address-of instead of an istring — was fixed, because it also broke the spaced form
@@ -72,9 +72,4 @@ Diagnosis kept only because it was already done:
   is object-like, but the call site writes `GET_GIB_BUNDLES()`, so expansion yields a call
   applied to a call result. Would be fixed by letting `ParsePostfixChain` accept `(` alongside
   `[` and `.`.
-- **`vehicle_shared.gsc(3932)`** — an apparently unmatched `#/`. The dev-block markers look
-  genuinely unbalanced in Treyarch's file, meaning our diagnostic may simply be correct. **Do
-  not loosen the parser to accept unbalanced markers** without first confirming which side is
-  wrong; that would trade a correct error for silent mis-parsing.
-
-The corpus test prints both on every local run, so neither can be quietly forgotten.
+The corpus test prints it on every local run, so it cannot be quietly forgotten.

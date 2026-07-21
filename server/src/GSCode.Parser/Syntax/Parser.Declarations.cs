@@ -54,6 +54,14 @@ public sealed partial class Parser
                 case TokenKind.Semicolon:
                     Advance();
                     continue;
+                case TokenKind.DevBlockClose:
+                    // A `#/` with nothing open. Stock scripts ship with one — vehicle_shared.gsc
+                    // has 13 closes to 12 opens — and the engine compiles them, so erroring here
+                    // flags code the user cannot act on. Skipping the marker is deliberately
+                    // narrower than treating it as a delimiter: every declaration around it still
+                    // parses exactly as before, so nothing changes about which code is dev-only.
+                    Advance();
+                    continue;
                 default:
                 {
                     AddError(GscDiagnosticCode.ExpectedDeclaration, Current.RootRange, DescribeCurrent());

@@ -153,11 +153,17 @@ three features, and the grey-out is the most visible missing behavior in the edi
     driven by the API's parameter lists.
 
 **Wave 5 — workspace lifecycle.**
-13. Untitled documents (P14 #13) — **verify first**: `PathUtil.NormalizeAbsolute` runs
-    `Path.GetFullPath` on the URI's file-system path, which fabricates a CWD-relative path
-    rather than throwing, so this may already work by accident. Confirm empirically before
-    building anything.
-14. `workspace/didChangeWorkspaceFolders` (P14 #11).
+13. ✔ Untitled documents (P14 #13) — **verified, no code needed.** Probed the real behaviour:
+    `GetFileSystemPath()` on `untitled:Untitled-1` returns the bare buffer name, and
+    `Path.GetFullPath` resolves it against the server's working directory rather than
+    throwing, producing a stable synthetic key. `PathResolver.GetContext` then falls through
+    to `ForWorkspace(containingDirectory)`, and open documents never reach the cache because
+    only `WorkspaceIndexer` commits records. That is exactly what hardening item 11 asked
+    for — Workspace context, keyed off the URI, never persisted — satisfied by construction.
+    Pinned by `Handlers/UntitledDocumentTests` so it cannot regress silently. A "proper" fix
+    would have meant threading URI scheme through 13 call sites plus `DocumentStore` and the
+    resolver, for no behavioural gain.
+14. ✔ `workspace/didChangeWorkspaceFolders` (P14 #11) — `Handlers/WorkspaceFoldersHandler.cs`.
 15. `workspace/willRenameFiles` (P14 #12).
 
 **Wave 6 — P13 unblocked items.**

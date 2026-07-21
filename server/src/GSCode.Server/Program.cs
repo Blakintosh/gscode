@@ -109,6 +109,7 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<SelectionRangeHandler>()
         .AddHandler<WorkspaceSymbolHandler>()
         .AddHandler<WatchedFilesHandler>()
+        .AddHandler<WorkspaceFoldersHandler>()
         .AddHandler<HoverHandler>()
         .AddHandler<DefinitionHandler>()
         .AddHandler<ReferencesHandler>()
@@ -149,13 +150,9 @@ LanguageServer server = await LanguageServer.From(options =>
                 workspaceFolders.Add(request.RootUri.GetFileSystemPath());
             }
 
-            RootConfig rootConfig = RootConfig.Create(
-                settings.RawEnabled,
-                settings.RawPathOverride.Length == 0 ? null : settings.RawPathOverride,
-                settings.ModsPathOverride.Length == 0 ? null : settings.ModsPathOverride,
-                Environment.GetEnvironmentVariable("TA_TOOLS_PATH"),
-                workspaceFolders,
-                fileSystem);
+            // Same builder the workspace-folder handler uses, so a rebuild after a folder
+            // change can never drift from what initialize constructed.
+            RootConfig rootConfig = WorkspaceFoldersHandler.BuildConfig(settings, workspaceFolders, fileSystem);
 
             resolverHolder.Current = new PathResolver(rootConfig, fileSystem);
 

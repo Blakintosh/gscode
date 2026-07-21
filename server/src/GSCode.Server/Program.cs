@@ -173,6 +173,12 @@ LanguageServer server = await LanguageServer.From(options =>
         })
         .OnInitialized((languageServer, request, response, cancellationToken) =>
         {
+            // Declared explicitly rather than left to the protocol default. Every range this
+            // server produces comes from SourceText, which indexes UTF-16 code units, so a
+            // client negotiating UTF-8 offsets would silently mis-place ranges in any file
+            // containing astral characters. UTF-16 is the encoding every LSP client supports.
+            response.Capabilities.PositionEncoding = PositionEncodingKind.UTF16;
+
             Log.Information("GSCode v2 server initialized");
             return Task.CompletedTask;
         })
@@ -238,6 +244,14 @@ LanguageServer server = await LanguageServer.From(options =>
                             outcome.Total,
                             stopwatch.Elapsed.TotalSeconds,
                             outcome.Restored);
+                        if ( outcome.SkippedOversized > 0 )
+                        {
+                            Log.Warning(
+                                "{Count} file(s) skipped: larger than the {Limit} MB analysis limit",
+                                outcome.SkippedOversized,
+                                WorkspaceIndexer.MaxAnalysedCharacters / (1024 * 1024));
+                        }
+
                         LogIndexBreakdown(languageServer.Services.GetRequiredService<ScriptDatabase>());
 
                         // Sampled before the monitor starts, so the number reflects the state

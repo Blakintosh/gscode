@@ -29,7 +29,8 @@ public enum IndexingMode
 /// <param name="Total">Files processed.</param>
 /// <param name="Restored">Files served from the cache without re-analysis.</param>
 /// <param name="Analysed">Files taken through the full lex/preprocess/parse/extract pipeline.</param>
-public readonly record struct IndexOutcome(int Total, int Restored, int Analysed);
+/// <param name="SkippedOversized">Files past the size limit, left unanalysed.</param>
+public readonly record struct IndexOutcome(int Total, int Restored, int Analysed, int SkippedOversized = 0);
 
 /// <summary>Receives indexing lifecycle events (the server maps these to notifications).</summary>
 public interface IIndexProgressListener
@@ -71,6 +72,14 @@ public sealed class WorkspaceIndexer
     private readonly Func<PathResolver> _resolverProvider;
     private readonly IFileSystem _fileSystem;
     private readonly NameTable _names;
+
+    /// <summary>
+    /// Largest file the pipeline will analyse. Generous next to real scripts (the biggest stock
+    /// GSC is well under a megabyte), so it only ever catches genuinely pathological input.
+    /// </summary>
+    public const int MaxAnalysedCharacters = 8 * 1024 * 1024;
+
+    private int _skippedOversized;
 
     // path → lazily lexed insert target, shared by every file that inserts it.
     private readonly ConcurrentDictionary<string, Lazy<InsertedFile?>> _gshCache = new(StringComparer.Ordinal);
@@ -115,6 +124,7 @@ public sealed class WorkspaceIndexer
         progress.Started(targets.Count);
 
         int completed = 0;
+        _skippedOversized = 0;
         ParallelOptions options = new()
         {
             MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
@@ -175,7 +185,7 @@ public sealed class WorkspaceIndexer
         // Restored files that phase two re-parsed were analysed after all, so they count as
         // analysed rather than restored — the split is what tells a cold run from a warm one.
         int restored = restoredRecords.Count - reparsedAfterHeaderChange;
-        return new IndexOutcome(completed, restored, completed - restored);
+        return new IndexOutcome(completed, restored, completed - restored, _skippedOversized);
     }
 
     /// <summary>Outcome of processing one file: whether it came from cache, and the resulting record.</summary>
@@ -202,6 +212,16 @@ public sealed class WorkspaceIndexer
         }
         catch ( UnauthorizedAccessException )
         {
+            return new FileOutcome(Restored: false, Record: null);
+        }
+
+        if ( content.Length > MaxAnalysedCharacters )
+        {
+            // Reading is cheap; lex/parse/extract on a file this size is not. Skipping keeps a
+            // single pathological file from dominating a cold index. Real scripts are orders of
+            // magnitude smaller, so this should never fire in practice. Counted rather than
+            // logged here: this layer has no logger by design, so the server reports it.
+            Interlocked.Increment(ref _skippedOversized);
             return new FileOutcome(Restored: false, Record: null);
         }
 

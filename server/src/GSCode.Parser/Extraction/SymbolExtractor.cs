@@ -52,6 +52,7 @@ public sealed class SymbolExtractor
     {
         SymbolExtractor extractor = new(rootFilePath, names, text, rawTokens);
         extractor.Run(tree, preprocessed);
+        extractor.ReportDuplicateFunctions();
 
         return new ExtractionResult(
             extractor._namespaces.ToImmutable(),
@@ -677,5 +678,37 @@ public sealed class SymbolExtractor
     private void AddDiagnostic(GscDiagnosticCode code, TextRange range, params object[] arguments)
     {
         _diagnostics.Add(Diagnostic.Create(range, DiagnosticSeverity.Error, code, arguments));
+    }
+
+    /// <summary>
+    /// Reports a redeclaration of the same namespace::function within one file, carrying a
+    /// related location that points back at the first declaration. Only file-local functions
+    /// take part: one spliced in by #insert keeps its GSH-local name coordinates, which would
+    /// put the marker in the wrong place in the including file.
+    /// </summary>
+    private void ReportDuplicateFunctions()
+    {
+        Dictionary<string, FunctionSymbol> firstByKey = new(StringComparer.Ordinal);
+
+        foreach ( FunctionSymbol function in _functions )
+        {
+            if ( function.SourceFile.Length > 0 )
+            {
+                continue;
+            }
+
+            string key = function.Namespace + "::" + function.KeyName;
+            if ( !firstByKey.TryGetValue(key, out FunctionSymbol? first) )
+            {
+                firstByKey[key] = function;
+                continue;
+            }
+
+            DiagnosticRelation relation = new(_rootFilePath, first.NameRange, "First defined here.");
+            Diagnostic duplicate = Diagnostic.Create(
+                function.NameRange, DiagnosticSeverity.Error, GscDiagnosticCode.DuplicateFunction, function.Name);
+
+            _diagnostics.Add(duplicate with { RelatedInformation = [relation] });
+        }
     }
 }

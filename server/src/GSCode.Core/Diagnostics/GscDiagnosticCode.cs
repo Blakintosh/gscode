@@ -49,6 +49,7 @@ public enum GscDiagnosticCode
     ConstructorHasParameters = 4002,
     DestructorHasParameters = 4003,
     NonValueDefaultParameter = 4004,
+    DuplicateFunction = 4005,
 
     // Cross-file / workspace semantics (5xxx)
     NamespaceNotImported = 5000,

@@ -188,6 +188,44 @@ public class ColdRestoreTests : IDisposable
         Assert.Single(DatabaseQueries.LookupFunctions(db2.Gsc, "raw", "", null, "alpha"));
     }
 
+    /// <summary>
+    /// The restored/analysed split is what labels a run cold or warm in the memory report, and
+    /// the two have very different allocation profiles, so the counts have to be truthful.
+    /// </summary>
+    [Fact]
+    public async Task IndexOutcome_ReportsTheRestoredVersusAnalysedSplit()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\a.gsc", "function alpha()\n{\n}\n")
+            .AddFile(@$"{Raw}\scripts\b.gsc", "function beta()\n{\n}\n");
+
+        IndexOutcome cold;
+        (ScriptDatabase _, WorkspaceIndexer indexer1, _) = Build(files);
+        await using ( SqliteCache cache1 = SqliteCache.Open(_dbPath, "id") )
+        {
+            indexer1.UseCache(cache1, cache1.LoadAll());
+            cold = await indexer1.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+        }
+
+        // Nothing cached yet, so every file goes through the full pipeline.
+        Assert.Equal(2, cold.Total);
+        Assert.Equal(0, cold.Restored);
+        Assert.Equal(2, cold.Analysed);
+
+        IndexOutcome warm;
+        (ScriptDatabase _, WorkspaceIndexer indexer2, _) = Build(files);
+        await using ( SqliteCache cache2 = SqliteCache.Open(_dbPath, "id") )
+        {
+            indexer2.UseCache(cache2, cache2.LoadAll());
+            warm = await indexer2.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+        }
+
+        // Unchanged files come straight from the cache, skipping analysis entirely.
+        Assert.Equal(2, warm.Total);
+        Assert.Equal(2, warm.Restored);
+        Assert.Equal(0, warm.Analysed);
+    }
+
     [Fact]
     public async Task ChangedGshBetweenStarts_ReindexesDependents()
     {

@@ -18,10 +18,51 @@ table below is filled from a run on the local BO3-tools machine, since the corpu
 At `gscode.serverLogLevel = info`, the "GSCode Server" output channel logs the two headline
 numbers directly:
 
-- `Workspace indexing complete: N files in X.Xs` — the cold/warm index time (also mirrored to the
-  client "GSCode" channel and the status-bar tooltip).
+- `Workspace indexing complete: N files in X.Xs (M from cache)` — the cold/warm index time (also
+  mirrored to the client "GSCode" channel and the status-bar tooltip). The cache count makes a
+  run self-identifying as cold or warm.
+- `Memory after indexing:` — a one-shot breakdown at the indexing → serving transition (below).
 - `Server memory: N MB` — the working set, sampled every 2 s but logged only when it moves by
   >= 1 MB, and only AFTER indexing completes (so it never spams while memory is climbing).
+
+### Reading the memory breakdown
+
+```
+Memory after indexing:
+    files              1,105  (0 restored · 1,105 analysed)
+    working set        400.0 MB   (what the OS reports)
+    managed live       180.0 MB   (retained objects)
+    heap size          350.0 MB
+    committed          390.0 MB
+    fragmented          40.0 MB   (mostly large-object heap)
+    collections     gen0 120 · gen1 40 · gen2 6
+```
+
+**The number that matters is the gap between "managed live" and "working set."**
+
+Cold indexing allocates heavily per file — source text, token arrays, the PToken stream, the
+AST, extraction builders — at `ProcessorCount - 1` way parallelism, and all of it is garbage
+once the `ScriptRecord` is built. A warm start only deserializes records from SQLite, so it
+never allocates at that scale.
+
+The open question this exists to settle (observed 2026-07-20: ~400 MB cold vs ~200 MB warm on
+1,105 files):
+
+- If **managed live is similar** across a cold and a warm start while the working set differs,
+  the extra footprint is grown, uncompacted heap rather than retained data. A high
+  `fragmented` figure points at the large-object heap specifically, which is not compacted by
+  default. The fix is a one-time compacting collect at this transition
+  (`GCLargeObjectHeapCompactionMode.CompactOnce` plus a blocking gen2 collect) — v1 reached
+  the same conclusion in `cfccd26`, "Force aggressive GC after workspace indexing completes".
+- If **managed live is genuinely higher** after a cold start, something in the analysis path is
+  being retained that should not be, and the answer is a leak hunt, not a GC call.
+
+Do not switch to Server GC to chase this: per-core heaps would make the footprint worse, and
+Workstation GC is the right choice for a language server.
+
+Worth checking while measuring: whether the cache-restore path interns strings through
+`NameTable`. If it does not, a warm start looks leaner but carries duplicate strings that
+interning exists to eliminate — making the warm number flattering rather than genuinely better.
 
 ## Deeper timing (optional instrumentation)
 

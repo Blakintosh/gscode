@@ -22,6 +22,15 @@ public enum IndexingMode
     Full,
 }
 
+/// <summary>
+/// What an indexing pass did. The restored/analysed split is what distinguishes a cold run
+/// from a warm one, and the two have very different allocation profiles.
+/// </summary>
+/// <param name="Total">Files processed.</param>
+/// <param name="Restored">Files served from the cache without re-analysis.</param>
+/// <param name="Analysed">Files taken through the full lex/preprocess/parse/extract pipeline.</param>
+public readonly record struct IndexOutcome(int Total, int Restored, int Analysed);
+
 /// <summary>Receives indexing lifecycle events (the server maps these to notifications).</summary>
 public interface IIndexProgressListener
 {
@@ -92,11 +101,11 @@ public sealed class WorkspaceIndexer
     }
 
     /// <summary>Indexes everything the resolver can reach. Returns the number of files indexed.</summary>
-    public async Task<int> IndexAsync(IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken)
+    public async Task<IndexOutcome> IndexAsync(IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken)
     {
         if ( mode == IndexingMode.Off )
         {
-            return 0;
+            return new IndexOutcome(0, 0, 0);
         }
 
         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -116,6 +125,7 @@ public sealed class WorkspaceIndexer
         // restored files that #insert one of these must be re-parsed in phase two.
         ConcurrentDictionary<string, byte> changedHeaders = new(StringComparer.Ordinal);
         ConcurrentBag<ScriptRecord> restoredRecords = [];
+        int reparsedAfterHeaderChange = 0;
 
         await Parallel.ForEachAsync(targets, options, (path, token) =>
         {
@@ -155,12 +165,17 @@ public sealed class WorkspaceIndexer
             foreach ( string path in stale )
             {
                 ProcessFile(path, allowRestore: false);
+                reparsedAfterHeaderChange++;
             }
         }
 
         PerfTracker.End();
         progress.Completed(completed, targets.Count, stopwatch.Elapsed);
-        return completed;
+
+        // Restored files that phase two re-parsed were analysed after all, so they count as
+        // analysed rather than restored — the split is what tells a cold run from a warm one.
+        int restored = restoredRecords.Count - reparsedAfterHeaderChange;
+        return new IndexOutcome(completed, restored, completed - restored);
     }
 
     /// <summary>Outcome of processing one file: whether it came from cache, and the resulting record.</summary>

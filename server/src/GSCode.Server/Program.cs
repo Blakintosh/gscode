@@ -233,10 +233,18 @@ LanguageServer server = await LanguageServer.From(options =>
                         // notifications on a workspace small enough to index in a few ms.
                         await Task.Delay(500, CancellationToken.None);
                         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                        int indexed = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
+                        IndexOutcome outcome = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
                         stopwatch.Stop();
-                        Log.Information("Workspace indexing complete: {Count} files in {Seconds:F1}s", indexed, stopwatch.Elapsed.TotalSeconds);
+                        Log.Information(
+                            "Workspace indexing complete: {Count} files in {Seconds:F1}s ({Restored:N0} from cache)",
+                            outcome.Total,
+                            stopwatch.Elapsed.TotalSeconds,
+                            outcome.Restored);
                         LogIndexBreakdown(languageServer.Services.GetRequiredService<ScriptDatabase>());
+
+                        // Sampled before the monitor starts, so the number reflects the state
+                        // indexing left behind rather than anything steady-state traffic did.
+                        LogMemoryReport("indexing", outcome);
 
                         // Start reporting memory only now — during indexing it climbs steadily and
                         // would spam. The monitor logs only on >= 1 MB changes from here on.
@@ -365,6 +373,37 @@ static string FormatLanguageLine(string label, int raw, int mod, int workspace)
 
     string split = parts.Count > 0 ? "  (" + string.Join(" · ", parts) + ")" : "";
     return $"    {label}  {total,6:N0} files{split}";
+}
+
+// A one-shot memory breakdown, logged at the indexing -> serving transition.
+//
+// The point is the gap between the managed heap and the working set. Cold indexing allocates
+// heavily per file (source text, token arrays, AST, extraction builders) at
+// ProcessorCount - 1 way parallelism, all of it garbage once the record is built; a warm
+// restore just deserializes records. If the LIVE numbers match across a cold and a warm start
+// while the working set differs, the extra footprint is grown, uncompacted heap rather than
+// retained data — and a one-time compacting collect here is the fix.
+static void LogMemoryReport(string phase, IndexOutcome outcome)
+{
+    GCMemoryInfo info = GC.GetGCMemoryInfo();
+
+    double workingSet = Environment.WorkingSet / (1024.0 * 1024.0);
+    double managedLive = GC.GetTotalMemory(forceFullCollection: false) / (1024.0 * 1024.0);
+    double heapSize = info.HeapSizeBytes / (1024.0 * 1024.0);
+    double committed = info.TotalCommittedBytes / (1024.0 * 1024.0);
+    double fragmented = info.FragmentedBytes / (1024.0 * 1024.0);
+
+    System.Text.StringBuilder report = new();
+    report.AppendLine($"Memory after {phase}:");
+    report.AppendLine($"    files           {outcome.Total,8:N0}  ({outcome.Restored:N0} restored · {outcome.Analysed:N0} analysed)");
+    report.AppendLine($"    working set     {workingSet,8:F1} MB   (what the OS reports)");
+    report.AppendLine($"    managed live    {managedLive,8:F1} MB   (retained objects)");
+    report.AppendLine($"    heap size       {heapSize,8:F1} MB");
+    report.AppendLine($"    committed       {committed,8:F1} MB");
+    report.AppendLine($"    fragmented      {fragmented,8:F1} MB   (mostly large-object heap)");
+    report.Append($"    collections     gen0 {GC.CollectionCount(0):N0} · gen1 {GC.CollectionCount(1):N0} · gen2 {GC.CollectionCount(2):N0}");
+
+    Log.Information("{MemoryReport}", report.ToString());
 }
 
 // Reports the server's working set after indexing completes, but only when it moves by at

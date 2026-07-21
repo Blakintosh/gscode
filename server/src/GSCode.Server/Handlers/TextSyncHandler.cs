@@ -3,6 +3,7 @@ using GSCode.Core.Symbols;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
+using GSCode.Workspace.Resolution;
 using GSCode.Parser;
 using GSCode.Server.Configuration;
 using GSCode.Server.Mapping;
@@ -150,7 +151,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _diagnostics.Publish(uri, document.Version, WithWorkspaceLints(document, result));
     }
 
-    /// <summary>Merges the parse diagnostics with the cross-file lints (namespace-usage).</summary>
+    /// <summary>Merges the parse diagnostics with the cross-file lints (namespace-usage, unused #using).</summary>
     private ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> WithWorkspaceLints(OpenDocument document, ParseResult result)
     {
         // GSH fragments have no language store of their own and no #using semantics to lint.
@@ -160,14 +161,18 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         }
 
         LanguageStore store = _database.StoreFor(document.Language);
-        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> lints = NamespaceUsageLint.Analyze(
-            result, store, document.Language, _resolver.Current, document.Path);
+        PathResolver resolver = _resolver.Current;
 
-        if ( lints.Length == 0 )
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> namespaceLints = NamespaceUsageLint.Analyze(
+            result, store, document.Language, resolver, document.Path);
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> unusedUsings = UnusedUsingLint.Analyze(
+            result, store, document.Language, resolver, document.Path);
+
+        if ( namespaceLints.Length == 0 && unusedUsings.Length == 0 )
         {
             return result.AllDiagnostics;
         }
 
-        return result.AllDiagnostics.AddRange(lints);
+        return result.AllDiagnostics.AddRange(namespaceLints).AddRange(unusedUsings);
     }
 }

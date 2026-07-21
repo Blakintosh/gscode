@@ -52,4 +52,5 @@ public enum GscDiagnosticCode
 
     // Cross-file / workspace semantics (5xxx)
     NamespaceNotImported = 5000,
+    UnusedUsing = 5001,
 }

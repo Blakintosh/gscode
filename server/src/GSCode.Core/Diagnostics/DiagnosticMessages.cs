@@ -56,6 +56,7 @@ public static class DiagnosticMessages
 
         // Cross-file / workspace semantics
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
+        [GscDiagnosticCode.UnusedUsing] = "'{0}' is imported but nothing from it is used.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

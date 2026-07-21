@@ -19,5 +19,7 @@ public static class GscKeywords
     [
         "function", "class", "var", "autoexec", "private", "constructor", "destructor",
         "#using", "#insert", "#namespace", "#precache", "#define", "#using_animtree",
+        // Documented in KeywordDocs and hoverable, but previously never offered.
+        "#animtree", "#if", "#elif", "#else", "#endif",
     ];
 }

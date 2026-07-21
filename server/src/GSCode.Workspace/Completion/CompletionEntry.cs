@@ -33,9 +33,15 @@ public enum CompletionKind
 /// One completion suggestion, LSP-free. InsertText defaults to Label when empty; snippet
 /// insertion is signalled by CompletionKind.Snippet with placeholders in InsertText.
 /// </summary>
+/// <param name="FilterText">
+/// What the editor matches the typed prefix against, when that differs from the label. Needed
+/// for directives: the language's word pattern excludes '#', so after typing "#p" the editor's
+/// current word is "p" and a "#precache" label would be filtered out.
+/// </param>
 public sealed record CompletionEntry(
     string Label,
     CompletionKind Kind,
     string Detail = "",
     string InsertText = "",
-    string Documentation = "");
+    string Documentation = "",
+    string FilterText = "");

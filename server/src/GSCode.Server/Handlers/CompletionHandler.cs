@@ -82,6 +82,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
                 ? new StringOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = entry.Documentation })
                 : null,
             InsertText = insertText,
+            FilterText = entry.FilterText.Length > 0 ? entry.FilterText : null,
             InsertTextFormat = isSnippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
         };
     }

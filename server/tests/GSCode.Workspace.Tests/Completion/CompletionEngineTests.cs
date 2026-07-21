@@ -173,6 +173,97 @@ public class CompletionEngineTests
         Assert.False(HasLabel(entries, "if"));
     }
 
+    // --- Directives ---
+    //
+    // The client's word pattern excludes '#', so once it is typed the editor's current word is
+    // only the letters after it. Labels therefore keep the '#' (for readability) while filtering
+    // and insertion drop it — otherwise "#p" filters out "#precache" and leaves "private".
+
+    private static CompletionEntry Entry(ImmutableArray<CompletionEntry> entries, string label)
+    {
+        return Assert.Single(entries, e => e.Label == label);
+    }
+
+    /// <summary>Completes at the end of `line`, placed on its own line above a function.</summary>
+    private static ImmutableArray<CompletionEntry> CompleteAfter(string line)
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", line + "\n\nfunction run()\n{\n}\n");
+
+        return engine.Complete(result, "raw", new Position(0, line.Length));
+    }
+
+    [Fact]
+    public void PartialDirective_OffersDirectivesFilteredWithoutTheHash()
+    {
+        // The reported bug: "#p" showed `private` and not `#precache`.
+        CompletionEntry precache = Entry(CompleteAfter("#p"), "#precache");
+
+        Assert.Equal("precache", precache.FilterText);
+        Assert.Equal("precache", precache.InsertText);
+    }
+
+    [Fact]
+    public void PartialDirective_DoesNotOfferPlainKeywords()
+    {
+        // A '#' has been typed, so `private` cannot be what is meant.
+        ImmutableArray<CompletionEntry> entries = CompleteAfter("#p");
+
+        Assert.False(HasLabel(entries, "private"));
+        Assert.False(HasLabel(entries, "function"));
+    }
+
+    [Fact]
+    public void BareHash_OffersEveryDirective()
+    {
+        ImmutableArray<CompletionEntry> entries = CompleteAfter("#");
+
+        Assert.All(entries, e => Assert.StartsWith("#", e.Label));
+        Assert.True(HasLabel(entries, "#using"));
+        Assert.True(HasLabel(entries, "#namespace"));
+    }
+
+    [Theory]
+    [InlineData("#animtree")]
+    [InlineData("#if")]
+    [InlineData("#elif")]
+    [InlineData("#else")]
+    [InlineData("#endif")]
+    public void PreviouslyUnofferedDirectives_AreNowOffered(string directive)
+    {
+        // These five are documented in KeywordDocs and hover on them, but were absent from
+        // TopLevelKeywords, so they could never be completed.
+        Assert.True(HasLabel(CompleteAfter("#"), directive));
+    }
+
+    [Fact]
+    public void TopLevelWithoutAHash_StillOffersPlainKeywordsWithTheirHashesIntact()
+    {
+        // The directive path must not leak into ordinary top-level completion: entries there are
+        // inserted verbatim, so "#using" must still carry its '#'.
+        ImmutableArray<CompletionEntry> entries = CompleteAfter("");
+
+        Assert.True(HasLabel(entries, "function"));
+        Assert.Equal("", Entry(entries, "#using").FilterText);
+    }
+
+    [Fact]
+    public void HashInsideAStringLiteral_IsNotADirectiveContext()
+    {
+        // Literal completion owns this position; a '#' inside quotes is just a character.
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    x = \"#p\";\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 12));
+
+        Assert.False(HasLabel(entries, "#precache"));
+    }
+
     [Fact]
     public void MemberAccess_OffersFieldsAndSize()
     {

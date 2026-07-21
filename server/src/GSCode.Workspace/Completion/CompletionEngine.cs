@@ -88,7 +88,7 @@ public sealed class CompletionEngine
             return FieldCompletions(result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope);
         }
 
-        return StatementScopeCompletions(result, contextId, position);
+        return StatementScopeCompletions(result, contextId, position, offset);
     }
 
     // --- Contexts ---
@@ -216,6 +216,57 @@ public sealed class CompletionEngine
         foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
         {
             entries.Add(FunctionEntry(function));
+        }
+
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// True when a '#' sits immediately before the word being typed, i.e. the cursor is part-way
+    /// through a directive.
+    ///
+    /// This reads the raw text rather than the token stream on purpose. A half-typed "#p" is not
+    /// a known directive, so the lexer emits it as a single Error token — and a bare "#" with
+    /// nothing after it emits Hash. Walking the characters back over the partial word handles
+    /// both without depending on which of those two shapes the lexer chose.
+    /// </summary>
+    private static bool IsAfterDirectiveHash(SourceText text, int offset)
+    {
+        int cursor = Math.Min(offset, text.Length);
+        while ( cursor > 0 && IsWordChar(text.Text[cursor - 1]) )
+        {
+            cursor--;
+        }
+
+        return cursor > 0 && text.Text[cursor - 1] == '#';
+    }
+
+    private static bool IsWordChar(char c)
+    {
+        return char.IsLetterOrDigit(c) || c == '_';
+    }
+
+    /// <summary>
+    /// The directives, offered with the leading '#' stripped from what the editor filters and
+    /// inserts. The client's word pattern excludes '#', so after typing "#p" the current word is
+    /// "p": a "#precache" label would be filtered out while "private" survived — the reported
+    /// bug. Filtering on "precache" matches, and inserting "precache" onto the '#' already in the
+    /// buffer avoids producing "##precache". The label keeps its '#' so the list stays readable.
+    /// </summary>
+    private static ImmutableArray<CompletionEntry> DirectiveCompletions()
+    {
+        ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+
+        foreach ( string keyword in GscKeywords.TopLevelKeywords )
+        {
+            if ( !keyword.StartsWith('#') )
+            {
+                continue;
+            }
+
+            string withoutHash = keyword[1..];
+            entries.Add(new CompletionEntry(
+                keyword, CompletionKind.Keyword, "directive", withoutHash, KeywordDocs.Find(keyword) ?? "", withoutHash));
         }
 
         return entries.ToImmutable();
@@ -355,9 +406,17 @@ public sealed class CompletionEngine
         return type;
     }
 
-    private ImmutableArray<CompletionEntry> StatementScopeCompletions(ParseResult result, string contextId, Position position)
+    private ImmutableArray<CompletionEntry> StatementScopeCompletions(
+        ParseResult result, string contextId, Position position, int offset)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+
+        // A '#' has been typed, so nothing but a directive can be meant. Returning early also
+        // keeps functions and variables out of the list.
+        if ( IsAfterDirectiveHash(result.Text, offset) )
+        {
+            return DirectiveCompletions();
+        }
 
         bool insideFunction = IsInsideFunctionBody(result, position);
 

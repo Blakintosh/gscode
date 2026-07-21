@@ -10,6 +10,63 @@ Legend: **Missing** = no implementation at all · **Partial** = wired but incomp
 
 ---
 
+## Known bugs (reported in use, 2026-07-20)
+
+Both are macro-navigation defects in shipped P7 behaviour, not plan gaps. **Recommended
+ahead of the remaining P14 waves**: they are daily-use paths (`IS_TRUE`, `REGISTER_SYSTEM`,
+`NEW_STATE` are everywhere in BO3 script), while waves 5–7 are lifecycle and cleanup. Nothing
+sequences between them either way.
+
+### B1 — Go-to-definition fails for a macro defined in another file
+
+`IS_TRUE` in `shared.gsh`, used from `array_shared.gsc`: the call site resolves as a `Macro`
+reference, but the definition lookup returns nothing.
+
+**Cause (traced):** the macro's `Definition` reference IS emitted — when `shared.gsh` is
+analysed standalone its macros have `SourceFile == null`, so `SymbolExtractor` records one.
+But `.gsh` records route to `ScriptDatabase._gshRecords`, while `DefinitionHandler` resolves
+via `DatabaseQueries.FindReferences(target.Store, …)` with `target.Store` being `Gsc`/`Csc`.
+**The GSH store is never consulted.** Find-all-references on a macro is broken identically,
+same cause. Hover is likely unaffected: `HoverHandler.FindMacro` reads
+`target.Result.Preprocessed.Macros.All`, a different path that includes inserted macros —
+confirm when fixing.
+
+The plan already specified this seam and it was never implemented — see the language-guard
+invariant: *"standalone GSH queries — a `.gsh` serves both languages, so macro
+references/rename from a GSH union BOTH stores"*.
+
+**Fix shape:** expose the GSH store through `NavigationSupport`; consult it for
+`SymbolKind.Macro` hits in definition and references.
+
+### B2 — Macro-expanded content is attributed to the invocation site
+
+A multi-statement macro used in the same file, e.g. `NEW_STATE( "play" );` where the macro
+body opens with three `flagsys::clear( … )` calls:
+
+- Go-to-definition on `NEW_STATE` jumps to `flagsys_shared::clear()` — the macro body's first
+  call — instead of the `#define`.
+- Inlay hints render garbage at the call site: `str_flag: str_flag: str_flag: NEW_STATE:
+  string( : "play" )`, one `str_flag:` per expanded `clear` call.
+
+**Cause (traced):** `PToken.RootRange` is `Provenance.RootSite ?? Range`, and macro-expanded
+tokens carry `RootSite` = the invocation range. `SymbolExtractor` records every reference at
+`RootRange` unconditionally, so all ~8 references from the expansion stack onto the one
+invocation range. Whatever sits first in the list wins go-to-definition, and every expanded
+call contributes its own parameter hints at that position.
+
+**Why the same-file case is the visible one:** the existing guards test
+`Provenance.SourceFile is null`, but a macro defined in the same file HAS a null `SourceFile`,
+so those guards don't discriminate. The correct test for "came from an expansion" is
+`Provenance.DefinitionSite`/`RootSite`, not `SourceFile`.
+
+**Fix shape:** suppress references and inlay hints for tokens originating in a macro
+expansion — the body's internals belong to the `#define`, not the call site — keeping only
+the `MacroUse` reference for the invocation itself. Check semantic tokens for the same
+collapsing. B1 and B2 share the macro-navigation theme and should land together or
+back to back.
+
+---
+
 ## Execution order (agreed 2026-07-20)
 
 P13 and P14 are interleaved by leverage and user impact, not by phase number. Waves are

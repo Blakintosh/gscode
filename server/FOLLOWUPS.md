@@ -186,7 +186,12 @@ three features, and the grey-out is the most visible missing behavior in the edi
     than narrows, because offering nothing is worse than offering too much. Engine object fields
     and radiant keys are unaffected by the setting — it governs assignment-derived names only,
     per the plan.
-17. Mine v1 `CodeActionHandler.cs` for portable quick fixes (P13 #3).
+17. ✔ Mined v1 `CodeActionHandler.cs` (P13 #3). Four actions ported, the rest dropped with
+    reasons recorded in `tests/PORTING.md`. The decisive filter: a code action is only reachable
+    if something reports the problem, so most of v1's ~20 fixes would have needed their
+    diagnostic ported first — the portable set turned out to be exactly the diagnostics added in
+    waves 1 and 3 (`UnusedUsing`, `PreferBooleanLiteral`) plus the existing
+    `UsingAfterDeclaration`.
 18. Corpus test category + `PerfTracker.Report` surfacing (P13 #5).
 
 **Wave 7 — cleanup and low priority. ✔ DONE.**
@@ -201,12 +206,19 @@ three features, and the grey-out is the most visible missing behavior in the edi
     documented decision) and all 12 real gaps filled, including a stray duplicate empty heading.
     `PORTING.md` resolved: every row closed except the two below.
 
-**Still open from the porting ledger:**
+### P14 #18 — macro expansion preview (the last porting-ledger row)
 
-- **MacroCallSiteModeTests** — macro expansion preview. Hover renders the `#define` signature
-  and doc comment, but `MacroRecord` does not carry the body (bodies stay parser-side), so the
-  body must be plumbed through before a preview can exist.
-- (`GlobalObjectOwnersTests` closed by wave 6 item 16.)
+`MacroCallSiteModeTests` is the only `PORTING.md` row still open. Hovering a macro renders its
+`#define` signature and doc comment but not what it expands to, which is the thing a caller
+most wants to see for something like `IS_TRUE` or `NEW_STATE`.
+
+**Blocked on data, not presentation:** `MacroRecord` deliberately carries no body — the
+comment in `ScriptRecord.cs` reads "bodies stay parser-side" — so `MarkdownDocRenderer.RenderMacro`
+has nothing to render. The work is: carry the body (or a rendered preview of it) onto
+`MacroRecord`, decide how to present a multi-statement body sensibly, then render it. Watch the
+memory implications: macro bodies are retained per record, and headers are inserted by hundreds
+of files, so bodies should live once in the GSH record rather than be copied into every
+importer.
 
 **Blocked / user-gated, not scheduled:** PERF.md memory number (needs a BO3 machine),
 `apiUpdate.ts` (needs the gscode.net endpoint format), headless CLI (ships only if wanted).
@@ -317,7 +329,7 @@ genuinely absent. Ordered by user-visible impact.
     e.g. `Database/DatabaseQueries.cs` in `GSCode.Workspace/FOLDER.md` is an empty heading.
     Decide: ratify per-project layout in the plan, or split. Either way, fill the gaps.
 
-17. **`tests/PORTING.md` has 9 unresolved ☐ rows** — DiagnosticsTests, SymbolTableTests,
+17. **`tests/PORTING.md` unresolved rows** (now down to one: MacroCallSiteModeTests) — DiagnosticsTests, SymbolTableTests,
     MemoryOptimizationTests, ScriptManagerNamespaceScopingTests, ScriptDependenciesReadyTests,
     ScriptReferencesSelectionEndTests, MacroCallSiteModeTests, StockScriptsTests,
     GlobalObjectOwnersTests. Each needs a port or a conscious drop with a reason.

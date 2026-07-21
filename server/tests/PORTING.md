@@ -54,9 +54,36 @@ Resolutions favour pointing at where a scenario actually lives over inventing a 
 class, and one row is a conscious drop: `ScriptDependenciesReadyTests` tested a readiness gate
 that v2's immutable-record design removes entirely.
 
-## P11 code-action mining (deferred to P13)
+## P11 code-action mining (completed in P14 wave 6)
 
-Landed: remove-duplicate-#using and auto-add-#using (`CodeActionHandlerTests`), plus the
-whole/range/on-type formatter (`GscFormatterTests`) and the namespace-usage lint
-(`NamespaceUsageLintTests`). Deferred to P13: mine the v1 `CodeActionHandler.cs` (1,081 lines) via
-git history for any OTHER quick fixes worth porting and record keep/drop decisions here.
+Landed in P11: remove-duplicate-`#using` and auto-add-`#using` (`CodeActionHandlerTests`), plus
+the whole/range/on-type formatter (`GscFormatterTests`) and the namespace-usage lint
+(`NamespaceUsageLintTests`).
+
+The v1 `CodeActionHandler.cs` (1,081 lines) was then mined. Its actions were re-expressed, never
+copied. The decisive filter: **a code action is only reachable if something reports the problem**,
+so most v1 fixes would have required porting a diagnostic first.
+
+**Ported** — each one's trigger already exists in v2:
+
+| v1 action | v2 trigger | Notes |
+|---|---|---|
+| Remove unused `#using` | `UnusedUsing` (5001, wave 1) | Deletes the whole line, newline included |
+| Remove ALL unused `#using` | same, 2+ reported | One click for the common cleanup |
+| Replace `0`/`1` with `false`/`true` | `PreferBooleanLiteral` (5002, wave 3) | Replacement read from the SOURCE, not parsed out of the message, so it cannot drift if wording changes — and a stale range over other text yields no fix |
+| Move misplaced `#using` above the first declaration | `UsingAfterDeclaration` (3009) | Delete + re-insert as one edit; the insertion point ignores directives at or below the offending line, or it would target a point below itself |
+
+**Dropped, with reasons:**
+
+- *Unused variable, unused parameter, duplicate macro definition, duplicate modifier,
+  unreachable code, duplicate case label, multiple default labels, unreachable case,
+  consumed threaded call result, store-function-as-pointer* — v2 emits none of these
+  diagnostics, and switch-exhaustiveness analysis was consciously dropped in the plan. Porting
+  the fix without the diagnostic produces dead code.
+- *Generate function stub / create missing file* — speculative code generation from a quick
+  fix. Heavy, and both guess at intent (where does the file go, what signature?).
+- *Add matching `/* endregion */` and append `#endif`* — both append at a guessed position.
+  For `#endif` especially, guessing wrong silently changes which branch is active, which is
+  worse than the unterminated-directive diagnostic the user already sees.
+- *Square-bracket initialiser → `array()`* — no corresponding v2 diagnostic.
+- *Add `#using` for an unknown namespace / namespaced function* — already shipped in P11.

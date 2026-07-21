@@ -7,8 +7,12 @@ using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
+using GSCode.Core.Diagnostics;
 using GSCode.Server.Handlers;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
+using LspDiagnostic = OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic;
 
 namespace GSCode.Server.Tests.Handlers;
 
@@ -114,5 +118,144 @@ public class CodeActionHandlerTests
         List<string> missing = CodeActionHandler.FindMissingUsings(asking, database.Gsc, "raw", askingPath, WholeFile);
 
         Assert.Empty(missing);
+    }
+
+    // --- Diagnostic-driven fixes (ported from the v1 handler) ---
+
+    private static LspDiagnostic Reported(GscDiagnosticCode code, int line, int startCharacter, int endCharacter)
+    {
+        return new LspDiagnostic
+        {
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(line, startCharacter, line, endCharacter),
+            Code = new DiagnosticCode((int)code),
+            Message = "reported",
+        };
+    }
+
+    private static List<CodeAction> FixesFor(string source, params LspDiagnostic[] reported)
+    {
+        ParseResult result = Analyze(source);
+        List<CommandOrCodeAction> actions = [];
+
+        CodeActionParams request = new()
+        {
+            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(@"c:\ws\scripts\t.gsc") },
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(0, 0, 1000, 0),
+            Context = new CodeActionContext
+            {
+                Diagnostics = new Container<LspDiagnostic>(reported),
+            },
+        };
+
+        CodeActionHandler.AddDiagnosticFixes(request, result, actions);
+
+        List<CodeAction> fixes = [];
+        foreach ( CommandOrCodeAction action in actions )
+        {
+            if ( action.IsCodeAction && action.CodeAction is not null )
+            {
+                fixes.Add(action.CodeAction);
+            }
+        }
+
+        return fixes;
+    }
+
+    private static TextEdit SingleEditOf(CodeAction action)
+    {
+        return Assert.Single(Assert.Single(action.Edit!.Changes!).Value);
+    }
+
+    [Fact]
+    public void UnusedUsing_OffersToRemoveTheWholeLine()
+    {
+        string source = "#using scripts\\shared\\util;\nfunction f(){}\n";
+
+        CodeAction fix = Assert.Single(FixesFor(source, Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 27)));
+
+        Assert.Contains("Remove unused", fix.Title);
+        TextEdit edit = SingleEditOf(fix);
+        Assert.Equal("", edit.NewText);
+        // The whole line goes, including its newline, so no blank line is left behind.
+        Assert.Equal(0, edit.Range.Start.Line);
+        Assert.Equal(1, edit.Range.End.Line);
+        Assert.Equal(0, edit.Range.End.Character);
+    }
+
+    [Fact]
+    public void SeveralUnusedUsings_AlsoOfferOneBulkFix()
+    {
+        string source = "#using scripts\\a;\n#using scripts\\b;\nfunction f(){}\n";
+
+        List<CodeAction> fixes = FixesFor(
+            source,
+            Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17),
+            Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 17));
+
+        // Two individual removals plus the bulk one.
+        Assert.Equal(3, fixes.Count);
+        CodeAction bulk = fixes.First(f => f.Title.StartsWith("Remove all", StringComparison.Ordinal));
+        Assert.Equal(2, Assert.Single(bulk.Edit!.Changes!).Value.Count());
+    }
+
+    [Fact]
+    public void OneUnusedUsing_DoesNotOfferABulkFix()
+    {
+        string source = "#using scripts\\a;\nfunction f(){}\n";
+
+        List<CodeAction> fixes = FixesFor(source, Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17));
+
+        Assert.DoesNotContain(fixes, f => f.Title.StartsWith("Remove all", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("1", "true")]
+    [InlineData("0", "false")]
+    public void PreferBooleanLiteral_ReplacesTheLiteralItActuallyFinds(string literal, string expected)
+    {
+        // The replacement is read from the source, not parsed out of the diagnostic message.
+        string source = "function f()\n{\n    AllowAttack( " + literal + " );\n}\n";
+        int character = source.Split('\n')[2].IndexOf(literal, StringComparison.Ordinal);
+
+        CodeAction fix = Assert.Single(
+            FixesFor(source, Reported(GscDiagnosticCode.PreferBooleanLiteral, 2, character, character + 1)));
+
+        TextEdit edit = SingleEditOf(fix);
+        Assert.Equal(expected, edit.NewText);
+        Assert.Contains(expected, fix.Title);
+    }
+
+    [Fact]
+    public void PreferBooleanLiteral_OffersNothingWhenTheRangeIsNotZeroOrOne()
+    {
+        // A stale diagnostic pointing at edited text must not produce a nonsense edit.
+        string source = "function f()\n{\n    AllowAttack( 7 );\n}\n";
+        int character = source.Split('\n')[2].IndexOf('7');
+
+        Assert.Empty(FixesFor(source, Reported(GscDiagnosticCode.PreferBooleanLiteral, 2, character, character + 1)));
+    }
+
+    [Fact]
+    public void UsingAfterDeclaration_MovesItAboveTheFirstDeclaration()
+    {
+        string source = "#using scripts\\a;\nfunction f(){}\n#using scripts\\late;\n";
+
+        CodeAction fix = Assert.Single(FixesFor(source, Reported(GscDiagnosticCode.UsingAfterDeclaration, 2, 0, 20)));
+
+        Assert.Contains("Move", fix.Title);
+        List<TextEdit> edits = [.. Assert.Single(fix.Edit!.Changes!).Value];
+
+        // One deletion of the offending line, one insertion higher up.
+        Assert.Equal(2, edits.Count);
+        Assert.Contains(edits, e => e.NewText.Length == 0 && e.Range.Start.Line == 2);
+        Assert.Contains(edits, e => e.NewText.Contains("#using", StringComparison.Ordinal) && e.Range.Start.Line < 2);
+    }
+
+    [Fact]
+    public void UnrelatedDiagnostics_ProduceNoFixes()
+    {
+        string source = "function f(){}\n";
+
+        Assert.Empty(FixesFor(source, Reported(GscDiagnosticCode.ExpectedToken, 0, 0, 5)));
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Syntax.Ast;
@@ -74,7 +75,195 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
+        AddDiagnosticFixes(request, result, actions);
+
         return Task.FromResult<CommandOrCodeActionContainer?>(new CommandOrCodeActionContainer(actions));
+    }
+
+    /// <summary>
+    /// Fixes driven by the diagnostics the client reported for the selection. Keyed off the
+    /// request's context rather than re-derived, because the workspace lints run in
+    /// TextSyncHandler and are not recomputable from the ParseResult alone.
+    /// </summary>
+    internal static void AddDiagnosticFixes(CodeActionParams request, ParseResult result, List<CommandOrCodeAction> actions)
+    {
+        DocumentUri uri = request.TextDocument.Uri;
+        List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unusedUsings = [];
+
+        foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in request.Context.Diagnostics )
+        {
+            switch ( CodeOf(diagnostic) )
+            {
+                case GscDiagnosticCode.UnusedUsing:
+                    unusedUsings.Add(diagnostic);
+                    actions.Add(new CommandOrCodeAction(BuildDeleteLineAction(uri, result, diagnostic)));
+                    continue;
+                case GscDiagnosticCode.PreferBooleanLiteral:
+                    AddBooleanLiteralFix(uri, result, diagnostic, actions);
+                    continue;
+                case GscDiagnosticCode.UsingAfterDeclaration:
+                    AddMoveUsingFix(uri, result, diagnostic, actions);
+                    continue;
+                default:
+                    continue;
+            }
+        }
+
+        // One click for the common cleanup, rather than N separate fixes.
+        if ( unusedUsings.Count > 1 )
+        {
+            actions.Add(new CommandOrCodeAction(BuildRemoveAllUnusedAction(uri, unusedUsings)));
+        }
+    }
+
+    private static GscDiagnosticCode? CodeOf(OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
+    {
+        if ( diagnostic.Code is null || !diagnostic.Code.Value.IsLong )
+        {
+            return null;
+        }
+
+        return (GscDiagnosticCode)diagnostic.Code.Value.Long;
+    }
+
+    /// <summary>The whole line a range sits on, including its trailing newline.</summary>
+    private static TextRange LineRangeOf(TextRange range)
+    {
+        return new TextRange(new Position(range.Start.Line, 0), new Position(range.Start.Line + 1, 0));
+    }
+
+    /// <summary>The trimmed source of a line, used to name an action after what it acts on.</summary>
+    private static string LineTextOf(ParseResult result, int line)
+    {
+        if ( line < 0 || line >= result.Text.LineCount )
+        {
+            return "";
+        }
+
+        int start = result.Text.GetOffset(new Position(line, 0));
+        int end = line + 1 < result.Text.LineCount
+            ? result.Text.GetOffset(new Position(line + 1, 0))
+            : result.Text.Length;
+
+        return result.Text.Text[start..end].Trim().TrimEnd(SemiColon);
+    }
+
+    private const char SemiColon = ';';
+
+    private static CodeAction BuildDeleteLineAction(DocumentUri uri, ParseResult result, OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
+    {
+        TextRange range = diagnostic.Range.ToCore();
+        TextEdit edit = new() { Range = LineRangeOf(range).ToLsp(), NewText = "" };
+
+        return new CodeAction
+        {
+            Title = "Remove unused " + LineTextOf(result, range.Start.Line),
+            Kind = CodeActionKind.QuickFix,
+            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
+            Edit = SingleEdit(uri, edit),
+        };
+    }
+
+    private static CodeAction BuildRemoveAllUnusedAction(DocumentUri uri, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unusedUsings)
+    {
+        // Whole-line deletions on distinct lines never overlap, so order does not matter.
+        HashSet<int> lines = [];
+        List<TextEdit> edits = [];
+        foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in unusedUsings )
+        {
+            TextRange range = diagnostic.Range.ToCore();
+            if ( lines.Add(range.Start.Line) )
+            {
+                edits.Add(new TextEdit { Range = LineRangeOf(range).ToLsp(), NewText = "" });
+            }
+        }
+
+        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
+
+        return new CodeAction
+        {
+            Title = "Remove all " + edits.Count + " unused #using directives",
+            Kind = CodeActionKind.QuickFix,
+            Edit = new WorkspaceEdit { Changes = changes },
+        };
+    }
+
+    /// <summary>
+    /// Replaces a literal 0/1 with false/true. The replacement is read from the source at the
+    /// diagnostic's range rather than parsed out of its message, so the fix cannot drift if the
+    /// wording ever changes.
+    /// </summary>
+    private static void AddBooleanLiteralFix(DocumentUri uri, ParseResult result, OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic, List<CommandOrCodeAction> actions)
+    {
+        TextRange range = diagnostic.Range.ToCore();
+        int start = result.Text.GetOffset(range.Start);
+        int end = result.Text.GetOffset(range.End);
+        if ( start >= end || end > result.Text.Length )
+        {
+            return;
+        }
+
+        string literal = result.Text.Text[start..end].Trim();
+        string replacement = "";
+        if ( literal == "1" )
+        {
+            replacement = "true";
+        }
+        else if ( literal == "0" )
+        {
+            replacement = "false";
+        }
+
+        if ( replacement.Length == 0 )
+        {
+            return;
+        }
+
+        TextEdit edit = new() { Range = range.ToLsp(), NewText = replacement };
+        actions.Add(new CommandOrCodeAction(new CodeAction
+        {
+            Title = "Replace " + literal + " with " + replacement,
+            Kind = CodeActionKind.QuickFix,
+            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
+            Edit = SingleEdit(uri, edit),
+        }));
+    }
+
+    /// <summary>
+    /// Moves a #using that appears after the first declaration up to where imports belong. Two
+    /// edits — delete the offending line, insert it at the top — applied as one operation.
+    /// </summary>
+    private static void AddMoveUsingFix(DocumentUri uri, ParseResult result, OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic, List<CommandOrCodeAction> actions)
+    {
+        TextRange range = diagnostic.Range.ToCore();
+        string directive = LineTextOf(result, range.Start.Line);
+        if ( directive.Length == 0 )
+        {
+            return;
+        }
+
+        Position insertAt = UsingInsertionPoint(result, range.Start.Line);
+        if ( insertAt.Line >= range.Start.Line )
+        {
+            // Nowhere earlier to move it to; leave the diagnostic without a fix.
+            return;
+        }
+
+        List<TextEdit> edits =
+        [
+            new TextEdit { Range = LineRangeOf(range).ToLsp(), NewText = "" },
+            new TextEdit { Range = new TextRange(insertAt, insertAt).ToLsp(), NewText = directive + ";" + "\n" },
+        ];
+
+        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
+
+        actions.Add(new CommandOrCodeAction(new CodeAction
+        {
+            Title = "Move " + directive + " above the first declaration",
+            Kind = CodeActionKind.QuickFix,
+            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
+            Edit = new WorkspaceEdit { Changes = changes },
+        }));
     }
 
     /// <summary>
@@ -179,12 +368,17 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     }
 
     /// <summary>Where a new #using should be inserted: after the last one, else the file top.</summary>
-    private static Position UsingInsertionPoint(ParseResult result)
+    /// <summary>
+    /// Where a new #using belongs: just after the last one. <paramref name="beforeLine"/> caps
+    /// which directives count, so moving a misplaced #using does not target a point below
+    /// itself — the directive being moved is the very thing that must not anchor the insertion.
+    /// </summary>
+    private static Position UsingInsertionPoint(ParseResult result, int beforeLine = int.MaxValue)
     {
         int line = 0;
         foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            if ( element is UsingNode usingNode )
+            if ( element is UsingNode usingNode && usingNode.Range.Start.Line < beforeLine )
             {
                 line = usingNode.Range.Start.Line + 1;
             }

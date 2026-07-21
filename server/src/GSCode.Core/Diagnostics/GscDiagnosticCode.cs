@@ -55,4 +55,5 @@ public enum GscDiagnosticCode
     NamespaceNotImported = 5000,
     UnusedUsing = 5001,
     PreferBooleanLiteral = 5002,
+    PrivateFunctionNotVisible = 5003,
 }

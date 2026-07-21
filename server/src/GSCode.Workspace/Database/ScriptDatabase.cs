@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.IO.Hashing;
 using System.Text;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
@@ -153,7 +154,9 @@ public sealed class ScriptDatabase
 
         return new ScriptRecord
         {
-            Path = result.FilePath,
+            // The record's path IS the store key, so normalizing here rather than trusting
+            // callers keeps lookups and same-file comparisons (e.g. private visibility) sound.
+            Path = PathUtil.NormalizeAbsolute(result.FilePath),
             Language = result.Language,
             ContextId = ContextIdOf(context),
             RelativePath = relativePath,

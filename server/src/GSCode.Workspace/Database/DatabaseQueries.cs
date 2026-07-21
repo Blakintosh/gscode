@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Database;
@@ -19,16 +20,24 @@ public static class DatabaseQueries
 {
     /// <summary>
     /// Every visible function matching namespace+name, merged across contributing files.
-    /// Private functions are only visible from their own file.
+    /// Private functions are only visible from their own file, unless
+    /// <paramref name="includePrivate"/> is set — which the private-access lint uses to tell
+    /// "no such function" apart from "exists but is private".
     /// </summary>
     public static ImmutableArray<ResolvedFunction> LookupFunctions(
         LanguageStore store,
         string askingContextId,
         string askingPath,
         string? namespaceName,
-        string keyName)
+        string keyName,
+        bool includePrivate = false)
     {
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
+
+        // Record paths are normalized; normalize the asking path once so the same-file test
+        // below (which decides private visibility) can't be defeated by casing or slash style.
+        // An empty asking path means "no asking file", which sees no private functions at all.
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
         foreach ( ScriptRecord record in store.AllRecords )
         {
@@ -49,7 +58,7 @@ public static class DatabaseQueries
                     continue;
                 }
 
-                if ( function.IsPrivate && record.Path != askingPath )
+                if ( !includePrivate && function.IsPrivate && record.Path != normalizedAskingPath )
                 {
                     continue;
                 }
@@ -101,6 +110,20 @@ public static class DatabaseQueries
         return kept.ToImmutable();
     }
 
+    /// <summary>
+    /// Normalizes an asking path for same-file comparisons. Callers with no asking file pass
+    /// an empty string, which must stay empty rather than resolving to the process directory.
+    /// </summary>
+    private static string NormalizeAskingPath(string askingPath)
+    {
+        if ( askingPath.Length == 0 )
+        {
+            return "";
+        }
+
+        return PathUtil.NormalizeAbsolute(askingPath);
+    }
+
     /// <summary>Every visible function in a namespace (for completion), deduplicated by name.</summary>
     public static ImmutableArray<FunctionSymbol> FunctionsInNamespace(
         LanguageStore store,
@@ -109,6 +132,9 @@ public static class DatabaseQueries
         string namespaceName)
     {
         Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
+
+        // Same normalization contract as LookupFunctions: the same-file test gates privacy.
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
         foreach ( ScriptRecord record in store.AllRecords )
         {
@@ -124,7 +150,7 @@ public static class DatabaseQueries
                     continue;
                 }
 
-                if ( function.IsPrivate && record.Path != askingPath )
+                if ( function.IsPrivate && record.Path != normalizedAskingPath )
                 {
                     continue;
                 }

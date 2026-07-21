@@ -210,27 +210,22 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
         LanguageStore store = _database.StoreFor(document.Language);
         PathResolver resolver = _resolver.Current;
+        BuiltinApi builtins = _builtins.For(document.Language);
+        string contextId = ScriptDatabase.ContextIdOf(resolver.GetContext(document.Path));
 
-        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> namespaceLints = NamespaceUsageLint.Analyze(
-            result, store, document.Language, resolver, document.Path);
-        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> unusedUsings = UnusedUsingLint.Analyze(
-            result, store, document.Language, resolver, document.Path);
-        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> booleanLints = PreferBooleanLiteralLint.Analyze(
-            result, _builtins.For(document.Language));
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic>.Builder lints =
+            ImmutableArray.CreateBuilder<GSCode.Core.Diagnostics.Diagnostic>();
 
-        if ( booleanLints.Length > 0 )
-        {
-            return result.AllDiagnostics
-                .AddRange(namespaceLints)
-                .AddRange(unusedUsings)
-                .AddRange(booleanLints);
-        }
+        lints.AddRange(NamespaceUsageLint.Analyze(result, store, document.Language, resolver, document.Path));
+        lints.AddRange(UnusedUsingLint.Analyze(result, store, document.Language, resolver, document.Path));
+        lints.AddRange(PreferBooleanLiteralLint.Analyze(result, builtins));
+        lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, document.Path, builtins));
 
-        if ( namespaceLints.Length == 0 && unusedUsings.Length == 0 )
+        if ( lints.Count == 0 )
         {
             return result.AllDiagnostics;
         }
 
-        return result.AllDiagnostics.AddRange(namespaceLints).AddRange(unusedUsings);
+        return result.AllDiagnostics.AddRange(lints);
     }
 }

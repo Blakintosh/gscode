@@ -59,6 +59,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
         [GscDiagnosticCode.UnusedUsing] = "'{0}' is imported but nothing from it is used.",
         [GscDiagnosticCode.PreferBooleanLiteral] = "Parameter '{0}' is a bool; prefer '{1}' over the integer literal.",
+        [GscDiagnosticCode.PrivateFunctionNotVisible] = "'{0}' is private to '{1}' and cannot be called from another file.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

@@ -1,5 +1,9 @@
+using System.Collections.Immutable;
+using GSCode.Core.Diagnostics;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Position = GSCode.Core.Text.Position;
+using LspDiagnosticTag = OmniSharp.Extensions.LanguageServer.Protocol.Models.DiagnosticTag;
 using TextRange = GSCode.Core.Text.TextRange;
 using LspDiagnostic = OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic;
 using LspDiagnosticSeverity = OmniSharp.Extensions.LanguageServer.Protocol.Models.DiagnosticSeverity;
@@ -43,6 +47,50 @@ public static class LspMapping
             Code = new DiagnosticCode((int)diagnostic.Code),
             Source = "gscode",
             Message = diagnostic.Message,
+            Tags = ToLspTags(diagnostic.Tags),
+            RelatedInformation = ToLspRelated(diagnostic.RelatedInformation),
         };
+    }
+
+    /// <summary>Maps presentation tags, returning null for the common empty case so the field is omitted.</summary>
+    private static Container<LspDiagnosticTag>? ToLspTags(ImmutableArray<GSCode.Core.Diagnostics.DiagnosticTag> tags)
+    {
+        if ( tags.IsEmpty )
+        {
+            return null;
+        }
+
+        List<LspDiagnosticTag> mapped = new(tags.Length);
+        foreach ( GSCode.Core.Diagnostics.DiagnosticTag tag in tags )
+        {
+            mapped.Add((LspDiagnosticTag)(int)tag);
+        }
+
+        return new Container<LspDiagnosticTag>(mapped);
+    }
+
+    /// <summary>Maps related locations, returning null for the common empty case so the field is omitted.</summary>
+    private static Container<DiagnosticRelatedInformation>? ToLspRelated(ImmutableArray<DiagnosticRelation> relations)
+    {
+        if ( relations.IsEmpty )
+        {
+            return null;
+        }
+
+        List<DiagnosticRelatedInformation> mapped = new(relations.Length);
+        foreach ( DiagnosticRelation relation in relations )
+        {
+            mapped.Add(new DiagnosticRelatedInformation
+            {
+                Location = new Location
+                {
+                    Uri = DocumentUri.FromFileSystemPath(relation.FilePath),
+                    Range = relation.Range.ToLsp(),
+                },
+                Message = relation.Message,
+            });
+        }
+
+        return new Container<DiagnosticRelatedInformation>(mapped);
     }
 }

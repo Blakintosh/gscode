@@ -31,6 +31,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.UnexpectedConditionalDirective] = "'{0}' without a matching '#if'.",
         [GscDiagnosticCode.MissingMacroArguments] = "Macro '{0}' expects an argument list.",
         [GscDiagnosticCode.UnterminatedMacroArguments] = "The argument list for macro '{0}' is missing its closing ')'.",
+        [GscDiagnosticCode.InactiveConditionalBranch] = "Inactive preprocessor branch; this code is excluded from the build.",
 
         // Parsing
         [GscDiagnosticCode.ExpectedToken] = "Expected '{0}' but found '{1}'.",

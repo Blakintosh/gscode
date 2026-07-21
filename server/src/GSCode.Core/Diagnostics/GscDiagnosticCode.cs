@@ -27,6 +27,7 @@ public enum GscDiagnosticCode
     UnexpectedConditionalDirective = 2010,
     MissingMacroArguments = 2011,
     UnterminatedMacroArguments = 2012,
+    InactiveConditionalBranch = 2013,
 
     // Parsing (3xxx)
     ExpectedToken = 3000,

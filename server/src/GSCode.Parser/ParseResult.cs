@@ -67,6 +67,16 @@ public static class ScriptAnalysis
             all.AddRange(extraction.Diagnostics);
         }
 
+        // Excluded #if branches grey out. The preprocessor already trimmed these ranges to
+        // significant tokens and dropped any coming from inserts, so they map 1:1 onto hints.
+        foreach ( TextRange region in preprocessed.DisabledRegions )
+        {
+            Diagnostic hint = Diagnostic.Create(
+                region, DiagnosticSeverity.Hint, GscDiagnosticCode.InactiveConditionalBranch);
+
+            all.Add(hint with { Tags = [DiagnosticTag.Unnecessary] });
+        }
+
         return new ParseResult(filePath, language, text, lexed, preprocessed, tree, extraction, all.ToImmutable());
     }
 

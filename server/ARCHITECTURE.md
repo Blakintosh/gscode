@@ -82,3 +82,10 @@ indexing counter driven by `gscode/indexingStarted|Progress|Complete` notificati
 files: ScriptObjectFields.xlsx, radiant keys.txt) and `sources/curated/` (editable
 JSON source of truth). A P7 tool converts curated → the bundled runtime artifacts in
 `GSCode.Workspace/Api/`.
+
+## Known gaps
+
+P0–P12 are complete. `FOLLOWUPS.md` tracks what did not ship: P13 (optional / externally
+blocked) and P14 (plan-promised items found missing in the 2026-07-20 global audit).
+Read it before assuming a plan feature exists — several settings and data artifacts are
+present but not yet consumed, and each is listed there.

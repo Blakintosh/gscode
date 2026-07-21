@@ -43,6 +43,12 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 | ReferencesHandlerTests | ✔ P7 | Cross-file references verified by the P7 navigation smoke; code-lens counts by the P9 smoke |
 | LexerTests (v1 TestHelper trivia filtering) | ✔ P1 | Superseded by trivia-as-tokens + `LexTestHelper.SignificantTokens` |
 
+## Unresolved rows
+
+The ☐ rows above are tracked as P14 item 17 in `server/FOLLOWUPS.md`; each needs a port or
+a conscious drop with a reason. The remaining halves of the ◐ rows are P14 items 5, 4,
+and 9 (`.size` write diagnostic, ReadOnly-field write diagnostic, branch-join convergence).
+
 ## P11 code-action mining (deferred to P13)
 
 Landed: remove-duplicate-#using and auto-add-#using (`CodeActionHandlerTests`), plus the

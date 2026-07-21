@@ -173,6 +173,61 @@ public class CompletionEngineTests
         Assert.False(HasLabel(entries, "if"));
     }
 
+    // --- Class visibility ---
+    //
+    // Classes are named without a namespace qualifier, so there is nothing to narrow them by
+    // except the file's imports. Offering every class in the workspace meant typing "anim"
+    // suggested AnimationAdjustmentInfoXY from a file the caller never #using'd.
+
+    private const string ClassFile = "#namespace vehicles;\nclass cVehicle\n{\n}\n";
+
+    /// <summary>Completes inside a function body in main.gsc, given its full text.</summary>
+    private static ImmutableArray<CompletionEntry> CompleteInMain(string text, Position position)
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\vehicles.gsc", ClassFile);
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        return engine.Complete(Analyze(@$"{Raw}\scripts\main.gsc", text), "raw", position);
+    }
+
+    [Fact]
+    public void ClassInAnUnimportedFile_IsNotOffered()
+    {
+        // The reported bug.
+        ImmutableArray<CompletionEntry> entries = CompleteInMain("function run()\n{\n    \n}\n", new Position(2, 4));
+
+        Assert.False(HasLabel(entries, "cVehicle"));
+    }
+
+    [Fact]
+    public void ClassInAnImportedFile_IsOffered()
+    {
+        string text = "#using scripts\\vehicles;\n\nfunction run()\n{\n    \n}\n";
+
+        Assert.True(HasLabel(CompleteInMain(text, new Position(4, 4)), "cVehicle"));
+    }
+
+    [Fact]
+    public void ClassDeclaredInThisFile_IsOfferedWithoutAnImport()
+    {
+        // From the live extraction, so it completes before the record is reindexed.
+        string text = "class cLocal\n{\n}\n\nfunction run()\n{\n    \n}\n";
+
+        Assert.True(HasLabel(CompleteInMain(text, new Position(6, 4)), "cLocal"));
+    }
+
+    [Fact]
+    public void ImportedClass_IsOfferedOnlyOnce()
+    {
+        // The file's own extraction and the store both contribute; the union must dedupe.
+        string text = "#using scripts\\vehicles;\n\nfunction run()\n{\n    \n}\n";
+        ImmutableArray<CompletionEntry> entries = CompleteInMain(text, new Position(4, 4));
+
+        Assert.Single(entries, e => e.Label == "cVehicle");
+    }
+
     // --- Directives ---
     //
     // The client's word pattern excludes '#', so once it is typed the editor's current word is

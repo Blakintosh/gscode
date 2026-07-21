@@ -458,10 +458,24 @@ public sealed class CompletionEngine
             }
         }
 
-        // Visible classes (for `new C()` and `C::`).
-        foreach ( ClassSymbol classSymbol in DatabaseQueries.AllVisibleClasses(store, contextId) )
+        // Classes this file may name (for `new C()` and `C::`) — its own, plus those in the files
+        // it #usings. The file's own come from the live extraction as well as the store, so a
+        // class typed a moment ago completes before the record is reindexed.
+        HashSet<string> classNames = new(StringComparer.Ordinal);
+        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
         {
-            entries.Add(new CompletionEntry(classSymbol.Name, CompletionKind.Class, "class"));
+            classNames.Add(classSymbol.Name);
+        }
+
+        foreach ( ClassSymbol classSymbol in DatabaseQueries.AllVisibleClasses(
+            store, contextId, result.FilePath, DatabaseQueries.ImportedScriptPaths(result)) )
+        {
+            classNames.Add(classSymbol.Name);
+        }
+
+        foreach ( string className in classNames )
+        {
+            entries.Add(new CompletionEntry(className, CompletionKind.Class, "class"));
         }
 
         // Namespace-less builtins.

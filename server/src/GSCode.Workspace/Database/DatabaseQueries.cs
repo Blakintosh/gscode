@@ -217,14 +217,77 @@ public static class DatabaseQueries
         return [.. byName.Values];
     }
 
-    /// <summary>Every visible class (for completion), deduplicated by name.</summary>
-    public static ImmutableArray<ClassSymbol> AllVisibleClasses(LanguageStore store, string askingContextId)
+    /// <summary>
+    /// The script-relative paths a file imports with <c>#using</c>, lowercased with backslash
+    /// separators and no extension — the form <see cref="ScriptRecord.RelativePath"/> reduces to,
+    /// and the form <c>#using</c> is written in.
+    ///
+    /// Read from the live parse result rather than the record's dependency edges, because a
+    /// <c>#using</c> edge is stored with an empty ResolvedPath and so cannot be matched by path.
+    /// </summary>
+    public static ImmutableArray<string> ImportedScriptPaths(GSCode.Parser.ParseResult result)
+    {
+        ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
+
+        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+        {
+            if ( element is not GSCode.Parser.Syntax.Ast.UsingNode usingNode )
+            {
+                continue;
+            }
+
+            string normalized = NormalizeScriptPath(usingNode.Path);
+            if ( normalized.Length > 0 && !paths.Contains(normalized) )
+            {
+                paths.Add(normalized);
+            }
+        }
+
+        return paths.ToImmutable();
+    }
+
+    private static string NormalizeScriptPath(string path)
+    {
+        string trimmed = path.Trim().Replace('/', '\\');
+        return (System.IO.Path.ChangeExtension(trimmed, null) ?? trimmed).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Every class this file may name (for completion), deduplicated by name.
+    ///
+    /// Classes are referenced by bare name, so unlike functions there is no namespace qualifier to
+    /// narrow them — offering every class in the workspace meant typing "anim" suggested
+    /// AnimationAdjustmentInfoXY from a file the caller never imported. A class is reachable only
+    /// from its own file or from one that <c>#using</c>s it.
+    ///
+    /// Direct imports only, deliberately: across the 980 stock scripts every one of the 8
+    /// cross-file class uses names the declaring file in its own <c>#using</c> list, so nothing
+    /// real depends on an import chain.
+    ///
+    /// <see cref="LookupClasses"/> stays unfiltered on purpose. Completion should offer what you
+    /// may legally write, but resolution should still find a class you typed without the import,
+    /// so go-to-definition keeps working while you fix the missing <c>#using</c>.
+    /// </summary>
+    public static ImmutableArray<ClassSymbol> AllVisibleClasses(
+        LanguageStore store,
+        string askingContextId,
+        string askingPath,
+        ImmutableArray<string> importedPaths)
     {
         Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
         foreach ( ScriptRecord record in store.AllRecords )
         {
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            bool sameFile = normalizedAskingPath.Length > 0
+                && string.Equals(record.Path, normalizedAskingPath, StringComparison.OrdinalIgnoreCase);
+
+            if ( !sameFile && !importedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
             {
                 continue;
             }

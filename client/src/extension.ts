@@ -93,6 +93,75 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     await created.start();
     log.info("GSCode language client started");
+
+    registerRenameDirectiveFixup(context, created, log);
+}
+
+/**
+ * Keeps `#using`/`#insert` paths correct when a script is renamed or moved.
+ *
+ * This lives client-side because OmniSharp 0.19.9 models the LSP `FileRename` with a single
+ * `Uri` — the spec's `oldUri`/`newUri` pair is missing, so a server-side `willRenameFiles`
+ * handler cannot see where a file is going. VSCode's own event has both, so the client sources
+ * the event and asks the server (which owns the dependency data) to plan the edits.
+ */
+function registerRenameDirectiveFixup(
+    context: vscode.ExtensionContext,
+    languageClient: LanguageClient,
+    log: vscode.LogOutputChannel,
+): void {
+    interface PlanRenameEdit {
+        path: string;
+        startLine: number;
+        startCharacter: number;
+        endLine: number;
+        endCharacter: number;
+        newText: string;
+    }
+
+    context.subscriptions.push(
+        vscode.workspace.onWillRenameFiles((event) => {
+            const scripts = event.files.filter((file) => /\.(gsc|csc|gsh)$/i.test(file.oldUri.fsPath));
+            if (scripts.length === 0) {
+                return;
+            }
+
+            // waitUntil defers the rename until the edit resolves, so both apply together.
+            event.waitUntil(
+                (async () => {
+                    const edit = new vscode.WorkspaceEdit();
+                    let total = 0;
+
+                    for (const file of scripts) {
+                        const response = await languageClient.sendRequest<{ edits: PlanRenameEdit[] }>(
+                            "gscode/planRename",
+                            { oldPath: file.oldUri.fsPath, newPath: file.newUri.fsPath },
+                        );
+
+                        for (const planned of response?.edits ?? []) {
+                            edit.replace(
+                                vscode.Uri.file(planned.path),
+                                new vscode.Range(
+                                    planned.startLine,
+                                    planned.startCharacter,
+                                    planned.endLine,
+                                    planned.endCharacter,
+                                ),
+                                planned.newText,
+                            );
+                            total++;
+                        }
+                    }
+
+                    if (total > 0) {
+                        log.info(`Rename: updating ${total} directive path(s) across the workspace`);
+                    }
+
+                    return edit;
+                })(),
+            );
+        }),
+    );
 }
 
 /** The live indexing counter: a spinner whose number races upward as files complete. */

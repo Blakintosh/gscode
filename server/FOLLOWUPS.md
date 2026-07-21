@@ -164,7 +164,20 @@ three features, and the grey-out is the most visible missing behavior in the edi
     would have meant threading URI scheme through 13 call sites plus `DocumentStore` and the
     resolver, for no behavioural gain.
 14. ✔ `workspace/didChangeWorkspaceFolders` (P14 #11) — `Handlers/WorkspaceFoldersHandler.cs`.
-15. `workspace/willRenameFiles` (P14 #12).
+15. ✔ Rename fixes `#using`/`#insert` paths (P14 #12) — but NOT via
+    `workspace/willRenameFiles`. **OmniSharp 0.19.9 models the LSP `FileRename` with a single
+    `Uri` property; the spec's `oldUri`/`newUri` pair is absent**, verified by reflecting the
+    real types — `WillRenameFileParams.Files` and `DidRenameFileParams.Files` are both
+    `Container<FileRename>`, and `FileRename` exposes only `Uri`. A server-side handler
+    therefore cannot learn a rename's destination. This is the "OmniSharp staleness" risk the
+    plan accepted, hitting for the first time.
+
+    Implemented instead as a custom `gscode/planRename` request: the client sources the event
+    from `vscode.workspace.onWillRenameFiles` (which has both URIs) and defers the rename with
+    `waitUntil` while the server plans the edits. All path reasoning stays server-side in
+    `Resolution/DependencyRewrite.cs`, where the database lives, so only the transport differs
+    from the original design. If OmniSharp ever models `FileRename` correctly, the handler can
+    move server-side with no change to the planner.
 
 **Wave 6 — P13 unblocked items.**
 16. `completion.fieldScope` owner/all (P13 #2).

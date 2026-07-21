@@ -7,7 +7,8 @@ namespace GSCode.Parser.Preprocessing;
 /// <summary>One #insert edge, resolved or not — the dependency tracker consumes these.</summary>
 /// <param name="RawPath">The path exactly as written after #insert.</param>
 /// <param name="ResolvedPath">Normalized absolute path, or null when resolution failed.</param>
-/// <param name="DirectiveRange">Range of the directive in the file that contains it.</param>
+/// <param name="DirectiveRange">Range of the PATH ARGUMENT, not the whole directive — rename
+/// rewriting replaces exactly this span, leaving the keyword and semicolon alone.</param>
 /// <param name="ContainingFile">File holding the directive; null = the root file.</param>
 public sealed record InsertEdge(string RawPath, string? ResolvedPath, TextRange DirectiveRange, string? ContainingFile);
 

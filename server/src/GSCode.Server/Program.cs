@@ -110,6 +110,7 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<WorkspaceSymbolHandler>()
         .AddHandler<WatchedFilesHandler>()
         .AddHandler<WorkspaceFoldersHandler>()
+        .AddHandler<PlanRenameHandler>()
         .AddHandler<HoverHandler>()
         .AddHandler<DefinitionHandler>()
         .AddHandler<ReferencesHandler>()

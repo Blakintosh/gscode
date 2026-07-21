@@ -134,6 +134,20 @@ public class ExtractionTests
             diagnostic => diagnostic.Code == GscDiagnosticCode.WrongPrecacheArgumentCount);
     }
 
+    [Theory]
+    [InlineData("xmodel")]
+    [InlineData("model")]
+    [InlineData("xmodelalias")]
+    public void Precache_AcceptsEveryAssetTypeStockScriptsUse(string assetType)
+    {
+        // xmodel is absent from the language PDF but appears 38 times in the shipped scripts;
+        // model and xmodelalias are documented and distinct from it. All three must pass, so a
+        // future edit cannot "tidy" one into another.
+        Assert.DoesNotContain(
+            Analyze($"#precache( \"{assetType}\", \"p7_perk_t7_hud_perk_engineer\" );").AllDiagnostics,
+            diagnostic => diagnostic.Code == GscDiagnosticCode.UnknownPrecacheType);
+    }
+
     [Fact]
     public void DefaultParameter_MustBePlainValue()
     {

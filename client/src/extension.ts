@@ -73,15 +73,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
-    // Bridge for code-lens "N references" clicks: the server sends plain JSON args, which
-    // VSCode's editor.action.showReferences rejects via instanceof checks, so we re-fetch
-    // references through the provider and hand it real Location instances.
+    // Bridge for code-lens "N references" clicks. Two things are going on:
+    //
+    //  1. editor.action.showReferences validates its arguments with instanceof, so plain JSON
+    //     will not do — we re-fetch through the provider to get real Location instances.
+    //  2. The position arrives as two NUMBERS, not an object. An object round-tripped through
+    //     the server's JArray kept its C# PascalCase ("Line"/"Character"), so reading
+    //     position.line gave undefined and the Position constructor threw "Unexpected type".
     context.subscriptions.push(
         vscode.commands.registerCommand(
             "gscode.showReferences",
-            async (uriString: string, position: { line: number; character: number }) => {
+            async (uriString: string, line: number, character: number) => {
+                if (typeof line !== "number" || typeof character !== "number") {
+                    log.error(`showReferences got a bad position: ${JSON.stringify([line, character])}`);
+                    return;
+                }
+
                 const uri = vscode.Uri.parse(uriString);
-                const pos = new vscode.Position(position.line, position.character);
+                const pos = new vscode.Position(line, character);
                 const locations = await vscode.commands.executeCommand<vscode.Location[]>(
                     "vscode.executeReferenceProvider", uri, pos) ?? [];
                 await vscode.commands.executeCommand("editor.action.showReferences", uri, pos, locations);

@@ -88,8 +88,23 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             {
                 Title = title,
                 Name = "gscode.showReferences",
-                Arguments = new JArray(uri.ToString(), JToken.FromObject(nameRange.Start.ToLsp())),
+                Arguments = ShowReferencesArguments(uri, nameRange.Start),
             },
         };
+    }
+
+    /// <summary>
+    /// The arguments for the client's gscode.showReferences bridge: a URI string and the position
+    /// as two NUMBERS.
+    ///
+    /// Primitives only, deliberately. Arguments is a JArray, so whatever goes in is serialized
+    /// as-is — OmniSharp's camelCase resolver never rewrites an already-materialized JToken.
+    /// Passing a Position through JToken.FromObject therefore put {"Line":..,"Character":..} on
+    /// the wire; the client read `position.line` as undefined and the vscode.Position constructor
+    /// threw "Unexpected type". Numbers cannot be case-mangled by any serializer configuration.
+    /// </summary>
+    internal static JArray ShowReferencesArguments(DocumentUri uri, GSCode.Core.Text.Position start)
+    {
+        return new JArray(uri.ToString(), start.Line, start.Character);
     }
 }

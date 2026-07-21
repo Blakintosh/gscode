@@ -20,6 +20,10 @@ public static class PrecacheAssetTypes
     {
         // The string-family types accept additional arguments beyond the asset name;
         // everything else takes exactly one value.
+        //
+        // Every type the language PDF documents is here. "xmodel" is the one addition beyond it:
+        // undocumented, but used 38 times across the shipped scripts, so rejecting it would flag
+        // stock code. Extend the same way — from real usage, not guesswork.
         string[] singleValueTypes =
         [
             "vehicle", "model", "playercharacter", "aitype", "character", "xmodelalias",
@@ -27,6 +31,7 @@ public static class PrecacheAssetTypes
             "streamerhint", "headicon", "statusicon", "locationselector", "menu",
             "material", "objective", "fx", "lui_menu", "lui_menu_data", "client_fx",
             "client_tagfxset",
+            "xmodel",
         ];
 
         string[] stringFamilyTypes = ["string", "debugstring", "eventstring", "triggerstring"];

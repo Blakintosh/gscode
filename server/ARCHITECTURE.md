@@ -97,7 +97,6 @@ tightly-paired handlers may share one heading (`Parser.cs (+ .Declarations / .St
 
 ## Known gaps
 
-P0–P12 are complete. `FOLLOWUPS.md` tracks what did not ship: P13 (optional / externally
-blocked) and P14 (plan-promised items found missing in the 2026-07-20 global audit).
-Read it before assuming a plan feature exists — several settings and data artifacts are
-present but not yet consumed, and each is listed there.
+P0–P14 are complete. `FOLLOWUPS.md` holds only what still needs a decision: the opt-in
+`apiUpdate.ts` refresh and the optional headless CLI, plus two corpus grammar gaps
+consciously left alone. Everything the 2026-07-20 audit found missing has since been built.

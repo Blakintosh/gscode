@@ -69,8 +69,13 @@ public static class MarkdownDocRenderer
         return markdown.ToString();
     }
 
-    /// <summary>Markdown for a macro: its define form plus any trailing-comment documentation.</summary>
-    public static string RenderMacro(MacroRecord macro)
+    /// <summary>
+    /// Markdown for a macro: its define form, what it expands to, and any trailing-comment
+    /// documentation. The expansion is passed in rather than read off the record, because
+    /// macro bodies are deliberately not retained per record — a header inserted by hundreds
+    /// of files would otherwise store its bodies hundreds of times over.
+    /// </summary>
+    public static string RenderMacro(MacroRecord macro, string expansion = "")
     {
         StringBuilder markdown = new();
 
@@ -78,6 +83,13 @@ public static class MarkdownDocRenderer
         if ( macro.IsFunctionLike )
         {
             markdown.Append('(').Append(string.Join(", ", macro.Parameters)).Append(')');
+        }
+
+        // The expansion is what a caller actually wants to see, so it shares the code block
+        // with the define rather than sitting below the documentation.
+        if ( expansion.Length > 0 )
+        {
+            markdown.Append('\n').Append(expansion);
         }
 
         markdown.Append("\n```");

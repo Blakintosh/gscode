@@ -193,14 +193,88 @@ three features, and the grey-out is the most visible missing behavior in the edi
     waves 1 and 3 (`UnusedUsing`, `PreferBooleanLiteral`) plus the existing
     `UsingAfterDeclaration`.
 18. ✔ Corpus test category + `PerfTracker.Report` surfacing (P13 #5).
-    `GSCode.Server.Tests/Corpus` runs the real `shareaw` tree behind `Category=Corpus`,
+    `GSCode.Server.Tests/Corpus` runs the real `share
+aw` tree behind `Category=Corpus`,
     excluded on CI and no-opping wherever the corpus is absent. `PerfTracker.Report` is now
     dumped after the memory breakdown (still `[Conditional]`, so normal builds pay nothing).
 
     **First run found real bugs, which is the point.** 980 scripts, zero crashes, formatter
     gates clean, 4 files with lex/parse errors (0.41%) — three distinct causes, below.
 
-### P14 #19 — grammar gaps found by the corpus
+### P14 #19 — grammar gaps found by the corpus (DEFERRED 2026-07-20)
+
+**User decision: not worth fixing — the game has shipped, so these four stock files are frozen
+and will never be re-authored.** Recorded rather than dropped because the two idioms below can
+also appear in MOD code (a modder copying stock style would write them), so if either ever
+shows up in a user's own script, the diagnosis is already done here.
+
+**(a) Object-like macro invoked with `()`** — `gib.gsc(58)` / `gib.csc(35)`,
+"Expected ';' but found '('".
+
+`gib.gsh` declares `#define GET_GIB_BUNDLES struct::get_script_bundles("gibcharacterdef")`
+(object-like, no parameter list), and the call site writes `GET_GIB_BUNDLES()`. Expansion
+therefore yields `struct::get_script_bundles("gibcharacterdef")()` — a call applied to a call
+result, which the parser rejects. Since this is shipped Treyarch code, the engine evidently
+accepts it. Likely fix: let `ParsePostfixChain` accept `(` as well as `[` and `.`, which
+generalizes the call-result indexing fix already made for
+`players[q] getplayerangles()[1]`.
+
+**(b) `&` applied to a macro that expands to a string** — `_quadtank.gsc(1741)`,
+"Expected an expression but found '\"tag_target_lower\"'".
+
+`#define WEAKSPOT_BONE_NAME "tag_target_lower"`, used as
+`... triggerWeakpointDamage( &WEAKSPOT_BONE_NAME )`. Written directly, `&"tag_target_lower"`
+lexes as a single localized-string (istring) token. Arriving via expansion, the `&` and the
+string are separate tokens, and the parser's prefix `&` expects a function name. Fix: accept
+`&` followed by a string literal as an istring in the expression grammar, not only in the
+lexer.
+
+**(c) Unmatched `#/`** — `vehicle_shared.gsc(3932)`, "Expected a function, class, or directive
+but found '#/'".
+
+Dev-block markers in that file look genuinely unbalanced (`/#` at 3244 and 3287 close at 3264
+and 3292; the `#/` at 3932 has no opener above it). This may be a defect in the stock script
+rather than a gap on our side, in which case our diagnostic is correct and the file is simply
+one Treyarch never compiled with a strict parser. Needs confirming before changing anything —
+do not "fix" the parser to accept unbalanced markers.
+
+**Wave 7 — cleanup and low priority. ✔ DONE.**
+19. ✔ Oversized-file guard (P14 #14). Smaller than the plan implied: v1's 65,535 cap existed
+    because it packed positions into narrow fields, but v2's `Position` holds ints, so there is
+    no correctness cliff. The 8 MB guard in `WorkspaceIndexer` only stops a pathological file
+    dominating a cold index; the count surfaces via `IndexOutcome.SkippedOversized`.
+20. ✔ `positionEncoding: utf-16` declared, plus `Text/SurrogatePairPositionTests`. Behaviour was
+    already correct — `SourceText` indexes UTF-16 code units throughout — so this was
+    declaration and proof, not repair.
+21. ✔ `FOLDER.md` layout ratified per-project in `ARCHITECTURE.md` (drift turned into a
+    documented decision) and all 12 real gaps filled, including a stray duplicate empty heading.
+    `PORTING.md` resolved: every row closed except the two below.
+
+### P14 #18 — macro expansion preview ✔ DONE
+
+Hovering a macro now shows what it expands to, alongside its `#define` signature and doc
+comment.
+
+The recorded blocker — "`MacroRecord` does not carry the body" — turned out to be avoidable.
+`HoverHandler.FindMacro` builds its record from the live `MacroDefinition`, which already
+carries `Body`, so the preview is rendered there and passed to `MarkdownDocRenderer.RenderMacro`
+as an argument. **`MacroRecord` was not changed at all**, which sidesteps the memory concern
+flagged when this was opened: bodies are still never retained per record, so a header inserted
+by hundreds of files does not store its bodies hundreds of times.
+
+`Api/MacroExpansionPreview.cs` rebuilds the body from the token stream rather than slicing the
+original source, because a macro reached through `#insert` lives in a header whose text is not
+loaded at hover time. The trade is the author's exact spacing for something that matters more:
+line continuations collapse, so a nine-statement macro like `NEW_STATE` reads as one line of
+what it actually expands to instead of a wall of backslashes. Long bodies truncate at 240
+characters — a hover is a glance, not a listing.
+
+### P14 #19 — grammar gaps found by the corpus (DEFERRED 2026-07-20)
+
+**User decision: not worth fixing — the game has shipped, so these four stock files are frozen
+and will never be re-authored.** Recorded rather than dropped because the two idioms below can
+also appear in MOD code (a modder copying stock style would write them), so if either ever
+shows up in a user's own script, the diagnosis is already done here.
 
 **(a) Object-like macro invoked with `()`** — `gib.gsc(58)` / `gib.csc(35)`,
 "Expected ';' but found '('".

@@ -111,7 +111,7 @@ public sealed class HoverHandler : HoverHandlerBase
             case SymbolKind.Macro:
             {
                 MacroRecord? macro = FindMacro(target, key.Name);
-                return macro is not null ? MarkdownDocRenderer.RenderMacro(macro) : null;
+                return macro is not null ? MarkdownDocRenderer.RenderMacro(macro, FindMacroExpansion(target, key.Name)) : null;
             }
             case SymbolKind.Field:
                 return RenderField(key.Name, target.Language);
@@ -123,6 +123,23 @@ public sealed class HoverHandler : HoverHandlerBase
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// The macro's body rendered for preview. Read from the live MacroDefinition, which carries
+    /// the body, rather than from the record, which deliberately does not.
+    /// </summary>
+    private static string FindMacroExpansion(NavigationTarget target, string name)
+    {
+        foreach ( GSCode.Parser.Preprocessing.MacroDefinition definition in target.Result.Preprocessed.Macros.All )
+        {
+            if ( string.Equals(definition.Name, name, StringComparison.Ordinal) )
+            {
+                return MacroExpansionPreview.Render(definition.Body);
+            }
+        }
+
+        return "";
     }
 
     private MacroRecord? FindMacro(NavigationTarget target, string name)

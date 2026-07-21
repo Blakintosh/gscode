@@ -34,7 +34,7 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 | ScriptReferencesSelectionEndTests | ✔ P14 | The underlying contract is half-open ranges, pinned by `SourceTextTests.Range_Contains_IsHalfOpen`; boundary behaviour at a selection end follows from it, and cross-file references are covered by the P7 navigation smoke |
 | ScriptHoverQualifiedFunctionTests | ✔ P7 | Qualified-function hover via `Api/ApiLoaderTests` (renderer) + the nav smoke; deeper cases as more hover tests land |
 | ScriptDefinitionQualifiedIdentifierTests | ✔ P7 | Cross-file qualified definition verified by the P7 navigation smoke |
-| MacroCallSiteModeTests | ☐ P14 | GENUINELY OPEN. Macro hover renders the `#define` signature and doc comment but no expansion preview, and `MacroRecord` does not carry the body (bodies stay parser-side). Needs the body plumbed into the record before the preview can exist |
+| MacroCallSiteModeTests | ✔ P14 | Macro hover shows its expansion (`Api/MacroExpansionPreviewTests`), rebuilt from the token stream so continuations collapse. `MacroRecord` still carries no body — the preview renders from the live `MacroDefinition` at hover time, so nothing is retained per record |
 | MacroGoToDefinitionWrongTargetTests | ✔ P2 | The canonical provenance regression: `InsertTests.Insert_SplicesTokens_WithGshProvenance` + `Insert_MacroFromGsh_DefinitionSitePointsIntoGsh` assert gsh-local ranges survive splicing (P7 wires it to go-to-def) |
 | DocumentHighlightCasingTests | ✔ P7 | Same-file highlight verified by the P7 navigation smoke; keys are lowercase-canonical so casing is inherently handled |
 | StockScriptsTests | ✔ P14 | `Api/StockScripts.cs` loads the list; `Resolution/RawWriteGuardTests` covers loading, slash/case-insensitive lookup, and every rawFileWarningMode branch |
@@ -45,10 +45,7 @@ Status: ☐ pending · ◐ partially ported · ✔ ported · ✘ dropped (with r
 
 ## Unresolved rows
 
-Every row is now resolved except one, tracked in `server/FOLLOWUPS.md`:
-
-- **MacroCallSiteModeTests** (☐) — macro expansion preview; needs the macro body carried on
-  `MacroRecord` first.
+**Every row is now resolved.**
 
 Resolutions favour pointing at where a scenario actually lives over inventing a same-named
 class, and one row is a conscious drop: `ScriptDependenciesReadyTests` tested a readiness gate

@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Analysis;
+using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
@@ -12,10 +13,14 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
 using Serilog;
 
 namespace GSCode.Server.Handlers;
+
+/// <summary>Payload for gscode/rawFolderWriteWarning.</summary>
+public sealed record RawFolderWriteWarningParams(string Path, string RelativePath, bool IsStockScript);
 
 /// <summary>
 /// Document lifecycle: incremental text sync, ~250 ms debounced re-analysis on typing,
@@ -30,19 +35,28 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ScriptDatabase _database;
     private readonly ResolverHolder _resolver;
     private readonly TextDocumentSelector _selector;
+    private readonly ServerSettings _settings;
+    private readonly StockScripts _stockScripts;
+    private readonly ILanguageServerFacade _server;
 
     public TextSyncHandler(
         DocumentStore documents,
         DiagnosticsPublisher diagnostics,
         ScriptDatabase database,
         ResolverHolder resolver,
-        TextDocumentSelector selector)
+        TextDocumentSelector selector,
+        ServerSettings settings,
+        StockScripts stockScripts,
+        ILanguageServerFacade server)
     {
         _documents = documents;
         _diagnostics = diagnostics;
         _database = database;
         _resolver = resolver;
         _selector = selector;
+        _settings = settings;
+        _stockScripts = stockScripts;
+        _server = server;
     }
 
     public override TextDocumentAttributes GetTextDocumentAttributes(DocumentUri uri)
@@ -107,9 +121,37 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             }
 
             AnalyzeAndPublish(document, request.TextDocument.Uri);
+            WarnIfProtectedRawFile(document);
         }
 
         return Unit.Value;
+    }
+
+    /// <summary>
+    /// Tells the client when a just-saved file lives in the game's raw folder, so it can offer
+    /// the "you probably meant to edit a mod copy" warning. Nothing is blocked — the save has
+    /// already happened; this is purely advisory.
+    /// </summary>
+    private void WarnIfProtectedRawFile(OpenDocument document)
+    {
+        RawFileWarningMode mode = RawWriteGuard.ParseMode(_settings.RawFileWarningMode);
+        if ( mode == RawFileWarningMode.Off )
+        {
+            return;
+        }
+
+        PathResolver resolver = _resolver.Current;
+        ResolutionContext context = resolver.GetContext(document.Path);
+        string relativePath = resolver.GetScriptRelativePath(document.Path, context);
+
+        if ( !RawWriteGuard.ShouldWarn(mode, context, relativePath, _stockScripts) )
+        {
+            return;
+        }
+
+        bool isStock = _stockScripts.Contains(relativePath);
+        _server.SendNotification(
+            "gscode/rawFolderWriteWarning", new RawFolderWriteWarningParams(document.Path, relativePath, isStock));
     }
 
     public override Task<Unit> Handle(DidCloseTextDocumentParams request, CancellationToken cancellationToken)

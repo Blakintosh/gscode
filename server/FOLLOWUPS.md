@@ -15,13 +15,16 @@ Legend: **Missing** = no implementation at all · **Partial** = wired but incomp
 P13 and P14 are interleaved by leverage and user impact, not by phase number. Waves are
 ordered; items inside a wave are ordered. Each item is one commit unless noted.
 
-**Wave 1 — diagnostics foundation.** Highest leverage: one record change unblocks three
-features, and the grey-out is the most visible missing behavior in the editor.
-1. Extend `Core.Diagnostics.Diagnostic` with `Tags` + `RelatedInformation`, map both in
+**Wave 1 — diagnostics foundation. ✔ DONE.** Highest leverage: one record change unblocks
+three features, and the grey-out is the most visible missing behavior in the editor.
+1. ✔ Extend `Core.Diagnostics.Diagnostic` with `Tags` + `RelatedInformation`, map both in
    `LspMapping` (P14 #1 infrastructure).
-2. Inactive `#if`/`#elif`/`#else` grey-out via `DiagnosticTag.Unnecessary` (P14 #1).
-3. Unused `#using` tagged `Unnecessary` (P14 #1).
-4. Duplicate-definition `relatedInformation` (P14 #1).
+2. ✔ Inactive `#if`/`#elif`/`#else` grey-out via `DiagnosticTag.Unnecessary` (P14 #1).
+   Needed no preprocessor change — `RecordDisabledRegion` already trimmed ranges and
+   already excluded insert-provided regions; only the emission was missing.
+3. ✔ Unused `#using` tagged `Unnecessary` (P14 #1) — `Analysis/UnusedUsingLint.cs`.
+4. ✔ Duplicate-definition `relatedInformation` (P14 #1) — new `DuplicateFunction` (4005)
+   rule in `SymbolExtractor`, file-local declarations only.
 
 **Wave 2 — no dead surfaces.** User-mandated; both are shipped-but-inert today.
 5. `gscode.rawFileWarningMode`: load `t7_stock_scripts.txt`, implement the

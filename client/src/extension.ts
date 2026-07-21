@@ -119,6 +119,37 @@ function registerIndexingStatusBar(
         statusBar.text = `$(sync~spin) GSCode: indexing ${formatCount(params.filesIndexed)}/${formatCount(params.totalFiles)}`;
     });
 
+    // Warn once per file per session: the save already happened, so repeating the toast on
+    // every later save of the same file would nag rather than inform.
+    const warnedRawFiles = new Set<string>();
+
+    languageClient.onNotification(
+        "gscode/rawFolderWriteWarning",
+        async (params: { path: string; relativePath: string; isStockScript: boolean }) => {
+            if (warnedRawFiles.has(params.path)) {
+                return;
+            }
+
+            warnedRawFiles.add(params.path);
+
+            const what = params.isStockScript ? "a stock script" : "a file in the game's raw folder";
+            const detail = params.relativePath || params.path;
+            log.warn(`Saved ${what}: ${detail}`);
+
+            const choice = await vscode.window.showWarningMessage(
+                `You just saved ${what} (${detail}). Mod tools updates overwrite raw, so edits here can be lost — consider copying the file into your mod folder instead.`,
+                "Don't Warn Again",
+            );
+
+            if (choice === "Don't Warn Again") {
+                await vscode.workspace
+                    .getConfiguration("gscode")
+                    .update("rawFileWarningMode", "off", vscode.ConfigurationTarget.Global);
+                log.info("Raw folder write warnings disabled (gscode.rawFileWarningMode = off).");
+            }
+        },
+    );
+
     languageClient.onNotification(
         "gscode/indexingComplete",
         (params: { filesIndexed: number; totalFiles: number; elapsedMilliseconds: number }) => {

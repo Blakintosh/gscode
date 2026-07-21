@@ -95,9 +95,23 @@ normal builds pay nothing (`Core/Instrumentation/PerfTracker.cs`,
 dotnet build server/GSCode.slnx -c Release -p:GscodeInstrumentation=true
 ```
 
-The indexer wraps its fan-out in an `index.total` scope. NOTE: a `PerfTracker.Report(...)` dump
-is not yet surfaced automatically — the two logged numbers above are the current perf signal;
-wiring a report dump + a `TA_TOOLS_PATH` corpus test is a tracked follow-up.
+The indexer wraps its fan-out in an `index.total` scope, and `Program.cs` dumps
+`PerfTracker.Report(...)` as `Perf  <scope>: N calls, X ms total, Y ms mean` right after the
+memory breakdown. Both the scopes and the dump are `[Conditional]`, so a normal build pays
+nothing for either.
+
+## Corpus tests
+
+`GSCode.Server.Tests/Corpus` runs the real %TA_TOOLS_PATH%\share\raw tree, tagged
+`Category=Corpus` and excluded on CI (which has no mod-tools install; the tests also no-op on
+their own when the corpus is absent). Four checks: every script analyses without throwing,
+lex/parse errors stay under 1% of the corpus, and the formatter's two property gates —
+token-stream equality and idempotence — hold over a 250-file sample.
+
+First run, 980 scripts: **zero crashes**, formatter gates clean, and **4 files with lex/parse
+errors (0.41%)** — three distinct genuine grammar gaps, listed in `FOLLOWUPS.md`. The listing
+in the test output is the real signal; the 1% budget exists only so one odd file cannot block
+the suite.
 
 ## How to run the pass
 

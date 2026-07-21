@@ -1,5 +1,6 @@
 using CommandLine;
 using GSCode.Core;
+using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
@@ -262,6 +263,10 @@ LanguageServer server = await LanguageServer.From(options =>
                         {
                             LogMemoryReport("compaction", outcome);
                         }
+
+                        // Compiles to nothing without -p:GscodeInstrumentation=true, so a normal
+                        // build pays neither the timing scopes nor this dump.
+                        PerfTracker.Report(line => Log.Information("Perf  {Scope}", line));
 
                         // Start reporting memory only now — during indexing it climbs steadily and
                         // would spam. The monitor logs only on >= 1 MB changes from here on.

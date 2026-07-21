@@ -21,7 +21,9 @@ jobs:
 
       # Corpus/stock-fixture test categories auto-skip when their local data is absent.
       - name: Test server
-        run: dotnet test server/GSCode.slnx --nologo --no-build
+        # Corpus tests need a local mod-tools install (%TA_TOOLS_PATH%\shareaw), which CI
+        # does not have. They no-op without it, but excluding them keeps that explicit.
+        run: dotnet test server/GSCode.slnx --nologo --no-build --filter "Category!=Corpus"
 
       - uses: actions/setup-node@v4
         with:

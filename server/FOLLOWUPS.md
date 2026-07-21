@@ -192,7 +192,45 @@ three features, and the grey-out is the most visible missing behavior in the edi
     diagnostic ported first — the portable set turned out to be exactly the diagnostics added in
     waves 1 and 3 (`UnusedUsing`, `PreferBooleanLiteral`) plus the existing
     `UsingAfterDeclaration`.
-18. Corpus test category + `PerfTracker.Report` surfacing (P13 #5).
+18. ✔ Corpus test category + `PerfTracker.Report` surfacing (P13 #5).
+    `GSCode.Server.Tests/Corpus` runs the real `shareaw` tree behind `Category=Corpus`,
+    excluded on CI and no-opping wherever the corpus is absent. `PerfTracker.Report` is now
+    dumped after the memory breakdown (still `[Conditional]`, so normal builds pay nothing).
+
+    **First run found real bugs, which is the point.** 980 scripts, zero crashes, formatter
+    gates clean, 4 files with lex/parse errors (0.41%) — three distinct causes, below.
+
+### P14 #19 — grammar gaps found by the corpus
+
+**(a) Object-like macro invoked with `()`** — `gib.gsc(58)` / `gib.csc(35)`,
+"Expected ';' but found '('".
+
+`gib.gsh` declares `#define GET_GIB_BUNDLES struct::get_script_bundles("gibcharacterdef")`
+(object-like, no parameter list), and the call site writes `GET_GIB_BUNDLES()`. Expansion
+therefore yields `struct::get_script_bundles("gibcharacterdef")()` — a call applied to a call
+result, which the parser rejects. Since this is shipped Treyarch code, the engine evidently
+accepts it. Likely fix: let `ParsePostfixChain` accept `(` as well as `[` and `.`, which
+generalizes the call-result indexing fix already made for
+`players[q] getplayerangles()[1]`.
+
+**(b) `&` applied to a macro that expands to a string** — `_quadtank.gsc(1741)`,
+"Expected an expression but found '\"tag_target_lower\"'".
+
+`#define WEAKSPOT_BONE_NAME "tag_target_lower"`, used as
+`... triggerWeakpointDamage( &WEAKSPOT_BONE_NAME )`. Written directly, `&"tag_target_lower"`
+lexes as a single localized-string (istring) token. Arriving via expansion, the `&` and the
+string are separate tokens, and the parser's prefix `&` expects a function name. Fix: accept
+`&` followed by a string literal as an istring in the expression grammar, not only in the
+lexer.
+
+**(c) Unmatched `#/`** — `vehicle_shared.gsc(3932)`, "Expected a function, class, or directive
+but found '#/'".
+
+Dev-block markers in that file look genuinely unbalanced (`/#` at 3244 and 3287 close at 3264
+and 3292; the `#/` at 3932 has no opener above it). This may be a defect in the stock script
+rather than a gap on our side, in which case our diagnostic is correct and the file is simply
+one Treyarch never compiled with a strict parser. Needs confirming before changing anything —
+do not "fix" the parser to accept unbalanced markers.
 
 **Wave 7 — cleanup and low priority. ✔ DONE.**
 19. ✔ Oversized-file guard (P14 #14). Smaller than the plan implied: v1's 65,535 cap existed

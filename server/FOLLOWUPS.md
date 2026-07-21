@@ -50,7 +50,12 @@ three features, and the grey-out is the most visible missing behavior in the edi
 7. ✔ prefer-boolean-literal lint (P14 #2) — `Analysis/PreferBooleanLiteralLint.cs`. Scope
    recovered from the v1 regression test in git history: declared-`bool` parameters only.
    Lives in the workspace layer, not extraction, because it needs the builtin API.
-8. ✔ Cross-file `private` function diagnostic (P14 #3) — `Analysis/PrivateAccessLint.cs`.
+8. ✔ Cross-namespace `private` function diagnostic (P14 #3) — `Analysis/PrivateAccessLint.cs`.
+   **Semantics corrected 2026-07-20**: `private` in GSC is scoped to the NAMESPACE, not the
+   file. A namespace can be split across files, and any file declaring it may call into its
+   private members. Resolution, completion and the lint all follow the namespace rule now;
+   `DatabaseQueries.DeclaredNamespaces` supplies the asking file's namespaces from the live
+   parse result so unsaved edits count immediately.
    Also fixed a latent bug this exposed: `ScriptRecord.Path` was assigned the raw analysed
    path despite being documented as the normalized store key, so private visibility (a
    record-path vs asking-path comparison) could be defeated by casing or slash style.

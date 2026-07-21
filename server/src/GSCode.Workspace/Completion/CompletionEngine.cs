@@ -207,7 +207,7 @@ public sealed class CompletionEngine
         LanguageStore store = _database.StoreFor(result.Language);
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
-        foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns) )
+        foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
         {
             entries.Add(FunctionEntry(function));
         }
@@ -330,7 +330,7 @@ public sealed class CompletionEngine
 
         foreach ( string ns in namespaces )
         {
-            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns) )
+            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
             {
                 entries.Add(FunctionEntry(function));
             }

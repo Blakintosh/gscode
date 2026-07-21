@@ -190,8 +190,13 @@ public class ScriptDatabaseTests
         Assert.NotNull(resolver);
     }
 
+    /// <summary>
+    /// Privacy is scoped to the NAMESPACE, not the file: any file declaring the same namespace
+    /// is part of the same logical unit and may call into it. secret.gsc declares no
+    /// #namespace, so it takes its file-name stem, "secret".
+    /// </summary>
     [Fact]
-    public async Task PrivateFunctions_InvisibleFromOtherFiles()
+    public async Task PrivateFunctions_VisibleWithinTheirNamespace_NotOutsideIt()
     {
         FakeFileSystem fileSystem = FixtureTree()
             .AddFile(@$"{Raw}\scripts\secret.gsc", "function private hidden()\n{\n}\n");
@@ -203,8 +208,20 @@ public class ScriptDatabaseTests
         await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
 
         string secretPath = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\secret.gsc");
+        string elsewhere = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\elsewhere.gsc");
 
-        Assert.Empty(DatabaseQueries.LookupFunctions(database.Gsc, "raw", askingPath: "elsewhere", null, "hidden"));
-        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", askingPath: secretPath, null, "hidden"));
+        // Its own file always sees it.
+        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", secretPath, null, "hidden"));
+
+        // Another file declaring the same namespace sees it too.
+        Assert.Single(DatabaseQueries.LookupFunctions(
+            database.Gsc, "raw", elsewhere, null, "hidden", askingNamespaces: ["secret"]));
+
+        // A file in a different namespace does not.
+        Assert.Empty(DatabaseQueries.LookupFunctions(
+            database.Gsc, "raw", elsewhere, null, "hidden", askingNamespaces: ["game"]));
+
+        // A caller supplying no namespaces falls back to same-file visibility only.
+        Assert.Empty(DatabaseQueries.LookupFunctions(database.Gsc, "raw", elsewhere, null, "hidden"));
     }
 }

@@ -125,7 +125,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             foreach ( NamespaceSpan span in target.Result.Extraction.Namespaces )
             {
                 ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                    target.Store, target.ContextId, target.Path, span.KeyName, identifier.Token.Text.ToLowerInvariant());
+                    target.Store, target.ContextId, target.Path, span.KeyName, identifier.Token.Text.ToLowerInvariant(), askingNamespaces: target.Namespaces);
                 if ( found.Length > 0 )
                 {
                     return [.. found[0].Function.Parameters.Select(static p => p.Name)];
@@ -146,7 +146,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
                 target.Store, target.ContextId, target.Path,
                 qualified.NamespaceToken.Text.ToLowerInvariant(),
-                qualified.NameToken.Text.ToLowerInvariant());
+                qualified.NameToken.Text.ToLowerInvariant(), askingNamespaces: target.Namespaces);
             if ( found.Length > 0 )
             {
                 return [.. found[0].Function.Parameters.Select(static p => p.Name)];

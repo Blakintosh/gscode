@@ -111,7 +111,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 
         // Find this function's definition record, then the call references inside its body range.
         ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
-            target.Store, target.ContextId, target.Path, key.Value.Namespace, key.Value.Name);
+            target.Store, target.ContextId, target.Path, key.Value.Namespace, key.Value.Name, askingNamespaces: target.Namespaces);
         if ( functions.Length == 0 )
         {
             return Task.FromResult<Container<CallHierarchyOutgoingCall>?>(null);
@@ -137,7 +137,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         foreach ( (SymbolKey callee, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range> ranges) in calls )
         {
             ImmutableArray<ResolvedFunction> resolved = DatabaseQueries.LookupFunctions(
-                target.Store, target.ContextId, target.Path, callee.Namespace, callee.Name);
+                target.Store, target.ContextId, target.Path, callee.Namespace, callee.Name, askingNamespaces: target.Namespaces);
             if ( resolved.Length == 0 )
             {
                 continue;

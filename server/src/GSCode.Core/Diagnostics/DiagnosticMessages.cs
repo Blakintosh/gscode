@@ -59,7 +59,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
         [GscDiagnosticCode.UnusedUsing] = "'{0}' is imported but nothing from it is used.",
         [GscDiagnosticCode.PreferBooleanLiteral] = "Parameter '{0}' is a bool; prefer '{1}' over the integer literal.",
-        [GscDiagnosticCode.PrivateFunctionNotVisible] = "'{0}' is private to '{1}' and cannot be called from another file.",
+        [GscDiagnosticCode.PrivateFunctionNotVisible] = "'{0}' is private to namespace '{1}'; only files declaring that namespace can call it.",
         [GscDiagnosticCode.ReadOnlyFieldWrite] = "Engine field '{0}' is read-only; assigning to it has no effect.",
         [GscDiagnosticCode.SizeIsReadOnly] = "'.size' is read-only and cannot be assigned.",
     }.ToFrozenDictionary();

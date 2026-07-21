@@ -92,7 +92,7 @@ public sealed class HoverHandler : HoverHandlerBase
             case SymbolKind.Function:
             {
                 ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
-                    target.Store, target.ContextId, target.Path, key.Namespace, key.Name);
+                    target.Store, target.ContextId, target.Path, key.Namespace, key.Name, askingNamespaces: target.Namespaces);
                 if ( functions.Length > 0 )
                 {
                     return MarkdownDocRenderer.RenderFunction(functions[0].Function);

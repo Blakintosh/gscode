@@ -20,9 +20,9 @@ public static class DatabaseQueries
 {
     /// <summary>
     /// Every visible function matching namespace+name, merged across contributing files.
-    /// Private functions are only visible from their own file, unless
-    /// <paramref name="includePrivate"/> is set — which the private-access lint uses to tell
-    /// "no such function" apart from "exists but is private".
+    /// Private functions follow the namespace-privacy rule below; <paramref name="includePrivate"/>
+    /// lifts it entirely, which the private-access lint uses to tell "no such function" apart
+    /// from "exists but is private".
     /// </summary>
     public static ImmutableArray<ResolvedFunction> LookupFunctions(
         LanguageStore store,
@@ -30,7 +30,8 @@ public static class DatabaseQueries
         string askingPath,
         string? namespaceName,
         string keyName,
-        bool includePrivate = false)
+        bool includePrivate = false,
+        ImmutableArray<string> askingNamespaces = default)
     {
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
 
@@ -58,7 +59,8 @@ public static class DatabaseQueries
                     continue;
                 }
 
-                if ( !includePrivate && function.IsPrivate && record.Path != normalizedAskingPath )
+                if ( !includePrivate && function.IsPrivate
+                    && !CanSeePrivate(function, record, normalizedAskingPath, askingNamespaces) )
                 {
                     continue;
                 }
@@ -111,6 +113,58 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// Whether a private function is visible to the asker. Privacy in GSC is scoped to the
+    /// NAMESPACE, not the file: a namespace can be split across several files, and every file
+    /// declaring that namespace is part of the same logical unit, so file_b declaring
+    /// `#namespace shared` may call a private function declared in file_a's `shared` block.
+    /// Callers that cannot supply their namespaces fall back to same-file visibility only.
+    /// </summary>
+    private static bool CanSeePrivate(
+        FunctionSymbol function,
+        ScriptRecord record,
+        string normalizedAskingPath,
+        ImmutableArray<string> askingNamespaces)
+    {
+        if ( record.Path == normalizedAskingPath )
+        {
+            return true;
+        }
+
+        if ( askingNamespaces.IsDefaultOrEmpty )
+        {
+            return false;
+        }
+
+        foreach ( string declared in askingNamespaces )
+        {
+            if ( string.Equals(declared, function.Namespace, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The lowercase-canonical namespaces a file declares, for the namespace-privacy rule.
+    /// Taken from the live parse result so unsaved edits count immediately.
+    /// </summary>
+    public static ImmutableArray<string> DeclaredNamespaces(GSCode.Parser.ParseResult result)
+    {
+        ImmutableArray<string>.Builder names = ImmutableArray.CreateBuilder<string>();
+        foreach ( NamespaceSpan span in result.Extraction.Namespaces )
+        {
+            if ( !names.Contains(span.KeyName) )
+            {
+                names.Add(span.KeyName);
+            }
+        }
+
+        return names.ToImmutable();
+    }
+
+    /// <summary>
     /// Normalizes an asking path for same-file comparisons. Callers with no asking file pass
     /// an empty string, which must stay empty rather than resolving to the process directory.
     /// </summary>
@@ -129,7 +183,8 @@ public static class DatabaseQueries
         LanguageStore store,
         string askingContextId,
         string askingPath,
-        string namespaceName)
+        string namespaceName,
+        ImmutableArray<string> askingNamespaces = default)
     {
         Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
 
@@ -150,7 +205,7 @@ public static class DatabaseQueries
                     continue;
                 }
 
-                if ( function.IsPrivate && record.Path != normalizedAskingPath )
+                if ( function.IsPrivate && !CanSeePrivate(function, record, normalizedAskingPath, askingNamespaces) )
                 {
                     continue;
                 }

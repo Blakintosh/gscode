@@ -8,9 +8,14 @@ using GSCode.Workspace.Database;
 namespace GSCode.Workspace.Analysis;
 
 /// <summary>
-/// Reports a call to a function that exists but is declared <c>private</c> in another file.
-/// Resolution already skips such functions, which means the call would otherwise fail
-/// silently with no explanation; this turns that silence into the actual reason.
+/// Reports a call to a function that exists but is declared <c>private</c> in a namespace the
+/// calling file does not declare. Resolution already skips such functions, which means the
+/// call would otherwise fail silently with no explanation; this turns that silence into the
+/// actual reason.
+///
+/// Privacy is scoped to the NAMESPACE, not the file: a file declaring <c>#namespace shared</c>
+/// may call a private function from another file's <c>shared</c> block, because they are the
+/// same logical unit. Only a caller outside the namespace is reported.
 ///
 /// Only fires when the normal lookup finds nothing AND a privacy-ignoring lookup finds a
 /// private declaration elsewhere, so a name that resolves fine some other way is never
@@ -27,6 +32,7 @@ public static class PrivateAccessLint
         BuiltinApi builtins)
     {
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -41,7 +47,8 @@ public static class PrivateAccessLint
             }
 
             ImmutableArray<ResolvedFunction> visible = DatabaseQueries.LookupFunctions(
-                store, askingContextId, askingPath, entry.Key.Namespace, entry.Key.Name);
+                store, askingContextId, askingPath, entry.Key.Namespace, entry.Key.Name,
+                askingNamespaces: askingNamespaces);
             if ( visible.Length > 0 )
             {
                 continue;
@@ -62,7 +69,7 @@ public static class PrivateAccessLint
                     DiagnosticSeverity.Error,
                     GscDiagnosticCode.PrivateFunctionNotVisible,
                     candidate.Function.Name,
-                    Path.GetFileName(candidate.Record.Path));
+                    candidate.Function.Namespace);
 
                 DiagnosticRelation declaredAt = new(
                     candidate.Record.Path, candidate.Function.NameRange, "Declared private here.");

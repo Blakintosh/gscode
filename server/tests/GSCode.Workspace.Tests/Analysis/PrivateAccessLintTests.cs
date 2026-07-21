@@ -48,7 +48,7 @@ public class PrivateAccessLintTests
     }
 
     [Fact]
-    public void CallingAPrivateFunctionFromAnotherFile_IsReported()
+    public void CallingAPrivateFunctionFromOutsideItsNamespace_IsReported()
     {
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
 
@@ -56,7 +56,35 @@ public class PrivateAccessLintTests
 
         Assert.Equal(GscDiagnosticCode.PrivateFunctionNotVisible, diagnostic.Code);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-        Assert.Contains("util.gsc", diagnostic.Message);
+        // The message names the namespace, since that is the unit privacy is scoped to.
+        Assert.Contains("util", diagnostic.Message);
+    }
+
+    [Fact]
+    public void CallingAPrivateFunctionFromAnotherFileInTheSameNamespace_IsFine()
+    {
+        // The core rule: private is scoped to the namespace, not the file. main.gsc declares
+        // #namespace util, so util's private members are part of its own logical unit.
+        string source = "#using scripts\\util;\n#namespace util;\nfunction run()\n{\n    util::hidden();\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void UnqualifiedCallFromAnotherFileInTheSameNamespace_IsFine()
+    {
+        string source = "#using scripts\\util;\n#namespace util;\nfunction run()\n{\n    hidden();\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void OneOfSeveralDeclaredNamespacesMatching_IsEnough()
+    {
+        // A file may declare several namespaces; matching any one of them grants access.
+        string source = "#using scripts\\util;\n#namespace game;\nfunction a()\n{\n}\n#namespace util;\nfunction run()\n{\n    util::hidden();\n}\n";
+
+        Assert.Empty(Lint(source));
     }
 
     [Fact]
@@ -65,6 +93,7 @@ public class PrivateAccessLintTests
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
 
         DiagnosticRelation relation = Assert.Single(Assert.Single(Lint(source)).RelatedInformation);
+
 
         Assert.EndsWith("util.gsc", relation.FilePath, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, relation.Range.Start.Line);

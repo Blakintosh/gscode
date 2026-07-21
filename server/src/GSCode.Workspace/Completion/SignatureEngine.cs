@@ -76,7 +76,7 @@ public sealed class SignatureEngine
         string keyName = calleeName.ToLowerInvariant();
 
         ImmutableArray<ResolvedFunction> functions = namespaceName is not null
-            ? DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, namespaceName, keyName)
+            ? DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: DatabaseQueries.DeclaredNamespaces(result))
             : LookupUnqualified(result, store, contextId, keyName);
 
         if ( functions.Length == 0 )
@@ -110,7 +110,7 @@ public sealed class SignatureEngine
         // Try each namespace the file participates in.
         foreach ( NamespaceSpan span in result.Extraction.Namespaces )
         {
-            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, span.KeyName, keyName);
+            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, span.KeyName, keyName, askingNamespaces: DatabaseQueries.DeclaredNamespaces(result));
             if ( found.Length > 0 )
             {
                 return found;

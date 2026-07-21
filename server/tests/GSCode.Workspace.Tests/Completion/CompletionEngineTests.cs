@@ -61,6 +61,32 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void NamespaceQualified_OffersPrivateFunctions_ToFilesInTheSameNamespace()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction private hidden()\n{\n}\nfunction shown()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        // main.gsc declares the SAME namespace, so util's private members are in scope:
+        // privacy is scoped to the namespace, not the file.
+        string sameNamespace = "#namespace util;\nfunction run()\n{\n    util::\n}\n";
+        ParseResult inside = Analyze(@$"{Raw}\scripts\main.gsc", sameNamespace);
+        ImmutableArray<CompletionEntry> insideEntries = engine.Complete(inside, "raw", new Position(3, 10));
+
+        Assert.True(HasLabel(insideEntries, "hidden"));
+        Assert.True(HasLabel(insideEntries, "shown"));
+
+        // A file in a different namespace sees only the public one.
+        string otherNamespace = "#namespace game;\nfunction run()\n{\n    util::\n}\n";
+        ParseResult outside = Analyze(@$"{Raw}\scripts\other.gsc", otherNamespace);
+        ImmutableArray<CompletionEntry> outsideEntries = engine.Complete(outside, "raw", new Position(3, 10));
+
+        Assert.False(HasLabel(outsideEntries, "hidden"));
+        Assert.True(HasLabel(outsideEntries, "shown"));
+    }
+
+    [Fact]
     public void Keywords_CarryDocumentation_AndAssertIsNotAKeyword()
     {
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");

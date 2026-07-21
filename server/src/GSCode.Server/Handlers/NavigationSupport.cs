@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Database;
@@ -9,12 +10,17 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 namespace GSCode.Server.Handlers;
 
 /// <summary>The resolved context for a navigation request against one open document.</summary>
+/// <param name="Namespaces">
+/// The namespaces this file declares, carried so every query can apply the namespace-privacy
+/// rule without recomputing it: a private function is visible to any file in the same namespace.
+/// </param>
 public sealed record NavigationTarget(
     ParseResult Result,
     string Path,
     ScriptLanguage Language,
     LanguageStore Store,
-    string ContextId);
+    string ContextId,
+    ImmutableArray<string> Namespaces);
 
 /// <summary>
 /// Shared plumbing for the navigation handlers: turns a document URI into its live
@@ -60,6 +66,7 @@ public sealed class NavigationSupport
             document.Path,
             document.Language,
             store,
-            ScriptDatabase.ContextIdOf(context));
+            ScriptDatabase.ContextIdOf(context),
+            DatabaseQueries.DeclaredNamespaces(document.LatestResult));
     }
 }

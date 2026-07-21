@@ -37,6 +37,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly TextDocumentSelector _selector;
     private readonly ServerSettings _settings;
     private readonly StockScripts _stockScripts;
+    private readonly BuiltinApiSet _builtins;
     private readonly ILanguageServerFacade _server;
 
     public TextSyncHandler(
@@ -47,8 +48,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         TextDocumentSelector selector,
         ServerSettings settings,
         StockScripts stockScripts,
+        BuiltinApiSet builtins,
         ILanguageServerFacade server)
     {
+        _builtins = builtins;
         _documents = documents;
         _diagnostics = diagnostics;
         _database = database;
@@ -193,7 +196,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _diagnostics.Publish(uri, document.Version, WithWorkspaceLints(document, result));
     }
 
-    /// <summary>Merges the parse diagnostics with the cross-file lints (namespace-usage, unused #using).</summary>
+    /// <summary>
+    /// Merges the parse diagnostics with the workspace lints: namespace-usage, unused #using,
+    /// and prefer-boolean-literal.
+    /// </summary>
     private ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> WithWorkspaceLints(OpenDocument document, ParseResult result)
     {
         // GSH fragments have no language store of their own and no #using semantics to lint.
@@ -209,6 +215,16 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             result, store, document.Language, resolver, document.Path);
         ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> unusedUsings = UnusedUsingLint.Analyze(
             result, store, document.Language, resolver, document.Path);
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> booleanLints = PreferBooleanLiteralLint.Analyze(
+            result, _builtins.For(document.Language));
+
+        if ( booleanLints.Length > 0 )
+        {
+            return result.AllDiagnostics
+                .AddRange(namespaceLints)
+                .AddRange(unusedUsings)
+                .AddRange(booleanLints);
+        }
 
         if ( namespaceLints.Length == 0 && unusedUsings.Length == 0 )
         {

@@ -311,6 +311,12 @@
 					"maximum": 10,
 					"description": "The longest run of blank lines the formatter preserves. Longer runs are collapsed to this many.",
 					"scope": "window"
+				},
+				"gscode.format.sortDirectives": {
+					"type": "boolean",
+					"default": true,
+					"description": "Group and sort the directive block at the top of a file: #using, then #insert, then #namespace, then #define, then #precache, separated by blank lines. #using and #precache are sorted alphabetically; #insert and #define keep their relative order because they are order-sensitive. Applies to Format Document only, never to range or on-type formatting.",
+					"scope": "window"
 				}
 			}
 		},

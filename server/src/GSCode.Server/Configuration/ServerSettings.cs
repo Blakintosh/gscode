@@ -43,6 +43,9 @@ public sealed class ServerSettings
     /// <summary>The longest run of blank lines the formatter preserves.</summary>
     public int FormatMaxBlankLines { get; set; } = 2;
 
+    /// <summary>Whether Format Document groups and sorts the leading directive block.</summary>
+    public bool FormatSortDirectives { get; set; } = true;
+
     /// <summary>
     /// The settings that actually change what the server does, as one line.
     ///
@@ -116,5 +119,8 @@ public sealed class ServerSettings
         FormatMaxBlankLines = section.Value<int?>("format.maxBlankLines")
             ?? section["format"]?.Value<int?>("maxBlankLines")
             ?? FormatMaxBlankLines;
+        FormatSortDirectives = section.Value<bool?>("format.sortDirectives")
+            ?? section["format"]?.Value<bool?>("sortDirectives")
+            ?? FormatSortDirectives;
     }
 }

@@ -100,6 +100,13 @@ public static class GscFormatter
             return null;
         }
 
+        // Directive sorting runs AFTER the gate, because it deliberately moves tokens and would
+        // trip it. It carries its own equality check instead -- see DirectiveSorter.
+        if ( options.SortDirectives )
+        {
+            formatted = DirectiveSorter.Sort(formatted) ?? formatted;
+        }
+
         return formatted;
     }
 
@@ -135,6 +142,13 @@ public static class GscFormatter
     {
         StringBuilder output = new();
         int depth = 0;
+        int parenDepth = 0;
+
+        // Brace depth puts `case` one level inside the switch, but the statements UNDER a label
+        // need one more, and the label itself must not get it. Each open brace records whether it
+        // belongs to a switch and whether a case label is currently open inside it.
+        List<SwitchBlock> blocks = [];
+        bool switchHeaderSeen = false;
 
         // Brace depth alone cannot indent an unbraced control-flow body — `if ( x )` with its
         // statement on the next line opens no brace, so the body would land in the `if`'s own
@@ -146,11 +160,28 @@ public static class GscFormatter
             Token token = significant[index].Token;
             int newlinesBefore = significant[index].NewlinesBefore;
 
-            // Closers dedent before this line's indent is computed.
-            if ( token.Kind == TokenKind.CloseBrace || token.Kind == TokenKind.DevBlockClose )
+            // Closers dedent before this line's indent is computed. A dev block is deliberately
+            // absent: `/# … #/` is a compile-time switch, not a scope -- the engine jumps over it
+            // when dev script is off -- so indenting its body would imply a nesting that does not
+            // exist. The stock scripts agree, 316 flush against 194 indented.
+            if ( token.Kind == TokenKind.CloseBrace )
             {
                 depth = Math.Max(0, depth - 1);
             }
+
+            if ( token.Kind == TokenKind.CloseParen )
+            {
+                parenDepth = Math.Max(0, parenDepth - 1);
+            }
+
+            if ( token.Kind == TokenKind.CloseBrace && blocks.Count > 0 )
+            {
+                blocks.RemoveAt(blocks.Count - 1);
+            }
+
+            // A label sits at the block's own level, so it does not get its own case indent.
+            bool isLabel = token.Kind is TokenKind.Case or TokenKind.Default;
+            int caseIndents = OpenCaseIndents(blocks, excludeInnermost: isLabel);
 
             unbraced.BeforeToken(token.Kind);
 
@@ -163,11 +194,11 @@ public static class GscFormatter
                 Token previous = significant[index - 1].Token;
                 bool trailingComment = IsComment(token.Kind) && newlinesBefore == 0;
 
-                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment) )
+                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth) )
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
                     output.Append('\n', 1 + blankLines);
-                    AppendIndent(output, depth + unbraced.PendingIndents, options);
+                    AppendIndent(output, depth + unbraced.PendingIndents + caseIndents, options);
                 }
                 else
                 {
@@ -177,10 +208,28 @@ public static class GscFormatter
                 output.Append(token.GetText(text));
             }
 
-            // Openers indent everything that follows.
-            if ( token.Kind == TokenKind.OpenBrace || token.Kind == TokenKind.DevBlockOpen )
+            // Openers indent everything that follows -- again, dev blocks excepted.
+            if ( token.Kind == TokenKind.OpenBrace )
             {
                 depth++;
+                blocks.Add(new SwitchBlock { IsSwitch = switchHeaderSeen });
+                switchHeaderSeen = false;
+            }
+
+            if ( token.Kind == TokenKind.Switch )
+            {
+                switchHeaderSeen = true;
+            }
+
+            // Everything after the label's ':' belongs to the case body.
+            if ( isLabel && blocks.Count > 0 && blocks[^1].IsSwitch )
+            {
+                blocks[^1].CaseOpen = true;
+            }
+
+            if ( token.Kind == TokenKind.OpenParen )
+            {
+                parenDepth++;
             }
 
             unbraced.AfterToken(token.Kind);
@@ -188,6 +237,50 @@ public static class GscFormatter
 
         output.Append('\n');
         return output.ToString();
+    }
+
+    /// <summary>One open brace: whether it is a switch body, and whether a case label is open in it.</summary>
+    private sealed class SwitchBlock
+    {
+        public bool IsSwitch { get; init; }
+
+        public bool CaseOpen { get; set; }
+    }
+
+    /// <summary>
+    /// How many extra levels the open case labels are worth. Nested switches each contribute one.
+    /// <paramref name="excludeInnermost"/> is set when emitting a label, which belongs at its
+    /// block's own level rather than inside the case body it is about to open.
+    /// </summary>
+    private static int OpenCaseIndents(List<SwitchBlock> blocks, bool excludeInnermost)
+    {
+        int total = 0;
+        for ( int index = 0; index < blocks.Count; index++ )
+        {
+            if ( !blocks[index].CaseOpen )
+            {
+                continue;
+            }
+
+            bool innermostOpen = true;
+            for ( int deeper = index + 1; deeper < blocks.Count; deeper++ )
+            {
+                if ( blocks[deeper].IsSwitch )
+                {
+                    innermostOpen = false;
+                    break;
+                }
+            }
+
+            if ( excludeInnermost && innermostOpen )
+            {
+                continue;
+            }
+
+            total++;
+        }
+
+        return total;
     }
 
     /// <summary>
@@ -207,6 +300,7 @@ public static class GscFormatter
         private bool _expectingHeader;
         private int _headerParenDepth;
         private bool _awaitingBody;
+        private bool _awaitingBodyFromElse;
 
         /// <summary>Extra indent levels owed to unbraced bodies currently open.</summary>
         public int PendingIndents { get; private set; }
@@ -220,12 +314,24 @@ public static class GscFormatter
             }
 
             _awaitingBody = false;
+            bool fromElse = _awaitingBodyFromElse;
+            _awaitingBodyFromElse = false;
 
             // A braced body needs nothing: brace depth already covers it.
-            if ( kind != TokenKind.OpenBrace )
+            if ( kind == TokenKind.OpenBrace )
             {
-                PendingIndents++;
+                return;
             }
+
+            // `else if` is one chained construct, not an `else` whose body is an `if`. Counting it
+            // as a body left a level owed that the `if`'s own `{` never released, so a braced
+            // `else if ( x ) { … }` came out one level deep with its closing brace misaligned.
+            if ( fromElse && kind == TokenKind.If )
+            {
+                return;
+            }
+
+            PendingIndents++;
         }
 
         /// <summary>Called after the token is written, to arm or release the next body.</summary>
@@ -234,11 +340,21 @@ public static class GscFormatter
             // A statement terminator ends every unbraced body stacked above it. `}` is reset
             // rather than decremented: a brace closing here means the body was braced after all,
             // or the tracker is out of step, and dropping to zero is the safe direction.
+            // A ';' inside a header's parentheses separates the clauses of a `for` rather than
+            // ending a statement. Treating it as a terminator tore down the header mid-flight, so
+            // the ')' never armed the body and `for ( … )` with an unbraced statement under it was
+            // left flat. Same root cause as the line-breaking rule in ShouldBreak.
+            if ( kind == TokenKind.Semicolon && _expectingHeader && _headerParenDepth > 0 )
+            {
+                return;
+            }
+
             if ( kind == TokenKind.Semicolon || kind == TokenKind.CloseBrace )
             {
                 PendingIndents = 0;
                 _expectingHeader = false;
                 _awaitingBody = false;
+                _awaitingBodyFromElse = false;
                 return;
             }
 
@@ -253,6 +369,7 @@ public static class GscFormatter
             if ( kind is TokenKind.Else or TokenKind.Do )
             {
                 _awaitingBody = true;
+                _awaitingBodyFromElse = kind == TokenKind.Else;
                 return;
             }
 
@@ -284,7 +401,8 @@ public static class GscFormatter
     /// keeps newline-terminated directives (#define, #if) intact. A trailing comment stays
     /// glued to the line it annotated.
     /// </summary>
-    private static bool ShouldBreak(TokenKind previous, TokenKind current, int newlinesBefore, bool trailingComment)
+    private static bool ShouldBreak(
+        TokenKind previous, TokenKind current, int newlinesBefore, bool trailingComment, int parenDepth)
     {
         if ( trailingComment )
         {
@@ -307,7 +425,9 @@ public static class GscFormatter
             return true;
         }
 
-        if ( previous == TokenKind.Semicolon )
+        // Inside parentheses a ';' separates the clauses of a `for` header rather than ending a
+        // statement, so it must not break the line: `for ( i = 0; i < 10; i++ )`.
+        if ( previous == TokenKind.Semicolon && parenDepth == 0 )
         {
             return true;
         }
@@ -349,10 +469,29 @@ public static class GscFormatter
             return options.PadParens ? " " : "";
         }
 
-        // Brackets hug their contents: a[0], [[ptr]].
-        if ( previous == TokenKind.OpenBracket || current == TokenKind.OpenBracket || current == TokenKind.CloseBracket )
+        // Bracket interiors are padded, matching parentheses: `a[ i ]`, `[[ ptr ]]`. Stock leans
+        // the other way on indexes (19,175 tight against 4,686 padded), but this is a deliberate
+        // override: one padding rule for every bracket reads better than an asymmetry nobody can
+        // remember the direction of.
+        //
+        // Adjacent brackets stay tight, so a function pointer's `[[` and `]]` each read as one
+        // token rather than as nested indexes, and an empty array stays `[]`.
+        if ( previous == TokenKind.OpenBracket )
         {
-            return "";
+            return current is TokenKind.OpenBracket or TokenKind.CloseBracket ? "" : " ";
+        }
+
+        if ( current == TokenKind.CloseBracket )
+        {
+            return previous == TokenKind.CloseBracket ? "" : " ";
+        }
+
+        // A '[' hugs its operand only when it SUBSCRIPTS one -- `a[ 0 ]`, `foo()[ 1 ]`. Opening an
+        // array literal it is an operand in its own right and takes the spacing of one, or
+        // `a = [];` would come out `a =[];`.
+        if ( current == TokenKind.OpenBracket )
+        {
+            return EndsAnOperand(previous) ? "" : " ";
         }
 
         if ( NoSpaceAfter(previous) )
@@ -368,9 +507,23 @@ public static class GscFormatter
         // A call/declaration '(' hugs its callee/name; a control-flow '(' is padded.
         // Not affected by PadParens, which is about the INTERIOR: the tight form is `if (a)`,
         // never `if(a)`, so a control-flow keyword keeps its space either way.
+        //
+        // It only hugs something it could actually be CALLING. After an OPERATOR a '(' opens a
+        // grouped subexpression and is an operand in its own right, or
+        // `x = ( GetDvarString( "d" ) == "true" );` came out `x =( GetDvarString…`.
+        //
+        // Tested by what precedes rather than by what could be a callee: names are Identifier, but
+        // so are `isdefined(`, `constructor(` and `destructor(`, which lex as keywords and would
+        // lose their hug under an allow-list.
         if ( current == TokenKind.OpenParen )
         {
-            return IsControlFlowKeyword(previous) ? " " : "";
+            // `return ( … )` and `case ( … )` group rather than call, so they take the space that
+            // any other keyword-followed-by-paren would not.
+            bool grouping = IsControlFlowKeyword(previous)
+                || IsBinaryOrAssignmentOperator(previous)
+                || previous is TokenKind.Return or TokenKind.Case;
+
+            return grouping ? " " : "";
         }
 
         return " ";
@@ -407,6 +560,71 @@ public static class GscFormatter
             case TokenKind.PlusPlus:
             case TokenKind.MinusMinus:
             case TokenKind.Colon:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether a token can end an operand, so that a following '[' is a subscript rather than the
+    /// start of an array literal. Globals like `self` and `level` lex as Identifier.
+    /// </summary>
+    private static bool EndsAnOperand(TokenKind kind)
+    {
+        return kind is TokenKind.Identifier
+            or TokenKind.Integer
+            or TokenKind.Float
+            or TokenKind.String
+            or TokenKind.LocalizedString
+            or TokenKind.HashString
+            or TokenKind.CloseParen
+            or TokenKind.CloseBracket;
+    }
+
+    /// <summary>
+    /// Operators that must be followed by an operand, so a '(' or '[' after one opens a group or a
+    /// literal rather than calling or subscripting what came before.
+    ///
+    /// Unary `!` and `~` are absent on purpose: they bind tight to their operand (`!( a )` is
+    /// handled by <see cref="NoSpaceAfter"/> before this is ever consulted), as are `++` and `--`.
+    /// </summary>
+    private static bool IsBinaryOrAssignmentOperator(TokenKind kind)
+    {
+        switch ( kind )
+        {
+            case TokenKind.Assign:
+            case TokenKind.Plus:
+            case TokenKind.Minus:
+            case TokenKind.Star:
+            case TokenKind.Slash:
+            case TokenKind.Percent:
+            case TokenKind.Ampersand:
+            case TokenKind.Pipe:
+            case TokenKind.Caret:
+            case TokenKind.LessThan:
+            case TokenKind.GreaterThan:
+            case TokenKind.EqualsEquals:
+            case TokenKind.StrictEquals:
+            case TokenKind.NotEquals:
+            case TokenKind.StrictNotEquals:
+            case TokenKind.LessThanEquals:
+            case TokenKind.GreaterThanEquals:
+            case TokenKind.LogicalAnd:
+            case TokenKind.LogicalOr:
+            case TokenKind.ShiftLeft:
+            case TokenKind.ShiftRight:
+            case TokenKind.PlusAssign:
+            case TokenKind.MinusAssign:
+            case TokenKind.StarAssign:
+            case TokenKind.SlashAssign:
+            case TokenKind.PercentAssign:
+            case TokenKind.AmpersandAssign:
+            case TokenKind.PipeAssign:
+            case TokenKind.CaretAssign:
+            case TokenKind.ShiftLeftAssign:
+            case TokenKind.ShiftRightAssign:
+            case TokenKind.QuestionMark:
                 return true;
             default:
                 return false;

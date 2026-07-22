@@ -25,6 +25,7 @@ export interface GscodeSettings {
     "diagnostics.scope": string;
     "format.padParens": boolean;
     "format.maxBlankLines": number;
+    "format.sortDirectives": boolean;
 }
 
 /** Reads the current gscode.* settings into the shape the server expects. */
@@ -48,5 +49,6 @@ export function readSettings(): GscodeSettings {
         "diagnostics.scope": config.get<string>("diagnostics.scope", "workspace"),
         "format.padParens": config.get<boolean>("format.padParens", true),
         "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),
+        "format.sortDirectives": config.get<boolean>("format.sortDirectives", true),
     };
 }

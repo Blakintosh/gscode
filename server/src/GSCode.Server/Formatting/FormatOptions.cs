@@ -28,11 +28,18 @@ namespace GSCode.Server.Formatting;
 /// The longest run of blank lines to preserve. Two by default, which keeps the 2,477 double blanks
 /// in the stock scripts while still collapsing the 152 longer runs.
 /// </param>
+/// <param name="SortDirectives">
+/// Whether the leading directive block is grouped and sorted. The formatter's only operation that
+/// moves code rather than whitespace, so it carries its own safety checks and refuses the one
+/// arrangement it could change the meaning of. On by default: 498 of the 980 stock scripts are not
+/// in canonical order and the same 498 have unsorted <c>#using</c> lines, so the tidying is real.
+/// </param>
 public readonly record struct FormatOptions(
     int IndentWidth = 4,
     bool UseTabs = false,
     bool PadParens = true,
-    int MaxBlankLines = 2)
+    int MaxBlankLines = 2,
+    bool SortDirectives = true)
 {
     /// <summary>
     /// The defaults, for callers with no editor settings to hand (tests, corpus gates).
@@ -43,7 +50,7 @@ public readonly record struct FormatOptions(
     /// blank lines, not the values declared above.
     /// </summary>
     public static FormatOptions Default { get; } = new(
-        IndentWidth: 4, UseTabs: false, PadParens: true, MaxBlankLines: 2);
+        IndentWidth: 4, UseTabs: false, PadParens: true, MaxBlankLines: 2, SortDirectives: true);
 
     /// <summary>One level of indentation as text.</summary>
     public string IndentUnit

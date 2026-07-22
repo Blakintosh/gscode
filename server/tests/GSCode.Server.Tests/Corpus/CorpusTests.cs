@@ -123,16 +123,22 @@ public class CorpusTests
         }
 
         List<string> violations = [];
-        int formatted = ForEachFormattableSample((path, result, output) =>
-        {
-            ImmutableArray<Token> before = SignificantTokens(result.Lexed.Tokens);
-            ImmutableArray<Token> after = SignificantTokens(Lexer.Lex(SourceText.From(output)).Tokens);
 
-            if ( !SameKinds(before, after) )
+        // Sorting off: this gate proves the REFLOW changes nothing but whitespace. Directive
+        // sorting moves lines on purpose and would trip it by design, so it carries its own
+        // invariant instead -- see DirectiveSorting_NeverLosesOrInventsALine below.
+        int formatted = ForEachFormattableSample(
+            (path, result, output) =>
             {
-                violations.Add(path);
-            }
-        });
+                ImmutableArray<Token> before = SignificantTokens(result.Lexed.Tokens);
+                ImmutableArray<Token> after = SignificantTokens(Lexer.Lex(SourceText.From(output)).Tokens);
+
+                if ( !SameKinds(before, after) )
+                {
+                    violations.Add(path);
+                }
+            },
+            FormatOptions.Default with { SortDirectives = false });
 
         _output.WriteLine($"Checked token-stream equality across {formatted} formatted scripts.");
         foreach ( string violation in violations.Take(25) )
@@ -182,7 +188,57 @@ public class CorpusTests
     /// Files the formatter refuses (syntax errors) are skipped rather than counted, since
     /// refusing is the correct behaviour there and already has its own coverage.
     /// </summary>
-    private static int ForEachFormattableSample(Action<string, ParseResult, string> check)
+    /// <summary>
+    /// The directive sorter's own safety net, run over real files. It may move a line but must
+    /// never drop, duplicate or edit one -- so the multiset of non-blank lines has to survive.
+    /// </summary>
+    [Fact]
+    public void DirectiveSorting_NeverLosesOrInventsALine()
+    {
+        if ( SkipWithoutCorpus() )
+        {
+            return;
+        }
+
+        List<string> violations = [];
+        int sorted = 0;
+        int checkedFiles = ForEachFormattableSample(
+            (path, result, output) =>
+            {
+                string? reordered = DirectiveSorter.Sort(output);
+                if ( reordered is null )
+                {
+                    return;
+                }
+
+                sorted++;
+                if ( !SameNonBlankLines(output, reordered) )
+                {
+                    violations.Add(path);
+                }
+            },
+            FormatOptions.Default with { SortDirectives = false });
+
+        _output.WriteLine($"Sorted the directive block in {sorted} of {checkedFiles} formatted scripts.");
+        foreach ( string violation in violations.Take(25) )
+        {
+            _output.WriteLine("  " + violation);
+        }
+
+        Assert.Empty(violations);
+        Assert.True(sorted > 0, "the sorter reordered nothing, so this gate proved nothing");
+    }
+
+    private static bool SameNonBlankLines(string before, string after)
+    {
+        List<string> left = [.. before.Split('\n').Select(static l => l.Trim()).Where(static l => l.Length > 0).Order(StringComparer.Ordinal)];
+        List<string> right = [.. after.Split('\n').Select(static l => l.Trim()).Where(static l => l.Length > 0).Order(StringComparer.Ordinal)];
+
+        return left.SequenceEqual(right, StringComparer.Ordinal);
+    }
+
+    private static int ForEachFormattableSample(
+        Action<string, ParseResult, string> check, FormatOptions? options = null)
     {
         PathResolver resolver = CorpusFixture.Resolver();
         NameTable names = new();
@@ -196,7 +252,7 @@ public class CorpusTests
             }
 
             ParseResult result = CorpusFixture.Analyze(path, resolver, names);
-            string? output = GscFormatter.Format(result);
+            string? output = GscFormatter.Format(result, options);
             if ( output is null )
             {
                 continue;

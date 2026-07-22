@@ -82,6 +82,9 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
             IndentWidth: requested.TabSize > 0 ? (int)requested.TabSize : 4,
             UseTabs: !requested.InsertSpaces,
             PadParens: _settings.FormatPadParens,
-            MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines));
+            MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines),
+            // Never here: this formats a fragment, and hoisting the whole file's
+            // directive block from under a partial edit would be startling.
+            SortDirectives: false);
     }
 }

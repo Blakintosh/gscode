@@ -76,6 +76,7 @@ public sealed class DocumentFormattingHandler : DocumentFormattingHandlerBase
             IndentWidth: requested.TabSize > 0 ? (int)requested.TabSize : 4,
             UseTabs: !requested.InsertSpaces,
             PadParens: _settings.FormatPadParens,
-            MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines));
+            MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines),
+            SortDirectives: _settings.FormatSortDirectives);
     }
 }

@@ -19,7 +19,14 @@ public sealed record ParameterSymbol(string Name, bool ByRef, string DefaultValu
 /// <param name="Name">Display-case variable/field name.</param>
 /// <param name="KeyName">Lowercase-canonical name for lookups.</param>
 /// <param name="Range">Root-file range of the assigned name.</param>
-public sealed record AssignmentSymbol(string OwnerName, string Name, string KeyName, TextRange Range);
+/// <param name="IsLoopVariable">
+/// Whether this is a loop's own induction variable — a `for` initializer's counter, or a
+/// `foreach` key/value. Still an assignment, and still worth completing and typing; just not
+/// worth a line in the outline, where `i`, `key` and `value` from every loop in the file drown
+/// the names that mean something.
+/// </param>
+public sealed record AssignmentSymbol(
+    string OwnerName, string Name, string KeyName, TextRange Range, bool IsLoopVariable = false);
 
 /// <summary>One declared function (top-level or class method).</summary>
 public sealed record FunctionSymbol

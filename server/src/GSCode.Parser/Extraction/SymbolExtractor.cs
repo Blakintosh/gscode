@@ -393,7 +393,9 @@ public sealed class SymbolExtractor
             case ForNode forNode:
                 if ( forNode.Initializer is not null )
                 {
+                    int beforeInitializer = assignments.Count;
                     WalkStatement(forNode.Initializer, assignments);
+                    MarkAsLoopVariables(assignments, beforeInitializer);
                 }
 
                 if ( forNode.Condition is not null )
@@ -413,10 +415,10 @@ public sealed class SymbolExtractor
                 // Loop variables are local assignments by definition.
                 if ( foreachNode.KeyToken is not null )
                 {
-                    AddLocalAssignment(foreachNode.KeyToken.Value, assignments);
+                    AddLocalAssignment(foreachNode.KeyToken.Value, assignments, isLoopVariable: true);
                 }
 
-                AddLocalAssignment(foreachNode.ValueToken, assignments);
+                AddLocalAssignment(foreachNode.ValueToken, assignments, isLoopVariable: true);
                 WalkExpression(foreachNode.Collection, assignments);
                 WalkStatement(foreachNode.Body, assignments);
                 return;
@@ -613,13 +615,31 @@ public sealed class SymbolExtractor
         }
     }
 
-    private void AddLocalAssignment(PToken nameToken, ImmutableArray<AssignmentSymbol>.Builder assignments)
+    private void AddLocalAssignment(
+        PToken nameToken, ImmutableArray<AssignmentSymbol>.Builder assignments, bool isLoopVariable = false)
     {
         assignments.Add(new AssignmentSymbol(
             "",
             nameToken.Text,
             _names.InternLower(nameToken.Text),
-            nameToken.RootRange));
+            nameToken.RootRange,
+            isLoopVariable));
+    }
+
+    /// <summary>
+    /// Marks everything a `for` initializer just added as a loop variable.
+    ///
+    /// The initializer is an ordinary statement — `i = 0` is indistinguishable from any other
+    /// assignment by the time it is walked — so rather than thread a flag through the whole
+    /// expression walk, the entries it contributed are rewritten afterwards. The range is known
+    /// because a builder only ever appends.
+    /// </summary>
+    private static void MarkAsLoopVariables(ImmutableArray<AssignmentSymbol>.Builder assignments, int fromIndex)
+    {
+        for ( int index = fromIndex; index < assignments.Count; index++ )
+        {
+            assignments[index] = assignments[index] with { IsLoopVariable = true };
+        }
     }
 
     private void RecordCalleeReference(ExprNode callee, ReferenceKind kind)

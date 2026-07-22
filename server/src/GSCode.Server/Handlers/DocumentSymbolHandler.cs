@@ -87,19 +87,28 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
                 }
             }
 
-            if ( isExplicit )
+            if ( children.Count == 0 )
             {
-                roots.Add(MakeSymbol(
-                    namespaceSpan.Name,
-                    SymbolKind.Namespace,
-                    namespaceSpan.GovernedRange.ToLsp(),
-                    namespaceSpan.NameRange.ToLsp(),
-                    children));
+                continue;
             }
-            else
-            {
-                roots.AddRange(children);
-            }
+
+            // An implicit namespace is still a namespace: a file with no #namespace directive
+            // belongs to the one named after it, and its functions really do live there. Treating
+            // "no directive" as "no namespace" flattened those files to the root, so struct.gsc
+            // showed a bare list of functions while its neighbours were grouped.
+            //
+            // The node needs a selection range that exists in the file, and there is no name to
+            // point at, so it selects the first thing it contains.
+            OmniSharp.Extensions.LanguageServer.Protocol.Models.Range selectionRange = isExplicit
+                ? namespaceSpan.NameRange.ToLsp()
+                : FirstSelectionRange(children);
+
+            roots.Add(MakeSymbol(
+                namespaceSpan.Name,
+                SymbolKind.Namespace,
+                namespaceSpan.GovernedRange.ToLsp(),
+                selectionRange,
+                children));
         }
 
         return Task.FromResult<SymbolInformationOrDocumentSymbolContainer?>(
@@ -116,6 +125,14 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
             HashSet<string> seen = new(StringComparer.Ordinal);
             foreach ( AssignmentSymbol assignment in function.Assignments )
             {
+                // A loop's own counter is not a symbol anyone navigates to. Every `for` and
+                // `foreach` in the file would otherwise contribute an `i`, `key` or `value`,
+                // which is what made the outline look like it was listing the loops themselves.
+                if ( assignment.IsLoopVariable )
+                {
+                    continue;
+                }
+
                 string display = assignment.OwnerName.Length == 0
                     ? assignment.Name
                     : assignment.OwnerName + "." + assignment.Name;
@@ -155,6 +172,25 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
             classSymbol.FullRange.ToLsp(),
             classSymbol.NameRange.ToLsp(),
             children);
+    }
+
+    /// <summary>
+    /// A selection range for a node with no name of its own to point at: the first child's.
+    /// Clients require the selection range to lie inside the node's full range, so it cannot
+    /// simply be left empty.
+    /// </summary>
+    private static OmniSharp.Extensions.LanguageServer.Protocol.Models.Range FirstSelectionRange(
+        List<SymbolInformationOrDocumentSymbol> children)
+    {
+        foreach ( SymbolInformationOrDocumentSymbol child in children )
+        {
+            if ( child.DocumentSymbol is not null )
+            {
+                return child.DocumentSymbol.SelectionRange;
+            }
+        }
+
+        return new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range();
     }
 
     private static SymbolInformationOrDocumentSymbol MakeSymbol(

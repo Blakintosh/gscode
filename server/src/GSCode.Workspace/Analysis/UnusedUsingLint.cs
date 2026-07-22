@@ -92,6 +92,10 @@ public static class UnusedUsingLint
     {
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
+            // ExpandedFromMacro is deliberately NOT skipped: `REGISTER_SYSTEM(...)` expands to
+            // `system::register(...)`, so a file using that macro genuinely needs its
+            // `#using scripts\shared\system_shared`. Ignoring those uses told 471 stock files
+            // their import was pointless.
             if ( entry.Kind == ReferenceKind.Definition )
             {
                 continue;

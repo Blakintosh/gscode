@@ -9,9 +9,14 @@ using Xunit;
 namespace GSCode.Parser.Tests.Extraction;
 
 /// <summary>
-/// Macro-expanded tokens report the INVOCATION's range, so recording references for them
-/// stacks a macro's whole body onto the one call site. The reported symptom was
-/// go-to-definition on a multi-statement macro landing on the first call in its body.
+/// Macro-expanded tokens report the INVOCATION's range, so a macro's whole body stacks onto the
+/// one call site. The reported symptom was go-to-definition on a multi-statement macro landing on
+/// the first call in its body.
+///
+/// The parser-level contract is that those uses are recorded under ReferenceKind.ExpandedFromMacro
+/// and never as an ordinary Call — the fact is kept, so the unused-import lint can see that
+/// REGISTER_SYSTEM really does call into the `system` namespace, while navigation (which skips
+/// that kind) still resolves the cursor to the macro. SymbolAtPositionTests covers that half.
 /// </summary>
 public class MacroExpansionReferenceTests
 {
@@ -42,7 +47,7 @@ public class MacroExpansionReferenceTests
     }
 
     [Fact]
-    public void MacroInvocation_YieldsOnlyTheMacroReference()
+    public void MacroInvocation_CarriesTheMacroUse_AndNoOrdinaryCall()
     {
         ParseResult result = Analyze(NewStateSource);
 
@@ -50,23 +55,28 @@ public class MacroExpansionReferenceTests
         int invocationLine = NewStateSource.Split('\n').ToList().FindIndex(line => line.Contains("NEW_STATE( \"play\" )"));
         ImmutableArray<ReferenceEntry> atCall = ReferencesAt(result, invocationLine);
 
-        // The macro use must be here, and nothing from its body may claim the same position.
+        // The macro use must be here, and nothing from its body may claim the position as an
+        // ordinary CALL — that is what let go-to-definition land on flagsys::clear.
         // (The "play" string literal also lives here legitimately — the caller wrote it.)
         Assert.Contains(atCall, entry => entry.Kind == ReferenceKind.MacroUse);
-        Assert.DoesNotContain(atCall, entry => entry.Key.Kind == SymbolKind.Function);
-        Assert.DoesNotContain(atCall, entry => entry.Key.Kind == SymbolKind.Class);
+        Assert.DoesNotContain(atCall, entry => entry.Kind == ReferenceKind.Call);
+        Assert.DoesNotContain(atCall, entry => entry.Kind == ReferenceKind.ClassUse);
     }
 
     [Fact]
-    public void MacroBodyCalls_AreNotAttributedToTheCallSite()
+    public void MacroBodyCalls_AreRecordedAsExpansions_NotAsCalls()
     {
         ParseResult result = Analyze(NewStateSource);
 
-        // `clear` and `notify` live in the macro body; neither may appear as a reference,
-        // because their only recorded position would be the invocation's.
-        Assert.DoesNotContain(
-            result.Extraction.References,
-            entry => string.Equals(entry.Key.Name, "clear", StringComparison.OrdinalIgnoreCase));
+        // `clear` lives in the macro body. The USE is kept, so a lint can tell this file reaches
+        // into the flagsys namespace — REGISTER_SYSTEM's expansion into system::register is the
+        // case that matters — but never as a Call, which is the kind navigation resolves.
+        ImmutableArray<ReferenceEntry> toClear = result.Extraction.References
+            .Where(entry => string.Equals(entry.Key.Name, "clear", StringComparison.OrdinalIgnoreCase))
+            .ToImmutableArray();
+
+        Assert.NotEmpty(toClear);
+        Assert.All(toClear, entry => Assert.Equal(ReferenceKind.ExpandedFromMacro, entry.Kind));
     }
 
     [Fact]

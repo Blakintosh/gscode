@@ -10,6 +10,29 @@ per-project `FOLDER.md` convention).
 
 ## Backlog
 
+### Two findings left from the corpus diagnostic sweep
+
+`CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since
+those shipped, anything it reports is either a real defect in Treyarch's code or a false positive
+in ours. Two groups are still unexplained:
+
+**`gscode-5004 ReadOnlyFieldWrite` — 87 warnings in 44 files.** Stock code assigns to
+`damageTaken` (39), `goalpos` (22), `attacker` (6), `height`, `velocity`, `name`, `pers`,
+`meleeDamage`. Either the shipped scripts are full of no-op assignments or the read-only flags in
+the bundled field data are wrong for these names. The data is curated from mod tools and the lint
+is already only a Warning for exactly that reason. Check a couple against the engine before
+either loosening the lint or correcting the data.
+
+**`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 ERRORS in 5 files.** The highest severity
+anything reports on shipped code: `error` (3x), `debug_spherical_cone`, `Print3d`,
+`printHashIDs`. Worth resolving either way — if genuine, the message is right and stock code has
+a latent bug; if not, an Error-severity false positive is the worst kind. Suspect the callers are
+themselves only reachable from dev code, which the lint does not model.
+
+The remaining 2,171 `UnusedUsing` hints were checked and are real: a text scan for the imported
+file's namespace, with comments stripped, finds an actual `ns::` use in **zero** of them. Stock
+scripts simply carry a lot of stale imports. It is a Hint, so they grey out rather than nag.
+
 ### Cross-file lints for files that are not open
 
 `gscode.diagnostics.scope` now publishes problems for indexed files, but a closed file reports

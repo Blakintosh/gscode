@@ -68,6 +68,8 @@ public static class NamespaceUsageLint
         // Warn on any qualified call whose namespace is neither the file's own nor imported.
         // Unqualified calls are keyed under the current namespace (always own), so they never
         // trip this; sys:: builtin calls have a null namespace and are skipped.
+        HashSet<string> classNames = ClassNames(store);
+
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -82,10 +84,43 @@ public static class NamespaceUsageLint
                 continue;
             }
 
+            // `self._o_scene cscene::stop()` calls a class METHOD: the qualifier names a class,
+            // not a namespace, and no `#using` can import one. Extraction cannot tell them apart,
+            // since both are written `name::name`, so the distinction has to be drawn here where
+            // the database knows what a class is. Every one of the 23 times this lint fired on
+            // the stock scripts was a class — cScene, cRailTurret, cSecurityMover.
+            if ( classNames.Contains(namespaceName) )
+            {
+                continue;
+            }
+
             diagnostics.Add(Diagnostic.Create(
                 entry.Range, DiagnosticSeverity.Warning, GscDiagnosticCode.NamespaceNotImported, namespaceName));
         }
 
         return diagnostics.ToImmutable();
+    }
+
+    /// <summary>
+    /// Every class name in the language world, not merely the visible ones.
+    ///
+    /// Deliberately generous, matching the rest of this lint: a name that is a class ANYWHERE is
+    /// never claimed to be an unimported namespace. Narrowing it to imported classes would trade
+    /// a guaranteed-correct silence for a warning that might be wrong, which is the wrong
+    /// direction for a lint whose whole premise is no false positives.
+    /// </summary>
+    private static HashSet<string> ClassNames(LanguageStore store)
+    {
+        HashSet<string> names = new(StringComparer.Ordinal);
+
+        foreach ( ScriptRecord record in store.AllRecords )
+        {
+            foreach ( ClassSymbol classSymbol in record.Classes )
+            {
+                names.Add(classSymbol.KeyName);
+            }
+        }
+
+        return names;
     }
 }

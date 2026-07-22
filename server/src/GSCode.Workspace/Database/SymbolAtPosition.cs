@@ -38,6 +38,13 @@ public static class SymbolAtPosition
     {
         foreach ( ReferenceEntry entry in record.References )
         {
+            // Never resolve the cursor to something a macro expanded into: the characters under
+            // it spell the macro's name, so go-to-definition and hover belong to the macro.
+            if ( entry.Kind == ReferenceKind.ExpandedFromMacro )
+            {
+                continue;
+            }
+
             if ( entry.Range.Contains(position) )
             {
                 return new PositionHit(HitKind.Reference, entry.Key, entry.Range, entry.Kind, "");
@@ -60,6 +67,13 @@ public static class SymbolAtPosition
     {
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
+            // Never resolve the cursor to something a macro expanded into: the characters under
+            // it spell the macro's name, so go-to-definition and hover belong to the macro.
+            if ( entry.Kind == ReferenceKind.ExpandedFromMacro )
+            {
+                continue;
+            }
+
             if ( entry.Range.Contains(position) )
             {
                 return new PositionHit(HitKind.Reference, entry.Key, entry.Range, entry.Kind, "");

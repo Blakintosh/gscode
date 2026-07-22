@@ -762,8 +762,14 @@ public sealed class SymbolExtractor
     /// </summary>
     private void AddReference(SymbolKey key, PToken token, ReferenceKind kind)
     {
+        // Text from a macro body still USES what it names — a file invoking REGISTER_SYSTEM
+        // really does call system::register — but the cursor can never sit on it, because the
+        // characters on screen spell the macro's name. Recording it under a separate kind keeps
+        // the fact while leaving navigation to resolve the macro instead. RootRange is already
+        // the invocation site in this file, so the range is meaningful either way.
         if ( token.Provenance.DefinitionSite is not null )
         {
+            _references.Add(new ReferenceEntry(key, token.RootRange, ReferenceKind.ExpandedFromMacro));
             return;
         }
 

@@ -239,39 +239,12 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     }
 
     /// <summary>
-    /// Merges the parse diagnostics with the workspace lints: namespace-usage, unused #using,
-    /// and prefer-boolean-literal.
+    /// The file's diagnostics plus the cross-file lints, from the shared pipeline so the editor
+    /// and any offline sweep report the same thing.
     /// </summary>
     private ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> WithWorkspaceLints(OpenDocument document, ParseResult result)
     {
-        // GSH fragments have no language store of their own and no #using semantics to lint.
-        if ( document.Language != ScriptLanguage.Gsc && document.Language != ScriptLanguage.Csc )
-        {
-            return result.AllDiagnostics;
-        }
-
-        LanguageStore store = _database.StoreFor(document.Language);
-        PathResolver resolver = _resolver.Current;
-        BuiltinApi builtins = _builtins.For(document.Language);
-        string contextId = ScriptDatabase.ContextIdOf(resolver.GetContext(document.Path));
-
-        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic>.Builder lints =
-            ImmutableArray.CreateBuilder<GSCode.Core.Diagnostics.Diagnostic>();
-
-        lints.AddRange(NamespaceUsageLint.Analyze(result, store, document.Language, resolver, document.Path));
-        lints.AddRange(UnusedUsingLint.Analyze(result, store, document.Language, resolver, document.Path));
-        lints.AddRange(PreferBooleanLiteralLint.Analyze(result, builtins));
-        lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, document.Path, builtins));
-        lints.AddRange(ReadOnlyWriteLint.Analyze(
-            result, _objectFields, new FlowTyper(builtins, _objectFields)));
-        lints.AddRange(DevBlockCallLint.Analyze(
-            result, store, contextId, document.Path, DatabaseQueries.DeclaredNamespaces(result), builtins));
-
-        if ( lints.Count == 0 )
-        {
-            return result.AllDiagnostics;
-        }
-
-        return result.AllDiagnostics.AddRange(lints);
+        return WorkspaceLints.Analyze(
+            result, document.Language, document.Path, _database, _resolver.Current, _builtins, _objectFields);
     }
 }

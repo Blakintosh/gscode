@@ -118,6 +118,22 @@ public enum ReferenceKind
     /// it was chasing is largely gone.
     /// </summary>
     ConcatenatedLiteral,
+
+    /// <summary>
+    /// A use that came from inside a MACRO BODY, recorded against the invocation site in this
+    /// file rather than the macro's own text.
+    ///
+    /// These used to be dropped outright, which was right about ranges and wrong about facts.
+    /// `REGISTER_SYSTEM(...)` expands to `system::register(...)`, so a file using that macro
+    /// really does call into the `system` namespace — but with nothing recorded, the unused-import
+    /// lint saw no use and told 471 stock files their `#using scripts\shared\system_shared` was
+    /// pointless. Code-lens counts and find-all-references were short by the same amount.
+    ///
+    /// Kept as a distinct kind rather than folded in, because the two consumers want opposite
+    /// things: counting a use is right, but resolving the CURSOR to one is not — the text under
+    /// it reads `REGISTER_SYSTEM`, and go-to-definition there must still reach the macro.
+    /// </summary>
+    ExpandedFromMacro,
 }
 
 /// <summary>One classified reference site: key + where + how. No text is stored beyond the interned key.</summary>

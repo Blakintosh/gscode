@@ -723,7 +723,8 @@ public sealed class CompletionEngine
         {
             // Documented keywords/directives (isdefined, notify, #using, …) carry their PDF blurb.
             string documentation = KeywordDocs.Find(keyword) ?? "";
-            entries.Add(new CompletionEntry(keyword, CompletionKind.Keyword, "", "", documentation));
+            entries.Add(new CompletionEntry(
+                keyword, CompletionKind.Keyword, "", KeywordInsertText(keyword, callSuffix), documentation));
         }
 
         if ( !insideFunction )
@@ -849,6 +850,29 @@ public sealed class CompletionEngine
                 return true;
             }
 
+            // An unbraced control-flow body is a statement too, and `else`/`do` take one
+            // directly. Rejecting these is why the semicolon went missing on exactly the lines
+            // whose body has no braces.
+            if ( kind is TokenKind.Else or TokenKind.Do )
+            {
+                return true;
+            }
+
+            if ( kind == TokenKind.CloseParen )
+            {
+                // A ')' either closes a control-flow header, so a body follows, or closes a call,
+                // in which case this is an expression and the answer is no.
+                return ClosesControlFlowHeader(tokens, scan);
+            }
+
+            if ( kind == TokenKind.CloseBracket )
+            {
+                // Skip the whole index — `things[0]` and `things[ get_key() ]` are both just an
+                // object being called on, and whatever is inside says nothing about that.
+                scan = MatchingOpenBracket(tokens, scan) - 1;
+                continue;
+            }
+
             // The object and the path to the name — `self`, `level`, `ns::`, `.field`, `thread`.
             if ( kind is TokenKind.Identifier or TokenKind.Dot or TokenKind.ScopeResolution or TokenKind.Thread )
             {
@@ -861,6 +885,107 @@ public sealed class CompletionEngine
 
         // Nothing but allowed tokens all the way back — the file opens here.
         return true;
+    }
+
+    /// <summary>
+    /// What a completed KEYWORD inserts, derived from the same call suffix functions use so the
+    /// callPunctuation setting governs both.
+    ///
+    /// <paramref name="callSuffix"/> already encodes the setting and the position: "" when
+    /// punctuation is off, "($0)" for a call, "($0);" for a call that is a whole statement. Each
+    /// keyword shape reads what it needs from that rather than re-deriving it.
+    /// </summary>
+    private static string KeywordInsertText(string keyword, string callSuffix)
+    {
+        bool punctuate = callSuffix.Length > 0;
+        bool statement = callSuffix.EndsWith(';');
+
+        switch ( GscKeywords.ShapeOf(keyword) )
+        {
+            // Never a semicolon: `isdefined( x )` is a condition, so the position looking like a
+            // statement means nothing.
+            case KeywordShape.ExpressionCall:
+                return punctuate ? keyword + "($0)" : "";
+
+            case KeywordShape.StatementCall:
+                return punctuate ? keyword + callSuffix : "";
+
+            // `wait 0.5;` — a value and no parentheses.
+            case KeywordShape.ValueStatement:
+                return statement ? keyword + " $0;" : "";
+
+            // `waittillframeend;` — nothing but the terminator.
+            case KeywordShape.BareStatement:
+                return statement ? keyword + ";" : "";
+
+            default:
+                // Empty means "insert the label", which is what a plain word wants.
+                return "";
+        }
+    }
+
+    /// <summary>
+    /// The index of the <c>[</c> matching the <c>]</c> at <paramref name="closeIndex"/>, or -1
+    /// when the brackets are unbalanced (mid-edit, which is most of the time here).
+    /// </summary>
+    private static int MatchingOpenBracket(ImmutableArray<Token> tokens, int closeIndex)
+    {
+        int depth = 0;
+
+        for ( int scan = closeIndex; scan >= 0; scan-- )
+        {
+            if ( tokens[scan].Kind == TokenKind.CloseBracket )
+            {
+                depth++;
+            }
+            else if ( tokens[scan].Kind == TokenKind.OpenBracket && --depth == 0 )
+            {
+                return scan;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Whether the <c>)</c> at <paramref name="closeIndex"/> ends an `if`/`while`/`for`/`foreach`
+    /// header — so a statement follows it — rather than ending a call.
+    ///
+    /// Walks back over balanced parentheses to the matching <c>(</c> and looks at the word before
+    /// it, which is the only way to tell `if ( ready )` from `get_ready()`.
+    /// </summary>
+    private static bool ClosesControlFlowHeader(ImmutableArray<Token> tokens, int closeIndex)
+    {
+        int depth = 0;
+
+        for ( int scan = closeIndex; scan >= 0; scan-- )
+        {
+            TokenKind kind = tokens[scan].Kind;
+
+            if ( kind == TokenKind.CloseParen )
+            {
+                depth++;
+                continue;
+            }
+
+            if ( kind != TokenKind.OpenParen )
+            {
+                continue;
+            }
+
+            depth--;
+            if ( depth > 0 )
+            {
+                continue;
+            }
+
+            int keyword = PreviousSignificant(tokens, scan);
+            return keyword >= 0
+                && tokens[keyword].Kind is TokenKind.If or TokenKind.While
+                    or TokenKind.For or TokenKind.Foreach;
+        }
+
+        return false;
     }
 
     // --- Token helpers ---

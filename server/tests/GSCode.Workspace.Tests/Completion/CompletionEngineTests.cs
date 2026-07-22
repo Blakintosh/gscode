@@ -420,6 +420,103 @@ public class CompletionEngineTests
         Assert.DoesNotContain(";", entry.InsertText, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("if ( ready ) ")]           // an unbraced if body
+    [InlineData("while ( ready ) ")]
+    [InlineData("for ( i = 0; i < 3; i++ ) ")]
+    [InlineData("foreach ( p in players ) ")]
+    [InlineData("else ")]
+    [InlineData("things[0] ")]              // a call on an indexed element
+    public void AnUnbracedBodyIsAStatementToo(string line)
+    {
+        // The reported miss: the semicolon vanished on exactly the lines whose body has no
+        // braces, because a ')' or an `else` was not in the accepted set.
+        Assert.EndsWith("($0);", CallEntry(line).InsertText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACallsClosingParenIsStillAnExpression()
+    {
+        // The ')' of `get_ready()` must not be mistaken for a control-flow header's, or every
+        // chained expression would gain a semicolon.
+        Assert.EndsWith("($0)", CallEntry("x = get_ready() + ").InsertText, StringComparison.Ordinal);
+    }
+
+    // --- Call-shaped keywords ---
+    //
+    // The distinction is expression-versus-statement, not keyword-versus-function: `isdefined` is
+    // only ever a condition, `notify` is a statement, and `wait` takes no parentheses at all.
+
+    private static CompletionEntry KeywordEntry(
+        string line, string keyword, CallPunctuation punctuation = CallPunctuation.ParensAndSemicolon)
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(
+            @$"{Raw}\scripts\main.gsc", "function run()\n{\n    " + line + "\n}\n");
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            result, "raw", new Position(2, 4 + line.Length), callPunctuation: punctuation);
+
+        return Assert.Single(entries, e => e.Label == keyword && e.Kind == CompletionKind.Keyword);
+    }
+
+    [Theory]
+    [InlineData("notify")]
+    [InlineData("endon")]
+    [InlineData("waittill")]
+    public void StatementKeywordsTakeParensAndASemicolon(string keyword)
+    {
+        Assert.Equal(keyword + "($0);", KeywordEntry("self ", keyword).InsertText);
+    }
+
+    [Fact]
+    public void IsdefinedTakesParensButNeverASemicolon()
+    {
+        // It is a condition wherever it appears, so a statement-looking position means nothing.
+        Assert.Equal("isdefined($0)", KeywordEntry("", "isdefined").InsertText);
+        Assert.Equal("isdefined($0)", KeywordEntry("if ( ", "isdefined").InsertText);
+    }
+
+    [Fact]
+    public void StatementKeywordsInAnExpressionKeepBareParens()
+    {
+        Assert.Equal("waittill($0)", KeywordEntry("x = self ", "waittill").InsertText);
+    }
+
+    [Theory]
+    [InlineData("wait", "wait $0;")]
+    [InlineData("waitrealtime", "waitrealtime $0;")]
+    public void WaitTakesAValueAndNoParentheses(string keyword, string expected)
+    {
+        Assert.Equal(expected, KeywordEntry("", keyword).InsertText);
+    }
+
+    [Fact]
+    public void WaittillframeendTakesNothingButATerminator()
+    {
+        Assert.Equal("waittillframeend;", KeywordEntry("", "waittillframeend").InsertText);
+    }
+
+    [Theory]
+    [InlineData("else")]
+    [InlineData("break")]
+    [InlineData("true")]
+    [InlineData("if")]
+    public void PlainWordsAreUnchanged(string keyword)
+    {
+        // Empty insert text means "insert the label". Control-flow keywords are left alone
+        // because completing `if` usefully means a body too, which is a different job.
+        Assert.Equal("", KeywordEntry("", keyword).InsertText);
+    }
+
+    [Fact]
+    public void TurningPunctuationOffLeavesKeywordsBare()
+    {
+        Assert.Equal("", KeywordEntry("self ", "notify", CallPunctuation.Off).InsertText);
+    }
+
     [Fact]
     public void ParensOnlyNeverAddsASemicolon()
     {

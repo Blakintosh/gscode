@@ -166,7 +166,6 @@ public sealed class SymbolExtractor
         ImmutableArray<ParameterSymbol>.Builder parameters = ImmutableArray.CreateBuilder<ParameterSymbol>();
         foreach ( ParameterNode parameter in function.Parameters )
         {
-            ValidateDefaultValue(parameter);
             string defaultText = parameter.DefaultValue is null ? "" : AstPrinter.Print(parameter.DefaultValue);
             parameters.Add(new ParameterSymbol(parameter.NameToken.Text, parameter.ByRef, defaultText));
         }
@@ -258,27 +257,6 @@ public sealed class SymbolExtractor
             FullRange = classNode.Range,
             SourceFile = classNode.NameToken.Provenance.SourceFile ?? "",
         });
-    }
-
-    /// <summary>
-    /// Retired. A default value is not a compile-time constant in this language: it is evaluated
-    /// in the function BODY when the argument comes in undefined, which makes any expression the
-    /// body could contain legal there.
-    ///
-    /// The old rule allowed literals and vectors only, and reported 21 ERRORS across 8 shipped
-    /// scripts. Counting what stock code actually writes as a default shows why — bool 211,
-    /// number 109, string 55, undefined 34, MACRO 22, function pointer &amp;f 10, member expression
-    /// a.b 8, istring 3, empty array [] 2 — with `function register( ..., reqs = [] )` in
-    /// system_shared called from everywhere.
-    ///
-    /// Nothing is reported now. The one shape that might still be worth flagging is a CALL, and
-    /// the corpus contains none in 449 defaults, so there is no evidence to write a rule from and
-    /// no user to protect from a mistake nobody makes. <see cref="GscDiagnosticCode"/> keeps 4004
-    /// reserved rather than renumbering.
-    /// </summary>
-    private static void ValidateDefaultValue(ParameterNode parameter)
-    {
-        _ = parameter;
     }
 
     /// <summary>

@@ -10,6 +10,29 @@ per-project `FOLDER.md` convention).
 
 ## Backlog
 
+### Cross-file lints for files that are not open
+
+`gscode.diagnostics.scope` now publishes problems for indexed files, but a closed file reports
+only what `ScriptRecord.Diagnostics` holds — the parse-level findings (syntax errors, unknown
+directives, precache mistakes). Opening it adds the cross-file lints: unused `#using`, namespace
+usage, private access, dev-block calls, read-only writes, prefer-boolean-literal.
+
+So a file can gain problems on being opened, which is honest but slightly odd.
+
+Closing the gap needs those lints run over the whole workspace, and they need a `ParseResult`,
+which records deliberately do not retain — holding 1,105 of them is exactly the memory the
+rewrite avoided. Options, roughly in order of appeal:
+
+1. A background pass after indexing that re-analyses each file, runs the lints, stores the merged
+   diagnostics on the record and drops the result. Costs a second analysis pass but bounded, and
+   it can be cancelled and resumed.
+2. Run the lints during indexing's second phase, once the database is complete enough for the
+   cross-file ones to be meaningful.
+3. Leave it, and document that closed files report parse-level problems only.
+
+Whichever, the count in the status bar and the Problems panel should agree, so decide before
+adding any "N problems" summary.
+
 ### Gate every completion context on where the cursor actually is
 
 **Confirmed:** completing at `self notify(#` offers all 11 directives — `#using`, `#insert`,

@@ -25,6 +25,12 @@ public sealed class ServerSettings
     /// <summary>"owner" (default) or "all" — how widely assignment-derived fields are offered.</summary>
     public string CompletionFieldScope { get; set; } = "owner";
 
+    /// <summary>
+    /// Which files get diagnostics published: "open" (only what is open), "workspace" (every
+    /// indexed file of your own, the default) or "all" (including the stock scripts).
+    /// </summary>
+    public string DiagnosticsScope { get; set; } = "workspace";
+
     /// <summary>Whether control-flow parentheses are padded: `if ( x )` against `if (x)`.</summary>
     public bool FormatPadParens { get; set; } = true;
 
@@ -65,6 +71,9 @@ public sealed class ServerSettings
         CompletionFieldScope = section.Value<string>("completion.fieldScope")
             ?? section["completion"]?.Value<string>("fieldScope")
             ?? CompletionFieldScope;
+        DiagnosticsScope = section.Value<string>("diagnostics.scope")
+            ?? section["diagnostics"]?.Value<string>("scope")
+            ?? DiagnosticsScope;
         FormatPadParens = section.Value<bool?>("format.padParens")
             ?? section["format"]?.Value<bool?>("padParens")
             ?? FormatPadParens;

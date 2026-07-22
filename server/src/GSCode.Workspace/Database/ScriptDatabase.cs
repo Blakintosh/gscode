@@ -64,6 +64,20 @@ public sealed class ScriptDatabase
         _gshRecords[record.Path] = record;
     }
 
+    /// <summary>
+    /// Finds a record by path without knowing its language, for callers that have only a file
+    /// path — a closed document, a file-watcher event. Every store is searched because the path
+    /// alone does not say which world it belongs to.
+    /// </summary>
+    public bool TryGetAnyRecord(string path, out ScriptRecord record)
+    {
+        string normalized = PathUtil.NormalizeAbsolute(path);
+
+        return Gsc.TryGet(normalized, out record)
+            || Csc.TryGet(normalized, out record)
+            || TryGetGsh(normalized, out record);
+    }
+
     public bool TryGetGsh(string normalizedPath, out ScriptRecord record)
     {
         return _gshRecords.TryGetValue(normalizedPath, out record!);

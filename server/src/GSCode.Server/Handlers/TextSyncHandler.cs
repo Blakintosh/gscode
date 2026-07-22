@@ -41,6 +41,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly BuiltinApiSet _builtins;
     private readonly ObjectFields _objectFields;
     private readonly ILanguageServerFacade _server;
+    private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
 
     public TextSyncHandler(
         DocumentStore documents,
@@ -52,8 +53,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         StockScripts stockScripts,
         BuiltinApiSet builtins,
         ObjectFields objectFields,
-        ILanguageServerFacade server)
+        ILanguageServerFacade server,
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics)
     {
+        _workspaceDiagnostics = workspaceDiagnostics;
         _builtins = builtins;
         _objectFields = objectFields;
         _documents = documents;
@@ -163,8 +166,16 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     public override Task<Unit> Handle(DidCloseTextDocumentParams request, CancellationToken cancellationToken)
     {
-        _documents.Close(request.TextDocument.Uri.GetFileSystemPath());
+        string path = request.TextDocument.Uri.GetFileSystemPath();
+
+        _documents.Close(path);
         _diagnostics.Clear(request.TextDocument.Uri);
+
+        // Clearing is right for what THIS handler published, but the file may still be in the
+        // workspace scope, where its problems are supposed to stay visible. Without handing it
+        // back, opening and closing a broken file would make it look clean.
+        _workspaceDiagnostics.OnDocumentClosed(path);
+
         return Unit.Task;
     }
 

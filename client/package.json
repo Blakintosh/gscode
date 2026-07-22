@@ -266,6 +266,22 @@
 					"description": "How widely field names gathered from assignments are offered after a '.'.",
 					"scope": "window"
 				},
+				"gscode.diagnostics.scope": {
+					"type": "string",
+					"default": "workspace",
+					"enum": [
+						"open",
+						"workspace",
+						"all"
+					],
+					"enumDescriptions": [
+						"Only files you have open.",
+						"Every indexed file of your own -- your mod and workspace folders, but not the stock scripts.",
+						"Everything indexed, including the game's stock scripts. Noisy, and you cannot edit them."
+					],
+					"description": "Which files report problems. Files that are not open report the errors found when they were indexed; open files additionally get the cross-file lints.",
+					"scope": "window"
+				},
 				"gscode.format.padParens": {
 					"type": "boolean",
 					"default": true,

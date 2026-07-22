@@ -79,6 +79,7 @@ LanguageServer server = await LanguageServer.From(options =>
 
             services.AddSingleton(provider =>
                 new DiagnosticsPublisher(provider.GetRequiredService<ILanguageServerFacade>()));
+            services.AddSingleton<WorkspaceDiagnosticsPublisher>();
 
             services.AddSingleton<ScriptDatabase>();
             services.AddSingleton(BuiltinApiSet.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
@@ -258,6 +259,10 @@ LanguageServer server = await LanguageServer.From(options =>
                         }
 
                         LogIndexBreakdown(languageServer.Services.GetRequiredService<ScriptDatabase>());
+
+                        // Only now: the cross-file picture is complete, and a record's stored
+                        // diagnostics are meaningless for files still waiting to be analysed.
+                        languageServer.Services.GetRequiredService<WorkspaceDiagnosticsPublisher>().Refresh();
 
                         // Sampled before the monitor starts, so the number reflects the state
                         // indexing left behind rather than anything steady-state traffic did.

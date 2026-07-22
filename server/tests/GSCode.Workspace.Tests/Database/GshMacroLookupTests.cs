@@ -99,6 +99,29 @@ public class GshMacroLookupTests
     // a query scope it made CSC uses of a header macro invisible from the header itself: find-all-
     // references on IS_TRUE in shared.gsh listed the .gsc and never the .csc.
 
+    // --- Finding a record from a path alone ---
+    //
+    // Callers that hold only a file path — a document that just closed, a file-watcher event —
+    // cannot know which store it belongs to, so every one has to be searched.
+
+    [Theory]
+    [InlineData(@"scripts\shared\array_shared.gsc")]
+    [InlineData(@"scripts\shared\array_shared.csc")]
+    [InlineData(@"scripts\shared\shared.gsh")]
+    public void ARecordIsFoundFromItsPath_WhicheverStoreItIsIn(string relative)
+    {
+        ScriptDatabase database = BuildWorkspace();
+
+        Assert.True(database.TryGetAnyRecord(Path.Combine(Raw, relative), out ScriptRecord record));
+        Assert.EndsWith(Path.GetFileName(relative), record.Path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AnUnknownPathIsNotFound()
+    {
+        Assert.False(BuildWorkspace().TryGetAnyRecord(@$"{Raw}\scripts\nothing_here.gsc", out _));
+    }
+
     [Fact]
     public void HeaderSeesBothLanguageStores()
     {

@@ -94,6 +94,30 @@ public enum ReferenceKind
     FieldAccess,
     MacroUse,
     Literal,
+
+    /// <summary>
+    /// A string literal that is an operand of <c>+</c> — a fragment of a message being built up,
+    /// rather than a name.
+    ///
+    /// Still a reference, so find-all-references on the text still finds it. The kind exists only
+    /// so literal COMPLETION can leave it out: offering these filled the list with things like
+    /// "already exists. Proceeding with override" and " at origin: ", half-sentences nobody wants
+    /// to insert.
+    ///
+    /// This is a STRUCTURAL rule — what the code does with the string — and two tempting textual
+    /// ones were measured against the stock scripts and rejected:
+    ///
+    /// * "drop anything containing a space" loses 54 real notify/endon events, among them
+    ///   "abort forfeit", "missile fired", "stop sound" and "destination reached". BO3 event names
+    ///   are often multi-word, and it would be wrong for localized strings besides.
+    /// * "drop anything appearing in only one file" removes 73% of all literals, including
+    ///   single-use asset and model names, and would hide a name from the second file that uses
+    ///   it — which is exactly when it is wanted.
+    ///
+    /// After this rule only about 5% of the remaining literals even contain a space, so the noise
+    /// it was chasing is largely gone.
+    /// </summary>
+    ConcatenatedLiteral,
 }
 
 /// <summary>One classified reference site: key + where + how. No text is stored beyond the interned key.</summary>

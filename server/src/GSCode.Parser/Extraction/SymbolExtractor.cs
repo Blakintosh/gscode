@@ -39,6 +39,10 @@ public sealed class SymbolExtractor
     // How many dev blocks enclose the walk right now; > 0 means release builds drop this code.
     private int _devBlockDepth;
 
+    // Whether the walk is inside a `+` chain, where a string literal is a message fragment
+    // rather than a name. Nested so an inner expression does not clear an outer concatenation.
+    private bool _inStringConcatenation;
+
     private SymbolExtractor(string rootFilePath, NameTable names, SourceText text, ImmutableArray<Token> rawTokens)
     {
         _rootFilePath = rootFilePath;
@@ -479,9 +483,21 @@ public sealed class SymbolExtractor
                 WalkExpression(assignment.Value, assignments);
                 return;
             case BinaryNode binary:
+            {
+                // A string literal spliced into a `+` chain is a message fragment, not a name, so
+                // it is recorded under a kind literal completion skips. Marked here because the
+                // AST is the only place the relationship is visible: by the time the reference
+                // reaches the database it is just text.
+                bool concatenation = binary.Operator == TokenKind.Plus;
+                bool wasInConcatenation = _inStringConcatenation;
+                _inStringConcatenation = wasInConcatenation || concatenation;
+
                 WalkExpression(binary.Left, assignments);
                 WalkExpression(binary.Right, assignments);
+
+                _inStringConcatenation = wasInConcatenation;
                 return;
+            }
             case TernaryNode ternary:
                 WalkExpression(ternary.Condition, assignments);
                 WalkExpression(ternary.WhenTrue, assignments);
@@ -647,7 +663,10 @@ public sealed class SymbolExtractor
             {
                 // Strings are content-exact (case-sensitive).
                 SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text)), SymbolKind.StringLiteral);
-                AddReference(key, literal.Token, ReferenceKind.Literal);
+                AddReference(
+                    key,
+                    literal.Token,
+                    _inStringConcatenation ? ReferenceKind.ConcatenatedLiteral : ReferenceKind.Literal);
                 return;
             }
             case TokenKind.HashString:

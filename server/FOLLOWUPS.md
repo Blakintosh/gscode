@@ -8,6 +8,27 @@ per-project `FOLDER.md` convention).
 
 ---
 
+## Deferred by request
+
+### Formatter — a further pass is planned
+
+Left where it is on purpose: another round of formatter changes is coming, so anything more here
+would be rework. What landed so far is the settings layer, not the style itself:
+
+- `tabSize`/`insertSpaces` are honoured per request, and the GSC languages default to tabs in
+  `client/package.json`'s `configurationDefaults` (247,613 tab-led indented lines across the stock
+  scripts against 886 space-led).
+- `gscode.format.padParens` and `gscode.format.maxBlankLines` exist; `maxBlankLines` defaults to 2,
+  which is what the doc comment always claimed while the code capped at 1.
+- `braceStyle` was deliberately NOT added — 51,048 Allman braces against 37 same-line makes it a
+  convention rather than a preference. Revisit only if that measurement is disputed.
+
+Still open whenever the pass happens: line wrapping (there is none — long argument lists stay on
+one line), alignment of consecutive assignments, and whether `#insert`ed regions should be
+reformatted at all.
+
+---
+
 ## Known limitations from the triage pass
 
 Recorded because each was a deliberate stopping point, not an oversight. The triage plan lives

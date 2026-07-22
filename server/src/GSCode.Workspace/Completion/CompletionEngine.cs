@@ -281,7 +281,9 @@ public sealed class CompletionEngine
         HashSet<string> seen = new(StringComparer.Ordinal);
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
-        // The current file's live literals first, then every visible record's.
+        // The current file's live literals first, then every visible record's. Message fragments
+        // are already excluded upstream: a string spliced into a `+` chain is recorded as
+        // ConcatenatedLiteral, and this only accepts ReferenceKind.Literal.
         CollectLiterals(result.Extraction.References, literalKind, seen, entries);
         foreach ( ScriptRecord record in store.AllRecords )
         {

@@ -122,6 +122,75 @@ public class CompletionEngineTests
         Assert.All(entries, e => Assert.Equal(CompletionKind.Literal, e.Kind));
     }
 
+    // --- Concatenated message fragments are not names ---
+    //
+    // The reported noise: the list filled with things like "already exists. Proceeding with
+    // override" and " at origin: ". Those are pieces of a message being built with '+', not
+    // vocabulary anyone wants to insert.
+
+    /// <summary>Completes inside an empty string in main.gsc, given a workspace file to harvest.</summary>
+    private static ImmutableArray<CompletionEntry> LiteralsFrom(string harvestSource)
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\events.gsc", harvestSource);
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(
+            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n");
+
+        return engine.Complete(result, "raw", new Position(3, 9));
+    }
+
+    [Fact]
+    public void ConcatenatedFragments_AreNotOffered()
+    {
+        ImmutableArray<CompletionEntry> entries = LiteralsFrom(
+            "#namespace ev;\nfunction f( n )\n{\n    IPrintLn( \"at origin: \" + n );\n}\n");
+
+        Assert.False(HasLabel(entries, "at origin: "));
+    }
+
+    [Fact]
+    public void AFragmentOnEitherSideOfThePlus_IsExcluded()
+    {
+        ImmutableArray<CompletionEntry> entries = LiteralsFrom(
+            "#namespace ev;\nfunction f( n )\n{\n    IPrintLn( \"left\" + n + \"right\" );\n}\n");
+
+        Assert.False(HasLabel(entries, "left"));
+        Assert.False(HasLabel(entries, "right"));
+    }
+
+    [Fact]
+    public void FragmentsNestedDeeperInTheChain_AreAlsoExcluded()
+    {
+        // The whole chain is a message, however the parser happened to nest it.
+        ImmutableArray<CompletionEntry> entries = LiteralsFrom(
+            "#namespace ev;\nfunction f( a, b )\n{\n    IPrintLn( \"one\" + a + \"two\" + b + \"three\" );\n}\n");
+
+        Assert.False(HasLabel(entries, "one"));
+        Assert.False(HasLabel(entries, "two"));
+        Assert.False(HasLabel(entries, "three"));
+    }
+
+    [Fact]
+    public void AStandaloneArgumentIsStillOffered()
+    {
+        // The point of literal completion: real vocabulary must survive.
+        Assert.True(HasLabel(
+            LiteralsFrom("#namespace ev;\nfunction f()\n{\n    self notify( \"player_spawned\" );\n}\n"),
+            "player_spawned"));
+    }
+
+    [Fact]
+    public void AStandaloneLiteralElsewhereInTheSameFile_IsUnaffected()
+    {
+        // Being concatenated at ONE site must not blacklist the text everywhere: the same string
+        // used as a real argument somewhere else is still a name.
+        ImmutableArray<CompletionEntry> entries = LiteralsFrom(
+            "#namespace ev;\nfunction f( n )\n{\n    self notify( \"death\" );\n    IPrintLn( \"death\" + n );\n}\n");
+
+        Assert.True(HasLabel(entries, "death"));
+    }
+
     [Fact]
     public void InsideStringLiteral_OffersNothing_WhenLiteralsDisabled()
     {

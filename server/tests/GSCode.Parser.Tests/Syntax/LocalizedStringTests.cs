@@ -44,7 +44,7 @@ public class LocalizedStringTests
         ParseResult result = Analyze("function f()\n{\n    x = &\"MENU_ITEM\";\n}\n");
 
         Assert.Empty(Errors(result));
-        Assert.Equal("menu_item", Assert.Single(IStrings(result)).Key.Name);
+        Assert.Equal("MENU_ITEM", Assert.Single(IStrings(result)).Key.Name);
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public class LocalizedStringTests
         ParseResult result = Analyze("function f()\n{\n    x = & \"MENU_ITEM\";\n}\n");
 
         Assert.Empty(Errors(result));
-        Assert.Equal("menu_item", Assert.Single(IStrings(result)).Key.Name);
+        Assert.Equal("MENU_ITEM", Assert.Single(IStrings(result)).Key.Name);
     }
 
     [Fact]

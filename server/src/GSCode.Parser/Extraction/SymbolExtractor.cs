@@ -671,13 +671,17 @@ public sealed class SymbolExtractor
             }
             case TokenKind.HashString:
             {
-                SymbolKey key = new(null, _names.InternLower(Unquote(literal.Token.Text[1..])), SymbolKind.HashString);
+                // Case-preserving: the name is shown verbatim in completion, and lowercasing it
+                // turned KILLSTREAK_COMBAT_ROBOT_CRATE into killstreak_combat_robot_crate. Safe
+                // to match case-sensitively too — across the stock scripts no hash string or
+                // localized string is ever written with two different casings.
+                SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text[1..])), SymbolKind.HashString);
                 AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
             case TokenKind.LocalizedString:
             {
-                SymbolKey key = new(null, _names.InternLower(Unquote(literal.Token.Text[1..])), SymbolKind.LocalizedString);
+                SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text[1..])), SymbolKind.LocalizedString);
                 AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }

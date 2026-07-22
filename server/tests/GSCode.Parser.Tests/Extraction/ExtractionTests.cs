@@ -205,9 +205,17 @@ public class ExtractionTests
         Assert.Contains(references, entry =>
             entry.Key == new SymbolKey(null, "Death_Event", SymbolKind.StringLiteral) && entry.Kind == ReferenceKind.Literal);
 
-        // ...hash strings and istrings are case-insensitive (lowercase keys).
-        Assert.Contains(references, entry => entry.Key == new SymbolKey(null, "hash_val", SymbolKind.HashString));
-        Assert.Contains(references, entry => entry.Key == new SymbolKey(null, "menu_label", SymbolKind.LocalizedString));
+        // ...and so are hash strings and istrings, which used to be lowercased.
+        //
+        // The keys are shown verbatim in completion, so lowercasing turned
+        // KILLSTREAK_COMBAT_ROBOT_CRATE into killstreak_combat_robot_crate. Storing the written
+        // form costs only the linking of two DIFFERENTLY cased writings of one name, and across
+        // the stock scripts that never happens: of 539 distinct istrings and 48 hash strings, not
+        // one is written with two casings. Literal references are resolved by range containment
+        // rather than by re-deriving a key from the text, so both sides of a find-all-references
+        // use the same extraction-produced key either way.
+        Assert.Contains(references, entry => entry.Key == new SymbolKey(null, "Hash_Val", SymbolKind.HashString));
+        Assert.Contains(references, entry => entry.Key == new SymbolKey(null, "MENU_LABEL", SymbolKind.LocalizedString));
     }
 
     [Fact]

@@ -227,6 +227,67 @@ public class CompletionEngineTests
         Assert.True(HasLabel(entries, "foobarbaz"));
     }
 
+    // --- Only name-shaped literals, and shown as written ---
+
+    [Theory]
+    [InlineData("already exists. Proceeding with override")]   // a message
+    [InlineData("at origin: ")]                                // a fragment
+    [InlineData("player spawned")]                             // a space anywhere
+    [InlineData("attacker:")]                                  // punctuation
+    public void TextThatIsNotNameShaped_IsNotOffered(string literal)
+    {
+        Assert.False(HasLabel(
+            LiteralsFrom("#namespace ev;\nfunction f()\n{\n    IPrintLn( \"" + literal + "\" );\n}\n"),
+            literal));
+    }
+
+    [Theory]
+    [InlineData("player_spawned")]
+    [InlineData("p7_zm_lab_battery")]
+    [InlineData("zombie/spawn_point")]      // asset paths keep their separators
+    [InlineData("weapons\\ray_gun")]
+    [InlineData("ai_tank.v2")]
+    public void NameShapedLiterals_AreStillOffered(string literal)
+    {
+        Assert.True(HasLabel(
+            LiteralsFrom("#namespace ev;\nfunction f()\n{\n    self notify( \"" + literal + "\" );\n}\n"),
+            literal));
+    }
+
+    [Fact]
+    public void LocalizedStringsKeepTheirCase()
+    {
+        // The reported bug: KILLSTREAK_COMBAT_ROBOT_CRATE was offered lowercased, because istring
+        // keys were interned lowercase to make them match case-insensitively.
+        FakeFileSystem files = new FakeFileSystem().AddFile(
+            @$"{Raw}\scripts\ui.gsc",
+            "#namespace ui;\nfunction f()\n{\n    x = &\"KILLSTREAK_COMBAT_ROBOT_CRATE\";\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        // Cursor inside the empty istring on line 3.
+        ParseResult result = Analyze(
+            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    x = &\"\";\n}\n");
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 10));
+
+        Assert.True(HasLabel(entries, "KILLSTREAK_COMBAT_ROBOT_CRATE"));
+        Assert.False(HasLabel(entries, "killstreak_combat_robot_crate"));
+    }
+
+    [Fact]
+    public void HashStringsKeepTheirCaseToo()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(
+            @$"{Raw}\scripts\ui.gsc", "#namespace ui;\nfunction f()\n{\n    x = #\"Zombie_State\";\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+        ParseResult result = Analyze(
+            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    x = #\"\";\n}\n");
+
+        Assert.True(HasLabel(engine.Complete(result, "raw", new Position(3, 10)), "Zombie_State"));
+    }
+
     [Fact]
     public void InsideStringLiteral_OffersNothing_WhenLiteralsDisabled()
     {

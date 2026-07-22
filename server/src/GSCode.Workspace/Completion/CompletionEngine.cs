@@ -310,11 +310,56 @@ public sealed class CompletionEngine
                 continue;
             }
 
-            if ( entry.Key.Name.Length > 0 && seen.Add(entry.Key.Name) )
+            if ( !IsNameLike(entry.Key.Name) )
+            {
+                continue;
+            }
+
+            if ( seen.Add(entry.Key.Name) )
             {
                 entries.Add(new CompletionEntry(entry.Key.Name, CompletionKind.Literal, detail));
             }
         }
+    }
+
+    /// <summary>
+    /// Whether a literal reads as a NAME rather than as text, and so is worth offering.
+    ///
+    /// Names in this language are identifier-shaped: across the stock scripts, every literal in an
+    /// unambiguous name position (notify, endon, flag and clientfield calls, precache, tag lookups)
+    /// is made of letters, digits and underscores — the only other characters that appear at all
+    /// are 163 spaces and 16 colons, which is exactly the prose this excludes. Path punctuation is
+    /// allowed alongside them for asset paths.
+    ///
+    /// This is a blunter rule than the structural one that removes <c>+</c> operands, and it is
+    /// deliberately blunt: it also drops the handful of stock events written as several words
+    /// ("abort forfeit", "missile fired"). Those are rare enough, and the noise they let through
+    /// common enough, that keeping the list clean wins.
+    /// </summary>
+    private static bool IsNameLike(string literal)
+    {
+        if ( literal.Length == 0 )
+        {
+            return false;
+        }
+
+        foreach ( char c in literal )
+        {
+            if ( char.IsLetterOrDigit(c) )
+            {
+                continue;
+            }
+
+            // Underscore for names; the rest for asset paths and versioned model names.
+            if ( c is '_' or '-' or '.' or '\\' or '/' )
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private static string LiteralDetail(SymbolKind literalKind)

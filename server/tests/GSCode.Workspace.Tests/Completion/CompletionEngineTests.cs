@@ -371,6 +371,86 @@ public class CompletionEngineTests
         Assert.False(HasLabel(entries, "if"));
     }
 
+    // --- Contexts are gated on where the cursor actually is ---
+    //
+    // Every context is detected by scanning BACKWARD for a trigger character, which answers "what
+    // did the user just type" but never "is this construct legal here". The directive family is
+    // top-level only, so inside a function body the scan found a '#' and offered #using, #insert
+    // and #namespace in the middle of a call.
+
+    /// <summary>Completes at the end of `line`, placed inside a function body.</summary>
+    private static ImmutableArray<CompletionEntry> CompleteInsideFunction(string line, FakeFileSystem? files = null)
+    {
+        files ??= new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\nfunction run()\n{\n    " + line + "\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        return engine.Complete(result, "raw", new Position(3, 4 + line.Length));
+    }
+
+    [Theory]
+    [InlineData("self notify(#")]
+    [InlineData("x = #")]
+    [InlineData("#")]
+    public void DirectivesAreNotOfferedInsideAFunctionBody(string line)
+    {
+        // The reported bug: `self notify(#` listed all 11 directives.
+        ImmutableArray<CompletionEntry> entries = CompleteInsideFunction(line);
+
+        Assert.DoesNotContain(entries, e => e.Label.StartsWith("#", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AHashInsideAFunctionBodyOffersHashStrings()
+    {
+        // The one thing a '#' can begin there. The quotes come with it, since only the '#' has
+        // been typed and the cursor is not inside a string yet.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\ui.gsc", "#namespace ui;\nfunction f()\n{\n    x = #\"zombie_state\";\n}\n");
+
+        ImmutableArray<CompletionEntry> entries = CompleteInsideFunction("self notify(#", files);
+
+        CompletionEntry hash = Assert.Single(entries, e => e.Label == "zombie_state");
+        Assert.Equal("\"zombie_state\"", hash.InsertText);
+    }
+
+    [Fact]
+    public void PathCompletionIsNotOfferedInsideAFunctionBody()
+    {
+        // `#using` is top level too, so a stray one on the line must not summon script paths.
+        Assert.DoesNotContain(
+            CompleteInsideFunction(@"#using scripts\"),
+            e => e.Kind is CompletionKind.PathSegment or CompletionKind.PathFile);
+    }
+
+    [Fact]
+    public void AssetTypesAreNotOfferedInsideAFunctionBody()
+    {
+        Assert.DoesNotContain(
+            CompleteInsideFunction("#precache("),
+            e => e.Kind == CompletionKind.AssetType);
+    }
+
+    [Fact]
+    public void ExpressionContextsStillWorkInsideAFunctionBody()
+    {
+        // The guard covers the three TOP-LEVEL contexts only; `ns::` and `owner.` are legal
+        // wherever an expression is and must be untouched by it.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction alpha()\n{\n}\n");
+
+        Assert.True(HasLabel(CompleteInsideFunction("util::", files), "alpha"));
+    }
+
+    [Fact]
+    public void DirectivesAreStillOfferedAtTopLevel()
+    {
+        // The guard must not silence the context it was protecting.
+        Assert.True(HasLabel(CompleteAfter("#"), "#using"));
+    }
+
     // --- Class visibility ---
     //
     // Classes are named without a namespace qualifier, so there is nothing to narrow them by

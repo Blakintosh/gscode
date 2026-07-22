@@ -70,39 +70,6 @@ rewrite avoided. Options, roughly in order of appeal:
 Whichever, the count in the status bar and the Problems panel should agree, so decide before
 adding any "N problems" summary.
 
-### Gate every completion context on where the cursor actually is
-
-**Confirmed:** completing at `self notify(#` offers all 11 directives — `#using`, `#insert`,
-`#namespace`, … — inside a call argument, where the only thing a `#` can begin is a hash string.
-
-The cause is that `IsAfterDirectiveHash` (`CompletionEngine`) asks only "is there a `#` before the
-word being typed", never "may a directive appear here at all". Directives are top-level only, so
-the check needs to fail inside a function body — `IsInsideFunctionBody` already answers that, it
-is simply consulted after the directive branch has already returned. What SHOULD be offered there
-is the known hash strings, inserting `"name"` onto the `#` already in the buffer, mirroring how
-the `#precache` asset-type slot works.
-
-**Treat this as the general problem it is, not one fix.** Every context in `Complete` is detected
-by looking BACKWARD for a trigger, and none of them confirm that the construct is legal at that
-position. Worth an audit of each, since the same shape is likely elsewhere:
-
-| Context | Trigger | Where it is actually legal |
-|---|---|---|
-| Directives | a `#` before the word | Top level only, never in a function body |
-| `#using`/`#insert` paths | the directive earlier on the line | Top level only |
-| `#precache` asset types | inside the first string argument | Only in the real directive |
-| `ns::` functions | a `::` behind the cursor | Anywhere in an expression |
-| `owner.` fields | a `.` behind the cursor | Anywhere in an expression |
-| Literals | the cursor inside a string token | Anywhere a string is legal |
-
-The last three are fine as they are. The first three are all top-level constructs being offered
-from anywhere, so a single "is a directive legal at this position" helper probably covers them,
-rather than three separate guards.
-
-A test per row would pin the whole class rather than the one symptom.
-
----
-
 ### Auto-complete the call punctuation — `gscode.completion.callPunctuation`
 
 Accepting a function completion in statement position should leave

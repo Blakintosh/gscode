@@ -68,17 +68,35 @@ public sealed class CompletionEngine
         int currentIndex = FindCurrentWordIndex(tokens, offset);
         int triggerIndex = PreviousSignificant(tokens, currentIndex >= 0 ? currentIndex : FirstAtOrAfter(tokens, offset));
 
-        // #precache( "type" ...) — offer asset types as the first argument.
-        if ( TryPrecacheContext(tokens, triggerIndex) )
-        {
-            return AssetTypeCompletions();
-        }
+        // Every context below is detected by looking BACKWARD for a trigger character, which
+        // answers "what did the user just type" but not "is this construct legal here". The
+        // directive family is top level ONLY, so inside a function body the backward scan finds a
+        // '#' and confidently offers #using, #insert and #namespace in the middle of a call.
+        bool insideFunction = IsInsideFunctionBody(result, position);
 
-        // #using / #insert path — offer path segments.
-        ImmutableArray<CompletionEntry> pathCompletions = TryPathContext(result, contextId, tokens, currentIndex, offset);
-        if ( !pathCompletions.IsDefault )
+        if ( !insideFunction )
         {
-            return pathCompletions;
+            // #precache( "type" ...) — offer asset types as the first argument.
+            if ( TryPrecacheContext(tokens, triggerIndex) )
+            {
+                return AssetTypeCompletions();
+            }
+
+            // #using / #insert path — offer path segments.
+            ImmutableArray<CompletionEntry> pathCompletions = TryPathContext(result, contextId, tokens, currentIndex, offset);
+            if ( !pathCompletions.IsDefault )
+            {
+                return pathCompletions;
+            }
+        }
+        else if ( IsAfterDirectiveHash(result.Text, offset) )
+        {
+            // A '#' inside a function body begins a HASH STRING, the one thing it can mean there.
+            // The quotes are added because the cursor is not inside a string yet — only the '#'
+            // has been typed.
+            return includeLiterals
+                ? LiteralCompletions(result, contextId, SymbolKind.HashString, quoted: true)
+                : [];
         }
 
         // ns:: — offer functions in that namespace only.
@@ -98,7 +116,7 @@ public sealed class CompletionEngine
             return FieldCompletions(result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope);
         }
 
-        return StatementScopeCompletions(result, contextId, position, offset);
+        return StatementScopeCompletions(result, contextId, offset, insideFunction);
     }
 
     // --- Contexts ---
@@ -272,7 +290,12 @@ public sealed class CompletionEngine
         return _database.StoreFor(result.Language).AllRecords;
     }
 
-    private ImmutableArray<CompletionEntry> LiteralCompletions(ParseResult result, string contextId, SymbolKind literalKind)
+    /// <param name="quoted">
+    /// Whether to insert the surrounding quotes. True when only the sigil has been typed — at
+    /// `notify(#` the cursor is not inside a string yet, so the entry has to supply them.
+    /// </param>
+    private ImmutableArray<CompletionEntry> LiteralCompletions(
+        ParseResult result, string contextId, SymbolKind literalKind, bool quoted = false)
     {
         LanguageStore store = _database.StoreFor(result.Language);
 
@@ -284,12 +307,12 @@ public sealed class CompletionEngine
         // The current file's live literals first, then every visible record's. Message fragments
         // are already excluded upstream: a string spliced into a `+` chain is recorded as
         // ConcatenatedLiteral, and this only accepts ReferenceKind.Literal.
-        CollectLiterals(result.Extraction.References, literalKind, seen, entries);
+        CollectLiterals(result.Extraction.References, literalKind, seen, entries, quoted);
         foreach ( ScriptRecord record in store.AllRecords )
         {
             if ( ScriptDatabase.CanSee(contextId, record.ContextId) )
             {
-                CollectLiterals(record.References, literalKind, seen, entries);
+                CollectLiterals(record.References, literalKind, seen, entries, quoted);
             }
         }
 
@@ -300,7 +323,8 @@ public sealed class CompletionEngine
         ImmutableArray<ReferenceEntry> references,
         SymbolKind literalKind,
         HashSet<string> seen,
-        ImmutableArray<CompletionEntry>.Builder entries)
+        ImmutableArray<CompletionEntry>.Builder entries,
+        bool quoted)
     {
         string detail = LiteralDetail(literalKind);
         foreach ( ReferenceEntry entry in references )
@@ -317,7 +341,11 @@ public sealed class CompletionEngine
 
             if ( seen.Add(entry.Key.Name) )
             {
-                entries.Add(new CompletionEntry(entry.Key.Name, CompletionKind.Literal, detail));
+                entries.Add(new CompletionEntry(
+                    entry.Key.Name,
+                    CompletionKind.Literal,
+                    detail,
+                    quoted ? "\"" + entry.Key.Name + "\"" : ""));
             }
         }
     }
@@ -675,18 +703,17 @@ public sealed class CompletionEngine
     }
 
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(
-        ParseResult result, string contextId, Position position, int offset)
+        ParseResult result, string contextId, int offset, bool insideFunction)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
-        // A '#' has been typed, so nothing but a directive can be meant. Returning early also
-        // keeps functions and variables out of the list.
-        if ( IsAfterDirectiveHash(result.Text, offset) )
+        // A '#' has been typed at top level, so nothing but a directive can be meant. Returning
+        // early also keeps functions and variables out of the list. Inside a function body the
+        // caller has already handled '#' as the start of a hash string.
+        if ( !insideFunction && IsAfterDirectiveHash(result.Text, offset) )
         {
             return DirectiveCompletions();
         }
-
-        bool insideFunction = IsInsideFunctionBody(result, position);
 
         foreach ( string keyword in insideFunction ? GscKeywords.StatementKeywords : GscKeywords.TopLevelKeywords )
         {

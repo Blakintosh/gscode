@@ -279,7 +279,10 @@ LanguageServer server = await LanguageServer.From(options =>
 
                         // Start reporting memory only now — during indexing it climbs steadily and
                         // would spam. The monitor logs only on >= 1 MB changes from here on.
-                        _ = RunMemoryMonitorAsync(CancellationToken.None);
+                        if ( InstrumentationEnabled() )
+                        {
+                            _ = RunMemoryMonitorAsync(CancellationToken.None);
+                        }
                     }
                     catch ( Exception exception )
                     {
@@ -443,8 +446,30 @@ static bool CompactIfFragmented()
 // restore just deserializes records. If the LIVE numbers match across a cold and a warm start
 // while the working set differs, the extra footprint is grown, uncompacted heap rather than
 // retained data — and a one-time compacting collect here is the fix.
+/// <summary>
+/// Whether the detailed memory instrumentation is switched on, via GSCODE_INSTRUMENTATION.
+///
+/// The multi-line report and the 2-second monitor were written to answer one question — why a
+/// cold start held 390 MB and a warm one 212 MB — and they answered it. Left on, they put a
+/// memory line in the log every couple of seconds forever, which buries everything else at the
+/// only level most users ever read. The headline number now lives in the status-bar tooltip,
+/// where it is visible without being noisy.
+/// </summary>
+static bool InstrumentationEnabled()
+{
+    string? value = Environment.GetEnvironmentVariable("GSCODE_INSTRUMENTATION");
+    return !string.IsNullOrEmpty(value)
+        && !string.Equals(value, "0", StringComparison.Ordinal)
+        && !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+}
+
 static void LogMemoryReport(string phase, IndexOutcome outcome)
 {
+    if ( !InstrumentationEnabled() )
+    {
+        return;
+    }
+
     GCMemoryInfo info = GC.GetGCMemoryInfo();
 
     double workingSet = Environment.WorkingSet / (1024.0 * 1024.0);

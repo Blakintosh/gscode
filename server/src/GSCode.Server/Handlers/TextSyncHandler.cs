@@ -207,9 +207,23 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     private void AnalyzeAndPublish(OpenDocument document, DocumentUri uri)
     {
+        long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+
         ParseResult result = _documents.Analyze(document);
-        _diagnostics.Publish(uri, document.Version, WithWorkspaceLints(document, result));
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics = WithWorkspaceLints(document, result);
+
+        _diagnostics.Publish(uri, document.Version, diagnostics);
         CommitAndRefreshLenses(document, result);
+
+        // The single most useful verbose line there is: it says whether the server reacted to a
+        // keystroke at all, how long it took, and what it decided — which is most of what anyone
+        // turns verbose logging on to find out.
+        Log.Verbose(
+            "Analysed {Path} v{Version} in {Elapsed:F1}ms → {Count} diagnostic(s)",
+            document.Path,
+            document.Version,
+            System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
+            diagnostics.Length);
     }
 
     /// <summary>

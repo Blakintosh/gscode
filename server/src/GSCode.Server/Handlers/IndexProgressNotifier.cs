@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using GSCode.Workspace.Indexing;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
+using Serilog;
 
 namespace GSCode.Server.Handlers;
 
@@ -11,7 +12,12 @@ public sealed record IndexingStartedParams(int TotalFiles);
 public sealed record IndexingProgressParams(int FilesIndexed, int TotalFiles);
 
 /// <summary>Payload for gscode/indexingComplete.</summary>
-public sealed record IndexingCompleteParams(int FilesIndexed, int TotalFiles, long ElapsedMilliseconds);
+/// <param name="WorkingSetMegabytes">
+/// What the server is holding, so the status-bar tooltip can show it. The number was previously
+/// only reachable by turning on a log level and reading past everything else.
+/// </param>
+public sealed record IndexingCompleteParams(
+    int FilesIndexed, int TotalFiles, long ElapsedMilliseconds, double WorkingSetMegabytes);
 
 /// <summary>
 /// Maps indexer progress onto the gscode/indexing* notifications. Progress fires on
@@ -34,8 +40,41 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
 
     public void Started(int totalFiles)
     {
+        // The server's own channel, not the client's. This line used to be written by the
+        // extension host, which put the one message telling you indexing had begun in a different
+        // output channel from every other thing the language server says — including whatever you
+        // opened the channel to diagnose.
+        Log.Information("Indexing {Count} script file(s)…", totalFiles);
+
         _server.SendNotification("gscode/indexingStarted", new IndexingStartedParams(totalFiles));
     }
+
+    /// <summary>
+    /// Per-file timing, at Verbose. There was previously nothing at all below Information, so
+    /// `gscode.serverLogLevel: verbose` produced byte-identical output to `info` — a setting whose
+    /// description promised detail and delivered none.
+    ///
+    /// Runs on the parallel indexing path, so it does no work when Verbose is off: Serilog's own
+    /// level check short-circuits before the message template is rendered.
+    /// </summary>
+    public void FileIndexed(string path, TimeSpan elapsed, bool restoredFromCache)
+    {
+        Log.Verbose(
+            "Indexed {Path} in {Elapsed:F1}ms ({Source})",
+            path,
+            elapsed.TotalMilliseconds,
+            restoredFromCache ? "cache" : "analysed");
+
+        // Repeated at Debug, a level ABOVE Verbose in Serilog's ordering, so a slow file stands
+        // out in a log that now holds a line for every one of a thousand files.
+        if ( !restoredFromCache && elapsed.TotalMilliseconds >= SlowFileMilliseconds )
+        {
+            Log.Debug("Slow file: {Path} took {Elapsed:F0}ms", path, elapsed.TotalMilliseconds);
+        }
+    }
+
+    /// <summary>A file taking longer than this is worth a line of its own at Debug.</summary>
+    private const int SlowFileMilliseconds = 250;
 
     public void Progressed(int filesIndexed, int totalFiles)
     {
@@ -51,9 +90,18 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
 
     public void Completed(int filesIndexed, int totalFiles, TimeSpan elapsed)
     {
+        Log.Debug(
+            "Indexing finished: {Count} file(s) in {Seconds:F1}s",
+            filesIndexed,
+            elapsed.TotalSeconds);
+
         _server.SendNotification(
             "gscode/indexingComplete",
-            new IndexingCompleteParams(filesIndexed, totalFiles, (long)elapsed.TotalMilliseconds));
+            new IndexingCompleteParams(
+                filesIndexed,
+                totalFiles,
+                (long)elapsed.TotalMilliseconds,
+                Environment.WorkingSet / (1024.0 * 1024.0)));
 
         RequestCodeLensRefresh();
     }

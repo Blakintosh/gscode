@@ -40,6 +40,17 @@ public interface IIndexProgressListener
     /// <summary>Fired on every file completion; implementations throttle the wire traffic.</summary>
     void Progressed(int filesIndexed, int totalFiles);
 
+    /// <summary>
+    /// One file finished, with how long it took and whether the cache spared the analysis.
+    ///
+    /// This exists so the server can log per-file timings without GSCode.Workspace taking a
+    /// dependency on Serilog — the layering keeps logging on the server side, so the indexer
+    /// reports through the listener it already has rather than acquiring a logger.
+    ///
+    /// Called on the parallel indexing path, so implementations must be cheap and thread-safe.
+    /// </summary>
+    void FileIndexed(string path, TimeSpan elapsed, bool restoredFromCache);
+
     void Completed(int filesIndexed, int totalFiles, TimeSpan elapsed);
 }
 
@@ -49,6 +60,10 @@ public sealed class NullIndexProgressListener : IIndexProgressListener
     public static NullIndexProgressListener Instance { get; } = new();
 
     public void Started(int totalFiles)
+    {
+    }
+
+    public void FileIndexed(string path, TimeSpan elapsed, bool restoredFromCache)
     {
     }
 
@@ -141,7 +156,10 @@ public sealed class WorkspaceIndexer
         {
             token.ThrowIfCancellationRequested();
 
+            long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
             FileOutcome outcome = ProcessFile(path, allowRestore: true);
+            progress.FileIndexed(path, System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks), outcome.Restored);
+
             if ( outcome.Restored && outcome.Record is not null )
             {
                 restoredRecords.Add(outcome.Record);

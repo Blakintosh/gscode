@@ -182,14 +182,17 @@ function registerRenameDirectiveFixup(
     );
 }
 
-/** The live indexing counter: a spinner whose number races upward as files complete. */
+/**
+ * The server's status: a spinner counting files while indexing, then a ready state whose tooltip
+ * carries what was indexed, how long it took and what the server is holding.
+ */
 function registerIndexingStatusBar(
     context: vscode.ExtensionContext,
     languageClient: LanguageClient,
     log: vscode.LogOutputChannel,
 ): void {
     const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-    statusBar.name = "GSCode Indexing";
+    statusBar.name = "GSCode Status";
     statusBar.command = "gscode.showOutput";
     context.subscriptions.push(statusBar);
 
@@ -199,7 +202,9 @@ function registerIndexingStatusBar(
         statusBar.text = `$(sync~spin) GSCode: indexing 0/${formatCount(params.totalFiles)}`;
         statusBar.tooltip = `Indexing ${formatCount(params.totalFiles)} script files…`;
         statusBar.show();
-        log.info(`Indexing ${formatCount(params.totalFiles)} script files…`);
+        // Not logged here: the server writes this line to its own channel now. Writing it from
+        // the extension host put the one message announcing indexing in a different output
+        // channel from everything else the language server says.
     });
 
     languageClient.onNotification("gscode/indexingProgress", (params: { filesIndexed: number; totalFiles: number }) => {
@@ -239,11 +244,29 @@ function registerIndexingStatusBar(
 
     languageClient.onNotification(
         "gscode/indexingComplete",
-        (params: { filesIndexed: number; totalFiles: number; elapsedMilliseconds: number }) => {
+        (params: {
+            filesIndexed: number;
+            totalFiles: number;
+            elapsedMilliseconds: number;
+            workingSetMegabytes: number;
+        }) => {
             const seconds = (params.elapsedMilliseconds / 1000).toFixed(1);
+            const memory = params.workingSetMegabytes.toFixed(0);
+
             statusBar.text = "$(check) GSCode: ready";
-            statusBar.tooltip = `Indexed ${formatCount(params.filesIndexed)} files in ${seconds}s`;
-            log.info(`Workspace indexing complete: ${formatCount(params.filesIndexed)} files in ${seconds}s`);
+            // Memory lives here rather than in the log: it is worth glancing at, and was
+            // previously only reachable by raising a log level and reading past everything else.
+            statusBar.tooltip = new vscode.MarkdownString(
+                [
+                    `**GSCode** — ready`,
+                    ``,
+                    `Indexed **${formatCount(params.filesIndexed)}** files in **${seconds}s**`,
+                    `Server memory **${memory} MB**`,
+                    ``,
+                    `_Click to open the server log._`,
+                ].join("\n"),
+            );
+            // The server logs its own completion line; repeating it here would double it.
         },
     );
 }

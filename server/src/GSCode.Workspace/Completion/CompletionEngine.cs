@@ -390,7 +390,8 @@ public sealed class CompletionEngine
                 // Pre-fill the root: every one of the 9,875 path directives in the stock scripts
                 // starts at `scripts\`, so typing it is pure ceremony. The cursor lands after the
                 // separator, where completion reopens on that folder's contents.
-                return withoutHash + " scripts\\$1;$0";
+                //
+                return withoutHash + " " + SnippetLiteral(@"scripts\") + "$1;$0";
             case "#namespace":
                 return "namespace $1;$0";
             case "#define":
@@ -399,6 +400,22 @@ public sealed class CompletionEngine
             default:
                 return withoutHash;
         }
+    }
+
+    /// <summary>
+    /// Escapes text that must appear VERBATIM inside a snippet.
+    ///
+    /// Snippet syntax gives '\', '$' and '}' meaning, and '\' escapes whatever follows it — so an
+    /// unescaped path separator swallowed the tab stop after it and put `#using scripts$1;` in the
+    /// buffer as literal text. GSC paths are full of separators, so this has to be a function
+    /// rather than something remembered at each call site.
+    /// </summary>
+    private static string SnippetLiteral(string text)
+    {
+        return text
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("$", "\\$", StringComparison.Ordinal)
+            .Replace("}", "\\}", StringComparison.Ordinal);
     }
 
     /// <summary>

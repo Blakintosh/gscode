@@ -265,8 +265,8 @@ public class CompletionEngineTests
     [Theory]
     [InlineData("#precache", "precache( \"$1\", \"$2\" );$0")]
     [InlineData("#using_animtree", "using_animtree( \"$1\" );$0")]
-    [InlineData("#using", @"using scripts\$1;$0")]
-    [InlineData("#insert", @"insert scripts\$1;$0")]
+    [InlineData("#using", @"using scripts\\$1;$0")]
+    [InlineData("#insert", @"insert scripts\\$1;$0")]
     [InlineData("#namespace", "namespace $1;$0")]
     public void AcceptingADirective_InsertsItsWholeForm(string directive, string expected)
     {
@@ -400,14 +400,60 @@ public class CompletionEngineTests
         Assert.Equal("_arena", Entry(CompletePath(@"#using scripts\mp\"), "_arena").InsertText);
     }
 
-    [Fact]
-    public void PathDirectives_PreFillTheScriptsRoot()
+    /// <summary>
+    /// The text an editor puts in the buffer for a snippet: '\' escapes the next character, and
+    /// $0/$1/… are tab stops that contribute nothing.
+    ///
+    /// Comparing raw snippet strings is what let the escaping bug through — the assertion simply
+    /// restated whatever the code produced. Decoding first tests the thing that matters.
+    /// </summary>
+    private static string ExpandSnippet(string snippet)
+    {
+        System.Text.StringBuilder buffer = new();
+
+        for ( int index = 0; index < snippet.Length; index++ )
+        {
+            char c = snippet[index];
+
+            if ( c == '\\' && index + 1 < snippet.Length )
+            {
+                buffer.Append(snippet[index + 1]);
+                index++;
+                continue;
+            }
+
+            if ( c == '$' && index + 1 < snippet.Length && char.IsAsciiDigit(snippet[index + 1]) )
+            {
+                while ( index + 1 < snippet.Length && char.IsAsciiDigit(snippet[index + 1]) )
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            buffer.Append(c);
+        }
+
+        return buffer.ToString();
+    }
+
+    [Theory]
+    [InlineData("#using", @"using scripts\;")]
+    [InlineData("#insert", @"insert scripts\;")]
+    public void PathDirectives_PreFillTheScriptsRoot(string directive, string expected)
     {
         // Every one of the 9,875 path directives in the stock scripts starts at `scripts\`, so
-        // typing it is pure ceremony. The cursor lands after the separator, where the retrigger
-        // reopens on that folder's contents.
-        Assert.Equal(@"using scripts\$1;$0", Entry(CompleteAfter("#"), "#using").InsertText);
-        Assert.Equal(@"insert scripts\$1;$0", Entry(CompleteAfter("#"), "#insert").InsertText);
+        // typing it is pure ceremony. Asserted through the expander because the separator has to
+        // survive snippet escaping: unescaped, '\' swallowed the tab stop after it and the buffer
+        // read `#using scripts$1;`.
+        Assert.Equal(expected, ExpandSnippet(Entry(CompleteAfter("#"), directive).InsertText));
+    }
+
+    [Fact]
+    public void PrecacheSnippet_ExpandsToItsRealForm()
+    {
+        Assert.Equal("precache( \"\", \"\" );", ExpandSnippet(Entry(CompleteAfter("#"), "#precache").InsertText));
     }
 
     [Fact]

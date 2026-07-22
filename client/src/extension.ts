@@ -73,12 +73,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
-    // Open the gscode.net script API library for the active editor's language (default gsc).
+    // Open gscode.net for whatever is under the cursor: the engine function's own page when it is
+    // one, otherwise the library index for the editor's language.
+    //
+    // Whether a name IS a builtin is not a text question — a script function of the same name
+    // shadows it — so the server is asked. The extension host has no symbol knowledge at all.
     context.subscriptions.push(
-        vscode.commands.registerCommand("gscode.openApiLibrary", () => {
-            const languageId = vscode.window.activeTextEditor?.document.languageId;
-            const library = languageId === "csc" ? "csc" : "gsc";
-            vscode.env.openExternal(vscode.Uri.parse(`https://www.gscode.net/library/${library}`));
+        vscode.commands.registerCommand("gscode.openApiLibrary", async () => {
+            const editor = vscode.window.activeTextEditor;
+            const library = editor?.document.languageId === "csc" ? "csc" : "gsc";
+            let page = `https://www.gscode.net/library/${library}`;
+
+            if (editor !== undefined) {
+                try {
+                    const builtin = await created.sendRequest<{ name: string; language: string }>(
+                        "gscode/builtinAt",
+                        {
+                            uri: editor.document.uri.toString(),
+                            line: editor.selection.active.line,
+                            character: editor.selection.active.character,
+                        },
+                    );
+
+                    if (builtin?.name) {
+                        // The site addresses pages in lowercase: LUINotifyEvent -> luinotifyevent.
+                        page = `https://www.gscode.net/library/${builtin.language}/${builtin.name.toLowerCase()}`;
+                    }
+                } catch (error) {
+                    // The index is still a useful answer, so a failed lookup opens that instead of
+                    // nothing at all.
+                    log.warn(`Could not resolve the symbol under the cursor: ${String(error)}`);
+                }
+            }
+
+            await vscode.env.openExternal(vscode.Uri.parse(page));
         }),
     );
 

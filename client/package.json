@@ -122,14 +122,14 @@
 			},
 			{
 				"command": "gscode.openApiLibrary",
-				"title": "GSCode: Open Script API Library"
+				"title": "GSCode: Open Documentation for Symbol"
 			}
 		],
 		"keybindings": [
 			{
 				"command": "gscode.openApiLibrary",
 				"key": "shift+f1",
-				"when": "editorTextFocus && (editorLangId == gsc || editorLangId == csc)"
+				"when": "editorTextFocus && (editorLangId == gsc || editorLangId == csc || editorLangId == gsh)"
 			}
 		],
 		"configuration": {

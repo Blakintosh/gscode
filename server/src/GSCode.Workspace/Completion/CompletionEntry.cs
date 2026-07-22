@@ -42,6 +42,14 @@ public enum CompletionKind
 /// The declaring namespace, carried so completionItem/resolve can find the symbol again and
 /// render its full documentation. Empty for anything without one (builtins, macros, keywords).
 /// </param>
+/// <param name="RetriggerCompletion">
+/// Whether accepting this entry should immediately reopen the suggestion list.
+///
+/// For entries that insert a snippet landing the cursor somewhere with its own vocabulary —
+/// `#precache( "<here>", … )` wants asset types, `#using <here>;` wants path segments. Nothing
+/// otherwise reopens the list, so the user had to delete the inserted quotes and retype one just
+/// to fire the '"' trigger character again.
+/// </param>
 public sealed record CompletionEntry(
     string Label,
     CompletionKind Kind,
@@ -49,4 +57,5 @@ public sealed record CompletionEntry(
     string InsertText = "",
     string Documentation = "",
     string FilterText = "",
-    string Namespace = "");
+    string Namespace = "",
+    bool RetriggerCompletion = false);

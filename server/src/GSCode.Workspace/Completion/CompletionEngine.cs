@@ -313,6 +313,28 @@ public sealed class CompletionEngine
     }
 
     /// <summary>
+    /// Whether the cursor lands somewhere this engine can actually suggest for, so accepting the
+    /// directive should reopen the suggestion list.
+    ///
+    /// Only where a vocabulary exists. Reopening on <c>#define</c> or <c>#namespace</c>, whose
+    /// argument is a name the user is inventing, would pop a list over what they are typing.
+    /// </summary>
+    private static bool DirectiveArgumentHasVocabulary(string keyword)
+    {
+        switch ( keyword )
+        {
+            // The asset type: a closed list from PrecacheAssetTypes.
+            case "#precache":
+            // A script path: offered from the indexed files.
+            case "#using":
+            case "#insert":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
     /// The directives, offered with the leading '#' stripped from what the editor filters and
     /// inserts. The client's word pattern excludes '#', so after typing "#p" the current word is
     /// "p": a "#precache" label would be filtered out while "private" survived — the reported
@@ -337,7 +359,8 @@ public sealed class CompletionEngine
                 "directive",
                 DirectiveSnippet(keyword, withoutHash),
                 KeywordDocs.Find(keyword) ?? "",
-                withoutHash));
+                withoutHash,
+                RetriggerCompletion: DirectiveArgumentHasVocabulary(keyword)));
         }
 
         return entries.ToImmutable();

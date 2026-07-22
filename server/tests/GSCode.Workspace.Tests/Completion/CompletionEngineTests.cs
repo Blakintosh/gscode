@@ -275,6 +275,47 @@ public class CompletionEngineTests
         Assert.Equal(expected, Entry(CompleteAfter("#"), directive).InsertText);
     }
 
+    [Theory]
+    [InlineData("#precache")]   // asset types
+    [InlineData("#using")]      // script paths
+    [InlineData("#insert")]     // script paths
+    public void DirectivesWithAVocabulary_ReopenTheSuggestionList(string directive)
+    {
+        // The snippet lands the cursor between the quotes of the first argument, but nothing
+        // reopens the list there — the user had to delete the quotes and retype one just to fire
+        // the '"' trigger character again.
+        Assert.True(Entry(CompleteAfter("#"), directive).RetriggerCompletion);
+    }
+
+    [Theory]
+    [InlineData("#define")]     // the macro name is being invented
+    [InlineData("#namespace")]  // so is the namespace
+    [InlineData("#endif")]      // takes no argument at all
+    public void DirectivesWithoutAVocabulary_DoNotReopenIt(string directive)
+    {
+        // Popping a list over a name the user is typing would be worse than not popping one.
+        Assert.False(Entry(CompleteAfter("#"), directive).RetriggerCompletion);
+    }
+
+    [Theory]
+    [InlineData("#using ;", 7)]
+    [InlineData("#insert ;", 8)]
+    public void TheReopenedListIsNotEmpty_WherePathDirectivesLeaveTheCursor(string line, int cursor)
+    {
+        // Retriggering is only worth doing if something is actually offered at the spot the
+        // snippet leaves the cursor — before the ';' it just inserted.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction u()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", line + "\n\nfunction run()\n{\n}\n");
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(0, cursor));
+
+        Assert.NotEmpty(entries);
+        Assert.All(entries, e => Assert.Equal(CompletionKind.PathSegment, e.Kind));
+    }
+
     [Fact]
     public void DefineTakesNoSemicolon()
     {

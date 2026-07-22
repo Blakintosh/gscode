@@ -225,9 +225,24 @@ public sealed class CompletionHandler : CompletionHandlerBase
             InsertText = insertText,
             FilterText = entry.FilterText.Length > 0 ? entry.FilterText : null,
             InsertTextFormat = isSnippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
+            Command = entry.RetriggerCompletion ? RetriggerCommand : null,
             Data = IsResolvable(entry.Kind) ? ResolveData(entry, uri) : null,
         };
     }
+
+    /// <summary>
+    /// Run after the insert, to reopen the suggestion list where the snippet left the cursor.
+    ///
+    /// Accepting `#precache` lands between the quotes of its first argument, but nothing reopens
+    /// the list there — the user had to delete the inserted quotes and retype one just to fire the
+    /// '"' trigger character again. This is the editor's own built-in command; a client that does
+    /// not have it simply does nothing, which is the behaviour we already had.
+    /// </summary>
+    private static readonly Command RetriggerCommand = new()
+    {
+        Name = "editor.action.triggerSuggest",
+        Title = "Suggest",
+    };
 
     /// <summary>
     /// The identity resolve needs to find this symbol again. Plain strings only — the same

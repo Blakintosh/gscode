@@ -43,12 +43,29 @@ stock scripts. It fires on their own code, where it is actionable.
 those shipped, anything it reports is either a real defect in Treyarch's code or a false positive
 in ours. Two groups are still unexplained:
 
-**`gscode-5004 ReadOnlyFieldWrite` — 87 warnings in 44 files.** Stock code assigns to
-`damageTaken` (39), `goalpos` (22), `attacker` (6), `height`, `velocity`, `name`, `pers`,
-`meleeDamage`. Either the shipped scripts are full of no-op assignments or the read-only flags in
-the bundled field data are wrong for these names. The data is curated from mod tools and the lint
-is already only a Warning for exactly that reason. Check a couple against the engine before
-either loosening the lint or correcting the data.
+**`gscode-5004 ReadOnlyFieldWrite` — 87 warnings in 44 files. The flags have no provenance.**
+
+Traced: `ScriptObjectFields.xlsx` in `%TA_TOOLS_PATH%\docs_modtools\`, the source the field data
+comes from, has NO read-only column. It maps field name to engine type token and nothing else. All
+362 `readonly` flags in `server/tools/field-data/sources/curated/*.json` were applied by hand
+during the manual xlsx-to-curated import, on no documented authority.
+
+The distribution gives it away: `weapon_fields_simple.json` marks **all 234** of its fields
+read-only, `aitype_fields.json` all 4, `vehicle_fields.json` 43 of 58. Those are wholesale
+decisions, not field-by-field ones. Every name that fires on stock code sits in such a file —
+`damagetaken` (ai), `goalpos` and `attacker` (sentient), `meleedamage` (weapon).
+
+So the 87 findings are most likely OUR data being wrong rather than Treyarch writing 87 no-op
+assignments. Options:
+
+1. Clear the wholesale-flagged files (`weapon`, `aitype`) and keep only flags that can be
+   justified, then re-run the sweep and see what survives.
+2. Verify a handful in-engine — assign `self.damagetaken` and observe — and use the answer to
+   decide whether the flag concept is worth keeping at all.
+3. Drop the lint. It is the only diagnostic resting on data nobody can source.
+
+Whichever, the curated files should record WHERE each flag came from, so this question does not
+have to be answered twice.
 
 **`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 ERRORS in 5 files.** The highest severity
 anything reports on shipped code: `error` (3x), `debug_spherical_cone`, `Print3d`,

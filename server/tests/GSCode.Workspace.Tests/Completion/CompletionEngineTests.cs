@@ -400,17 +400,20 @@ public class CompletionEngineTests
     [InlineData("self thread ")]        // threaded
     [InlineData("level.owner ")]        // an arbitrary object expression
     [InlineData("util::")]              // namespace-qualified
+    [InlineData("x = ")]                // an assignment completes a statement too
+    [InlineData("self.count += ")]      // and a compound one
+    [InlineData("things[0] = ")]        // and one through an index
     public void AStatementCallGetsItsSemicolon(string line)
     {
         Assert.EndsWith("($0);", CallEntry(line).InsertText, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData("x = ")]                // an assignment's right-hand side
     [InlineData("if ( ")]               // a condition
     [InlineData("other( ")]             // an argument
     [InlineData("return ")]             // a returned value
-    [InlineData("x = a + ")]            // an operand
+    [InlineData("x = a + ")]            // an operand, not the whole right-hand side
+    [InlineData("x = y = ")]            // a second assignment: too unusual to guess at
     public void AnExpressionCallDoesNot(string line)
     {
         // A semicolon here would land in the middle of the expression.
@@ -472,25 +475,28 @@ public class CompletionEngineTests
     }
 
     [Fact]
-    public void IsdefinedTakesParensButNeverASemicolon()
+    public void IsdefinedFollowsTheSameStatementRule()
     {
-        // It is a condition wherever it appears, so a statement-looking position means nothing.
-        Assert.Equal("isdefined($0)", KeywordEntry("", "isdefined").InsertText);
+        // No special case needed: `x = isdefined( f )` is an assignment STATEMENT and takes a
+        // semicolon, while `if ( isdefined( f ) )` is not a statement position and does not.
+        Assert.Equal("isdefined($0);", KeywordEntry("x = ", "isdefined").InsertText);
         Assert.Equal("isdefined($0)", KeywordEntry("if ( ", "isdefined").InsertText);
     }
 
     [Fact]
     public void StatementKeywordsInAnExpressionKeepBareParens()
     {
-        Assert.Equal("waittill($0)", KeywordEntry("x = self ", "waittill").InsertText);
+        Assert.Equal("waittill($0)", KeywordEntry("if ( self ", "waittill").InsertText);
     }
 
     [Theory]
-    [InlineData("wait", "wait $0;")]
-    [InlineData("waitrealtime", "waitrealtime $0;")]
-    public void WaitTakesAValueAndNoParentheses(string keyword, string expected)
+    [InlineData("wait")]
+    [InlineData("waitrealtime")]
+    public void WaitIsParenthesised(string keyword)
     {
-        Assert.Equal(expected, KeywordEntry("", keyword).InsertText);
+        // Both `wait 0.5;` and `wait( 0.5 );` are legal; the parenthesised form is used, being
+        // the one that reads the same as everything around it.
+        Assert.Equal(keyword + "($0);", KeywordEntry("", keyword).InsertText);
     }
 
     [Fact]

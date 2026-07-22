@@ -832,6 +832,7 @@ public sealed class CompletionEngine
     private static bool IsStatementPosition(ImmutableArray<Token> tokens, int currentIndex, int offset)
     {
         int scan = (currentIndex >= 0 ? currentIndex : FirstAtOrAfter(tokens, offset)) - 1;
+        bool seenAssignment = false;
 
         while ( scan >= 0 )
         {
@@ -863,6 +864,21 @@ public sealed class CompletionEngine
                 // A ')' either closes a control-flow header, so a body follows, or closes a call,
                 // in which case this is an expression and the answer is no.
                 return ClosesControlFlowHeader(tokens, scan);
+            }
+
+            // `x = foo()` and `self.count += tally()` are statements too — the call completes
+            // one. Allowed once: a second assignment operator on the way back would mean the
+            // first was part of something else, and `a = b = foo()` is not worth the risk.
+            if ( IsAssignmentOperator(kind) )
+            {
+                if ( seenAssignment )
+                {
+                    return false;
+                }
+
+                seenAssignment = true;
+                scan--;
+                continue;
             }
 
             if ( kind == TokenKind.CloseBracket )
@@ -902,17 +918,8 @@ public sealed class CompletionEngine
 
         switch ( GscKeywords.ShapeOf(keyword) )
         {
-            // Never a semicolon: `isdefined( x )` is a condition, so the position looking like a
-            // statement means nothing.
-            case KeywordShape.ExpressionCall:
-                return punctuate ? keyword + "($0)" : "";
-
             case KeywordShape.StatementCall:
                 return punctuate ? keyword + callSuffix : "";
-
-            // `wait 0.5;` — a value and no parentheses.
-            case KeywordShape.ValueStatement:
-                return statement ? keyword + " $0;" : "";
 
             // `waittillframeend;` — nothing but the terminator.
             case KeywordShape.BareStatement:
@@ -922,6 +929,13 @@ public sealed class CompletionEngine
                 // Empty means "insert the label", which is what a plain word wants.
                 return "";
         }
+    }
+
+    private static bool IsAssignmentOperator(TokenKind kind)
+    {
+        return kind is TokenKind.Assign or TokenKind.PlusAssign or TokenKind.MinusAssign
+            or TokenKind.StarAssign or TokenKind.SlashAssign or TokenKind.PercentAssign
+            or TokenKind.AmpersandAssign or TokenKind.PipeAssign or TokenKind.CaretAssign;
     }
 
     /// <summary>

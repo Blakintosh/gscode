@@ -9,20 +9,10 @@ public enum KeywordShape
     Word,
 
     /// <summary>
-    /// Call-shaped, but only ever part of a larger expression — `isdefined( x )` is a condition,
-    /// never a statement, so it must not gain a semicolon however statement-like the position
-    /// looks.
-    /// </summary>
-    ExpressionCall,
-
-    /// <summary>
     /// Call-shaped and a statement in its own right: `self notify( "x" );`. Takes a semicolon on
     /// the same terms a function call does.
     /// </summary>
     StatementCall,
-
-    /// <summary>A statement taking a value with no parentheses: `wait 0.5;`.</summary>
-    ValueStatement,
 
     /// <summary>A statement taking nothing at all: `waittillframeend;`.</summary>
     BareStatement,
@@ -34,23 +24,26 @@ public static class GscKeywords
     /// <summary>
     /// How each call-shaped keyword completes; anything absent is a plain <see cref="KeywordShape.Word"/>.
     ///
-    /// The distinction that matters is not keyword-versus-function but EXPRESSION-versus-STATEMENT.
-    /// `isdefined` is only ever a condition, so it takes parentheses and never a semicolon, while
-    /// `notify` and `endon` are statements and take both. `wait` takes a value and no parentheses
-    /// at all — which is why one rule for everything call-shaped would be wrong.
+    /// All of these are written as calls, so all of them take parentheses and then follow the
+    /// same statement rule a function call does. `isdefined` needs no special case: `x = isdefined( f )`
+    /// is an assignment statement and takes a semicolon, while `if ( isdefined( f ) )` is not a
+    /// statement position at all and does not.
+    ///
+    /// `wait` accepts both `wait 0.5;` and `wait( 0.5 );`; the parenthesised form is used, being
+    /// the one that reads the same as everything around it.
     ///
     /// Control-flow keywords are deliberately absent: `if` needs a body as well as a header, so
     /// completing it usefully is a different job from punctuating a call.
     /// </summary>
     private static readonly Dictionary<string, KeywordShape> s_shapes = new(StringComparer.Ordinal)
     {
-        ["isdefined"] = KeywordShape.ExpressionCall,
+        ["isdefined"] = KeywordShape.StatementCall,
         ["notify"] = KeywordShape.StatementCall,
         ["endon"] = KeywordShape.StatementCall,
         ["waittill"] = KeywordShape.StatementCall,
         ["waittillmatch"] = KeywordShape.StatementCall,
-        ["wait"] = KeywordShape.ValueStatement,
-        ["waitrealtime"] = KeywordShape.ValueStatement,
+        ["wait"] = KeywordShape.StatementCall,
+        ["waitrealtime"] = KeywordShape.StatementCall,
         ["waittillframeend"] = KeywordShape.BareStatement,
     };
 

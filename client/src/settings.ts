@@ -1,6 +1,12 @@
 import { workspace } from "vscode";
 
-/** The payload sent to the server as initializationOptions and on configuration changes. */
+/**
+ * The payload sent to the server as initializationOptions and on configuration changes.
+ *
+ * An explicit list, so a setting declared in package.json but not named here NEVER REACHES THE
+ * SERVER — the server falls back to its own default and the user's choice is silently ignored.
+ * Anything added to `contributes.configuration` has to be added here too.
+ */
 export interface GscodeSettings {
     serverLogLevel: string;
     workspaceIndexingMode: string;
@@ -15,6 +21,10 @@ export interface GscodeSettings {
     "inlayHints.inferredTypes": boolean;
     "completion.literals": boolean;
     "completion.fieldScope": string;
+    "completion.callPunctuation": string;
+    "diagnostics.scope": string;
+    "format.padParens": boolean;
+    "format.maxBlankLines": number;
 }
 
 /** Reads the current gscode.* settings into the shape the server expects. */
@@ -34,5 +44,9 @@ export function readSettings(): GscodeSettings {
         "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", true),
         "completion.literals": config.get<boolean>("completion.literals", true),
         "completion.fieldScope": config.get<string>("completion.fieldScope", "owner"),
+        "completion.callPunctuation": config.get<string>("completion.callPunctuation", "parensAndSemicolon"),
+        "diagnostics.scope": config.get<string>("diagnostics.scope", "workspace"),
+        "format.padParens": config.get<boolean>("format.padParens", true),
+        "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),
     };
 }

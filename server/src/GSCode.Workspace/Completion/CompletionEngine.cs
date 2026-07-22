@@ -154,7 +154,9 @@ public sealed class CompletionEngine
 
             if ( kind == TokenKind.UsingDirective || kind == TokenKind.InsertDirective )
             {
-                return PathSegmentCompletions(result, contextId);
+                string typed = TypedPathBefore(result, tokens[scan].End, offset);
+                return PathSegmentCompletions(
+                    result, contextId, isInsert: kind == TokenKind.InsertDirective, typed);
             }
 
             scan--;
@@ -163,28 +165,106 @@ public sealed class CompletionEngine
         return default;
     }
 
-    private ImmutableArray<CompletionEntry> PathSegmentCompletions(ParseResult result, string contextId)
+    /// <summary>
+    /// The path text already typed between the directive and the cursor, normalized to
+    /// backslashes. Read from the raw source rather than the tokens because a partial path is a
+    /// run of identifiers and separators that never lexes as one thing.
+    /// </summary>
+    private static string TypedPathBefore(ParseResult result, int directiveEnd, int offset)
     {
-        // Offer top-level script folders/files reachable from this file's context. Kept
-        // simple: enumerate index targets and surface their leading path segment options.
-        HashSet<string> segments = new(StringComparer.OrdinalIgnoreCase);
-        foreach ( ScriptRecord record in _database.StoreFor(result.Language).AllRecords )
+        int start = Math.Clamp(directiveEnd, 0, result.Text.Length);
+        int end = Math.Clamp(offset, start, result.Text.Length);
+
+        return result.Text.Text[start..end].Trim().Replace('/', '\\');
+    }
+
+    /// <summary>
+    /// Path completion, ONE SEGMENT AT A TIME, like a folder picker.
+    ///
+    /// Offering whole relative paths did not work: the client's word pattern excludes '\', so at
+    /// `scripts\mp\` the editor's current word is empty and it cannot filter `scripts\mp\_arena`
+    /// against anything the user typed — the list stayed unfiltered and highlighted whatever came
+    /// first. Offering only the next segment means the word being matched IS the segment, so the
+    /// editor filters it correctly with no special handling.
+    ///
+    /// Folders insert a trailing '\' and reopen the list, so a path is walked down rather than
+    /// typed out.
+    /// </summary>
+    /// <param name="isInsert">
+    /// Whether this is <c>#insert</c>, which takes a header. Headers live in the shared GSH store
+    /// rather than either language store, so serving both from one store offered <c>#insert</c>
+    /// the <c>.gsc</c> files it can never include.
+    /// </param>
+    /// <param name="typed">The path already typed, e.g. <c>scripts\mp\_ar</c>.</param>
+    private ImmutableArray<CompletionEntry> PathSegmentCompletions(
+        ParseResult result, string contextId, bool isInsert, string typed)
+    {
+        // Everything up to the last separator is the folder being listed. What follows is the
+        // partial segment the editor filters on, so it must NOT narrow the candidates here.
+        int lastSeparator = typed.LastIndexOf('\\');
+        string directory = lastSeparator >= 0 ? typed[..(lastSeparator + 1)] : "";
+
+        // Segment -> whether it is a folder (has more path below it).
+        Dictionary<string, bool> segments = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach ( ScriptRecord record in PathCandidates(result, isInsert) )
         {
-            if ( record.RelativePath.Length > 0 && ScriptDatabase.CanSee(contextId, record.ContextId) )
+            if ( record.RelativePath.Length == 0 || !ScriptDatabase.CanSee(contextId, record.ContextId) )
             {
-                // The script-relative path without extension is what #using expects.
-                string withoutExtension = System.IO.Path.ChangeExtension(record.RelativePath, null) ?? record.RelativePath;
-                segments.Add(withoutExtension.Replace('/', '\\'));
+                continue;
             }
+
+            // The script-relative path without extension is what #using and #insert expect.
+            string path = (System.IO.Path.ChangeExtension(record.RelativePath, null) ?? record.RelativePath)
+                .Replace('/', '\\');
+
+            if ( !path.StartsWith(directory, StringComparison.OrdinalIgnoreCase) )
+            {
+                continue;
+            }
+
+            string remainder = path[directory.Length..];
+            if ( remainder.Length == 0 )
+            {
+                continue;
+            }
+
+            int separator = remainder.IndexOf('\\');
+            bool isFolder = separator >= 0;
+            string segment = isFolder ? remainder[..separator] : remainder;
+
+            // A name that is both a folder and a file lists as a folder, which is the one with
+            // more below it to reach.
+            segments[segment] = segments.TryGetValue(segment, out bool existing) ? existing || isFolder : isFolder;
         }
 
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
-        foreach ( string segment in segments.OrderBy(static s => s, StringComparer.Ordinal) )
+        foreach ( KeyValuePair<string, bool> segment in segments.OrderBy(static s => s.Key, StringComparer.OrdinalIgnoreCase) )
         {
-            entries.Add(new CompletionEntry(segment, CompletionKind.PathSegment, "script path"));
+            bool isFolder = segment.Value;
+            entries.Add(new CompletionEntry(
+                segment.Key,
+                isFolder ? CompletionKind.PathSegment : CompletionKind.PathFile,
+                isFolder ? "folder" : (isInsert ? "header" : "script"),
+                isFolder ? segment.Key + "\\" : segment.Key,
+                RetriggerCompletion: isFolder));
         }
 
         return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// The records a path directive may name: headers for <c>#insert</c>, this file's own
+    /// language for <c>#using</c>. A <c>.gsc</c> never includes a <c>.csc</c> or vice versa.
+    /// </summary>
+    private IEnumerable<ScriptRecord> PathCandidates(ParseResult result, bool isInsert)
+    {
+        if ( isInsert )
+        {
+            return _database.AllGshRecords;
+        }
+
+        return _database.StoreFor(result.Language).AllRecords;
     }
 
     private ImmutableArray<CompletionEntry> LiteralCompletions(ParseResult result, string contextId, SymbolKind literalKind)

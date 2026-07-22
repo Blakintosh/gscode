@@ -297,23 +297,119 @@ public class CompletionEngineTests
         Assert.False(Entry(CompleteAfter("#"), directive).RetriggerCompletion);
     }
 
-    [Theory]
-    [InlineData("#using ;", 7)]
-    [InlineData("#insert ;", 8)]
-    public void TheReopenedListIsNotEmpty_WherePathDirectivesLeaveTheCursor(string line, int cursor)
+    // --- #using / #insert path completion ---
+    //
+    // One segment at a time, like a folder picker. Whole relative paths did not work: the
+    // client's word pattern excludes '\', so at `scripts\mp\` the editor's current word is empty
+    // and it cannot filter `scripts\mp\_arena` against anything typed — the list stayed
+    // unfiltered and highlighted whatever came first.
+
+    private static readonly FakeFileSystem PathWorld = new FakeFileSystem()
+        .AddFile(@$"{Raw}\scripts\mp\_arena.gsc", "function a()\n{\n}\n")
+        .AddFile(@$"{Raw}\scripts\mp\_armor.gsc", "function b()\n{\n}\n")
+        .AddFile(@$"{Raw}\scripts\mp\gametypes\tdm.gsc", "function c()\n{\n}\n")
+        .AddFile(@$"{Raw}\scripts\codescripts\struct.gsc", "function d()\n{\n}\n")
+        .AddFile(@$"{Raw}\scripts\mp\_arena.csc", "function e()\n{\n}\n")
+        .AddFile(@$"{Raw}\scripts\shared\shared.gsh", "#define X 1\n")
+        .AddFile(@$"{Raw}\scripts\mp\mp.gsh", "#define Y 2\n");
+
+    /// <summary>Completes at the end of a directive line in a file of the given extension.</summary>
+    private static ImmutableArray<CompletionEntry> CompletePath(string line, string extension = "gsc")
     {
-        // Retriggering is only worth doing if something is actually offered at the spot the
-        // snippet leaves the cursor — before the ';' it just inserted.
-        FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction u()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(PathWorld);
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.{extension}", line + "\n\nfunction run()\n{\n}\n");
 
-        (CompletionEngine engine, _, _) = BuildWorld(files);
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", line + "\n\nfunction run()\n{\n}\n");
+        return engine.Complete(result, "raw", new Position(0, line.Length));
+    }
 
-        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(0, cursor));
+    [Fact]
+    public void PathCompletion_StartsAtTheTopLevel()
+    {
+        ImmutableArray<CompletionEntry> entries = CompletePath("#using ");
 
-        Assert.NotEmpty(entries);
-        Assert.All(entries, e => Assert.Equal(CompletionKind.PathSegment, e.Kind));
+        // One entry, "scripts", not every path in the workspace.
+        Assert.Equal("scripts", Assert.Single(entries).Label);
+    }
+
+    [Fact]
+    public void PathCompletion_DescendsOneSegmentAtATime()
+    {
+        ImmutableArray<CompletionEntry> entries = CompletePath(@"#using scripts\");
+
+        Assert.True(HasLabel(entries, "mp"));
+        Assert.True(HasLabel(entries, "codescripts"));
+        Assert.False(HasLabel(entries, @"scripts\mp"));   // never a whole path
+    }
+
+    [Fact]
+    public void PathCompletion_OffersFilesAndFoldersAtTheSameLevel()
+    {
+        ImmutableArray<CompletionEntry> entries = CompletePath(@"#using scripts\mp\");
+
+        Assert.Equal(CompletionKind.PathFile, Entry(entries, "_arena").Kind);
+        Assert.Equal(CompletionKind.PathSegment, Entry(entries, "gametypes").Kind);
+    }
+
+    [Fact]
+    public void FoldersInsertASeparatorAndReopenTheList()
+    {
+        // So a path is walked down rather than typed out.
+        CompletionEntry folder = Entry(CompletePath(@"#using scripts\"), "mp");
+
+        Assert.Equal(@"mp\", folder.InsertText);
+        Assert.True(folder.RetriggerCompletion);
+    }
+
+    [Fact]
+    public void FilesInsertBareAndDoNotReopen()
+    {
+        CompletionEntry file = Entry(CompletePath(@"#using scripts\mp\"), "_arena");
+
+        Assert.Equal("_arena", file.InsertText);
+        Assert.False(file.RetriggerCompletion);
+    }
+
+    [Fact]
+    public void APartiallyTypedSegmentDoesNotNarrowTheList()
+    {
+        // The editor filters on the partial word itself, so narrowing here as well would fight
+        // its fuzzy matching. Both _arena and _armor must still be offered.
+        ImmutableArray<CompletionEntry> entries = CompletePath(@"#using scripts\mp\_ar");
+
+        Assert.True(HasLabel(entries, "_arena"));
+        Assert.True(HasLabel(entries, "_armor"));
+    }
+
+    [Fact]
+    public void Insert_OffersHeadersOnly()
+    {
+        // Headers live in the shared GSH store rather than either language store, so serving both
+        // directives from one store offered #insert the .gsc files it can never include.
+        ImmutableArray<CompletionEntry> entries = CompletePath(@"#insert scripts\shared\");
+
+        Assert.Equal("shared", Assert.Single(entries).Label);
+    }
+
+    [Fact]
+    public void Insert_DoesNotOfferScripts()
+    {
+        Assert.False(HasLabel(CompletePath(@"#insert scripts\mp\"), "_arena"));
+    }
+
+    [Fact]
+    public void Using_DoesNotOfferHeaders()
+    {
+        // The mirror of the above: a #using takes a script, never a header.
+        Assert.False(HasLabel(CompletePath(@"#using scripts\mp\"), "mp"));
+    }
+
+    [Fact]
+    public void Using_StaysInTheAskingFilesLanguage()
+    {
+        // _arena exists as both .gsc and .csc; a .csc must not be offered a .gsc path, and the
+        // segment names are identical, so this is really asserting the store choice.
+        Assert.True(HasLabel(CompletePath(@"#using scripts\mp\", extension: "csc"), "_arena"));
+        Assert.False(HasLabel(CompletePath(@"#using scripts\mp\", extension: "csc"), "_armor"));
     }
 
     [Fact]

@@ -24,7 +24,12 @@ public enum CompletionKind
     Macro,
     Namespace,
     AssetType,
+
+    /// <summary>A folder in a #using/#insert path — inserts a trailing '\' and reopens the list.</summary>
     PathSegment,
+
+    /// <summary>A script or header file: the end of a #using/#insert path.</summary>
+    PathFile,
     Literal,
     Snippet,
 }

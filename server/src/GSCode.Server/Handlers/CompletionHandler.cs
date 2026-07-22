@@ -281,6 +281,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
             case CompletionKind.AssetType:
                 return CompletionItemKind.EnumMember;
             case CompletionKind.PathSegment:
+                return CompletionItemKind.Folder;
+            case CompletionKind.PathFile:
                 return CompletionItemKind.File;
             case CompletionKind.Literal:
                 return CompletionItemKind.Text;

@@ -371,6 +371,81 @@ public class CompletionEngineTests
         Assert.False(HasLabel(entries, "if"));
     }
 
+    // --- Call punctuation ---
+    //
+    // A completed call brings its parentheses, and closes a STATEMENT with a semicolon. Getting
+    // the statement test wrong writes a ';' into the middle of an expression, so the detection is
+    // a whitelist of what may precede a call in statement position rather than a blacklist.
+
+    /// <summary>Completes at the end of `line`, inside a function body, and returns `foo`'s entry.</summary>
+    private static CompletionEntry CallEntry(string line, CallPunctuation punctuation = CallPunctuation.ParensAndSemicolon)
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction foo()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace util;\nfunction run()\n{\n    " + line + "\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            result, "raw", new Position(3, 4 + line.Length), callPunctuation: punctuation);
+
+        return Assert.Single(entries, e => e.Label == "foo" && e.Kind == CompletionKind.Function);
+    }
+
+    [Theory]
+    [InlineData("")]                    // start of a statement
+    [InlineData("self ")]               // a method call on self
+    [InlineData("self thread ")]        // threaded
+    [InlineData("level.owner ")]        // an arbitrary object expression
+    [InlineData("util::")]              // namespace-qualified
+    public void AStatementCallGetsItsSemicolon(string line)
+    {
+        Assert.EndsWith("($0);", CallEntry(line).InsertText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("x = ")]                // an assignment's right-hand side
+    [InlineData("if ( ")]               // a condition
+    [InlineData("other( ")]             // an argument
+    [InlineData("return ")]             // a returned value
+    [InlineData("x = a + ")]            // an operand
+    public void AnExpressionCallDoesNot(string line)
+    {
+        // A semicolon here would land in the middle of the expression.
+        CompletionEntry entry = CallEntry(line);
+
+        Assert.EndsWith("($0)", entry.InsertText, StringComparison.Ordinal);
+        Assert.DoesNotContain(";", entry.InsertText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ParensOnlyNeverAddsASemicolon()
+    {
+        Assert.Equal("foo($0)", CallEntry("self ", CallPunctuation.Parens).InsertText);
+    }
+
+    [Fact]
+    public void OffInsertsTheBareName()
+    {
+        Assert.Equal("foo", CallEntry("self ", CallPunctuation.Off).InsertText);
+    }
+
+    [Fact]
+    public void BuiltinsFollowTheSameRule()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    self \n}\n");
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            result, "raw", new Position(2, 9), callPunctuation: CallPunctuation.ParensAndSemicolon);
+
+        CompletionEntry builtin = entries.First(e => e.Detail == "builtin");
+        Assert.EndsWith("($0);", builtin.InsertText, StringComparison.Ordinal);
+    }
+
     // --- Contexts are gated on where the cursor actually is ---
     //
     // Every context is detected by scanning BACKWARD for a trigger character, which answers "what

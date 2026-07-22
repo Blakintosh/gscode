@@ -26,6 +26,12 @@ public sealed class ServerSettings
     public string CompletionFieldScope { get; set; } = "owner";
 
     /// <summary>
+    /// How much punctuation a completed call brings with it: "off", "parens", or
+    /// "parensAndSemicolon" (the default).
+    /// </summary>
+    public string CompletionCallPunctuation { get; set; } = "parensAndSemicolon";
+
+    /// <summary>
     /// Which files get diagnostics published: "open" (only what is open), "workspace" (every
     /// indexed file of your own, the default) or "all" (including the stock scripts).
     /// </summary>
@@ -98,6 +104,9 @@ public sealed class ServerSettings
         CompletionFieldScope = section.Value<string>("completion.fieldScope")
             ?? section["completion"]?.Value<string>("fieldScope")
             ?? CompletionFieldScope;
+        CompletionCallPunctuation = section.Value<string>("completion.callPunctuation")
+            ?? section["completion"]?.Value<string>("callPunctuation")
+            ?? CompletionCallPunctuation;
         DiagnosticsScope = section.Value<string>("diagnostics.scope")
             ?? section["diagnostics"]?.Value<string>("scope")
             ?? DiagnosticsScope;

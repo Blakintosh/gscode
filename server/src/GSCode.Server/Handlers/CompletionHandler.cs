@@ -35,6 +35,22 @@ public sealed class CompletionHandler : CompletionHandlerBase
         _builtins = builtins;
     }
 
+    /// <summary>Maps the client setting; anything unrecognised keeps the default rather than going silent.</summary>
+    private static CallPunctuation CallPunctuationFromSetting(string value)
+    {
+        if ( string.Equals(value, "off", StringComparison.OrdinalIgnoreCase) )
+        {
+            return CallPunctuation.Off;
+        }
+
+        if ( string.Equals(value, "parens", StringComparison.OrdinalIgnoreCase) )
+        {
+            return CallPunctuation.Parens;
+        }
+
+        return CallPunctuation.ParensAndSemicolon;
+    }
+
     /// <summary>Maps the client setting; anything unrecognised keeps the safer owner-scoped default.</summary>
     private static FieldScope FieldScopeFromSetting(string value)
     {
@@ -70,7 +86,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
             target.ContextId,
             request.Position.ToCore(),
             _settings.CompletionLiterals,
-            FieldScopeFromSetting(_settings.CompletionFieldScope)) )
+            FieldScopeFromSetting(_settings.CompletionFieldScope),
+            CallPunctuationFromSetting(_settings.CompletionCallPunctuation)) )
         {
             items.Add(ToItem(entry, request.TextDocument.Uri));
         }

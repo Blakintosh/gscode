@@ -266,6 +266,22 @@
 					"description": "How widely field names gathered from assignments are offered after a '.'.",
 					"scope": "window"
 				},
+				"gscode.completion.callPunctuation": {
+					"type": "string",
+					"default": "parensAndSemicolon",
+					"enum": [
+						"off",
+						"parens",
+						"parensAndSemicolon"
+					],
+					"enumDescriptions": [
+						"Insert just the name.",
+						"Insert 'name()' with the cursor between the parentheses.",
+						"Also close a statement with a semicolon: 'name(<cursor>);'. Expressions such as 'x = f()' never gain one."
+					],
+					"description": "How much punctuation completing a function call brings with it.",
+					"scope": "window"
+				},
 				"gscode.diagnostics.scope": {
 					"type": "string",
 					"default": "workspace",
@@ -306,7 +322,8 @@
 					"strings": "off"
 				},
 				"editor.insertSpaces": false,
-				"editor.tabSize": 4
+				"editor.tabSize": 4,
+				"editor.autoClosingOvertype": "always"
 			},
 			"[csc]": {
 				"editor.quickSuggestions": {
@@ -315,7 +332,8 @@
 					"strings": "off"
 				},
 				"editor.insertSpaces": false,
-				"editor.tabSize": 4
+				"editor.tabSize": 4,
+				"editor.autoClosingOvertype": "always"
 			},
 			"[gsh]": {
 				"editor.quickSuggestions": {
@@ -324,7 +342,8 @@
 					"strings": "off"
 				},
 				"editor.insertSpaces": false,
-				"editor.tabSize": 4
+				"editor.tabSize": 4,
+				"editor.autoClosingOvertype": "always"
 			}
 		}
 	},

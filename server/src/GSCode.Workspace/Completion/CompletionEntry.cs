@@ -13,6 +13,22 @@ public enum FieldScope
     All,
 }
 
+/// <summary>
+/// How much punctuation a completed call brings with it (the gscode.completion.callPunctuation
+/// setting).
+/// </summary>
+public enum CallPunctuation
+{
+    /// <summary>Insert the bare name; the user types everything else.</summary>
+    Off,
+
+    /// <summary>Insert `name()` with the cursor between the parentheses.</summary>
+    Parens,
+
+    /// <summary>Also close a STATEMENT with a semicolon: `name(<cursor>);`.</summary>
+    ParensAndSemicolon,
+}
+
 /// <summary>The kind of a completion item (maps onto LSP CompletionItemKind in the handler).</summary>
 public enum CompletionKind
 {

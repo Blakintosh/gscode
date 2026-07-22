@@ -35,7 +35,8 @@ public sealed class CompletionEngine
         string contextId,
         Position position,
         bool includeLiterals = true,
-        FieldScope fieldScope = FieldScope.Owner)
+        FieldScope fieldScope = FieldScope.Owner,
+        CallPunctuation callPunctuation = CallPunctuation.Parens)
     {
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
         int offset = result.Text.GetOffset(position);
@@ -106,7 +107,8 @@ public sealed class CompletionEngine
             if ( nsIndex >= 0 && tokens[nsIndex].Kind == TokenKind.Identifier )
             {
                 string ns = tokens[nsIndex].GetText(result.Text).ToString().ToLowerInvariant();
-                return NamespaceFunctionCompletions(result, contextId, ns);
+                return NamespaceFunctionCompletions(
+                    result, contextId, ns, CallSnippet(tokens, currentIndex, offset, callPunctuation));
             }
         }
 
@@ -116,7 +118,8 @@ public sealed class CompletionEngine
             return FieldCompletions(result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope);
         }
 
-        return StatementScopeCompletions(result, contextId, offset, insideFunction);
+        return StatementScopeCompletions(
+            result, contextId, offset, insideFunction, CallSnippet(tokens, currentIndex, offset, callPunctuation));
     }
 
     // --- Contexts ---
@@ -424,14 +427,15 @@ public sealed class CompletionEngine
         }
     }
 
-    private ImmutableArray<CompletionEntry> NamespaceFunctionCompletions(ParseResult result, string contextId, string ns)
+    private ImmutableArray<CompletionEntry> NamespaceFunctionCompletions(
+        ParseResult result, string contextId, string ns, string callSuffix)
     {
         LanguageStore store = _database.StoreFor(result.Language);
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
         foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
         {
-            entries.Add(FunctionEntry(function));
+            entries.Add(FunctionEntry(function, callSuffix));
         }
 
         return entries.ToImmutable();
@@ -703,7 +707,7 @@ public sealed class CompletionEngine
     }
 
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(
-        ParseResult result, string contextId, int offset, bool insideFunction)
+        ParseResult result, string contextId, int offset, bool insideFunction, string callSuffix)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
@@ -749,7 +753,7 @@ public sealed class CompletionEngine
         {
             foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
             {
-                entries.Add(FunctionEntry(function));
+                entries.Add(FunctionEntry(function, callSuffix));
             }
         }
 
@@ -776,13 +780,13 @@ public sealed class CompletionEngine
         // Namespace-less builtins.
         foreach ( BuiltinFunction builtin in _builtins.For(result.Language).All )
         {
-            entries.Add(new CompletionEntry(builtin.Name, CompletionKind.Function, "builtin", builtin.Name + "($0)"));
+            entries.Add(new CompletionEntry(builtin.Name, CompletionKind.Function, "builtin", builtin.Name + callSuffix));
         }
 
         return entries.ToImmutable();
     }
 
-    private static CompletionEntry FunctionEntry(FunctionSymbol function)
+    private static CompletionEntry FunctionEntry(FunctionSymbol function, string callSuffix)
     {
         string detail = function.Namespace.Length > 0 ? function.Namespace + "::" + function.Name : function.Name;
 
@@ -790,7 +794,73 @@ public sealed class CompletionEngine
         // keystroke is exactly what completionItem/resolve exists to avoid. The namespace rides
         // along so resolve can find this function again.
         return new CompletionEntry(
-            function.Name, CompletionKind.Function, detail, function.Name + "($0)", Namespace: function.Namespace);
+            function.Name, CompletionKind.Function, detail, function.Name + callSuffix, Namespace: function.Namespace);
+    }
+
+    /// <summary>
+    /// What a completed call brings with it after the name, honouring the callPunctuation setting.
+    ///
+    /// The semicolon is added only in STATEMENT position. `x = foobar()` and `foobar()[0]` are
+    /// expressions, and closing them would put a semicolon in the middle of one.
+    /// </summary>
+    private static string CallSnippet(
+        ImmutableArray<Token> tokens, int currentIndex, int offset, CallPunctuation punctuation)
+    {
+        switch ( punctuation )
+        {
+            case CallPunctuation.Off:
+                return "";
+            case CallPunctuation.ParensAndSemicolon when IsStatementPosition(tokens, currentIndex, offset):
+                return "($0);";
+            default:
+                return "($0)";
+        }
+    }
+
+    /// <summary>
+    /// Whether a call written here would be a whole statement.
+    ///
+    /// Scans back to the nearest statement boundary and accepts only the tokens that can precede
+    /// a call in statement position: the object it is called on, and the qualifiers reaching the
+    /// name. `self foobar` and `self thread ns::foobar` qualify; `x = foobar` does not, because
+    /// the '=' is not in the allowed set.
+    ///
+    /// A whitelist rather than a blacklist, deliberately. Getting this wrong writes a semicolon
+    /// into the middle of an expression, so anything unrecognised has to mean "not a statement".
+    /// </summary>
+    private static bool IsStatementPosition(ImmutableArray<Token> tokens, int currentIndex, int offset)
+    {
+        int scan = (currentIndex >= 0 ? currentIndex : FirstAtOrAfter(tokens, offset)) - 1;
+
+        while ( scan >= 0 )
+        {
+            TokenKind kind = tokens[scan].Kind;
+
+            if ( tokens[scan].IsTrivia )
+            {
+                scan--;
+                continue;
+            }
+
+            // A statement boundary: everything from here to the cursor was allowed, so this is
+            // the start of a statement. Colon covers `case x:` and `default:`.
+            if ( kind is TokenKind.Semicolon or TokenKind.OpenBrace or TokenKind.CloseBrace or TokenKind.Colon )
+            {
+                return true;
+            }
+
+            // The object and the path to the name — `self`, `level`, `ns::`, `.field`, `thread`.
+            if ( kind is TokenKind.Identifier or TokenKind.Dot or TokenKind.ScopeResolution or TokenKind.Thread )
+            {
+                scan--;
+                continue;
+            }
+
+            return false;
+        }
+
+        // Nothing but allowed tokens all the way back — the file opens here.
+        return true;
     }
 
     // --- Token helpers ---

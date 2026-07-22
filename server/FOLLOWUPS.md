@@ -8,6 +8,46 @@ per-project `FOLDER.md` convention).
 
 ---
 
+## Backlog
+
+### Auto-complete the call punctuation — `gscode.completion.callPunctuation`
+
+Accepting a function completion in statement position should leave
+`self foobar( <cursor> );` rather than `self foobar()` with the semicolon still to type.
+
+**What already exists.** `(` → `)` is an auto-closing pair
+(`client/language-configuration.json`), function and builtin completions already insert
+`name($0)` so the parentheses and cursor placement are done, and on-type formatting is already
+registered on `;` and `}` (`DocumentOnTypeFormattingHandler`). The missing pieces are the
+semicolon and, more importantly, not fighting the user for it.
+
+**The real problem: typing `);` is muscle memory.** Insert punctuation the user then types
+again and you get `foobar());` or `foobar();;`. Worse than not helping. Two different mechanisms
+are needed, because the two characters behave differently:
+
+- **`)` — the editor can already handle this.** `editor.autoClosingOvertype` makes typing a
+  closer move over an identical one instead of inserting. The default `"auto"` only tracks
+  closers the EDITOR inserted, which will not cover a `)` that arrived inside a completion
+  snippet, so this wants `"always"` in `configurationDefaults` for `[gsc]`/`[csc]`/`[gsh]`.
+  Overtype only fires when the very next character is the same closer, which is exactly when a
+  second one would be wrong, so `"always"` is safe here.
+- **`;` — needs our own handling.** There is no built-in overtype for it. The on-type formatting
+  handler already fires on `;`, so it can return an edit deleting the duplicate when the
+  character after the cursor is also `;`. **Guard `for ( ;; )`**, where a doubled semicolon is
+  the language, not a mistake — check that the enclosing construct is not a `for` header rather
+  than pattern-matching the text.
+
+**Only in statement position.** `x = foobar()` and `foobar()[0]` must not gain a semicolon. The
+completion engine already distinguishes statement scope from expression context
+(`IsInsideFunctionBody` plus the trigger token), so the entry can carry the semicolon or not
+rather than the handler guessing afterwards.
+
+**Setting shape.** `off` | `parens` | `parensAndSemicolon`. Worth defaulting to `parens` — the
+current behaviour — so the semicolon is opt-in until the overtype handling has been used in
+anger. Whether it should eventually default on is the open question; decide after trying it.
+
+---
+
 ## Deferred by request
 
 ### Formatter — a further pass is planned

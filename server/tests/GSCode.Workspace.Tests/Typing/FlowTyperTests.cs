@@ -118,11 +118,23 @@ public class FlowTyperTests
     }
 
     [Fact]
-    public void OnlyFirstAssignmentIsHinted()
+    public void EveryAssignmentIsRecorded_ButOnlyTheFirstIsHinted()
     {
-        Dictionary<string, ScrType> types = InferByFirstToken("    a = 1;\n    a = \"now a string\";");
-        // First assignment (int) is the recorded hint; the reassignment does not add another.
-        Assert.Equal(ScrType.Int, types["a"]);
+        // Both are in the list, because hover needs the later one to report the type as of the
+        // cursor. IsFirstForName is what inlay hints filter on, so the `: int` label appears once
+        // rather than at every reassignment.
+        string source = "function f()\n{\n    a = 1;\n    a = \"now a string\";\n}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        ImmutableArray<InferredAssignment> assignments = NewTyper().InferAssignments(result);
+        InferredAssignment[] toA = [.. assignments.Where(a => a.Name == "a")];
+
+        Assert.Equal(2, toA.Length);
+        Assert.Equal(ScrType.Int, toA[0].Type);
+        Assert.True(toA[0].IsFirstForName);
+        Assert.Equal(ScrType.String, toA[1].Type);
+        Assert.False(toA[1].IsFirstForName);
     }
 
     [Fact]
@@ -160,5 +172,47 @@ public class FlowTyperTests
         bool found = typer.TryGetLocalTypeAt(result, new Position(2, 9), out LocalTypeHover hover);
 
         Assert.False(found);
+    }
+
+    // --- The type AT the cursor, not the type it started as ---
+
+    private static ParseResult Reassigned()
+    {
+        // count is an int, then a string, then read once more.
+        string source = "function f()\n{\n    count = 5;\n    a = count;\n    count = \"hello\";\n    b = count;\n}\n";
+        return ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+    }
+
+    [Fact]
+    public void HoverLookup_UsesTheAssignmentAboveTheCursor()
+    {
+        // The read on line 3 sits between the two assignments, so it is still an int.
+        FlowTyper typer = NewTyper();
+
+        Assert.True(typer.TryGetLocalTypeAt(Reassigned(), new Position(3, 8), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void HoverLookup_FollowsAReassignmentToADifferentType()
+    {
+        // The reported regression: the read on line 5 used to report int, because the lookup
+        // returned the FIRST assignment in the function rather than the one above the cursor.
+        FlowTyper typer = NewTyper();
+
+        Assert.True(typer.TryGetLocalTypeAt(Reassigned(), new Position(5, 8), out LocalTypeHover hover));
+        Assert.Equal(ScrType.String, hover.Type);
+    }
+
+    [Fact]
+    public void HoverLookup_IgnoresAssignmentsBelowTheCursor()
+    {
+        // Hovering the name in `count = 5;` itself: the string assignment further down says
+        // nothing about the value here.
+        FlowTyper typer = NewTyper();
+
+        Assert.True(typer.TryGetLocalTypeAt(Reassigned(), new Position(2, 5), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
     }
 }

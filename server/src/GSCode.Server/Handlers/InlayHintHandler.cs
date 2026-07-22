@@ -67,7 +67,9 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
             foreach ( InferredAssignment inferred in typer.InferAssignments(target.Result) )
             {
-                if ( window.Contains(inferred.NameRange.Start) )
+                // First assignment only: a `: int` label repeated at every reassignment is noise.
+                // The list itself carries them all, because hover needs the later ones.
+                if ( inferred.IsFirstForName && window.Contains(inferred.NameRange.Start) )
                 {
                     hints.Add(new InlayHint
                     {

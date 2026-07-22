@@ -9,11 +9,19 @@ using GSCode.Workspace.Api;
 
 namespace GSCode.Workspace.Typing;
 
-/// <summary>The inferred type of a local at its assignment site (for inlay hints).</summary>
+/// <summary>The inferred type of a local at one assignment site.</summary>
 /// <param name="NameRange">Root-file range of the assigned local's name.</param>
 /// <param name="Type">The inferred concrete type.</param>
 /// <param name="Name">Display-case local name (lets hover match an identifier by name).</param>
-public readonly record struct InferredAssignment(TextRange NameRange, ScrType Type, string Name);
+/// <param name="IsFirstForName">
+/// Whether this is the first typed assignment to the name in its function.
+///
+/// Inlay hints want only these — a `: int` label repeated at every reassignment is noise. Hover
+/// wants them all, so it can report the type as of the cursor rather than the type the variable
+/// started with. The list carries every assignment and each consumer filters, because building it
+/// for the hint case alone is what made hover report a stale type.
+/// </param>
+public readonly record struct InferredAssignment(TextRange NameRange, ScrType Type, string Name, bool IsFirstForName = true);
 
 /// <summary>The inferred type of the local identifier under a cursor (for hover).</summary>
 public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrType Type);
@@ -112,7 +120,14 @@ public sealed class FlowTyper
 
         // The identifier is only a local if the flow pass typed an assignment to that name
         // inside this same function.
+        //
+        // The LAST assignment at or before the cursor, not the first. A variable reassigned to a
+        // different type used to keep reporting the type it started with, so hovering the final
+        // `x` in `x = 1; … x = "hello"; use( x );` said int. Assignments BELOW the cursor are
+        // skipped outright: they say nothing about the value here.
         string name = identifier.Token.Text;
+        bool found = false;
+
         foreach ( InferredAssignment assignment in InferAssignments(result) )
         {
             if ( !function.Range.Contains(assignment.NameRange.Start) )
@@ -120,14 +135,25 @@ public sealed class FlowTyper
                 continue;
             }
 
-            if ( string.Equals(assignment.Name, name, StringComparison.OrdinalIgnoreCase) )
+            if ( !string.Equals(assignment.Name, name, StringComparison.OrdinalIgnoreCase) )
             {
-                hover = new LocalTypeHover(name, identifier.Range, assignment.Type);
-                return true;
+                continue;
             }
+
+            if ( assignment.NameRange.Start > position )
+            {
+                continue;
+            }
+
+            // Assignments arrive in source order, so a later one simply overwrites an earlier.
+            // Straight-line code is then exact. Across branches this reports whichever arm is
+            // written last rather than the join of both — narrowing that further needs the walk's
+            // environment sampled at a position, which it does not currently retain.
+            hover = new LocalTypeHover(name, identifier.Range, assignment.Type);
+            found = true;
         }
 
-        return false;
+        return found;
     }
 
     private void TypeFunction(FunctionNode function, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
@@ -449,9 +475,9 @@ public sealed class FlowTyper
             return;
         }
 
-        if ( type.IsKnown() && hinted.Add(name) )
+        if ( type.IsKnown() )
         {
-            hints.Add(new InferredAssignment(target.Token.RootRange, type, name));
+            hints.Add(new InferredAssignment(target.Token.RootRange, type, name, IsFirstForName: hinted.Add(name)));
         }
     }
 

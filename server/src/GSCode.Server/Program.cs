@@ -361,7 +361,7 @@ static void LogIndexBreakdown(ScriptDatabase database)
     report.Append('\n').Append(
         $"    {functions,6:N0} functions · {classes:N0} classes · {macros:N0} macros · {namespaces.Count:N0} namespaces");
 
-    Log.Information("{IndexReport}", report.ToString());
+    Log.Verbose("{IndexReport}", report.ToString());
 }
 
 // Tallies one record's context into the raw / mod / workspace buckets for its language.

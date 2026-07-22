@@ -20,8 +20,8 @@
   { "name": "script_animname", "type": "string" },
   { "name": "script_noteworthy", "type": "string" },
   { "name": "spawnflags", "type": "int" },
-  { "name": "takedamage", "type": "bool" },
-  { "name": "allowdeath", "type": "bool" },
+  { "name": "takedamage", "type": "int" },
+  { "name": "allowdeath", "type": "int" },
   { "name": "target", "type": "string" },
   { "name": "targetname", "type": "string" },
   { "name": "team", "type": "int" }

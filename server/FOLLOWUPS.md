@@ -43,29 +43,30 @@ stock scripts. It fires on their own code, where it is actionable.
 those shipped, anything it reports is either a real defect in Treyarch's code or a false positive
 in ours. Two groups are still unexplained:
 
-**`gscode-5004 ReadOnlyFieldWrite` — RESOLVED. The flags were removed; the lint is dormant.**
+**`gscode-5004 ReadOnlyFieldWrite` — RESOLVED. Flags now sourced; the lint is dormant.**
 
-The 87 warnings were ours, not Treyarch's. `ScriptObjectFields.xlsx` in `%TA_TOOLS_PATH%\docs_modtools\`
-— the source the field data comes from — has NO read-only column. It maps field name to engine type
-token and nothing else. All 362 `readonly` flags in `server/tools/field-data/sources/curated/*.json`
-were applied by hand during the manual xlsx-to-curated import, on no documented authority.
+The 87 warnings were ours, not Treyarch's. `ScriptObjectFields.xlsx` maps field name to engine type
+token and nothing else — it has no read-only column. All 362 flags in the curated sources were
+applied by hand during the manual import.
 
-The distribution gave it away: `weapon_fields_simple.json` marked **all 234** of its fields
-read-only, `aitype_fields.json` all 4, `vehicle_fields.json` 43 of 58 — wholesale decisions, not
-field-by-field ones. Every name that fired on stock code sat in such a file.
+They were removed, and then 240 came back with a real source: `Weapon Fields.txt` in the same
+folder lists exactly the weapon fields under "These are read only fields accessible on weapon ID
+values returned by GetWeapon()". That is now the ONLY read-only authority in the data, it is cited
+in the weapon file's header, and regenerating asserts every flagged name appears in that list.
 
-All 362 flags were stripped and the artifact regenerated. Corpus went 3,305 → 3,218 diagnostics:
-exactly the 87, nothing else moved.
+The lint no longer lets a weapon fact speak for an entity owner. Weapon read-only applies to the
+value `GetWeapon()` returns, not to an entity sharing the field name — `self.meleedamage` was
+several of the original 87. Since the lattice has no weapon type, a weapon owner cannot be typed at
+all, so weapon declarations are excluded from the entity check outright.
 
-`ReadOnlyWriteLint` was KEPT rather than deleted. The rule is sound — it was the data that was
-invented — and its `.size` half (`5005 SizeIsReadOnly`) is unaffected and still fires. Its field
-half now reads a set in which nothing is flagged, so it cannot fire. It stays tested against
-synthetic data via the new `ObjectFields.Create`, so flags that CAN be sourced need only be added
-back to the curated JSON — no code change. `ObjectFieldsTests.NoBundledFieldIsMarkedReadOnly` pins
-the empty state so a regeneration cannot quietly reintroduce guesses.
+Net: corpus 3,305 → 3,218, exactly the 87 and nothing else. The field half of the lint cannot
+currently fire, which is the intended state; `5005 SizeIsReadOnly` is unaffected and still does.
+`ObjectFieldsTests.OnlyWeaponFieldsAreMarkedReadOnly` pins it.
 
-If the concept is ever revived, the curated files should record WHERE each flag came from, so this
-question does not have to be answered a third time.
+Related, same root cause: `bool` was removed as a field type entirely (135 fields). GSC has no
+bool — 0 is false, anything else true — so `F_BYTE` and `F_BITFLAG` are ints. `bool` was another
+hand-applied inference from the same import, and `forceDamageHitLocation` (F_BYTE, a hit location)
+showed it was wrong in general.
 
 **`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 ERRORS in 5 files.** The highest severity
 anything reports on shipped code: `error` (3x), `debug_spherical_cone`, `Print3d`,

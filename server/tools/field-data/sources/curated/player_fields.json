@@ -7,7 +7,7 @@
 
   { "name": "hasspyplane", "type": "int" },
   { "name": "hassatellite", "type": "int" },
-  { "name": "disallowvehicleusage", "type": "bool" },
+  { "name": "disallowvehicleusage", "type": "int" },
 
   { "name": "downs", "type": "int" },
   { "name": "revives", "type": "int" },
@@ -63,19 +63,19 @@
 
   { "name": "pers", "type": "object" },
 
-  { "name": "usingvehicle", "type": "bool" },
+  { "name": "usingvehicle", "type": "int" },
   { "name": "vehicleposition", "type": "int" },
 
   { "name": "headicon", "type": "string" },
 
   { "name": "momentum", "type": "int" },
 
-  { "name": "divetoprone", "type": "bool" },
-  { "name": "sprinting", "type": "bool" },
-  { "name": "animViewUnlock", "type": "bool" },
-  { "name": "animInputUnlock", "type": "bool" },
-  { "name": "animNoClientTransform", "type": "bool" },
-  { "name": "topdowncamera", "type": "bool" },
+  { "name": "divetoprone", "type": "int" },
+  { "name": "sprinting", "type": "int" },
+  { "name": "animViewUnlock", "type": "int" },
+  { "name": "animInputUnlock", "type": "int" },
+  { "name": "animNoClientTransform", "type": "int" },
+  { "name": "topdowncamera", "type": "int" },
 
   { "name": "groundentity", "type": "entity" },
   { "name": "viewlockedentity", "type": "entity" },

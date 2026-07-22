@@ -19,12 +19,14 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// strings but a normal field name on anything else.
 ///
 /// Field data is synthetic rather than the bundled artifacts, because this tests the RULE and the
-/// rule must stay pinned however the data moves. It moved: the bundled read-only flags turned out
-/// to have no source and were removed, so no field carries one today and fixtures drawn from real
-/// data would silently stop exercising the read-only path at all rather than fail.
+/// rule must stay pinned however the data moves — and it moved twice while this was being written.
+/// The bundled flags on every kind but weapon turned out to have no source and were removed, and
+/// weapon's, which ARE documented, apply to a value type this lint deliberately ignores. Fixtures
+/// drawn from real data would now silently stop exercising the read-only path rather than fail.
 ///
-/// The fixtures name the three cases that matter: `accuratefire` read-only wherever it is declared,
-/// `accuracy` writable, and `radius` read-only on one kind and writable on another.
+/// The fixtures name the cases that matter: `accuratefire` read-only wherever it is declared,
+/// `accuracy` writable, `radius` read-only on one kind and writable on another, and `meleedamage`
+/// read-only on weapon alone.
 /// </summary>
 public class ReadOnlyWriteLintTests
 {
@@ -41,6 +43,8 @@ public class ReadOnlyWriteLintTests
         // collision the owner-type check exists for.
         new("name", "string", ReadOnly: true, "player"),
         new("name", "string", ReadOnly: true, "weapon"),
+        // Declared ONLY on weapon, which is a different world from an entity.
+        new("meleedamage", "int", ReadOnly: true, "weapon"),
     ];
 
     private static ImmutableArray<Diagnostic> Lint(string body)
@@ -88,6 +92,16 @@ public class ReadOnlyWriteLintTests
         // The owner cannot be typed, so the field's read-only flag proves nothing. Silence beats
         // a false error — this is the whole class the struct bug belonged to.
         Assert.Empty(Lint("thing = mystery_function();\n    thing.accuratefire = 1;"));
+    }
+
+    [Fact]
+    public void AFieldReadOnlyOnlyOnWeapon_IsNotFlaggedOnAnEntity()
+    {
+        // Weapon fields are genuinely documented read-only -- but on the value GetWeapon()
+        // returns, not on an entity that happens to share the field name. `self` is an entity, so
+        // the weapon's rule says nothing about it. Several of the 87 false positives that got the
+        // hand-applied flags removed were exactly this confusion.
+        Assert.Empty(Lint("self.meleedamage = 1;"));
     }
 
     // --- Engine field rules that still hold ---

@@ -29,19 +29,22 @@ public class ObjectFieldsTests
     }
 
     [Fact]
-    public void NoBundledFieldIsMarkedReadOnly()
+    public void OnlyWeaponFieldsAreMarkedReadOnly()
     {
-        // Deliberate, and pinned here so regenerating the artifact cannot quietly bring the flags
-        // back. The 362 flags this data used to carry were applied by hand during the manual
-        // import from ScriptObjectFields.xlsx, which has no read-only column — nothing sourced
-        // them. They produced 87 warnings telling authors that shipped, working stock code was
-        // wrong. The reading rule in ReadOnlyWriteLint is kept and still tested against synthetic
-        // data, so flags that can be sourced need only be added back to the curated JSON.
+        // Pinned because the flags have a single documented source and must not spread past it.
+        // Weapon Fields.txt lists all 240 weapon fields under "These are read only fields
+        // accessible on weapon ID values returned by GetWeapon()". No other curated file has any
+        // such authority -- the 128 flags they used to carry were applied by hand during the
+        // manual import and produced warnings on shipped, working stock code, so they were
+        // removed. A regeneration that reintroduces guesses fails here.
         ObjectFields fields = ObjectFields.Load(ApiDirectory);
 
-        Assert.DoesNotContain(
-            fields.FieldNames().SelectMany(name => fields.FindField(name)),
-            static field => field.ReadOnly);
+        ObjectField[] readOnly = [.. fields.FieldNames()
+            .SelectMany(name => fields.FindField(name))
+            .Where(static field => field.ReadOnly)];
+
+        Assert.Equal(240, readOnly.Length);
+        Assert.All(readOnly, static field => Assert.Equal("weapon", field.EntityKind));
     }
 
     [Fact]

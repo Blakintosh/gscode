@@ -72,13 +72,17 @@ public static class ReadOnlyWriteLint
     /// The field must also be read-only on EVERY entity kind that declares it: the owner's exact
     /// kind is not inferred, so disagreement between kinds means we cannot be sure.
     ///
-    /// DORMANT as things stand: no field in the bundled data carries a read-only flag, so this
-    /// never fires. The 362 flags it used to consult were applied by hand during the manual
-    /// import and turned out to have no source — `ScriptObjectFields.xlsx` has no such column —
-    /// and they produced 87 warnings on shipped code. Rather than keep guesses that told users
-    /// their working code was broken, the data was emptied and the code kept: the rule is right
-    /// IF the flags are, so it costs nothing to leave the path in place for data that can be
-    /// sourced. See FOLLOWUPS.md.
+    /// Weapon declarations are excluded outright. Weapon fields ARE documented read-only, but on
+    /// the weapon value `GetWeapon()` returns — and a weapon is not an entity, so that fact says
+    /// nothing about `self.meleedamage`. Since the lattice has no weapon type, an owner that is a
+    /// weapon can never be typed anyway; letting weapon flags speak for entity owners would only
+    /// ever produce false positives, and did — several of the original 87.
+    ///
+    /// DORMANT in practice: after the unsourced flags were removed, weapon is the only kind
+    /// carrying any read-only flag, and weapon is excluded here — so this cannot currently fire.
+    /// That is the intended state, not an oversight. The rule is kept because it is correct: it
+    /// costs nothing, and flags that can be sourced for an entity kind will light it up with no
+    /// code change. See FOLLOWUPS.md.
     /// </summary>
     private static void InspectFieldWrite(
         FieldWrite write,
@@ -91,7 +95,7 @@ public static class ReadOnlyWriteLint
         }
 
         ImmutableArray<ObjectField> declarations = objectFields.FindField(write.FieldName);
-        if ( declarations.Length == 0 || !AllReadOnly(declarations) )
+        if ( !AnyEntityKindDeclaresIt(declarations) || !EveryEntityKindMakesItReadOnly(declarations) )
         {
             return;
         }
@@ -100,11 +104,30 @@ public static class ReadOnlyWriteLint
             write.NameRange, DiagnosticSeverity.Warning, GscDiagnosticCode.ReadOnlyFieldWrite, write.FieldName));
     }
 
-    private static bool AllReadOnly(ImmutableArray<ObjectField> declarations)
+    /// <summary>The owner is an entity, so a declaration on the weapon value type does not apply.</summary>
+    private static bool AppliesToAnEntity(ObjectField declaration)
+    {
+        return !string.Equals(declaration.EntityKind, "weapon", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool AnyEntityKindDeclaresIt(ImmutableArray<ObjectField> declarations)
     {
         foreach ( ObjectField declaration in declarations )
         {
-            if ( !declaration.ReadOnly )
+            if ( AppliesToAnEntity(declaration) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool EveryEntityKindMakesItReadOnly(ImmutableArray<ObjectField> declarations)
+    {
+        foreach ( ObjectField declaration in declarations )
+        {
+            if ( AppliesToAnEntity(declaration) && !declaration.ReadOnly )
             {
                 return false;
             }

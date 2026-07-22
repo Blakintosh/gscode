@@ -10,6 +10,6 @@
   { "name": "movementtype_ignore", "type": "int" },    // (same)
   { "name": "movementtype_require", "type": "int" },   // (same)
   { "name": "type", "type": "int" },                   // F_INT
-  { "name": "suspended", "type": "bool" },             // F_BITFLAG -> bool
+  { "name": "suspended", "type": "int" },             // F_BITFLAG -> bool
   { "name": "cost_modifier", "type": "float" }         // F_FLOAT
 ]

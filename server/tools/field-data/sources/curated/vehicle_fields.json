@@ -40,8 +40,8 @@
 
   { "name": "turretweapon", "type": "weapon" },
 
-  { "name": "addtocompass", "type": "bool" },
-  { "name": "isphysicsvehicle", "type": "bool" },
+  { "name": "addtocompass", "type": "int" },
+  { "name": "isphysicsvehicle", "type": "int" },
 
   { "name": "pathpos", "type": "vector" },
   { "name": "pathlookpos", "type": "vector" },
@@ -59,16 +59,16 @@
   { "name": "vehicleridersbundle", "type": "string" },
   { "name": "vehicleridersrobotbundle", "type": "string" },
 
-  { "name": "vehkilloccupantsondeath", "type": "bool" },
-  { "name": "vehunlinkoccupantsondeath", "type": "bool" },
-  { "name": "vehcheckforpredictedcrash", "type": "bool" },
-  { "name": "vehonpath", "type": "bool" },
-  { "name": "vehaircraftcollisionenabled", "type": "bool" },
+  { "name": "vehkilloccupantsondeath", "type": "int" },
+  { "name": "vehunlinkoccupantsondeath", "type": "int" },
+  { "name": "vehcheckforpredictedcrash", "type": "int" },
+  { "name": "vehonpath", "type": "int" },
+  { "name": "vehaircraftcollisionenabled", "type": "int" },
 
-  { "name": "turretontarget", "type": "bool" },
-  { "name": "turretonvistarget", "type": "bool" },
-  { "name": "gunner1ontarget", "type": "bool" },
-  { "name": "gunner2ontarget", "type": "bool" },
+  { "name": "turretontarget", "type": "int" },
+  { "name": "turretonvistarget", "type": "int" },
+  { "name": "gunner1ontarget", "type": "int" },
+  { "name": "gunner2ontarget", "type": "int" },
 
   { "name": "physicslaunchdeathscale", "type": "float" },
 
@@ -76,5 +76,5 @@
 
   { "name": "predictedCollisionTime", "type": "float" },
 
-  { "name": "glasscollision_alt", "type": "bool" }
+  { "name": "glasscollision_alt", "type": "int" }
 ]

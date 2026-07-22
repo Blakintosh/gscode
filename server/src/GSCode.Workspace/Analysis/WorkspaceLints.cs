@@ -72,9 +72,13 @@ public static class WorkspaceLints
         lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(UnusedLocalLint.Analyze(result));
         lints.AddRange(CaseLabelLint.Analyze(result));
-        lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins));
+        // One typer for both field rules: each of them runs the assignment inference, and the
+        // walk is the expensive half.
+        FlowTyper typer = new(languageBuiltins, objectFields);
+
+        lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins, objectFields, typer));
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
-        lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, new FlowTyper(languageBuiltins, objectFields)));
+        lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));
         lints.AddRange(DevBlockCallLint.Analyze(
             result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));
 

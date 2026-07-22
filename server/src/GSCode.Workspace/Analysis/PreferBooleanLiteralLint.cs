@@ -4,7 +4,9 @@ using GSCode.Parser;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
+using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
+using GSCode.Workspace.Typing;
 
 namespace GSCode.Workspace.Analysis;
 
@@ -16,15 +18,89 @@ namespace GSCode.Workspace.Analysis;
 ///
 /// Overloads must agree. If any overload declares something other than bool at that position,
 /// the call is left alone, since which overload the author meant is unknowable here.
+///
+/// The same rule covers ENGINE FIELDS declared bool: `self.dogibbing = 1` should be `= true`. GSC
+/// has no bool type of its own — 0 is false and anything else is true — so an int there is legal
+/// and this stays a Hint. It is the field data that knows the field is a flag, which is why the
+/// suggestion is worth making at all.
+///
+/// Field writes are scoped exactly as <see cref="ReadOnlyWriteLint"/> scopes its own: the owner
+/// must be a known entity, weapon declarations do not speak for entity owners, and every entity
+/// kind declaring the name must agree it is bool. A field name is not evidence on its own.
 /// </summary>
 public static class PreferBooleanLiteralLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, BuiltinApi builtins)
+    public static ImmutableArray<Diagnostic> Analyze(
+        ParseResult result, BuiltinApi builtins, ObjectFields objectFields, FlowTyper typer)
     {
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         Inspect(result.Tree.Root, builtins, diagnostics);
+        InspectFieldWrites(result, objectFields, typer, diagnostics);
 
         return diagnostics.ToImmutable();
+    }
+
+    private static void InspectFieldWrites(
+        ParseResult result,
+        ObjectFields objectFields,
+        FlowTyper typer,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        typer.InferAssignments(result, out ImmutableArray<FieldWrite> writes);
+
+        foreach ( FieldWrite write in writes )
+        {
+            // Value is null for `+=` and `++`, which have no single assigned value to judge.
+            if ( write.Value is null || write.OwnerType != ScrType.Entity )
+            {
+                continue;
+            }
+
+            if ( !IsIntegerZeroOrOne(write.Value) )
+            {
+                continue;
+            }
+
+            if ( !EveryEntityKindDeclaresItBool(objectFields.FindField(write.FieldName)) )
+            {
+                continue;
+            }
+
+            diagnostics.Add(Diagnostic.Create(
+                write.Value.Range,
+                DiagnosticSeverity.Hint,
+                GscDiagnosticCode.PreferBooleanLiteral,
+                "Field",
+                write.FieldName,
+                IsOne(write.Value) ? "true" : "false"));
+        }
+    }
+
+    /// <summary>
+    /// Whether every entity kind that declares this field types it bool. Weapon declarations are
+    /// skipped: a weapon is what GetWeapon() returns, not an entity, so its types say nothing
+    /// about an entity owner -- the same scoping ReadOnlyWriteLint applies for the same reason.
+    /// </summary>
+    private static bool EveryEntityKindDeclaresItBool(ImmutableArray<ObjectField> declarations)
+    {
+        bool sawEntityKind = false;
+
+        foreach ( ObjectField declaration in declarations )
+        {
+            if ( string.Equals(declaration.EntityKind, "weapon", StringComparison.OrdinalIgnoreCase) )
+            {
+                continue;
+            }
+
+            if ( !string.Equals(declaration.Type, "bool", StringComparison.OrdinalIgnoreCase) )
+            {
+                return false;
+            }
+
+            sawEntityKind = true;
+        }
+
+        return sawEntityKind;
     }
 
     private static void Inspect(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
@@ -71,6 +147,7 @@ public static class PreferBooleanLiteralLint
                 call.Arguments[index].Range,
                 DiagnosticSeverity.Hint,
                 GscDiagnosticCode.PreferBooleanLiteral,
+                "Parameter",
                 parameterName,
                 replacement));
         }

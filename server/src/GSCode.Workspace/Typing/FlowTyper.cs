@@ -31,7 +31,13 @@ public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrTy
 /// whether a field is read-only without re-deriving types: `SpawnStruct()` gives Struct, `self`
 /// gives Entity, and an owner the flow cannot type gives Unknown.
 /// </summary>
-public readonly record struct FieldWrite(TextRange NameRange, string FieldName, ScrType OwnerType);
+/// <summary>
+/// One write to `owner.field`. <paramref name="Value"/> is the assigned expression for a plain
+/// `=`, and null for a compound assignment or `++`/`--` — those have no single assigned value, and
+/// a rule about what was assigned must not fire on them.
+/// </summary>
+public readonly record struct FieldWrite(
+    TextRange NameRange, string FieldName, ScrType OwnerType, ExprNode? Value = null);
 
 /// <summary>
 /// A deliberately-small forward type-flow pass, per function. It types each assignment's
@@ -452,7 +458,8 @@ public sealed class FlowTyper
             writes.Add(new FieldWrite(
                 member.NameToken.RootRange,
                 member.NameToken.Text,
-                TypeOf(member.Object, environment)));
+                TypeOf(member.Object, environment),
+                assignment.Operator == TokenKind.Assign ? assignment.Value : null));
             return;
         }
 

@@ -13,26 +13,26 @@
 
   { "name": "syncedmeleetarget", "type": "enthandle" },
 
-  { "name": "ignoreme", "type": "int" },
-  { "name": "ignoreall", "type": "int" },
-  { "name": "ignoreforfriendlyfire", "type": "int" },
-  { "name": "ignorevortices", "type": "int" },
+  { "name": "ignoreme", "type": "bool" },
+  { "name": "ignoreall", "type": "bool" },
+  { "name": "ignoreforfriendlyfire", "type": "bool" },
+  { "name": "ignorevortices", "type": "bool" },
 
   { "name": "maxvisibledist", "type": "float" },
   { "name": "maxseenfovcosine", "type": "float" },
   { "name": "maxseenfovcosinez", "type": "float" },
 
-  { "name": "silentshot", "type": "int" },
+  { "name": "silentshot", "type": "bool" },
 
   { "name": "surprisedbymedistsq", "type": "float" },
 
   { "name": "attackeraccuracy", "type": "float" },
 
-  { "name": "ignorenavmeshtriggers", "type": "int" },
-  { "name": "ignorebulletdamage", "type": "int" },
+  { "name": "ignorenavmeshtriggers", "type": "bool" },
+  { "name": "ignorebulletdamage", "type": "bool" },
 
-  { "name": "inmeleecharge", "type": "int" },
-  { "name": "updatesight", "type": "int" },
+  { "name": "inmeleecharge", "type": "bool" },
+  { "name": "updatesight", "type": "bool" },
 
   { "name": "fovcosine", "type": "float" },
   { "name": "fovcosinebusy", "type": "float" },
@@ -47,7 +47,7 @@
 
   { "name": "goodenemyonly", "type": "int" },
 
-  { "name": "ignoreexplosionevents", "type": "int" },
+  { "name": "ignoreexplosionevents", "type": "bool" },
 
   { "name": "favoriteenemy", "type": "sentienthandle" },
   { "name": "highlyawareradius", "type": "float" },
@@ -64,12 +64,12 @@
   { "name": "goalheight", "type": "float" },
   { "name": "goalpos", "type": "vector" },
   { "name": "goalent", "type": "enthandle" },
-  { "name": "goalforced", "type": "int" },
+  { "name": "goalforced", "type": "bool" },
 
-  { "name": "fixednode", "type": "int" },
+  { "name": "fixednode", "type": "bool" },
   { "name": "fixednodesaferadius", "type": "float" },
 
   { "name": "goalangle", "type": "vector" },
 
-  { "name": "isatanchor", "type": "int" }
+  { "name": "isatanchor", "type": "bool" }
 ]

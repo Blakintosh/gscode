@@ -3,10 +3,10 @@
   { "name": "missinglegs", "type": "int" },
   { "name": "accuracy", "type": "float" },
 
-  { "name": "perfectaim", "type": "int" },
-  { "name": "blindaim", "type": "int" },
-  { "name": "holdfire", "type": "int" },
-  { "name": "forcefire", "type": "int" },
+  { "name": "perfectaim", "type": "bool" },
+  { "name": "blindaim", "type": "bool" },
+  { "name": "holdfire", "type": "bool" },
+  { "name": "forcefire", "type": "bool" },
 
   { "name": "damagetaken", "type": "int" },
   { "name": "damagedir", "type": "vector" },
@@ -24,7 +24,7 @@
   { "name": "desiredangle", "type": "float" },
 
   { "name": "newenemyreactionpos", "type": "vector" },
-  { "name": "newenemyreaction", "type": "int" },
+  { "name": "newenemyreaction", "type": "bool" },
   { "name": "newenemyreactiondistsq", "type": "float" },
 
   { "name": "ignoresuppression", "type": "int" },
@@ -46,12 +46,12 @@
   { "name": "grenadeammo", "type": "float" },
   { "name": "grenadethrowback", "type": "int" },
 
-  { "name": "allowpain", "type": "int" },
-  { "name": "blockingpain", "type": "int" },
-  { "name": "diequietly", "type": "int" },
-  { "name": "skipDeath", "type": "int" },
+  { "name": "allowpain", "type": "bool" },
+  { "name": "blockingpain", "type": "bool" },
+  { "name": "diequietly", "type": "bool" },
+  { "name": "skipDeath", "type": "bool" },
 
-  { "name": "doingambush", "type": "int" },
+  { "name": "doingambush", "type": "bool" },
   { "name": "combatmode", "type": "int" },
   { "name": "alertlevel", "type": "int" },
   { "name": "alertlevelint", "type": "float" },
@@ -82,34 +82,34 @@
 
   { "name": "pathrandompercent", "type": "int" },
 
-  { "name": "usechokepoints", "type": "int" },
+  { "name": "usechokepoints", "type": "bool" },
 
   { "name": "lastenemysightpos", "type": "vector" },
 
   { "name": "pathenemylookahead", "type": "float" },
   { "name": "pathenemyfightdist", "type": "float" },
-  { "name": "ignorepathenemyfightdist", "type": "int" },
-  { "name": "ignorerunandgundist", "type": "int" },
+  { "name": "ignorepathenemyfightdist", "type": "bool" },
+  { "name": "ignorerunandgundist", "type": "bool" },
   { "name": "runandgundist", "type": "float" },
   { "name": "meleeattackdist", "type": "float" },
 
   { "name": "movemode", "type": "string" },
-  { "name": "usecombatscriptatcover", "type": "int" },
-  { "name": "safetochangescript", "type": "int" },
-  { "name": "usegoalanimweight", "type": "int" },
+  { "name": "usecombatscriptatcover", "type": "bool" },
+  { "name": "safetochangescript", "type": "bool" },
+  { "name": "usegoalanimweight", "type": "bool" },
 
-  { "name": "keepclaimednode", "type": "int" },
-  { "name": "keepclaimednodeifvalid", "type": "int" },
+  { "name": "keepclaimednode", "type": "bool" },
+  { "name": "keepclaimednodeifvalid", "type": "bool" },
 
   { "name": "coversearchinterval", "type": "float" },
   { "name": "nextFindBestCoverTime", "type": "float" },
 
   { "name": "badplaceawareness", "type": "float" },
 
-  { "name": "nogrenadereturnthrow", "type": "int" },
+  { "name": "nogrenadereturnthrow", "type": "bool" },
 
   { "name": "goodshootpos", "type": "vector" },
-  { "name": "goodshootposvalid", "type": "int" },
+  { "name": "goodshootposvalid", "type": "bool" },
 
   { "name": "flashbangimmunity", "type": "int" },
 
@@ -123,7 +123,7 @@
   { "name": "lastpathtime", "type": "float" },
 
   { "name": "isarriving", "type": "int" },
-  { "name": "isarrivalpending", "type": "int" },
+  { "name": "isarrivalpending", "type": "bool" },
 
   { "name": "engagemindist", "type": "float" },
   { "name": "engageminfalloffdist", "type": "float" },
@@ -132,12 +132,12 @@
 
   { "name": "finalaccuracy", "type": "float" },
 
-  { "name": "noattackeraccuracymod", "type": "int" },
+  { "name": "noattackeraccuracymod", "type": "bool" },
   { "name": "maxfaceenemydist", "type": "float" },
 
-  { "name": "prevrelativedir", "type": "int" },
-  { "name": "relativedir", "type": "int" },
-  { "name": "gunblockedbywall", "type": "int" },
+  { "name": "prevrelativedir", "type": "bool" },
+  { "name": "relativedir", "type": "bool" },
+  { "name": "gunblockedbywall", "type": "bool" },
 
   { "name": "fixedlinkyawonly", "type": "int" },
 
@@ -148,7 +148,7 @@
   { "name": "arrivalfinalpos", "type": "vector" },
   { "name": "exitPos", "type": "vector" },
   { "name": "predictedExitPos", "type": "vector" },
-  { "name": "predictedArrivalDirectionValid", "type": "int" },
+  { "name": "predictedArrivalDirectionValid", "type": "bool" },
   { "name": "arrivalfinalyaw", "type": "float" },
 
   { "name": "firemode", "type": "int" },
@@ -158,7 +158,7 @@
   { "name": "traversalstartpos", "type": "vector" },
   { "name": "traversalendpos", "type": "vector" },
 
-  { "name": "manualtraversemode", "type": "int" },
+  { "name": "manualtraversemode", "type": "bool" },
 
   { "name": "script_accuracy", "type": "float" },
 
@@ -170,8 +170,8 @@
 
   { "name": "pathablematerial", "type": "int" },
 
-  { "name": "hero", "type": "int" },
-  { "name": "canflank", "type": "int" },
-  { "name": "accuratefire", "type": "int" },
-  { "name": "aggressivemode", "type": "int" }
+  { "name": "hero", "type": "bool" },
+  { "name": "canflank", "type": "bool" },
+  { "name": "accuratefire", "type": "bool" },
+  { "name": "aggressivemode", "type": "bool" }
 ]

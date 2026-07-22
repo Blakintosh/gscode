@@ -24,27 +24,6 @@ you end up with red squiggles on working code.
 `CorpusDiagnosticSweepTests.NoNamespaceIsReportedUnimported` asserts the zero, so a regression
 shows up before the promotion does.
 
-### Duplicate declarations across files are NOT an error — do not re-add 5007
-
-A lint was written and reverted the same day. It reported the same `namespace::name` declared in
-two files a script imports, on the theory that such a call is ambiguous. Scoped to a file's own
-imports it fired 9 times across the stock scripts, and the survivors are genuine duplicates:
-`scripts\mp\_util.gsc:395` and `scripts\shared\util_shared.gsc:1663` both declare
-`util::wait_endon` with IDENTICAL signatures, and `_dogs.gsc` imports both.
-
-That Treyarch ships it is the point. GSC evidently tolerates it, so the theory the lint rested on
-was never verified and turned out to be wrong — two declarations of a namespaced function are not
-by themselves a defect.
-
-Worth keeping from the exercise, if anyone revisits it:
-
-- A workspace-wide version is hopeless regardless: 565 pairs, almost all one game mode's copy of a
-  file against another's (`scripts\mp\_ambient.csc` and `scripts\zm\_ambient.csc` declare the same
-  30-odd functions in namespace `ambient` and are never linked together).
-- If a real defect lives nearby, it is two declarations whose BODIES differ — a genuine "which one
-  runs" question rather than harmless duplication. That needs body comparison, and needs
-  confirming against the engine before anything is reported.
-
 ### Two findings left from the corpus diagnostic sweep
 
 `CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since

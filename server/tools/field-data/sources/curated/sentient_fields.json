@@ -1,15 +1,15 @@
 [
-  { "name": "script_owner", "type": "enthandle", "readonly": true },
+  { "name": "script_owner", "type": "enthandle" },
   { "name": "threatbias", "type": "int" },
-  { "name": "threatbiasgroup", "type": "int", "readonly": true },
-  { "name": "attacker", "type": "enthandle", "readonly": true },
-  { "name": "attackercount", "type": "int", "readonly": true },
-  { "name": "node", "type": "pathnode", "readonly": true },
-  { "name": "prevnode", "type": "pathnode", "readonly": true },
-  { "name": "enemy", "type": "enthandle", "readonly": true },
-  { "name": "enemylastseenpos", "type": "vector", "readonly": true },
-  { "name": "scriptenemy", "type": "enthandle", "readonly": true },
-  { "name": "scriptenemytag", "type": "string", "readonly": true },
+  { "name": "threatbiasgroup", "type": "int" },
+  { "name": "attacker", "type": "enthandle" },
+  { "name": "attackercount", "type": "int" },
+  { "name": "node", "type": "pathnode" },
+  { "name": "prevnode", "type": "pathnode" },
+  { "name": "enemy", "type": "enthandle" },
+  { "name": "enemylastseenpos", "type": "vector" },
+  { "name": "scriptenemy", "type": "enthandle" },
+  { "name": "scriptenemytag", "type": "string" },
 
   { "name": "syncedmeleetarget", "type": "enthandle" },
 
@@ -62,14 +62,14 @@
 
   { "name": "goalradius", "type": "float" },
   { "name": "goalheight", "type": "float" },
-  { "name": "goalpos", "type": "vector", "readonly": true },
-  { "name": "goalent", "type": "enthandle", "readonly": true },
-  { "name": "goalforced", "type": "bool", "readonly": true },
+  { "name": "goalpos", "type": "vector" },
+  { "name": "goalent", "type": "enthandle" },
+  { "name": "goalforced", "type": "bool" },
 
   { "name": "fixednode", "type": "bool" },
   { "name": "fixednodesaferadius", "type": "float" },
 
-  { "name": "goalangle", "type": "vector", "readonly": true },
+  { "name": "goalangle", "type": "vector" },
 
   { "name": "isatanchor", "type": "bool" }
 ]

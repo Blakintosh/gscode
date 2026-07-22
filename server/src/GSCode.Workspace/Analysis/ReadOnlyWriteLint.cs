@@ -71,6 +71,14 @@ public static class ReadOnlyWriteLint
     /// Engine object fields belong to entities, so only an owner known to be one is reported.
     /// The field must also be read-only on EVERY entity kind that declares it: the owner's exact
     /// kind is not inferred, so disagreement between kinds means we cannot be sure.
+    ///
+    /// DORMANT as things stand: no field in the bundled data carries a read-only flag, so this
+    /// never fires. The 362 flags it used to consult were applied by hand during the manual
+    /// import and turned out to have no source — `ScriptObjectFields.xlsx` has no such column —
+    /// and they produced 87 warnings on shipped code. Rather than keep guesses that told users
+    /// their working code was broken, the data was emptied and the code kept: the rule is right
+    /// IF the flags are, so it costs nothing to leave the path in place for data that can be
+    /// sourced. See FOLLOWUPS.md.
     /// </summary>
     private static void InspectFieldWrite(
         FieldWrite write,

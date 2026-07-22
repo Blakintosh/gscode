@@ -18,13 +18,30 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// is an ordinary field on a struct you made, and `.size` is the implicit member of arrays and
 /// strings but a normal field name on anything else.
 ///
-/// Fixtures use real bundled data: `accuratefire` is read-only on every kind that declares it,
-/// `accuracy` is writable, and `radius` is one of only two names read-only on some kinds and
-/// writable on others.
+/// Field data is synthetic rather than the bundled artifacts, because this tests the RULE and the
+/// rule must stay pinned however the data moves. It moved: the bundled read-only flags turned out
+/// to have no source and were removed, so no field carries one today and fixtures drawn from real
+/// data would silently stop exercising the read-only path at all rather than fail.
+///
+/// The fixtures name the three cases that matter: `accuratefire` read-only wherever it is declared,
+/// `accuracy` writable, and `radius` read-only on one kind and writable on another.
 /// </summary>
 public class ReadOnlyWriteLintTests
 {
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
+
+    private static readonly ObjectField[] s_fields =
+    [
+        new("accuratefire", "int", ReadOnly: true, "ai"),
+        new("accuratefire", "int", ReadOnly: true, "weapon"),
+        new("accuracy", "float", ReadOnly: false, "ai"),
+        new("radius", "float", ReadOnly: true, "ai"),
+        new("radius", "float", ReadOnly: false, "trigger"),
+        // Read-only on the engine's own kinds, an ordinary field on a struct you made: the
+        // collision the owner-type check exists for.
+        new("name", "string", ReadOnly: true, "player"),
+        new("name", "string", ReadOnly: true, "weapon"),
+    ];
 
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
@@ -32,7 +49,7 @@ public class ReadOnlyWriteLintTests
         ParseResult result = ScriptAnalysis.Analyze(
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
-        ObjectFields fields = ObjectFields.Load(ApiDirectory);
+        ObjectFields fields = ObjectFields.Create(s_fields, []);
         FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc), fields);
 
         return ReadOnlyWriteLint.Analyze(result, fields, typer);

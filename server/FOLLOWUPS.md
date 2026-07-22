@@ -43,29 +43,29 @@ stock scripts. It fires on their own code, where it is actionable.
 those shipped, anything it reports is either a real defect in Treyarch's code or a false positive
 in ours. Two groups are still unexplained:
 
-**`gscode-5004 ReadOnlyFieldWrite` — 87 warnings in 44 files. The flags have no provenance.**
+**`gscode-5004 ReadOnlyFieldWrite` — RESOLVED. The flags were removed; the lint is dormant.**
 
-Traced: `ScriptObjectFields.xlsx` in `%TA_TOOLS_PATH%\docs_modtools\`, the source the field data
-comes from, has NO read-only column. It maps field name to engine type token and nothing else. All
-362 `readonly` flags in `server/tools/field-data/sources/curated/*.json` were applied by hand
-during the manual xlsx-to-curated import, on no documented authority.
+The 87 warnings were ours, not Treyarch's. `ScriptObjectFields.xlsx` in `%TA_TOOLS_PATH%\docs_modtools\`
+— the source the field data comes from — has NO read-only column. It maps field name to engine type
+token and nothing else. All 362 `readonly` flags in `server/tools/field-data/sources/curated/*.json`
+were applied by hand during the manual xlsx-to-curated import, on no documented authority.
 
-The distribution gives it away: `weapon_fields_simple.json` marks **all 234** of its fields
-read-only, `aitype_fields.json` all 4, `vehicle_fields.json` 43 of 58. Those are wholesale
-decisions, not field-by-field ones. Every name that fires on stock code sits in such a file —
-`damagetaken` (ai), `goalpos` and `attacker` (sentient), `meleedamage` (weapon).
+The distribution gave it away: `weapon_fields_simple.json` marked **all 234** of its fields
+read-only, `aitype_fields.json` all 4, `vehicle_fields.json` 43 of 58 — wholesale decisions, not
+field-by-field ones. Every name that fired on stock code sat in such a file.
 
-So the 87 findings are most likely OUR data being wrong rather than Treyarch writing 87 no-op
-assignments. Options:
+All 362 flags were stripped and the artifact regenerated. Corpus went 3,305 → 3,218 diagnostics:
+exactly the 87, nothing else moved.
 
-1. Clear the wholesale-flagged files (`weapon`, `aitype`) and keep only flags that can be
-   justified, then re-run the sweep and see what survives.
-2. Verify a handful in-engine — assign `self.damagetaken` and observe — and use the answer to
-   decide whether the flag concept is worth keeping at all.
-3. Drop the lint. It is the only diagnostic resting on data nobody can source.
+`ReadOnlyWriteLint` was KEPT rather than deleted. The rule is sound — it was the data that was
+invented — and its `.size` half (`5005 SizeIsReadOnly`) is unaffected and still fires. Its field
+half now reads a set in which nothing is flagged, so it cannot fire. It stays tested against
+synthetic data via the new `ObjectFields.Create`, so flags that CAN be sourced need only be added
+back to the curated JSON — no code change. `ObjectFieldsTests.NoBundledFieldIsMarkedReadOnly` pins
+the empty state so a regeneration cannot quietly reintroduce guesses.
 
-Whichever, the curated files should record WHERE each flag came from, so this question does not
-have to be answered twice.
+If the concept is ever revived, the curated files should record WHERE each flag came from, so this
+question does not have to be answered a third time.
 
 **`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 ERRORS in 5 files.** The highest severity
 anything reports on shipped code: `error` (3x), `debug_spherical_cone`, `Print3d`,

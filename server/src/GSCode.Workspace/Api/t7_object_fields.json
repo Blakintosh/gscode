@@ -6,18 +6,15 @@
     },
     {
       "Name": "accuratefire",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "actor_id",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "aggressivemode",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "alertlevel",
@@ -41,13 +38,11 @@
     },
     {
       "Name": "arrivalfinalpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "arrivalfinalyaw",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "awarenesslevelcurrent",
@@ -75,8 +70,7 @@
     },
     {
       "Name": "canflank",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "clamptonavmesh",
@@ -92,38 +86,31 @@
     },
     {
       "Name": "damagedir",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "damagelocation",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "damagemod",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "damagetaken",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "damageweapon",
-      "Type": "weapon",
-      "ReadOnly": true
+      "Type": "weapon"
     },
     {
       "Name": "damageyaw",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "desiredangle",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "diequietly",
@@ -139,8 +126,7 @@
     },
     {
       "Name": "dropweapon",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "enableterrainik",
@@ -148,28 +134,23 @@
     },
     {
       "Name": "engagemaxdist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "engagemaxfalloffdist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "engagemindist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "engageminfalloffdist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "exitPos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "exposedduration",
@@ -177,13 +158,11 @@
     },
     {
       "Name": "finalaccuracy",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "firemode",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "fixedlinkyawonly",
@@ -211,8 +190,7 @@
     },
     {
       "Name": "grenade",
-      "Type": "enthandle",
-      "ReadOnly": true
+      "Type": "enthandle"
     },
     {
       "Name": "grenadeammo",
@@ -228,8 +206,7 @@
     },
     {
       "Name": "grenadeweapon",
-      "Type": "weapon",
-      "ReadOnly": true
+      "Type": "weapon"
     },
     {
       "Name": "groundrelativepose",
@@ -237,18 +214,15 @@
     },
     {
       "Name": "groundtype",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "gunblockedbywall",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "hero",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "holdfire",
@@ -272,8 +246,7 @@
     },
     {
       "Name": "isarrivalpending",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isarriving",
@@ -281,8 +254,7 @@
     },
     {
       "Name": "isdog",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "keepclaimednode",
@@ -294,8 +266,7 @@
     },
     {
       "Name": "lastenemysightpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "lastpathtime",
@@ -303,18 +274,15 @@
     },
     {
       "Name": "lastscriptstate",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "lookaheaddir",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "lookaheaddist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "manualtraversemode",
@@ -322,8 +290,7 @@
     },
     {
       "Name": "maxfaceenemydist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "meleeattackdist",
@@ -343,8 +310,7 @@
     },
     {
       "Name": "movemode",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "newenemyreaction",
@@ -356,8 +322,7 @@
     },
     {
       "Name": "newenemyreactionpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "nextFindBestCoverTime",
@@ -369,8 +334,7 @@
     },
     {
       "Name": "nodeoffsetpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "nogrenadereturnthrow",
@@ -386,8 +350,7 @@
     },
     {
       "Name": "pathenemyfightdist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "pathenemylookahead",
@@ -395,8 +358,7 @@
     },
     {
       "Name": "pathgoalpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "pathrandompercent",
@@ -404,8 +366,7 @@
     },
     {
       "Name": "pathstartpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "pathwaittime",
@@ -421,18 +382,15 @@
     },
     {
       "Name": "predictedExitPos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "prevanimdelta",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "prevrelativedir",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "primaryweapon",
@@ -440,8 +398,7 @@
     },
     {
       "Name": "proneok",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "properName",
@@ -453,13 +410,11 @@
     },
     {
       "Name": "relativedir",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "runandgundist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "safetochangescript",
@@ -471,8 +426,7 @@
     },
     {
       "Name": "scriptstate",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "secondaryweapon",
@@ -488,8 +442,7 @@
     },
     {
       "Name": "statechangereason",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "suppressionduration",
@@ -497,13 +450,11 @@
     },
     {
       "Name": "suppressionmeter",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "suppressionstarttime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "suppressionwait",
@@ -511,23 +462,19 @@
     },
     {
       "Name": "traversalendpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "traversalstartpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "traverseendnode",
-      "Type": "pathnode",
-      "ReadOnly": true
+      "Type": "pathnode"
     },
     {
       "Name": "traversestartnode",
-      "Type": "pathnode",
-      "ReadOnly": true
+      "Type": "pathnode"
     },
     {
       "Name": "usechokepoints",
@@ -551,30 +498,25 @@
     },
     {
       "Name": "weaponaccuracy",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     }
   ],
   "aitype": [
     {
       "Name": "accuratefire",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "aggressivemode",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "canflank",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "hero",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     }
   ],
   "entity": [
@@ -890,8 +832,7 @@
     },
     {
       "Name": "chargeshotlevel",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "chickens",
@@ -899,13 +840,11 @@
     },
     {
       "Name": "currentspectatingclient",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "cursorhintent",
-      "Type": "entity",
-      "ReadOnly": true
+      "Type": "entity"
     },
     {
       "Name": "deaths",
@@ -949,13 +888,11 @@
     },
     {
       "Name": "groundentity",
-      "Type": "entity",
-      "ReadOnly": true
+      "Type": "entity"
     },
     {
       "Name": "groundsurfacetype",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "hacks",
@@ -1015,8 +952,7 @@
     },
     {
       "Name": "lastdamagetime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "lockonentity",
@@ -1024,8 +960,7 @@
     },
     {
       "Name": "lookatent",
-      "Type": "enthandle",
-      "ReadOnly": true
+      "Type": "enthandle"
     },
     {
       "Name": "maxhealth",
@@ -1037,8 +972,7 @@
     },
     {
       "Name": "name",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "objtime",
@@ -1046,8 +980,7 @@
     },
     {
       "Name": "pers",
-      "Type": "object",
-      "ReadOnly": true
+      "Type": "object"
     },
     {
       "Name": "pivotentity",
@@ -1059,8 +992,7 @@
     },
     {
       "Name": "playername",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "pointstowin",
@@ -1144,13 +1076,11 @@
     },
     {
       "Name": "usingvehicle",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "vehicleposition",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "victory",
@@ -1158,8 +1088,7 @@
     },
     {
       "Name": "viewlockedentity",
-      "Type": "entity",
-      "ReadOnly": true
+      "Type": "entity"
     },
     {
       "Name": "weaponhealth",
@@ -1177,8 +1106,7 @@
     },
     {
       "Name": "attacker",
-      "Type": "enthandle",
-      "ReadOnly": true
+      "Type": "enthandle"
     },
     {
       "Name": "attackeraccuracy",
@@ -1186,8 +1114,7 @@
     },
     {
       "Name": "attackercount",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "attackercountthreatscale",
@@ -1207,13 +1134,11 @@
     },
     {
       "Name": "enemy",
-      "Type": "enthandle",
-      "ReadOnly": true
+      "Type": "enthandle"
     },
     {
       "Name": "enemylastseenpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "favoriteenemy",
@@ -1241,18 +1166,15 @@
     },
     {
       "Name": "goalangle",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "goalent",
-      "Type": "enthandle",
-      "ReadOnly": true
+      "Type": "enthandle"
     },
     {
       "Name": "goalforced",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "goalheight",
@@ -1260,8 +1182,7 @@
     },
     {
       "Name": "goalpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "goalradius",
@@ -1333,8 +1254,7 @@
     },
     {
       "Name": "node",
-      "Type": "pathnode",
-      "ReadOnly": true
+      "Type": "pathnode"
     },
     {
       "Name": "pacifist",
@@ -1346,8 +1266,7 @@
     },
     {
       "Name": "prevnode",
-      "Type": "pathnode",
-      "ReadOnly": true
+      "Type": "pathnode"
     },
     {
       "Name": "recentattackerthreatscale",
@@ -1355,18 +1274,15 @@
     },
     {
       "Name": "script_owner",
-      "Type": "enthandle",
-      "ReadOnly": true
+      "Type": "enthandle"
     },
     {
       "Name": "scriptenemy",
-      "Type": "enthandle",
-      "ReadOnly": true
+      "Type": "enthandle"
     },
     {
       "Name": "scriptenemytag",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "sightlatency",
@@ -1390,8 +1306,7 @@
     },
     {
       "Name": "threatbiasgroup",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "updatesight",
@@ -1421,28 +1336,23 @@
     },
     {
       "Name": "addtocompass",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "assassinationbundle",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "deathmodel",
-      "Type": "xmodel",
-      "ReadOnly": true
+      "Type": "xmodel"
     },
     {
       "Name": "drivebysoundtime0",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "drivebysoundtime1",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "glasscollision_alt",
@@ -1450,23 +1360,19 @@
     },
     {
       "Name": "gunner1ontarget",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gunner2ontarget",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "healthdefault",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "height",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "heliheightlockoffset",
@@ -1474,38 +1380,31 @@
     },
     {
       "Name": "isphysicsvehicle",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "jumpforce",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "modelswapdelay",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "pathdistancetraveled",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "pathlookpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "pathpos",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     },
     {
       "Name": "pathwidth",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "pathwidthlookaheadfrac",
@@ -1513,13 +1412,11 @@
     },
     {
       "Name": "physicslaunchdeathscale",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "playerdrivenversion",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "predictedCollisionTime",
@@ -1527,78 +1424,63 @@
     },
     {
       "Name": "radius",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "radiusdamagemax",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "radiusdamagemin",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "radiusdamageradius",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "rumbleadditionaltime",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "rumblebasetime",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "rumbleduration",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "rumbleradius",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "rumblescale",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "rumbletype",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "scriptbundlesettings",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "scriptvehicletype",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "shootshock",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "turretontarget",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "turretonvistarget",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "turretrotscale",
@@ -1606,8 +1488,7 @@
     },
     {
       "Name": "turretweapon",
-      "Type": "weapon",
-      "ReadOnly": true
+      "Type": "weapon"
     },
     {
       "Name": "vehaircraftcollisionenabled",
@@ -1619,18 +1500,15 @@
     },
     {
       "Name": "vehicleclass",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "vehicleridersbundle",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "vehicleridersrobotbundle",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "vehicletype",
@@ -1642,23 +1520,19 @@
     },
     {
       "Name": "vehmodel",
-      "Type": "xmodel",
-      "ReadOnly": true
+      "Type": "xmodel"
     },
     {
       "Name": "vehmodelenemy",
-      "Type": "xmodel",
-      "ReadOnly": true
+      "Type": "xmodel"
     },
     {
       "Name": "vehonpath",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "vehspeed",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "vehunlinkoccupantsondeath",
@@ -1666,13 +1540,11 @@
     },
     {
       "Name": "vehviewmodel",
-      "Type": "xmodel",
-      "ReadOnly": true
+      "Type": "xmodel"
     },
     {
       "Name": "velocity",
-      "Type": "vector",
-      "ReadOnly": true
+      "Type": "vector"
     }
   ],
   "vn": [
@@ -1728,1173 +1600,939 @@
   "weapon": [
     {
       "Name": "aifusetime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "allowsDetonationDuringReload",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "altoffhand",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "altweapon",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "ammocountequipment",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "anyplayercanretrieve",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "attachments",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "blocksprone",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "bottomarc",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "bulletImpactExplode",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "burnDamage",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "burnDamageInterval",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "burnDuration",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "burstCount",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "chaineventmax",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "chaineventradius",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "chaineventtime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "clipmodel",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "clipsize",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "cookoffholdtime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "damageAlwaysKillsPlayer",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "damageToOwnerScalar",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "deathcamtime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "decoy",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "destroyablebytrophysystem",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "destroysEquipment",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "disableDeploy",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "disallowatmatchstart",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "displayname",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "dniweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "doNotDamageOwner",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "doannihilate",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "doblowback",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "dodamagefeedback",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "doempdestroyfx",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "doesfiredamage",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "dogibbing",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "dogibbingonmelee",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "dohackedstats",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "dostun",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "drawoffhandmodelinhand",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "dualwieldweapon",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "enemycrosshairrange",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "explosioninnerradius",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "explosionradius",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "fightdist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "firesound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "firesoundplayer",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "firetime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "firetype",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "forcedamageshellshockandrumble",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "frontendmodel",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "fuellife",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "fusetime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_breadcrumbduration",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_flickerondamage",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_flickeronpowerloss",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_flickeronpowerlow",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_heroversion_2_0",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_max_hitpoints",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_power_consume_on_ammo_use",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_power_reset_on_class_change",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_power_reset_on_round_switch",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_power_reset_on_spawn",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_power_reset_on_team_change",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_power_round_end_active_penalty",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_power_usage_rate",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "gadget_powergainscorefactor",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "gadget_powergainscoreignoreself",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_powergainscoreignorewhenactive",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_powermax",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_powermoveloss",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_powermovespeed",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "gadget_powerofflossondamage",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "gadget_poweronlossondamage",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "gadget_powerreplenishfactor",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "gadget_powersprintloss",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_powertakedowngain",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_pulse_duration",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_pulse_margin",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_pulse_max_range",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_shieldreflectpowergain",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_shieldreflectpowerloss",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_shockfield_damage",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "gadget_shockfield_radius",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "gadget_takedownrevealtime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "gadget_turnoff_onempjammed",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "gadget_type",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "grappleweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "guidedmissiletype",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "hackertriggerorigintag",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "ignoresLightArmor",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "ignoresPowerArmor",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "ignoresflakjacket",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "ignoreteamkills",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "inventorytype",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isaikillstreakdamage",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isalllockedfire",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isaltmode",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isballisticknife",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isboltaction",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isbulletweapon",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isburstfire",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "iscarriedkillstreak",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "ischargeshot",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "iscliponly",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isdisallowatmatchstart",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isdualwield",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isemp",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isequipment",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isflash",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isflourishweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isfullauto",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isgadget",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isgameplayweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isgasweapon",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isgrenadeweapon",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "ishacktoolweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isheroweapon",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "ishybridweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isitem",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "iskillstreak",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "islauncher",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "islethalgrenade",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "ismeleeweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isnotdroppable",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isperkbottle",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isprimary",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isprojectileweapon",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isriotshield",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isrocketlauncher",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isscavengable",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "issemiauto",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "issniperweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isspecificuse",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isstackedfire",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isstun",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "issupplydropweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "istacticalgrenade",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "istacticalinsertion",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "istimeddetonation",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "isvalid",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "isvaluable",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "leftarc",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "lockOnLossRadius",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "lockOnRadius",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "lockonSeekerLockedSound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "lockonSeekerLockedSoundLoops",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "lockonSeekerSearchSound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "lockonSeekerSearchSoundLoops",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "lockonTargetFiredOnSound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "lockonTargetFiredOnSoundLoops",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "lockonTargetLockedSound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "lockonTargetLockedSoundLoops",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "lockonanglehorizontal",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "lockonanglevertical",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "lockonlossanglehorizontal",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "lockonlossanglevertical",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "lockonmaxrange",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "lockonmaxrangenolineofsight",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "lockonminrange",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "lockonscreenradius",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "lockonspeed",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "lockontype",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "maxammo",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "maxdist",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "maxgibdistance",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "maxinstancesallowed",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "meleeIgnoresLightArmor",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "meleechargerange",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "meleechargetime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "meleedamage",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "meleelungerange",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "meleepowertime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "meleepowertimeLeft",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "meleetime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "multidetonation",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "multidetonationfragmentspeed",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "name",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "nohitmarker",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "nonstowedweapon",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "notkillstreak",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "offhandclass",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "offhandslot",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "pickupsound",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "pickupsoundplayer",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "projSmokeEndSound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "projSmokeLoopSound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "projSmokeStartSound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "projexplosionsound",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "projexplosionsoundplayer",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "projexplosiontype",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "proximityalarmactivationdelay",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "proximityalarminnerradius",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "proximityalarmouterradius",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "proximitydetonation",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "reloadtime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "requirelockontofire",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "rightarc",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "rootweapon",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "setusedstat",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "shotcount",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "shownenemyequip",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "shownenemyexplo",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "shownretrievable",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "skipbattlechatterkill",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "skipbattlechatterreload",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "skiplowammovox",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "soundRattleRangeMax",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "soundRattleRangeMin",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "spawnInfluencer",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "specialpain",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "spindowntime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "spinuptime",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "startammo",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "stowedmodel",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "supportedattachments",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "teamkillpenaltyscale",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "toparc",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "type",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "unlimitedammo",
-      "Type": "bool",
-      "ReadOnly": true
+      "Type": "bool"
     },
     {
       "Name": "vehicleprojectiledamagescalar",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "vehicleprojectilesplashdamagescalar",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "viewmodels",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "weapclass",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "weaponHeadObjectiveHeight",
-      "Type": "float",
-      "ReadOnly": true
+      "Type": "float"
     },
     {
       "Name": "weapondamage1hitpoints",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "weapondamage2hitpoints",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "weapondamage3hitpoints",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "weaponstarthitpoints",
-      "Type": "int",
-      "ReadOnly": true
+      "Type": "int"
     },
     {
       "Name": "worlddamagedmodel1",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "worlddamagedmodel2",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "worlddamagedmodel3",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     },
     {
       "Name": "worldmodel",
-      "Type": "string",
-      "ReadOnly": true
+      "Type": "string"
     }
   ]
 }

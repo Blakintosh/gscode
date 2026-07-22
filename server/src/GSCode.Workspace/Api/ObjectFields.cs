@@ -95,6 +95,25 @@ public sealed class ObjectFields
         return string.Equals(key.Side, "client", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Builds a set from field data directly, rather than from the bundled artifacts.
+    ///
+    /// This exists so rules that CONSULT the data can be tested apart from what the data happens
+    /// to say — which stopped being hypothetical when the read-only flags were removed and three
+    /// tests of a still-correct rule failed only because no field carries the flag any more.
+    /// </summary>
+    public static ObjectFields Create(IEnumerable<ObjectField> fields, IEnumerable<RadiantKey> radiantKeys)
+    {
+        return new ObjectFields(
+            fields
+                .GroupBy(static field => field.Name, StringComparer.OrdinalIgnoreCase)
+                .ToFrozenDictionary(
+                    static group => group.Key,
+                    static group => group.ToImmutableArray(),
+                    StringComparer.OrdinalIgnoreCase),
+            radiantKeys.ToFrozenDictionary(static key => key.Name, StringComparer.OrdinalIgnoreCase));
+    }
+
     /// <summary>Loads the two artifacts from an Api directory (empty when absent/corrupt).</summary>
     public static ObjectFields Load(string apiDirectory)
     {

@@ -1,5 +1,5 @@
 [
-  { "name": "isdog", "type": "int", "readonly": true },
+  { "name": "isdog", "type": "int" },
   { "name": "missinglegs", "type": "int" },
   { "name": "accuracy", "type": "float" },
 
@@ -8,30 +8,30 @@
   { "name": "holdfire", "type": "bool" },
   { "name": "forcefire", "type": "bool" },
 
-  { "name": "damagetaken", "type": "int", "readonly": true },
-  { "name": "damagedir", "type": "vector", "readonly": true },
-  { "name": "damageyaw", "type": "int", "readonly": true },
-  { "name": "damagelocation", "type": "string", "readonly": true },
-  { "name": "damageweapon", "type": "weapon", "readonly": true },
-  { "name": "damagemod", "type": "string", "readonly": true },
+  { "name": "damagetaken", "type": "int" },
+  { "name": "damagedir", "type": "vector" },
+  { "name": "damageyaw", "type": "int" },
+  { "name": "damagelocation", "type": "string" },
+  { "name": "damageweapon", "type": "weapon" },
+  { "name": "damagemod", "type": "string" },
 
-  { "name": "proneok", "type": "int", "readonly": true },
+  { "name": "proneok", "type": "int" },
 
   { "name": "walkdist", "type": "float" },
 
   { "name": "dontavoidplayer", "type": "bool" },
 
-  { "name": "desiredangle", "type": "float", "readonly": true },
+  { "name": "desiredangle", "type": "float" },
 
-  { "name": "newenemyreactionpos", "type": "vector", "readonly": true },
+  { "name": "newenemyreactionpos", "type": "vector" },
   { "name": "newenemyreaction", "type": "bool" },
   { "name": "newenemyreactiondistsq", "type": "float" },
 
   { "name": "ignoresuppression", "type": "bool" },
   { "name": "suppressionwait", "type": "float" },
   { "name": "suppressionduration", "type": "float" },
-  { "name": "suppressionstarttime", "type": "int", "readonly": true },
-  { "name": "suppressionmeter", "type": "float", "readonly": true },
+  { "name": "suppressionstarttime", "type": "int" },
+  { "name": "suppressionmeter", "type": "float" },
 
   { "name": "weapon", "type": "weapon" },
   { "name": "secondaryweapon", "type": "weapon" },
@@ -41,8 +41,8 @@
   { "name": "ammopouch", "type": "weapon" },
 
   { "name": "grenadeawareness", "type": "float" },
-  { "name": "grenade", "type": "enthandle", "readonly": true },
-  { "name": "grenadeweapon", "type": "weapon", "readonly": true },
+  { "name": "grenade", "type": "enthandle" },
+  { "name": "grenadeweapon", "type": "weapon" },
   { "name": "grenadeammo", "type": "float" },
   { "name": "grenadethrowback", "type": "bool" },
 
@@ -67,33 +67,33 @@
   { "name": "gibbed", "type": "int" },
   { "name": "groundrelativepose", "type": "int" },
 
-  { "name": "dropweapon", "type": "int", "readonly": true },
+  { "name": "dropweapon", "type": "int" },
 
-  { "name": "groundtype", "type": "string", "readonly": true },
+  { "name": "groundtype", "type": "string" },
 
   { "name": "properName", "type": "string" },
-  { "name": "scriptstate", "type": "string", "readonly": true },
-  { "name": "lastscriptstate", "type": "string", "readonly": true },
-  { "name": "statechangereason", "type": "string", "readonly": true },
+  { "name": "scriptstate", "type": "string" },
+  { "name": "lastscriptstate", "type": "string" },
+  { "name": "statechangereason", "type": "string" },
 
-  { "name": "nodeoffsetpos", "type": "vector", "readonly": true },
-  { "name": "pathstartpos", "type": "vector", "readonly": true },
-  { "name": "pathgoalpos", "type": "vector", "readonly": true },
+  { "name": "nodeoffsetpos", "type": "vector" },
+  { "name": "pathstartpos", "type": "vector" },
+  { "name": "pathgoalpos", "type": "vector" },
 
   { "name": "pathrandompercent", "type": "int" },
 
   { "name": "usechokepoints", "type": "bool" },
 
-  { "name": "lastenemysightpos", "type": "vector", "readonly": true },
+  { "name": "lastenemysightpos", "type": "vector" },
 
   { "name": "pathenemylookahead", "type": "float" },
-  { "name": "pathenemyfightdist", "type": "float", "readonly": true },
+  { "name": "pathenemyfightdist", "type": "float" },
   { "name": "ignorepathenemyfightdist", "type": "bool" },
   { "name": "ignorerunandgundist", "type": "bool" },
-  { "name": "runandgundist", "type": "float", "readonly": true },
+  { "name": "runandgundist", "type": "float" },
   { "name": "meleeattackdist", "type": "float" },
 
-  { "name": "movemode", "type": "string", "readonly": true },
+  { "name": "movemode", "type": "string" },
   { "name": "usecombatscriptatcover", "type": "bool" },
   { "name": "safetochangescript", "type": "bool" },
   { "name": "usegoalanimweight", "type": "bool" },
@@ -113,50 +113,50 @@
 
   { "name": "flashbangimmunity", "type": "bool" },
 
-  { "name": "lookaheaddir", "type": "vector", "readonly": true },
-  { "name": "lookaheaddist", "type": "float", "readonly": true },
+  { "name": "lookaheaddir", "type": "vector" },
+  { "name": "lookaheaddist", "type": "float" },
 
-  { "name": "prevanimdelta", "type": "vector", "readonly": true },
+  { "name": "prevanimdelta", "type": "vector" },
 
   { "name": "exposedduration", "type": "float" },
   { "name": "pathwaittime", "type": "float" },
   { "name": "lastpathtime", "type": "float" },
 
   { "name": "isarriving", "type": "bool" },
-  { "name": "isarrivalpending", "type": "bool", "readonly": true },
+  { "name": "isarrivalpending", "type": "bool" },
 
-  { "name": "engagemindist", "type": "float", "readonly": true },
-  { "name": "engageminfalloffdist", "type": "float", "readonly": true },
-  { "name": "engagemaxdist", "type": "float", "readonly": true },
-  { "name": "engagemaxfalloffdist", "type": "float", "readonly": true },
+  { "name": "engagemindist", "type": "float" },
+  { "name": "engageminfalloffdist", "type": "float" },
+  { "name": "engagemaxdist", "type": "float" },
+  { "name": "engagemaxfalloffdist", "type": "float" },
 
-  { "name": "finalaccuracy", "type": "float", "readonly": true },
+  { "name": "finalaccuracy", "type": "float" },
 
   { "name": "noattackeraccuracymod", "type": "bool" },
-  { "name": "maxfaceenemydist", "type": "float", "readonly": true },
+  { "name": "maxfaceenemydist", "type": "float" },
 
-  { "name": "prevrelativedir", "type": "bool", "readonly": true },
-  { "name": "relativedir", "type": "bool", "readonly": true },
-  { "name": "gunblockedbywall", "type": "bool", "readonly": true },
+  { "name": "prevrelativedir", "type": "bool" },
+  { "name": "relativedir", "type": "bool" },
+  { "name": "gunblockedbywall", "type": "bool" },
 
   { "name": "fixedlinkyawonly", "type": "bool" },
 
-  { "name": "weaponaccuracy", "type": "float", "readonly": true },
+  { "name": "weaponaccuracy", "type": "float" },
 
   { "name": "movementtype", "type": "string" },
 
-  { "name": "arrivalfinalpos", "type": "vector", "readonly": true },
-  { "name": "exitPos", "type": "vector", "readonly": true },
-  { "name": "predictedExitPos", "type": "vector", "readonly": true },
+  { "name": "arrivalfinalpos", "type": "vector" },
+  { "name": "exitPos", "type": "vector" },
+  { "name": "predictedExitPos", "type": "vector" },
   { "name": "predictedArrivalDirectionValid", "type": "bool" },
-  { "name": "arrivalfinalyaw", "type": "float", "readonly": true },
+  { "name": "arrivalfinalyaw", "type": "float" },
 
-  { "name": "firemode", "type": "int", "readonly": true },
+  { "name": "firemode", "type": "int" },
 
-  { "name": "traversestartnode", "type": "pathnode", "readonly": true },
-  { "name": "traverseendnode", "type": "pathnode", "readonly": true },
-  { "name": "traversalstartpos", "type": "vector", "readonly": true },
-  { "name": "traversalendpos", "type": "vector", "readonly": true },
+  { "name": "traversestartnode", "type": "pathnode" },
+  { "name": "traverseendnode", "type": "pathnode" },
+  { "name": "traversalstartpos", "type": "vector" },
+  { "name": "traversalendpos", "type": "vector" },
 
   { "name": "manualtraversemode", "type": "bool" },
 
@@ -164,14 +164,14 @@
 
   { "name": "bulletsinclip", "type": "float" },
 
-  { "name": "actor_id", "type": "int", "readonly": true },
+  { "name": "actor_id", "type": "int" },
 
   { "name": "animtranslationscale", "type": "float" },
 
   { "name": "pathablematerial", "type": "int" },
 
-  { "name": "hero", "type": "bool", "readonly": true },
-  { "name": "canflank", "type": "bool", "readonly": true },
-  { "name": "accuratefire", "type": "bool", "readonly": true },
-  { "name": "aggressivemode", "type": "bool", "readonly": true }
+  { "name": "hero", "type": "bool" },
+  { "name": "canflank", "type": "bool" },
+  { "name": "accuratefire", "type": "bool" },
+  { "name": "aggressivemode", "type": "bool" }
 ]

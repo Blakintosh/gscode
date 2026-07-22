@@ -19,15 +19,29 @@ public class ObjectFieldsTests
     }
 
     [Fact]
-    public void FindField_IsCaseInsensitive_AndCarriesTypeAndReadonly()
+    public void FindField_IsCaseInsensitive_AndCarriesType()
     {
         ObjectFields fields = ObjectFields.Load(ApiDirectory);
 
-        // weapon.aifusetime is an int and read-only in the curated data.
         ImmutableArray<ObjectField> upper = fields.FindField("AIFUSETIME");
         ObjectField weapon = Assert.Single(upper.Where(f => f.EntityKind == "weapon"));
         Assert.Equal("int", weapon.Type);
-        Assert.True(weapon.ReadOnly);
+    }
+
+    [Fact]
+    public void NoBundledFieldIsMarkedReadOnly()
+    {
+        // Deliberate, and pinned here so regenerating the artifact cannot quietly bring the flags
+        // back. The 362 flags this data used to carry were applied by hand during the manual
+        // import from ScriptObjectFields.xlsx, which has no read-only column — nothing sourced
+        // them. They produced 87 warnings telling authors that shipped, working stock code was
+        // wrong. The reading rule in ReadOnlyWriteLint is kept and still tested against synthetic
+        // data, so flags that can be sourced need only be added back to the curated JSON.
+        ObjectFields fields = ObjectFields.Load(ApiDirectory);
+
+        Assert.DoesNotContain(
+            fields.FieldNames().SelectMany(name => fields.FindField(name)),
+            static field => field.ReadOnly);
     }
 
     [Fact]

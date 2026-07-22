@@ -170,6 +170,10 @@ static void WriteJson<T>(string path, T value)
     string json = JsonSerializer.Serialize(value, new JsonSerializerOptions
     {
         WriteIndented = true,
+        // Indentation defaults to the platform newline, which on Windows makes every regeneration
+        // rewrite the whole artifact as CRLF against an LF repo. Pinned so the output is identical
+        // wherever it is generated.
+        NewLine = "\n",
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
     });
     File.WriteAllText(path, json + "\n");

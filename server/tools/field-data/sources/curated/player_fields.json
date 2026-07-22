@@ -1,7 +1,7 @@
 [
-  { "name": "playername", "type": "string", "readonly": true },
+  { "name": "playername", "type": "string" },
   { "name": "sessionteam", "type": "string" },
-  { "name": "name", "type": "string", "readonly": true },
+  { "name": "name", "type": "string" },
   { "name": "maxhealth", "type": "int" },
   { "name": "weaponhealth", "type": "int" },
 
@@ -56,15 +56,15 @@
   { "name": "statusicon", "type": "string" },
 
   { "name": "spectatorclient", "type": "int" },
-  { "name": "currentspectatingclient", "type": "int", "readonly": true },
+  { "name": "currentspectatingclient", "type": "int" },
 
   { "name": "archivetime", "type": "float" },
   { "name": "psoffsettime", "type": "int" },
 
-  { "name": "pers", "type": "object", "readonly": true },
+  { "name": "pers", "type": "object" },
 
-  { "name": "usingvehicle", "type": "bool", "readonly": true },
-  { "name": "vehicleposition", "type": "int", "readonly": true },
+  { "name": "usingvehicle", "type": "bool" },
+  { "name": "vehicleposition", "type": "int" },
 
   { "name": "headicon", "type": "string" },
 
@@ -77,18 +77,18 @@
   { "name": "animNoClientTransform", "type": "bool" },
   { "name": "topdowncamera", "type": "bool" },
 
-  { "name": "groundentity", "type": "entity", "readonly": true },
-  { "name": "viewlockedentity", "type": "entity", "readonly": true },
-  { "name": "cursorhintent", "type": "entity", "readonly": true },
+  { "name": "groundentity", "type": "entity" },
+  { "name": "viewlockedentity", "type": "entity" },
+  { "name": "cursorhintent", "type": "entity" },
 
-  { "name": "groundsurfacetype", "type": "string", "readonly": true },
+  { "name": "groundsurfacetype", "type": "string" },
 
-  { "name": "lookatent", "type": "enthandle", "readonly": true },
+  { "name": "lookatent", "type": "enthandle" },
 
-  { "name": "chargeshotlevel", "type": "int", "readonly": true },
+  { "name": "chargeshotlevel", "type": "int" },
 
   { "name": "lockonentity", "type": "entity" },
   { "name": "pivotentity", "type": "entity" },
 
-  { "name": "lastdamagetime", "type": "int", "readonly": true }
+  { "name": "lastdamagetime", "type": "int" }
 ]

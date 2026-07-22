@@ -275,6 +275,8 @@ public sealed class HoverHandler : HoverHandlerBase
             foreach ( ObjectField field in known )
             {
                 markdown.Append("* `").Append(field.EntityKind).Append("`: ").Append(field.Type);
+                // No field carries this today — the flags had no source and were removed — but
+                // the marker stays, so data that can be sourced needs no code change.
                 if ( field.ReadOnly )
                 {
                     markdown.Append(" *(read-only)*");

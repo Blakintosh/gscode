@@ -8,6 +8,53 @@ per-project `FOLDER.md` convention).
 
 ---
 
+## Known limitations from the triage pass
+
+Recorded because each was a deliberate stopping point, not an oversight. The triage plan lives
+at `~/.claude/plans/i-m-looking-into-recreating-linear-raccoon.md`; P0, P1 and the hover/doc
+half of P2 are done.
+
+### Type hover across branches reports the last arm, not the join
+
+`FlowTyper.TryGetLocalTypeAt` now takes the last assignment at or before the cursor, which is
+exact for straight-line code and fixed the reported "reassigned variable still says int" bug.
+Across `if`/`else` it reports whichever arm is written last rather than `Join` of both:
+
+```gsc
+if ( c ) { x = 1; } else { x = "s"; }
+use( x );   // reports string; the truth is int|string
+```
+
+The join machinery exists (`ScrType.Join`, already wired into the walk) but the walk does not
+retain its environment per position, so the hover has nothing to sample. Fixing it properly
+means recording the environment at statement boundaries — worth doing only if the wrong answer
+here turns out to bite in practice, since both the old and new behaviour are wrong in this case
+and the new one is right far more often.
+
+### Parameters and fields still get no inferred type on hover
+
+Only locals with a typed assignment are covered. A parameter has no assignment to read, and
+`self.foo` shows the engine's field data but never an inferred type. Both are additive on top
+of the current lookup.
+
+### `#using` is treated as non-transitive for class completion
+
+`DatabaseQueries.AllVisibleClasses` offers classes from the asking file and the files it
+`#using`s directly. Measured against the corpus first: all 8 cross-file class uses in the 980
+stock scripts name the declaring file in their own `#using` list, so nothing real depends on an
+import chain. If a mod turns out to rely on transitivity, this is the place to widen.
+`LookupClasses` is deliberately left unfiltered so go-to-definition still works on a class
+written without its import.
+
+### ScriptDoc coverage is 499 of 572 blocks
+
+`ScriptDocCorpusTests` asserts a floor rather than an exact figure, since the corpus is whatever
+mod-tools version is installed. The ~70 unaccounted blocks are most likely attached to classes
+or sitting in positions `FindDocComment`'s two-line window does not reach; nobody has checked
+which. Worth a look only if a real file shows a missing hover.
+
+---
+
 ## Open — optional, nothing depends on them
 
 ### 1. `apiUpdate.ts` — opt-in online refresh of the builtin API

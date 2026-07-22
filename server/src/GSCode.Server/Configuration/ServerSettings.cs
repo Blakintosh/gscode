@@ -25,6 +25,12 @@ public sealed class ServerSettings
     /// <summary>"owner" (default) or "all" — how widely assignment-derived fields are offered.</summary>
     public string CompletionFieldScope { get; set; } = "owner";
 
+    /// <summary>Whether control-flow parentheses are padded: `if ( x )` against `if (x)`.</summary>
+    public bool FormatPadParens { get; set; } = true;
+
+    /// <summary>The longest run of blank lines the formatter preserves.</summary>
+    public int FormatMaxBlankLines { get; set; } = 2;
+
     /// <summary>Applies a { "gscode": { ... } } payload; missing keys keep their current values.</summary>
     public void Apply(JToken settingsRoot)
     {
@@ -59,5 +65,11 @@ public sealed class ServerSettings
         CompletionFieldScope = section.Value<string>("completion.fieldScope")
             ?? section["completion"]?.Value<string>("fieldScope")
             ?? CompletionFieldScope;
+        FormatPadParens = section.Value<bool?>("format.padParens")
+            ?? section["format"]?.Value<bool?>("padParens")
+            ?? FormatPadParens;
+        FormatMaxBlankLines = section.Value<int?>("format.maxBlankLines")
+            ?? section["format"]?.Value<int?>("maxBlankLines")
+            ?? FormatMaxBlankLines;
     }
 }

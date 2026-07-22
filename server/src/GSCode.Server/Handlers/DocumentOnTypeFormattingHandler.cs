@@ -1,5 +1,6 @@
 using GSCode.Parser;
 using GSCode.Workspace.Documents;
+using GSCode.Server.Configuration;
 using GSCode.Server.Formatting;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -18,11 +19,13 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
 {
     private readonly DocumentStore _documents;
     private readonly TextDocumentSelector _selector;
+    private readonly ServerSettings _settings;
 
-    public DocumentOnTypeFormattingHandler(DocumentStore documents, TextDocumentSelector selector)
+    public DocumentOnTypeFormattingHandler(DocumentStore documents, TextDocumentSelector selector, ServerSettings settings)
     {
         _documents = documents;
         _selector = selector;
+        _settings = settings;
     }
 
     protected override DocumentOnTypeFormattingRegistrationOptions CreateRegistrationOptions(
@@ -50,7 +53,7 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
         // Every other stale read shows something wrong; this one writes something wrong.
         ParseResult analysis = _documents.AnalyzeIfStale(document);
 
-        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(analysis);
+        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(analysis, OptionsFrom(request.Options));
         if ( edit is null )
         {
             return Task.FromResult<TextEditContainer?>(null);
@@ -63,5 +66,22 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
         };
 
         return Task.FromResult<TextEditContainer?>(new TextEditContainer(textEdit));
+    }
+
+    /// <summary>
+    /// Combines the editor's per-request indentation with the configured GSC knobs.
+    ///
+    /// tabSize/insertSpaces arrive in the LSP payload on EVERY formatting request, because the
+    /// editor resolves them per document (language overrides, .editorconfig, detected indentation).
+    /// They were being dropped entirely, so the formatter reindented every file to four spaces no
+    /// matter what the editor had been told.
+    /// </summary>
+    private FormatOptions OptionsFrom(FormattingOptions requested)
+    {
+        return new FormatOptions(
+            IndentWidth: requested.TabSize > 0 ? (int)requested.TabSize : 4,
+            UseTabs: !requested.InsertSpaces,
+            PadParens: _settings.FormatPadParens,
+            MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines));
     }
 }

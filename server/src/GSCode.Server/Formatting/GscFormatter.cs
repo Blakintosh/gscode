@@ -9,9 +9,13 @@ namespace GSCode.Server.Formatting;
 
 /// <summary>
 /// A whitespace-only GSC/CSC formatter. It emits every non-trivia token verbatim and only
-/// recomputes the whitespace around them: Allman braces, one statement per line, 4-space
-/// indent from brace depth, padded control-flow and non-empty parentheses, and blank lines
-/// capped at two. Comments, dev blocks, macros, and disabled branches pass through untouched.
+/// recomputes the whitespace around them: Allman braces, one statement per line, indentation
+/// from brace depth, and blank-line runs capped. Comments, dev blocks, macros, and disabled
+/// branches pass through untouched. See <see cref="FormatOptions"/> for what is configurable.
+///
+/// Brace style is deliberately NOT configurable. Allman is not a preference here, it is the
+/// language's convention: the stock scripts open 51,048 braces on their own line and 37 at the
+/// end of a statement.
 ///
 /// Two safety properties make it impossible to corrupt code: it refuses to format a file
 /// with lex/parse errors, and it re-lexes its own output and returns the original unchanged
@@ -19,7 +23,6 @@ namespace GSCode.Server.Formatting;
 /// </summary>
 public static class GscFormatter
 {
-    private const int IndentWidth = 4;
 
     /// <summary>A single text edit: the source range to replace and its replacement text.</summary>
     public readonly record struct FormatEdit(TextRange Range, string NewText);
@@ -30,9 +33,9 @@ public static class GscFormatter
     /// nothing to change or formatting is refused. All three formatting requests (whole,
     /// range, on-type) share this so edits stay small and churn-free.
     /// </summary>
-    public static FormatEdit? FormatMinimal(ParseResult result)
+    public static FormatEdit? FormatMinimal(ParseResult result, FormatOptions? options = null)
     {
-        string? formatted = Format(result);
+        string? formatted = Format(result, options);
         if ( formatted is null )
         {
             return null;
@@ -70,8 +73,13 @@ public static class GscFormatter
     /// errors) or would not be safe (the token stream would change). A null result means
     /// "make no edits".
     /// </summary>
-    public static string? Format(ParseResult result)
+    public static string? Format(ParseResult result, FormatOptions? requested = null)
     {
+        // Nullable rather than a `default` struct sentinel: default(FormatOptions) is all-zero,
+        // which reads as a perfectly valid "no indent, no padding" configuration and silently
+        // formatted everything flat.
+        FormatOptions options = requested ?? FormatOptions.Default;
+
         if ( HasSyntaxErrors(result) )
         {
             return null;
@@ -84,7 +92,7 @@ public static class GscFormatter
             return null;
         }
 
-        string formatted = Reflow(significant, result.Text);
+        string formatted = Reflow(significant, result.Text, options);
 
         // Corruption guard: the reflow must preserve the exact non-trivia token stream.
         if ( !TokenStreamMatches(significant, result.Text, formatted) )
@@ -123,7 +131,7 @@ public static class GscFormatter
         return significant;
     }
 
-    private static string Reflow(List<SignificantToken> significant, SourceText text)
+    private static string Reflow(List<SignificantToken> significant, SourceText text, FormatOptions options)
     {
         StringBuilder output = new();
         int depth = 0;
@@ -157,13 +165,13 @@ public static class GscFormatter
 
                 if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment) )
                 {
-                    int blankLines = Math.Clamp(newlinesBefore - 1, 0, 1);
+                    int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
                     output.Append('\n', 1 + blankLines);
-                    output.Append(' ', (depth + unbraced.PendingIndents) * IndentWidth);
+                    AppendIndent(output, depth + unbraced.PendingIndents, options);
                 }
                 else
                 {
-                    output.Append(Separator(previous.Kind, token.Kind));
+                    output.Append(Separator(previous.Kind, token.Kind, options));
                 }
 
                 output.Append(token.GetText(text));
@@ -308,17 +316,37 @@ public static class GscFormatter
     }
 
     /// <summary>The intra-line separator between two adjacent tokens: a single space or nothing.</summary>
-    private static string Separator(TokenKind previous, TokenKind current)
+    /// <summary>
+    /// Writes one line's indentation. Tabs are one character per level regardless of tab size,
+    /// which is the point of using them; spaces multiply by the editor's width.
+    /// </summary>
+    private static void AppendIndent(StringBuilder output, int levels, FormatOptions options)
+    {
+        if ( levels <= 0 )
+        {
+            return;
+        }
+
+        if ( options.UseTabs )
+        {
+            output.Append('	', levels);
+            return;
+        }
+
+        output.Append(' ', levels * options.IndentWidth);
+    }
+
+    private static string Separator(TokenKind previous, TokenKind current, FormatOptions options)
     {
         // Parenthesis interior padding: "( x )", but "()" stays tight.
         if ( previous == TokenKind.OpenParen )
         {
-            return current == TokenKind.CloseParen ? "" : " ";
+            return current == TokenKind.CloseParen || !options.PadParens ? "" : " ";
         }
 
         if ( current == TokenKind.CloseParen )
         {
-            return " ";
+            return options.PadParens ? " " : "";
         }
 
         // Brackets hug their contents: a[0], [[ptr]].
@@ -338,6 +366,8 @@ public static class GscFormatter
         }
 
         // A call/declaration '(' hugs its callee/name; a control-flow '(' is padded.
+        // Not affected by PadParens, which is about the INTERIOR: the tight form is `if (a)`,
+        // never `if(a)`, so a control-flow keyword keeps its space either way.
         if ( current == TokenKind.OpenParen )
         {
             return IsControlFlowKeyword(previous) ? " " : "";

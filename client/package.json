@@ -265,6 +265,20 @@
 					],
 					"description": "How widely field names gathered from assignments are offered after a '.'.",
 					"scope": "window"
+				},
+				"gscode.format.padParens": {
+					"type": "boolean",
+					"default": true,
+					"description": "Pad the inside of control-flow parentheses: 'if ( x )' rather than 'if (x)'. Both appear in stock scripts, which are about 88% padded.",
+					"scope": "window"
+				},
+				"gscode.format.maxBlankLines": {
+					"type": "integer",
+					"default": 2,
+					"minimum": 0,
+					"maximum": 10,
+					"description": "The longest run of blank lines the formatter preserves. Longer runs are collapsed to this many.",
+					"scope": "window"
 				}
 			}
 		},
@@ -274,14 +288,27 @@
 					"other": "on",
 					"comments": "off",
 					"strings": "off"
-				}
+				},
+				"editor.insertSpaces": false,
+				"editor.tabSize": 4
 			},
 			"[csc]": {
 				"editor.quickSuggestions": {
 					"other": "on",
 					"comments": "off",
 					"strings": "off"
-				}
+				},
+				"editor.insertSpaces": false,
+				"editor.tabSize": 4
+			},
+			"[gsh]": {
+				"editor.quickSuggestions": {
+					"other": "on",
+					"comments": "off",
+					"strings": "off"
+				},
+				"editor.insertSpaces": false,
+				"editor.tabSize": 4
 			}
 		}
 	},

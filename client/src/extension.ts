@@ -198,6 +198,37 @@ function registerIndexingStatusBar(
 
     const formatCount = (value: number) => value.toLocaleString();
 
+    // The ready tooltip is assembled from two independent sources — the indexing summary, which
+    // arrives once, and memory, which keeps changing — so it is held here and re-rendered
+    // whenever either moves. Building it inside a single notification handler is what left the
+    // memory figure frozen at whatever it was the instant indexing finished.
+    let indexSummary: { files: number; seconds: string } | undefined;
+    let memoryMegabytes: number | undefined;
+
+    const renderTooltip = () => {
+        if (indexSummary === undefined) {
+            return;
+        }
+
+        const lines = [
+            "**GSCode** — ready",
+            "",
+            `Indexed **${formatCount(indexSummary.files)}** files in **${indexSummary.seconds}s**`,
+        ];
+
+        if (memoryMegabytes !== undefined) {
+            lines.push(`Server memory **${memoryMegabytes.toFixed(0)} MB**`);
+        }
+
+        lines.push("", "_Click to open the server log._");
+        statusBar.tooltip = new vscode.MarkdownString(lines.join("\n"));
+    };
+
+    languageClient.onNotification("gscode/serverStatus", (params: { workingSetMegabytes: number }) => {
+        memoryMegabytes = params.workingSetMegabytes;
+        renderTooltip();
+    });
+
     languageClient.onNotification("gscode/indexingStarted", (params: { totalFiles: number }) => {
         statusBar.text = `$(sync~spin) GSCode: indexing 0/${formatCount(params.totalFiles)}`;
         statusBar.tooltip = `Indexing ${formatCount(params.totalFiles)} script files…`;
@@ -250,22 +281,17 @@ function registerIndexingStatusBar(
             elapsedMilliseconds: number;
             workingSetMegabytes: number;
         }) => {
-            const seconds = (params.elapsedMilliseconds / 1000).toFixed(1);
-            const memory = params.workingSetMegabytes.toFixed(0);
-
             statusBar.text = "$(check) GSCode: ready";
-            // Memory lives here rather than in the log: it is worth glancing at, and was
-            // previously only reachable by raising a log level and reading past everything else.
-            statusBar.tooltip = new vscode.MarkdownString(
-                [
-                    `**GSCode** — ready`,
-                    ``,
-                    `Indexed **${formatCount(params.filesIndexed)}** files in **${seconds}s**`,
-                    `Server memory **${memory} MB**`,
-                    ``,
-                    `_Click to open the server log._`,
-                ].join("\n"),
-            );
+
+            indexSummary = {
+                files: params.filesIndexed,
+                seconds: (params.elapsedMilliseconds / 1000).toFixed(1),
+            };
+            // A starting value, so the tooltip is complete before the first status push. It is
+            // then kept current by gscode/serverStatus rather than staying at this sample.
+            memoryMegabytes = params.workingSetMegabytes;
+
+            renderTooltip();
             // The server logs its own completion line; repeating it here would double it.
         },
     );

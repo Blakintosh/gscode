@@ -11,6 +11,15 @@ public sealed record IndexingStartedParams(int TotalFiles);
 /// <summary>Payload for gscode/indexingProgress.</summary>
 public sealed record IndexingProgressParams(int FilesIndexed, int TotalFiles);
 
+/// <summary>
+/// Payload for gscode/serverStatus: what the server is holding right now.
+///
+/// Sent on a change rather than a schedule, so an idle server produces no traffic at all. The
+/// status-bar tooltip is otherwise frozen at whatever memory happened to be in use the instant
+/// indexing finished, which is the least interesting moment to sample it.
+/// </summary>
+public sealed record ServerStatusParams(double WorkingSetMegabytes);
+
 /// <summary>Payload for gscode/indexingComplete.</summary>
 /// <param name="WorkingSetMegabytes">
 /// What the server is holding, so the status-bar tooltip can show it. The number was previously

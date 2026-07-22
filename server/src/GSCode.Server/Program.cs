@@ -80,6 +80,7 @@ LanguageServer server = await LanguageServer.From(options =>
             services.AddSingleton(provider =>
                 new DiagnosticsPublisher(provider.GetRequiredService<ILanguageServerFacade>()));
             services.AddSingleton<WorkspaceDiagnosticsPublisher>();
+            services.AddSingleton<ServerStatusNotifier>();
 
             services.AddSingleton<ScriptDatabase>();
             services.AddSingleton(BuiltinApiSet.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
@@ -278,7 +279,14 @@ LanguageServer server = await LanguageServer.From(options =>
                         PerfTracker.Report(line => Log.Information("Perf  {Scope}", line));
 
                         // Start reporting memory only now — during indexing it climbs steadily and
-                        // would spam. The monitor logs only on >= 1 MB changes from here on.
+                        // would spam. Both report only on >= 1 MB changes from here on.
+                        //
+                        // The status notifier is always on: it is one number for a tooltip, and
+                        // sends nothing once the server settles. The LOG monitor is the debugging
+                        // tool and stays behind the environment variable.
+                        _ = languageServer.Services.GetRequiredService<ServerStatusNotifier>()
+                            .RunAsync(CancellationToken.None);
+
                         if ( InstrumentationEnabled() )
                         {
                             _ = RunMemoryMonitorAsync(CancellationToken.None);

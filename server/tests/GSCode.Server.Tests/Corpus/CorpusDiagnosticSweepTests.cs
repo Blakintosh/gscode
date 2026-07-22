@@ -35,7 +35,8 @@ public class CorpusDiagnosticSweepTests
         _output = output;
     }
 
-    private sealed record Finding(GscDiagnosticCode Code, DiagnosticSeverity Severity, string Message, string Path);
+    private sealed record Finding(
+        GscDiagnosticCode Code, DiagnosticSeverity Severity, string Message, string Path, int Line, int Character);
 
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
@@ -69,7 +70,13 @@ public class CorpusDiagnosticSweepTests
                 foreach ( Diagnostic diagnostic in WorkspaceLints.Analyze(
                     result, language, path, database, resolver, builtins, objectFields) )
                 {
-                    findings.Add(new Finding(diagnostic.Code, diagnostic.Severity, diagnostic.Message, path));
+                    findings.Add(new Finding(
+                        diagnostic.Code,
+                        diagnostic.Severity,
+                        diagnostic.Message,
+                        path,
+                        diagnostic.Range.Start.Line,
+                        diagnostic.Range.Start.Character));
                 }
             }
             catch ( Exception )
@@ -92,12 +99,7 @@ public class CorpusDiagnosticSweepTests
 
         List<Finding> findings = await SweepAsync();
 
-        string? dump = Environment.GetEnvironmentVariable("GSCODE_SWEEP_DUMP");
-        if ( !string.IsNullOrEmpty(dump) )
-        {
-            File.WriteAllLines(dump, findings.Select(f => $"{(int)f.Code}	{f.Severity}	{f.Path}	{f.Message}"));
-            _output.WriteLine($"Wrote {findings.Count} findings to {dump}");
-        }
+        WriteReport(findings);
 
         _output.WriteLine($"{findings.Count} diagnostics across the stock corpus.");
         _output.WriteLine("");
@@ -167,5 +169,25 @@ public class CorpusDiagnosticSweepTests
         // preprocessor drops. A ceiling rather than an exact count, since the corpus is whatever
         // mod-tools version is installed.
         Assert.True(wrong < 20, $"{wrong} files told their system_shared import is unused while invoking REGISTER_SYSTEM");
+    }
+
+    /// <summary>
+    /// Writes the HTML report. Defaults to the user's temp folder rather than the repository: it
+    /// is a snapshot of whatever mod-tools install is on this machine, not a build artifact.
+    /// Set GSCODE_SWEEP_REPORT to put it somewhere else.
+    /// </summary>
+    private void WriteReport(List<Finding> findings)
+    {
+        string path = Environment.GetEnvironmentVariable("GSCODE_SWEEP_REPORT") is string configured
+            && configured.Length > 0
+                ? configured
+                : Path.Combine(Path.GetTempPath(), "gscode-corpus-sweep.html");
+
+        SweepReport.Write(
+            path,
+            [.. findings.Select(f => new SweepReport.Item(f.Code, f.Severity, f.Message, f.Path, f.Line, f.Character))],
+            CorpusFixture.RawRoot ?? "");
+
+        _output.WriteLine($"Report: {path}");
     }
 }

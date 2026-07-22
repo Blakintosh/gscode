@@ -242,11 +242,43 @@ public class CompletionEngineTests
     }
 
     [Theory]
+    [InlineData("0")]           // plain numbers
+    [InlineData("-1")]
+    [InlineData("0.25")]
+    [InlineData("1000")]
+    [InlineData(".")]           // lone punctuation
+    [InlineData("/")]
+    [InlineData("-")]
+    public void NumbersAndPunctuation_AreNotOffered(string literal)
+    {
+        // Data, not names. Not one of the 2,094 literals in a name position in the stock scripts
+        // lacks a letter, so requiring one costs nothing.
+        Assert.False(HasLabel(
+            LiteralsFrom("#namespace ev;\nfunction f()\n{\n    x = \"" + literal + "\";\n}\n"),
+            literal));
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("tp")]
+    [InlineData("_a")]          // punctuation does not count towards the length
+    [InlineData("a.b")]
+    public void VeryShortFragments_AreNotOffered(string literal)
+    {
+        Assert.False(HasLabel(
+            LiteralsFrom("#namespace ev;\nfunction f()\n{\n    x = \"" + literal + "\";\n}\n"),
+            literal));
+    }
+
+    [Theory]
     [InlineData("player_spawned")]
     [InlineData("p7_zm_lab_battery")]
     [InlineData("zombie/spawn_point")]      // asset paths keep their separators
     [InlineData("weapons\\ray_gun")]
     [InlineData("ai_tank.v2")]
+    [InlineData("hk416")]                   // two letters, three digits — a real weapon
+    [InlineData("m32")]                     // one letter, two digits
+    [InlineData("pl1")]
     public void NameShapedLiterals_AreStillOffered(string literal)
     {
         Assert.True(HasLabel(

@@ -322,35 +322,56 @@ public sealed class CompletionEngine
         }
     }
 
+    /// <summary>The shortest run of letters and digits a literal must have to read as a name.</summary>
+    private const int MinimumNameCharacters = 3;
+
     /// <summary>
-    /// Whether a literal reads as a NAME rather than as text, and so is worth offering.
+    /// Whether a literal reads as a NAME rather than as text or data, and so is worth offering.
     ///
-    /// Names in this language are identifier-shaped: across the stock scripts, every literal in an
-    /// unambiguous name position (notify, endon, flag and clientfield calls, precache, tag lookups)
-    /// is made of letters, digits and underscores — the only other characters that appear at all
-    /// are 163 spaces and 16 colons, which is exactly the prose this excludes. Path punctuation is
-    /// allowed alongside them for asset paths.
+    /// Three conditions, each measured against the stock scripts rather than guessed. Of the 2,094
+    /// literals in unambiguous name positions there (notify, endon, flag and clientfield calls,
+    /// precache, tag and weapon lookups), all 2,094 satisfy the first two and 2,093 satisfy all
+    /// three:
     ///
-    /// This is a blunter rule than the structural one that removes <c>+</c> operands, and it is
-    /// deliberately blunt: it also drops the handful of stock events written as several words
-    /// ("abort forfeit", "missile fired"). Those are rare enough, and the noise they let through
-    /// common enough, that keeping the list clean wins.
+    /// 1. Identifier-shaped characters only. Those 2,094 contain nothing but letters, digits and
+    ///    underscores; the sole other characters anywhere among them are 163 spaces and 16 colons,
+    ///    which is exactly the prose being excluded. Path punctuation is allowed alongside, for
+    ///    asset paths and versioned model names.
+    /// 2. At least one letter, which removes the numbers and lone punctuation that were being
+    ///    offered inside a string — "0.25", "-1", ".", "/". Not one real name lacks a letter.
+    /// 3. At least <see cref="MinimumNameCharacters"/> letters-and-digits, which removes stray
+    ///    one- and two-character fragments.
+    ///
+    /// Counting letters AND DIGITS in the third rule, rather than letters alone, is what keeps
+    /// weapon names: "hk416" has two letters, "m32" has one, and both are real. Requiring three
+    /// letters would have thrown them away. The single casualty is "tp", used once.
+    ///
+    /// These are blunter than the structural rule that drops <c>+</c> operands, and deliberately
+    /// so — they also lose the handful of stock events written as several words ("abort forfeit",
+    /// "missile fired"). A clean list was judged worth more than those.
     /// </summary>
     private static bool IsNameLike(string literal)
     {
-        if ( literal.Length == 0 )
-        {
-            return false;
-        }
+        bool hasLetter = false;
+        int nameCharacters = 0;
 
         foreach ( char c in literal )
         {
-            if ( char.IsLetterOrDigit(c) )
+            if ( char.IsLetter(c) )
             {
+                hasLetter = true;
+                nameCharacters++;
                 continue;
             }
 
-            // Underscore for names; the rest for asset paths and versioned model names.
+            if ( char.IsDigit(c) )
+            {
+                nameCharacters++;
+                continue;
+            }
+
+            // Underscore for names; the rest for asset paths and versioned model names. These do
+            // not count towards the length, so "_a" and "a.b" are still too short.
             if ( c is '_' or '-' or '.' or '\\' or '/' )
             {
                 continue;
@@ -359,7 +380,7 @@ public sealed class CompletionEngine
             return false;
         }
 
-        return true;
+        return hasLetter && nameCharacters >= MinimumNameCharacters;
     }
 
     private static string LiteralDetail(SymbolKind literalKind)

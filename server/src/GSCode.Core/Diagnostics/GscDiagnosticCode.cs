@@ -65,4 +65,7 @@ public enum GscDiagnosticCode
     /// definition a call reaches is not decided by the source.
     /// </summary>
     AmbiguousFunction = 5007,
+
+    /// <summary>A local that is assigned and never read. Information: dead, not broken.</summary>
+    UnusedLocal = 5008,
 }

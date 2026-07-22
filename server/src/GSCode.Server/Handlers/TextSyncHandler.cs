@@ -198,6 +198,33 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     {
         ParseResult result = _documents.Analyze(document);
         _diagnostics.Publish(uri, document.Version, WithWorkspaceLints(document, result));
+        CommitAndRefreshLenses(document, result);
+    }
+
+    /// <summary>
+    /// Folds the edited file's symbols back into the database and asks the client to re-request
+    /// code lenses.
+    ///
+    /// Without the commit, the reference index still held whatever the last INDEX pass saw, so
+    /// adding or removing a call left "N references" showing the old number until a reindex. The
+    /// refresh is needed on top: a lens count depends on every file that references the symbol,
+    /// which the client has no way to know changed, so editing file A never re-requested the
+    /// lenses shown in file B.
+    /// </summary>
+    private void CommitAndRefreshLenses(OpenDocument document, ParseResult result)
+    {
+        ResolutionContext context = _resolver.Current.GetContext(document.Path);
+        _database.Commit(result, context, isDirty: true, _resolver.Current.GetScriptRelativePath(document.Path, context));
+
+        if ( !_settings.CodeLensEnabled )
+        {
+            return;
+        }
+
+        // Fire-and-forget: a failed refresh is cosmetic, and this runs on the analysis path.
+        _ = _server.SendRequest("workspace/codeLens/refresh")
+            .ReturningVoid(CancellationToken.None)
+            .ContinueWith(static _ => { }, TaskScheduler.Default);
     }
 
     /// <summary>

@@ -19,6 +19,22 @@ public sealed class OpenDocument
     /// <summary>Latest completed analysis; null only before the first run finishes.</summary>
     public ParseResult? LatestResult { get; set; }
 
+    /// <summary>
+    /// The <see cref="Version"/> that <see cref="LatestResult"/> was produced from, or -1 before
+    /// the first run.
+    ///
+    /// Text updates synchronously on every keystroke while analysis is debounced, so between an
+    /// edit and the debounce firing these disagree. Any feature that pairs a LIVE cursor position
+    /// with the STALE result text is then reading the wrong characters entirely.
+    /// </summary>
+    public int AnalyzedVersion { get; set; } = -1;
+
+    /// <summary>True when the text has moved on since the last completed analysis.</summary>
+    public bool IsStale
+    {
+        get { return AnalyzedVersion != Version; }
+    }
+
     /// <summary>Cancels the in-flight debounced analysis when a newer edit arrives.</summary>
     public CancellationTokenSource? PendingAnalysis { get; set; }
 }
@@ -89,6 +105,10 @@ public sealed class DocumentStore
     /// <summary>Runs the full per-file pipeline on the document's current text.</summary>
     public ParseResult Analyze(OpenDocument document)
     {
+        // Read the version FIRST: an edit arriving mid-analysis must leave the document marked
+        // stale, not stamped with a version whose text was never analysed.
+        int version = document.Version;
+
         ParseResult result = ScriptAnalysis.Analyze(
             document.Path,
             document.Language,
@@ -97,6 +117,25 @@ public sealed class DocumentStore
             _names);
 
         document.LatestResult = result;
+        document.AnalyzedVersion = version;
         return result;
+    }
+
+    /// <summary>
+    /// The document's analysis, re-running it first when the text has moved on.
+    ///
+    /// For interactive, position-sensitive features — completion, signature help — where the
+    /// request carries a live cursor position that only means anything against matching text.
+    /// The debounce exists to keep diagnostics off the keystroke path; it must not make the
+    /// editor answer questions about text the user has already replaced.
+    /// </summary>
+    public ParseResult AnalyzeIfStale(OpenDocument document)
+    {
+        if ( !document.IsStale && document.LatestResult is not null )
+        {
+            return document.LatestResult;
+        }
+
+        return Analyze(document);
     }
 }

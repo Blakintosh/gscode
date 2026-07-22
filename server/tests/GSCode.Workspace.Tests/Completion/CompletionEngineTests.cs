@@ -260,6 +260,19 @@ public class CompletionEngineTests
         Assert.Equal("precache", precache.InsertText);
     }
 
+    [Theory]
+    [InlineData("#p")]
+    [InlineData("#pr")]
+    [InlineData("#pre")]
+    [InlineData("#preca")]
+    [InlineData("#precache")]
+    public void PartialDirective_WorksAtEveryPrefixLength(string typed)
+    {
+        // The lexer emits a half-typed directive as a single Error token and a bare '#' as Hash,
+        // so detection walks characters instead — which must hold at every length.
+        Assert.True(HasLabel(CompleteAfter(typed), "#precache"));
+    }
+
     [Fact]
     public void PartialDirective_DoesNotOfferPlainKeywords()
     {

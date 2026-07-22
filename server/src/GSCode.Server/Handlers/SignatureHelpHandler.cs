@@ -32,7 +32,9 @@ public sealed class SignatureHelpHandler : SignatureHelpHandlerBase
 
     public override Task<SignatureHelp?> Handle(SignatureHelpParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        // Fresh: the active argument is derived from the cursor, which moves with every
+        // keystroke while analysis is debounced.
+        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri);
         if ( target is null )
         {
             return Task.FromResult<SignatureHelp?>(null);

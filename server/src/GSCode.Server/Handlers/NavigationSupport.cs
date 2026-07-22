@@ -61,8 +61,33 @@ public sealed class NavigationSupport
     /// <summary>Resolves an open document, or null when it is unknown or not yet analysed.</summary>
     public NavigationTarget? Resolve(DocumentUri uri)
     {
+        return Resolve(uri, freshen: false);
+    }
+
+    /// <summary>
+    /// Resolves an open document, re-analysing first if the text has moved on since the last run.
+    ///
+    /// For features whose request carries a LIVE cursor position — completion and signature help.
+    /// Analysis is debounced by 250 ms, so mid-typing the cursor offset lands in text the user has
+    /// already replaced: at <c>#pre</c> the stale text might still read <c>#p</c>, the '#'-context
+    /// check reads the wrong characters, and completion falls back to statement scope and offers
+    /// `private`. That it worked whenever the user paused is exactly the tell.
+    /// </summary>
+    public NavigationTarget? ResolveFresh(DocumentUri uri)
+    {
+        return Resolve(uri, freshen: true);
+    }
+
+    private NavigationTarget? Resolve(DocumentUri uri, bool freshen)
+    {
         string path = uri.GetFileSystemPath();
-        if ( !_documents.TryGet(path, out OpenDocument document) || document.LatestResult is null )
+        if ( !_documents.TryGet(path, out OpenDocument document) )
+        {
+            return null;
+        }
+
+        ParseResult? result = freshen ? _documents.AnalyzeIfStale(document) : document.LatestResult;
+        if ( result is null )
         {
             return null;
         }
@@ -70,13 +95,13 @@ public sealed class NavigationSupport
         ResolutionContext context = _resolver.Current.GetContext(document.Path);
 
         return new NavigationTarget(
-            document.LatestResult,
+            result,
             document.Path,
             document.Language,
             _database.StoreFor(document.Language),
             _database.StoresFor(document.Language),
             ScriptDatabase.ContextIdOf(context),
-            DatabaseQueries.DeclaredNamespaces(document.LatestResult));
+            DatabaseQueries.DeclaredNamespaces(result));
     }
 
     /// <summary>

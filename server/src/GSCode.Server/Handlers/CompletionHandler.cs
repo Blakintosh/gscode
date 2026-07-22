@@ -57,7 +57,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
 
     public override Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        // Fresh: the cursor position is live, so it only means anything against live text.
+        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri);
         if ( target is null )
         {
             return Task.FromResult(new CompletionList());

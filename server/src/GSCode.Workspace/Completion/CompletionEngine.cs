@@ -214,9 +214,14 @@ public sealed class CompletionEngine
                 continue;
             }
 
-            // The script-relative path without extension is what #using and #insert expect.
-            string path = (System.IO.Path.ChangeExtension(record.RelativePath, null) ?? record.RelativePath)
-                .Replace('/', '\\');
+            // #insert writes the extension, #using does not — an asymmetry of the language, not
+            // of this code, and unanimous across the stock scripts: all 2,137 #inserts end in
+            // .gsh and all 7,738 #usings are bare. Keeping the extension for #insert also makes
+            // the segmenting below fall out for free, since the leaf is simply "shared.gsh".
+            string relative = record.RelativePath.Replace('/', '\\');
+            string path = isInsert
+                ? relative
+                : System.IO.Path.ChangeExtension(relative, null) ?? relative;
 
             if ( !path.StartsWith(directory, StringComparison.OrdinalIgnoreCase) )
             {
@@ -382,8 +387,12 @@ public sealed class CompletionEngine
                 return "using_animtree( \"$1\" );$0";
             case "#using":
             case "#insert":
+                // Pre-fill the root: every one of the 9,875 path directives in the stock scripts
+                // starts at `scripts\`, so typing it is pure ceremony. The cursor lands after the
+                // separator, where completion reopens on that folder's contents.
+                return withoutHash + " scripts\\$1;$0";
             case "#namespace":
-                return withoutHash + " $1;$0";
+                return "namespace $1;$0";
             case "#define":
                 // No semicolon: a #define runs to the end of the line.
                 return "define $1 $0";

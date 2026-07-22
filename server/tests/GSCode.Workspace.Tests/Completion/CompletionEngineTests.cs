@@ -265,8 +265,8 @@ public class CompletionEngineTests
     [Theory]
     [InlineData("#precache", "precache( \"$1\", \"$2\" );$0")]
     [InlineData("#using_animtree", "using_animtree( \"$1\" );$0")]
-    [InlineData("#using", "using $1;$0")]
-    [InlineData("#insert", "insert $1;$0")]
+    [InlineData("#using", @"using scripts\$1;$0")]
+    [InlineData("#insert", @"insert scripts\$1;$0")]
     [InlineData("#namespace", "namespace $1;$0")]
     public void AcceptingADirective_InsertsItsWholeForm(string directive, string expected)
     {
@@ -387,7 +387,36 @@ public class CompletionEngineTests
         // directives from one store offered #insert the .gsc files it can never include.
         ImmutableArray<CompletionEntry> entries = CompletePath(@"#insert scripts\shared\");
 
-        Assert.Equal("shared", Assert.Single(entries).Label);
+        // With the .gsh, because #insert writes the extension and #using does not.
+        Assert.Equal("shared.gsh", Assert.Single(entries).Label);
+    }
+
+    [Fact]
+    public void Insert_KeepsTheExtension_WhileUsingDropsIt()
+    {
+        // An asymmetry of the language, not of this code, and unanimous across the stock
+        // scripts: all 2,137 #inserts end in .gsh and all 7,738 #usings are bare.
+        Assert.Equal("shared.gsh", Entry(CompletePath(@"#insert scripts\shared\"), "shared.gsh").InsertText);
+        Assert.Equal("_arena", Entry(CompletePath(@"#using scripts\mp\"), "_arena").InsertText);
+    }
+
+    [Fact]
+    public void PathDirectives_PreFillTheScriptsRoot()
+    {
+        // Every one of the 9,875 path directives in the stock scripts starts at `scripts\`, so
+        // typing it is pure ceremony. The cursor lands after the separator, where the retrigger
+        // reopens on that folder's contents.
+        Assert.Equal(@"using scripts\$1;$0", Entry(CompleteAfter("#"), "#using").InsertText);
+        Assert.Equal(@"insert scripts\$1;$0", Entry(CompleteAfter("#"), "#insert").InsertText);
+    }
+
+    [Fact]
+    public void ThePreFilledRootLandsOnANonEmptyList()
+    {
+        // Where the snippet leaves the cursor must be a folder that actually has contents,
+        // otherwise the retrigger opens an empty list.
+        Assert.NotEmpty(CompletePath(@"#using scripts\"));
+        Assert.NotEmpty(CompletePath(@"#insert scripts\"));
     }
 
     [Fact]

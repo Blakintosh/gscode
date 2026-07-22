@@ -29,12 +29,79 @@ public class MacroExpansionPreviewTests
     [Fact]
     public void FunctionLikeMacro_RendersItsBody()
     {
-        // The reported IS_TRUE shape.
+        // The reported IS_TRUE shape. With no call site there is nothing to substitute, so the
+        // parameter names stand — which is what hovering the DEFINITION should show.
         string preview = MacroExpansionPreview.Render(
             BodyOf("#define IS_TRUE(__a) (isdefined(__a) && __a)\n", "IS_TRUE"));
 
         Assert.Contains("isdefined", preview);
         Assert.Contains("__a", preview);
+    }
+
+    // --- Substituting the call site's arguments ---
+
+    private static ImmutableArray<string> ParametersOf(string source, string macroName)
+    {
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        Assert.True(result.Preprocessed.Macros.TryGet(macroName, out MacroDefinition definition));
+        return definition.Parameters ?? [];
+    }
+
+    [Fact]
+    public void ArgumentsReplaceTheParameterNames()
+    {
+        // The reported want: hovering `IS_TRUE( foo )` should read what it expands to, rather
+        // than the macro's own parameter names read back at you.
+        const string source = "#define IS_TRUE(__a) (isdefined(__a) && __a)\n";
+
+        string preview = MacroExpansionPreview.Render(
+            BodyOf(source, "IS_TRUE"), ParametersOf(source, "IS_TRUE"), ["foo"]);
+
+        Assert.Contains("foo", preview);
+        Assert.DoesNotContain("__a", preview);
+    }
+
+    [Fact]
+    public void SubstitutionIsPerTokenNotTextual()
+    {
+        // A parameter named `a` replaced textually would also rewrite the `a` inside `value`.
+        const string source = "#define USE(a) helper( a, value )\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "USE"), ParametersOf(source, "USE"), ["x"]);
+
+        Assert.Contains("value", preview);
+        Assert.Contains("x", preview);
+    }
+
+    [Fact]
+    public void UnsuppliedParametersKeepTheirNames()
+    {
+        // A half-written invocation should show what is actually known.
+        const string source = "#define PAIR(a, b) use( a, b )\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "PAIR"), ParametersOf(source, "PAIR"), ["first"]);
+
+        Assert.Contains("first", preview);
+        Assert.Contains("b", preview);
+    }
+
+    [Theory]
+    [InlineData("IS_TRUE( foo )", new[] { "foo" })]
+    [InlineData("PAIR( a, b )", new[] { "a", "b" })]
+    [InlineData("OUTER( inner( a, b ), c )", new[] { "inner( a, b )", "c" })]
+    [InlineData("INDEXED( things[0, 1], c )", new[] { "things[0, 1]", "c" })]
+    public void ArgumentsAreSplitOnTopLevelCommas(string invocation, string[] expected)
+    {
+        // Nesting matters: a comma inside a nested call belongs to that call, not to this one.
+        Assert.Equal(expected, MacroExpansionPreview.ParseArguments(invocation));
+    }
+
+    [Fact]
+    public void AnObjectLikeMacroHasNoArgumentList()
+    {
+        Assert.Empty(MacroExpansionPreview.ParseArguments("MAX_PLAYERS"));
     }
 
     [Fact]

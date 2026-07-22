@@ -47,7 +47,7 @@ public sealed class HoverHandler : HoverHandlerBase
         PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
         if ( hit.Kind == HitKind.Reference )
         {
-            string? markdown = RenderHover(target, hit.Key);
+            string? markdown = RenderHover(target, hit.Key, hit.Range);
             if ( markdown is null )
             {
                 return Task.FromResult<Hover?>(null);
@@ -85,7 +85,7 @@ public sealed class HoverHandler : HoverHandlerBase
         return Task.FromResult<Hover?>(null);
     }
 
-    private string? RenderHover(NavigationTarget target, SymbolKey key)
+    private string? RenderHover(NavigationTarget target, SymbolKey key, TextRange hitRange)
     {
         switch ( key.Kind )
         {
@@ -111,7 +111,9 @@ public sealed class HoverHandler : HoverHandlerBase
             case SymbolKind.Macro:
             {
                 MacroRecord? macro = FindMacro(target, key.Name);
-                return macro is not null ? MarkdownDocRenderer.RenderMacro(macro, FindMacroExpansion(target, key.Name)) : null;
+                return macro is not null
+                    ? MarkdownDocRenderer.RenderMacro(macro, FindMacroExpansion(target, key.Name, hitRange))
+                    : null;
             }
             case SymbolKind.Field:
                 return RenderField(key.Name, target.Language);
@@ -126,20 +128,58 @@ public sealed class HoverHandler : HoverHandlerBase
     }
 
     /// <summary>
-    /// The macro's body rendered for preview. Read from the live MacroDefinition, which carries
-    /// the body, rather than from the record, which deliberately does not.
+    /// The macro's body rendered for preview, with THIS call site's arguments substituted where
+    /// the hover is on an invocation — `IS_TRUE( foo )` reads `isdefined( foo ) && foo` rather
+    /// than showing the macro's own parameter names back to the reader.
+    ///
+    /// Hovering the DEFINITION has no arguments to substitute, so it keeps the parameter names,
+    /// which is what a definition should show.
     /// </summary>
-    private static string FindMacroExpansion(NavigationTarget target, string name)
+    private static string FindMacroExpansion(NavigationTarget target, string name, TextRange hitRange)
     {
         foreach ( GSCode.Parser.Preprocessing.MacroDefinition definition in target.Result.Preprocessed.Macros.All )
         {
-            if ( string.Equals(definition.Name, name, StringComparison.Ordinal) )
+            if ( !string.Equals(definition.Name, name, StringComparison.Ordinal) )
             {
-                return MacroExpansionPreview.Render(definition.Body);
+                continue;
             }
+
+            return MacroExpansionPreview.Render(
+                definition.Body,
+                definition.Parameters ?? [],
+                ArgumentsAt(target, hitRange));
         }
 
         return "";
+    }
+
+    /// <summary>
+    /// The arguments written at the invocation covering <paramref name="hitRange"/>, or none when
+    /// the hover is not on one. An invocation records where it is and what it calls but not what
+    /// it was passed, so the text is read back out of the file.
+    /// </summary>
+    private static ImmutableArray<string> ArgumentsAt(NavigationTarget target, TextRange hitRange)
+    {
+        foreach ( GSCode.Parser.Preprocessing.MacroInvocation invocation in target.Result.Preprocessed.MacroInvocations )
+        {
+            // Only invocations written in THIS file: one reached through an #insert has its text
+            // in another file that is not loaded here.
+            if ( invocation.SourceFile is not null || !invocation.Range.Contains(hitRange.Start) )
+            {
+                continue;
+            }
+
+            int start = target.Result.Text.GetOffset(invocation.Range.Start);
+            int end = target.Result.Text.GetOffset(invocation.Range.End);
+            if ( end <= start || end > target.Result.Text.Length )
+            {
+                return [];
+            }
+
+            return MacroExpansionPreview.ParseArguments(target.Result.Text.Text[start..end]);
+        }
+
+        return [];
     }
 
     private MacroRecord? FindMacro(NavigationTarget target, string name)

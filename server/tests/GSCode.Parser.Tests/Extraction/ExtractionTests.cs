@@ -148,15 +148,20 @@ public class ExtractionTests
             diagnostic => diagnostic.Code == GscDiagnosticCode.UnknownPrecacheType);
     }
 
-    [Fact]
-    public void DefaultParameter_MustBePlainValue()
+    [Theory]
+    [InlineData("a = 1, b = -2.5, c = (0,0,0), d = \"x\"")]   // literals and vectors
+    [InlineData("reqs = []")]                                // system_shared's register()
+    [InlineData("give_fn = &default_give")]                  // a function pointer
+    [InlineData("slot = self.piece.inventory_slot")]         // a member read
+    [InlineData("weapon = undefined")]
+    [InlineData("v = get_default()")]                        // even a call
+    public void AnyDefaultParameterValueIsAccepted(string parameters)
     {
+        // A default is evaluated in the function BODY when the argument arrives undefined, so
+        // anything the body could contain is legal there. The old "literals and vectors only"
+        // rule reported 21 errors across 8 shipped scripts, every one of them wrong.
         Assert.DoesNotContain(
-            Analyze("function f( a = 1, b = -2.5, c = (0,0,0), d = \"x\" )\n{\n}").AllDiagnostics,
-            diagnostic => diagnostic.Code == GscDiagnosticCode.NonValueDefaultParameter);
-
-        Assert.Contains(
-            Analyze("function f( a = get_default() )\n{\n}").AllDiagnostics,
+            Analyze($"function f( {parameters} )\n{{\n}}").AllDiagnostics,
             diagnostic => diagnostic.Code == GscDiagnosticCode.NonValueDefaultParameter);
     }
 

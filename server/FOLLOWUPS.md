@@ -10,6 +10,20 @@ per-project `FOLDER.md` convention).
 
 ## Backlog
 
+### `gscode-5000 NamespaceNotImported` should be an Error, not a Warning
+
+Calling into a namespace no `#using` imports fails to LINK at runtime — the script does not load.
+That is a broken build, not a matter of style, and the severity should say so.
+
+Left as a follow-up rather than flipped immediately because the lint has only just stopped
+misfiring: it reported 23 false positives on class-method calls until `NamespaceUsageLint` learned
+to skip class qualifiers, and it now reports zero across the stock corpus. Give it some real-world
+use at Warning first; promoting a rule to Error the same day its false positives were fixed is how
+you end up with red squiggles on working code.
+
+`CorpusDiagnosticSweepTests.NoNamespaceIsReportedUnimported` asserts the zero, so a regression
+shows up before the promotion does.
+
 ### Two findings left from the corpus diagnostic sweep
 
 `CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since

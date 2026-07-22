@@ -62,9 +62,11 @@ public class CorpusDiagnosticSweepTests
             {
                 GSCode.Parser.ParseResult result = CorpusFixture.Analyze(path, resolver, names);
 
-                // Lints only: parse diagnostics are already covered by the lex/parse gate, and
-                // mixing them in would bury the cross-file findings this is looking for.
-                foreach ( Diagnostic diagnostic in WorkspaceLints.LintsOnly(
+                // EVERYTHING the editor would show: the file's own parse and semantic
+                // diagnostics as well as the cross-file lints. Reporting lints alone hid the
+                // 4000-series entirely -- precache rules, default-parameter rules, duplicate
+                // functions -- which is most of what a user actually sees underlined.
+                foreach ( Diagnostic diagnostic in WorkspaceLints.Analyze(
                     result, language, path, database, resolver, builtins, objectFields) )
                 {
                     findings.Add(new Finding(diagnostic.Code, diagnostic.Severity, diagnostic.Message, path));
@@ -97,7 +99,7 @@ public class CorpusDiagnosticSweepTests
             _output.WriteLine($"Wrote {findings.Count} findings to {dump}");
         }
 
-        _output.WriteLine($"{findings.Count} lint diagnostics across the stock corpus.");
+        _output.WriteLine($"{findings.Count} diagnostics across the stock corpus.");
         _output.WriteLine("");
 
         foreach ( IGrouping<GscDiagnosticCode, Finding> group in findings

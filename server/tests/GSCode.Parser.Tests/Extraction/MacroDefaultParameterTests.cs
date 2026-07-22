@@ -10,9 +10,14 @@ using Xunit;
 namespace GSCode.Parser.Tests.Extraction;
 
 /// <summary>
-/// A macro is a compile-time constant, so it is a legal parameter default however it expands.
-/// The spec rule ("plain values only") is about rejecting function references and variables, not
-/// about rejecting the preprocessor.
+/// Parameter defaults are unrestricted: the value is evaluated in the function BODY when the
+/// argument arrives undefined, so anything the body could contain is legal there.
+///
+/// These began as tests that a MACRO default survived a "plain values only" rule. That rule is
+/// gone — it reported 21 errors across 8 shipped scripts, on empty arrays, function pointers and
+/// member reads that core files use — so what they now pin is that nothing is reported at all.
+/// Kept rather than deleted because the macro cases were a real reported bug, and a future
+/// narrowing of the rule must not resurrect it.
 /// </summary>
 public class MacroDefaultParameterTests
 {
@@ -46,16 +51,16 @@ public class MacroDefaultParameterTests
         Assert.False(HasDefaultValueError(Analyze("function f( a = 5, b = \"x\", c = ( 0, 0, 1 ), d = -1 )\n{\n}\n")));
     }
 
-    [Fact]
-    public void FunctionCallDefault_IsStillRejected()
+    [Theory]
+    [InlineData("a = get_value()")]
+    [InlineData("a = some_variable")]
+    [InlineData("reqs = []")]
+    [InlineData("give_fn = &default_give")]
+    public void NothingIsRejectedAnyMore(string parameters)
     {
-        // The rule still has to catch what it exists for.
-        Assert.True(HasDefaultValueError(Analyze("function f( a = get_value() )\n{\n}\n")));
-    }
-
-    [Fact]
-    public void VariableDefault_IsStillRejected()
-    {
-        Assert.True(HasDefaultValueError(Analyze("function f( a = some_variable )\n{\n}\n")));
+        // The last two are why the rule went: `function register( ..., reqs = [] )` in
+        // system_shared is called from everywhere, and `&default_give` is an ordinary callback
+        // default. Both were reported as errors.
+        Assert.False(HasDefaultValueError(Analyze($"function f( {parameters} )\n{{\n}}\n")));
     }
 }

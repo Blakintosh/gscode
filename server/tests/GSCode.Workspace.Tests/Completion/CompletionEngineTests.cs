@@ -191,6 +191,42 @@ public class CompletionEngineTests
         Assert.True(HasLabel(entries, "death"));
     }
 
+    // --- A name you just invented ---
+    //
+    // The point of the feature, and the reason the filtering above is structural rather than
+    // based on how often a string is used: writing `self notify( "foobarbaz" );` and then
+    // `self endon( "` on the next line has to offer foobarbaz, even though it exists nowhere
+    // else in the workspace and has been written exactly once.
+
+    [Fact]
+    public void ANameJustTypedInThisFile_IsOfferedImmediately()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        // The second string is still open, exactly as it is mid-keystroke.
+        string text = "#namespace game;\nfunction run()\n{\n    self notify( \"foobarbaz\" );\n    self endon( \"\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 17));
+
+        Assert.True(HasLabel(entries, "foobarbaz"));
+    }
+
+    [Fact]
+    public void ANameJustTypedInThisFile_IsOfferedEvenWithTheStringClosed()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\nfunction run()\n{\n    self notify( \"foobarbaz\" );\n    self endon( \"\" );\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 17));
+
+        Assert.True(HasLabel(entries, "foobarbaz"));
+    }
+
     [Fact]
     public void InsideStringLiteral_OffersNothing_WhenLiteralsDisabled()
     {

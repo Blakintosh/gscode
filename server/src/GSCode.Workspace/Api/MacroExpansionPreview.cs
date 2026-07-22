@@ -83,10 +83,34 @@ public static class MacroExpansionPreview
     }
 
     /// <summary>
+    /// The argument list following a macro NAME at <paramref name="afterName"/>, split on
+    /// top-level commas.
+    ///
+    /// A MacroInvocation's range covers the name alone — <c>IS_TRUE</c>, not <c>IS_TRUE( v )</c> —
+    /// so the arguments have to be read from the text that follows it. Anything other than an
+    /// opening parenthesis next means the macro is object-like and takes none.
+    /// </summary>
+    public static ImmutableArray<string> ArgumentsFollowing(string text, int afterName)
+    {
+        int scan = afterName;
+        while ( scan < text.Length && char.IsWhiteSpace(text[scan]) )
+        {
+            scan++;
+        }
+
+        if ( scan >= text.Length || text[scan] != '(' )
+        {
+            return [];
+        }
+
+        return ParseArguments(text[scan..]);
+    }
+
+    /// <summary>
     /// The argument list written at a call site, split on top-level commas.
     ///
-    /// Read from the invocation's own text because a MacroInvocation records WHERE it is and WHAT
-    /// it calls, but not what it was passed. Nesting is respected, so
+    /// Read from the call site's text because a MacroInvocation records WHERE it is and WHAT it
+    /// calls, but not what it was passed. Nesting is respected, so
     /// <c>OUTER( inner( a, b ), c )</c> yields two arguments rather than three.
     /// </summary>
     public static ImmutableArray<string> ParseArguments(string invocationText)

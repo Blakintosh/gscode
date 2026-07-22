@@ -169,14 +169,15 @@ public sealed class HoverHandler : HoverHandlerBase
                 continue;
             }
 
-            int start = target.Result.Text.GetOffset(invocation.Range.Start);
-            int end = target.Result.Text.GetOffset(invocation.Range.End);
-            if ( end <= start || end > target.Result.Text.Length )
+            // The range covers the NAME only — `IS_TRUE`, not `IS_TRUE( v )` — so the arguments
+            // are read from the text that follows it.
+            int afterName = target.Result.Text.GetOffset(invocation.Range.End);
+            if ( afterName <= 0 || afterName > target.Result.Text.Length )
             {
                 return [];
             }
 
-            return MacroExpansionPreview.ParseArguments(target.Result.Text.Text[start..end]);
+            return MacroExpansionPreview.ArgumentsFollowing(target.Result.Text.Text, afterName);
         }
 
         return [];

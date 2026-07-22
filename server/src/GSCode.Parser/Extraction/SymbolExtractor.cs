@@ -784,9 +784,18 @@ public sealed class SymbolExtractor
                 continue;
             }
 
+            // The collision is a NAMESPACE one, not a file one: the key above is already
+            // namespace-qualified, and two files may share a namespace, so saying "in this file"
+            // described the search rather than the rule. Files that share the namespace without
+            // being linked together are the cross-file lint's business, since only the importer
+            // knows which of them meet.
             DiagnosticRelation relation = new(_rootFilePath, first.NameRange, "First defined here.");
             Diagnostic duplicate = Diagnostic.Create(
-                function.NameRange, DiagnosticSeverity.Error, GscDiagnosticCode.DuplicateFunction, function.Name);
+                function.NameRange,
+                DiagnosticSeverity.Error,
+                GscDiagnosticCode.DuplicateFunction,
+                function.Name,
+                function.Namespace);
 
             _diagnostics.Add(duplicate with { RelatedInformation = [relation] });
         }

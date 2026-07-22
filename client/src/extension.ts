@@ -113,6 +113,90 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     log.info("GSCode language client started");
 
     registerRenameDirectiveFixup(context, created, log);
+    registerSemicolonDeduplication(context);
+}
+
+/**
+ * Removes the second of two adjacent semicolons, right after one is typed.
+ *
+ * Completion finishes a statement call with its `;`, and finishing the line with `);` is muscle
+ * memory — so the semicolon needs the same "type over it" behaviour the editor already gives the
+ * closing parenthesis through `editor.autoClosingOvertype`.
+ *
+ * This lives client-side rather than in the server's on-type formatting handler, which is where it
+ * belongs conceptually, because VSCode only sends `textDocument/onTypeFormatting` when
+ * `editor.formatOnType` is enabled — and that is off by default. Turning it on to reach the
+ * handler would also run the whole document formatter on every `}` and `;` as the user types,
+ * which is a far larger change than swallowing one character.
+ */
+function registerSemicolonDeduplication(context: vscode.ExtensionContext): void {
+    const languages = new Set(["gsc", "csc", "gsh"]);
+
+    // Our own edit fires this event again; without the guard it would recurse.
+    let applying = false;
+
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument(async (event) => {
+            if (applying || !languages.has(event.document.languageId) || event.contentChanges.length !== 1) {
+                return;
+            }
+
+            const change = event.contentChanges[0];
+            // A single typed ';' — not a paste, not a replacement.
+            if (change.text !== ";" || !change.range.isEmpty) {
+                return;
+            }
+
+            const after = change.range.start.translate(0, 1);
+            const following = new vscode.Range(after, after.translate(0, 1));
+            if (event.document.getText(following) !== ";") {
+                return;
+            }
+
+            // `for ( ;; )` is the language, not a mistake.
+            const line = event.document.lineAt(after.line).text;
+            if (isInsideForHeader(line, after.character)) {
+                return;
+            }
+
+            const editor = vscode.window.visibleTextEditors.find((e) => e.document === event.document);
+            if (editor === undefined) {
+                return;
+            }
+
+            applying = true;
+            try {
+                // Delete the one AHEAD of the cursor rather than the one just typed: the visible
+                // result is identical, and the cursor is left after the surviving semicolon
+                // instead of before it.
+                await editor.edit((builder) => builder.delete(following), {
+                    undoStopBefore: false,
+                    undoStopAfter: false,
+                });
+            } finally {
+                applying = false;
+            }
+        }),
+    );
+}
+
+/** Whether `character` sits inside a `for ( … )` header on this line. */
+function isInsideForHeader(line: string, character: number): boolean {
+    let depth = 0;
+
+    for (let index = character - 1; index >= 0; index--) {
+        const c = line[index];
+        if (c === ")") {
+            depth++;
+        } else if (c === "(") {
+            if (depth === 0) {
+                return /\bfor\s*$/.test(line.slice(0, index));
+            }
+            depth--;
+        }
+    }
+
+    return false;
 }
 
 /**

@@ -107,6 +107,38 @@ Still open whenever the pass happens: line wrapping (there is none — long argu
 one line), alignment of consecutive assignments, and whether `#insert`ed regions should be
 reformatted at all.
 
+**On-type formatting reformats the whole document, and is dormant only by accident.**
+`DocumentOnTypeFormattingHandler` runs `FormatMinimal` over the entire file on every `;` and `}`.
+Nobody has hit it because VSCode only sends `textDocument/onTypeFormatting` when
+`editor.formatOnType` is enabled, and that is off by default — so a user who turns it on today
+finds a single keystroke reformatting their whole file. That is the wrong semantics regardless:
+on-type formatting is specified as a LOCAL fix-up, and LSP hands the handler the position and the
+character precisely so it can be one.
+
+The fix is bounded and does not touch `GscFormatter`: keep the formatter as the source of truth
+for what the indentation should be, then CLIP the resulting edit to the line being typed on and
+drop it if it reaches further. With that done, `editor.formatOnType: true` can join the other
+`configurationDefaults` for the GSC languages, and `}` will dedent as you type.
+
+**Do not gate the semicolon de-duplication on that setting.** It lives client-side in
+`extension.ts` and runs unconditionally, which is the point — it has to work whether or not
+`formatOnType` is on. The tempting alternative, reading `editor.formatOnType` and choosing a
+client- or server-side implementation, trades a harmless outcome (both run; the second finds
+nothing left to do) for a broken one (neither runs), and breaks in the way that is hardest to
+notice. The setting also resolves per-language, per-workspace and per-folder and can change
+mid-session, so each of those is a chance to guess wrong in the silent direction.
+
+Split by RESPONSIBILITY instead, and the two never contend:
+
+| Job | Owner | Why |
+|---|---|---|
+| Semicolon de-duplication | Client, always | Must work regardless of any setting; idempotent, so it costs nothing when there is no duplicate |
+| `}` auto-dedent while typing | Server, gated by `formatOnType` | Genuinely IS format-on-type, and has no client-side equivalent to overlap with |
+
+Querying the CLIENT'S CAPABILITIES at `initialize` is a different matter and remains fine — that
+is a fact about the client. A user preference is not, and switching implementations on one ages
+badly.
+
 ---
 
 ## Known limitations from the triage pass

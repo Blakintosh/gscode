@@ -52,10 +52,9 @@ public sealed class ServerStatusNotifier
                 if ( Math.Abs(workingSetBytes - lastSentBytes) >= ReportThresholdBytes )
                 {
                     lastSentBytes = workingSetBytes;
-                    double megabytes = workingSetBytes / (1024.0 * 1024.0);
+                    double megabytes = workingSetBytes / ReportThresholdBytes;
 
                     _server.SendNotification("gscode/serverStatus", new ServerStatusParams(megabytes));
-                    Log.Verbose("Server memory: {Megabytes:F1} MB", megabytes);
                 }
 
                 await Task.Delay(SampleInterval, cancellationToken).ConfigureAwait(false);

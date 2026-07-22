@@ -175,6 +175,7 @@ LanguageServer server = await LanguageServer.From(options =>
             }
 
             Log.Information("Initialize received from {ClientName}", request.ClientInfo?.Name ?? "unknown client");
+            LogEffectiveSettings(settings);
             return Task.CompletedTask;
         })
         .OnInitialized((languageServer, request, response, cancellationToken) =>
@@ -446,6 +447,27 @@ static bool CompactIfFragmented()
 // restore just deserializes records. If the LIVE numbers match across a cold and a warm start
 // while the working set differs, the extra footprint is grown, uncompacted heap rather than
 // retained data — and a one-time compacting collect here is the fix.
+/// <summary>
+/// The settings that shape behaviour, logged once at startup at Information — so they are in the
+/// log a user attaches to a bug report without anyone having to ask for a higher level first.
+/// </summary>
+static void LogEffectiveSettings(ServerSettings settings)
+{
+    Log.Information("Settings: {Settings}", settings.EffectiveSummary);
+
+    // Only when set: an override is unusual and worth seeing, but a line saying "no override" on
+    // every start would be noise.
+    if ( settings.RawPathOverride.Length > 0 )
+    {
+        Log.Information("Setting: rawPath overridden to {Path}", settings.RawPathOverride);
+    }
+
+    if ( settings.ModsPathOverride.Length > 0 )
+    {
+        Log.Information("Setting: modsPath overridden to {Path}", settings.ModsPathOverride);
+    }
+}
+
 /// <summary>
 /// The detailed memory breakdown, at Verbose.
 ///

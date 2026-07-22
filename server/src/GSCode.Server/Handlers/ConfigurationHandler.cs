@@ -4,6 +4,7 @@ using MediatR;
 using Newtonsoft.Json.Linq;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
+using Serilog;
 using Serilog.Core;
 
 namespace GSCode.Server.Handlers;
@@ -33,9 +34,19 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
         }
 
         string previousScope = _settings.DiagnosticsScope;
+        string previousSummary = _settings.EffectiveSummary;
 
         _settings.Apply(settingsRoot);
         _levelSwitch.MinimumLevel = ServerLogLevel.FromSetting(_settings.ServerLogLevel);
+
+        // Only when something that matters actually moved. Clients push their whole configuration
+        // on any settings edit, so logging unconditionally would write this line every time the
+        // user changed a font size. Knowing a setting changed mid-session answers the other half
+        // of "why is it doing that" — the half a startup line cannot.
+        if ( !string.Equals(previousSummary, _settings.EffectiveSummary, StringComparison.Ordinal) )
+        {
+            Log.Information("Settings changed: {Settings}", _settings.EffectiveSummary);
+        }
 
         // Only on an actual change: a republish walks every record, and clients push their whole
         // configuration on any settings edit, most of which has nothing to do with us.

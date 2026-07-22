@@ -37,6 +37,33 @@ public sealed class ServerSettings
     /// <summary>The longest run of blank lines the formatter preserves.</summary>
     public int FormatMaxBlankLines { get; set; } = 2;
 
+    /// <summary>
+    /// The settings that actually change what the server does, as one line.
+    ///
+    /// Logged at startup and again whenever it changes, because nearly every "why is it doing
+    /// that" turns out to be one of these — indexing off, the cache serving a stale record,
+    /// diagnostics scoped to open files, raw resolution disabled — and none is visible from the
+    /// symptom alone. Being a single string also makes "did anything meaningful change" a string
+    /// comparison rather than a field-by-field diff.
+    ///
+    /// Deliberately not every setting: a dump of all of them is one nobody reads.
+    /// </summary>
+    public string EffectiveSummary
+    {
+        get
+        {
+            return $"indexing={WorkspaceIndexingMode}, cache={OnOff(EnableWorkspaceCache)}, "
+                + $"diagnostics={DiagnosticsScope}, raw={OnOff(RawEnabled)}, "
+                + $"rawWarning={RawFileWarningMode}, codeLens={OnOff(CodeLensEnabled)}, "
+                + $"log={ServerLogLevel}";
+        }
+    }
+
+    private static string OnOff(bool value)
+    {
+        return value ? "on" : "off";
+    }
+
     /// <summary>Applies a { "gscode": { ... } } payload; missing keys keep their current values.</summary>
     public void Apply(JToken settingsRoot)
     {

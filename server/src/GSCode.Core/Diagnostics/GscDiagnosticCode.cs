@@ -71,4 +71,10 @@ public enum GscDiagnosticCode
 
     /// <summary>A #using whose target does not exist. The script will not link.</summary>
     UsingNotFound = 5009,
+
+    /// <summary>`case undefined:` — nothing equals undefined in a switch, so the branch is dead.</summary>
+    CaseUndefined = 5010,
+
+    /// <summary>A case label that is not a compile-time constant.</summary>
+    NonConstantCaseLabel = 5011,
 }

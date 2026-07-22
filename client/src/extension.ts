@@ -1,6 +1,6 @@
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
+// No fs/os/path: the extension host does no filesystem work of its own. Everything path-shaped
+// belongs to the server, which is the side that knows the roots, the cache layout and the
+// resolution rules.
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { createLanguageClient } from "./server";
@@ -34,8 +34,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
-    // Clear the persistent cache and re-index: stop the server (releasing the SQLite lock),
-    // delete the cache directory, then reload the window for a fresh cold index.
+    // Clear the persistent cache and re-index.
+    //
+    // The server does the deleting, because it is the only side that knows WHICH cache is ours:
+    // caches are per-workspace, named <hash>.db under a shared directory. Doing it here meant
+    // recursively deleting that whole directory and throwing away every other workspace's cache
+    // to reindex this one — and rebuilding the path from process.env.APPDATA, whose `??` fallback
+    // does not trigger on an empty string, so an empty APPDATA aimed a recursive force delete at
+    // a relative path resolved against the extension host's working directory.
+    //
+    // It also drains the SQLite writer properly rather than stopping the server and sleeping 300ms.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.clearCacheAndReindex", async () => {
             const choice = await vscode.window.showWarningMessage(
@@ -49,15 +57,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
             log.info("Clearing cache and reindexing");
             try {
-                await created.stop();
-                // Give the server a moment to release the SQLite file handles.
-                await new Promise((resolve) => setTimeout(resolve, 300));
-                // Mirrors the server's cache location (Environment.SpecialFolder.ApplicationData:
-                // %APPDATA% on Windows, ~/.config elsewhere).
-                const appData = process.env.APPDATA ?? path.join(os.homedir(), ".config");
-                const cacheDir = path.join(appData, "gscode", "cache");
-                await fs.promises.rm(cacheDir, { recursive: true, force: true });
+                const response = await created.sendRequest<{ deleted: boolean; message: string }>(
+                    "gscode/clearCache",
+                    {},
+                );
+                if (!response.deleted && response.message) {
+                    log.info(`Cache not deleted: ${response.message}`);
+                }
             } catch (error) {
+                // Reload anyway: a reindex without a cleared cache is still closer to what was
+                // asked for than doing nothing.
                 log.error(`Failed to clear cache: ${String(error)}`);
             }
             await vscode.commands.executeCommand("workbench.action.reloadWindow");

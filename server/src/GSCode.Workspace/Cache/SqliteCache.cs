@@ -49,6 +49,53 @@ public sealed class SqliteCache : IAsyncDisposable
         return Path.Combine(cacheDir, hash + ".db");
     }
 
+    /// <summary>
+    /// Deletes ONE workspace's cache database, plus the -wal/-shm sidecars SQLite leaves beside
+    /// it. Call after <see cref="DisposeAsync"/>, so the writer has drained and the handles are
+    /// released.
+    ///
+    /// Scoped to a single file on purpose. The client used to do this by recursively deleting the
+    /// whole `gscode/cache` directory, which threw away every other workspace's cache as a side
+    /// effect of reindexing one — and computed that directory from `process.env.APPDATA`, which
+    /// yields a RELATIVE path when the variable is set but empty, pointing a recursive force
+    /// delete at whatever the extension host's working directory happened to be.
+    /// </summary>
+    /// <returns>True when a database file was found and removed.</returns>
+    public static bool DeleteDatabase(string databasePath)
+    {
+        // A relative path here would resolve against the process's working directory, which is
+        // never where a cache lives. Refusing is the only safe response to a malformed path.
+        if ( databasePath.Length == 0 || !Path.IsPathFullyQualified(databasePath) )
+        {
+            return false;
+        }
+
+        bool deleted = false;
+
+        foreach ( string suffix in new[] { "", "-wal", "-shm" } )
+        {
+            string path = databasePath + suffix;
+            try
+            {
+                if ( File.Exists(path) )
+                {
+                    File.Delete(path);
+                    deleted |= suffix.Length == 0;
+                }
+            }
+            catch ( IOException )
+            {
+                // Still held, or gone already. The cache is a rebuildable artifact, so a failure
+                // to remove it costs a stale-looking reindex rather than correctness.
+            }
+            catch ( UnauthorizedAccessException )
+            {
+            }
+        }
+
+        return deleted;
+    }
+
     /// <summary>Deletes the legacy single-file gzip-JSON cache from the old server, if present.</summary>
     public static void CleanUpLegacyCache()
     {

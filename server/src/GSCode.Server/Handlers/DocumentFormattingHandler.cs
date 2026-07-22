@@ -1,3 +1,4 @@
+using GSCode.Parser;
 using GSCode.Workspace.Documents;
 using GSCode.Server.Formatting;
 using GSCode.Server.Mapping;
@@ -37,7 +38,13 @@ public sealed class DocumentFormattingHandler : DocumentFormattingHandlerBase
             return Task.FromResult<TextEditContainer?>(null);
         }
 
-        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(document.LatestResult);
+        // Analyse fresh. FormatMinimal diffs the formatted output against the analysed text and
+        // returns a MINIMAL edit, so its range indexes into that text — applying it to a document
+        // that has since changed points the range at unrelated characters and corrupts the file.
+        // Every other stale read shows something wrong; this one writes something wrong.
+        ParseResult analysis = _documents.AnalyzeIfStale(document);
+
+        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(analysis);
         if ( edit is null )
         {
             return Task.FromResult<TextEditContainer?>(null);

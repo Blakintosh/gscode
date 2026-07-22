@@ -44,8 +44,9 @@ ServerSettings settings = new();
 PhysicalFileSystem fileSystem = new();
 ResolverHolder resolverHolder = new(fileSystem);
 
-// Owns the lifetime of the persistent cache; created in OnStarted, drained on exit.
-SqliteCache? workspaceCache = null;
+// Owns the lifetime of the persistent cache; created in OnStarted, drained on exit. A holder
+// rather than a local, so the gscode/clearCache handler can close and delete it on request.
+CacheHolder cacheHolder = new();
 
 LanguageServer server = await LanguageServer.From(options =>
 {
@@ -58,6 +59,7 @@ LanguageServer server = await LanguageServer.From(options =>
             services.AddSingleton(levelSwitch);
             services.AddSingleton<IFileSystem>(fileSystem);
             services.AddSingleton(resolverHolder);
+            services.AddSingleton(cacheHolder);
             services.AddSingleton(NameTable.Shared);
 
             services.AddSingleton(new TextDocumentSelector(
@@ -112,6 +114,7 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<WatchedFilesHandler>()
         .AddHandler<WorkspaceFoldersHandler>()
         .AddHandler<PlanRenameHandler>()
+        .AddHandler<ClearCacheHandler>()
         .AddHandler<HoverHandler>()
         .AddHandler<DefinitionHandler>()
         .AddHandler<ReferencesHandler>()
@@ -220,7 +223,8 @@ LanguageServer server = await LanguageServer.From(options =>
 
                         string databasePath = SqliteCache.ResolveDatabasePath(cacheKeyRoots);
                         string identity = ServerBuildIdentity.Compute(BundledDataFilePaths());
-                        workspaceCache = SqliteCache.Open(databasePath, identity);
+                        SqliteCache workspaceCache = SqliteCache.Open(databasePath, identity);
+                        cacheHolder.Set(workspaceCache, databasePath);
                         indexer.UseCache(workspaceCache, workspaceCache.LoadAll());
                     }
                     catch ( Exception exception )
@@ -285,11 +289,9 @@ LanguageServer server = await LanguageServer.From(options =>
 
 await server.WaitForExit;
 
-// Drain the cache writer so the last records land before we close.
-if ( workspaceCache is not null )
-{
-    await workspaceCache.DisposeAsync();
-}
+// Drain the cache writer so the last records land before we close. A no-op when
+// gscode/clearCache already closed it.
+await cacheHolder.CloseAsync();
 
 transport.Owner?.Dispose();
 Log.Information("GSCode v2 server exited");

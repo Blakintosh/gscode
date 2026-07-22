@@ -217,6 +217,7 @@ function registerIndexingStatusBar(
         ];
 
         if (memoryMegabytes !== undefined) {
+            lines.push("");
             lines.push(`Server memory **${memoryMegabytes.toFixed(0)} MB**`);
         }
 

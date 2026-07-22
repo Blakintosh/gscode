@@ -54,8 +54,6 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.DestructorHasParameters] = "Destructors cannot declare parameters.",
         [GscDiagnosticCode.NonValueDefaultParameter] = "Default value for '{0}' must be a plain value (literals and vectors only).",
         [GscDiagnosticCode.DuplicateFunction] = "Function '{0}' is already defined in namespace '{1}'.",
-        [GscDiagnosticCode.AmbiguousFunction] =
-            "'{0}' is declared in {2} of the files this script imports, all in namespace '{1}' — which one this call reaches is undefined.",
 
         // Cross-file / workspace semantics
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",

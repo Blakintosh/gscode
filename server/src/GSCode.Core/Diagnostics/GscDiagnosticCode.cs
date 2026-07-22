@@ -59,10 +59,4 @@ public enum GscDiagnosticCode
     ReadOnlyFieldWrite = 5004,
     SizeIsReadOnly = 5005,
     DevOnlyFunctionCalledFromRelease = 5006,
-
-    /// <summary>
-    /// The same namespace::name is declared in two files this one links against, so which
-    /// definition a call reaches is not decided by the source.
-    /// </summary>
-    AmbiguousFunction = 5007,
 }

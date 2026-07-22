@@ -66,7 +66,6 @@ public static class WorkspaceLints
 
         lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path));
-        lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins));
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
         lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, new FlowTyper(languageBuiltins, objectFields)));

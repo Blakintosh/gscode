@@ -15,9 +15,11 @@ namespace GSCode.Server.Handlers;
 /// actually moved. An idle server settles and then produces no traffic at all, while a server
 /// churning through edits keeps the tooltip honest.
 ///
-/// This is deliberately separate from the memory LOGGING behind GSCODE_INSTRUMENTATION. That
-/// writes a multi-line report into the log every couple of seconds and is a debugging tool; this
-/// is one small number for a tooltip, and is always on.
+/// The same sample also feeds the verbose log, so there is ONE memory sampler rather than a timer
+/// for the tooltip and another for logging. Whether the log line appears is decided by the log
+/// level, not by an environment variable: a setting the user can change from the settings UI
+/// beats one that needs a restart, and Serilog drops the call before rendering when Verbose is
+/// off, so the quiet path stays free.
 /// </summary>
 public sealed class ServerStatusNotifier
 {
@@ -50,9 +52,10 @@ public sealed class ServerStatusNotifier
                 if ( Math.Abs(workingSetBytes - lastSentBytes) >= ReportThresholdBytes )
                 {
                     lastSentBytes = workingSetBytes;
-                    _server.SendNotification(
-                        "gscode/serverStatus",
-                        new ServerStatusParams(workingSetBytes / (1024.0 * 1024.0)));
+                    double megabytes = workingSetBytes / (1024.0 * 1024.0);
+
+                    _server.SendNotification("gscode/serverStatus", new ServerStatusParams(megabytes));
+                    Log.Verbose("Server memory: {Megabytes:F1} MB", megabytes);
                 }
 
                 await Task.Delay(SampleInterval, cancellationToken).ConfigureAwait(false);

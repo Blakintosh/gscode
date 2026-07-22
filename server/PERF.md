@@ -22,8 +22,15 @@ numbers directly:
   mirrored to the client "GSCode" channel and the status-bar tooltip). The cache count makes a
   run self-identifying as cold or warm.
 - `Memory after indexing:` — a one-shot breakdown at the indexing → serving transition (below).
-- `Server memory: N MB` — the working set, sampled every 2 s but logged only when it moves by
+  **Verbose only.**
+- `Server memory: N MB` — the working set, sampled every 3 s but logged only when it moves by
   >= 1 MB, and only AFTER indexing completes (so it never spams while memory is climbing).
+  **Verbose only.**
+
+Both are gated by the log level rather than an environment variable, so `gscode.serverLogLevel =
+verbose` is all it takes. The same sample feeds the status-bar tooltip, which shows the working
+set without any log level at all — usually enough, and the reason the log lines can be quiet by
+default.
 
 ### Reading the memory breakdown
 
@@ -118,12 +125,14 @@ the suite.
 ## How to run the pass
 
 1. Set `TA_TOOLS_PATH` to the BO3 mod-tools install (so `share\raw` and `mods\` resolve), set
-   `gscode.serverLogLevel = info` and `gscode.workspaceIndexingMode = full`.
+   `gscode.serverLogLevel = verbose` (the memory lines are Verbose) and
+   `gscode.workspaceIndexingMode = full`.
 2. Launch the extension against the tools root (see the client `.env` debug flow, or install the
    packaged extension).
 3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and
    read the "indexing complete" line each time.
-4. Read the steady-state "Server memory" line once the process settles.
+4. Read the steady-state "Server memory" line once the process settles — or just hover the status
+   bar, which shows the same number live.
 
 ## Results
 

@@ -278,19 +278,11 @@ LanguageServer server = await LanguageServer.From(options =>
                         // build pays neither the timing scopes nor this dump.
                         PerfTracker.Report(line => Log.Information("Perf  {Scope}", line));
 
-                        // Start reporting memory only now — during indexing it climbs steadily and
-                        // would spam. Both report only on >= 1 MB changes from here on.
-                        //
-                        // The status notifier is always on: it is one number for a tooltip, and
-                        // sends nothing once the server settles. The LOG monitor is the debugging
-                        // tool and stays behind the environment variable.
+                        // Start sampling memory only now — during indexing it climbs steadily,
+                        // and every sample would be a change. One sampler serves both the
+                        // status-bar tooltip and the verbose log.
                         _ = languageServer.Services.GetRequiredService<ServerStatusNotifier>()
                             .RunAsync(CancellationToken.None);
-
-                        if ( InstrumentationEnabled() )
-                        {
-                            _ = RunMemoryMonitorAsync(CancellationToken.None);
-                        }
                     }
                     catch ( Exception exception )
                     {
@@ -455,28 +447,17 @@ static bool CompactIfFragmented()
 // while the working set differs, the extra footprint is grown, uncompacted heap rather than
 // retained data — and a one-time compacting collect here is the fix.
 /// <summary>
-/// Whether the detailed memory instrumentation is switched on, via GSCODE_INSTRUMENTATION.
+/// The detailed memory breakdown, at Verbose.
 ///
-/// The multi-line report and the 2-second monitor were written to answer one question — why a
-/// cold start held 390 MB and a warm one 212 MB — and they answered it. Left on, they put a
-/// memory line in the log every couple of seconds forever, which buries everything else at the
-/// only level most users ever read. The headline number now lives in the status-bar tooltip,
-/// where it is visible without being noisy.
+/// Gated by the LOG LEVEL rather than an environment variable. A setting the user can change from
+/// the settings UI beats one that needs an env var and a restart — and GSCODE_INSTRUMENTATION was
+/// doubly confusing, since PerfTracker already uses that name as a COMPILE-TIME symbol for
+/// something else entirely.
+///
+/// Called twice a session, after indexing and after compaction, so it is not the noisy part.
 /// </summary>
-static bool InstrumentationEnabled()
-{
-    string? value = Environment.GetEnvironmentVariable("GSCODE_INSTRUMENTATION");
-    return !string.IsNullOrEmpty(value)
-        && !string.Equals(value, "0", StringComparison.Ordinal)
-        && !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
-}
-
 static void LogMemoryReport(string phase, IndexOutcome outcome)
 {
-    if ( !InstrumentationEnabled() )
-    {
-        return;
-    }
 
     GCMemoryInfo info = GC.GetGCMemoryInfo();
 
@@ -496,41 +477,9 @@ static void LogMemoryReport(string phase, IndexOutcome outcome)
     report.AppendLine($"    fragmented      {fragmented,8:F1} MB   (mostly large-object heap)");
     report.Append($"    collections     gen0 {GC.CollectionCount(0):N0} · gen1 {GC.CollectionCount(1):N0} · gen2 {GC.CollectionCount(2):N0}");
 
-    Log.Information("{MemoryReport}", report.ToString());
+    Log.Verbose("{MemoryReport}", report.ToString());
 }
 
-// Reports the server's working set after indexing completes, but only when it moves by at
-// least 1 MB, so a stable process stays quiet instead of spamming the log. Runs for the
-// server's lifetime; its own try/catch keeps any fault from going unobserved.
-static async Task RunMemoryMonitorAsync(CancellationToken cancellationToken)
-{
-    const long reportThresholdBytes = 1024 * 1024;
-    long lastReportedBytes = long.MinValue; // Force the first sample to log a baseline.
-
-    try
-    {
-        while ( !cancellationToken.IsCancellationRequested )
-        {
-            long workingSetBytes = Environment.WorkingSet;
-            if ( Math.Abs(workingSetBytes - lastReportedBytes) >= reportThresholdBytes )
-            {
-                lastReportedBytes = workingSetBytes;
-                double megabytes = workingSetBytes / (1024.0 * 1024.0);
-                Log.Information("Server memory: {Megabytes:F1} MB", megabytes);
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-        }
-    }
-    catch ( OperationCanceledException )
-    {
-        // Shutting down — not an error.
-    }
-    catch ( Exception exception )
-    {
-        Log.Error(exception, "Memory monitor stopped unexpectedly");
-    }
-}
 
 // Locates the bundled data files whose contents feed the server build identity.
 static IEnumerable<string> BundledDataFilePaths()

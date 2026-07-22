@@ -64,6 +64,9 @@ public static class WorkspaceLints
 
         ImmutableArray<Diagnostic>.Builder lints = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        // First: the other #using lints abandon their pass when an import will not resolve, so
+        // without this a typo silences them and says nothing about why.
+        lints.AddRange(UsingNotFoundLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path));

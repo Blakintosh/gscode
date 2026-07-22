@@ -57,6 +57,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.AmbiguousFunction] =
             "'{0}' is declared in {2} of the files this script imports, all in namespace '{1}' — which one this call reaches is undefined.",
         [GscDiagnosticCode.UnusedLocal] = "'{0}' is assigned but never read.",
+        [GscDiagnosticCode.UsingNotFound] = "Cannot find script '{0}'.",
 
         // Cross-file / workspace semantics
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",

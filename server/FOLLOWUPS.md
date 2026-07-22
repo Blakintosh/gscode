@@ -24,6 +24,19 @@ you end up with red squiggles on working code.
 `CorpusDiagnosticSweepTests.NoNamespaceIsReportedUnimported` asserts the zero, so a regression
 shows up before the promotion does.
 
+### The stock scripts import a file the tools do not ship
+
+`gscode-5009 UsingNotFound` reports 15 real cases across the shipped scripts, and 10 of them are
+the same one: `#using scripts\zm\_bb;`, where `_bb.gsc` exists nowhere in the mod tools.
+
+Nothing to fix on our side — the diagnostic is correct and those files really would not link as
+written. Recorded because it looks alarming and is not our bug. It also explains a smaller
+mystery: `NamespaceUsageLint` and `UnusedUsingLint` abandon their pass on an unresolvable import,
+so those 10 zm files had namespace checking quietly disabled with nothing saying why.
+
+Users are not shown this by default: `gscode.diagnostics.scope` is `workspace`, which excludes the
+stock scripts. It fires on their own code, where it is actionable.
+
 ### Two findings left from the corpus diagnostic sweep
 
 `CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since

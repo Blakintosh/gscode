@@ -256,8 +256,94 @@ public class CompletionEngineTests
         // The reported bug: "#p" showed `private` and not `#precache`.
         CompletionEntry precache = Entry(CompleteAfter("#p"), "#precache");
 
+        // Filtering drops the '#' (the editor's word does too); the label keeps it.
         Assert.Equal("precache", precache.FilterText);
-        Assert.Equal("precache", precache.InsertText);
+        Assert.StartsWith("precache", precache.InsertText, StringComparison.Ordinal);
+        Assert.DoesNotContain("#", precache.InsertText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("#precache", "precache( \"$1\", \"$2\" );$0")]
+    [InlineData("#using_animtree", "using_animtree( \"$1\" );$0")]
+    [InlineData("#using", "using $1;$0")]
+    [InlineData("#insert", "insert $1;$0")]
+    [InlineData("#namespace", "namespace $1;$0")]
+    public void AcceptingADirective_InsertsItsWholeForm(string directive, string expected)
+    {
+        // Inserting the bare word left something that does not parse until the parentheses and
+        // semicolon are typed by hand, and a half-written directive reddens every line below it.
+        Assert.Equal(expected, Entry(CompleteAfter("#"), directive).InsertText);
+    }
+
+    [Fact]
+    public void DefineTakesNoSemicolon()
+    {
+        // A #define runs to the end of the line rather than to a terminator.
+        Assert.DoesNotContain(";", Entry(CompleteAfter("#"), "#define").InsertText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("#if")]
+    [InlineData("#else")]
+    [InlineData("#endif")]
+    public void ConditionalDirectivesAreInsertedPlain(string directive)
+    {
+        // These take no punctuation, so a snippet would only add noise to undo.
+        Assert.Equal(directive[1..], Entry(CompleteAfter("#"), directive).InsertText);
+    }
+
+    // --- Asset types inside #precache's first argument ---
+
+    /// <summary>Completes with the cursor between the quotes of the given line.</summary>
+    private static ImmutableArray<CompletionEntry> CompleteInsideQuotes(string line, int quoteIndex)
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n    s = \"some free text\";\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", line + "\n\nfunction run()\n{\n}\n");
+
+        return engine.Complete(result, "raw", new Position(0, quoteIndex + 1));
+    }
+
+    [Fact]
+    public void FirstPrecacheArgument_OffersAssetTypes()
+    {
+        // The reported bug. '"' is a completion trigger, so by the time this fires the cursor is
+        // already inside a string token and generic literal completion used to win — offering
+        // every string in the workspace where a closed vocabulary belongs.
+        ImmutableArray<CompletionEntry> entries = CompleteInsideQuotes("#precache( \"\" );", 11);
+
+        Assert.True(HasLabel(entries, "model"));
+        Assert.True(HasLabel(entries, "xmodel"));
+        Assert.All(entries, e => Assert.Equal(CompletionKind.AssetType, e.Kind));
+    }
+
+    [Fact]
+    public void AssetTypesInsideQuotes_AreInsertedWithoutQuotes()
+    {
+        // The cursor is already between quotes, so inserting them again yields ""model"".
+        ImmutableArray<CompletionEntry> entries = CompleteInsideQuotes("#precache( \"\" );", 11);
+
+        Assert.Equal("model", Entry(entries, "model").InsertText);
+    }
+
+    [Fact]
+    public void SecondPrecacheArgument_IsNotAnAssetType()
+    {
+        // That slot is the asset's own name — free text with no vocabulary to offer.
+        ImmutableArray<CompletionEntry> entries = CompleteInsideQuotes("#precache( \"model\", \"\" );", 20);
+
+        Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.AssetType);
+    }
+
+    [Fact]
+    public void AStringOutsidePrecache_StillOffersLiterals()
+    {
+        // The asset-type check must not swallow ordinary literal completion.
+        ImmutableArray<CompletionEntry> entries = CompleteInsideQuotes("#namespace game;", 15);
+
+        Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.AssetType);
     }
 
     [Theory]

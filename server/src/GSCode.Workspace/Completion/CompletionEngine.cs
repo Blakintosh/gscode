@@ -45,6 +45,16 @@ public sealed class CompletionEngine
         int literalIndex = FindLiteralAtOffset(tokens, offset);
         if ( literalIndex >= 0 )
         {
+            // `#precache( "<here>"` is an asset TYPE, not free text. The quote is a completion
+            // trigger character, so by the time this fires the cursor is already inside a string
+            // token — and generic literal completion would win and offer every string in the
+            // workspace. This has to be asked first, and independently of the literals setting:
+            // the asset type is a closed vocabulary, not a convenience.
+            if ( IsPrecacheAssetTypeLiteral(tokens, literalIndex) )
+            {
+                return AssetTypeCompletions(quoted: false);
+            }
+
             if ( !includeLiterals )
             {
                 return [];
@@ -93,15 +103,40 @@ public sealed class CompletionEngine
 
     // --- Contexts ---
 
-    private ImmutableArray<CompletionEntry> AssetTypeCompletions()
+    /// <summary>
+    /// The precache asset types.
+    /// </summary>
+    /// <param name="quoted">
+    /// Whether to insert the quotes too. False when the cursor already sits inside a string —
+    /// otherwise accepting a suggestion produces <c>""model""</c>.
+    /// </param>
+    private ImmutableArray<CompletionEntry> AssetTypeCompletions(bool quoted = true)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         foreach ( string name in PrecacheAssetTypes.AllNames.OrderBy(static n => n, StringComparer.Ordinal) )
         {
-            entries.Add(new CompletionEntry(name, CompletionKind.AssetType, "precache asset type", "\"" + name + "\""));
+            entries.Add(new CompletionEntry(
+                name, CompletionKind.AssetType, "precache asset type", quoted ? "\"" + name + "\"" : name));
         }
 
         return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// True when the string at <paramref name="literalIndex"/> is the FIRST argument of a
+    /// <c>#precache(</c> — the asset-type slot. The second argument is the asset's own name and
+    /// has no closed vocabulary to offer.
+    /// </summary>
+    private static bool IsPrecacheAssetTypeLiteral(ImmutableArray<Token> tokens, int literalIndex)
+    {
+        int openParen = PreviousSignificant(tokens, literalIndex);
+        if ( openParen < 0 || tokens[openParen].Kind != TokenKind.OpenParen )
+        {
+            return false;
+        }
+
+        int directive = PreviousSignificant(tokens, openParen);
+        return directive >= 0 && tokens[directive].Kind == TokenKind.PrecacheDirective;
     }
 
     private ImmutableArray<CompletionEntry> TryPathContext(ParseResult result, string contextId, ImmutableArray<Token> tokens, int currentIndex, int offset)
@@ -247,6 +282,37 @@ public sealed class CompletionEngine
     }
 
     /// <summary>
+    /// What accepting a directive actually inserts: its full form, with the cursor placed where
+    /// the argument goes. Inserting the bare word left a directive that does not parse until the
+    /// parentheses and semicolon are typed by hand — and a half-written directive reddens the
+    /// lines under it, so the editor looks broken while you finish the line.
+    ///
+    /// The '#' is already in the buffer (that is what put us in this context), so none of these
+    /// repeat it. Conditionals and #endif take no punctuation and are inserted plain.
+    /// </summary>
+    private static string DirectiveSnippet(string keyword, string withoutHash)
+    {
+        switch ( keyword )
+        {
+            case "#precache":
+                // Both arguments are quoted, and the first is a closed vocabulary that
+                // completion offers as soon as the cursor lands inside the quotes.
+                return "precache( \"$1\", \"$2\" );$0";
+            case "#using_animtree":
+                return "using_animtree( \"$1\" );$0";
+            case "#using":
+            case "#insert":
+            case "#namespace":
+                return withoutHash + " $1;$0";
+            case "#define":
+                // No semicolon: a #define runs to the end of the line.
+                return "define $1 $0";
+            default:
+                return withoutHash;
+        }
+    }
+
+    /// <summary>
     /// The directives, offered with the leading '#' stripped from what the editor filters and
     /// inserts. The client's word pattern excludes '#', so after typing "#p" the current word is
     /// "p": a "#precache" label would be filtered out while "private" survived — the reported
@@ -266,7 +332,12 @@ public sealed class CompletionEngine
 
             string withoutHash = keyword[1..];
             entries.Add(new CompletionEntry(
-                keyword, CompletionKind.Keyword, "directive", withoutHash, KeywordDocs.Find(keyword) ?? "", withoutHash));
+                keyword,
+                CompletionKind.Keyword,
+                "directive",
+                DirectiveSnippet(keyword, withoutHash),
+                KeywordDocs.Find(keyword) ?? "",
+                withoutHash));
         }
 
         return entries.ToImmutable();

@@ -42,6 +42,20 @@ public class CompletionResolveDataTests
         Assert.All(data.Properties(), p => Assert.Equal(JTokenType.String, p.Value.Type));
     }
 
+    [Theory]
+    [InlineData("precache( \"$1\", \"$2\" );$0", true)]
+    [InlineData("using $1;$0", true)]
+    [InlineData("give_weapon($0)", true)]
+    [InlineData("endif", false)]
+    [InlineData("model", false)]
+    [InlineData("cost_$50", true)]
+    public void ATabStopAnywhereMarksASnippet(string insertText, bool expected)
+    {
+        // Directive snippets put the cursor at $1 and leave $0 for the end, so checking only for
+        // $0 would send them as PlainText and drop a literal "$1" into the buffer.
+        Assert.Equal(expected, CompletionHandler.HasTabStop(insertText));
+    }
+
     [Fact]
     public void ANamespacelessSymbolCarriesAnEmptyNamespace()
     {

@@ -181,6 +181,23 @@ public sealed class CompletionHandler : CompletionHandlerBase
     }
 
     /// <summary>
+    /// Whether the insert text contains an LSP snippet tab stop (<c>$0</c>, <c>$1</c>, …). Sending
+    /// a snippet as PlainText would put the literal "$1" in the buffer.
+    /// </summary>
+    internal static bool HasTabStop(string insertText)
+    {
+        for ( int index = 0; index + 1 < insertText.Length; index++ )
+        {
+            if ( insertText[index] == '$' && char.IsAsciiDigit(insertText[index + 1]) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Whether resolve can say anything more about this kind than the list already does. Keywords
     /// and literals carry their whole documentation up front, so tagging them would just cost a
     /// round trip per highlighted item.
@@ -192,7 +209,9 @@ public sealed class CompletionHandler : CompletionHandlerBase
 
     private static CompletionItem ToItem(CompletionEntry entry, DocumentUri uri)
     {
-        bool isSnippet = entry.InsertText.Contains("$0", StringComparison.Ordinal);
+        // Any tab stop, not just $0: directive snippets place the cursor at $1 first and leave
+        // $0 for the end, so checking only for $0 would send them as literal text.
+        bool isSnippet = HasTabStop(entry.InsertText);
         string insertText = entry.InsertText.Length > 0 ? entry.InsertText : entry.Label;
 
         return new CompletionItem

@@ -37,19 +37,38 @@ public static class MarkdownDocRenderer
         return markdown.ToString();
     }
 
-    /// <summary>Markdown for a builtin: prototype (first overload), description, extra overloads, example.</summary>
+    /// <summary>
+    /// Markdown for a builtin, matching what a script function's hover shows: prototype,
+    /// dev-only warning, description, per-parameter types and descriptions, the return, extra
+    /// overloads, and the example.
+    ///
+    /// The bundled library is far richer than the signature line suggests — 3,240 of the 3,289
+    /// GSC parameters carry their own description and 965 overloads name a return type — so
+    /// rendering names alone left most of the documentation on the floor.
+    /// </summary>
     public static string RenderBuiltin(BuiltinFunction builtin)
     {
         StringBuilder markdown = new();
+        BuiltinOverload? primary = builtin.Overloads.FirstOrDefault();
 
         markdown.Append("```gsc\n");
-        markdown.Append(BuiltinSignature(builtin, builtin.Overloads.FirstOrDefault()));
+        markdown.Append(BuiltinSignature(builtin, primary));
         markdown.Append("\n```");
+
+        // Above the description: calling this outside a /# #/ block breaks a shipped mod, which
+        // matters more than anything else the hover has to say.
+        if ( builtin.IsDevOnly )
+        {
+            markdown.Append("\n\n**Development only** — calling this outside a `/# #/` block will not work in a release build.");
+        }
 
         if ( builtin.Description.Length > 0 )
         {
             markdown.Append("\n\n---\n\n").Append(builtin.Description);
         }
+
+        AppendBuiltinParameters(markdown, primary);
+        AppendBuiltinReturn(markdown, primary);
 
         // Additional overloads listed compactly under the primary prototype.
         if ( builtin.Overloads.Length > 1 )
@@ -67,6 +86,58 @@ public static class MarkdownDocRenderer
         }
 
         return markdown.ToString();
+    }
+
+    private static void AppendBuiltinParameters(StringBuilder markdown, BuiltinOverload? overload)
+    {
+        if ( overload is null || overload.Parameters.Length == 0 )
+        {
+            return;
+        }
+
+        markdown.Append("\n\n---\n\nParameters:\n");
+        foreach ( BuiltinParameter parameter in overload.Parameters )
+        {
+            markdown.Append("* `").Append(parameter.Name).Append('`');
+
+            if ( parameter.TypeText.Length > 0 )
+            {
+                markdown.Append(": `").Append(parameter.TypeText).Append('`');
+            }
+
+            if ( !parameter.Mandatory )
+            {
+                markdown.Append(" *(optional)*");
+            }
+
+            if ( parameter.Description.Length > 0 )
+            {
+                markdown.Append(" — ").Append(parameter.Description);
+            }
+
+            markdown.Append('\n');
+        }
+    }
+
+    private static void AppendBuiltinReturn(StringBuilder markdown, BuiltinOverload? overload)
+    {
+        // Void is the common case and says nothing worth a line of its own.
+        if ( overload is null || overload.ReturnsVoid || overload.ReturnTypeText.Length == 0 )
+        {
+            return;
+        }
+
+        markdown.Append("\n\nReturns: `").Append(overload.ReturnTypeText).Append('`');
+    }
+
+    /// <summary>Markdown for a class: its declaration line, with the parent when it has one.</summary>
+    public static string RenderClass(ClassSymbol classSymbol)
+    {
+        string header = classSymbol.ParentKeyName is null
+            ? $"class {classSymbol.Name}"
+            : $"class {classSymbol.Name} : {classSymbol.ParentKeyName}";
+
+        return "```gsc\n" + header + "\n```";
     }
 
     /// <summary>

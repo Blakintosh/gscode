@@ -48,6 +48,53 @@ public class ApiLoaderTests
     }
 
     [Fact]
+    public void RenderBuiltin_SurfacesParameterTypesAndDescriptions()
+    {
+        // The signature line shows only names, but the bundled library documents nearly every
+        // parameter individually — 3,240 of the 3,289 GSC parameters carry a description.
+        BuiltinApi api = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
+
+        string markdown = MarkdownDocRenderer.RenderBuiltin(api.Find("Abs")!);
+
+        Assert.Contains("Parameters:", markdown, StringComparison.Ordinal);
+        Assert.Contains("`value`", markdown, StringComparison.Ordinal);
+        Assert.Contains("float or integer", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RenderBuiltin_SurfacesTheReturnType()
+    {
+        BuiltinApi api = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
+
+        Assert.Contains("Returns:", MarkdownDocRenderer.RenderBuiltin(api.Find("Abs")!), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderBuiltin_WarnsOnDevOnlyBuiltins()
+    {
+        // Calling one of these outside /# #/ compiles fine and then does nothing in a release
+        // mod, so the warning belongs above the description rather than buried under it.
+        BuiltinApi api = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
+        BuiltinFunction printLn = api.Find("PrintLn")!;
+
+        Assert.True(printLn.IsDevOnly);
+        Assert.Contains("Development only", MarkdownDocRenderer.RenderBuiltin(printLn), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderBuiltin_OmitsTheReturnLineForVoidBuiltins()
+    {
+        // Void is the common case, and a "Returns: void" line would be noise on most hovers.
+        BuiltinFunction voidBuiltin = new(
+            "DoThing",
+            "Does the thing.",
+            [new BuiltinOverload(null, [], "", ReturnsVoid: true)],
+            "");
+
+        Assert.DoesNotContain("Returns:", MarkdownDocRenderer.RenderBuiltin(voidBuiltin), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RenderFunction_IncludesNamespaceParamsAndDoc()
     {
         FunctionSymbol function = new()

@@ -1,6 +1,11 @@
+using System.Collections.Immutable;
+using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
+using GSCode.Workspace.Database;
 using GSCode.Server.Configuration;
 using GSCode.Server.Mapping;
+using Newtonsoft.Json.Linq;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -14,13 +19,20 @@ public sealed class CompletionHandler : CompletionHandlerBase
     private readonly CompletionEngine _engine;
     private readonly ServerSettings _settings;
     private readonly TextDocumentSelector _selector;
+    private readonly BuiltinApiSet _builtins;
 
-    public CompletionHandler(NavigationSupport support, CompletionEngine engine, ServerSettings settings, TextDocumentSelector selector)
+    public CompletionHandler(
+        NavigationSupport support,
+        CompletionEngine engine,
+        ServerSettings settings,
+        TextDocumentSelector selector,
+        BuiltinApiSet builtins)
     {
         _support = support;
         _engine = engine;
         _settings = settings;
         _selector = selector;
+        _builtins = builtins;
     }
 
     /// <summary>Maps the client setting; anything unrecognised keeps the safer owner-scoped default.</summary>
@@ -36,7 +48,10 @@ public sealed class CompletionHandler : CompletionHandlerBase
             DocumentSelector = _selector,
             // The characters that should re-trigger completion (the "feels dead" fix).
             TriggerCharacters = new Container<string>(".", ":", "#", "&", "%", "\\", "/", "\""),
-            ResolveProvider = false,
+            // Documentation is rendered per highlighted item rather than for the whole list: a
+            // statement-scope completion in a real workspace is thousands of entries, and
+            // building a doc block for each on every keystroke is the cost this avoids.
+            ResolveProvider = true,
         };
     }
 
@@ -56,19 +71,125 @@ public sealed class CompletionHandler : CompletionHandlerBase
             _settings.CompletionLiterals,
             FieldScopeFromSetting(_settings.CompletionFieldScope)) )
         {
-            items.Add(ToItem(entry));
+            items.Add(ToItem(entry, request.TextDocument.Uri));
         }
 
         return Task.FromResult(new CompletionList(items));
     }
 
+    /// <summary>
+    /// Fills in the documentation for the one item the user has highlighted, from the identity
+    /// stashed in Data at list-build time. Anything unresolvable comes back untouched, which is a
+    /// blank doc pane rather than a failure.
+    /// </summary>
     public override Task<CompletionItem> Handle(CompletionItem request, CancellationToken cancellationToken)
     {
-        // ResolveProvider is false; items are complete already.
-        return Task.FromResult(request);
+        if ( request.Data is not JObject data )
+        {
+            return Task.FromResult(request);
+        }
+
+        DocumentUri? uri = ReadUri(data);
+        if ( uri is null )
+        {
+            return Task.FromResult(request);
+        }
+
+        NavigationTarget? target = _support.Resolve(uri);
+        if ( target is null )
+        {
+            return Task.FromResult(request);
+        }
+
+        string? markdown = RenderDocumentation(
+            target,
+            data.Value<string>("kind") ?? "",
+            data.Value<string>("name") ?? "",
+            data.Value<string>("ns") ?? "");
+
+        if ( markdown is null )
+        {
+            return Task.FromResult(request);
+        }
+
+        return Task.FromResult(request with
+        {
+            Documentation = new StringOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = markdown }),
+        });
     }
 
-    private static CompletionItem ToItem(CompletionEntry entry)
+    private static DocumentUri? ReadUri(JObject data)
+    {
+        string? text = data.Value<string>("uri");
+        if ( string.IsNullOrEmpty(text) )
+        {
+            return null;
+        }
+
+        try
+        {
+            return DocumentUri.Parse(text);
+        }
+        catch ( Exception )
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The same renderer that feeds hover, so the two surfaces can never describe a symbol
+    /// differently. Script functions win over builtins on a name clash, matching resolution.
+    /// </summary>
+    private string? RenderDocumentation(NavigationTarget target, string kind, string name, string ns)
+    {
+        if ( name.Length == 0 )
+        {
+            return null;
+        }
+
+        switch ( kind )
+        {
+            case nameof(CompletionKind.Function):
+            {
+                ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
+                    target.Store,
+                    target.ContextId,
+                    target.Path,
+                    ns.Length > 0 ? ns : null,
+                    name.ToLowerInvariant(),
+                    askingNamespaces: target.Namespaces);
+
+                if ( functions.Length > 0 )
+                {
+                    return MarkdownDocRenderer.RenderFunction(functions[0].Function);
+                }
+
+                BuiltinFunction? builtin = _builtins.For(target.Language).Find(name);
+                return builtin is not null ? MarkdownDocRenderer.RenderBuiltin(builtin) : null;
+            }
+            case nameof(CompletionKind.Class):
+            {
+                ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
+                    target.Store, target.ContextId, ns.Length > 0 ? ns : null, name.ToLowerInvariant());
+
+                return classes.Length > 0 ? MarkdownDocRenderer.RenderClass(classes[0].Class) : null;
+            }
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether resolve can say anything more about this kind than the list already does. Keywords
+    /// and literals carry their whole documentation up front, so tagging them would just cost a
+    /// round trip per highlighted item.
+    /// </summary>
+    private static bool IsResolvable(CompletionKind kind)
+    {
+        return kind is CompletionKind.Function or CompletionKind.Class;
+    }
+
+    private static CompletionItem ToItem(CompletionEntry entry, DocumentUri uri)
     {
         bool isSnippet = entry.InsertText.Contains("$0", StringComparison.Ordinal);
         string insertText = entry.InsertText.Length > 0 ? entry.InsertText : entry.Label;
@@ -84,6 +205,23 @@ public sealed class CompletionHandler : CompletionHandlerBase
             InsertText = insertText,
             FilterText = entry.FilterText.Length > 0 ? entry.FilterText : null,
             InsertTextFormat = isSnippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
+            Data = IsResolvable(entry.Kind) ? ResolveData(entry, uri) : null,
+        };
+    }
+
+    /// <summary>
+    /// The identity resolve needs to find this symbol again. Plain strings only — the same
+    /// serializer-casing trap the CodeLens arguments hit, since Data round-trips through the
+    /// client untouched.
+    /// </summary>
+    internal static JObject ResolveData(CompletionEntry entry, DocumentUri uri)
+    {
+        return new JObject
+        {
+            ["uri"] = uri.ToString(),
+            ["kind"] = entry.Kind.ToString(),
+            ["name"] = entry.Label,
+            ["ns"] = entry.Namespace,
         };
     }
 

@@ -106,7 +106,7 @@ public sealed class HoverHandler : HoverHandlerBase
             {
                 ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
                     target.Store, target.ContextId, key.Namespace, key.Name);
-                return classes.Length > 0 ? RenderClass(classes[0].Class) : null;
+                return classes.Length > 0 ? MarkdownDocRenderer.RenderClass(classes[0].Class) : null;
             }
             case SymbolKind.Macro:
             {
@@ -255,12 +255,4 @@ public sealed class HoverHandler : HoverHandlerBase
         return markdown.ToString();
     }
 
-    private static string RenderClass(ClassSymbol classSymbol)
-    {
-        string header = classSymbol.ParentKeyName is null
-            ? $"class {classSymbol.Name}"
-            : $"class {classSymbol.Name} : {classSymbol.ParentKeyName}";
-
-        return $"```gsc\n{header}\n```";
-    }
 }

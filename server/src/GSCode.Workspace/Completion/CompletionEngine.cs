@@ -490,7 +490,12 @@ public sealed class CompletionEngine
     private static CompletionEntry FunctionEntry(FunctionSymbol function)
     {
         string detail = function.Namespace.Length > 0 ? function.Namespace + "::" + function.Name : function.Name;
-        return new CompletionEntry(function.Name, CompletionKind.Function, detail, function.Name + "($0)");
+
+        // No Documentation: rendering a doc block for every function in the workspace on every
+        // keystroke is exactly what completionItem/resolve exists to avoid. The namespace rides
+        // along so resolve can find this function again.
+        return new CompletionEntry(
+            function.Name, CompletionKind.Function, detail, function.Name + "($0)", Namespace: function.Namespace);
     }
 
     // --- Token helpers ---

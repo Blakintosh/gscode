@@ -38,10 +38,15 @@ public enum CompletionKind
 /// for directives: the language's word pattern excludes '#', so after typing "#p" the editor's
 /// current word is "p" and a "#precache" label would be filtered out.
 /// </param>
+/// <param name="Namespace">
+/// The declaring namespace, carried so completionItem/resolve can find the symbol again and
+/// render its full documentation. Empty for anything without one (builtins, macros, keywords).
+/// </param>
 public sealed record CompletionEntry(
     string Label,
     CompletionKind Kind,
     string Detail = "",
     string InsertText = "",
     string Documentation = "",
-    string FilterText = "");
+    string FilterText = "",
+    string Namespace = "");

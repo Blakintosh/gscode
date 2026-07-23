@@ -30,6 +30,8 @@ public class GameProfileTests
         Assert.True(profile.HasFunctionKeyword);
         Assert.True(profile.HasNamespaceDirective);
         Assert.Equal(ImportStyle.Namespace, profile.ImportStyle);
+        Assert.Equal(FunctionPointerStyle.Ampersand, profile.FunctionPointerStyle);
+        Assert.True(profile.ArraysPassedByReference);
         Assert.Equal("TA_TOOLS_PATH", profile.RootEnvironmentVariable);
         Assert.Equal(@"share\raw", profile.RawSubfolder);
         Assert.Equal("mods", profile.ModsSubfolder);

@@ -22,6 +22,22 @@ public enum EngineFamily
     SledgehammerGames,
 }
 
+/// <summary>How a function pointer is written — this changed at BO3.</summary>
+public enum FunctionPointerStyle
+{
+    /// <summary>
+    /// Pre-BO3 / IW: a bare qualified name IS the pointer — <c>level.f = maps\mp\_utility::foo;</c>
+    /// (no parentheses), and <c>::foo</c> for a function in this file. Parentheses would call it.
+    /// </summary>
+    PathQualified,
+
+    /// <summary>
+    /// BO3 / T7: an explicit <c>&amp;</c> makes the pointer — <c>level.f = &amp;foo;</c> or
+    /// <c>&amp;namespace::foo;</c>. A bare <c>ns::foo</c> is a call, never a pointer.
+    /// </summary>
+    Ampersand,
+}
+
 /// <summary>
 /// The portability seam: every piece of game-specific knowledge (extensions, global object names,
 /// which language features exist, how imports work, where scripts live) is reached through this
@@ -92,6 +108,15 @@ public sealed record GameProfile
 
     /// <summary>How imports work — see <see cref="Core.ImportStyle"/>.</summary>
     public ImportStyle ImportStyle { get; init; } = ImportStyle.Include;
+
+    /// <summary>How a function pointer is written — see <see cref="Core.FunctionPointerStyle"/>.</summary>
+    public FunctionPointerStyle FunctionPointerStyle { get; init; } = FunctionPointerStyle.PathQualified;
+
+    /// <summary>
+    /// Whether array parameters are passed by reference. BO3 passes arrays by reference ONLY;
+    /// earlier games copy them by value, so a callee mutating an array does not affect the caller's.
+    /// </summary>
+    public bool ArraysPassedByReference { get; init; }
 
     // --- Root discovery: where the game's scripts live. ---
 
@@ -195,6 +220,8 @@ public sealed record GameProfile
         HasFunctionKeyword = true,
         HasNamespaceDirective = true,
         ImportStyle = ImportStyle.Namespace,
+        FunctionPointerStyle = FunctionPointerStyle.Ampersand,
+        ArraysPassedByReference = true,
         RootEnvironmentVariable = "TA_TOOLS_PATH",
         RawSubfolder = @"share\raw",
         ModsSubfolder = "mods",

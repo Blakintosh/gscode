@@ -13,13 +13,13 @@ namespace GSCode.Server.Handlers;
 
 /// <summary>
 /// On-type formatting, triggered after a closing brace or semicolon. Reuses the whole-document
-/// formatter but returns only the edits that fall in the contiguous block around the cursor, so a
-/// keystroke tidies what you are working on rather than the whole file. Because the formatter
+/// formatter but returns only the edits that fall in the alignment GROUP around the cursor, so a
+/// keystroke tidies the run you are editing rather than the whole function. Because the formatter
 /// refuses files with syntax errors, a half-typed document is simply left alone until it parses.
 ///
-/// Scoping to the block is what lets consecutive alignment work here: an alignment group is bounded
-/// by blank lines, so the block always contains the whole group — the lines re-pad together as you
-/// type the next member, and no partial alignment escapes.
+/// Scoping to the group is what makes consecutive alignment feel local: editing one of a run of
+/// assignments re-aligns that run and stops at the next statement of a different kind. See
+/// <see cref="FormatScope"/> for how the group is found.
 /// </summary>
 public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHandlerBase
 {
@@ -68,10 +68,11 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
             return Task.FromResult<TextEditContainer?>(null);
         }
 
-        // Keep only edits touching the contiguous run of non-blank lines around the cursor. That
-        // run is the unit the user is editing, and it fully contains any alignment group, which is
-        // bounded by blank lines — so alignment lands whole while distant code is left alone.
-        (int top, int bottom) = BlockAround(document.Text.Text, request.Position.Line);
+        // Keep only edits touching the alignment GROUP around the cursor — the run of lines that
+        // actually re-flow together when this one is edited. Editing an assignment tidies its run
+        // of assignments and stops at the next statement of a different kind, rather than the whole
+        // function body.
+        (int top, int bottom) = FormatScope.GroupAround(document.Text.Text, request.Position.Line);
 
         List<TextEdit> textEdits = [.. edits
             .Where(edit => edit.Range.Start.Line <= bottom && edit.Range.End.Line >= top)
@@ -107,38 +108,8 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
             // Never here: this formats a fragment, and hoisting the whole file's
             // directive block from under a partial edit would be startling.
             SortDirectives: false,
-            // Alignment is welcome: the edits are then clipped to the block around the cursor, so a
-            // group re-aligns as you type its next member without touching anything else.
+            // Alignment is welcome: the edits are then clipped to the group around the cursor, so a
+            // run re-aligns as you type its next member without touching anything else.
             AlignConsecutive: _settings.FormatAlignConsecutive);
-    }
-
-    /// <summary>
-    /// The half-open... no — the inclusive line range of the contiguous non-blank run containing
-    /// <paramref name="line"/>. A blank line bounds it on each side; that is exactly where an
-    /// alignment group ends too.
-    /// </summary>
-    internal static (int Top, int Bottom) BlockAround(string text, int line)
-    {
-        string[] lines = text.Split('\n');
-        if ( lines.Length == 0 )
-        {
-            return (line, line);
-        }
-
-        int here = Math.Clamp(line, 0, lines.Length - 1);
-
-        int top = here;
-        while ( top > 0 && lines[top - 1].Trim().Length > 0 )
-        {
-            top--;
-        }
-
-        int bottom = here;
-        while ( bottom < lines.Length - 1 && lines[bottom + 1].Trim().Length > 0 )
-        {
-            bottom++;
-        }
-
-        return (top, bottom);
     }
 }

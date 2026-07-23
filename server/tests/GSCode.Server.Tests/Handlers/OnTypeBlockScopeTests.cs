@@ -1,59 +1,128 @@
-using GSCode.Server.Handlers;
+using GSCode.Server.Formatting;
 using Xunit;
 
 namespace GSCode.Server.Tests.Handlers;
 
 /// <summary>
-/// On-type formatting scopes its edits to the contiguous run of non-blank lines around the cursor,
-/// so a keystroke tidies the block being edited rather than the whole file. The run is bounded by
-/// blank lines, which is exactly where an alignment group ends — so the group is always contained
-/// whole and never half-aligned.
+/// On-type formatting scopes its edits to the alignment GROUP around the cursor — the run of lines
+/// that actually re-flow together — so a keystroke tidies the run you are editing and nothing past
+/// it. A run of assignments is one group; a statement of a different kind ends it.
 /// </summary>
 public class OnTypeBlockScopeTests
 {
-    private const string Doc =
-        "function f()\n" +    // 0
-        "{\n" +               // 1
-        "\tfoo = 1;\n" +      // 2
-        "\tothershit = 2;\n" + // 3
-        "\n" +                // 4  (blank)
-        "\tlater = 3;\n" +    // 5
-        "}\n";                // 6
-
     [Fact]
-    public void TheBlockIsBoundedByBlankLines()
+    public void AnAssignmentRunStopsAtAStatementOfADifferentKind()
     {
-        // Typing ';' on line 3 scopes to the run 0..3 (the function header, brace and both
-        // assignments) and stops at the blank line 4.
-        (int top, int bottom) = DocumentOnTypeFormattingHandler.BlockAround(Doc, 3);
+        // The reported case: editing a subscript assignment must not reach the bare calls around
+        // it, even with no blank line between them.
+        const string doc =
+            "function f()\n" +          // 0
+            "{\n" +                     // 1
+            "\ta();\n" +                // 2  call
+            "\tfoo[ \"x\" ] = 1;\n" +   // 3  assignment
+            "\tbash[ \"yy\" ] = 2;\n" + // 4  assignment
+            "\tb();\n" +                // 5  call
+            "}\n";                      // 6
 
-        Assert.Equal(0, top);
-        Assert.Equal(3, bottom);
+        (int top, int bottom) = FormatScope.GroupAround(doc, 4);
+
+        Assert.Equal(3, top);
+        Assert.Equal(4, bottom);
     }
 
     [Fact]
-    public void ASeparateBlockBelowTheBlankIsItsOwn()
+    public void AllConsecutiveAssignmentsAreOneGroup()
     {
-        (int top, int bottom) = DocumentOnTypeFormattingHandler.BlockAround(Doc, 5);
+        // The operator aligner spans any consecutive assignments, so the scope must too.
+        const string doc =
+            "function f()\n" +
+            "{\n" +
+            "\tplain = 1;\n" +      // 2
+            "\tfoo[ \"x\" ] = 2;\n" + // 3
+            "\tother += 3;\n" +     // 4
+            "}\n";
 
-        Assert.Equal(5, top);
-        Assert.Equal(6, bottom);
-    }
-
-    [Fact]
-    public void ASingleLineBetweenBlanksIsJustItself()
-    {
-        (int top, int bottom) = DocumentOnTypeFormattingHandler.BlockAround("a\n\nb\n\nc\n", 2);
+        (int top, int bottom) = FormatScope.GroupAround(doc, 3);
 
         Assert.Equal(2, top);
+        Assert.Equal(4, bottom);
+    }
+
+    [Fact]
+    public void ACommentInTheRunIsTransparent()
+    {
+        const string doc =
+            "\ta = 1;\n" +      // 0
+            "\t// a note\n" +   // 1
+            "\tbb = 2;\n";      // 2
+
+        (int top, int bottom) = FormatScope.GroupAround(doc, 0);
+
+        Assert.Equal(0, top);
         Assert.Equal(2, bottom);
+    }
+
+    [Fact]
+    public void ABlankLineEndsTheRun()
+    {
+        const string doc =
+            "\ta = 1;\n" +   // 0
+            "\tbb = 2;\n" +  // 1
+            "\n" +           // 2
+            "\tcc = 3;\n";   // 3
+
+        (int top, int bottom) = FormatScope.GroupAround(doc, 1);
+
+        Assert.Equal(0, top);
+        Assert.Equal(1, bottom);
+    }
+
+    [Fact]
+    public void CallsGroupOnlyWithTheSameCallee()
+    {
+        const string doc =
+            "\tregister( \"a\", 1 );\n" +  // 0
+            "\tregister( \"bb\", 2 );\n" + // 1
+            "\tspawn( \"c\", 3 );\n";      // 2
+
+        (int top, int bottom) = FormatScope.GroupAround(doc, 0);
+
+        Assert.Equal(0, top);
+        Assert.Equal(1, bottom);
+    }
+
+    [Fact]
+    public void ADifferentIndentEndsTheRun()
+    {
+        const string doc =
+            "\ta = 1;\n" +       // 0
+            "\t\tnested = 2;\n" + // 1  deeper
+            "\tb = 3;\n";        // 2
+
+        (int top, int bottom) = FormatScope.GroupAround(doc, 1);
+
+        Assert.Equal(1, top);
+        Assert.Equal(1, bottom);
+    }
+
+    [Fact]
+    public void ANonAlignableLineIsScopedToItself()
+    {
+        const string doc =
+            "\ta = 1;\n" +      // 0
+            "\treturn x;\n" +   // 1  not an assignment or call
+            "\tb = 2;\n";       // 2
+
+        (int top, int bottom) = FormatScope.GroupAround(doc, 1);
+
+        Assert.Equal(1, top);
+        Assert.Equal(1, bottom);
     }
 
     [Fact]
     public void AnOutOfRangeLineIsClamped()
     {
-        // Defensive: a position past the end must not throw.
-        (int top, int bottom) = DocumentOnTypeFormattingHandler.BlockAround("a\nb\n", 99);
+        (int top, int bottom) = FormatScope.GroupAround("a = 1;\n", 99);
 
         Assert.True(top >= 0 && bottom >= top);
     }

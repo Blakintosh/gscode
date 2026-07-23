@@ -82,6 +82,7 @@ public sealed class DocumentFormattingHandler : DocumentFormattingHandlerBase
             UseTabs: !requested.InsertSpaces,
             PadParens: _settings.FormatPadParens,
             MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines),
-            SortDirectives: _settings.FormatSortDirectives);
+            SortDirectives: _settings.FormatSortDirectives,
+            AlignConsecutive: _settings.FormatAlignConsecutive);
     }
 }

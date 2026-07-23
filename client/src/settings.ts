@@ -26,6 +26,7 @@ export interface GscodeSettings {
     "format.padParens": boolean;
     "format.maxBlankLines": number;
     "format.sortDirectives": boolean;
+    "format.alignConsecutive": boolean;
 }
 
 /** Reads the current gscode.* settings into the shape the server expects. */
@@ -50,5 +51,6 @@ export function readSettings(): GscodeSettings {
         "format.padParens": config.get<boolean>("format.padParens", true),
         "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),
         "format.sortDirectives": config.get<boolean>("format.sortDirectives", true),
+        "format.alignConsecutive": config.get<boolean>("format.alignConsecutive", true),
     };
 }

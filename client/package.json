@@ -317,6 +317,12 @@
 					"default": true,
 					"description": "Group and sort the directive block at the top of a file: #using, then #insert, then #namespace, then #define, then #precache, separated by blank lines. #using and #precache are sorted alphabetically; #insert and #define keep their relative order because they are order-sensitive. Applies to Format Document only, never to range or on-type formatting.",
 					"scope": "window"
+				},
+				"gscode.format.alignConsecutive": {
+					"type": "boolean",
+					"default": true,
+					"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. Applies to Format Document only.",
+					"scope": "window"
 				}
 			}
 		},

@@ -337,6 +337,60 @@ public class CorpusTests
         return left.SequenceEqual(right, StringComparer.Ordinal);
     }
 
+    [Fact]
+    public void AssignmentAlignment_PreservesTokensAndIsIdempotent()
+    {
+        // Alignment adds only whitespace, so re-lexing the aligned text must give the same tokens
+        // as the unaligned; and aligning an already-aligned file must change nothing. Proven over
+        // real files, since alignment is a text post-pass where a stray edit would hide.
+        if ( SkipWithoutCorpus() )
+        {
+            return;
+        }
+
+        List<string> tokenViolations = [];
+        List<string> idempotenceViolations = [];
+        int aligned = 0;
+        int checkedFiles = ForEachFormattableSample(
+            (path, result, output) =>
+            {
+                string once = AssignmentAligner.Align(output);
+                if ( !string.Equals(once, output, StringComparison.Ordinal) )
+                {
+                    aligned++;
+                }
+
+                // Compared against the FORMATTED output, not the original source: the format step
+                // reorders directives, which legitimately changes the token sequence. Isolating the
+                // aligner means diffing its input against its output.
+                if ( !SameKinds(SignificantTokens(Lexer.Lex(SourceText.From(output)).Tokens), SignificantTokens(Lexer.Lex(SourceText.From(once)).Tokens)) )
+                {
+                    tokenViolations.Add(path);
+                }
+
+                if ( !string.Equals(AssignmentAligner.Align(once), once, StringComparison.Ordinal) )
+                {
+                    idempotenceViolations.Add(path);
+                }
+            },
+            FormatOptions.Default with { AlignConsecutive = false });
+
+        _output.WriteLine($"Aligned assignments in {aligned} of {checkedFiles} formatted scripts.");
+        foreach ( string violation in tokenViolations.Take(25) )
+        {
+            _output.WriteLine("  token change: " + violation);
+        }
+
+        foreach ( string violation in idempotenceViolations.Take(25) )
+        {
+            _output.WriteLine("  not idempotent: " + violation);
+        }
+
+        Assert.Empty(tokenViolations);
+        Assert.Empty(idempotenceViolations);
+        Assert.True(aligned > 0, "no file gained alignment, so this gate proved nothing");
+    }
+
     private static int ForEachFormattableSample(
         Action<string, ParseResult, string> check, FormatOptions? options = null)
     {

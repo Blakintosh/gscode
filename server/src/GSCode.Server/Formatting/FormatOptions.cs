@@ -34,12 +34,20 @@ namespace GSCode.Server.Formatting;
 /// arrangement it could change the meaning of. On by default: 498 of the 980 stock scripts are not
 /// in canonical order and the same 498 have unsorted <c>#using</c> lines, so the tidying is real.
 /// </param>
+/// <param name="AlignConsecutive">
+/// Whether a run of consecutive assignments has its operators aligned. A deliberate override of the
+/// stock scripts, which align almost nothing, so it is OFF here — the code-level default used by
+/// tests and the corpus gates, which must keep measuring the unaligned baseline. The client setting
+/// defaults it on, the same split already used for <see cref="UseTabs"/>: the code default is the
+/// conservative one, the editor default is the intended one.
+/// </param>
 public readonly record struct FormatOptions(
     int IndentWidth = 4,
     bool UseTabs = false,
     bool PadParens = true,
     int MaxBlankLines = 2,
-    bool SortDirectives = true)
+    bool SortDirectives = true,
+    bool AlignConsecutive = false)
 {
     /// <summary>
     /// The defaults, for callers with no editor settings to hand (tests, corpus gates).
@@ -50,7 +58,8 @@ public readonly record struct FormatOptions(
     /// blank lines, not the values declared above.
     /// </summary>
     public static FormatOptions Default { get; } = new(
-        IndentWidth: 4, UseTabs: false, PadParens: true, MaxBlankLines: 2, SortDirectives: true);
+        IndentWidth: 4, UseTabs: false, PadParens: true, MaxBlankLines: 2,
+        SortDirectives: true, AlignConsecutive: false);
 
     /// <summary>One level of indentation as text.</summary>
     public string IndentUnit

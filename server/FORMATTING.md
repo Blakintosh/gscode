@@ -137,7 +137,36 @@ Worth it: 498 of the 980 stock scripts are not in canonical order, and the same 
 #precache( "string", "TEAM_GATHER_TEAM_STEALTH_ENTER" );
 ```
 
-## 6. Worked example
+## 6. Consecutive alignment
+
+`gscode.format.alignConsecutive` (on) lines up the operators of a run of consecutive assignments,
+one space past the longest left-hand side. Compound operators start at that column and extend
+rightward.
+
+```gsc
+level.wasp_enabled          = true;
+level.wasp_round_count_blah = 1;      // longest LHS sets the column
+level.wasp_round_count      += 1;     // '+' at the column, '=' one past
+```
+
+Like directive sorting, this is a deliberate override of the corpus — the stock scripts align
+almost nothing (2 assignments in 397,111 lines) — so it is a setting, and it runs as a whitespace
+post-pass: it adds spaces only between a left-hand side and its operator, never touches a token, and
+is idempotent. It re-lexes the text rather than scanning it, so a `=` inside a string, comment, or
+`for` header is never mistaken for an operator.
+
+Grouping: a blank line or a statement of a different kind ends a run; a comment on its own line is
+transparent, and the assignments above and below it align together. A run of one is left at ordinary
+single spacing. Runs are per indentation level, so a nested block aligns within itself.
+
+It applies to **Format Document only**, not range or on-type formatting — alignment is a property of
+a group, not of the one line being edited.
+
+**Not yet aligned:** the *interior* of subscripts and call arguments — `foo[ "a" ][ "bb" ]` lining
+its `]` columns up, or consecutive `register( … )` calls lining their arguments up. That is the same
+column-padding engine and is the next phase; today only the assignment operator itself is aligned.
+
+## 7. Worked example
 
 Everything above, applied:
 
@@ -217,7 +246,7 @@ function flop()
 }
 ```
 
-## 7. Settings
+## 8. Settings
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -226,8 +255,9 @@ function flop()
 | `gscode.format.padParens` | `true` | `if ( x )` against `if (x)` — the interior, not the keyword gap |
 | `gscode.format.maxBlankLines` | `2` | Longest run of blank lines preserved |
 | `gscode.format.sortDirectives` | `true` | Group and sort the leading directive block. Format Document only |
+| `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. Format Document only |
 
-## 8. What the formatter will not do
+## 9. What the formatter will not do
 
 - Reflow or wrap long lines. Stock has no width discipline and breaking a line changes how it reads.
 - Reorder anything except the leading directive block, and that only under §5's conditions.

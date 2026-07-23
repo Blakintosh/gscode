@@ -24,6 +24,9 @@ namespace GSCode.Server.Handlers;
 /// <summary>Payload for gscode/rawFolderWriteWarning.</summary>
 public sealed record RawFolderWriteWarningParams(string Path, string RelativePath, bool IsStockScript);
 
+/// <summary>Payload for gscode/gameMismatch: the selected game does not match what the file looks like.</summary>
+public sealed record GameMismatchParams(string SelectedGame, string SelectedDisplayName, bool FileLooksLikeBlackOps3);
+
 /// <summary>
 /// Document lifecycle: incremental text sync, ~250 ms debounced re-analysis on typing,
 /// immediate analysis on open and save, diagnostic clearing on close.
@@ -99,7 +102,35 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             request.TextDocument.Version ?? 0);
 
         AnalyzeAndPublish(document, request.TextDocument.Uri);
+        WarnIfGameLooksWrong(document);
         return Unit.Task;
+    }
+
+    private int _gameMismatchNotified;
+
+    /// <summary>
+    /// Offers to switch the game version when an opened file plainly does not match the selected
+    /// one. Fired at most once per session, and only on a decisive import-directive signal — a
+    /// wrong guess is just a dismissable prompt, so being quiet matters more than being exhaustive.
+    /// </summary>
+    private void WarnIfGameLooksWrong(OpenDocument document)
+    {
+        GameProfile active = GameProfile.Active;
+        GameShape shape = GameShapeDetector.Detect(document.Text.Text);
+        if ( !GameShapeDetector.Mismatches(active, shape) )
+        {
+            return;
+        }
+
+        // Once per session; Interlocked so two files opening at once cannot both prompt.
+        if ( Interlocked.Exchange(ref _gameMismatchNotified, 1) != 0 )
+        {
+            return;
+        }
+
+        _server.SendNotification(
+            "gscode/gameMismatch",
+            new GameMismatchParams(active.ShortName, active.DisplayName, shape == GameShape.BlackOps3));
     }
 
     public override Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken cancellationToken)

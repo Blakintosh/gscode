@@ -387,6 +387,49 @@ function registerIndexingStatusBar(
     );
 
     languageClient.onNotification(
+        "gscode/gameMismatch",
+        async (params: { selectedGame: string; selectedDisplayName: string; fileLooksLikeBlackOps3: boolean }) => {
+            // The games the extension can target, in release order, with their display names.
+            const games: { id: string; label: string }[] = [
+                { id: "cod4", label: "Call of Duty 4: Modern Warfare (2007)" },
+                { id: "waw", label: "Call of Duty: World at War (2008)" },
+                { id: "mw2", label: "Call of Duty: Modern Warfare 2 (2009)" },
+                { id: "bo1", label: "Call of Duty: Black Ops (2010)" },
+                { id: "mw3", label: "Call of Duty: Modern Warfare 3 (2011)" },
+                { id: "bo2", label: "Call of Duty: Black Ops II (2012)" },
+                { id: "ghosts", label: "Call of Duty: Ghosts (2013)" },
+                { id: "aw", label: "Call of Duty: Advanced Warfare (2014)" },
+                { id: "bo3", label: "Call of Duty: Black Ops III (2015)" },
+            ];
+
+            const looksLike = params.fileLooksLikeBlackOps3
+                ? "Black Ops III"
+                : "an earlier Call of Duty";
+            const choice = await vscode.window.showInformationMessage(
+                `This file looks like ${looksLike}, but the game version is set to ${params.selectedDisplayName}. Switch it?`,
+                "Choose Game…",
+                "Not Now",
+            );
+
+            if (choice !== "Choose Game…") {
+                return;
+            }
+
+            const picked = await vscode.window.showQuickPick(
+                games.map((g) => ({ label: g.label, id: g.id, picked: g.id === params.selectedGame })),
+                { title: "Select the game this workspace targets", placeHolder: "Call of Duty game" },
+            );
+
+            if (picked) {
+                await vscode.workspace
+                    .getConfiguration("gscode")
+                    .update("game", picked.id, vscode.ConfigurationTarget.Workspace);
+                log.info(`Game version set to ${picked.id}.`);
+            }
+        },
+    );
+
+    languageClient.onNotification(
         "gscode/indexingComplete",
         (params: {
             filesIndexed: number;

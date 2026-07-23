@@ -296,10 +296,13 @@ public static class GscFormatter
             formatted = DirectiveSorter.Sort(formatted) ?? formatted;
         }
 
-        // Consecutive alignment is also a post-pass: it changes only whitespace inside assignment
-        // lines, so the gate above has already vouched for the tokens.
+        // Consecutive alignment is also a post-pass: it changes only whitespace, so the gate above
+        // has already vouched for the tokens. Columns first — padding subscript and argument
+        // interiors equalises the left-hand sides — then the operators, which the equalised sides
+        // then line up almost for free.
         if ( options.AlignConsecutive )
         {
+            formatted = ColumnAligner.Align(formatted);
             formatted = AssignmentAligner.Align(formatted);
         }
 

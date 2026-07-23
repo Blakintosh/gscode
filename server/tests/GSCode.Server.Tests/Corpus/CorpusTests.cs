@@ -338,6 +338,57 @@ public class CorpusTests
     }
 
     [Fact]
+    public void ColumnAlignment_PreservesTokensAndIsIdempotent()
+    {
+        // Column alignment adds only whitespace, so re-lexing the aligned text must give the same
+        // tokens as the formatted output; and it must be a fixed point, which is the property its
+        // gap-replacement design turns on. Proven over real files.
+        if ( SkipWithoutCorpus() )
+        {
+            return;
+        }
+
+        List<string> tokenViolations = [];
+        List<string> idempotenceViolations = [];
+        int aligned = 0;
+        int checkedFiles = ForEachFormattableSample(
+            (path, result, output) =>
+            {
+                string once = ColumnAligner.Align(output);
+                if ( !string.Equals(once, output, StringComparison.Ordinal) )
+                {
+                    aligned++;
+                }
+
+                if ( !SameKinds(SignificantTokens(Lexer.Lex(SourceText.From(output)).Tokens), SignificantTokens(Lexer.Lex(SourceText.From(once)).Tokens)) )
+                {
+                    tokenViolations.Add(path);
+                }
+
+                if ( !string.Equals(ColumnAligner.Align(once), once, StringComparison.Ordinal) )
+                {
+                    idempotenceViolations.Add(path);
+                }
+            },
+            FormatOptions.Default with { AlignConsecutive = false });
+
+        _output.WriteLine($"Column-aligned {aligned} of {checkedFiles} formatted scripts.");
+        foreach ( string violation in tokenViolations.Take(25) )
+        {
+            _output.WriteLine("  token change: " + violation);
+        }
+
+        foreach ( string violation in idempotenceViolations.Take(25) )
+        {
+            _output.WriteLine("  not idempotent: " + violation);
+        }
+
+        Assert.Empty(tokenViolations);
+        Assert.Empty(idempotenceViolations);
+        Assert.True(aligned > 0, "no file gained column alignment, so this gate proved nothing");
+    }
+
+    [Fact]
     public void AssignmentAlignment_PreservesTokensAndIsIdempotent()
     {
         // Alignment adds only whitespace, so re-lexing the aligned text must give the same tokens

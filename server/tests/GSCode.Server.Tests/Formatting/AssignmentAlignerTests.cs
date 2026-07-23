@@ -198,28 +198,6 @@ public class AssignmentAlignerTests
         Assert.Contains("\tbbbbbb = 2;\n", formatted, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void ArrayLeftHandSides_AlignTheOperator_ButNotYetTheBracketColumns()
-    {
-        // Documents the current boundary. v1 aligns the '=' after the whole LHS, so the operators
-        // line up even for subscripted targets -- but the INTERIOR of each subscript is not yet
-        // column-padded. That is the next phase, the same engine as call-argument alignment.
-        string formatted = Format("""
-            function f()
-            {
-            	foo[ "lol" ][ "lol2" ] = "something";
-            	foo[ "somethingelse" ][ "other" ] = "garbage";
-            }
-            """);
-
-        string[] lines = formatted.Split('\n');
-        string shortLhs = lines.Single(line => line.Contains("\"something\"", StringComparison.Ordinal));
-        string longLhs = lines.Single(line => line.Contains("\"garbage\"", StringComparison.Ordinal));
-
-        // Operators align: the '=' sits at the same column on both lines.
-        Assert.Equal(longLhs.IndexOf('=', StringComparison.Ordinal), shortLhs.IndexOf('=', StringComparison.Ordinal));
-
-        // Interiors are NOT column-padded yet: each subscript keeps its single-space interior.
-        Assert.Contains("foo[ \"lol\" ][ \"lol2\" ]", formatted, StringComparison.Ordinal);
-    }
+    // Subscript-interior alignment for array left-hand sides lives in ColumnAlignerTests; this
+    // file covers the operator alignment those two aligners compose with.
 }

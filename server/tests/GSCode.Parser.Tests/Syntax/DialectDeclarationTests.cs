@@ -110,6 +110,27 @@ public class DialectDeclarationTests
     }
 
     [Fact]
+    public void AKeywordlessDialectHasNoClasses()
+    {
+        // Classes are a BO3 (T7) construct. In CoD4 `class` is an ordinary identifier, so a class
+        // declaration never forms -- no ClassNode, and the malformed top-level line is reported.
+        ParseTree tree = ParserTestHelper.Parse("class Foo\n{\n}\n", Cod4);
+
+        Assert.DoesNotContain(tree.Root.Elements, static element => element is ClassNode);
+        Assert.NotEmpty(tree.Diagnostics);
+    }
+
+    [Fact]
+    public void BlackOps3StillParsesAClass()
+    {
+        ParseTree tree = ParserTestHelper.Parse("class Foo\n{\n}\n", Bo3);
+
+        ClassNode classNode = Assert.Single(tree.Root.Elements.OfType<ClassNode>());
+        Assert.Equal("Foo", classNode.NameToken.Text);
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    [Fact]
     public void RecoveryResyncsOnTheNextBareFunction()
     {
         // A garbled top-level line must not swallow the function after it.

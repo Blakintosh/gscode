@@ -415,8 +415,11 @@ public sealed class Lexer
             return;
         }
 
-        if ( second == '"' )
+        if ( second == '"' && _profile.HasHashStrings )
         {
+            // #"precached_string" is a Treyarch feature (BO1+). Where the dialect lacks it, this
+            // falls through: '#' lexes as a bare Hash and the string on its own, so the parser
+            // flags the stray '#' rather than silently accepting a foreign literal.
             LexString(TokenKind.HashString, prefixLength: 1);
             return;
         }

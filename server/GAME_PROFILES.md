@@ -130,6 +130,23 @@ Still to pin down (constructs whose exact introduction point is unconfirmed): th
 (barely present in CoD4, common from MW2), `assert`/`assertmsg`, `breakpoint`, and any per-game
 builtins. Add them as flags once a construct is confirmed to differ between games.
 
+## Root discovery (where the raw scripts live)
+
+Only BO3 has an install the extension can find on its own — the `TA_TOOLS_PATH` environment variable
+plus the `share\raw` subfolder, both recorded on its profile. No other game ships that, so **every
+non-BO3 game takes a user-defined raw path**: the existing `gscode.rawPath` (and `gscode.modsPath`)
+settings, which override the profile's env-var lookup for any game. With none set, the workspace
+runs in workspace-only mode, which is first-class.
+
+So the model is: BO3 auto-detects via the env var; every earlier game points `gscode.rawPath` at
+its own raw scripts folder. The profile already encodes this (`RootEnvironmentVariable` /
+`RawSubfolder` / `ModsSubfolder` are null for every game but BO3), so nothing hardcodes BO3's paths.
+
+Planned enhancement (not built): after switching to a non-BO3 game with no raw path set, prompt once
+to configure `gscode.rawPath` — the same nudge as the game-mismatch prompt. A per-game raw path
+(so switching games remembers each) is a possible later refinement; a workspace is one game, so a
+single `gscode.rawPath` is enough for now.
+
 ## Coverage
 
 Every game CoD4 through BO3 has its profile filled in. Still open (unsupported shells): everything

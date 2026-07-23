@@ -69,6 +69,195 @@ public static class GscFormatter
     }
 
     /// <summary>
+    /// The formatting result as a set of PER-REGION edits — one small edit for each run of changed
+    /// lines, with unchanged lines left out entirely.
+    ///
+    /// <see cref="FormatMinimal"/> returns a single edit spanning the first change to the last. For
+    /// a document-wide reindent that is nearly the whole file, and an editor preserves the caret by
+    /// mapping its offset through the edits — so a caret sitting inside that one big replacement has
+    /// nowhere to map to and snaps to the edit's end. Diffing by LINES instead keeps every
+    /// unchanged line, and the caret resting on one, untouched.
+    ///
+    /// The edits together reproduce <see cref="Format"/>'s output exactly, are ordered, and never
+    /// overlap — a matched (unchanged) line always sits between two hunks — so they satisfy the
+    /// LSP's requirements for a multi-edit response.
+    /// </summary>
+    public static ImmutableArray<FormatEdit> FormatMinimalEdits(ParseResult result, FormatOptions? options = null)
+    {
+        string? formatted = Format(result, options);
+        if ( formatted is null )
+        {
+            return [];
+        }
+
+        string original = result.Text.Text;
+        if ( string.Equals(original, formatted, StringComparison.Ordinal) )
+        {
+            return [];
+        }
+
+        return DiffByLines(result.Text, original, formatted);
+    }
+
+    /// <summary>Beyond this many changed lines on either side, one whole-region edit is used
+    /// instead of a line diff. The line-diff matrix is quadratic, and a file this size being
+    /// reindented wholesale is rare enough that the coarser edit is an acceptable fallback.</summary>
+    private const int LineDiffLimit = 3000;
+
+    private static ImmutableArray<FormatEdit> DiffByLines(SourceText text, string original, string formatted)
+    {
+        List<LineSpan> originalLines = SplitLines(original);
+        List<string> formattedLines = [.. SplitLines(formatted).Select(static span => span.Text)];
+
+        int originalCount = originalLines.Count;
+        int formattedCount = formattedLines.Count;
+
+        // Trim the runs of identical lines at the top and bottom; only the middle can differ.
+        int lead = 0;
+        while ( lead < originalCount && lead < formattedCount
+            && string.Equals(originalLines[lead].Text, formattedLines[lead], StringComparison.Ordinal) )
+        {
+            lead++;
+        }
+
+        int tail = 0;
+        while ( tail < originalCount - lead && tail < formattedCount - lead
+            && string.Equals(
+                originalLines[originalCount - 1 - tail].Text,
+                formattedLines[formattedCount - 1 - tail],
+                StringComparison.Ordinal) )
+        {
+            tail++;
+        }
+
+        int midOriginal = originalCount - tail - lead;
+        int midFormatted = formattedCount - tail - lead;
+
+        ImmutableArray<FormatEdit>.Builder edits = ImmutableArray.CreateBuilder<FormatEdit>();
+
+        // One coarse edit when the middle is empty on a side (pure insertion or deletion) or too
+        // large to diff. Correct either way; it just may span the caret.
+        if ( midOriginal == 0 || midFormatted == 0 || midOriginal > LineDiffLimit || midFormatted > LineDiffLimit )
+        {
+            AddEdit(edits, text, originalLines, formattedLines, lead, originalCount - tail, lead, formattedCount - tail);
+            return edits.ToImmutable();
+        }
+
+        // Longest common subsequence of the middle lines: the anchors that stay put, so the gaps
+        // between them are the smallest set of edits that turns original into formatted.
+        int[,] lcs = new int[midOriginal + 1, midFormatted + 1];
+        for ( int i = midOriginal - 1; i >= 0; i-- )
+        {
+            for ( int j = midFormatted - 1; j >= 0; j-- )
+            {
+                if ( string.Equals(originalLines[lead + i].Text, formattedLines[lead + j], StringComparison.Ordinal) )
+                {
+                    lcs[i, j] = lcs[i + 1, j + 1] + 1;
+                }
+                else
+                {
+                    lcs[i, j] = Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
+                }
+            }
+        }
+
+        int originalPos = 0;
+        int formattedPos = 0;
+        int walkI = 0;
+        int walkJ = 0;
+        while ( walkI < midOriginal && walkJ < midFormatted )
+        {
+            if ( string.Equals(originalLines[lead + walkI].Text, formattedLines[lead + walkJ], StringComparison.Ordinal) )
+            {
+                // A line that stays. Everything queued before it is one edit.
+                if ( walkI > originalPos || walkJ > formattedPos )
+                {
+                    AddEdit(
+                        edits, text, originalLines, formattedLines,
+                        lead + originalPos, lead + walkI, lead + formattedPos, lead + walkJ);
+                }
+
+                originalPos = walkI + 1;
+                formattedPos = walkJ + 1;
+                walkI++;
+                walkJ++;
+            }
+            else if ( lcs[walkI + 1, walkJ] >= lcs[walkI, walkJ + 1] )
+            {
+                walkI++;
+            }
+            else
+            {
+                walkJ++;
+            }
+        }
+
+        // The final gap after the last anchor.
+        if ( midOriginal > originalPos || midFormatted > formattedPos )
+        {
+            AddEdit(
+                edits, text, originalLines, formattedLines,
+                lead + originalPos, lead + midOriginal, lead + formattedPos, lead + midFormatted);
+        }
+
+        return edits.ToImmutable();
+    }
+
+    /// <summary>
+    /// Emits one edit replacing original lines <c>[originalStart, originalEnd)</c> with formatted
+    /// lines <c>[formattedStart, formattedEnd)</c>. Each line carries its own newline, so the line
+    /// boundaries are exactly the offsets to cut at and a line range maps to a contiguous span.
+    /// </summary>
+    private static void AddEdit(
+        ImmutableArray<FormatEdit>.Builder edits,
+        SourceText text,
+        List<LineSpan> originalLines,
+        List<string> formattedLines,
+        int originalStart,
+        int originalEnd,
+        int formattedStart,
+        int formattedEnd)
+    {
+        int startOffset = originalStart < originalLines.Count ? originalLines[originalStart].Offset : text.Length;
+        int endOffset = originalEnd < originalLines.Count ? originalLines[originalEnd].Offset : text.Length;
+
+        StringBuilder replacement = new();
+        for ( int index = formattedStart; index < formattedEnd; index++ )
+        {
+            replacement.Append(formattedLines[index]);
+        }
+
+        TextRange range = new(text.GetPosition(startOffset), text.GetPosition(endOffset));
+        edits.Add(new FormatEdit(range, replacement.ToString()));
+    }
+
+    /// <summary>A source line and its start offset. The text keeps its trailing newline, if any.</summary>
+    private readonly record struct LineSpan(int Offset, string Text);
+
+    private static List<LineSpan> SplitLines(string source)
+    {
+        List<LineSpan> lines = [];
+        int start = 0;
+        for ( int index = 0; index < source.Length; index++ )
+        {
+            if ( source[index] == '\n' )
+            {
+                lines.Add(new LineSpan(start, source.Substring(start, index - start + 1)));
+                start = index + 1;
+            }
+        }
+
+        // A final line without a trailing newline. When the text ends on '\n', start == length and
+        // there is nothing left, which is correct — no empty line is invented.
+        if ( start < source.Length )
+        {
+            lines.Add(new LineSpan(start, source.Substring(start)));
+        }
+
+        return lines;
+    }
+
+    /// <summary>
     /// Produces the formatted document text, or null when formatting is refused (syntax
     /// errors) or would not be safe (the token stream would change). A null result means
     /// "make no edits".

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using GSCode.Parser;
 using GSCode.Workspace.Documents;
 using GSCode.Server.Configuration;
@@ -47,19 +48,23 @@ public sealed class DocumentFormattingHandler : DocumentFormattingHandlerBase
         // Every other stale read shows something wrong; this one writes something wrong.
         ParseResult analysis = _documents.AnalyzeIfStale(document);
 
-        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(analysis, OptionsFrom(request.Options));
-        if ( edit is null )
+        // Per-region edits rather than one document-spanning replacement, so the editor can keep
+        // the caret on whatever unchanged line it started on instead of dropping it at the end of
+        // a whole-file edit.
+        ImmutableArray<GscFormatter.FormatEdit> edits =
+            GscFormatter.FormatMinimalEdits(analysis, OptionsFrom(request.Options));
+        if ( edits.IsEmpty )
         {
             return Task.FromResult<TextEditContainer?>(null);
         }
 
-        TextEdit textEdit = new()
+        List<TextEdit> textEdits = [.. edits.Select(static edit => new TextEdit
         {
-            Range = edit.Value.Range.ToLsp(),
-            NewText = edit.Value.NewText,
-        };
+            Range = edit.Range.ToLsp(),
+            NewText = edit.NewText,
+        })];
 
-        return Task.FromResult<TextEditContainer?>(new TextEditContainer(textEdit));
+        return Task.FromResult<TextEditContainer?>(new TextEditContainer(textEdits));
     }
 
     /// <summary>

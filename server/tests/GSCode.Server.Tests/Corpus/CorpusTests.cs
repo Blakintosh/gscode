@@ -150,6 +150,106 @@ public class CorpusTests
     }
 
     [Fact]
+    public void Formatter_LineEditsReproduceTheFormattedText_AndSpareUnchangedLines()
+    {
+        // The per-region edits the handlers return must, applied together, equal the whole-document
+        // format -- proven over real files, since the line diff is where a reproduction bug would
+        // hide. And every edit must stay off lines the formatter did not change, which is the whole
+        // point: that is what keeps the editor's caret still.
+        if ( SkipWithoutCorpus() )
+        {
+            return;
+        }
+
+        List<string> reproduceViolations = [];
+        List<string> spanViolations = [];
+        int formatted = ForEachFormattableSample((path, result, output) =>
+        {
+            SourceText text = result.Text;
+            System.Collections.Immutable.ImmutableArray<GscFormatter.FormatEdit> edits =
+                GscFormatter.FormatMinimalEdits(result);
+
+            if ( !string.Equals(ApplyEdits(text, edits), output, StringComparison.Ordinal) )
+            {
+                reproduceViolations.Add(path);
+            }
+
+            // No edit may cover a line whose original text already matches the formatted text at
+            // the same line index within the edit -- i.e. an edit must not straddle a line both
+            // sides agree on. Checked structurally: an edit's original line range and its
+            // replacement must not share a common leading or trailing whole line.
+            foreach ( GscFormatter.FormatEdit edit in edits )
+            {
+                if ( EditSharesAWholeBoundaryLine(text, edit) )
+                {
+                    spanViolations.Add(path);
+                    break;
+                }
+            }
+        });
+
+        _output.WriteLine($"Checked line-edit reproduction across {formatted} formatted scripts.");
+        foreach ( string violation in reproduceViolations.Take(25) )
+        {
+            _output.WriteLine("  reproduce: " + violation);
+        }
+
+        foreach ( string violation in spanViolations.Take(25) )
+        {
+            _output.WriteLine("  over-span: " + violation);
+        }
+
+        Assert.Empty(reproduceViolations);
+        Assert.Empty(spanViolations);
+    }
+
+    private static string ApplyEdits(SourceText text, System.Collections.Immutable.ImmutableArray<GscFormatter.FormatEdit> edits)
+    {
+        string result = text.Text;
+        foreach ( GscFormatter.FormatEdit edit in edits.OrderByDescending(e => text.GetOffset(e.Range.Start)) )
+        {
+            int start = text.GetOffset(edit.Range.Start);
+            int end = text.GetOffset(edit.Range.End);
+            result = string.Concat(result.AsSpan(0, start), edit.NewText, result.AsSpan(end));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Whether an edit's original span and its replacement begin or end with the same whole line —
+    /// which would mean the diff swallowed a line both sides agree on, the exact thing that moves a
+    /// caret resting on it.
+    /// </summary>
+    private static bool EditSharesAWholeBoundaryLine(SourceText text, GscFormatter.FormatEdit edit)
+    {
+        int start = text.GetOffset(edit.Range.Start);
+        int end = text.GetOffset(edit.Range.End);
+        string removed = text.Text.Substring(start, end - start);
+        string added = edit.NewText;
+
+        // Both must start at a line boundary for this comparison to be about whole lines.
+        if ( start > 0 && text.Text[start - 1] != '\n' )
+        {
+            return false;
+        }
+
+        string[] removedLines = removed.Split('\n');
+        string[] addedLines = added.Split('\n');
+        if ( removedLines.Length < 2 || addedLines.Length < 2 )
+        {
+            return false;
+        }
+
+        bool sharedFirst = string.Equals(removedLines[0], addedLines[0], StringComparison.Ordinal)
+            && removedLines[0].Length > 0;
+        bool sharedLast = string.Equals(removedLines[^1], addedLines[^1], StringComparison.Ordinal)
+            && removedLines[^1].Length > 0;
+
+        return sharedFirst || sharedLast;
+    }
+
+    [Fact]
     public void Formatter_IsIdempotent()
     {
         if ( SkipWithoutCorpus() )

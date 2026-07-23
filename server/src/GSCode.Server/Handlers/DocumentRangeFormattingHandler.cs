@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Documents;
@@ -48,25 +49,25 @@ public sealed class DocumentRangeFormattingHandler : DocumentRangeFormattingHand
         // Every other stale read shows something wrong; this one writes something wrong.
         ParseResult analysis = _documents.AnalyzeIfStale(document);
 
-        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(analysis, OptionsFrom(request.Options));
-        if ( edit is null )
+        // Per-region edits, keeping only those that touch the requested range. Multiple small
+        // edits also let the editor hold the caret on an unchanged line.
+        ImmutableArray<GscFormatter.FormatEdit> edits =
+            GscFormatter.FormatMinimalEdits(analysis, OptionsFrom(request.Options));
+        if ( edits.IsEmpty )
         {
             return Task.FromResult<TextEditContainer>(new TextEditContainer());
         }
 
         TextRange requested = request.Range.ToCore();
-        if ( !Overlaps(edit.Value.Range, requested) )
-        {
-            return Task.FromResult<TextEditContainer>(new TextEditContainer());
-        }
+        List<TextEdit> textEdits = [.. edits
+            .Where(edit => Overlaps(edit.Range, requested))
+            .Select(static edit => new TextEdit
+            {
+                Range = edit.Range.ToLsp(),
+                NewText = edit.NewText,
+            })];
 
-        TextEdit textEdit = new()
-        {
-            Range = edit.Value.Range.ToLsp(),
-            NewText = edit.Value.NewText,
-        };
-
-        return Task.FromResult<TextEditContainer>(new TextEditContainer(textEdit));
+        return Task.FromResult<TextEditContainer>(new TextEditContainer(textEdits));
     }
 
     private static bool Overlaps(TextRange edit, TextRange requested)

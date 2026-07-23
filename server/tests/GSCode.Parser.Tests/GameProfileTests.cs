@@ -68,4 +68,48 @@ public class GameProfileTests
         // The seam a dialect port turns into a per-workspace choice; today it is fixed.
         Assert.Same(GameProfile.BlackOps3, GameProfile.Active);
     }
+
+    [Fact]
+    public void TheLineageRunsFromCod4ToBo6InReleaseOrder()
+    {
+        Assert.Equal("cod4", GameProfile.All[0].ShortName);
+        Assert.Equal("bo6", GameProfile.All[^1].ShortName);
+
+        for ( int i = 1; i < GameProfile.All.Length; i++ )
+        {
+            Assert.True(
+                GameProfile.All[i].ReleaseYear >= GameProfile.All[i - 1].ReleaseYear,
+                $"{GameProfile.All[i].ShortName} is out of release order");
+        }
+    }
+
+    [Fact]
+    public void OnlyBlackOps3IsVerified_TheRestAreShells()
+    {
+        // Every shell must stay a shell until someone confirms it, so this pins the intent: the
+        // lineage is nameable, but only BO3's capabilities may be trusted.
+        Assert.Single(GameProfile.All, static profile => profile.Verified);
+        Assert.Same(GameProfile.BlackOps3, GameProfile.All.Single(static profile => profile.Verified));
+    }
+
+    [Theory]
+    [InlineData("bo3")]
+    [InlineData("BO3")]
+    [InlineData("t7")]
+    public void ByName_FindsAGameByShortNameOrId(string name)
+    {
+        Assert.Same(GameProfile.BlackOps3, GameProfile.ByName(name));
+    }
+
+    [Fact]
+    public void ByName_ReturnsNullForAnUnknownName()
+    {
+        Assert.Null(GameProfile.ByName("halo"));
+    }
+
+    [Fact]
+    public void EveryShortNameIsUnique()
+    {
+        Assert.Equal(GameProfile.All.Length, GameProfile.All.Select(static profile => profile.ShortName).Distinct().Count());
+    }
 }

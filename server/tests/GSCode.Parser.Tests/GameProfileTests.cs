@@ -166,6 +166,26 @@ public class GameProfileTests
     }
 
     [Fact]
+    public void ForeachArrivesInMw2()
+    {
+        // CoD4 (2007) and WaW (2008) have only for/while; MW2 (2009) onward has foreach.
+        Assert.False(GameProfile.ByName("cod4")!.HasForeach);
+        Assert.False(GameProfile.ByName("waw")!.HasForeach);
+        Assert.True(GameProfile.ByName("mw2")!.HasForeach);
+        Assert.True(GameProfile.ByName("bo1")!.HasForeach);
+        Assert.True(GameProfile.BlackOps3.HasForeach);
+    }
+
+    [Fact]
+    public void DoWhileIsBlackOps3Only()
+    {
+        Assert.True(GameProfile.BlackOps3.HasDoWhile);
+        Assert.All(
+            GameProfile.All.Where(static profile => profile.ShortName != "bo3"),
+            static profile => Assert.False(profile.HasDoWhile, profile.ShortName));
+    }
+
+    [Fact]
     public void OnlyBlackOps3UsesAtSignScriptDoc()
     {
         // BO3 uses /@ @/; every earlier game fences ScriptDoc with ///ScriptDocBegin.

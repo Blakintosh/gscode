@@ -8,13 +8,13 @@ namespace GSCode.Core;
 /// </summary>
 public sealed partial record GameProfile
 {
-    /// <summary>Call of Duty 4: Modern Warfare (2007) — the original Infinity Ward GSC.</summary>
+    /// <summary>Call of Duty 4: Modern Warfare (2007) — the original Infinity Ward GSC; no foreach.</summary>
     public static GameProfile Cod4 { get; } =
-        Targeted("cod4", "Call of Duty 4: Modern Warfare", 2007, EngineFamily.InfinityWard);
+        Targeted("cod4", "Call of Duty 4: Modern Warfare", 2007, EngineFamily.InfinityWard, hasForeach: false);
 
-    /// <summary>Call of Duty: World at War (2008) — Treyarch, first to ship client scripts.</summary>
+    /// <summary>Call of Duty: World at War (2008) — Treyarch, first with client scripts; no foreach.</summary>
     public static GameProfile WorldAtWar { get; } =
-        Targeted("waw", "Call of Duty: World at War", 2008, EngineFamily.Treyarch, hasClientScripts: true);
+        Targeted("waw", "Call of Duty: World at War", 2008, EngineFamily.Treyarch, hasClientScripts: true, hasForeach: false);
 
     /// <summary>Call of Duty: Modern Warfare 2 (2009) — has file-scope constants.</summary>
     public static GameProfile ModernWarfare2 { get; } =
@@ -74,6 +74,8 @@ public sealed partial record GameProfile
         ArraysPassedByReference = true,
         HasHashStrings = true,
         HasPrecacheDirective = true,
+        HasForeach = true,
+        HasDoWhile = true,
         // BO3 dropped inline path calls: a function is reached by #using + ns::foo, never by path.
         HasInlinePathCalls = false,
         RootEnvironmentVariable = "TA_TOOLS_PATH",

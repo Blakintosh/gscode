@@ -109,6 +109,27 @@ Capability axes on `GameProfile`:
 Also: no `.csc` in any IW game; `.csc` in the Treyarch games; no `function` keyword, no classes, no
 `->`/`new`/varargs, `#include` imports and `::` path-qualified pointers in every pre-BO3 game.
 
+## Language constructs
+
+Beyond the shape axes above, individual language constructs appear at different points in the
+lineage. Modelled on `GameProfile` as `Has*` flags, set from what the scripts actually use.
+
+| construct | availability |
+|-----------|--------------|
+| `foreach ( item in coll )` | **MW2 (2009) onward.** CoD4 and WaW have only `for`/`while` (0 uses; MW2 has 2,523). `HasForeach`. |
+| `do { … } while ( … )` | **BO3.** Not seen in any pre-BO3 script (usage-derived for the middle games; CoD4 has none). `HasDoWhile`. |
+| classes (`class`/`new`/`->`) | **BO3.** `HasClasses`. |
+| varargs (`…`) | **BO3.** `HasClasses`-era; absent pre-BO3. |
+
+Shared baseline — present in **every** game, so not axes: `for`, `while`, `if`/`else`, `switch`/
+`case`/`default`, `break`, `continue`, `return`, `wait`, `waittill` / `notify` / `endon` /
+`waittillframeend` / `waittillmatch`, `thread`, `isdefined`, `#define` macros, `#using_animtree`,
+`%anim` references, `/# #/` dev blocks.
+
+Still to pin down (constructs whose exact introduction point is unconfirmed): the ternary `?:`
+(barely present in CoD4, common from MW2), `assert`/`assertmsg`, `breakpoint`, and any per-game
+builtins. Add them as flags once a construct is confirmed to differ between games.
+
 ## Coverage
 
 Every game CoD4 through BO3 has its profile filled in. Still open (unsupported shells): everything

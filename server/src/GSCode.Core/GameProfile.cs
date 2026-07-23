@@ -164,6 +164,18 @@ public sealed partial record GameProfile
     public bool HasHashStrings { get; init; }
 
     /// <summary>
+    /// Whether the <c>foreach ( item in collection )</c> loop exists. Introduced in MW2 (2009);
+    /// CoD4 and WaW have only <c>for</c> and <c>while</c>.
+    /// </summary>
+    public bool HasForeach { get; init; }
+
+    /// <summary>
+    /// Whether the <c>do { … } while ( … )</c> loop exists. Present in BO3; not seen in any pre-BO3
+    /// script (the axis is usage-derived for the middle games, and CoD4 has none).
+    /// </summary>
+    public bool HasDoWhile { get; init; }
+
+    /// <summary>
     /// Whether assets are precached with the <c>#precache( "type", "asset" )</c> directive. BO3 only;
     /// every earlier game precaches with ordinary function calls (<c>PrecacheModel( … )</c>,
     /// <c>PrecacheItem( … )</c>), which is why the directive is absent from them.
@@ -256,7 +268,8 @@ public sealed partial record GameProfile
     /// </summary>
     internal static GameProfile Targeted(
         string shortName, string displayName, int year, EngineFamily family,
-        bool hasClientScripts = false, bool hasFileScopeConstants = false, bool hasHashStrings = false)
+        bool hasClientScripts = false, bool hasFileScopeConstants = false, bool hasHashStrings = false,
+        bool hasForeach = true)
     {
         return new GameProfile
         {
@@ -269,8 +282,9 @@ public sealed partial record GameProfile
             HasClientScripts = hasClientScripts,
             HasFileScopeConstants = hasFileScopeConstants,
             HasHashStrings = hasHashStrings,
-            // Every pre-BO3 game shares these: a function reached inline by its file path, and
-            // precache done with function calls rather than a #precache directive.
+            HasForeach = hasForeach,
+            // Every pre-BO3 game shares this: a function reached inline by its file path. do-while
+            // is not seen before BO3, so it stays at the default false here.
             HasInlinePathCalls = true,
         };
     }

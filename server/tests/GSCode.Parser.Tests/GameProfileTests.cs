@@ -72,10 +72,13 @@ public class GameProfileTests
     }
 
     [Fact]
-    public void TheLineageRunsFromCod4ToBo6InReleaseOrder()
+    public void TheLineageIsInReleaseOrderAndTargetsThroughBo3()
     {
+        // The after-BO3 shells live in a gitignored file, so the lineage may or may not reach past
+        // BO3 depending on whether that file is present. What is guaranteed is that it starts at
+        // CoD4, is release-ordered, and the last SUPPORTED game is BO3.
         Assert.Equal("cod4", GameProfile.All[0].ShortName);
-        Assert.Equal("bo6", GameProfile.All[^1].ShortName);
+        Assert.Equal("bo3", GameProfile.All.Last(static profile => profile.Supported).ShortName);
 
         for ( int i = 1; i < GameProfile.All.Length; i++ )
         {

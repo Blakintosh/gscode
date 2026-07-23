@@ -59,7 +59,7 @@ public enum ScriptDocStyle
 /// makes the choice per workspace. Every call site already goes through it, so that change lands
 /// here rather than being scattered.
 /// </summary>
-public sealed record GameProfile
+public sealed partial record GameProfile
 {
     /// <summary>Short identifier used in logs and cache metadata, e.g. "t7".</summary>
     public required string Id { get; init; }
@@ -220,50 +220,16 @@ public sealed record GameProfile
     }
 
     /// <summary>
-    /// The Black Ops 3 (Treyarch T7) profile — the only game the rewrite targets today, and the
-    /// only one whose capabilities are confirmed.
-    /// </summary>
-    public static GameProfile BlackOps3 { get; } = new()
-    {
-        Id = "t7",
-        ShortName = "bo3",
-        DisplayName = "Call of Duty: Black Ops III",
-        ReleaseYear = 2015,
-        Family = EngineFamily.Treyarch,
-        Verified = true,
-        Supported = true,
-        ServerScriptExtension = ".gsc",
-        ClientScriptExtension = ".csc",
-        HeaderExtension = ".gsh",
-        GlobalObjectNames = ["self", "level", "game", "world", "anim", "classes"],
-        BundledDataFileNames =
-        [
-            "t7_api_gsc.json",
-            "t7_api_csc.json",
-            "t7_stock_scripts.txt",
-        ],
-        HasClientScripts = true,
-        HasHeaders = true,
-        HasClasses = true,
-        HasFunctionKeyword = true,
-        HasNamespaceDirective = true,
-        ImportStyle = ImportStyle.Namespace,
-        FunctionPointerStyle = FunctionPointerStyle.Ampersand,
-        ScriptDocStyle = ScriptDocStyle.AtSign,
-        ArraysPassedByReference = true,
-        RootEnvironmentVariable = "TA_TOOLS_PATH",
-        RawSubfolder = @"share\raw",
-        ModsSubfolder = "mods",
-    };
-
-    /// <summary>
     /// A game the extension targets (CoD4 through BO3), with its capabilities filled in from the
     /// worksheet. Anything not passed matches the shared pre-BO3 shape: <c>#include</c> imports,
     /// path-qualified function pointers, arrays by value, <c>/# #/</c> ScriptDoc, and no headers,
     /// classes, <c>function</c> keyword or <c>#namespace</c>. <see cref="Verified"/> stays false
     /// until the capabilities are confirmed against real scripts and the parser fork lands.
+    ///
+    /// The profiles themselves live one-per-area under <c>Profiles/</c>, so this file stays the
+    /// record and the registry rather than a wall of game data.
     /// </summary>
-    private static GameProfile Targeted(
+    internal static GameProfile Targeted(
         string shortName, string displayName, int year, EngineFamily family,
         bool hasClientScripts = false, bool hasFileScopeConstants = false)
     {
@@ -280,49 +246,43 @@ public sealed record GameProfile
         };
     }
 
+    private static readonly Lazy<ImmutableArray<GameProfile>> s_lineage = new(BuildLineage);
+
     /// <summary>
-    /// An unsupported placeholder for a game after BO3: named and ordered, but every capability sits
-    /// at the conservative default until a contributor fills it in against real scripts. The family
-    /// is the one fact worth recording up front, since it is the strongest hint about the dialect.
+    /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. CoD4 through BO3
+    /// are targeted with capabilities filled in (only BO3 is also <see cref="Verified"/>). The
+    /// after-BO3 shells live in a gitignored file (<c>Profiles/UnsupportedProfiles.cs</c>), so the
+    /// repo stops at BO3 — when that file is absent, the lineage simply ends there.
     /// </summary>
-    private static GameProfile Shell(string shortName, string displayName, int year, EngineFamily family)
+    public static ImmutableArray<GameProfile> All => s_lineage.Value;
+
+    private static ImmutableArray<GameProfile> BuildLineage()
     {
-        return new GameProfile
-        {
-            Id = shortName,
-            ShortName = shortName,
-            DisplayName = displayName,
-            ReleaseYear = year,
-            Family = family,
-        };
+        List<GameProfile> profiles =
+        [
+            Cod4,
+            WorldAtWar,
+            ModernWarfare2,
+            BlackOps,
+            ModernWarfare3,
+            BlackOps2,
+            Ghosts,
+            AdvancedWarfare,
+            BlackOps3,
+        ];
+
+        AddUnsupportedShells(profiles);
+
+        profiles.Sort(static (left, right) => left.ReleaseYear.CompareTo(right.ReleaseYear));
+        return [.. profiles];
     }
 
     /// <summary>
-    /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. CoD4 through BO3 are
-    /// targeted with capabilities filled in (only BO3 is also <see cref="Verified"/>);
-    /// everything after is an unsupported shell, left for a contributor to fill in.
+    /// Appends the after-BO3 shells. Implemented in the gitignored <c>Profiles/UnsupportedProfiles.cs</c>;
+    /// a void partial method, so when that file is absent the call is elided and nothing after BO3
+    /// is listed.
     /// </summary>
-    public static ImmutableArray<GameProfile> All { get; } =
-    [
-        Targeted("cod4", "Call of Duty 4: Modern Warfare", 2007, EngineFamily.InfinityWard),
-        Targeted("waw", "Call of Duty: World at War", 2008, EngineFamily.Treyarch, hasClientScripts: true),
-        Targeted("mw2", "Call of Duty: Modern Warfare 2", 2009, EngineFamily.InfinityWard, hasFileScopeConstants: true),
-        Targeted("bo1", "Call of Duty: Black Ops", 2010, EngineFamily.Treyarch, hasClientScripts: true),
-        Targeted("mw3", "Call of Duty: Modern Warfare 3", 2011, EngineFamily.InfinityWard),
-        Targeted("bo2", "Call of Duty: Black Ops II", 2012, EngineFamily.Treyarch, hasClientScripts: true),
-        Targeted("ghosts", "Call of Duty: Ghosts", 2013, EngineFamily.InfinityWard),
-        Targeted("aw", "Call of Duty: Advanced Warfare", 2014, EngineFamily.SledgehammerGames),
-        BlackOps3,
-        Shell("iw", "Call of Duty: Infinite Warfare", 2016, EngineFamily.InfinityWard),
-        Shell("wwii", "Call of Duty: WWII", 2017, EngineFamily.SledgehammerGames),
-        Shell("bo4", "Call of Duty: Black Ops 4", 2018, EngineFamily.Treyarch),
-        Shell("mw19", "Call of Duty: Modern Warfare", 2019, EngineFamily.InfinityWard),
-        Shell("bocw", "Call of Duty: Black Ops Cold War", 2020, EngineFamily.Treyarch),
-        Shell("vg", "Call of Duty: Vanguard", 2021, EngineFamily.SledgehammerGames),
-        Shell("mw22", "Call of Duty: Modern Warfare II", 2022, EngineFamily.InfinityWard),
-        Shell("mw23", "Call of Duty: Modern Warfare III", 2023, EngineFamily.SledgehammerGames),
-        Shell("bo6", "Call of Duty: Black Ops 6", 2024, EngineFamily.Treyarch),
-    ];
+    static partial void AddUnsupportedShells(List<GameProfile> profiles);
 
     /// <summary>The profile whose short name or id matches (case-insensitive), or null.</summary>
     public static GameProfile? ByName(string name)

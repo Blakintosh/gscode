@@ -1,0 +1,41 @@
+namespace GSCode.Core;
+
+/// <summary>
+/// The after-BO3 games the extension does NOT support yet — placeholder shells so each is nameable
+/// and ordered, with every capability at the conservative default until a contributor fills it in.
+///
+/// This file is GITIGNORED: the repo stops at BO3, and the lineage only reaches these games when
+/// this file is present locally. A fresh clone has no after-BO3 games at all. To start supporting
+/// one, fill in its shell, move it to <c>SupportedProfiles.cs</c> as a real profile, and commit.
+///
+/// If this file is missing, copy <c>UnsupportedProfiles.cs.example</c> to
+/// <c>UnsupportedProfiles.cs</c> to bring the shells back.
+/// </summary>
+public sealed partial record GameProfile
+{
+    static partial void AddUnsupportedShells(List<GameProfile> profiles)
+    {
+        profiles.Add(Shell("iw", "Call of Duty: Infinite Warfare", 2016, EngineFamily.InfinityWard));
+        profiles.Add(Shell("wwii", "Call of Duty: WWII", 2017, EngineFamily.SledgehammerGames));
+        profiles.Add(Shell("bo4", "Call of Duty: Black Ops 4", 2018, EngineFamily.Treyarch));
+        profiles.Add(Shell("mw19", "Call of Duty: Modern Warfare", 2019, EngineFamily.InfinityWard));
+        profiles.Add(Shell("bocw", "Call of Duty: Black Ops Cold War", 2020, EngineFamily.Treyarch));
+        profiles.Add(Shell("vg", "Call of Duty: Vanguard", 2021, EngineFamily.SledgehammerGames));
+        profiles.Add(Shell("mw22", "Call of Duty: Modern Warfare II", 2022, EngineFamily.InfinityWard));
+        profiles.Add(Shell("mw23", "Call of Duty: Modern Warfare III", 2023, EngineFamily.SledgehammerGames));
+        profiles.Add(Shell("bo6", "Call of Duty: Black Ops 6", 2024, EngineFamily.Treyarch));
+    }
+
+    /// <summary>An unsupported placeholder: named, dated, family-tagged, everything else default.</summary>
+    private static GameProfile Shell(string shortName, string displayName, int year, EngineFamily family)
+    {
+        return new GameProfile
+        {
+            Id = shortName,
+            ShortName = shortName,
+            DisplayName = displayName,
+            ReleaseYear = year,
+            Family = family,
+        };
+    }
+}

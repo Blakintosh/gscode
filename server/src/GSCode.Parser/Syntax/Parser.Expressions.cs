@@ -146,6 +146,12 @@ public sealed partial class Parser
             return true;
         }
 
+        // maps\mp\_utility::foo( — an Infinity Ward path-qualified method callee (gated dialect).
+        if ( StartsInlinePath() )
+        {
+            return IsInlinePathCallAhead();
+        }
+
         // identifier( or identifier::identifier( — require the paren so plain
         // juxtaposed identifiers (an error) don't parse as calls.
         if ( Kind == TokenKind.Identifier )
@@ -179,6 +185,59 @@ public sealed partial class Parser
             && Peek(1).Kind == TokenKind.OpenBracket;
     }
 
+    /// <summary>
+    /// True when a path-qualified reference begins here: an identifier joined by a backslash,
+    /// e.g. maps\mp\_utility::foo. Only the Infinity Ward dialects have it (BO3 qualifies with
+    /// ns::name), so it costs BO3 nothing — the flag is off and the check short-circuits.
+    /// </summary>
+    private bool StartsInlinePath()
+    {
+        return _profile.HasInlinePathCalls
+            && Kind == TokenKind.Identifier
+            && Peek(1).Kind == TokenKind.Backslash;
+    }
+
+    /// <summary>
+    /// Given a path start, looks past the backslash path for <c>:: name (</c> — the shape of a
+    /// path-qualified CALL, as opposed to a bare pointer. Assumes <see cref="StartsInlinePath"/>.
+    /// </summary>
+    private bool IsInlinePathCallAhead()
+    {
+        int offset = 1;
+        while ( Peek(offset).Kind == TokenKind.Backslash && Peek(offset + 1).Kind == TokenKind.Identifier )
+        {
+            offset += 2;
+        }
+
+        return Peek(offset).Kind == TokenKind.ScopeResolution
+            && Peek(offset + 1).Kind == TokenKind.Identifier
+            && Peek(offset + 2).Kind == TokenKind.OpenParen;
+    }
+
+    /// <summary>
+    /// Parses maps\mp\_utility::foo — the backslash path, then :: and the function name. The caller
+    /// decides what follows: an argument list makes it a call, its absence a function pointer.
+    /// </summary>
+    private PathQualifiedNode ParsePathQualified()
+    {
+        PToken start = Current;
+        System.Text.StringBuilder path = new();
+
+        // The path is identifiers joined by backslashes; it ends at the :: qualifier.
+        while ( Kind == TokenKind.Identifier || Kind == TokenKind.Backslash )
+        {
+            path.Append(Current.Text);
+            Advance();
+        }
+
+        TextRange pathRange = new(start.RootRange.Start, _tokens[Math.Max(0, _index - 1)].RootRange.End);
+
+        Expect(TokenKind.ScopeResolution, "::");
+        PToken nameToken = Expect(TokenKind.Identifier, "function name");
+
+        return new PathQualifiedNode(RangeFrom(start), path.ToString(), pathRange, nameToken);
+    }
+
     /// <summary>Parses callee + argument list into a call node (target/thread supplied by the caller).</summary>
     private ExprNode ParseCallCore(ExprNode? target, bool isThread)
     {
@@ -200,7 +259,11 @@ public sealed partial class Parser
         }
 
         ExprNode callee;
-        if ( Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.ScopeResolution )
+        if ( StartsInlinePath() )
+        {
+            callee = ParsePathQualified();
+        }
+        else if ( Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.ScopeResolution )
         {
             PToken namespaceToken = Advance();
             Advance();
@@ -378,7 +441,7 @@ public sealed partial class Parser
                     expression = new IndexNode(new TextRange(expression.Range.Start, close.RootRange.End), expression, index);
                     continue;
                 }
-                case TokenKind.OpenParen when expression is IdentifierNode or QualifiedNode or PointerDerefNode:
+                case TokenKind.OpenParen when expression is IdentifierNode or QualifiedNode or PointerDerefNode or PathQualifiedNode:
                 {
                     ImmutableArray<ExprNode> arguments = ParseArgumentList();
                     TextRange range = new(expression.Range.Start, _tokens[Math.Max(0, _index - 1)].RootRange.End);
@@ -422,6 +485,13 @@ public sealed partial class Parser
 
     private ExprNode ParsePrimary()
     {
+        // maps\mp\_utility::foo — a leading path-qualified name (call or pointer). The postfix
+        // level turns a following ( into a call; without one it stands as a function pointer.
+        if ( StartsInlinePath() )
+        {
+            return ParsePathQualified();
+        }
+
         switch ( Kind )
         {
             case TokenKind.Integer:

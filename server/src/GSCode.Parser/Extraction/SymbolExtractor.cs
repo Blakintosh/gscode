@@ -543,6 +543,10 @@ public sealed class SymbolExtractor
 
                 return;
             }
+            case PathQualifiedNode:
+                // A bare maps\x::foo with no call — a function pointer passed as a value.
+                RecordCalleeReference(expression, ReferenceKind.AddressOf);
+                return;
             case LiteralNode literal:
                 RecordLiteralReference(literal);
                 return;
@@ -621,6 +625,16 @@ public sealed class SymbolExtractor
 
                 SymbolKey key = new(namespaceKey, _names.InternLower(qualified.NameToken.Text), SymbolKind.Function);
                 AddReference(key, qualified.NameToken, kind);
+                return;
+            }
+            case PathQualifiedNode path:
+            {
+                // maps\mp\_utility::foo — the Infinity Ward path form. #include MERGES the file's
+                // functions into this scope, so the call resolves by NAME; the path names the
+                // source file, not a namespace. Keyed like an unqualified call (null namespace)
+                // until the include-merge resolver can pin it to a specific file.
+                SymbolKey key = new(null, _names.InternLower(path.NameToken.Text), SymbolKind.Function);
+                AddReference(key, path.NameToken, kind);
                 return;
             }
             default:

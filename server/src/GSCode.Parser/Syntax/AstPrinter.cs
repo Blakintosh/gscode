@@ -277,6 +277,9 @@ public static class AstPrinter
             case QualifiedNode qualified:
                 builder.Append(qualified.NamespaceToken.Text).Append("::").Append(qualified.NameToken.Text);
                 return;
+            case PathQualifiedNode path:
+                builder.Append(path.Path).Append("::").Append(path.NameToken.Text);
+                return;
             case ParenNode paren:
                 builder.Append("(paren ");
                 Write(paren.Inner, builder);

@@ -16,6 +16,15 @@ public sealed record IdentifierNode(TextRange Range, PToken Token) : ExprNode(Ra
 /// <summary>ns::name — a namespace-qualified function/class reference.</summary>
 public sealed record QualifiedNode(TextRange Range, PToken NamespaceToken, PToken NameToken) : ExprNode(Range);
 
+/// <summary>
+/// maps\mp\_utility::foo — an Infinity Ward path-qualified reference: a backslash file path,
+/// then :: and the function name. Used both as a call callee (…::foo(args)) and, with no
+/// following argument list, as a function pointer. BO3 has no path form — it qualifies with a
+/// namespace (<see cref="QualifiedNode"/>) and takes addresses with &amp;name — so this node only
+/// appears when the active profile has <c>HasInlinePathCalls</c>.
+/// </summary>
+public sealed record PathQualifiedNode(TextRange Range, string Path, TextRange PathRange, PToken NameToken) : ExprNode(Range);
+
 /// <summary>( inner ) — kept explicit so ranges and the formatter stay faithful.</summary>
 public sealed record ParenNode(TextRange Range, ExprNode Inner) : ExprNode(Range);
 

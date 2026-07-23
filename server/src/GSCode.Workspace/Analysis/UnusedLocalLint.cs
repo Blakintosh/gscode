@@ -261,7 +261,7 @@ public static class UnusedLocalLint
 
                 // The callee of `foo()` names a FUNCTION, so it is not a read of a local called
                 // foo. `[[ handler ]]()` is different: that really does read the local.
-                if ( call.Callee is not (IdentifierNode or QualifiedNode) )
+                if ( call.Callee is not (IdentifierNode or QualifiedNode or PathQualifiedNode) )
                 {
                     WalkExpression(call.Callee, firstWrite, read);
                 }

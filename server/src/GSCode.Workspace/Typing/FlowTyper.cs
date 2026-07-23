@@ -701,6 +701,7 @@ public sealed class FlowTyper
         {
             IdentifierNode identifier => identifier.Token.Text,
             QualifiedNode qualified => qualified.NameToken.Text,
+            PathQualifiedNode path => path.NameToken.Text,
             _ => null,
         };
 

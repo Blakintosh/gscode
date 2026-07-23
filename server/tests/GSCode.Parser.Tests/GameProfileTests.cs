@@ -104,7 +104,7 @@ public class GameProfileTests
     [Fact]
     public void OnlyBlackOps3IsVerified()
     {
-        // Supported means "filled in and in scope"; Verified means "confirmed against real scripts".
+        // Supported means "filled in and in scope"; Verified means "verified for the game".
         // Only BO3 is the latter.
         Assert.Same(GameProfile.BlackOps3, GameProfile.All.Single(static profile => profile.Verified));
     }
@@ -136,10 +136,42 @@ public class GameProfileTests
     [Fact]
     public void OnlyBlackOps3UsesAtSignScriptDoc()
     {
+        // BO3 uses /@ @/; every earlier game fences ScriptDoc with ///ScriptDocBegin.
         Assert.Equal(ScriptDocStyle.AtSign, GameProfile.BlackOps3.ScriptDocStyle);
         Assert.All(
             GameProfile.All.Where(static profile => profile.ShortName != "bo3"),
-            static profile => Assert.Equal(ScriptDocStyle.Hash, profile.ScriptDocStyle));
+            static profile => Assert.Equal(ScriptDocStyle.TripleSlash, profile.ScriptDocStyle));
+    }
+
+    [Fact]
+    public void HashStringsAreATreyarchFeature()
+    {
+        // #"..." a Treyarch feature (BO1, BO2, BO3); the Infinity Ward games have none.
+        Assert.True(GameProfile.ByName("bo1")!.HasHashStrings);
+        Assert.True(GameProfile.ByName("bo2")!.HasHashStrings);
+        Assert.True(GameProfile.BlackOps3.HasHashStrings);
+        Assert.False(GameProfile.ByName("mw2")!.HasHashStrings);
+        Assert.False(GameProfile.ByName("cod4")!.HasHashStrings);
+    }
+
+    [Fact]
+    public void OnlyBlackOps3HasThePrecacheDirective()
+    {
+        // Every earlier game precaches with function calls, not a #precache directive.
+        Assert.True(GameProfile.BlackOps3.HasPrecacheDirective);
+        Assert.All(
+            GameProfile.All.Where(static profile => profile.ShortName != "bo3"),
+            static profile => Assert.False(profile.HasPrecacheDirective));
+    }
+
+    [Fact]
+    public void EveryTargetedPreBo3GameHasInlinePathCalls_ButBo3DoesNot()
+    {
+        // maps\mp\_util::foo() -- every pre-BO3 game; BO3 reaches functions only by #using.
+        Assert.All(
+            GameProfile.All.Where(static profile => profile.Supported && profile.ShortName != "bo3"),
+            static profile => Assert.True(profile.HasInlinePathCalls, profile.ShortName));
+        Assert.False(GameProfile.BlackOps3.HasInlinePathCalls);
     }
 
     [Theory]

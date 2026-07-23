@@ -38,11 +38,14 @@ public enum FunctionPointerStyle
     Ampersand,
 }
 
-/// <summary>Which delimiters a ScriptDoc documentation comment uses — BO3 differs from the rest.</summary>
+/// <summary>Which markers a ScriptDoc documentation comment uses — BO3 differs from the rest.</summary>
 public enum ScriptDocStyle
 {
-    /// <summary>Every game except BO3 delimits a doc comment with <c>/# … #/</c>.</summary>
-    Hash,
+    /// <summary>
+    /// Pre-BO3 (both Infinity Ward and Treyarch): a doc block sits inside an ordinary
+    /// <c>/* … */</c> comment, fenced by <c>///ScriptDocBegin</c> and <c>///ScriptDocEnd</c> lines.
+    /// </summary>
+    TripleSlash,
 
     /// <summary>BO3 delimits a doc comment with <c>/@ … @/</c> (its <c>/# #/</c> is a dev block).</summary>
     AtSign,
@@ -77,7 +80,7 @@ public sealed partial record GameProfile
     public EngineFamily Family { get; init; } = EngineFamily.Unknown;
 
     /// <summary>
-    /// Whether this profile's capabilities have been confirmed against real scripts. Only BO3 is
+    /// Whether this profile's capabilities have been verified. Only BO3 is
     /// verified; every other entry is a SHELL with placeholder capabilities, present so the game is
     /// nameable and its facts can be filled in, not relied on yet.
     /// </summary>
@@ -129,8 +132,8 @@ public sealed partial record GameProfile
     /// <summary>How a function pointer is written — see <see cref="Core.FunctionPointerStyle"/>.</summary>
     public FunctionPointerStyle FunctionPointerStyle { get; init; } = FunctionPointerStyle.PathQualified;
 
-    /// <summary>Which delimiters a ScriptDoc comment uses — see <see cref="Core.ScriptDocStyle"/>.</summary>
-    public ScriptDocStyle ScriptDocStyle { get; init; } = ScriptDocStyle.Hash;
+    /// <summary>Which markers a ScriptDoc comment uses — see <see cref="Core.ScriptDocStyle"/>.</summary>
+    public ScriptDocStyle ScriptDocStyle { get; init; } = ScriptDocStyle.TripleSlash;
 
     /// <summary>
     /// Whether array parameters are passed by reference. BO3 passes arrays by reference ONLY;
@@ -144,6 +147,28 @@ public sealed partial record GameProfile
     /// top-level assignment. Parser support for this form is future work (roadmap D2).
     /// </summary>
     public bool HasFileScopeConstants { get; init; }
+
+    /// <summary>
+    /// Whether a function can be reached inline by its file PATH — <c>maps\mp\_utility::foo()</c> to
+    /// call it, <c>maps\mp\_utility::foo</c> (no parens) as a pointer — without importing the file.
+    /// Every pre-BO3 game does this; BO3 replaced it with a
+    /// <c>#using</c> import and namespace-qualified <c>ns::foo</c> calls, and has none.
+    /// </summary>
+    public bool HasInlinePathCalls { get; init; }
+
+    /// <summary>
+    /// Whether the language has canonicalized hash strings — <c>#"some_string"</c>, hashed at
+    /// compile time. A Treyarch feature: present in BO1, BO2 and BO3; the Infinity Ward games have
+    /// none.
+    /// </summary>
+    public bool HasHashStrings { get; init; }
+
+    /// <summary>
+    /// Whether assets are precached with the <c>#precache( "type", "asset" )</c> directive. BO3 only;
+    /// every earlier game precaches with ordinary function calls (<c>PrecacheModel( … )</c>,
+    /// <c>PrecacheItem( … )</c>), which is why the directive is absent from them.
+    /// </summary>
+    public bool HasPrecacheDirective { get; init; }
 
     // --- Root discovery: where the game's scripts live. ---
 
@@ -224,14 +249,14 @@ public sealed partial record GameProfile
     /// worksheet. Anything not passed matches the shared pre-BO3 shape: <c>#include</c> imports,
     /// path-qualified function pointers, arrays by value, <c>/# #/</c> ScriptDoc, and no headers,
     /// classes, <c>function</c> keyword or <c>#namespace</c>. <see cref="Verified"/> stays false
-    /// until the capabilities are confirmed against real scripts and the parser fork lands.
+    /// until the capabilities are verified and the parser fork lands.
     ///
     /// The profiles themselves live one-per-area under <c>Profiles/</c>, so this file stays the
     /// record and the registry rather than a wall of game data.
     /// </summary>
     internal static GameProfile Targeted(
         string shortName, string displayName, int year, EngineFamily family,
-        bool hasClientScripts = false, bool hasFileScopeConstants = false)
+        bool hasClientScripts = false, bool hasFileScopeConstants = false, bool hasHashStrings = false)
     {
         return new GameProfile
         {
@@ -243,6 +268,10 @@ public sealed partial record GameProfile
             Supported = true,
             HasClientScripts = hasClientScripts,
             HasFileScopeConstants = hasFileScopeConstants,
+            HasHashStrings = hasHashStrings,
+            // Every pre-BO3 game shares these: a function reached inline by its file path, and
+            // precache done with function calls rather than a #precache directive.
+            HasInlinePathCalls = true,
         };
     }
 

@@ -20,9 +20,9 @@ public sealed partial record GameProfile
     public static GameProfile ModernWarfare2 { get; } =
         Targeted("mw2", "Call of Duty: Modern Warfare 2", 2009, EngineFamily.InfinityWard, hasFileScopeConstants: true);
 
-    /// <summary>Call of Duty: Black Ops (2010) — Treyarch.</summary>
+    /// <summary>Call of Duty: Black Ops (2010) — Treyarch; first with hash strings.</summary>
     public static GameProfile BlackOps { get; } =
-        Targeted("bo1", "Call of Duty: Black Ops", 2010, EngineFamily.Treyarch, hasClientScripts: true);
+        Targeted("bo1", "Call of Duty: Black Ops", 2010, EngineFamily.Treyarch, hasClientScripts: true, hasHashStrings: true);
 
     /// <summary>Call of Duty: Modern Warfare 3 (2011).</summary>
     public static GameProfile ModernWarfare3 { get; } =
@@ -30,7 +30,7 @@ public sealed partial record GameProfile
 
     /// <summary>Call of Duty: Black Ops II (2012) — Treyarch.</summary>
     public static GameProfile BlackOps2 { get; } =
-        Targeted("bo2", "Call of Duty: Black Ops II", 2012, EngineFamily.Treyarch, hasClientScripts: true);
+        Targeted("bo2", "Call of Duty: Black Ops II", 2012, EngineFamily.Treyarch, hasClientScripts: true, hasHashStrings: true);
 
     /// <summary>Call of Duty: Ghosts (2013).</summary>
     public static GameProfile Ghosts { get; } =
@@ -42,7 +42,7 @@ public sealed partial record GameProfile
 
     /// <summary>
     /// Call of Duty: Black Ops III (2015) — Treyarch T7, the one game the rewrite targets today and
-    /// the only profile whose capabilities are confirmed.
+    /// the only profile whose capabilities are verified.
     /// </summary>
     public static GameProfile BlackOps3 { get; } = new()
     {
@@ -72,6 +72,10 @@ public sealed partial record GameProfile
         FunctionPointerStyle = FunctionPointerStyle.Ampersand,
         ScriptDocStyle = ScriptDocStyle.AtSign,
         ArraysPassedByReference = true,
+        HasHashStrings = true,
+        HasPrecacheDirective = true,
+        // BO3 dropped inline path calls: a function is reached by #using + ns::foo, never by path.
+        HasInlinePathCalls = false,
         RootEnvironmentVariable = "TA_TOOLS_PATH",
         RawSubfolder = @"share\raw",
         ModsSubfolder = "mods",

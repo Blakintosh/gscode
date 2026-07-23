@@ -1,9 +1,9 @@
 # Game profile worksheet
 
 Fill in what each game supports. Every row maps to a `GameProfile` shell in
-`src/GSCode.Core/GameProfile.cs`. Only **bo3** is confirmed today; the rest are `?` until someone
-checks them against real scripts. Replace a `?` with the value, and when a whole row is done say so
-and it gets promoted to a real profile with `Verified = true`.
+`src/GSCode.Core/GameProfile.cs`. Only **bo3** is verified today; the rest are `?` until someone
+confirms them. Replace a `?` with the value, and when a whole row is done say so and it gets
+promoted to a real profile with `Verified = true`.
 
 ## Legend
 
@@ -69,5 +69,47 @@ grow the capability set to match. Candidates already on the radar for the IW fam
 |------|---------------------|-------|
 |      |                     |       |
 
-- I believe mw2 supported constant values that were variables that were assigned outside of a function `CONST_FOO_VALUE = 4;` make sure parser/settings support that too
-- ScriptDoc comments were in BO3 /@ @/ but /# #/ in every other game
+- mw2 supports file-scope constants: `CONST_FOO = 4;` outside any function, and they can reference
+  each other (`RUN_N_GUN_TRANSITION_POINT = 60 / MAX_RUN_N_GUN_ANGLE;`). CoD4 does not — the axis is
+  MW2-onward. Parser support is D2.
+- ScriptDoc: BO3 uses `/@ @/`. Every earlier game (both IW and Treyarch) fences it with
+  `///ScriptDocBegin` / `///ScriptDocEnd` lines inside an ordinary `/* */` comment. (Not `/# #/`;
+  that is a dev block.)
+
+## Feature evolution
+
+The lineage alternates between two shapes — an **Infinity Ward shape** and a **Treyarch shape** —
+that stay put through each studio's games, until BO3 rewrites everything. Each row is the diff from
+the prior release, so the toggling is visible.
+
+| game   | Δ from the prior release |
+|--------|--------------------------|
+| CoD4   | **Baseline (IW3).** `#include`; `::` inline path calls + pointers; `///ScriptDoc`; function-call precache. No csc, no `function` kw, no classes, no hash strings, no file-scope consts. |
+| WaW    | **+ client scripts (`.csc`)** — Treyarch adds them. Everything else as CoD4. |
+| MW2    | **− csc** (IW again); **+ file-scope constants** (`CONST = 4;`). |
+| BO1    | **+ csc**, **+ hash strings** (`#"…"`); **− file-scope consts**. |
+| MW3    | **− csc, − hash strings** (IW shape). |
+| BO2    | **+ csc, + hash strings** (Treyarch shape). |
+| Ghosts | **− csc, − hash strings** (IW shape). |
+| AW     | ~ same as Ghosts — Sledgehammer on an IW-derived engine. |
+| BO3    | **Wholesale rewrite (T7).** + `function` kw, + classes (`class`/`new`/`->`), + `#namespace`, + `#using` namespace imports (replaces `#include`), + `&` pointers (replaces `::`), + `.gsh`/`#insert`, + `#precache` directive, + `/@ @/` ScriptDoc, + arrays by-reference. **− inline path calls.** Keeps csc + hash strings. |
+| IW     | (after BO3) Reverts to the **IW shape**, not T7: no `function` kw, `::` pointers. |
+| WW2    | (after BO3) Sledgehammer. |
+
+Capability axes on `GameProfile`:
+
+- **HasInlinePathCalls** — call/reference a function by its file path, `maps\mp\_utility::foo()`.
+  Every pre-BO3 game; BO3 has none (it uses `#using` + `ns::foo`).
+- **HasHashStrings** — `#"some_string"`, hashed at compile time. Treyarch only (BO1, BO2, BO3); the
+  IW games have none.
+- **HasPrecacheDirective** — `#precache( "type", "asset" )`. BO3 only. Every earlier game precaches
+  with function calls (`PrecacheModel`, `PrecacheItem`, …).
+- **ScriptDocStyle** — `TripleSlash` (pre-BO3) vs `AtSign` (BO3).
+
+Also: no `.csc` in any IW game; `.csc` in the Treyarch games; no `function` keyword, no classes, no
+`->`/`new`/varargs, `#include` imports and `::` path-qualified pointers in every pre-BO3 game.
+
+## Coverage
+
+Every game CoD4 through BO3 has its profile filled in. Still open (unsupported shells): everything
+after BO3 except IW and WW2 — **BO4, MW19, BOCW, VG, MW22, MW23, BO6**.

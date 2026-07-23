@@ -328,10 +328,25 @@ public sealed partial record GameProfile
         return null;
     }
 
+    private static GameProfile? s_active;
+
     /// <summary>
-    /// The profile in force. A single fixed profile today — BO3 — and the seam a dialect port turns
-    /// into a per-workspace choice (roadmap D1). Kept as one accessor so that change is one edit,
-    /// not a sweep of every call site.
+    /// The profile in force. BO3 by default, changed by <see cref="Select"/> from the
+    /// <c>gscode.game</c> setting. A workspace is one game, so a single current profile is correct;
+    /// this is the one place the game is chosen, and every call site already reads it.
+    ///
+    /// Null-backed rather than initialised to <see cref="BlackOps3"/>, because that profile lives in
+    /// another partial file and static field init order across files is unspecified — the fallback
+    /// keeps <c>Active</c> valid before any field initialiser has run.
     /// </summary>
-    public static GameProfile Active => BlackOps3;
+    public static GameProfile Active => s_active ?? BlackOps3;
+
+    /// <summary>
+    /// Selects the active profile by short name or id (see <see cref="ByName"/>). An unknown name
+    /// falls back to BO3 rather than throwing, so a stray setting cannot break the server.
+    /// </summary>
+    public static void Select(string name)
+    {
+        s_active = ByName(name) ?? BlackOps3;
+    }
 }

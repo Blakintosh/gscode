@@ -65,10 +65,42 @@ public class GameProfileTests
     }
 
     [Fact]
-    public void Active_IsBlackOps3()
+    public void Active_DefaultsToBlackOps3()
     {
-        // The seam a dialect port turns into a per-workspace choice; today it is fixed.
+        // Before anything selects a game, the fallback is BO3.
+        GameProfile.Select("bo3");
         Assert.Same(GameProfile.BlackOps3, GameProfile.Active);
+    }
+
+    [Fact]
+    public void Select_ChangesTheActiveProfile()
+    {
+        try
+        {
+            GameProfile.Select("cod4");
+            Assert.Equal("cod4", GameProfile.Active.ShortName);
+
+            GameProfile.Select("t7");
+            Assert.Same(GameProfile.BlackOps3, GameProfile.Active);
+        }
+        finally
+        {
+            GameProfile.Select("bo3");
+        }
+    }
+
+    [Fact]
+    public void Select_FallsBackToBlackOps3ForAnUnknownName()
+    {
+        try
+        {
+            GameProfile.Select("halo");
+            Assert.Same(GameProfile.BlackOps3, GameProfile.Active);
+        }
+        finally
+        {
+            GameProfile.Select("bo3");
+        }
     }
 
     [Fact]

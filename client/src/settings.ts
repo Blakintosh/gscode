@@ -27,6 +27,7 @@ export interface GscodeSettings {
     "format.maxBlankLines": number;
     "format.sortDirectives": boolean;
     "format.alignConsecutive": boolean;
+    "game": string;
 }
 
 /** Reads the current gscode.* settings into the shape the server expects. */
@@ -52,5 +53,6 @@ export function readSettings(): GscodeSettings {
         "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),
         "format.sortDirectives": config.get<boolean>("format.sortDirectives", true),
         "format.alignConsecutive": config.get<boolean>("format.alignConsecutive", true),
+        "game": config.get<string>("game", "bo3"),
     };
 }

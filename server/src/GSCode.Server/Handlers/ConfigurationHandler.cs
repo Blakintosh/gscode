@@ -39,6 +39,10 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
         _settings.Apply(settingsRoot);
         _levelSwitch.MinimumLevel = ServerLogLevel.FromSetting(_settings.ServerLogLevel);
 
+        // The game drives the active profile (extensions, capabilities). Selecting an unknown name
+        // falls back to BO3, so a typo cannot break the server.
+        GSCode.Core.GameProfile.Select(_settings.Game);
+
         // Only when something that matters actually moved. Clients push their whole configuration
         // on any settings edit, so logging unconditionally would write this line every time the
         // user changed a font size. Knowing a setting changed mid-session answers the other half

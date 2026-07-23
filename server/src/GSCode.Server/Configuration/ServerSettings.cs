@@ -49,6 +49,9 @@ public sealed class ServerSettings
     /// <summary>Whether Format Document aligns the operators of consecutive assignments.</summary>
     public bool FormatAlignConsecutive { get; set; } = true;
 
+    /// <summary>The game whose dialect the workspace targets, by short name (e.g. "bo3", "cod4").</summary>
+    public string Game { get; set; } = "bo3";
+
     /// <summary>
     /// The settings that actually change what the server does, as one line.
     ///
@@ -64,7 +67,7 @@ public sealed class ServerSettings
     {
         get
         {
-            return $"indexing={WorkspaceIndexingMode}, cache={OnOff(EnableWorkspaceCache)}, "
+            return $"game={Game}, indexing={WorkspaceIndexingMode}, cache={OnOff(EnableWorkspaceCache)}, "
                 + $"diagnostics={DiagnosticsScope}, raw={OnOff(RawEnabled)}, "
                 + $"rawWarning={RawFileWarningMode}, codeLens={OnOff(CodeLensEnabled)}, "
                 + $"log={ServerLogLevel}";
@@ -85,6 +88,7 @@ public sealed class ServerSettings
             return;
         }
 
+        Game = section.Value<string>("game") ?? Game;
         ServerLogLevel = section.Value<string>("serverLogLevel") ?? ServerLogLevel;
         WorkspaceIndexingMode = section.Value<string>("workspaceIndexingMode") ?? WorkspaceIndexingMode;
         EnableWorkspaceCache = section.Value<bool?>("enableWorkspaceCache") ?? EnableWorkspaceCache;

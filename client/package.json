@@ -323,6 +323,24 @@
 					"default": true,
 					"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. The same setting also aligns subscript and call-argument columns for same-shaped lines. Applies to Format Document, and to format-on-type within the block you are editing.",
 					"scope": "window"
+				},
+				"gscode.game": {
+					"type": "string",
+					"default": "bo3",
+					"enum": [ "cod4", "waw", "mw2", "bo1", "mw3", "bo2", "ghosts", "aw", "bo3" ],
+					"enumDescriptions": [
+						"Call of Duty 4: Modern Warfare (2007)",
+						"Call of Duty: World at War (2008)",
+						"Call of Duty: Modern Warfare 2 (2009)",
+						"Call of Duty: Black Ops (2010)",
+						"Call of Duty: Modern Warfare 3 (2011)",
+						"Call of Duty: Black Ops II (2012)",
+						"Call of Duty: Ghosts (2013)",
+						"Call of Duty: Advanced Warfare (2014)",
+						"Call of Duty: Black Ops III (2015)"
+					],
+					"description": "Which Call of Duty game's GSC dialect this workspace targets. Black Ops III is the default and the only fully-supported dialect today; the earlier games select their profile but their dialect handling is still being implemented. If a file does not look like the selected game, the extension offers to switch.",
+					"scope": "window"
 				}
 			}
 		},

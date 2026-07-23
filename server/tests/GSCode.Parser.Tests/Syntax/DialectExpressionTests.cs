@@ -88,6 +88,36 @@ public class DialectExpressionTests
     }
 
     [Fact]
+    public void ALeadingScopeResolutionIsALocalPointer()
+    {
+        // array_thread( guys, ::foo ) — ::foo is a local function pointer (empty path).
+        CallNode outer = Assert.IsType<CallNode>(FirstExpression("array_thread( guys, ::foo );", Cod4));
+
+        PathQualifiedNode path = Assert.IsType<PathQualifiedNode>(outer.Arguments[1]);
+        Assert.Equal("", path.Path);
+        Assert.Equal("foo", path.NameToken.Text);
+    }
+
+    [Fact]
+    public void ALeadingScopeResolutionCanBeCalled()
+    {
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("::foo();", Cod4));
+
+        PathQualifiedNode callee = Assert.IsType<PathQualifiedNode>(call.Callee);
+        Assert.Equal("", callee.Path);
+        Assert.Empty(call.Arguments);
+    }
+
+    [Fact]
+    public void BlackOps3RejectsALeadingScopeResolution()
+    {
+        // BO3 needs a namespace before :: -- a bare ::foo does not parse.
+        ParseTree tree = ParserTestHelper.Parse("function run()\n{\n\tx = ::foo;\n}\n", Bo3);
+
+        Assert.NotEmpty(tree.Diagnostics);
+    }
+
+    [Fact]
     public void BlackOps3RejectsThePathForm()
     {
         // A backslash is not part of any BO3 expression, so the path form does not parse -- the

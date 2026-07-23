@@ -492,6 +492,16 @@ public sealed partial class Parser
             return ParsePathQualified();
         }
 
+        // ::foo — the same reference with no path: an Infinity Ward LOCAL function pointer/call.
+        // Modelled as a PathQualifiedNode with an empty path. BO3 requires a namespace before ::,
+        // so this only fires on a dialect that has the path form.
+        if ( _profile.HasInlinePathCalls && Kind == TokenKind.ScopeResolution )
+        {
+            PToken scope = Advance();
+            PToken localName = Expect(TokenKind.Identifier, "function name");
+            return new PathQualifiedNode(RangeFrom(scope), string.Empty, scope.RootRange, localName);
+        }
+
         switch ( Kind )
         {
             case TokenKind.Integer:
@@ -598,9 +608,16 @@ public sealed partial class Parser
     }
 
     /// <summary>True when a token can begin an expression (drives statement-level recovery).</summary>
-    private static bool CanStartExpression(TokenKind kind)
+    private bool CanStartExpression(TokenKind kind)
     {
         if ( IsCallableKeyword(kind) )
+        {
+            return true;
+        }
+
+        // ::foo — a leading local function pointer/call, only in the path-call dialects. Gated so
+        // BO3 still rejects a stray :: at the dispatcher (unchanged recovery).
+        if ( kind == TokenKind.ScopeResolution && _profile.HasInlinePathCalls )
         {
             return true;
         }

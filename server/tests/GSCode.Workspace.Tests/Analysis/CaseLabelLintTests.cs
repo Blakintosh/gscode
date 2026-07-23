@@ -37,7 +37,8 @@ public class CaseLabelLintTests
         Diagnostic bad = Assert.Single(Lint("        case undefined:\n            break;"));
 
         Assert.Equal(GscDiagnosticCode.CaseUndefined, bad.Code);
-        Assert.Contains("isdefined", bad.Message, StringComparison.Ordinal);
+        // The message explains why the branch is dead rather than just naming the rule.
+        Assert.Contains("never matches", bad.Message, StringComparison.Ordinal);
     }
 
     [Theory]

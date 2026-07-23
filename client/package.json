@@ -321,7 +321,7 @@
 				"gscode.format.alignConsecutive": {
 					"type": "boolean",
 					"default": true,
-					"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. Applies to Format Document only.",
+					"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. The same setting also aligns subscript and call-argument columns for same-shaped lines. Applies to Format Document, and to format-on-type within the block you are editing.",
 					"scope": "window"
 				}
 			}
@@ -335,7 +335,8 @@
 				},
 				"editor.insertSpaces": false,
 				"editor.tabSize": 4,
-				"editor.autoClosingOvertype": "always"
+				"editor.autoClosingOvertype": "always",
+				"editor.formatOnType": true
 			},
 			"[csc]": {
 				"editor.quickSuggestions": {
@@ -345,7 +346,8 @@
 				},
 				"editor.insertSpaces": false,
 				"editor.tabSize": 4,
-				"editor.autoClosingOvertype": "always"
+				"editor.autoClosingOvertype": "always",
+				"editor.formatOnType": true
 			},
 			"[gsh]": {
 				"editor.quickSuggestions": {
@@ -355,7 +357,8 @@
 				},
 				"editor.insertSpaces": false,
 				"editor.tabSize": 4,
-				"editor.autoClosingOvertype": "always"
+				"editor.autoClosingOvertype": "always",
+				"editor.formatOnType": true
 			}
 		}
 	},

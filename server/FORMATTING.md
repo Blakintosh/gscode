@@ -163,19 +163,21 @@ The same setting also aligns the **interior of subscripts and call arguments** w
 statements shares the same shape — the same base or callee, the same delimiters, the same arity:
 
 ```gsc
-foo[ "lol"           ][ "lol2"  ] = "something";
-foo[ "somethingelse" ][ "other" ] = "garbage";
+foo [ "bar"          ][ "lol"   ] = "other";
+bash[ "somethingelse" ][ "other" ] = "garbage";
 
 register( "toplayer", PARASITE_ROUND_RING_FX  , VERSION_SHIP, 1, "counter" );
 register( "world"   , "toggle_on_parasite_fog", VERSION_SHIP, 2, "int" );
 ```
 
 It is one engine for both. Two lines share a group when their token *skeleton* is identical — the
-delimiters and the fixed anchors — and only the values in the slots differ. A slot followed by `]`
-or `,` is aligned to its column's widest; a slot followed by `[` or `(` is an anchor that must
-match; a slot followed by `)`, `;` or an assignment operator is free — which is why the **last
-argument and the right-hand side are left at their natural width**. Subscript padding equalises the
-left-hand sides, so the operator then lines up on top of it.
+same delimiters in the same order — and only the values in the slots differ. A slot followed by `]`,
+`,` or `[` is aligned to its column's widest; a slot followed by `(` is an anchor (the **callee**,
+which must match, so different functions do not align); a slot followed by `)`, `;` or an assignment
+operator is free — which is why the **last argument and the right-hand side keep their natural
+width**. The base of a subscript is aligned too, so `foo[ … ]` and `bash[ … ]` line up their `[`
+even though the names differ. Subscript padding equalises the left-hand sides, so the operator then
+lines up on top of it.
 
 It applies to **Format Document only**, not range or on-type formatting — alignment is a property of
 a group, not of the one line being edited.

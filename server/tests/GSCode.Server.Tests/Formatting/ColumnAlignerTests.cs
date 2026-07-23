@@ -103,11 +103,31 @@ public class ColumnAlignerTests
     }
 
     [Fact]
-    public void ADifferentSubscriptBaseLeavesTheInteriorsAlone()
+    public void DifferentSubscriptBasesStillAlign_PaddingTheBaseColumn()
     {
-        // Different bases are not the same shape, so ColumnAligner does NOT pad the subscript
-        // interiors. The '=' still aligns -- that is the operator aligner doing its own job across
-        // consecutive assignments -- but "a" is not widened to "bbbb".
+        // The base of a subscript does not have to match: `foo[ … ]` and `bash[ … ]` share a shape,
+        // the base column is padded to the widest base so the '[' line up, and each subscript
+        // interior aligns on top of that.
+        string formatted = Format("""
+            function f()
+            {
+            	foo[ "bar" ][ "lol" ] = "other";
+            	bash[ "garbage" ][ "other" ] = "lol";
+            }
+            """);
+
+        const string expected = "function f()\n"
+            + "{\n"
+            + "\tfoo [ \"bar\"     ][ \"lol\"   ] = \"other\";\n"
+            + "\tbash[ \"garbage\" ][ \"other\" ] = \"lol\";\n"
+            + "}\n";
+
+        Assert.Equal(expected, formatted);
+    }
+
+    [Fact]
+    public void EqualWidthBasesAlignTheInteriorsWithoutPaddingTheBase()
+    {
         string formatted = Format("""
             function f()
             {
@@ -116,8 +136,8 @@ public class ColumnAlignerTests
             }
             """);
 
-        Assert.Contains("foo[ \"a\" ]", formatted, StringComparison.Ordinal);
-        Assert.Contains("bar[ \"bbbb\" ]", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tfoo[ \"a\"    ] = 1;\n", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tbar[ \"bbbb\" ] = 2;\n", formatted, StringComparison.Ordinal);
     }
 
     [Fact]

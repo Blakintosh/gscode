@@ -262,7 +262,13 @@ public static class ColumnAligner
             case TokenKind.CloseBracket:
                 return CellRole.Aligned;
             case TokenKind.OpenBracket:
+                // The base of a subscript -- `foo` in `foo[ … ]`. It is aligned, not an anchor, so
+                // `foo[ … ]` and `bash[ … ]` still share a shape and the `[` columns line up; the
+                // base is padded to the widest.
+                return CellRole.Aligned;
             case TokenKind.OpenParen:
+                // The callee -- `register` in `register( … )`. This DOES have to match, or calls to
+                // different functions would align with each other.
                 return CellRole.Anchor;
             default:
                 // CloseParen, Semicolon, and every assignment operator.

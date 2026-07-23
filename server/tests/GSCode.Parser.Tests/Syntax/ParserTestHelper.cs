@@ -10,14 +10,14 @@ namespace GSCode.Parser.Tests.Syntax;
 
 internal static class ParserTestHelper
 {
-    /// <summary>Runs the full pipeline (lex → preprocess → parse) over a snippet.</summary>
-    public static ParseTree Parse(string source)
+    /// <summary>Runs the full pipeline (lex → preprocess → parse) over a snippet, for a dialect.</summary>
+    public static ParseTree Parse(string source, GameProfile? profile = null)
     {
         SourceText text = SourceText.From(source);
         LexResult lexed = Lexer.Lex(text);
         PreprocessResult preprocessed = Preprocessor.Process(
             @"c:\work\scripts\test.gsc", lexed.Tokens, text, NullInsertProvider.Instance, new NameTable());
-        return Parser.Syntax.Parser.Parse(preprocessed.Tokens);
+        return Parser.Syntax.Parser.Parse(preprocessed.Tokens, profile ?? GameProfile.BlackOps3);
     }
 
     /// <summary>S-expression of the whole script node.</summary>

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
@@ -16,18 +17,20 @@ namespace GSCode.Parser.Syntax;
 public sealed partial class Parser
 {
     private readonly ImmutableArray<PToken> _tokens;
+    private readonly GameProfile _profile;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
     private int _index;
 
-    private Parser(ImmutableArray<PToken> tokens)
+    private Parser(ImmutableArray<PToken> tokens, GameProfile profile)
     {
         _tokens = tokens;
+        _profile = profile;
     }
 
-    /// <summary>Parses a preprocessed token stream into a syntax tree.</summary>
-    public static ParseTree Parse(ImmutableArray<PToken> tokens)
+    /// <summary>Parses a preprocessed token stream into a syntax tree for the given game's dialect.</summary>
+    public static ParseTree Parse(ImmutableArray<PToken> tokens, GameProfile profile)
     {
-        Parser parser = new(tokens);
+        Parser parser = new(tokens, profile);
         ScriptNode root = parser.ParseScript();
         return new ParseTree(root, parser._diagnostics.ToImmutable());
     }

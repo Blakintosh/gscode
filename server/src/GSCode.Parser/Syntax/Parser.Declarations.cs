@@ -64,6 +64,16 @@ public sealed partial class Parser
                     continue;
                 default:
                 {
+                    // In a dialect without the `function` keyword (the Infinity Ward games), a
+                    // top-level declaration is a bare `name( … ) { … }`, so an identifier followed
+                    // by `(` starts a function.
+                    if ( StartsBareFunction() )
+                    {
+                        elements.Add(ParseFunction());
+                        sawDeclaration = true;
+                        continue;
+                    }
+
                     AddError(GscDiagnosticCode.ExpectedDeclaration, Current.RootRange, DescribeCurrent());
                     RecoverToDeclaration();
                     continue;
@@ -72,6 +82,16 @@ public sealed partial class Parser
         }
 
         return new ScriptNode(RangeFrom(first), elements.ToImmutable());
+    }
+
+    /// <summary>
+    /// Whether the cursor starts a keyword-less function declaration — an identifier immediately
+    /// followed by <c>(</c>, only in a dialect that omits the <c>function</c> keyword. In BO3 this
+    /// is always false, so the keyword path is unchanged.
+    /// </summary>
+    private bool StartsBareFunction()
+    {
+        return !_profile.HasFunctionKeyword && Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.OpenParen;
     }
 
     /// <summary>Skips forward to something that can start a declaration; always makes progress.</summary>
@@ -87,7 +107,8 @@ public sealed partial class Parser
                 or TokenKind.NamespaceDirective
                 or TokenKind.PrecacheDirective
                 or TokenKind.UsingAnimTreeDirective
-                or TokenKind.DevBlockOpen;
+                or TokenKind.DevBlockOpen
+                || StartsBareFunction();
 
             if ( atSyncPoint )
             {
@@ -213,22 +234,30 @@ public sealed partial class Parser
 
     private FunctionNode ParseFunction()
     {
-        PToken functionKeyword = Advance();
+        // The declaration begins at the `function` keyword where the dialect has one, otherwise at
+        // the name itself. `private`/`autoexec` and the keyword are BO3 features, so a dialect
+        // without the keyword has neither.
+        PToken start = Current;
 
         bool isPrivate = false;
         bool isAutoexec = false;
-        while ( Kind == TokenKind.Private || Kind == TokenKind.Autoexec )
+        if ( _profile.HasFunctionKeyword )
         {
-            if ( Kind == TokenKind.Private )
-            {
-                isPrivate = true;
-            }
-            else
-            {
-                isAutoexec = true;
-            }
-
             Advance();
+
+            while ( Kind == TokenKind.Private || Kind == TokenKind.Autoexec )
+            {
+                if ( Kind == TokenKind.Private )
+                {
+                    isPrivate = true;
+                }
+                else
+                {
+                    isAutoexec = true;
+                }
+
+                Advance();
+            }
         }
 
         PToken nameToken = Expect(TokenKind.Identifier, "function name");
@@ -236,7 +265,7 @@ public sealed partial class Parser
         ImmutableArray<ParameterNode> parameters = ParseParameterList(out bool hasVarargs);
         BlockNode body = ParseBlock();
 
-        return new FunctionNode(RangeFrom(functionKeyword), nameToken, isPrivate, isAutoexec, parameters, hasVarargs, body);
+        return new FunctionNode(RangeFrom(start), nameToken, isPrivate, isAutoexec, parameters, hasVarargs, body);
     }
 
     private ImmutableArray<ParameterNode> ParseParameterList(out bool hasVarargs)

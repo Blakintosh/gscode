@@ -439,7 +439,7 @@ public sealed class Lexer
         ReadOnlySpan<char> word = _source.AsSpan(wordStart, wordEnd - wordStart);
         int totalLength = wordEnd - _offset;
 
-        if ( Keywords.TryMatchDirective(word, out TokenKind directiveKind) )
+        if ( Keywords.TryMatchDirective(word, _profile, out TokenKind directiveKind) )
         {
             AddToken(directiveKind, _offset, totalLength);
         }

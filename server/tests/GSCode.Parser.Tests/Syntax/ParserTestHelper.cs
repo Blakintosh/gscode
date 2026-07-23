@@ -13,11 +13,12 @@ internal static class ParserTestHelper
     /// <summary>Runs the full pipeline (lex → preprocess → parse) over a snippet, for a dialect.</summary>
     public static ParseTree Parse(string source, GameProfile? profile = null)
     {
+        GameProfile game = profile ?? GameProfile.BlackOps3;
         SourceText text = SourceText.From(source);
-        LexResult lexed = Lexer.Lex(text);
+        LexResult lexed = Lexer.Lex(text, game);
         PreprocessResult preprocessed = Preprocessor.Process(
             @"c:\work\scripts\test.gsc", lexed.Tokens, text, NullInsertProvider.Instance, new NameTable());
-        return Parser.Syntax.Parser.Parse(preprocessed.Tokens, profile ?? GameProfile.BlackOps3);
+        return Parser.Syntax.Parser.Parse(preprocessed.Tokens, game);
     }
 
     /// <summary>S-expression of the whole script node.</summary>

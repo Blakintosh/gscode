@@ -13,6 +13,13 @@ public sealed record ScriptNode(TextRange Range, ImmutableArray<AstNode> Element
 /// <summary>#using scripts\foo\bar; — Path is the joined, unnormalized text.</summary>
 public sealed record UsingNode(TextRange Range, string Path, TextRange PathRange) : AstNode(Range);
 
+/// <summary>
+/// #include common_scripts\utility; — the Infinity Ward import, which MERGES the included file's
+/// functions into this scope (unlike #using's namespace import). Parsed like a using; the merge
+/// semantics are a resolution concern handled separately.
+/// </summary>
+public sealed record IncludeNode(TextRange Range, string Path, TextRange PathRange) : AstNode(Range);
+
 /// <summary>#namespace name; — changes the namespace state for everything below it.</summary>
 public sealed record NamespaceNode(TextRange Range, PToken NameToken) : AstNode(Range);
 

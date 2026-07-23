@@ -59,6 +59,7 @@ public static class Keywords
     private static readonly FrozenDictionary<string, TokenKind> s_directives = new Dictionary<string, TokenKind>(StringComparer.Ordinal)
     {
         ["using"] = TokenKind.UsingDirective,
+        ["include"] = TokenKind.IncludeDirective,
         ["insert"] = TokenKind.InsertDirective,
         ["define"] = TokenKind.DefineDirective,
         ["namespace"] = TokenKind.NamespaceDirective,
@@ -123,5 +124,37 @@ public static class Keywords
     public static bool TryMatchDirective(ReadOnlySpan<char> word, out TokenKind kind)
     {
         return s_directiveSpanLookup.TryGetValue(word, out kind);
+    }
+
+    /// <summary>
+    /// Matches a directive, but only those the game has: <c>#include</c> is the Infinity Ward import
+    /// and <c>#using</c> / <c>#namespace</c> / <c>#insert</c> / <c>#precache</c> are BO3, so a
+    /// directive from the wrong family is left unmatched (and reported as unknown). The shared ones
+    /// — <c>#define</c>, animtree, and the <c>#if</c> family — are never gated. BO3 has all of its
+    /// own, so its lexing is unchanged.
+    /// </summary>
+    public static bool TryMatchDirective(ReadOnlySpan<char> word, GameProfile profile, out TokenKind kind)
+    {
+        return s_directiveSpanLookup.TryGetValue(word, out kind) && IsDirectiveEnabled(kind, profile);
+    }
+
+    private static bool IsDirectiveEnabled(TokenKind kind, GameProfile profile)
+    {
+        switch ( kind )
+        {
+            case TokenKind.IncludeDirective:
+                return profile.ImportStyle == ImportStyle.Include;
+            case TokenKind.UsingDirective:
+                return profile.ImportStyle == ImportStyle.Namespace;
+            case TokenKind.NamespaceDirective:
+                return profile.HasNamespaceDirective;
+            case TokenKind.InsertDirective:
+                return profile.HasHeaders;
+            case TokenKind.PrecacheDirective:
+                return profile.HasPrecacheDirective;
+            default:
+                // #define, #using_animtree, #animtree, and the #if family exist across the lineage.
+                return true;
+        }
     }
 }

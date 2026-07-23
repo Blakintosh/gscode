@@ -31,6 +31,9 @@ public sealed partial class Parser
                     elements.Add(usingNode);
                     continue;
                 }
+                case TokenKind.IncludeDirective:
+                    elements.Add(ParseInclude());
+                    continue;
                 case TokenKind.NamespaceDirective:
                     elements.Add(ParseNamespace());
                     continue;
@@ -104,6 +107,7 @@ public sealed partial class Parser
             bool atSyncPoint = Kind is TokenKind.Function
                 or TokenKind.Class
                 or TokenKind.UsingDirective
+                or TokenKind.IncludeDirective
                 or TokenKind.NamespaceDirective
                 or TokenKind.PrecacheDirective
                 or TokenKind.UsingAnimTreeDirective
@@ -147,6 +151,36 @@ public sealed partial class Parser
             : directive.RootRange;
 
         return new UsingNode(RangeFrom(directive), path.ToString(), pathRange);
+    }
+
+    private IncludeNode ParseInclude()
+    {
+        PToken directive = Advance();
+
+        System.Text.StringBuilder path = new();
+        PToken? firstPathToken = null;
+        PToken? lastPathToken = null;
+
+        while ( IsPathToken(Kind) )
+        {
+            PToken part = Advance();
+            firstPathToken ??= part;
+            lastPathToken = part;
+            path.Append(part.Text);
+        }
+
+        if ( firstPathToken is null )
+        {
+            AddError(GscDiagnosticCode.ExpectedScriptPath, directive.RootRange, "#include");
+        }
+
+        Expect(TokenKind.Semicolon, ";");
+
+        TextRange pathRange = firstPathToken is not null
+            ? new TextRange(firstPathToken.Value.RootRange.Start, lastPathToken!.Value.RootRange.End)
+            : directive.RootRange;
+
+        return new IncludeNode(RangeFrom(directive), path.ToString(), pathRange);
     }
 
     private static bool IsPathToken(TokenKind kind)

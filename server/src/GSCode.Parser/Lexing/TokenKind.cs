@@ -74,6 +74,7 @@ public enum TokenKind
 
     // Preprocessor directives (matched case-sensitively, lowercase per engine convention)
     UsingDirective,
+    IncludeDirective,
     InsertDirective,
     DefineDirective,
     NamespaceDirective,

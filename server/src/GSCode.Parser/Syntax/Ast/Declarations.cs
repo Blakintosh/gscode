@@ -20,6 +20,12 @@ public sealed record UsingNode(TextRange Range, string Path, TextRange PathRange
 /// </summary>
 public sealed record IncludeNode(TextRange Range, string Path, TextRange PathRange) : AstNode(Range);
 
+/// <summary>
+/// A file-scope constant — <c>CONST_FOO = 4;</c> assigned outside any function. An Infinity Ward
+/// feature (from MW2); BO3 uses <c>#define</c> and rejects a bare top-level assignment.
+/// </summary>
+public sealed record FileScopeConstantNode(TextRange Range, PToken NameToken, ExprNode Value) : AstNode(Range);
+
 /// <summary>#namespace name; — changes the namespace state for everything below it.</summary>
 public sealed record NamespaceNode(TextRange Range, PToken NameToken) : AstNode(Range);
 

@@ -77,6 +77,13 @@ public sealed partial class Parser
                         continue;
                     }
 
+                    // A file-scope constant (MW2 onward): `NAME = value;` outside any function.
+                    if ( StartsFileScopeConstant() )
+                    {
+                        elements.Add(ParseFileScopeConstant());
+                        continue;
+                    }
+
                     AddError(GscDiagnosticCode.ExpectedDeclaration, Current.RootRange, DescribeCurrent());
                     RecoverToDeclaration();
                     continue;
@@ -95,6 +102,26 @@ public sealed partial class Parser
     private bool StartsBareFunction()
     {
         return !_profile.HasFunctionKeyword && Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.OpenParen;
+    }
+
+    /// <summary>
+    /// Whether the cursor starts a file-scope constant — an identifier immediately followed by
+    /// <c>=</c>, only in a dialect that allows them. Always false in BO3, which rejects a top-level
+    /// assignment.
+    /// </summary>
+    private bool StartsFileScopeConstant()
+    {
+        return _profile.HasFileScopeConstants && Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.Assign;
+    }
+
+    private FileScopeConstantNode ParseFileScopeConstant()
+    {
+        PToken nameToken = Advance();
+        Expect(TokenKind.Assign, "=");
+        ExprNode value = ParseExpression();
+        Expect(TokenKind.Semicolon, ";");
+
+        return new FileScopeConstantNode(RangeFrom(nameToken), nameToken, value);
     }
 
     /// <summary>Skips forward to something that can start a declaration; always makes progress.</summary>

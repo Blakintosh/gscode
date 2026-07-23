@@ -15,6 +15,7 @@ namespace GSCode.Parser.Tests.Syntax;
 public class DialectDeclarationTests
 {
     private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
     private static readonly GameProfile Bo3 = GameProfile.BlackOps3;
 
     [Fact]
@@ -66,6 +67,46 @@ public class DialectDeclarationTests
         FunctionNode function = Assert.IsType<FunctionNode>(Assert.Single(tree.Root.Elements));
         Assert.Equal("main", function.NameToken.Text);
         Assert.Empty(tree.Diagnostics);
+    }
+
+    [Fact]
+    public void Mw2ParsesAFileScopeConstant()
+    {
+        ParseTree tree = ParserTestHelper.Parse("MAX = 130;\nrun()\n{\n}\n", Mw2);
+
+        FileScopeConstantNode constant = Assert.Single(tree.Root.Elements.OfType<FileScopeConstantNode>());
+        Assert.Equal("MAX", constant.NameToken.Text);
+        Assert.Contains(tree.Root.Elements, static element => element is FunctionNode);
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    [Fact]
+    public void FileScopeConstantsCanReferenceEachOther()
+    {
+        ParseTree tree = ParserTestHelper.Parse("A = 1;\nB = A + 1;\n", Mw2);
+
+        Assert.Equal(2, tree.Root.Elements.OfType<FileScopeConstantNode>().Count());
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    [Fact]
+    public void BlackOps3RejectsAFileScopeConstant()
+    {
+        // BO3 uses #define; a bare top-level assignment is not a declaration.
+        ParseTree tree = ParserTestHelper.Parse("MAX = 130;\n", Bo3);
+
+        Assert.DoesNotContain(tree.Root.Elements, static element => element is FileScopeConstantNode);
+        Assert.NotEmpty(tree.Diagnostics);
+    }
+
+    [Fact]
+    public void Cod4HasNoFileScopeConstants()
+    {
+        // The axis is MW2-onward; CoD4 does not have them.
+        ParseTree tree = ParserTestHelper.Parse("MAX = 130;\n", Cod4);
+
+        Assert.DoesNotContain(tree.Root.Elements, static element => element is FileScopeConstantNode);
+        Assert.NotEmpty(tree.Diagnostics);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 
@@ -12,6 +13,7 @@ public sealed class Lexer
 {
     private readonly SourceText _text;
     private readonly string _source;
+    private readonly GameProfile _profile;
     private readonly ImmutableArray<Token>.Builder _tokens = ImmutableArray.CreateBuilder<Token>();
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
@@ -21,16 +23,20 @@ public sealed class Lexer
     // modulo operator. Null means start of file (which counts as an anim context).
     private TokenKind? _lastSignificantKind;
 
-    private Lexer(SourceText text)
+    private Lexer(SourceText text, GameProfile profile)
     {
         _text = text;
         _source = text.Text;
+        _profile = profile;
     }
 
-    /// <summary>Lexes the whole snapshot into tokens + diagnostics.</summary>
-    public static LexResult Lex(SourceText text)
+    /// <summary>
+    /// Lexes the whole snapshot into tokens + diagnostics for a game's dialect. The profile only
+    /// affects which words are keywords; it defaults to the active game.
+    /// </summary>
+    public static LexResult Lex(SourceText text, GameProfile? profile = null)
     {
-        Lexer lexer = new(text);
+        Lexer lexer = new(text, profile ?? GameProfile.Active);
         lexer.Run();
         return new LexResult(lexer._tokens.ToImmutable(), lexer._diagnostics.ToImmutable());
     }
@@ -210,7 +216,7 @@ public sealed class Lexer
         }
 
         ReadOnlySpan<char> word = _source.AsSpan(start, _offset - start);
-        if ( Keywords.TryMatchKeyword(word, out TokenKind keywordKind) )
+        if ( Keywords.TryMatchKeyword(word, _profile, out TokenKind keywordKind) )
         {
             AddToken(keywordKind, start, word.Length);
         }

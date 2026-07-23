@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using GSCode.Core;
 
 namespace GSCode.Parser.Lexing;
 
@@ -77,6 +78,45 @@ public static class Keywords
     public static bool TryMatchKeyword(ReadOnlySpan<char> word, out TokenKind kind)
     {
         return s_keywordSpanLookup.TryGetValue(word, out kind);
+    }
+
+    /// <summary>
+    /// Matches a word against the keyword table, but only for keywords the game actually has: a
+    /// keyword the dialect lacks (e.g. <c>foreach</c> before MW2, <c>function</c>/<c>class</c> in
+    /// the Infinity Ward games) stays an ordinary identifier, so a script may use it as a name.
+    ///
+    /// BO3 has every keyword, so its lexing is unchanged.
+    /// </summary>
+    public static bool TryMatchKeyword(ReadOnlySpan<char> word, GameProfile profile, out TokenKind kind)
+    {
+        return s_keywordSpanLookup.TryGetValue(word, out kind) && IsEnabled(kind, profile);
+    }
+
+    /// <summary>Whether a keyword exists in the given game's dialect.</summary>
+    private static bool IsEnabled(TokenKind kind, GameProfile profile)
+    {
+        switch ( kind )
+        {
+            case TokenKind.Function:
+                return profile.HasFunctionKeyword;
+            case TokenKind.Foreach:
+                return profile.HasForeach;
+            case TokenKind.Do:
+                return profile.HasDoWhile;
+
+            // The class system and its function modifiers are all BO3-only.
+            case TokenKind.Class:
+            case TokenKind.New:
+            case TokenKind.Var:
+            case TokenKind.Constructor:
+            case TokenKind.Destructor:
+            case TokenKind.Autoexec:
+            case TokenKind.Private:
+                return profile.HasClasses;
+
+            default:
+                return true;
+        }
     }
 
     /// <summary>Matches the word after '#' against the directive table (case-sensitive, whole word).</summary>

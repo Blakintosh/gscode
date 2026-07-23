@@ -63,9 +63,8 @@ LanguageServer server = await LanguageServer.From(options =>
             services.AddSingleton(NameTable.Shared);
 
             services.AddSingleton(new TextDocumentSelector(
-                new TextDocumentFilter { Pattern = "**/*.gsc" },
-                new TextDocumentFilter { Pattern = "**/*.csc" },
-                new TextDocumentFilter { Pattern = "**/*.gsh" }));
+                [.. GameProfile.Active.ScriptGlobs.Select(glob =>
+                    new TextDocumentFilter { Pattern = "**/" + glob })]));
 
             services.AddSingleton(provider =>
             {

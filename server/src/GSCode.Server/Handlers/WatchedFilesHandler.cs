@@ -28,9 +28,8 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
 #pragma warning disable CS8601
         OmniSharp.Extensions.LanguageServer.Protocol.Models.FileSystemWatcher[] watchers =
         [
-            new() { GlobPattern = "**/*.gsc" },
-            new() { GlobPattern = "**/*.csc" },
-            new() { GlobPattern = "**/*.gsh" },
+            .. GSCode.Core.GameProfile.Active.ScriptGlobs.Select(glob =>
+                new OmniSharp.Extensions.LanguageServer.Protocol.Models.FileSystemWatcher { GlobPattern = "**/" + glob }),
         ];
 #pragma warning restore CS8601
 

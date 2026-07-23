@@ -1,3 +1,4 @@
+using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
@@ -106,7 +107,9 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             if ( element is GSCode.Parser.Syntax.Ast.UsingNode usingNode && usingNode.PathRange == hit.Range )
             {
                 ResolutionContext context = _support.Resolver.GetContext(target.Path);
-                string extension = target.Language == ScriptLanguage.Csc ? ".csc" : ".gsc";
+                string extension = target.Language == ScriptLanguage.Csc
+                    ? GameProfile.Active.ClientScriptExtension
+                    : GameProfile.Active.ServerScriptExtension;
                 return _support.Resolver.Resolve(context, usingNode.Path + extension);
             }
         }

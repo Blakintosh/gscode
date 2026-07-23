@@ -45,7 +45,7 @@ public static class AmbiguousFunctionLint
         string askingPath)
     {
         ResolutionContext context = resolver.GetContext(askingPath);
-        string extension = language == ScriptLanguage.Csc ? ".csc" : ".gsc";
+        string extension = language == ScriptLanguage.Csc ? GameProfile.Active.ClientScriptExtension : GameProfile.Active.ServerScriptExtension;
         string askingNormalized = PathUtil.NormalizeAbsolute(askingPath);
 
         // namespace::name -> the files reachable from here that declare it.

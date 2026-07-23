@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Paths;
 
 namespace GSCode.Workspace.Resolution;
@@ -46,8 +47,8 @@ public sealed record RootConfig
             return new RootConfig { WorkspaceFolders = folders.ToImmutable() };
         }
 
-        string? rawRoot = ResolveRoot(rawPathOverride, taToolsPath, @"share\raw", fileSystem);
-        string? modsRoot = ResolveRoot(modsPathOverride, taToolsPath, "mods", fileSystem);
+        string? rawRoot = ResolveRoot(rawPathOverride, taToolsPath, GameProfile.Active.RawSubfolder, fileSystem);
+        string? modsRoot = ResolveRoot(modsPathOverride, taToolsPath, GameProfile.Active.ModsSubfolder, fileSystem);
 
         return new RootConfig
         {
@@ -57,7 +58,7 @@ public sealed record RootConfig
         };
     }
 
-    private static string? ResolveRoot(string? overridePath, string? taToolsPath, string taToolsSubfolder, IFileSystem fileSystem)
+    private static string? ResolveRoot(string? overridePath, string? taToolsPath, string? taToolsSubfolder, IFileSystem fileSystem)
     {
         string? candidate = null;
 
@@ -65,7 +66,7 @@ public sealed record RootConfig
         {
             candidate = overridePath;
         }
-        else if ( !string.IsNullOrWhiteSpace(taToolsPath) )
+        else if ( !string.IsNullOrWhiteSpace(taToolsPath) && !string.IsNullOrWhiteSpace(taToolsSubfolder) )
         {
             candidate = Path.Combine(taToolsPath, taToolsSubfolder);
         }

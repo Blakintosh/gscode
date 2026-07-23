@@ -39,7 +39,7 @@ public static class NamespaceUsageLint
         // Add every namespace contributed by a #using target. Bail out (suppress the lint) the
         // moment a using can't be resolved to an indexed record — we can't know its namespaces.
         ResolutionContext context = resolver.GetContext(askingPath);
-        string extension = language == ScriptLanguage.Csc ? ".csc" : ".gsc";
+        string extension = language == ScriptLanguage.Csc ? GameProfile.Active.ClientScriptExtension : GameProfile.Active.ServerScriptExtension;
         foreach ( AstNode element in result.Tree.Root.Elements )
         {
             if ( element is not UsingNode usingNode )

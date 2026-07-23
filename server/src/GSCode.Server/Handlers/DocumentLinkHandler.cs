@@ -1,3 +1,4 @@
+using GSCode.Core;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -54,7 +55,9 @@ public sealed class DocumentLinkHandler : DocumentLinkHandlerBase
                 continue;
             }
 
-            string extension = target.Language == GSCode.Core.Symbols.ScriptLanguage.Csc ? ".csc" : ".gsc";
+            string extension = target.Language == GSCode.Core.Symbols.ScriptLanguage.Csc
+                ? GameProfile.Active.ClientScriptExtension
+                : GameProfile.Active.ServerScriptExtension;
             string? resolved = _support.Resolver.Resolve(_support.Resolver.GetContext(target.Path), usingNode.Path + extension);
             if ( resolved is not null )
             {

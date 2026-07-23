@@ -1,3 +1,4 @@
+using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Analysis;
@@ -71,13 +72,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     public override TextDocumentAttributes GetTextDocumentAttributes(DocumentUri uri)
     {
-        string extension = Path.GetExtension(uri.GetFileSystemPath()).ToLowerInvariant();
-        string languageId = extension switch
-        {
-            ".csc" => "csc",
-            ".gsh" => "gsh",
-            _ => "gsc",
-        };
+        string extension = Path.GetExtension(uri.GetFileSystemPath());
+        // The language id is the profile's extension for this world, without the dot.
+        ScriptLanguage language = GameProfile.Active.LanguageFromExtension(extension);
+        string languageId = GameProfile.Active.ExtensionFor(language).TrimStart('.').ToLowerInvariant();
 
         return new TextDocumentAttributes(uri, languageId);
     }

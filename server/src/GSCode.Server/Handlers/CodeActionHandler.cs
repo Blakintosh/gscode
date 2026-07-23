@@ -1,3 +1,4 @@
+using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -432,9 +433,14 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
     private static string StripExtension(string path)
     {
-        if ( path.EndsWith(".gsc", StringComparison.Ordinal) || path.EndsWith(".csc", StringComparison.Ordinal) )
+        // Scripts are reached by #using, which names them without extension. Strip the server
+        // or client extension; headers keep theirs (#insert names them in full).
+        foreach ( string extension in new[] { GameProfile.Active.ServerScriptExtension, GameProfile.Active.ClientScriptExtension } )
         {
-            return path[..^4];
+            if ( path.EndsWith(extension, StringComparison.Ordinal) )
+            {
+                return path[..^extension.Length];
+            }
         }
 
         return path;

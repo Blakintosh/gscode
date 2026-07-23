@@ -83,18 +83,6 @@ public static class ScriptAnalysis
     /// <summary>Infers the language from a file extension (defaults to GSC).</summary>
     public static ScriptLanguage LanguageFromPath(string filePath)
     {
-        string extension = Path.GetExtension(filePath);
-
-        if ( string.Equals(extension, ".csc", StringComparison.OrdinalIgnoreCase) )
-        {
-            return ScriptLanguage.Csc;
-        }
-
-        if ( string.Equals(extension, ".gsh", StringComparison.OrdinalIgnoreCase) )
-        {
-            return ScriptLanguage.Gsh;
-        }
-
-        return ScriptLanguage.Gsc;
+        return GameProfile.Active.LanguageFromPath(filePath);
     }
 }

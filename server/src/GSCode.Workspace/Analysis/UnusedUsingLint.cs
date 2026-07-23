@@ -52,7 +52,7 @@ public static class UnusedUsingLint
         CollectReferences(result, referencedNamespaces, referencedFunctions, referencedClasses);
 
         ResolutionContext context = resolver.GetContext(askingPath);
-        string extension = language == ScriptLanguage.Csc ? ".csc" : ".gsc";
+        string extension = language == ScriptLanguage.Csc ? GameProfile.Active.ClientScriptExtension : GameProfile.Active.ServerScriptExtension;
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach ( UsingNode usingNode in usings )

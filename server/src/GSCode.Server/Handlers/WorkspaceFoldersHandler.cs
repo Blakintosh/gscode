@@ -193,11 +193,15 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
     /// <summary>Rebuilds the root configuration from settings plus the given folder set.</summary>
     public static RootConfig BuildConfig(ServerSettings settings, IEnumerable<string> workspaceFolders, IFileSystem fileSystem)
     {
+        // The tools-install path comes from the game's own environment variable, if it has one.
+        string? environmentVariable = GSCode.Core.GameProfile.Active.RootEnvironmentVariable;
+        string? toolsPath = environmentVariable is null ? null : Environment.GetEnvironmentVariable(environmentVariable);
+
         return RootConfig.Create(
             settings.RawEnabled,
             settings.RawPathOverride.Length == 0 ? null : settings.RawPathOverride,
             settings.ModsPathOverride.Length == 0 ? null : settings.ModsPathOverride,
-            Environment.GetEnvironmentVariable("TA_TOOLS_PATH"),
+            toolsPath,
             workspaceFolders,
             fileSystem);
     }

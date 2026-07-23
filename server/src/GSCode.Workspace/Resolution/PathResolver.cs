@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Paths;
 
 namespace GSCode.Workspace.Resolution;
@@ -135,7 +137,7 @@ public sealed class PathResolver
     public IEnumerable<string> EnumerateIndexTargets()
     {
         HashSet<string> seen = new(StringComparer.Ordinal);
-        string[] patterns = ["*.gsc", "*.csc", "*.gsh"];
+        ImmutableArray<string> patterns = GameProfile.Active.ScriptGlobs;
 
         List<string> rootFolders = [];
         if ( _config.RawRoot is not null )

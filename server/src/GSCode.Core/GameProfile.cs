@@ -38,6 +38,16 @@ public enum FunctionPointerStyle
     Ampersand,
 }
 
+/// <summary>Which delimiters a ScriptDoc documentation comment uses — BO3 differs from the rest.</summary>
+public enum ScriptDocStyle
+{
+    /// <summary>Every game except BO3 delimits a doc comment with <c>/# … #/</c>.</summary>
+    Hash,
+
+    /// <summary>BO3 delimits a doc comment with <c>/@ … @/</c> (its <c>/# #/</c> is a dev block).</summary>
+    AtSign,
+}
+
 /// <summary>
 /// The portability seam: every piece of game-specific knowledge (extensions, global object names,
 /// which language features exist, how imports work, where scripts live) is reached through this
@@ -72,6 +82,13 @@ public sealed record GameProfile
     /// nameable and its facts can be filled in, not relied on yet.
     /// </summary>
     public bool Verified { get; init; }
+
+    /// <summary>
+    /// Whether the extension targets this game — the worksheet is filled in and it is within current
+    /// scope. True for CoD4 through BO3; false for everything after, which is left open for a
+    /// contributor to fill in and implement.
+    /// </summary>
+    public bool Supported { get; init; }
 
     /// <summary>Extension for server-side scripts, including the dot (".gsc").</summary>
     public string ServerScriptExtension { get; init; } = ".gsc";
@@ -112,11 +129,21 @@ public sealed record GameProfile
     /// <summary>How a function pointer is written — see <see cref="Core.FunctionPointerStyle"/>.</summary>
     public FunctionPointerStyle FunctionPointerStyle { get; init; } = FunctionPointerStyle.PathQualified;
 
+    /// <summary>Which delimiters a ScriptDoc comment uses — see <see cref="Core.ScriptDocStyle"/>.</summary>
+    public ScriptDocStyle ScriptDocStyle { get; init; } = ScriptDocStyle.Hash;
+
     /// <summary>
     /// Whether array parameters are passed by reference. BO3 passes arrays by reference ONLY;
     /// earlier games copy them by value, so a callee mutating an array does not affect the caller's.
     /// </summary>
     public bool ArraysPassedByReference { get; init; }
+
+    /// <summary>
+    /// Whether a constant can be declared at file scope by assigning a variable outside any function
+    /// (<c>CONST_FOO = 4;</c>). MW2 has these; BO3 uses <c>#define</c> instead and rejects a bare
+    /// top-level assignment. Parser support for this form is future work (roadmap D2).
+    /// </summary>
+    public bool HasFileScopeConstants { get; init; }
 
     // --- Root discovery: where the game's scripts live. ---
 
@@ -204,6 +231,7 @@ public sealed record GameProfile
         ReleaseYear = 2015,
         Family = EngineFamily.Treyarch,
         Verified = true,
+        Supported = true,
         ServerScriptExtension = ".gsc",
         ClientScriptExtension = ".csc",
         HeaderExtension = ".gsh",
@@ -221,6 +249,7 @@ public sealed record GameProfile
         HasNamespaceDirective = true,
         ImportStyle = ImportStyle.Namespace,
         FunctionPointerStyle = FunctionPointerStyle.Ampersand,
+        ScriptDocStyle = ScriptDocStyle.AtSign,
         ArraysPassedByReference = true,
         RootEnvironmentVariable = "TA_TOOLS_PATH",
         RawSubfolder = @"share\raw",
@@ -228,10 +257,33 @@ public sealed record GameProfile
     };
 
     /// <summary>
-    /// An unconfirmed placeholder for a game we do not support yet: it can be named and ordered, but
-    /// every capability sits at the conservative default until someone fills it in against real
-    /// scripts and sets <see cref="Verified"/>. The family is the one fact worth recording up front,
-    /// since it is the strongest hint about the dialect.
+    /// A game the extension targets (CoD4 through BO3), with its capabilities filled in from the
+    /// worksheet. Anything not passed matches the shared pre-BO3 shape: <c>#include</c> imports,
+    /// path-qualified function pointers, arrays by value, <c>/# #/</c> ScriptDoc, and no headers,
+    /// classes, <c>function</c> keyword or <c>#namespace</c>. <see cref="Verified"/> stays false
+    /// until the capabilities are confirmed against real scripts and the parser fork lands.
+    /// </summary>
+    private static GameProfile Targeted(
+        string shortName, string displayName, int year, EngineFamily family,
+        bool hasClientScripts = false, bool hasFileScopeConstants = false)
+    {
+        return new GameProfile
+        {
+            Id = shortName,
+            ShortName = shortName,
+            DisplayName = displayName,
+            ReleaseYear = year,
+            Family = family,
+            Supported = true,
+            HasClientScripts = hasClientScripts,
+            HasFileScopeConstants = hasFileScopeConstants,
+        };
+    }
+
+    /// <summary>
+    /// An unsupported placeholder for a game after BO3: named and ordered, but every capability sits
+    /// at the conservative default until a contributor fills it in against real scripts. The family
+    /// is the one fact worth recording up front, since it is the strongest hint about the dialect.
     /// </summary>
     private static GameProfile Shell(string shortName, string displayName, int year, EngineFamily family)
     {
@@ -246,20 +298,20 @@ public sealed record GameProfile
     }
 
     /// <summary>
-    /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. All but
-    /// <see cref="BlackOps3"/> are shells (<see cref="Verified"/> false) — present so the lineage is
-    /// nameable and each game's facts have a home, to be filled in as dialect support arrives.
+    /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. CoD4 through BO3 are
+    /// targeted with capabilities filled in (only BO3 is also <see cref="Verified"/>);
+    /// everything after is an unsupported shell, left for a contributor to fill in.
     /// </summary>
     public static ImmutableArray<GameProfile> All { get; } =
     [
-        Shell("cod4", "Call of Duty 4: Modern Warfare", 2007, EngineFamily.InfinityWard),
-        Shell("waw", "Call of Duty: World at War", 2008, EngineFamily.Treyarch),
-        Shell("mw2", "Call of Duty: Modern Warfare 2", 2009, EngineFamily.InfinityWard),
-        Shell("bo1", "Call of Duty: Black Ops", 2010, EngineFamily.Treyarch),
-        Shell("mw3", "Call of Duty: Modern Warfare 3", 2011, EngineFamily.InfinityWard),
-        Shell("bo2", "Call of Duty: Black Ops II", 2012, EngineFamily.Treyarch),
-        Shell("ghosts", "Call of Duty: Ghosts", 2013, EngineFamily.InfinityWard),
-        Shell("aw", "Call of Duty: Advanced Warfare", 2014, EngineFamily.SledgehammerGames),
+        Targeted("cod4", "Call of Duty 4: Modern Warfare", 2007, EngineFamily.InfinityWard),
+        Targeted("waw", "Call of Duty: World at War", 2008, EngineFamily.Treyarch, hasClientScripts: true),
+        Targeted("mw2", "Call of Duty: Modern Warfare 2", 2009, EngineFamily.InfinityWard, hasFileScopeConstants: true),
+        Targeted("bo1", "Call of Duty: Black Ops", 2010, EngineFamily.Treyarch, hasClientScripts: true),
+        Targeted("mw3", "Call of Duty: Modern Warfare 3", 2011, EngineFamily.InfinityWard),
+        Targeted("bo2", "Call of Duty: Black Ops II", 2012, EngineFamily.Treyarch, hasClientScripts: true),
+        Targeted("ghosts", "Call of Duty: Ghosts", 2013, EngineFamily.InfinityWard),
+        Targeted("aw", "Call of Duty: Advanced Warfare", 2014, EngineFamily.SledgehammerGames),
         BlackOps3,
         Shell("iw", "Call of Duty: Infinite Warfare", 2016, EngineFamily.InfinityWard),
         Shell("wwii", "Call of Duty: WWII", 2017, EngineFamily.SledgehammerGames),

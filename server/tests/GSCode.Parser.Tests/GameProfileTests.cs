@@ -86,12 +86,57 @@ public class GameProfileTests
     }
 
     [Fact]
-    public void OnlyBlackOps3IsVerified_TheRestAreShells()
+    public void SupportedGamesRunFromCod4ThroughBo3()
     {
-        // Every shell must stay a shell until someone confirms it, so this pins the intent: the
-        // lineage is nameable, but only BO3's capabilities may be trusted.
-        Assert.Single(GameProfile.All, static profile => profile.Verified);
+        // Everything up to and including BO3 is targeted; everything after is left open.
+        Assert.Equal(
+            new[] { "cod4", "waw", "mw2", "bo1", "mw3", "bo2", "ghosts", "aw", "bo3" },
+            GameProfile.All.Where(static profile => profile.Supported).Select(static profile => profile.ShortName).ToArray());
+
+        Assert.All(
+            GameProfile.All.Where(static profile => !profile.Supported),
+            static profile => Assert.True(profile.ReleaseYear > 2015, $"{profile.ShortName} should be after BO3"));
+    }
+
+    [Fact]
+    public void OnlyBlackOps3IsVerified()
+    {
+        // Supported means "filled in and in scope"; Verified means "confirmed against real scripts".
+        // Only BO3 is the latter.
         Assert.Same(GameProfile.BlackOps3, GameProfile.All.Single(static profile => profile.Verified));
+    }
+
+    [Fact]
+    public void TreyarchGamesBeforeBo3_HaveClientScriptsButNotTheRestOfTheBo3Shape()
+    {
+        // The nice detail from the worksheet: WaW/BO1/BO2 shipped .csc, but not headers, classes,
+        // the function keyword or #namespace.
+        foreach ( string name in new[] { "waw", "bo1", "bo2" } )
+        {
+            GameProfile game = GameProfile.ByName(name)!;
+            Assert.True(game.HasClientScripts, name);
+            Assert.False(game.HasHeaders, name);
+            Assert.False(game.HasClasses, name);
+            Assert.False(game.HasFunctionKeyword, name);
+            Assert.Equal(ImportStyle.Include, game.ImportStyle);
+            Assert.Equal(FunctionPointerStyle.PathQualified, game.FunctionPointerStyle);
+        }
+    }
+
+    [Fact]
+    public void OnlyMw2HasFileScopeConstants()
+    {
+        Assert.True(GameProfile.ByName("mw2")!.HasFileScopeConstants);
+        Assert.False(GameProfile.BlackOps3.HasFileScopeConstants);
+    }
+
+    [Fact]
+    public void OnlyBlackOps3UsesAtSignScriptDoc()
+    {
+        Assert.Equal(ScriptDocStyle.AtSign, GameProfile.BlackOps3.ScriptDocStyle);
+        Assert.All(
+            GameProfile.All.Where(static profile => profile.ShortName != "bo3"),
+            static profile => Assert.Equal(ScriptDocStyle.Hash, profile.ScriptDocStyle));
     }
 
     [Theory]

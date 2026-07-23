@@ -22,14 +22,14 @@ and it gets promoted to a real profile with `Verified = true`.
 
 | game   | studio      | year | csc | gsh | class | func | #ns | import | fptr | arr-ref |
 |--------|-------------|-----:|:---:|:---:|:-----:|:----:|:---:|:------:|:----:|:-------:|
-| cod4   | InfinityWard| 2007 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| waw    | Treyarch    | 2008 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| mw2    | InfinityWard| 2009 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| bo1    | Treyarch    | 2010 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| mw3    | InfinityWard| 2011 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| bo2    | Treyarch    | 2012 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| ghosts | InfinityWard| 2013 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| aw     | Sledgehammer| 2014 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
+| cod4   | InfinityWard| 2007 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
+| waw    | Treyarch    | 2008 |  ✓  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
+| mw2    | InfinityWard| 2009 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
+| bo1    | Treyarch    | 2010 |  ✓  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
+| mw3    | InfinityWard| 2011 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
+| bo2    | Treyarch    | 2012 |  ✓  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
+| ghosts | InfinityWard| 2013 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
+| aw     | Sledgehammer| 2014 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
 | **bo3**| Treyarch    | 2015 |  ✓  |  ✓  |   ✓   |  ✓   |  ✓  |  ns    |  &   |    ✓    |
 | iw     | InfinityWard| 2016 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
 | wwii   | Sledgehammer| 2017 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
@@ -68,3 +68,6 @@ grow the capability set to match. Candidates already on the radar for the IW fam
 | game | directive / feature | notes |
 |------|---------------------|-------|
 |      |                     |       |
+
+- I believe mw2 supported constant values that were variables that were assigned outside of a function `CONST_FOO_VALUE = 4;` make sure parser/settings support that too
+- ScriptDoc comments were in BO3 /@ @/ but /# #/ in every other game

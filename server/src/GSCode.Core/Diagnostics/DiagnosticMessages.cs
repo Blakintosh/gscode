@@ -59,7 +59,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.UnusedLocal] = "'{0}' is assigned but never read.",
         [GscDiagnosticCode.UsingNotFound] = "Cannot find script '{0}'.",
         [GscDiagnosticCode.CaseUndefined] =
-            "'case undefined' never matches — a switch compares values, so this branch is unreachable. Use isdefined() instead.",
+            "'case undefined' never matches — a switch compares values, so this branch is unreachable.",
         [GscDiagnosticCode.NonConstantCaseLabel] = "A case label must be a constant value.",
 
         // Cross-file / workspace semantics

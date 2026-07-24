@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 
 namespace GSCode.Workspace.Completion;
 
@@ -53,21 +54,48 @@ public static class GscKeywords
         return s_shapes.GetValueOrDefault(keyword, KeywordShape.Word);
     }
 
-    /// <summary>Statement and expression keywords a user might type in a function body.</summary>
+    /// <summary>
+    /// Statement and expression keywords a user might type in a function body. Global objects
+    /// (<c>self</c>, <c>level</c>, …) are NOT here — they come from the active profile
+    /// (<see cref="GameProfile.GlobalObjectNames"/>) so a dialect offers exactly its own.
+    /// </summary>
     public static ImmutableArray<string> StatementKeywords { get; } =
     [
         "if", "else", "for", "foreach", "while", "do", "switch", "case", "default",
         "return", "break", "continue", "wait", "waitrealtime", "waittill", "waittillmatch",
         "waittillframeend", "thread", "notify", "endon", "isdefined",
-        "true", "false", "undefined", "self", "level", "game", "world", "anim", "const", "new",
+        "true", "false", "undefined", "const", "new",
     ];
 
     /// <summary>Top-level keywords/directives offered outside a function body.</summary>
     public static ImmutableArray<string> TopLevelKeywords { get; } =
     [
         "function", "class", "var", "autoexec", "private", "constructor", "destructor",
-        "#using", "#insert", "#namespace", "#precache", "#define", "#using_animtree",
+        "#using", "#include", "#insert", "#namespace", "#precache", "#define", "#using_animtree",
         // Documented in KeywordDocs and hoverable, but previously never offered.
         "#animtree", "#if", "#elif", "#else", "#endif",
     ];
+
+    /// <summary>
+    /// Whether a keyword/directive exists in the given dialect, so completion offers only what the
+    /// game has. Mirrors the lexer's per-profile keyword gating (<c>Keywords.IsEnabled</c>): the
+    /// class family, <c>function</c>, <c>foreach</c> and <c>do</c> follow their capability flags,
+    /// the import/header/precache directives follow theirs, and everything else is universal.
+    /// </summary>
+    public static bool IsAvailable(string keyword, GameProfile profile)
+    {
+        return keyword switch
+        {
+            "foreach" => profile.HasForeach,
+            "do" => profile.HasDoWhile,
+            "function" => profile.HasFunctionKeyword,
+            "class" or "var" or "new" or "autoexec" or "private" or "constructor" or "destructor" => profile.HasClasses,
+            "#using" => profile.ImportStyle == ImportStyle.Namespace,
+            "#include" => profile.ImportStyle == ImportStyle.Include,
+            "#namespace" => profile.HasNamespaceDirective,
+            "#insert" => profile.HasHeaders,
+            "#precache" => profile.HasPrecacheDirective,
+            _ => true,
+        };
+    }
 }

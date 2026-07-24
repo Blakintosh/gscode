@@ -243,6 +243,17 @@ public sealed partial record GameProfile
         }
     }
 
+    /// <summary>
+    /// The engine global objects the language exposes (<c>self</c>, <c>level</c>, …), offered in
+    /// statement-scope completion. The base set is universal across the CoD lineage; BO3's class
+    /// system adds <c>classes</c>. Owned here so completion offers exactly what the dialect has,
+    /// rather than one hardcoded set for every game.
+    /// </summary>
+    public ImmutableArray<string> GlobalObjectNames =>
+        HasClasses
+            ? ["self", "level", "game", "world", "anim", "classes"]
+            : ["self", "level", "game", "world", "anim"];
+
     /// <summary>The extension for a language world, including the dot.</summary>
     public string ExtensionFor(ScriptLanguage language)
     {

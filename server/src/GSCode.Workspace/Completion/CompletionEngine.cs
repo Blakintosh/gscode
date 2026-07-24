@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -551,9 +552,10 @@ public sealed class CompletionEngine
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
+        GameProfile game = GameProfile.Active;
         foreach ( string keyword in GscKeywords.TopLevelKeywords )
         {
-            if ( !keyword.StartsWith('#') )
+            if ( !keyword.StartsWith('#') || !GscKeywords.IsAvailable(keyword, game) )
             {
                 continue;
             }
@@ -719,8 +721,20 @@ public sealed class CompletionEngine
             return DirectiveCompletions();
         }
 
-        foreach ( string keyword in insideFunction ? GscKeywords.StatementKeywords : GscKeywords.TopLevelKeywords )
+        // Statement scope adds the dialect's global objects (self, level, …); both scopes are
+        // filtered to what the active game actually has, so e.g. CoD4 is not offered class/#using.
+        GameProfile game = GameProfile.Active;
+        IEnumerable<string> words = insideFunction
+            ? GscKeywords.StatementKeywords.Concat(game.GlobalObjectNames)
+            : GscKeywords.TopLevelKeywords;
+
+        foreach ( string keyword in words )
         {
+            if ( !GscKeywords.IsAvailable(keyword, game) )
+            {
+                continue;
+            }
+
             // Documented keywords/directives (isdefined, notify, #using, …) carry their PDF blurb.
             string documentation = KeywordDocs.Find(keyword) ?? "";
             entries.Add(new CompletionEntry(

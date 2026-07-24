@@ -27,11 +27,12 @@ public class GameProfileTests
     [Fact]
     public void AGameThatShipsNoData_HasNoDataFileNames()
     {
-        GameProfile cod4 = GameProfile.ByName("cod4")!;
+        // MW2 has no bundled data (CoD4 does now, from its wordfile).
+        GameProfile mw2 = GameProfile.ByName("mw2")!;
 
-        Assert.Null(cod4.DataFilePrefix);
-        Assert.Null(cod4.ApiFileName(ScriptLanguage.Gsc));
-        Assert.Empty(cod4.BundledDataFileNames);
+        Assert.Null(mw2.DataFilePrefix);
+        Assert.Null(mw2.ApiFileName(ScriptLanguage.Gsc));
+        Assert.Empty(mw2.BundledDataFileNames);
     }
 
     [Fact]

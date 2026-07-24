@@ -1,0 +1,3012 @@
+{
+  "api": [
+    {
+      "name": "ACos",
+      "overloads": []
+    },
+    {
+      "name": "ASin",
+      "overloads": []
+    },
+    {
+      "name": "ATan",
+      "overloads": []
+    },
+    {
+      "name": "AddAIEventListener",
+      "overloads": []
+    },
+    {
+      "name": "AddTestClient",
+      "overloads": []
+    },
+    {
+      "name": "AddVehicleToCompass",
+      "overloads": []
+    },
+    {
+      "name": "AimAtPos",
+      "overloads": []
+    },
+    {
+      "name": "AllClientsPrint",
+      "overloads": []
+    },
+    {
+      "name": "AllowAds",
+      "overloads": []
+    },
+    {
+      "name": "AllowCrouch",
+      "overloads": []
+    },
+    {
+      "name": "AllowJump",
+      "overloads": []
+    },
+    {
+      "name": "AllowLean",
+      "overloads": []
+    },
+    {
+      "name": "AllowProne",
+      "overloads": []
+    },
+    {
+      "name": "AllowSpectateTeam",
+      "overloads": []
+    },
+    {
+      "name": "AllowSprint",
+      "overloads": []
+    },
+    {
+      "name": "AllowStand",
+      "overloads": []
+    },
+    {
+      "name": "AllowedStances",
+      "overloads": []
+    },
+    {
+      "name": "AmbientPlay",
+      "overloads": []
+    },
+    {
+      "name": "AmbientStop",
+      "overloads": []
+    },
+    {
+      "name": "Amplify",
+      "overloads": []
+    },
+    {
+      "name": "AmplifyStop",
+      "overloads": []
+    },
+    {
+      "name": "AnglesToForward",
+      "overloads": []
+    },
+    {
+      "name": "AnglesToRight",
+      "overloads": []
+    },
+    {
+      "name": "AnglesToUp",
+      "overloads": []
+    },
+    {
+      "name": "AnimCustom",
+      "overloads": []
+    },
+    {
+      "name": "AnimHasNotetrack",
+      "overloads": []
+    },
+    {
+      "name": "AnimMode",
+      "overloads": []
+    },
+    {
+      "name": "AnimRelative",
+      "overloads": []
+    },
+    {
+      "name": "AnimScripted",
+      "overloads": []
+    },
+    {
+      "name": "Announcement",
+      "overloads": []
+    },
+    {
+      "name": "AnyAmmoForWeaponModes",
+      "overloads": []
+    },
+    {
+      "name": "Assert",
+      "overloads": []
+    },
+    {
+      "name": "AssertEx",
+      "overloads": []
+    },
+    {
+      "name": "AssertMsg",
+      "overloads": []
+    },
+    {
+      "name": "Attach",
+      "overloads": []
+    },
+    {
+      "name": "AttachPath",
+      "overloads": []
+    },
+    {
+      "name": "AttackButtonPressed",
+      "overloads": []
+    },
+    {
+      "name": "BadPlace_Arc",
+      "overloads": []
+    },
+    {
+      "name": "BadPlace_Brush",
+      "overloads": []
+    },
+    {
+      "name": "BadPlace_Cylinder",
+      "overloads": []
+    },
+    {
+      "name": "BadPlace_Delete",
+      "overloads": []
+    },
+    {
+      "name": "Ban",
+      "overloads": []
+    },
+    {
+      "name": "BeginLocationSelection",
+      "overloads": []
+    },
+    {
+      "name": "BeginPrediction",
+      "overloads": []
+    },
+    {
+      "name": "BulletSpread",
+      "overloads": []
+    },
+    {
+      "name": "BulletTrace",
+      "overloads": []
+    },
+    {
+      "name": "BulletTracePassed",
+      "overloads": []
+    },
+    {
+      "name": "BulletTracer",
+      "overloads": []
+    },
+    {
+      "name": "ButtonPressed",
+      "overloads": []
+    },
+    {
+      "name": "CanAttackEnemyNode",
+      "overloads": []
+    },
+    {
+      "name": "CanSee",
+      "overloads": []
+    },
+    {
+      "name": "CanShoot",
+      "overloads": []
+    },
+    {
+      "name": "CanUseTurret",
+      "overloads": []
+    },
+    {
+      "name": "ChangeLevel",
+      "overloads": []
+    },
+    {
+      "name": "CheckCoverExitPosWithPath",
+      "overloads": []
+    },
+    {
+      "name": "CheckGrenadeLaunch",
+      "overloads": []
+    },
+    {
+      "name": "CheckGrenadeLaunchPos",
+      "overloads": []
+    },
+    {
+      "name": "CheckGrenadeThrow",
+      "overloads": []
+    },
+    {
+      "name": "CheckGrenadeThrowPos",
+      "overloads": []
+    },
+    {
+      "name": "CheckProne",
+      "overloads": []
+    },
+    {
+      "name": "Cinematic",
+      "overloads": []
+    },
+    {
+      "name": "CinematicInGame",
+      "overloads": []
+    },
+    {
+      "name": "ClearAllTextAfterHudelem",
+      "overloads": []
+    },
+    {
+      "name": "ClearAnim",
+      "overloads": []
+    },
+    {
+      "name": "ClearEnemy",
+      "overloads": []
+    },
+    {
+      "name": "ClearEntityTarget",
+      "overloads": []
+    },
+    {
+      "name": "ClearFixedNodeSafeVolume",
+      "overloads": []
+    },
+    {
+      "name": "ClearGoalVolume",
+      "overloads": []
+    },
+    {
+      "name": "ClearGoalYaw",
+      "overloads": []
+    },
+    {
+      "name": "ClearLocalizedStrings",
+      "overloads": []
+    },
+    {
+      "name": "ClearLookAtEnt",
+      "overloads": []
+    },
+    {
+      "name": "ClearPerks",
+      "overloads": []
+    },
+    {
+      "name": "ClearPotentialThreat",
+      "overloads": []
+    },
+    {
+      "name": "ClearTargetEntity",
+      "overloads": []
+    },
+    {
+      "name": "ClearTargetYaw",
+      "overloads": []
+    },
+    {
+      "name": "ClearTurretTarget",
+      "overloads": []
+    },
+    {
+      "name": "ClientAnnouncement",
+      "overloads": []
+    },
+    {
+      "name": "ClientClaimTrigger",
+      "overloads": []
+    },
+    {
+      "name": "ClientPrint",
+      "overloads": []
+    },
+    {
+      "name": "ClientReleaseTrigger",
+      "overloads": []
+    },
+    {
+      "name": "ClonePlayer",
+      "overloads": []
+    },
+    {
+      "name": "CloseFile",
+      "overloads": []
+    },
+    {
+      "name": "CloseInGameMenu",
+      "overloads": []
+    },
+    {
+      "name": "CloseMenu",
+      "overloads": []
+    },
+    {
+      "name": "Closer",
+      "overloads": []
+    },
+    {
+      "name": "CombineAngles",
+      "overloads": []
+    },
+    {
+      "name": "CommitSave",
+      "overloads": []
+    },
+    {
+      "name": "ConnectPaths",
+      "overloads": []
+    },
+    {
+      "name": "Cos",
+      "overloads": []
+    },
+    {
+      "name": "CreatePrintChannel",
+      "overloads": []
+    },
+    {
+      "name": "CreateThreatBiasGroup",
+      "overloads": []
+    },
+    {
+      "name": "DamageConeTrace",
+      "overloads": []
+    },
+    {
+      "name": "DeactivateChannelVolumes",
+      "overloads": []
+    },
+    {
+      "name": "DeactivateEq",
+      "overloads": []
+    },
+    {
+      "name": "DeactivateReverb",
+      "overloads": []
+    },
+    {
+      "name": "Delete",
+      "overloads": []
+    },
+    {
+      "name": "Destroy",
+      "overloads": []
+    },
+    {
+      "name": "Detach",
+      "overloads": []
+    },
+    {
+      "name": "DetachAll",
+      "overloads": []
+    },
+    {
+      "name": "Detonate",
+      "overloads": []
+    },
+    {
+      "name": "DevAddPitch",
+      "overloads": []
+    },
+    {
+      "name": "DevAddRoll",
+      "overloads": []
+    },
+    {
+      "name": "DevAddYaw",
+      "overloads": []
+    },
+    {
+      "name": "DisableAimAssist",
+      "overloads": []
+    },
+    {
+      "name": "DisableGrenadeTouchDamage",
+      "overloads": []
+    },
+    {
+      "name": "DisableInvulnerability",
+      "overloads": []
+    },
+    {
+      "name": "DisableTurretDismount",
+      "overloads": []
+    },
+    {
+      "name": "DisableWeapons",
+      "overloads": []
+    },
+    {
+      "name": "DisconnectPaths",
+      "overloads": []
+    },
+    {
+      "name": "Distance",
+      "overloads": []
+    },
+    {
+      "name": "Distance2D",
+      "overloads": []
+    },
+    {
+      "name": "DistanceSquared",
+      "overloads": []
+    },
+    {
+      "name": "DoDamage",
+      "overloads": []
+    },
+    {
+      "name": "DoSpawn",
+      "overloads": []
+    },
+    {
+      "name": "DontInterpolate",
+      "overloads": []
+    },
+    {
+      "name": "DrawCompassFriendlies",
+      "overloads": []
+    },
+    {
+      "name": "DropItem",
+      "overloads": []
+    },
+    {
+      "name": "DropWeapon",
+      "overloads": []
+    },
+    {
+      "name": "DumpAnims",
+      "overloads": []
+    },
+    {
+      "name": "DumpHistory",
+      "overloads": []
+    },
+    {
+      "name": "EQOff",
+      "overloads": []
+    },
+    {
+      "name": "EQOn",
+      "overloads": []
+    },
+    {
+      "name": "Earthquake",
+      "overloads": []
+    },
+    {
+      "name": "EnableAimAssist",
+      "overloads": []
+    },
+    {
+      "name": "EnableGrenadeTouchDamage",
+      "overloads": []
+    },
+    {
+      "name": "EnableHealthShield",
+      "overloads": []
+    },
+    {
+      "name": "EnableInvulnerability",
+      "overloads": []
+    },
+    {
+      "name": "EnableLinkTo",
+      "overloads": []
+    },
+    {
+      "name": "EnableTurretDismount",
+      "overloads": []
+    },
+    {
+      "name": "EnableWeapons",
+      "overloads": []
+    },
+    {
+      "name": "EndLocationSelection",
+      "overloads": []
+    },
+    {
+      "name": "EndPrediction",
+      "overloads": []
+    },
+    {
+      "name": "EnterProne",
+      "overloads": []
+    },
+    {
+      "name": "EntityRadiusDamage",
+      "overloads": []
+    },
+    {
+      "name": "ExitLevel",
+      "overloads": []
+    },
+    {
+      "name": "ExitProne",
+      "overloads": []
+    },
+    {
+      "name": "FGetArg",
+      "overloads": []
+    },
+    {
+      "name": "FPrintFields",
+      "overloads": []
+    },
+    {
+      "name": "FPrintLn",
+      "overloads": []
+    },
+    {
+      "name": "FReadLn",
+      "overloads": []
+    },
+    {
+      "name": "FadeOverTime",
+      "overloads": []
+    },
+    {
+      "name": "FindBestCoverNode",
+      "overloads": []
+    },
+    {
+      "name": "FindCoverNode",
+      "overloads": []
+    },
+    {
+      "name": "FindReacquireDirectPath",
+      "overloads": []
+    },
+    {
+      "name": "FindReacquireNode",
+      "overloads": []
+    },
+    {
+      "name": "FindReacquireProximatePath",
+      "overloads": []
+    },
+    {
+      "name": "FinishPlayerDamage",
+      "overloads": []
+    },
+    {
+      "name": "FireGrenadeLauncher",
+      "overloads": []
+    },
+    {
+      "name": "FireWeapon",
+      "overloads": []
+    },
+    {
+      "name": "FlagEnemyUnattackable",
+      "overloads": []
+    },
+    {
+      "name": "ForceViewmodelAnimation",
+      "overloads": []
+    },
+    {
+      "name": "FragButtonPressed",
+      "overloads": []
+    },
+    {
+      "name": "FreeVehicle",
+      "overloads": []
+    },
+    {
+      "name": "FreezeControls",
+      "overloads": []
+    },
+    {
+      "name": "GetAIArray",
+      "overloads": []
+    },
+    {
+      "name": "GetAISpeciesArray",
+      "overloads": []
+    },
+    {
+      "name": "GetAllNodes",
+      "overloads": []
+    },
+    {
+      "name": "GetAllVehicleNodes",
+      "overloads": []
+    },
+    {
+      "name": "GetAmmoCount",
+      "overloads": []
+    },
+    {
+      "name": "GetAngleDelta",
+      "overloads": []
+    },
+    {
+      "name": "GetAnglesToLikelyEnemyPath",
+      "overloads": []
+    },
+    {
+      "name": "GetAnimAssetType",
+      "overloads": []
+    },
+    {
+      "name": "GetAnimLength",
+      "overloads": []
+    },
+    {
+      "name": "GetAnimTime",
+      "overloads": []
+    },
+    {
+      "name": "GetArrayKeys",
+      "overloads": []
+    },
+    {
+      "name": "GetAssignedTeam",
+      "overloads": []
+    },
+    {
+      "name": "GetAttachIgnoreCollision",
+      "overloads": []
+    },
+    {
+      "name": "GetAttachModelName",
+      "overloads": []
+    },
+    {
+      "name": "GetAttachPos",
+      "overloads": []
+    },
+    {
+      "name": "GetAttachSize",
+      "overloads": []
+    },
+    {
+      "name": "GetAttachTagName",
+      "overloads": []
+    },
+    {
+      "name": "GetBrushModelCenter",
+      "overloads": []
+    },
+    {
+      "name": "GetCentroid",
+      "overloads": []
+    },
+    {
+      "name": "GetClanID",
+      "overloads": []
+    },
+    {
+      "name": "GetClanName",
+      "overloads": []
+    },
+    {
+      "name": "GetClosestEnemySqDist",
+      "overloads": []
+    },
+    {
+      "name": "GetCommandFromKey",
+      "overloads": []
+    },
+    {
+      "name": "GetCoverNode",
+      "overloads": []
+    },
+    {
+      "name": "GetCurrentOffhand",
+      "overloads": []
+    },
+    {
+      "name": "GetCurrentWeapon",
+      "overloads": []
+    },
+    {
+      "name": "GetCurrentWeaponClipAmmo",
+      "overloads": []
+    },
+    {
+      "name": "GetCycleOriginOffset",
+      "overloads": []
+    },
+    {
+      "name": "GetDebugDvar",
+      "overloads": []
+    },
+    {
+      "name": "GetDebugDvarFloat",
+      "overloads": []
+    },
+    {
+      "name": "GetDebugDvarInt",
+      "overloads": []
+    },
+    {
+      "name": "GetDebugEye",
+      "overloads": []
+    },
+    {
+      "name": "GetDiffuculty",
+      "overloads": []
+    },
+    {
+      "name": "GetDvar",
+      "overloads": []
+    },
+    {
+      "name": "GetDvarFloat",
+      "overloads": []
+    },
+    {
+      "name": "GetDvarInt",
+      "overloads": []
+    },
+    {
+      "name": "GetEnemySqDist",
+      "overloads": []
+    },
+    {
+      "name": "GetEnt",
+      "overloads": []
+    },
+    {
+      "name": "GetEntArray",
+      "overloads": []
+    },
+    {
+      "name": "GetEntByNum",
+      "overloads": []
+    },
+    {
+      "name": "GetEntNum",
+      "overloads": []
+    },
+    {
+      "name": "GetEntityNumber",
+      "overloads": []
+    },
+    {
+      "name": "GetEye",
+      "overloads": []
+    },
+    {
+      "name": "GetFXVisibility",
+      "overloads": []
+    },
+    {
+      "name": "GetFixedNodeSafeVolume",
+      "overloads": []
+    },
+    {
+      "name": "GetFlashBangedStrength",
+      "overloads": []
+    },
+    {
+      "name": "GetFractionMaxAmmo",
+      "overloads": []
+    },
+    {
+      "name": "GetFractionStartAmmo",
+      "overloads": []
+    },
+    {
+      "name": "GetGoalSpeedMPH",
+      "overloads": []
+    },
+    {
+      "name": "GetGoalVolume",
+      "overloads": []
+    },
+    {
+      "name": "GetGroundEntType",
+      "overloads": []
+    },
+    {
+      "name": "GetHitEntType",
+      "overloads": []
+    },
+    {
+      "name": "GetHitYaw",
+      "overloads": []
+    },
+    {
+      "name": "GetKeyBinding",
+      "overloads": []
+    },
+    {
+      "name": "GetLightColor",
+      "overloads": []
+    },
+    {
+      "name": "GetLightExponent",
+      "overloads": []
+    },
+    {
+      "name": "GetLightFovInner",
+      "overloads": []
+    },
+    {
+      "name": "GetLightFovOuter",
+      "overloads": []
+    },
+    {
+      "name": "GetLightIntensity",
+      "overloads": []
+    },
+    {
+      "name": "GetLightRadius",
+      "overloads": []
+    },
+    {
+      "name": "GetMapSunDirection",
+      "overloads": []
+    },
+    {
+      "name": "GetMapSunLight",
+      "overloads": []
+    },
+    {
+      "name": "GetMotionAngle",
+      "overloads": []
+    },
+    {
+      "name": "GetMoveDelta",
+      "overloads": []
+    },
+    {
+      "name": "GetNegotiationEndNode",
+      "overloads": []
+    },
+    {
+      "name": "GetNegotiationStartNode",
+      "overloads": []
+    },
+    {
+      "name": "GetNode",
+      "overloads": []
+    },
+    {
+      "name": "GetNodeArray",
+      "overloads": []
+    },
+    {
+      "name": "GetNormalHealth",
+      "overloads": []
+    },
+    {
+      "name": "GetNormalizedMovement",
+      "overloads": []
+    },
+    {
+      "name": "GetNorthYaw",
+      "overloads": []
+    },
+    {
+      "name": "GetNotetrackTimes",
+      "overloads": []
+    },
+    {
+      "name": "GetNumParts",
+      "overloads": []
+    },
+    {
+      "name": "GetNumVehicles",
+      "overloads": []
+    },
+    {
+      "name": "GetOffhandSecondaryClass",
+      "overloads": []
+    },
+    {
+      "name": "GetOrigin",
+      "overloads": []
+    },
+    {
+      "name": "GetPartName",
+      "overloads": []
+    },
+    {
+      "name": "GetPlayerAngles",
+      "overloads": []
+    },
+    {
+      "name": "GetPlayerViewHeight",
+      "overloads": []
+    },
+    {
+      "name": "GetReacquireNode",
+      "overloads": []
+    },
+    {
+      "name": "GetReflectionLocs",
+      "overloads": []
+    },
+    {
+      "name": "GetShootAtPos",
+      "overloads": []
+    },
+    {
+      "name": "GetSpawnerArray",
+      "overloads": []
+    },
+    {
+      "name": "GetSpawnerTeamArray",
+      "overloads": []
+    },
+    {
+      "name": "GetSpeed",
+      "overloads": []
+    },
+    {
+      "name": "GetSpeedMPH",
+      "overloads": []
+    },
+    {
+      "name": "GetStance",
+      "overloads": []
+    },
+    {
+      "name": "GetStartAngles",
+      "overloads": []
+    },
+    {
+      "name": "GetStartOrigin",
+      "overloads": []
+    },
+    {
+      "name": "GetStartTime",
+      "overloads": []
+    },
+    {
+      "name": "GetStat",
+      "overloads": []
+    },
+    {
+      "name": "GetSubStr",
+      "overloads": []
+    },
+    {
+      "name": "GetTagAngles",
+      "overloads": []
+    },
+    {
+      "name": "GetTagOrigin",
+      "overloads": []
+    },
+    {
+      "name": "GetTeamPlayersAlive",
+      "overloads": []
+    },
+    {
+      "name": "GetTeamRadar",
+      "overloads": []
+    },
+    {
+      "name": "GetTeamScore",
+      "overloads": []
+    },
+    {
+      "name": "GetThreatBias",
+      "overloads": []
+    },
+    {
+      "name": "GetThreatBiasGroup",
+      "overloads": []
+    },
+    {
+      "name": "GetTime",
+      "overloads": []
+    },
+    {
+      "name": "GetTimeScale",
+      "overloads": []
+    },
+    {
+      "name": "GetTurret",
+      "overloads": []
+    },
+    {
+      "name": "GetTurretOwner",
+      "overloads": []
+    },
+    {
+      "name": "GetTurretTarget",
+      "overloads": []
+    },
+    {
+      "name": "GetVehicleNode",
+      "overloads": []
+    },
+    {
+      "name": "GetVehicleNodeArray",
+      "overloads": []
+    },
+    {
+      "name": "GetVehicleOwner",
+      "overloads": []
+    },
+    {
+      "name": "GetVelocity",
+      "overloads": []
+    },
+    {
+      "name": "GetViewModel",
+      "overloads": []
+    },
+    {
+      "name": "GetWeaponAmmoClip",
+      "overloads": []
+    },
+    {
+      "name": "GetWeaponAmmoStock",
+      "overloads": []
+    },
+    {
+      "name": "GetWeaponClipModel",
+      "overloads": []
+    },
+    {
+      "name": "GetWeaponModel",
+      "overloads": []
+    },
+    {
+      "name": "GetWeaponsList",
+      "overloads": []
+    },
+    {
+      "name": "GetWeaponsListPrimaries",
+      "overloads": []
+    },
+    {
+      "name": "GetWheelSurface",
+      "overloads": []
+    },
+    {
+      "name": "GiveAchievement",
+      "overloads": []
+    },
+    {
+      "name": "GiveMaxAmmo",
+      "overloads": []
+    },
+    {
+      "name": "GiveStartAmmo",
+      "overloads": []
+    },
+    {
+      "name": "GiveWeapon",
+      "overloads": []
+    },
+    {
+      "name": "HasEQ",
+      "overloads": []
+    },
+    {
+      "name": "HasPerk",
+      "overloads": []
+    },
+    {
+      "name": "HasWeapon",
+      "overloads": []
+    },
+    {
+      "name": "Hide",
+      "overloads": []
+    },
+    {
+      "name": "HidePart",
+      "overloads": []
+    },
+    {
+      "name": "HideViewModel",
+      "overloads": []
+    },
+    {
+      "name": "IPrintLn",
+      "overloads": []
+    },
+    {
+      "name": "IPrintLnBold",
+      "overloads": []
+    },
+    {
+      "name": "Int",
+      "overloads": []
+    },
+    {
+      "name": "IsAI",
+      "overloads": []
+    },
+    {
+      "name": "IsAlive",
+      "overloads": []
+    },
+    {
+      "name": "IsArray",
+      "overloads": []
+    },
+    {
+      "name": "IsDefined",
+      "overloads": []
+    },
+    {
+      "name": "IsDeflected",
+      "overloads": []
+    },
+    {
+      "name": "IsFiring",
+      "overloads": []
+    },
+    {
+      "name": "IsFiringTurret",
+      "overloads": []
+    },
+    {
+      "name": "IsGodMode",
+      "overloads": []
+    },
+    {
+      "name": "IsInGoal",
+      "overloads": []
+    },
+    {
+      "name": "IsKnownEnemyInRadius",
+      "overloads": []
+    },
+    {
+      "name": "IsKnownEnemyInVolume",
+      "overloads": []
+    },
+    {
+      "name": "IsLookingAt",
+      "overloads": []
+    },
+    {
+      "name": "IsMeleeing",
+      "overloads": []
+    },
+    {
+      "name": "IsMoveSuppressed",
+      "overloads": []
+    },
+    {
+      "name": "IsNodeOccupied",
+      "overloads": []
+    },
+    {
+      "name": "IsOnGround",
+      "overloads": []
+    },
+    {
+      "name": "IsPathDirect",
+      "overloads": []
+    },
+    {
+      "name": "IsPlayer",
+      "overloads": []
+    },
+    {
+      "name": "IsPlayerNumber",
+      "overloads": []
+    },
+    {
+      "name": "IsRagdoll",
+      "overloads": []
+    },
+    {
+      "name": "IsSaveRecentlyLoaded",
+      "overloads": []
+    },
+    {
+      "name": "IsSaveSuccessful",
+      "overloads": []
+    },
+    {
+      "name": "IsSentient",
+      "overloads": []
+    },
+    {
+      "name": "IsSplitScreen",
+      "overloads": []
+    },
+    {
+      "name": "IsStanceAllowed",
+      "overloads": []
+    },
+    {
+      "name": "IsString",
+      "overloads": []
+    },
+    {
+      "name": "IsSubStr",
+      "overloads": []
+    },
+    {
+      "name": "IsSuppressed",
+      "overloads": []
+    },
+    {
+      "name": "IsSuppressionWaiting",
+      "overloads": []
+    },
+    {
+      "name": "IsTalking",
+      "overloads": []
+    },
+    {
+      "name": "IsThrowingGrenade",
+      "overloads": []
+    },
+    {
+      "name": "IsTouching",
+      "overloads": []
+    },
+    {
+      "name": "IsTurretActive",
+      "overloads": []
+    },
+    {
+      "name": "IsTurretReady",
+      "overloads": []
+    },
+    {
+      "name": "IsValidGametype",
+      "overloads": []
+    },
+    {
+      "name": "IsWaitingOnSound",
+      "overloads": []
+    },
+    {
+      "name": "IsWeaponClipOnly",
+      "overloads": []
+    },
+    {
+      "name": "ItemWeaponSetAmmo",
+      "overloads": []
+    },
+    {
+      "name": "JoltBody",
+      "overloads": []
+    },
+    {
+      "name": "Kick",
+      "overloads": []
+    },
+    {
+      "name": "LaserOff",
+      "overloads": []
+    },
+    {
+      "name": "LaserOn",
+      "overloads": []
+    },
+    {
+      "name": "Launch",
+      "overloads": []
+    },
+    {
+      "name": "Length",
+      "overloads": []
+    },
+    {
+      "name": "LengthSquared",
+      "overloads": []
+    },
+    {
+      "name": "LerpPosition",
+      "overloads": []
+    },
+    {
+      "name": "Line",
+      "overloads": []
+    },
+    {
+      "name": "LinkTo",
+      "overloads": []
+    },
+    {
+      "name": "LoadFX",
+      "overloads": []
+    },
+    {
+      "name": "LocalToWorldCoords",
+      "overloads": []
+    },
+    {
+      "name": "LockLightVis",
+      "overloads": []
+    },
+    {
+      "name": "LogPrint",
+      "overloads": []
+    },
+    {
+      "name": "MagicBullet",
+      "overloads": []
+    },
+    {
+      "name": "MagicGrenade",
+      "overloads": []
+    },
+    {
+      "name": "MagicGrenadeManual",
+      "overloads": []
+    },
+    {
+      "name": "MakeDvarServerInfo",
+      "overloads": []
+    },
+    {
+      "name": "MakeFakeAI",
+      "overloads": []
+    },
+    {
+      "name": "MakeTurretUnusable",
+      "overloads": []
+    },
+    {
+      "name": "MakeTurretUsable",
+      "overloads": []
+    },
+    {
+      "name": "MakeVehicleUnusable",
+      "overloads": []
+    },
+    {
+      "name": "MakeVehicleUsable",
+      "overloads": []
+    },
+    {
+      "name": "Map",
+      "overloads": []
+    },
+    {
+      "name": "MapExists",
+      "overloads": []
+    },
+    {
+      "name": "Map_Restart",
+      "overloads": []
+    },
+    {
+      "name": "MayMoveFromPointToPoint",
+      "overloads": []
+    },
+    {
+      "name": "MayMoveToPoint",
+      "overloads": []
+    },
+    {
+      "name": "Melee",
+      "overloads": []
+    },
+    {
+      "name": "MeleeButtonPressed",
+      "overloads": []
+    },
+    {
+      "name": "Missile_CreateAttractorEnt",
+      "overloads": []
+    },
+    {
+      "name": "Missile_CreateAttractorOrigin",
+      "overloads": []
+    },
+    {
+      "name": "Missile_CreateRepulsorEnt",
+      "overloads": []
+    },
+    {
+      "name": "Missile_CreateRepulsorOrigin",
+      "overloads": []
+    },
+    {
+      "name": "Missile_DeleteAttractor",
+      "overloads": []
+    },
+    {
+      "name": "Missile_SetTarget",
+      "overloads": []
+    },
+    {
+      "name": "MissionFailed",
+      "overloads": []
+    },
+    {
+      "name": "MissionSuccess",
+      "overloads": []
+    },
+    {
+      "name": "MoveGravity",
+      "overloads": []
+    },
+    {
+      "name": "MoveOverTime",
+      "overloads": []
+    },
+    {
+      "name": "MoveTo",
+      "overloads": []
+    },
+    {
+      "name": "MoveX",
+      "overloads": []
+    },
+    {
+      "name": "MoveY",
+      "overloads": []
+    },
+    {
+      "name": "MoveZ",
+      "overloads": []
+    },
+    {
+      "name": "MusicPlay",
+      "overloads": []
+    },
+    {
+      "name": "MusicStop",
+      "overloads": []
+    },
+    {
+      "name": "NearNode",
+      "overloads": []
+    },
+    {
+      "name": "NewClientHudElem",
+      "overloads": []
+    },
+    {
+      "name": "NewHudElem",
+      "overloads": []
+    },
+    {
+      "name": "NewTeamHudElem",
+      "overloads": []
+    },
+    {
+      "name": "NotSolid",
+      "overloads": []
+    },
+    {
+      "name": "NotifyOnCommand",
+      "overloads": []
+    },
+    {
+      "name": "Obituary",
+      "overloads": []
+    },
+    {
+      "name": "Objective_Add",
+      "overloads": []
+    },
+    {
+      "name": "Objective_AdditionalCurrent",
+      "overloads": []
+    },
+    {
+      "name": "Objective_AdditionalPosition",
+      "overloads": []
+    },
+    {
+      "name": "Objective_Current",
+      "overloads": []
+    },
+    {
+      "name": "Objective_Delete",
+      "overloads": []
+    },
+    {
+      "name": "Objective_Icon",
+      "overloads": []
+    },
+    {
+      "name": "Objective_OnEntity",
+      "overloads": []
+    },
+    {
+      "name": "Objective_Position",
+      "overloads": []
+    },
+    {
+      "name": "Objective_Ring",
+      "overloads": []
+    },
+    {
+      "name": "Objective_State",
+      "overloads": []
+    },
+    {
+      "name": "Objective_String",
+      "overloads": []
+    },
+    {
+      "name": "Objective_String_NoMessage",
+      "overloads": []
+    },
+    {
+      "name": "Objective_Team",
+      "overloads": []
+    },
+    {
+      "name": "OpenFile",
+      "overloads": []
+    },
+    {
+      "name": "OpenMenu",
+      "overloads": []
+    },
+    {
+      "name": "OpenMenuNoMouse",
+      "overloads": []
+    },
+    {
+      "name": "OrientMode",
+      "overloads": []
+    },
+    {
+      "name": "PhysicsExplosionCylinder",
+      "overloads": []
+    },
+    {
+      "name": "PhysicsExplosionSphere",
+      "overloads": []
+    },
+    {
+      "name": "PhysicsJitter",
+      "overloads": []
+    },
+    {
+      "name": "PhysicsJolt",
+      "overloads": []
+    },
+    {
+      "name": "PhysicsLaunch",
+      "overloads": []
+    },
+    {
+      "name": "PhysicsTrace",
+      "overloads": []
+    },
+    {
+      "name": "PickUpGrenade",
+      "overloads": []
+    },
+    {
+      "name": "PingPlayer",
+      "overloads": []
+    },
+    {
+      "name": "PlaceSpawnPoint",
+      "overloads": []
+    },
+    {
+      "name": "PlayFX",
+      "overloads": []
+    },
+    {
+      "name": "PlayFXOnTag",
+      "overloads": []
+    },
+    {
+      "name": "PlayLocalSound",
+      "overloads": []
+    },
+    {
+      "name": "PlayLoopSound",
+      "overloads": []
+    },
+    {
+      "name": "PlayLoopedFX",
+      "overloads": []
+    },
+    {
+      "name": "PlayRumbleLoopOnEntity",
+      "overloads": []
+    },
+    {
+      "name": "PlayRumbleLoopOnPosition",
+      "overloads": []
+    },
+    {
+      "name": "PlayRumbleOnEntity",
+      "overloads": []
+    },
+    {
+      "name": "PlayRumbleOnPosition",
+      "overloads": []
+    },
+    {
+      "name": "PlaySound",
+      "overloads": []
+    },
+    {
+      "name": "PlaySoundAsMaster",
+      "overloads": []
+    },
+    {
+      "name": "PlaySoundToPlayer",
+      "overloads": []
+    },
+    {
+      "name": "PlaySoundToTeam",
+      "overloads": []
+    },
+    {
+      "name": "PlayerAds",
+      "overloads": []
+    },
+    {
+      "name": "PlayerLinkTo",
+      "overloads": []
+    },
+    {
+      "name": "PlayerLinkToAbsolute",
+      "overloads": []
+    },
+    {
+      "name": "PlayerLinkToDelta",
+      "overloads": []
+    },
+    {
+      "name": "PlayerPhysicsTrace",
+      "overloads": []
+    },
+    {
+      "name": "PlayerSetGroundReferenceEnt",
+      "overloads": []
+    },
+    {
+      "name": "PointOnSegmentNearestToPoint",
+      "overloads": []
+    },
+    {
+      "name": "PositionWouldTelefrag",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheHeadIcon",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheItem",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheLocationSelector",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheModel",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheRumble",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheShader",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheShellShock",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheStatusIcon",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheString",
+      "overloads": []
+    },
+    {
+      "name": "PreCacheTurret",
+      "overloads": []
+    },
+    {
+      "name": "PrecacheMenu",
+      "overloads": []
+    },
+    {
+      "name": "PrecacheVehicle",
+      "overloads": []
+    },
+    {
+      "name": "PredictAnims",
+      "overloads": []
+    },
+    {
+      "name": "PredictOriginAndAngles",
+      "overloads": []
+    },
+    {
+      "name": "Print",
+      "overloads": []
+    },
+    {
+      "name": "Print3d",
+      "overloads": []
+    },
+    {
+      "name": "PrintLn",
+      "overloads": []
+    },
+    {
+      "name": "PushPlayer",
+      "overloads": []
+    },
+    {
+      "name": "RadiusDamage",
+      "overloads": []
+    },
+    {
+      "name": "RandomFloat",
+      "overloads": []
+    },
+    {
+      "name": "RandomFloatRange",
+      "overloads": []
+    },
+    {
+      "name": "RandomInt",
+      "overloads": []
+    },
+    {
+      "name": "RandomIntRange",
+      "overloads": []
+    },
+    {
+      "name": "ReacquireMove",
+      "overloads": []
+    },
+    {
+      "name": "ReacquireStep",
+      "overloads": []
+    },
+    {
+      "name": "ReleaseClaimedTrigger",
+      "overloads": []
+    },
+    {
+      "name": "RemoveAIEventListener",
+      "overloads": []
+    },
+    {
+      "name": "RemoveVehicleFromCompass",
+      "overloads": []
+    },
+    {
+      "name": "Reset",
+      "overloads": []
+    },
+    {
+      "name": "ResetSpreadOverride",
+      "overloads": []
+    },
+    {
+      "name": "ResetSunDirection",
+      "overloads": []
+    },
+    {
+      "name": "ResetSunLight",
+      "overloads": []
+    },
+    {
+      "name": "ResetTimeout",
+      "overloads": []
+    },
+    {
+      "name": "RestoreDefaultDropPitch",
+      "overloads": []
+    },
+    {
+      "name": "ResumeSpeed",
+      "overloads": []
+    },
+    {
+      "name": "ReturnPlayerControl",
+      "overloads": []
+    },
+    {
+      "name": "RotatePitch",
+      "overloads": []
+    },
+    {
+      "name": "RotateRoll",
+      "overloads": []
+    },
+    {
+      "name": "RotateTo",
+      "overloads": []
+    },
+    {
+      "name": "RotateVelocity",
+      "overloads": []
+    },
+    {
+      "name": "RotateYaw",
+      "overloads": []
+    },
+    {
+      "name": "SaveGame",
+      "overloads": []
+    },
+    {
+      "name": "SaveGameNoCommit",
+      "overloads": []
+    },
+    {
+      "name": "SayAll",
+      "overloads": []
+    },
+    {
+      "name": "SayTeam",
+      "overloads": []
+    },
+    {
+      "name": "ScaleOverTime",
+      "overloads": []
+    },
+    {
+      "name": "Scr_ClearAllCorpses",
+      "overloads": []
+    },
+    {
+      "name": "SecondaryOffhandButtonPressed",
+      "overloads": []
+    },
+    {
+      "name": "SendLeaderBoards",
+      "overloads": []
+    },
+    {
+      "name": "SendRanks",
+      "overloads": []
+    },
+    {
+      "name": "SetAISpread",
+      "overloads": []
+    },
+    {
+      "name": "SetAcceleration",
+      "overloads": []
+    },
+    {
+      "name": "SetActionSlot",
+      "overloads": []
+    },
+    {
+      "name": "SetAimAnims",
+      "overloads": []
+    },
+    {
+      "name": "SetAirResistance",
+      "overloads": []
+    },
+    {
+      "name": "SetAnim",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimKnob",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimKnobAll",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimKnobAllLimited",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimKnobAllLimitedRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimKnobAllRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimKnobLimited",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimKnobLimitedRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimKnobRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimLimited",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimLimitedRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetAnimTime",
+      "overloads": []
+    },
+    {
+      "name": "SetArchive",
+      "overloads": []
+    },
+    {
+      "name": "SetAutoPickup",
+      "overloads": []
+    },
+    {
+      "name": "SetBlur",
+      "overloads": []
+    },
+    {
+      "name": "SetBottomArc",
+      "overloads": []
+    },
+    {
+      "name": "SetCanDamage",
+      "overloads": []
+    },
+    {
+      "name": "SetChannelVolumes",
+      "overloads": []
+    },
+    {
+      "name": "SetClientDvar",
+      "overloads": []
+    },
+    {
+      "name": "SetClientDvars",
+      "overloads": []
+    },
+    {
+      "name": "SetClientNameMode",
+      "overloads": []
+    },
+    {
+      "name": "SetClock",
+      "overloads": []
+    },
+    {
+      "name": "SetClockUp",
+      "overloads": []
+    },
+    {
+      "name": "SetContents",
+      "overloads": []
+    },
+    {
+      "name": "SetConvergenceTime",
+      "overloads": []
+    },
+    {
+      "name": "SetCullDist",
+      "overloads": []
+    },
+    {
+      "name": "SetCursorHint",
+      "overloads": []
+    },
+    {
+      "name": "SetDebugAngles",
+      "overloads": []
+    },
+    {
+      "name": "SetDebugOrigin",
+      "overloads": []
+    },
+    {
+      "name": "SetDeceleration",
+      "overloads": []
+    },
+    {
+      "name": "SetDefaultDropPitch",
+      "overloads": []
+    },
+    {
+      "name": "SetDepthOfField",
+      "overloads": []
+    },
+    {
+      "name": "SetDvar",
+      "overloads": []
+    },
+    {
+      "name": "SetEngagementMaxDist",
+      "overloads": []
+    },
+    {
+      "name": "SetEngagementMinDist",
+      "overloads": []
+    },
+    {
+      "name": "SetEntityTarget",
+      "overloads": []
+    },
+    {
+      "name": "SetEq",
+      "overloads": []
+    },
+    {
+      "name": "SetEqLerp",
+      "overloads": []
+    },
+    {
+      "name": "SetExpFog",
+      "overloads": []
+    },
+    {
+      "name": "SetFixedNodeSafeVolume",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnim",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimKnob",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimKnobAll",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimKnobAllRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimKnobLimited",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimKnobLimitedRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimKnobRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimLimited",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimLimitedRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetFlaggedAnimRestart",
+      "overloads": []
+    },
+    {
+      "name": "SetFlashBanged",
+      "overloads": []
+    },
+    {
+      "name": "SetFlashbangImmunity",
+      "overloads": []
+    },
+    {
+      "name": "SetFriendlyChain",
+      "overloads": []
+    },
+    {
+      "name": "SetGameEndTime",
+      "overloads": []
+    },
+    {
+      "name": "SetGameTypeString",
+      "overloads": []
+    },
+    {
+      "name": "SetGoalEntity",
+      "overloads": []
+    },
+    {
+      "name": "SetGoalNode",
+      "overloads": []
+    },
+    {
+      "name": "SetGoalPos",
+      "overloads": []
+    },
+    {
+      "name": "SetGoalVolume",
+      "overloads": []
+    },
+    {
+      "name": "SetGoalYaw",
+      "overloads": []
+    },
+    {
+      "name": "SetHintString",
+      "overloads": []
+    },
+    {
+      "name": "SetHoverParams",
+      "overloads": []
+    },
+    {
+      "name": "SetIgnoreMeGroup",
+      "overloads": []
+    },
+    {
+      "name": "SetJitterParams",
+      "overloads": []
+    },
+    {
+      "name": "SetLeftArc",
+      "overloads": []
+    },
+    {
+      "name": "SetLightColor",
+      "overloads": []
+    },
+    {
+      "name": "SetLightExponent",
+      "overloads": []
+    },
+    {
+      "name": "SetLightFovRange",
+      "overloads": []
+    },
+    {
+      "name": "SetLightIntensity",
+      "overloads": []
+    },
+    {
+      "name": "SetLightRadius",
+      "overloads": []
+    },
+    {
+      "name": "SetLookAt",
+      "overloads": []
+    },
+    {
+      "name": "SetLookAtAnimNodes",
+      "overloads": []
+    },
+    {
+      "name": "SetLookAtEnt",
+      "overloads": []
+    },
+    {
+      "name": "SetLookAtText",
+      "overloads": []
+    },
+    {
+      "name": "SetLookAtYawLimits",
+      "overloads": []
+    },
+    {
+      "name": "SetMapCenter",
+      "overloads": []
+    },
+    {
+      "name": "SetMapNameString",
+      "overloads": []
+    },
+    {
+      "name": "SetMaxPitchRoll",
+      "overloads": []
+    },
+    {
+      "name": "SetMiniMap",
+      "overloads": []
+    },
+    {
+      "name": "SetMissionDvar",
+      "overloads": []
+    },
+    {
+      "name": "SetMode",
+      "overloads": []
+    },
+    {
+      "name": "SetModel",
+      "overloads": []
+    },
+    {
+      "name": "SetMoveSpeedScale",
+      "overloads": []
+    },
+    {
+      "name": "SetNearGoalNotifyDist",
+      "overloads": []
+    },
+    {
+      "name": "SetNodePriority",
+      "overloads": []
+    },
+    {
+      "name": "SetNormalHealth",
+      "overloads": []
+    },
+    {
+      "name": "SetOffhandSecondaryClass",
+      "overloads": []
+    },
+    {
+      "name": "SetOrigin",
+      "overloads": []
+    },
+    {
+      "name": "SetPerk",
+      "overloads": []
+    },
+    {
+      "name": "SetPhysicsGravityDir",
+      "overloads": []
+    },
+    {
+      "name": "SetPlayerAngles",
+      "overloads": []
+    },
+    {
+      "name": "SetPlayerIgnoreRadiusDamage",
+      "overloads": []
+    },
+    {
+      "name": "SetPlayerNameString",
+      "overloads": []
+    },
+    {
+      "name": "SetPlayerSpread",
+      "overloads": []
+    },
+    {
+      "name": "SetPlayerTeamRank",
+      "overloads": []
+    },
+    {
+      "name": "SetPotentialThreat",
+      "overloads": []
+    },
+    {
+      "name": "SetPrintChannel",
+      "overloads": []
+    },
+    {
+      "name": "SetProneAnimNodes",
+      "overloads": []
+    },
+    {
+      "name": "SetPulseFX",
+      "overloads": []
+    },
+    {
+      "name": "SetReverb",
+      "overloads": []
+    },
+    {
+      "name": "SetRightArc",
+      "overloads": []
+    },
+    {
+      "name": "SetRunToPos",
+      "overloads": []
+    },
+    {
+      "name": "SetSavedDvar",
+      "overloads": []
+    },
+    {
+      "name": "SetShader",
+      "overloads": []
+    },
+    {
+      "name": "SetShadowHint",
+      "overloads": []
+    },
+    {
+      "name": "SetSoundBlend",
+      "overloads": []
+    },
+    {
+      "name": "SetSpawnWeapon",
+      "overloads": []
+    },
+    {
+      "name": "SetSpawnerTeam",
+      "overloads": []
+    },
+    {
+      "name": "SetSpeed",
+      "overloads": []
+    },
+    {
+      "name": "SetSpeedImmediate",
+      "overloads": []
+    },
+    {
+      "name": "SetSpreadOverride",
+      "overloads": []
+    },
+    {
+      "name": "SetStableMissile",
+      "overloads": []
+    },
+    {
+      "name": "SetStance",
+      "overloads": []
+    },
+    {
+      "name": "SetStat",
+      "overloads": []
+    },
+    {
+      "name": "SetSunDirection",
+      "overloads": []
+    },
+    {
+      "name": "SetSunLight",
+      "overloads": []
+    },
+    {
+      "name": "SetSuppressionTime",
+      "overloads": []
+    },
+    {
+      "name": "SetSwitchNode",
+      "overloads": []
+    },
+    {
+      "name": "SetTalkToSpecies",
+      "overloads": []
+    },
+    {
+      "name": "SetTargetEntity",
+      "overloads": []
+    },
+    {
+      "name": "SetTargetYaw",
+      "overloads": []
+    },
+    {
+      "name": "SetTeamForTrigger",
+      "overloads": []
+    },
+    {
+      "name": "SetTeamRadar",
+      "overloads": []
+    },
+    {
+      "name": "SetTeamScore",
+      "overloads": []
+    },
+    {
+      "name": "SetTenthsTimer",
+      "overloads": []
+    },
+    {
+      "name": "SetTenthsTimerUp",
+      "overloads": []
+    },
+    {
+      "name": "SetText",
+      "overloads": []
+    },
+    {
+      "name": "SetThreatBias",
+      "overloads": []
+    },
+    {
+      "name": "SetThreatBiasAgainstAll",
+      "overloads": []
+    },
+    {
+      "name": "SetThreatBiasGroup",
+      "overloads": []
+    },
+    {
+      "name": "SetTimeScale",
+      "overloads": []
+    },
+    {
+      "name": "SetTimer",
+      "overloads": []
+    },
+    {
+      "name": "SetTimerUp",
+      "overloads": []
+    },
+    {
+      "name": "SetTopArc",
+      "overloads": []
+    },
+    {
+      "name": "SetTurningAbility",
+      "overloads": []
+    },
+    {
+      "name": "SetTurretAnim",
+      "overloads": []
+    },
+    {
+      "name": "SetTurretIgnoreGoals",
+      "overloads": []
+    },
+    {
+      "name": "SetTurretNode",
+      "overloads": []
+    },
+    {
+      "name": "SetTurretTargetEnt",
+      "overloads": []
+    },
+    {
+      "name": "SetTurretTargetVec",
+      "overloads": []
+    },
+    {
+      "name": "SetTurretTeam",
+      "overloads": []
+    },
+    {
+      "name": "SetValue",
+      "overloads": []
+    },
+    {
+      "name": "SetVehGoalPos",
+      "overloads": []
+    },
+    {
+      "name": "SetVehWeapon",
+      "overloads": []
+    },
+    {
+      "name": "SetVehicleLookAtText",
+      "overloads": []
+    },
+    {
+      "name": "SetVehicleTeam",
+      "overloads": []
+    },
+    {
+      "name": "SetVelocity",
+      "overloads": []
+    },
+    {
+      "name": "SetViewModel",
+      "overloads": []
+    },
+    {
+      "name": "SetVoteNoCount",
+      "overloads": []
+    },
+    {
+      "name": "SetVoteString",
+      "overloads": []
+    },
+    {
+      "name": "SetVoteTime",
+      "overloads": []
+    },
+    {
+      "name": "SetVoteYesCount",
+      "overloads": []
+    },
+    {
+      "name": "SetWaitNode",
+      "overloads": []
+    },
+    {
+      "name": "SetWaitSpeed",
+      "overloads": []
+    },
+    {
+      "name": "SetWayPoint",
+      "overloads": []
+    },
+    {
+      "name": "SetWeaponAmmoClip",
+      "overloads": []
+    },
+    {
+      "name": "SetWeaponAmmoStock",
+      "overloads": []
+    },
+    {
+      "name": "SetWinningPlayer",
+      "overloads": []
+    },
+    {
+      "name": "SetWinningTeam",
+      "overloads": []
+    },
+    {
+      "name": "SetYawSpeed",
+      "overloads": []
+    },
+    {
+      "name": "ShellShock",
+      "overloads": []
+    },
+    {
+      "name": "Shoot",
+      "overloads": []
+    },
+    {
+      "name": "ShootBlank",
+      "overloads": []
+    },
+    {
+      "name": "ShootTurret",
+      "overloads": []
+    },
+    {
+      "name": "Show",
+      "overloads": []
+    },
+    {
+      "name": "ShowAllParts",
+      "overloads": []
+    },
+    {
+      "name": "ShowPart",
+      "overloads": []
+    },
+    {
+      "name": "ShowScoreBoard",
+      "overloads": []
+    },
+    {
+      "name": "ShowToPlayer",
+      "overloads": []
+    },
+    {
+      "name": "ShowViewModel",
+      "overloads": []
+    },
+    {
+      "name": "SightConeTrace",
+      "overloads": []
+    },
+    {
+      "name": "SightTracePassed",
+      "overloads": []
+    },
+    {
+      "name": "Sin",
+      "overloads": []
+    },
+    {
+      "name": "Solid",
+      "overloads": []
+    },
+    {
+      "name": "SoundExists",
+      "overloads": []
+    },
+    {
+      "name": "SoundFade",
+      "overloads": []
+    },
+    {
+      "name": "Spawn",
+      "overloads": []
+    },
+    {
+      "name": "SpawnFx",
+      "overloads": []
+    },
+    {
+      "name": "SpawnStruct",
+      "overloads": []
+    },
+    {
+      "name": "SpawnTurret",
+      "overloads": []
+    },
+    {
+      "name": "SpawnVehicle",
+      "overloads": []
+    },
+    {
+      "name": "StalingradSpawn",
+      "overloads": []
+    },
+    {
+      "name": "StartCoverArrival",
+      "overloads": []
+    },
+    {
+      "name": "StartEngineSound",
+      "overloads": []
+    },
+    {
+      "name": "StartFiring",
+      "overloads": []
+    },
+    {
+      "name": "StartIgnoringSpotLight",
+      "overloads": []
+    },
+    {
+      "name": "StartPath",
+      "overloads": []
+    },
+    {
+      "name": "StartRagdoll",
+      "overloads": []
+    },
+    {
+      "name": "StartScriptedAnim",
+      "overloads": []
+    },
+    {
+      "name": "StartTraverseArrival",
+      "overloads": []
+    },
+    {
+      "name": "StopAllRumbles",
+      "overloads": []
+    },
+    {
+      "name": "StopAnimScripted",
+      "overloads": []
+    },
+    {
+      "name": "StopEngineSound",
+      "overloads": []
+    },
+    {
+      "name": "StopFiring",
+      "overloads": []
+    },
+    {
+      "name": "StopIgnoringSpotLight",
+      "overloads": []
+    },
+    {
+      "name": "StopLocalSound",
+      "overloads": []
+    },
+    {
+      "name": "StopLookAt",
+      "overloads": []
+    },
+    {
+      "name": "StopLoopSound",
+      "overloads": []
+    },
+    {
+      "name": "StopRumble",
+      "overloads": []
+    },
+    {
+      "name": "StopShellShock",
+      "overloads": []
+    },
+    {
+      "name": "StopSounds",
+      "overloads": []
+    },
+    {
+      "name": "StopUseAnimTree",
+      "overloads": []
+    },
+    {
+      "name": "StopUseTurret",
+      "overloads": []
+    },
+    {
+      "name": "StrTok",
+      "overloads": []
+    },
+    {
+      "name": "Suicide",
+      "overloads": []
+    },
+    {
+      "name": "SwitchToOffhand",
+      "overloads": []
+    },
+    {
+      "name": "SwitchToWeapon",
+      "overloads": []
+    },
+    {
+      "name": "TableLookup",
+      "overloads": []
+    },
+    {
+      "name": "TakeAllWeapons",
+      "overloads": []
+    },
+    {
+      "name": "TakeWeapon",
+      "overloads": []
+    },
+    {
+      "name": "Tan",
+      "overloads": []
+    },
+    {
+      "name": "Target_ClearReticleLockOn",
+      "overloads": []
+    },
+    {
+      "name": "Target_GetArray",
+      "overloads": []
+    },
+    {
+      "name": "Target_IsInCircle",
+      "overloads": []
+    },
+    {
+      "name": "Target_IsInRect",
+      "overloads": []
+    },
+    {
+      "name": "Target_IsTarget",
+      "overloads": []
+    },
+    {
+      "name": "Target_Remove",
+      "overloads": []
+    },
+    {
+      "name": "Target_Set",
+      "overloads": []
+    },
+    {
+      "name": "Target_SetAttackMode",
+      "overloads": []
+    },
+    {
+      "name": "Target_SetJavelinOnly",
+      "overloads": []
+    },
+    {
+      "name": "Target_SetOffscreenShader",
+      "overloads": []
+    },
+    {
+      "name": "Target_SetShader",
+      "overloads": []
+    },
+    {
+      "name": "Target_StartReticleLockOn",
+      "overloads": []
+    },
+    {
+      "name": "Teleport",
+      "overloads": []
+    },
+    {
+      "name": "ThreatBiasGroupExists",
+      "overloads": []
+    },
+    {
+      "name": "ThrowGrenade",
+      "overloads": []
+    },
+    {
+      "name": "ToLower",
+      "overloads": []
+    },
+    {
+      "name": "TrackScriptState",
+      "overloads": []
+    },
+    {
+      "name": "TraverseMode",
+      "overloads": []
+    },
+    {
+      "name": "TriggerFX",
+      "overloads": []
+    },
+    {
+      "name": "TrimPathtoAttack",
+      "overloads": []
+    },
+    {
+      "name": "UnSetPerk",
+      "overloads": []
+    },
+    {
+      "name": "UnSetTurretNode",
+      "overloads": []
+    },
+    {
+      "name": "Unlink",
+      "overloads": []
+    },
+    {
+      "name": "UnlockLightVis",
+      "overloads": []
+    },
+    {
+      "name": "UpdateClientNames",
+      "overloads": []
+    },
+    {
+      "name": "UpdatePlayerSightAccuracy",
+      "overloads": []
+    },
+    {
+      "name": "UpdateProne",
+      "overloads": []
+    },
+    {
+      "name": "UpdateScores",
+      "overloads": []
+    },
+    {
+      "name": "UseAnimTree",
+      "overloads": []
+    },
+    {
+      "name": "UseButtonPressed",
+      "overloads": []
+    },
+    {
+      "name": "UseBy",
+      "overloads": []
+    },
+    {
+      "name": "UseCoverNode",
+      "overloads": []
+    },
+    {
+      "name": "UseReacquireNode",
+      "overloads": []
+    },
+    {
+      "name": "UseTriggerRequireLookAt",
+      "overloads": []
+    },
+    {
+      "name": "UseTurret",
+      "overloads": []
+    },
+    {
+      "name": "VectorDot",
+      "overloads": []
+    },
+    {
+      "name": "VectorFromLineToPoint",
+      "overloads": []
+    },
+    {
+      "name": "VectorLerp",
+      "overloads": []
+    },
+    {
+      "name": "VectorNormalize",
+      "overloads": []
+    },
+    {
+      "name": "VectorToAngles",
+      "overloads": []
+    },
+    {
+      "name": "VehForceMaterialSpeed",
+      "overloads": []
+    },
+    {
+      "name": "Vibrate",
+      "overloads": []
+    },
+    {
+      "name": "ViewKick",
+      "overloads": []
+    },
+    {
+      "name": "VisionSetNaked",
+      "overloads": []
+    },
+    {
+      "name": "VisionSetNight",
+      "overloads": []
+    },
+    {
+      "name": "WeaponAltWeaponName",
+      "overloads": []
+    },
+    {
+      "name": "WeaponClass",
+      "overloads": []
+    },
+    {
+      "name": "WeaponClipSize",
+      "overloads": []
+    },
+    {
+      "name": "WeaponFightDist",
+      "overloads": []
+    },
+    {
+      "name": "WeaponFireTime",
+      "overloads": []
+    },
+    {
+      "name": "WeaponInventoryType",
+      "overloads": []
+    },
+    {
+      "name": "WeaponIsBoltAction",
+      "overloads": []
+    },
+    {
+      "name": "WeaponIsSemiAuto",
+      "overloads": []
+    },
+    {
+      "name": "WeaponLockFinalize",
+      "overloads": []
+    },
+    {
+      "name": "WeaponLockFree",
+      "overloads": []
+    },
+    {
+      "name": "WeaponLockNoClearance",
+      "overloads": []
+    },
+    {
+      "name": "WeaponLockStart",
+      "overloads": []
+    },
+    {
+      "name": "WeaponLockTargetTooClose",
+      "overloads": []
+    },
+    {
+      "name": "WeaponMaxAmmo",
+      "overloads": []
+    },
+    {
+      "name": "WeaponMaxDist",
+      "overloads": []
+    },
+    {
+      "name": "WeaponStartAmmo",
+      "overloads": []
+    },
+    {
+      "name": "WeaponType",
+      "overloads": []
+    },
+    {
+      "name": "WithinApproxPathDist",
+      "overloads": []
+    },
+    {
+      "name": "WorldEntNumber",
+      "overloads": []
+    }
+  ]
+}

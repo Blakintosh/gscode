@@ -19,6 +19,7 @@ Console.WriteLine($"Output:    {apiDir}");
 
 GenerateObjectFields(curatedDir, Path.Combine(apiDir, "t7_object_fields.json"));
 GenerateRadiantKeys(Path.Combine(originalsDir, "keys.txt"), Path.Combine(apiDir, "t7_radiant_keys.json"));
+GenerateCod4Data(Path.Combine(originalsDir, "cod4_wordfile.txt"), Path.Combine(originalsDir, "cod4_keys.txt"), apiDir);
 
 Console.WriteLine("Done.");
 return 0;
@@ -144,6 +145,146 @@ static string CorrectSide(string name, string parsedSide)
     return parsedSide;
 }
 
+// CoD4 has no bundled API/field data; its only complete list of engine functions, radiant keys and
+// entity properties is the mod-tools syntax-highlighting wordfile. This reads the CODSCRIPT block's
+// sections into the same runtime artifacts BO3 ships. Names only — the wordfile carries no types,
+// signatures or docs; those are a later enrichment pass. BO1's wordfile has the same shape.
+static void GenerateCod4Data(string wordfilePath, string keysPath, string apiDir)
+{
+    if ( !File.Exists(wordfilePath) )
+    {
+        Console.WriteLine($"  cod4 wordfile not found at {wordfilePath}; skipping cod4 data.");
+        return;
+    }
+
+    string[] lines = File.ReadAllLines(wordfilePath);
+
+    // /C7 "Script Commands" — the engine builtin functions. Case preserved (as BO3's api file does).
+    List<string> functions = CleanNames(ParseWordfileSection(lines, 7), stripLeadingDot: false, lowercase: false);
+    ApiFileOut api = new([.. functions.Select(static name => new ApiEntryOut(name, []))]);
+    WriteJson(Path.Combine(apiDir, "cod4_api_gsc.json"), api, camelCase: true);
+    Console.WriteLine($"  cod4 api functions: {functions.Count}");
+
+    // Radiant keys come from the game's own keys.txt (the same file Radiant loads), not the
+    // wordfile's bare-name /C6 — it carries types, client/both sides and comments for hover.
+    Console.Write("  cod4");
+    GenerateRadiantKeys(keysPath, Path.Combine(apiDir, "cod4_radiant_keys.json"));
+
+    // /C2 "Common Entity Properties" — script-accessible .fields (the wordfile writes the leading
+    // dot); untyped, under one generic kind.
+    List<FieldEntry> fieldEntries = [.. CleanNames(ParseWordfileSection(lines, 2), stripLeadingDot: true, lowercase: true)
+        .Select(static name => new FieldEntry(name, ""))];
+    SortedDictionary<string, List<FieldEntry>> fields = new(StringComparer.Ordinal) { ["entity"] = fieldEntries };
+    WriteJson(Path.Combine(apiDir, "cod4_object_fields.json"), fields);
+    Console.WriteLine($"  cod4 object fields: {fieldEntries.Count}");
+}
+
+// The entries of a /C&lt;index&gt; section within a wordfile's GSC language block. UltraEdit wordfiles
+// list one word per line under a /C header; a section ends at the next /C or /L marker.
+static List<string> ParseWordfileSection(string[] lines, int sectionIndex)
+{
+    int blockStart = Array.FindIndex(lines, static line =>
+        line.StartsWith("/L", StringComparison.Ordinal) && MentionsGscExtension(line));
+    if ( blockStart < 0 )
+    {
+        return [];
+    }
+
+    int blockEnd = lines.Length;
+    for ( int i = blockStart + 1; i < lines.Length; i++ )
+    {
+        if ( lines[i].StartsWith("/L", StringComparison.Ordinal) )
+        {
+            blockEnd = i;
+            break;
+        }
+    }
+
+    string marker = "/C" + sectionIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    int start = -1;
+    for ( int i = blockStart + 1; i < blockEnd; i++ )
+    {
+        // Exact section: "/C7" must not also match "/C70".
+        if ( lines[i].StartsWith(marker, StringComparison.Ordinal)
+            && (lines[i].Length == marker.Length || !char.IsDigit(lines[i][marker.Length])) )
+        {
+            start = i + 1;
+            break;
+        }
+    }
+
+    if ( start < 0 )
+    {
+        return [];
+    }
+
+    List<string> entries = [];
+    for ( int i = start; i < blockEnd; i++ )
+    {
+        if ( lines[i].StartsWith("/C", StringComparison.Ordinal) || lines[i].StartsWith("/L", StringComparison.Ordinal) )
+        {
+            break;
+        }
+
+        // One identifier per line; split defensively in case a line lists several.
+        foreach ( string token in lines[i].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries) )
+        {
+            entries.Add(token);
+        }
+    }
+
+    return entries;
+}
+
+// A wordfile language header names its file extensions, e.g. "... File Extensions = GSC".
+static bool MentionsGscExtension(string languageHeader)
+{
+    int index = languageHeader.IndexOf("File Extensions", StringComparison.OrdinalIgnoreCase);
+    if ( index < 0 )
+    {
+        return false;
+    }
+
+    return languageHeader[index..]
+        .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+        .Contains("GSC", StringComparer.OrdinalIgnoreCase);
+}
+
+// Normalizes and filters wordfile tokens to clean names: an optional leading dot removed (fields
+// are written .field), everything that is not a valid GSC identifier dropped (the section can end
+// in stray operators, quoted labels or tab runs), lowercased for keys/fields, then sorted-unique.
+static List<string> CleanNames(IEnumerable<string> raw, bool stripLeadingDot, bool lowercase)
+{
+    IEnumerable<string> names = raw
+        .Select(name => stripLeadingDot ? name.TrimStart('.') : name)
+        .Where(IsValidIdentifier);
+
+    if ( lowercase )
+    {
+        names = names.Select(static name => name.ToLowerInvariant());
+    }
+
+    return [.. names.Distinct(StringComparer.Ordinal).OrderBy(static n => n, StringComparer.Ordinal)];
+}
+
+static bool IsValidIdentifier(string name)
+{
+    if ( name.Length == 0 || !(char.IsLetter(name[0]) || name[0] == '_') )
+    {
+        return false;
+    }
+
+    foreach ( char character in name )
+    {
+        if ( !char.IsLetterOrDigit(character) && character != '_' )
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static string EntityKindFromFileName(string fileName)
 {
     string name = fileName;
@@ -165,7 +306,9 @@ static string EntityKindFromFileName(string fileName)
     return name;
 }
 
-static void WriteJson<T>(string path, T value)
+// camelCase matches BO3's api_gsc.json (the field data files stay PascalCase); the loaders read
+// both case-insensitively, so this is only for a clean, consistent diff against the existing files.
+static void WriteJson<T>(string path, T value, bool camelCase = false)
 {
     string json = JsonSerializer.Serialize(value, new JsonSerializerOptions
     {
@@ -174,6 +317,7 @@ static void WriteJson<T>(string path, T value)
         // rewrite the whole artifact as CRLF against an LF repo. Pinned so the output is identical
         // wherever it is generated.
         NewLine = "\n",
+        PropertyNamingPolicy = camelCase ? JsonNamingPolicy.CamelCase : null,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
     });
     File.WriteAllText(path, json + "\n");
@@ -181,3 +325,8 @@ static void WriteJson<T>(string path, T value)
 
 internal sealed record FieldEntry(string Name, string Type, bool ReadOnly = false);
 internal sealed record RadiantKey(string Name, string Type, string Side, string Comment);
+
+// The builtin-API artifact shape (matching t7_api_gsc.json): a name plus its overloads. From the
+// wordfile only names are known, so overloads is empty until the online-API enrichment pass.
+internal sealed record ApiFileOut(List<ApiEntryOut> Api);
+internal sealed record ApiEntryOut(string Name, IReadOnlyList<object> Overloads);

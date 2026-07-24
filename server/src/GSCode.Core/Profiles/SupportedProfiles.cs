@@ -8,9 +8,14 @@ namespace GSCode.Core;
 /// </summary>
 public sealed partial record GameProfile
 {
-    /// <summary>Call of Duty 4: Modern Warfare (2007) — the original Infinity Ward GSC; no foreach.</summary>
+    /// <summary>
+    /// Call of Duty 4: Modern Warfare (2007) — the original Infinity Ward GSC; no foreach. The one
+    /// non-BO3 game with bundled data (engine functions, radiant keys and entity fields, names-only,
+    /// from the mod-tools wordfile), so it sets a <see cref="GameProfile.DataFilePrefix"/>.
+    /// </summary>
     public static GameProfile Cod4 { get; } =
-        Targeted("cod4", "Call of Duty 4: Modern Warfare", 2007, EngineFamily.InfinityWard, hasForeach: false);
+        Targeted("cod4", "Call of Duty 4: Modern Warfare", 2007, EngineFamily.InfinityWard, hasForeach: false)
+            with { DataFilePrefix = "cod4" };
 
     /// <summary>Call of Duty: World at War (2008) — Treyarch, first with client scripts; no foreach.</summary>
     public static GameProfile WorldAtWar { get; } =

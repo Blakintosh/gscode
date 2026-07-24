@@ -185,6 +185,14 @@ public sealed class ScriptDatabase
             {
                 dependencies.Add(new DependencyEdge(usingNode.Path, "", IsInsert: false, usingNode.PathRange));
             }
+
+            // #include is the Infinity Ward import; an edge like #using's (resolved lazily per
+            // context), so the include graph exists for navigation, rename and merge scoping. A
+            // file is one dialect, so #using and #include never mix in the same record.
+            if ( element is GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
+            {
+                dependencies.Add(new DependencyEdge(includeNode.Path, "", IsInsert: false, includeNode.PathRange));
+            }
         }
 
         return new ScriptRecord

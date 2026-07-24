@@ -95,6 +95,12 @@ public static class SymbolAtPosition
                 // #using targets resolve at query time (the resolver isn't held here).
                 return new PositionHit(HitKind.DependencyPath, default, usingNode.PathRange, default, "");
             }
+
+            if ( element is GSCode.Parser.Syntax.Ast.IncludeNode includeNode && includeNode.PathRange.Contains(position) )
+            {
+                // #include is the Infinity Ward import; its target resolves the same way.
+                return new PositionHit(HitKind.DependencyPath, default, includeNode.PathRange, default, "");
+            }
         }
 
         return PositionHit.None;

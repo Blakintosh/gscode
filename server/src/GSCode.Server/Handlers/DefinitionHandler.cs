@@ -101,16 +101,23 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             return hit.DependencyTargetPath;
         }
 
-        // A #using with no pre-resolved path: resolve it now against this file's context.
+        // A #using / #include with no pre-resolved path: resolve it now against this file's context.
         foreach ( GSCode.Parser.Syntax.Ast.AstNode element in target.Result.Tree.Root.Elements )
         {
-            if ( element is GSCode.Parser.Syntax.Ast.UsingNode usingNode && usingNode.PathRange == hit.Range )
+            string? directivePath = element switch
+            {
+                GSCode.Parser.Syntax.Ast.UsingNode usingNode when usingNode.PathRange == hit.Range => usingNode.Path,
+                GSCode.Parser.Syntax.Ast.IncludeNode includeNode when includeNode.PathRange == hit.Range => includeNode.Path,
+                _ => null,
+            };
+
+            if ( directivePath is not null )
             {
                 ResolutionContext context = _support.Resolver.GetContext(target.Path);
                 string extension = target.Language == ScriptLanguage.Csc
                     ? GameProfile.Active.ClientScriptExtension
                     : GameProfile.Active.ServerScriptExtension;
-                return _support.Resolver.Resolve(context, usingNode.Path + extension);
+                return _support.Resolver.Resolve(context, directivePath + extension);
             }
         }
 

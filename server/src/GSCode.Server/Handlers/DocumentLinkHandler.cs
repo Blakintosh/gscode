@@ -1,4 +1,5 @@
 using GSCode.Core;
+using GSCode.Core.Text;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -47,10 +48,17 @@ public sealed class DocumentLinkHandler : DocumentLinkHandlerBase
             }
         }
 
-        // #using targets resolve through the file's context.
+        // #using / #include targets resolve through the file's context.
         foreach ( GSCode.Parser.Syntax.Ast.AstNode element in target.Result.Tree.Root.Elements )
         {
-            if ( element is not GSCode.Parser.Syntax.Ast.UsingNode usingNode )
+            (string Path, TextRange Range)? directive = element switch
+            {
+                GSCode.Parser.Syntax.Ast.UsingNode usingNode => (usingNode.Path, usingNode.PathRange),
+                GSCode.Parser.Syntax.Ast.IncludeNode includeNode => (includeNode.Path, includeNode.PathRange),
+                _ => null,
+            };
+
+            if ( directive is null )
             {
                 continue;
             }
@@ -58,12 +66,12 @@ public sealed class DocumentLinkHandler : DocumentLinkHandlerBase
             string extension = target.Language == GSCode.Core.Symbols.ScriptLanguage.Csc
                 ? GameProfile.Active.ClientScriptExtension
                 : GameProfile.Active.ServerScriptExtension;
-            string? resolved = _support.Resolver.Resolve(_support.Resolver.GetContext(target.Path), usingNode.Path + extension);
+            string? resolved = _support.Resolver.Resolve(_support.Resolver.GetContext(target.Path), directive.Value.Path + extension);
             if ( resolved is not null )
             {
                 links.Add(new DocumentLink
                 {
-                    Range = usingNode.PathRange.ToLsp(),
+                    Range = directive.Value.Range.ToLsp(),
                     Target = DocumentUri.FromFileSystemPath(resolved),
                 });
             }

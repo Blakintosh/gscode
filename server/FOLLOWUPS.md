@@ -210,6 +210,26 @@ import chain. If a mod turns out to rely on transitivity, this is the place to w
 `LookupClasses` is deliberately left unfiltered so go-to-definition still works on a class
 written without its import.
 
+### Find-references is not include-scoped on the merge dialects
+
+On the Infinity Ward games `#include` merges functions into scope, so the extractor keys a
+function and every call to it as `(null, name)` — no namespace — and go-to-definition resolves
+by name, then narrows to the asking file's include scope (`DefinitionHandler.ScopeToIncludes`).
+Find-references and the CodeLens count do **not** narrow: two unrelated files that both define
+`spawn()` share the one key, so find-references on either lists the other's uses too, and the
+lens counts both.
+
+Deliberately left for now. Scoping it correctly means resolving **each use** to its definition
+file — an include-set membership test per referencing record (the `#include` dependency edges
+now make this possible) — and applying it to the shared `DatabaseQueries.FindAllReferences`, not
+just `ReferencesHandler`: the CodeLens count runs through the same query, and narrowing one
+without the other rewidens exactly the count-vs-peek disagreement the shared query was
+introduced to kill. That is a cross-cutting, `O(refs × include-set)` change on the hottest names,
+for the lowest-value of the merge-resolution refinements (go-to-definition precision, which users
+hit far more often, is already done). Revisit if a real IW workspace makes the noise a problem;
+this is the place, and both surfaces must move together. BO3 (`#using`, namespace-qualified) is
+unaffected — its keys already disambiguate.
+
 ### ScriptDoc coverage is 499 of 572 blocks
 
 `ScriptDocCorpusTests` asserts a floor rather than an exact figure, since the corpus is whatever

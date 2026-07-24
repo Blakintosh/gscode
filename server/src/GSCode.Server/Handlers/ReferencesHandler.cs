@@ -47,6 +47,12 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         bool includeDeclaration = request.Context?.IncludeDeclaration ?? true;
         List<Location> locations = [];
 
+        // On the merge dialects (#include) a function and its calls are keyed (null, name), so
+        // unrelated files sharing a name share this key: the result unions them. Unlike
+        // go-to-definition (DefinitionHandler.ScopeToIncludes) this is NOT narrowed to the include
+        // scope — doing so means resolving each use to its definition file and applying it to this
+        // SHARED query so the CodeLens count stays in step, which is a bigger, hotter-path change
+        // than the noise warrants today. See FOLLOWUPS.md "Find-references is not include-scoped".
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found =
             _support.FindAllReferences(target, hit.Key);
 

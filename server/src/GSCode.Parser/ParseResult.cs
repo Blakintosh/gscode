@@ -46,7 +46,7 @@ public static class ScriptAnalysis
         LexResult lexed = Lexer.Lex(text, game);
         PreprocessResult preprocessed = Preprocessor.Process(filePath, lexed.Tokens, text, insertProvider, names);
         ParseTree tree = Syntax.Parser.Parse(preprocessed.Tokens, game);
-        ExtractionResult extraction = SymbolExtractor.Extract(filePath, tree, preprocessed, lexed.Tokens, text, names);
+        ExtractionResult extraction = SymbolExtractor.Extract(filePath, tree, preprocessed, lexed.Tokens, text, names, game);
 
         bool lenient = language == ScriptLanguage.Gsh;
 

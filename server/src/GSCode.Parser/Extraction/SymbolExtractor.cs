@@ -43,12 +43,15 @@ public sealed class SymbolExtractor
     // rather than a name. Nested so an inner expression does not clear an outer concatenation.
     private bool _inStringConcatenation;
 
-    private SymbolExtractor(string rootFilePath, NameTable names, SourceText text, ImmutableArray<Token> rawTokens)
+    private readonly GameProfile _profile;
+
+    private SymbolExtractor(string rootFilePath, NameTable names, SourceText text, ImmutableArray<Token> rawTokens, GameProfile profile)
     {
         _rootFilePath = rootFilePath;
         _names = names;
         _text = text;
         _rawTokens = rawTokens;
+        _profile = profile;
         _currentNamespace = names.InternLower(Path.GetFileNameWithoutExtension(rootFilePath));
     }
 
@@ -59,9 +62,10 @@ public sealed class SymbolExtractor
         PreprocessResult preprocessed,
         ImmutableArray<Token> rawTokens,
         SourceText text,
-        NameTable names)
+        NameTable names,
+        GameProfile profile)
     {
-        SymbolExtractor extractor = new(rootFilePath, names, text, rawTokens);
+        SymbolExtractor extractor = new(rootFilePath, names, text, rawTokens, profile);
         extractor.Run(tree, preprocessed);
         extractor.ReportDuplicateFunctions();
 
@@ -155,9 +159,20 @@ public sealed class SymbolExtractor
         }
     }
 
+    /// <summary>
+    /// The namespace component of a function's reference key. Under an #include (merge) dialect a
+    /// function is reached by NAME across the merged scope — the file it lives in is not a
+    /// namespace — so its key carries none, and a call keyed the same way resolves to it wherever
+    /// it lives. Under #using (BO3) the namespace is part of the function's identity and is kept.
+    /// </summary>
+    private string? FunctionKeyNamespace(string namespaceName)
+    {
+        return _profile.ImportStyle == ImportStyle.Include ? null : namespaceName;
+    }
+
     private FunctionSymbol ExtractFunction(FunctionNode function, string namespaceName)
     {
-        SymbolKey key = new(namespaceName, _names.InternLower(function.NameToken.Text), SymbolKind.Function);
+        SymbolKey key = new(FunctionKeyNamespace(namespaceName), _names.InternLower(function.NameToken.Text), SymbolKind.Function);
         AddReference(key, function.NameToken, ReferenceKind.Definition);
 
         ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
@@ -612,8 +627,10 @@ public sealed class SymbolExtractor
             case IdentifierNode identifier when identifier.Token.Kind == TokenKind.Identifier:
             {
                 // Unqualified: keyed under the current namespace state (its primary
-                // resolution target; builtin fallback is a query-time concern).
-                SymbolKey key = new(_currentNamespace, _names.InternLower(identifier.Token.Text), SymbolKind.Function);
+                // resolution target; builtin fallback is a query-time concern). Under a merge
+                // dialect there is no namespace, so the key drops it and the call resolves to the
+                // matching definition wherever the merged scope pulled it in from.
+                SymbolKey key = new(FunctionKeyNamespace(_currentNamespace), _names.InternLower(identifier.Token.Text), SymbolKind.Function);
                 AddReference(key, identifier.Token, kind);
                 return;
             }

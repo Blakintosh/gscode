@@ -4,6 +4,7 @@ using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
+using GSCode.Parser.Extraction;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
@@ -85,6 +86,31 @@ public class DialectIncludeScopeTests
             both, @"scripts\main.gsc", DatabaseQueries.IncludedScriptPaths(main));
 
         Assert.Equal(2, scoped.Length);
+    }
+
+    [Fact]
+    public void APathCallPinsToItsNamedFile()
+    {
+        // foo() is defined in two files; a path call names exactly one of them.
+        ScriptDatabase database = new();
+        database.Commit(AnalyzeIw(@"c:\ws\a.gsc", "foo()\n{\n}\n"), ResolutionContext.RawContext, false, @"maps\a.gsc");
+        database.Commit(AnalyzeIw(@"c:\ws\b.gsc", "foo()\n{\n}\n"), ResolutionContext.RawContext, false, @"maps\b.gsc");
+
+        SymbolKey fooKey = new(null, "foo", SymbolKind.Function);
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> both = [.. DatabaseQueries
+            .FindReferences(database.Gsc, "raw", fooKey)
+            .Where(reference => reference.Entry.Kind == ReferenceKind.Definition)];
+        Assert.Equal(2, both.Length);
+
+        ParseResult main = AnalyzeIw(@"c:\ws\main.gsc", "run()\n{\n\tmaps\\a::foo();\n}\n");
+        PathCallReference pathCall = Assert.Single(main.Extraction.PathCalls);
+
+        // Pinning uses the named path as a one-file scope (no include set).
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> scoped =
+            DatabaseQueries.PreferIncludeScope(both, pathCall.Path, includedPaths: []);
+
+        (ScriptRecord Record, ReferenceEntry Entry) only = Assert.Single(scoped);
+        Assert.Equal(@"maps\a.gsc", only.Record.RelativePath);
     }
 
     [Fact]

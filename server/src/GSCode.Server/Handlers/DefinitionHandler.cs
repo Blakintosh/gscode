@@ -65,7 +65,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
             [.. DefinitionSources(target, hit.Key).Where(static source => source.Entry.Kind == ReferenceKind.Definition)];
 
-        sources = ScopeToIncludes(target, sources);
+        sources = ScopeToIncludes(target, hit, sources);
 
         List<Location> definitions = [.. sources.Select(static source => new Location
         {
@@ -93,17 +93,27 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     }
 
     /// <summary>
-    /// On a merge dialect (#include), prefers definitions in the asking file's include scope so a
-    /// call resolves to the function actually merged in, not an unrelated file's same-named one.
-    /// Falls back to the full set when nothing is in scope, so a missing #include still resolves.
-    /// BO3 (#using) qualifies by namespace and needs no scoping.
+    /// On a merge dialect (#include), narrows definitions to the file the call actually reaches. A
+    /// path call (<c>maps\x::foo()</c>) names ONE file, so it pins to that; an unqualified call
+    /// prefers the asking file's include scope (itself + its #included files). Either way it is a
+    /// PREFERENCE — the full set comes back when nothing matches, so a missing #include still
+    /// resolves. BO3 (#using) qualifies by namespace and needs no scoping.
     /// </summary>
     private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludes(
-        NavigationTarget target, ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> definitions)
+        NavigationTarget target, PositionHit hit, ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> definitions)
     {
         if ( GameProfile.Active.ImportStyle != ImportStyle.Include )
         {
             return definitions;
+        }
+
+        // A path call names its target file explicitly — pin to it (as its own single-file scope).
+        foreach ( GSCode.Parser.Extraction.PathCallReference pathCall in target.Result.Extraction.PathCalls )
+        {
+            if ( pathCall.NameRange == hit.Range )
+            {
+                return DatabaseQueries.PreferIncludeScope(definitions, pathCall.Path, includedPaths: []);
+            }
         }
 
         ResolutionContext context = _support.Resolver.GetContext(target.Path);

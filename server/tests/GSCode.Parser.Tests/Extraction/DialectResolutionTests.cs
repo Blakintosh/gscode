@@ -77,6 +77,25 @@ public class DialectResolutionTests
     }
 
     [Fact]
+    public void APathCallRecordsItsTargetFile()
+    {
+        // The explicit path is kept so go-to-definition can pin the call to that one file.
+        ParseResult result = Analyze("run()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", Cod4);
+
+        GSCode.Parser.Extraction.PathCallReference pathCall = Assert.Single(result.Extraction.PathCalls);
+        Assert.Equal("maps\\mp\\_utility", pathCall.Path);
+    }
+
+    [Fact]
+    public void ALeadingScopeResolutionRecordsNoTargetFile()
+    {
+        // ::foo is a local pointer with no explicit file target.
+        ParseResult result = Analyze("run()\n{\n\t::foo();\n}\n", Cod4);
+
+        Assert.Empty(result.Extraction.PathCalls);
+    }
+
+    [Fact]
     public void BlackOps3StillKeysFunctionsByNamespace()
     {
         // BO3 identity includes the namespace (the file stem here, "_utility"), unchanged.

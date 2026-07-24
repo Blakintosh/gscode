@@ -27,6 +27,7 @@ public sealed class SymbolExtractor
     private readonly ImmutableArray<FunctionSymbol>.Builder _functions = ImmutableArray.CreateBuilder<FunctionSymbol>();
     private readonly ImmutableArray<ClassSymbol>.Builder _classes = ImmutableArray.CreateBuilder<ClassSymbol>();
     private readonly ImmutableArray<ReferenceEntry>.Builder _references = ImmutableArray.CreateBuilder<ReferenceEntry>();
+    private readonly ImmutableArray<PathCallReference>.Builder _pathCalls = ImmutableArray.CreateBuilder<PathCallReference>();
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
     // Namespace state while walking (default = the file name stem).
@@ -74,7 +75,8 @@ public sealed class SymbolExtractor
             extractor._functions.ToImmutable(),
             extractor._classes.ToImmutable(),
             extractor._references.ToImmutable(),
-            extractor._diagnostics.ToImmutable());
+            extractor._diagnostics.ToImmutable(),
+            extractor._pathCalls.ToImmutable());
     }
 
     private void Run(ParseTree tree, PreprocessResult preprocessed)
@@ -648,10 +650,18 @@ public sealed class SymbolExtractor
             {
                 // maps\mp\_utility::foo — the Infinity Ward path form. #include MERGES the file's
                 // functions into this scope, so the call resolves by NAME; the path names the
-                // source file, not a namespace. Keyed like an unqualified call (null namespace)
-                // until the include-merge resolver can pin it to a specific file.
+                // source file, not a namespace. Keyed like an unqualified call (null namespace) so
+                // it unions for find-references; the explicit path is kept alongside so
+                // go-to-definition can pin it to that one file.
                 SymbolKey key = new(null, _names.InternLower(path.NameToken.Text), SymbolKind.Function);
                 AddReference(key, path.NameToken, kind);
+
+                // The leading ::foo local form has an empty path and needs no file pinning.
+                if ( path.Path.Length > 0 )
+                {
+                    _pathCalls.Add(new PathCallReference(path.Path, path.NameToken.Range));
+                }
+
                 return;
             }
             default:

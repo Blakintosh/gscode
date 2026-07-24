@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -604,8 +605,10 @@ public sealed class FlowTyper
         {
             case "self":
                 return ScrType.Entity;
+            // world is a BO3+ global; where the dialect has no world, a bare "world" is an ordinary
+            // name (the case falls through to default), so it isn't mistyped as the world struct.
+            case "world" when GameProfile.Active.HasWorldObject:
             case "level":
-            case "world":
             case "anim":
                 return ScrType.Struct;
             case "game":

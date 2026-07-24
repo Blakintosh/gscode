@@ -57,10 +57,14 @@ public class DialectCompletionTests
     [Fact]
     public void GlobalObjectsComeFromTheProfile()
     {
+        // self/level/game/anim are universal.
         Assert.Contains("self", Cod4.GlobalObjectNames);
         Assert.Contains("level", Cod4.GlobalObjectNames);
+        Assert.Contains("anim", Cod4.GlobalObjectNames);
 
-        // classes is BO3's class-system global; CoD4 has no such object.
+        // world (BO3+) and classes (BO3 class system) are not in the Infinity Ward line.
+        Assert.Contains("world", Bo3.GlobalObjectNames);
+        Assert.DoesNotContain("world", Cod4.GlobalObjectNames);
         Assert.Contains("classes", Bo3.GlobalObjectNames);
         Assert.DoesNotContain("classes", Cod4.GlobalObjectNames);
     }

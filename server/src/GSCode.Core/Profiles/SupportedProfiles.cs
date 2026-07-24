@@ -65,6 +65,7 @@ public sealed partial record GameProfile
         HasClientScripts = true,
         HasHeaders = true,
         HasClasses = true,
+        HasWorldObject = true,
         HasFunctionKeyword = true,
         HasNamespaceDirective = true,
         ImportStyle = ImportStyle.Namespace,

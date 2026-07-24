@@ -123,6 +123,13 @@ public sealed partial record GameProfile
     /// <summary>Whether the language has classes (<c>class</c>, <c>new</c>, <c>-&gt;</c>). T7 only.</summary>
     public bool HasClasses { get; init; }
 
+    /// <summary>
+    /// Whether the engine exposes the <c>world</c> global object. Added in BO3 and present in the
+    /// Treyarch games from then on (BO4, Cold War); the earlier games and the Infinity Ward line
+    /// have <c>self</c>/<c>level</c>/<c>game</c>/<c>anim</c> but no <c>world</c>.
+    /// </summary>
+    public bool HasWorldObject { get; init; }
+
     /// <summary>Whether a function declaration begins with the <c>function</c> keyword. IW omits it.</summary>
     public bool HasFunctionKeyword { get; init; }
 
@@ -245,14 +252,33 @@ public sealed partial record GameProfile
 
     /// <summary>
     /// The engine global objects the language exposes (<c>self</c>, <c>level</c>, …), offered in
-    /// statement-scope completion. The base set is universal across the CoD lineage; BO3's class
-    /// system adds <c>classes</c>. Owned here so completion offers exactly what the dialect has,
-    /// rather than one hardcoded set for every game.
+    /// statement-scope completion. <c>self</c>/<c>level</c>/<c>game</c>/<c>anim</c> are universal
+    /// across the CoD lineage; <c>world</c> arrives with BO3 (see <see cref="HasWorldObject"/>) and
+    /// <c>classes</c> with its class system. Owned here so completion offers exactly what the
+    /// dialect has, rather than one hardcoded set for every game.
     /// </summary>
-    public ImmutableArray<string> GlobalObjectNames =>
-        HasClasses
-            ? ["self", "level", "game", "world", "anim", "classes"]
-            : ["self", "level", "game", "world", "anim"];
+    public ImmutableArray<string> GlobalObjectNames
+    {
+        get
+        {
+            ImmutableArray<string>.Builder names = ImmutableArray.CreateBuilder<string>();
+            names.Add("self");
+            names.Add("level");
+            names.Add("game");
+            if ( HasWorldObject )
+            {
+                names.Add("world");
+            }
+
+            names.Add("anim");
+            if ( HasClasses )
+            {
+                names.Add("classes");
+            }
+
+            return names.ToImmutable();
+        }
+    }
 
     /// <summary>The extension for a language world, including the dot.</summary>
     public string ExtensionFor(ScriptLanguage language)

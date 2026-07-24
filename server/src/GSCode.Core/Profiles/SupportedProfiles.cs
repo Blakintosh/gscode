@@ -56,13 +56,7 @@ public sealed partial record GameProfile
         ServerScriptExtension = ".gsc",
         ClientScriptExtension = ".csc",
         HeaderExtension = ".gsh",
-        GlobalObjectNames = ["self", "level", "game", "world", "anim", "classes"],
-        BundledDataFileNames =
-        [
-            "t7_api_gsc.json",
-            "t7_api_csc.json",
-            "t7_stock_scripts.txt",
-        ],
+        DataFilePrefix = "t7",
         HasClientScripts = true,
         HasHeaders = true,
         HasClasses = true,

@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using GSCode.Core;
 
 namespace GSCode.Workspace.Api;
 
@@ -20,10 +21,18 @@ public sealed class StockScripts
 
     public int Count => _paths.Count;
 
-    /// <summary>Loads the bundled list; a missing or unreadable file yields an empty set rather than throwing.</summary>
-    public static StockScripts Load(string apiDirectory)
+    /// <summary>
+    /// Loads the bundled list named by the profile; empty when the profile ships none, or the file
+    /// is missing/unreadable, rather than throwing.
+    /// </summary>
+    public static StockScripts Load(string apiDirectory, GameProfile? profile = null)
     {
-        string path = Path.Combine(apiDirectory, "t7_stock_scripts.txt");
+        if ( (profile ?? GameProfile.Active).StockScriptsFileName is not string stockScriptsFile )
+        {
+            return Empty;
+        }
+
+        string path = Path.Combine(apiDirectory, stockScriptsFile);
         if ( !File.Exists(path) )
         {
             return Empty;

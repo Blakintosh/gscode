@@ -82,9 +82,12 @@ LanguageServer server = await LanguageServer.From(options =>
             services.AddSingleton<ServerStatusNotifier>();
 
             services.AddSingleton<ScriptDatabase>();
-            services.AddSingleton(BuiltinApiSet.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
-            services.AddSingleton(ObjectFields.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
-            services.AddSingleton(StockScripts.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
+            // Lazy factories, not eager instances: the game (and so which data files to read) is
+            // selected after ConfigureServices, so loading is deferred to first resolution to give
+            // GameProfile.Active a chance to be the workspace's game rather than the startup default.
+            services.AddSingleton(_ => BuiltinApiSet.Load(Path.Combine(AppContext.BaseDirectory, "Api"), GameProfile.Active));
+            services.AddSingleton(_ => ObjectFields.Load(Path.Combine(AppContext.BaseDirectory, "Api"), GameProfile.Active));
+            services.AddSingleton(_ => StockScripts.Load(Path.Combine(AppContext.BaseDirectory, "Api"), GameProfile.Active));
             services.AddSingleton(provider => new NavigationSupport(
                 provider.GetRequiredService<DocumentStore>(),
                 provider.GetRequiredService<ScriptDatabase>(),
@@ -503,11 +506,13 @@ static void LogMemoryReport(string phase, IndexOutcome outcome)
 }
 
 
-// Locates the bundled data files whose contents feed the server build identity.
+// Locates the bundled data files whose contents feed the server build identity — the active
+// game's set, named by its profile, so a dialect port's data invalidates the cache like BO3's.
 static IEnumerable<string> BundledDataFilePaths()
 {
     string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
-    yield return Path.Combine(apiDirectory, "t7_api_gsc.json");
-    yield return Path.Combine(apiDirectory, "t7_api_csc.json");
-    yield return Path.Combine(apiDirectory, "t7_stock_scripts.txt");
+    foreach ( string fileName in GameProfile.Active.BundledDataFileNames )
+    {
+        yield return Path.Combine(apiDirectory, fileName);
+    }
 }

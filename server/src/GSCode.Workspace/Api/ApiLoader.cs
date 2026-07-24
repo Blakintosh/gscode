@@ -2,11 +2,12 @@ using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Api;
 
-// DTOs mirroring the t7_api_*.json shape, deserialized via source generation.
+// DTOs mirroring the api_*.json shape, deserialized via source generation.
 internal sealed record ApiFile(List<ApiEntry>? Api);
 internal sealed record ApiEntry(string? Name, string? Description, List<ApiOverload>? Overloads, string? Example, bool? DevOnly);
 internal sealed record ApiOverload(ApiCalledOn? CalledOn, List<ApiParameter>? Parameters, ApiReturn? Returns);
@@ -22,10 +23,18 @@ internal sealed partial class ApiJsonContext : JsonSerializerContext;
 /// <summary>Loads the bundled builtin API JSON into a <see cref="BuiltinApi"/>.</summary>
 public static class ApiLoader
 {
-    /// <summary>Loads the library for a language from the given Api directory (empty when the file is absent).</summary>
-    public static BuiltinApi Load(string apiDirectory, ScriptLanguage language)
+    /// <summary>
+    /// Loads the library for a language from the given Api directory, using the profile's data-file
+    /// naming. Empty when the profile ships no data (non-BO3 today) or the file is absent.
+    /// </summary>
+    public static BuiltinApi Load(string apiDirectory, ScriptLanguage language, GameProfile? profile = null)
     {
-        string fileName = language == ScriptLanguage.Csc ? "t7_api_csc.json" : "t7_api_gsc.json";
+        string? fileName = (profile ?? GameProfile.Active).ApiFileName(language);
+        if ( fileName is null )
+        {
+            return BuiltinApi.Empty;
+        }
+
         string path = Path.Combine(apiDirectory, fileName);
         if ( !File.Exists(path) )
         {

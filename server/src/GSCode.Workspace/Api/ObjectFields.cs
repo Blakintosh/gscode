@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Api;
@@ -114,14 +115,25 @@ public sealed class ObjectFields
             radiantKeys.ToFrozenDictionary(static key => key.Name, StringComparer.OrdinalIgnoreCase));
     }
 
-    /// <summary>Loads the two artifacts from an Api directory (empty when absent/corrupt).</summary>
-    public static ObjectFields Load(string apiDirectory)
+    /// <summary>
+    /// Loads the two artifacts from an Api directory, named by the profile (empty when the profile
+    /// ships no data, or the files are absent/corrupt).
+    /// </summary>
+    public static ObjectFields Load(string apiDirectory, GameProfile? profile = null)
     {
+        GameProfile game = profile ?? GameProfile.Active;
+
         Dictionary<string, List<ObjectField>> byName = new(StringComparer.OrdinalIgnoreCase);
-        LoadObjectFields(Path.Combine(apiDirectory, "t7_object_fields.json"), byName);
+        if ( game.ObjectFieldsFileName is string objectFieldsFile )
+        {
+            LoadObjectFields(Path.Combine(apiDirectory, objectFieldsFile), byName);
+        }
 
         Dictionary<string, RadiantKey> radiant = new(StringComparer.OrdinalIgnoreCase);
-        LoadRadiantKeys(Path.Combine(apiDirectory, "t7_radiant_keys.json"), radiant);
+        if ( game.RadiantKeysFileName is string radiantKeysFile )
+        {
+            LoadRadiantKeys(Path.Combine(apiDirectory, radiantKeysFile), radiant);
+        }
 
         FrozenDictionary<string, ImmutableArray<ObjectField>> fields = byName.ToFrozenDictionary(
             static pair => pair.Key,

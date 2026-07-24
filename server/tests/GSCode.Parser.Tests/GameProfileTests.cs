@@ -7,7 +7,7 @@ namespace GSCode.Parser.Tests;
 public class GameProfileTests
 {
     [Fact]
-    public void BlackOps3_Defaults_ExposeExpectedExtensionsAndGlobals()
+    public void BlackOps3_Defaults_ExposeExpectedExtensionsAndData()
     {
         GameProfile profile = GameProfile.BlackOps3;
 
@@ -15,8 +15,23 @@ public class GameProfileTests
         Assert.Equal(".gsc", profile.ServerScriptExtension);
         Assert.Equal(".csc", profile.ClientScriptExtension);
         Assert.Equal(".gsh", profile.HeaderExtension);
-        Assert.Contains("level", profile.GlobalObjectNames);
-        Assert.Contains("self", profile.GlobalObjectNames);
+
+        // Data files are named from the prefix, not hardcoded at the loaders.
+        Assert.Equal("t7", profile.DataFilePrefix);
+        Assert.Equal("t7_api_gsc.json", profile.ApiFileName(ScriptLanguage.Gsc));
+        Assert.Equal("t7_api_csc.json", profile.ApiFileName(ScriptLanguage.Csc));
+        Assert.Contains("t7_object_fields.json", profile.BundledDataFileNames);
+        Assert.Contains("t7_stock_scripts.txt", profile.BundledDataFileNames);
+    }
+
+    [Fact]
+    public void AGameThatShipsNoData_HasNoDataFileNames()
+    {
+        GameProfile cod4 = GameProfile.ByName("cod4")!;
+
+        Assert.Null(cod4.DataFilePrefix);
+        Assert.Null(cod4.ApiFileName(ScriptLanguage.Gsc));
+        Assert.Empty(cod4.BundledDataFileNames);
     }
 
     [Fact]

@@ -102,11 +102,14 @@ public sealed partial record GameProfile
     /// <summary>Extension for preprocessor-injectable header files, including the dot (".gsh").</summary>
     public string HeaderExtension { get; init; } = ".gsh";
 
-    /// <summary>Built-in global object names (level, game, world, ...) the language exposes.</summary>
-    public ImmutableArray<string> GlobalObjectNames { get; init; } = [];
-
-    /// <summary>File names of the bundled data artifacts this profile loads from the Api folder.</summary>
-    public ImmutableArray<string> BundledDataFileNames { get; init; } = [];
+    /// <summary>
+    /// The filename prefix for this game's bundled data files — the builtin API, object fields,
+    /// radiant keys and stock-script list — e.g. <c>"t7"</c> gives <c>t7_api_gsc.json</c>. Null when
+    /// the game ships none (every profile but BO3 today), in which case a workspace on that game
+    /// loads no builtin data rather than BO3's, and the loaders read their names from here rather
+    /// than hardcoding one game's.
+    /// </summary>
+    public string? DataFilePrefix { get; init; }
 
     // --- Capabilities: which language features and worlds exist in this dialect. Shells leave
     //     these at the conservative defaults below until confirmed. ---
@@ -192,6 +195,53 @@ public sealed partial record GameProfile
 
     /// <summary>The mods folder relative to the tools install (e.g. <c>mods</c>), or null.</summary>
     public string? ModsSubfolder { get; init; }
+
+    /// <summary>
+    /// The builtin-API filename for a language world (e.g. <c>t7_api_gsc.json</c>), or null when
+    /// this game ships no data. The world suffix is the language's own extension, so a dialect with
+    /// different extensions names its files consistently.
+    /// </summary>
+    public string? ApiFileName(ScriptLanguage language)
+    {
+        return DataFilePrefix is null ? null : $"{DataFilePrefix}_api_{ExtensionFor(language).TrimStart('.')}.json";
+    }
+
+    /// <summary>The object-fields data filename (<c>t7_object_fields.json</c>), or null when none.</summary>
+    public string? ObjectFieldsFileName => DataFilePrefix is null ? null : $"{DataFilePrefix}_object_fields.json";
+
+    /// <summary>The Radiant-keys data filename (<c>t7_radiant_keys.json</c>), or null when none.</summary>
+    public string? RadiantKeysFileName => DataFilePrefix is null ? null : $"{DataFilePrefix}_radiant_keys.json";
+
+    /// <summary>The stock-script list filename (<c>t7_stock_scripts.txt</c>), or null when none.</summary>
+    public string? StockScriptsFileName => DataFilePrefix is null ? null : $"{DataFilePrefix}_stock_scripts.txt";
+
+    /// <summary>
+    /// Every bundled data file this game ships, for the cache build identity. Computed from the
+    /// naming above so it cannot drift from what the loaders actually read; empty when the game
+    /// ships none. The client API is listed only when the game has client scripts.
+    /// </summary>
+    public ImmutableArray<string> BundledDataFileNames
+    {
+        get
+        {
+            if ( DataFilePrefix is null )
+            {
+                return [];
+            }
+
+            ImmutableArray<string>.Builder names = ImmutableArray.CreateBuilder<string>();
+            names.Add(ApiFileName(ScriptLanguage.Gsc)!);
+            if ( HasClientScripts )
+            {
+                names.Add(ApiFileName(ScriptLanguage.Csc)!);
+            }
+
+            names.Add(ObjectFieldsFileName!);
+            names.Add(RadiantKeysFileName!);
+            names.Add(StockScriptsFileName!);
+            return names.ToImmutable();
+        }
+    }
 
     /// <summary>The extension for a language world, including the dot.</summary>
     public string ExtensionFor(ScriptLanguage language)

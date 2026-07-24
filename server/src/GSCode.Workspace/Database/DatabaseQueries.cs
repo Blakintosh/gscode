@@ -253,6 +253,76 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// The script-relative paths a file merges with <c>#include</c> (the Infinity Ward import),
+    /// normalized like <see cref="ImportedScriptPaths"/>. These plus the file itself are the scope a
+    /// merged, unqualified call resolves within.
+    /// </summary>
+    public static ImmutableArray<string> IncludedScriptPaths(GSCode.Parser.ParseResult result)
+    {
+        ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
+
+        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+        {
+            if ( element is not GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
+            {
+                continue;
+            }
+
+            string normalized = NormalizeScriptPath(includeNode.Path);
+            if ( normalized.Length > 0 && !paths.Contains(normalized) )
+            {
+                paths.Add(normalized);
+            }
+        }
+
+        return paths.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether a record is in an asking file's <c>#include</c> merge scope: the file itself, or one
+    /// of its included files. Paths compare in normalized script-relative form.
+    /// </summary>
+    public static bool IsInIncludeScope(
+        string recordRelativePath,
+        string selfRelativePath,
+        ImmutableArray<string> includedPaths)
+    {
+        string relative = NormalizeScriptPath(recordRelativePath);
+        return relative == NormalizeScriptPath(selfRelativePath) || includedPaths.Contains(relative);
+    }
+
+    /// <summary>
+    /// Narrows resolved definitions to the asking file's <c>#include</c> merge scope, so a call
+    /// resolves to the function actually merged in rather than an unrelated file's same-named one.
+    /// A PREFERENCE, not a filter: when nothing is in scope (a missing <c>#include</c>, say) the full
+    /// set is returned, so go-to-definition still lands somewhere useful while the import is fixed —
+    /// the same stance <see cref="LookupClasses"/> takes.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> PreferIncludeScope(
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> definitions,
+        string selfRelativePath,
+        ImmutableArray<string> includedPaths)
+    {
+        if ( definitions.Length < 2 )
+        {
+            return definitions;
+        }
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder scoped =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) definition in definitions )
+        {
+            if ( IsInIncludeScope(definition.Record.RelativePath, selfRelativePath, includedPaths) )
+            {
+                scoped.Add(definition);
+            }
+        }
+
+        return scoped.Count == 0 ? definitions : scoped.ToImmutable();
+    }
+
+    /// <summary>
     /// Every class this file may name (for completion), deduplicated by name.
     ///
     /// Classes are referenced by bare name, so unlike functions there is no namespace qualifier to

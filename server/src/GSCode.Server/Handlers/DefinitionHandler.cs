@@ -62,18 +62,16 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             return Task.FromResult<LocationOrLocationLinks?>(null);
         }
 
-        List<Location> definitions = [];
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in DefinitionSources(target, hit.Key) )
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
+            [.. DefinitionSources(target, hit.Key).Where(static source => source.Entry.Kind == ReferenceKind.Definition)];
+
+        sources = ScopeToIncludes(target, sources);
+
+        List<Location> definitions = [.. sources.Select(static source => new Location
         {
-            if ( entry.Kind == ReferenceKind.Definition )
-            {
-                definitions.Add(new Location
-                {
-                    Uri = DocumentUri.FromFileSystemPath(record.Path),
-                    Range = entry.Range.ToLsp(),
-                });
-            }
-        }
+            Uri = DocumentUri.FromFileSystemPath(source.Record.Path),
+            Range = source.Entry.Range.ToLsp(),
+        })];
 
         if ( definitions.Count == 0 )
         {
@@ -92,6 +90,26 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(NavigationTarget target, SymbolKey key)
     {
         return _support.FindAllReferences(target, key);
+    }
+
+    /// <summary>
+    /// On a merge dialect (#include), prefers definitions in the asking file's include scope so a
+    /// call resolves to the function actually merged in, not an unrelated file's same-named one.
+    /// Falls back to the full set when nothing is in scope, so a missing #include still resolves.
+    /// BO3 (#using) qualifies by namespace and needs no scoping.
+    /// </summary>
+    private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludes(
+        NavigationTarget target, ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> definitions)
+    {
+        if ( GameProfile.Active.ImportStyle != ImportStyle.Include )
+        {
+            return definitions;
+        }
+
+        ResolutionContext context = _support.Resolver.GetContext(target.Path);
+        string selfRelative = _support.Resolver.GetScriptRelativePath(target.Path, context);
+        return DatabaseQueries.PreferIncludeScope(
+            definitions, selfRelative, DatabaseQueries.IncludedScriptPaths(target.Result));
     }
 
     private string? ResolveDependencyPath(NavigationTarget target, PositionHit hit)

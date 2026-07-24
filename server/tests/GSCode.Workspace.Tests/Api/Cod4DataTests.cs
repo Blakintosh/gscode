@@ -48,6 +48,16 @@ public class Cod4DataTests
     }
 
     [Fact]
+    public void Cod4_LoadsItsStockScriptList()
+    {
+        StockScripts stock = StockScripts.Load(ApiDirectory, Cod4);
+
+        Assert.True(stock.Count > 500, $"expected the CoD4 stock list, got {stock.Count}");
+        // A known stock script; slash style and case are normalized by the guard.
+        Assert.True(stock.Contains(@"maps\_utility.gsc"));
+    }
+
+    [Fact]
     public void Cod4_ProfileDeclaresItsDataFiles()
     {
         Assert.Equal("cod4", Cod4.DataFilePrefix);

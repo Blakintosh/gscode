@@ -1,11 +1,9 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Syntax.Ast;
-using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 
 namespace GSCode.Workspace.Analysis;
@@ -24,12 +22,16 @@ namespace GSCode.Workspace.Analysis;
 /// whole file and left no trace of why.
 ///
 /// Error severity: the script does not load. That is not a matter of taste.
+///
+/// "Not found" means the path does not resolve to a file on disk — the same thing that decides
+/// whether the game links it. It deliberately does not consult the workspace index: a target the
+/// initial index has not reached yet still exists, and testing the index would report a false
+/// error on correct scripts during startup.
 /// </summary>
 public static class UsingNotFoundLint
 {
     public static ImmutableArray<Diagnostic> Analyze(
         ParseResult result,
-        LanguageStore store,
         ScriptLanguage language,
         PathResolver resolver,
         string askingPath)
@@ -46,15 +48,16 @@ public static class UsingNotFoundLint
                 continue;
             }
 
-            string? resolved = resolver.Resolve(context, usingNode.Path + extension);
-            if ( resolved is not null && store.TryGet(PathUtil.NormalizeAbsolute(resolved), out _) )
+            // Resolve probes the roots and checks the file EXISTS on disk, which is exactly what
+            // decides whether the script links at runtime. That is the whole test — deliberately
+            // NOT "is it in the workspace index": a valid target the initial index has not reached
+            // yet (or an oversized file it skipped) exists all the same, and gating on the index
+            // turned a startup race into a false gscode-5009 on correct scripts.
+            if ( resolver.Resolve(context, usingNode.Path + extension) is not null )
             {
                 continue;
             }
 
-            // Resolving is not enough on its own: a path can resolve against a root and still not
-            // be indexed, which means it is not a script this workspace knows about. Both cases
-            // fail the same way at runtime, so both are reported the same way.
             diagnostics.Add(Diagnostic.Create(
                 usingNode.PathRange,
                 DiagnosticSeverity.Error,

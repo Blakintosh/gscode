@@ -45,8 +45,30 @@ public class UsingNotFoundLintTests
             path, ScriptLanguage.Gsc, SourceText.From(source), GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable());
 
         return (
-            UsingNotFoundLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, path),
+            UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path),
             NamespaceUsageLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, path));
+    }
+
+    [Fact]
+    public void ATargetThatExistsOnDiskButIsNotIndexedIsNotReported()
+    {
+        // The startup race: a #using target that exists on disk but has not been indexed yet must
+        // NOT be flagged -- it links fine at runtime. The lint is fed an EMPTY database (nothing
+        // indexed) and a resolver whose file system does have the file.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+        RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
+        PathResolver resolver = new(config, files);
+
+        string path = @$"{Raw}\scripts\main.gsc";
+        ParseResult result = ScriptAnalysis.Analyze(
+            path,
+            ScriptLanguage.Gsc,
+            SourceText.From("#using scripts\\shared\\util_shared;\nfunction run()\n{\n}\n"),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
+            new NameTable());
+
+        Assert.Empty(UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path));
     }
 
     [Fact]

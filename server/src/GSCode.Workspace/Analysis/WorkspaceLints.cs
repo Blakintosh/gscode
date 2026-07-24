@@ -69,6 +69,7 @@ public static class WorkspaceLints
         lints.AddRange(UsingNotFoundLint.Analyze(result, language, resolver, path));
         lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path));
+        lints.AddRange(UnusedIncludeLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(UnusedLocalLint.Analyze(result));
         lints.AddRange(CaseLabelLint.Analyze(result));

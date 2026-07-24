@@ -77,4 +77,7 @@ public enum GscDiagnosticCode
 
     /// <summary>A case label that is not a compile-time constant.</summary>
     NonConstantCaseLabel = 5011,
+
+    /// <summary>An #include whose target contributes nothing this file uses. Hint, not an error.</summary>
+    UnusedInclude = 5012,
 }

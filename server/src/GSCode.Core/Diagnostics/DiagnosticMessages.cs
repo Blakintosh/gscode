@@ -65,6 +65,7 @@ public static class DiagnosticMessages
         // Cross-file / workspace semantics
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
         [GscDiagnosticCode.UnusedUsing] = "'{0}' is imported but nothing from it is used.",
+        [GscDiagnosticCode.UnusedInclude] = "'{0}' is included but nothing from it is used.",
         // {0} is the noun -- "Parameter" or "Field" -- since the same rule covers a builtin's
         // declared-bool argument and an engine field the data types bool.
         [GscDiagnosticCode.PreferBooleanLiteral] = "{0} '{1}' is a bool; prefer '{2}' over the integer literal.",

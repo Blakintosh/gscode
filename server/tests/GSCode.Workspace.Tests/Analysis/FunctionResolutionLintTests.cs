@@ -112,6 +112,27 @@ public class FunctionResolutionLintTests
     }
 
     [Fact]
+    public void AGameWithAnIncompleteLibrary_ReportsNoBuiltinMiss()
+    {
+        // WaW and BO1 have a library good enough to complete and hover from, but built from a
+        // wordfile that is not exhaustive. Judging names against it would report its gaps as the
+        // user's mistakes, so the builtin half stands down while the script half keeps working.
+        GameProfile waw = GameProfile.ByName("waw")!;
+        Assert.False(waw.HasCompleteBuiltinLibrary);
+
+        ScriptDatabase database = BuildWorkspace();
+        string path = @$"{Raw}\scripts\main.gsc";
+        ParseResult result = ScriptAnalysis.Analyze(
+            path, ScriptLanguage.Gsc,
+            SourceText.From("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n"),
+            NullInsertProvider.Instance, new NameTable());
+
+        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
+        Assert.Empty(FunctionResolutionLint.Analyze(
+            result, database.Gsc, "raw", path, builtins.For(ScriptLanguage.Gsc), waw));
+    }
+
+    [Fact]
     public void AGameWithoutBuiltinData_ReportsNothing()
     {
         // Without an API library every builtin call would look unresolved, so the lint stands down.

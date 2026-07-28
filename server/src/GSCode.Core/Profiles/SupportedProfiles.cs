@@ -28,6 +28,7 @@ public sealed partial record GameProfile
         Verified = true,
         HasInlinePathCalls = true,
         DataFilePrefix = "cod4",
+        HasCompleteBuiltinLibrary = true,
         Keywords = [.. BaseKeywords, "prof_begin", "prof_end"],
     };
 
@@ -43,6 +44,7 @@ public sealed partial record GameProfile
         Verified = true,
         HasInlinePathCalls = true,
         HasClientScripts = true,
+        DataFilePrefix = "waw",
         Keywords = [.. BaseKeywords, "prof_begin", "prof_end"],
     };
 
@@ -101,6 +103,7 @@ public sealed partial record GameProfile
         Verified = true,
         Supported = true,
         DataFilePrefix = "t7",
+        HasCompleteBuiltinLibrary = true,
         HasClientScripts = true,
         HasHeaders = true,
         HasWorldObject = true,

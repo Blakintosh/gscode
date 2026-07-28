@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
 using Xunit;
@@ -6,10 +7,13 @@ using Xunit;
 namespace GSCode.Workspace.Tests.Api;
 
 /// <summary>
-/// Radiant keys marked "client" in keys.txt exist only on the CSC side. The bundled data
-/// currently contains no client-only keys at all (classname, the sole one upstream, is
-/// corrected to "both" by the field-data generator), so the filtering mechanism is exercised
-/// against synthetic data while the bundled artifact is asserted separately.
+/// Client-side radiant keys exist only on the CSC side. The games say so two different ways: BO3
+/// prefixes such lines with "client" in its single keys.txt, while the pre-BO3 Treyarch games split
+/// the data across keys.txt and clientkeys.txt and use no prefix at all.
+///
+/// BO3's bundled data contains no client-only keys (classname, the sole prefixed one upstream, is
+/// corrected to "both" by the generator), so the filtering mechanism is exercised against synthetic
+/// data. BO1's does contain them, and is asserted directly.
 /// </summary>
 public class RadiantKeyVisibilityTests
 {
@@ -96,6 +100,28 @@ public class RadiantKeyVisibilityTests
 
         Assert.NotEmpty(gsc);
         Assert.Equal(csc.Length, gsc.Length);
+    }
+
+    [Fact]
+    public void BlackOps1Keys_CarryClientOnlyEntries_HiddenFromGsc()
+    {
+        // BO1 takes its client keys from a second file, so unlike BO3 it really does ship keys that
+        // a .gsc file must not be offered. This is the case the two-file reader exists for.
+        ObjectFields bo1 = ObjectFields.Load(ApiDirectory, GameProfile.ByName("bo1")!);
+
+        ImmutableArray<RadiantKey> gsc = bo1.RadiantKeysFor(ScriptLanguage.Gsc);
+        ImmutableArray<RadiantKey> csc = bo1.RadiantKeysFor(ScriptLanguage.Csc);
+
+        Assert.NotEmpty(gsc);
+        Assert.True(csc.Length > gsc.Length, "BO1 ships client-only radiant keys, so CSC must see more than GSC");
+
+        // A key present only in clientkeys.txt is offered to CSC and withheld from GSC.
+        Assert.NotNull(bo1.FindRadiantKey("ambience_inner", ScriptLanguage.Csc));
+        Assert.Null(bo1.FindRadiantKey("ambience_inner", ScriptLanguage.Gsc));
+
+        // One listed in keys.txt stays visible to both.
+        Assert.NotNull(bo1.FindRadiantKey("origin", ScriptLanguage.Gsc));
+        Assert.NotNull(bo1.FindRadiantKey("origin", ScriptLanguage.Csc));
     }
 
     [Fact]

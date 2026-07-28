@@ -127,6 +127,19 @@ public sealed partial record GameProfile
     public bool HasHeaders { get; init; }
 
     /// <summary>
+    /// Whether this game's builtin library is complete enough to say a name is NOT an engine
+    /// function. Separate from <see cref="Verified"/>, which is about the DIALECT: a game's grammar
+    /// can be proven against its own scripts while its function list is still a stub.
+    ///
+    /// True only where the list came from real documentation — CoD4's pages, BO3's library. WaW and
+    /// BO1 have one built from their mod-tools wordfile, which is good enough to offer completions
+    /// and hovers from but demonstrably not exhaustive: sweeping BO1's own scripts against it finds
+    /// 529 names it lacks, because its wordfile is the CoD4-era list carried forward unchanged.
+    /// Reporting those as the user's mistakes would be worse than saying nothing.
+    /// </summary>
+    public bool HasCompleteBuiltinLibrary { get; init; }
+
+    /// <summary>
     /// The language keywords this dialect recognizes. A word is a keyword only if it is in this set,
     /// so a dialect that lacks one (e.g. <c>foreach</c> before MW2, <c>function</c>/<c>class</c> in
     /// the Infinity Ward games) leaves it an ordinary identifier. Built as <c>[..BaseKeywords, …]</c>:

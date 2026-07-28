@@ -65,15 +65,15 @@ public static class FunctionResolutionLint
         // A SCRIPT miss needs only the workspace, which every game has — an explicitly qualified call
         // that resolves to nothing is wrong whatever we know about the engine — so it is always
         // reported. A BUILTIN miss additionally requires a library we trust to be complete: without
-        // one, every engine call looks unresolved. So it needs both a loaded library and a VERIFIED
-        // profile, since an unverified game's library has never been measured against real scripts
-        // and would report its own gaps as the user's mistakes.
+        // one, every engine call looks unresolved. So it needs a loaded library AND a profile whose
+        // library is known complete — see HasCompleteBuiltinLibrary. A partial list would report its
+        // own gaps as the user's mistakes, which for BO1 would be 529 of them.
         // <paramref name="judgeUnverifiedBuiltins"/> lifts only the Verified half, for the corpus
-        // harvest. Without it the gate is circular: Verified means "measured against real scripts",
-        // and the harvest is HOW a library gets measured — so a game being brought up would report
-        // nothing at exactly the point its gaps need finding. A library must still be loaded, since
-        // there is nothing to compare an unknown name against otherwise.
-        bool canJudgeBuiltins = (game.Verified || judgeUnverifiedBuiltins)
+        // harvest. Without it the gate is circular: the harvest is HOW a library's completeness gets
+        // measured, so a game being brought up would report nothing at exactly the point its gaps
+        // need finding. A library must still be loaded, since there is nothing to compare against
+        // otherwise.
+        bool canJudgeBuiltins = (game.HasCompleteBuiltinLibrary || judgeUnverifiedBuiltins)
             && game.DataFilePrefix is not null
             && builtins.Count > 0;
 

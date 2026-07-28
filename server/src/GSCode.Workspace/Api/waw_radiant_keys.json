@@ -8,13 +8,13 @@
   {
     "Name": "ambience_inner",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
     "Name": "ambience_outer",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
@@ -36,49 +36,13 @@
     "Comment": "used for client side destructables, which convert script_brushmodel info into script structs."
   },
   {
-    "Name": "clientside",
+    "Name": "clientside;",
     "Type": "int",
     "Side": "client",
     "Comment": "Clientside spawn stuff."
   },
   {
-    "Name": "cm_delete",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set then the color manager trigger will be deleted once done"
-  },
-  {
-    "Name": "cm_dont_kill",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set then it would not kill the associated guys in ai group"
-  },
-  {
-    "Name": "cm_flag",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "if set waits for the flag to advance the colors"
-  },
-  {
-    "Name": "cm_kill_delay",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set then it will wait and then start killing the AI group"
-  },
-  {
     "Name": "count",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "how many times a spawner can be spawned from"
-  },
-  {
-    "Name": "count_max",
-    "Type": "int",
-    "Side": "both",
-    "Comment": ""
-  },
-  {
-    "Name": "count_min",
     "Type": "int",
     "Side": "both",
     "Comment": ""
@@ -99,7 +63,7 @@
     "Name": "destructible_type",
     "Type": "string",
     "Side": "both",
-    "Comment": "identifier for destructibles"
+    "Comment": "identifier"
   },
   {
     "Name": "destructibledef",
@@ -116,14 +80,8 @@
   {
     "Name": "dontdropweapon",
     "Type": "int",
-    "Side": "client",
-    "Comment": "If set, the AI will not drop a weapon when he dies"
-  },
-  {
-    "Name": "drivepath",
-    "Type": "int",
     "Side": "both",
-    "Comment": "if specified on a vehicle it will try to drive the path and should look more natural without hand tweaking (helicopters and physics vehicles only)"
+    "Comment": "If set, the AI will not drop a weapon when he dies"
   },
   {
     "Name": "exponent",
@@ -180,7 +138,7 @@
     "Comment": "clientside lights"
   },
   {
-    "Name": "model",
+    "Name": "model;",
     "Type": "string",
     "Side": "client",
     "Comment": "clientside exploders."
@@ -231,7 +189,7 @@
     "Name": "script_aigroup",
     "Type": "string",
     "Side": "both",
-    "Comment": "specifies an aigroup for a spawner"
+    "Comment": ""
   },
   {
     "Name": "script_airspeed",
@@ -243,7 +201,7 @@
     "Name": "script_allowdeath",
     "Type": "int",
     "Side": "both",
-    "Comment": "allow an AI to be killed during an animation"
+    "Comment": ""
   },
   {
     "Name": "script_ambientpackage",
@@ -262,6 +220,12 @@
     "Type": "string",
     "Side": "both",
     "Comment": "declare the room associated with this trigger"
+  },
+  {
+    "Name": "script_ammo_40mm",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "does nothing right now"
   },
   {
     "Name": "script_ammo_clip",
@@ -285,7 +249,7 @@
     "Name": "script_anglevehicle",
     "Type": "int",
     "Side": "both",
-    "Comment": "checked in _vehicle, but doesn't seem of any use..."
+    "Comment": ""
   },
   {
     "Name": "script_animation",
@@ -314,19 +278,19 @@
   {
     "Name": "script_assaultnode",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "generic identifier for nodes"
   },
   {
     "Name": "script_attackpattern",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used in checks to control weapons firing on helicopter path origins or nodes"
   },
   {
     "Name": "script_attackspeed",
     "Type": "float",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
@@ -344,13 +308,13 @@
   {
     "Name": "script_avoidplayer",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "setting to 1 will cause the tank to perform collision avoidance on the player"
   },
   {
     "Name": "script_avoidvehicles",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "setting to 0 on a tank will make it not do collision avoidance stuff"
   },
   {
@@ -362,7 +326,7 @@
   {
     "Name": "script_balcony",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "current mechanism for flagging an actor to test for balcony death"
   },
   {
@@ -405,12 +369,12 @@
     "Name": "script_bctrigger",
     "Type": "string",
     "Side": "both",
-    "Comment": "for use with battlechatter triggers"
+    "Comment": ""
   },
   {
     "Name": "script_bg_offset",
     "Type": "vector",
-    "Side": "client",
+    "Side": "both",
     "Comment": "I'm using this in cobrapilot to move the background pieces into place"
   },
   {
@@ -434,7 +398,7 @@
   {
     "Name": "script_breach_id",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used on a door to force a special type of breach."
   },
   {
@@ -450,12 +414,6 @@
     "Comment": ""
   },
   {
-    "Name": "script_burst_intensity",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
     "Name": "script_burst_max",
     "Type": "float",
     "Side": "both",
@@ -466,12 +424,6 @@
     "Type": "float",
     "Side": "both",
     "Comment": "Put on an mg turret, min time of a burst"
-  },
-  {
-    "Name": "script_burst_time",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
   },
   {
     "Name": "script_chance",
@@ -506,7 +458,7 @@
   {
     "Name": "script_cleartargetyaw",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used in checks to reset a target yaw on helicopter path origins or nodes"
   },
   {
@@ -524,7 +476,7 @@
   {
     "Name": "script_color2",
     "Type": "vector",
-    "Side": "client",
+    "Side": "both",
     "Comment": "The second color of a dynamic light to switch between it and script_color"
   },
   {
@@ -546,12 +498,6 @@
     "Comment": "groups axis AI with nodes/triggers of that color"
   },
   {
-    "Name": "script_color_scale",
-    "Type": "float",
-    "Side": "both",
-    "Comment": "The scale of the color components because the largest value for color is 1"
-  },
-  {
     "Name": "script_combat_getout",
     "Type": "int",
     "Side": "both",
@@ -566,14 +512,8 @@
   {
     "Name": "script_commentary",
     "Type": "string",
-    "Side": "client",
-    "Comment": "Used with level.commentary[script_commentary]"
-  },
-  {
-    "Name": "script_contextual_melee",
-    "Type": "string",
     "Side": "both",
-    "Comment": ""
+    "Comment": "Used with level.commentary[script_commentary]"
   },
   {
     "Name": "script_count_lock",
@@ -603,19 +543,19 @@
     "Name": "script_death",
     "Type": "float",
     "Side": "both",
-    "Comment": "set on a drone path point. Drone will die in this many seconds. Set to 0 on second to last script_struct in chain to ensure death."
+    "Comment": ""
   },
   {
     "Name": "script_death_max",
     "Type": "float",
     "Side": "both",
-    "Comment": "Drone will die between min-max seconds."
+    "Comment": ""
   },
   {
     "Name": "script_death_min",
     "Type": "float",
     "Side": "both",
-    "Comment": "Drone will die between min-max seconds."
+    "Comment": ""
   },
   {
     "Name": "script_deathchain",
@@ -627,7 +567,7 @@
     "Name": "script_deathflag",
     "Type": "string",
     "Side": "both",
-    "Comment": "when all the ai and spawners with the same string die (or their count depletes to zero), a flag with this string gets set"
+    "Comment": ""
   },
   {
     "Name": "script_deathflag_longdeath",
@@ -656,13 +596,13 @@
   {
     "Name": "script_delay_goto_goalmax",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "z: an AI will spawn, but not run to his goal for a random amount of time"
   },
   {
     "Name": "script_delay_goto_goalmin",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "z: an AI will spawn, but not run to his goal for a random amount of time"
   },
   {
@@ -680,7 +620,7 @@
   {
     "Name": "script_delayed_playerseek",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
@@ -696,54 +636,6 @@
     "Comment": "used to let destructable walls block off areas of the map (affects spawning, for instance)"
   },
   {
-    "Name": "script_disable_bleeder",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "sets .a.canbleed to false if set to 1"
-  },
-  {
-    "Name": "script_disable_cqbwalk",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "disables cqb if set"
-  },
-  {
-    "Name": "script_disable_heat",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "disables heat if set"
-  },
-  {
-    "Name": "script_disable_idle_strafe",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set then disable exposed idlestrafing and aim awareness"
-  },
-  {
-    "Name": "script_disable_reviver",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "sets .a.canrevive to false if set to 1"
-  },
-  {
-    "Name": "script_disablepain",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "disables pain when set"
-  },
-  {
-    "Name": "script_disablereact",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "disables reaction behavior on this AI"
-  },
-  {
-    "Name": "script_disableturns",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "disables turn locomotion when set"
-  },
-  {
     "Name": "script_disconnectpaths",
     "Type": "int",
     "Side": "both",
@@ -752,7 +644,7 @@
   {
     "Name": "script_displaceable",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "makes an AI able to change his goal radius from animscript."
   },
   {
@@ -762,16 +654,10 @@
     "Comment": ""
   },
   {
-    "Name": "script_dont_look",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "When set to 1, friendlies idling at this cover node won't look at the player."
-  },
-  {
     "Name": "script_dontshootwhilemoving",
     "Type": "int",
     "Side": "both",
-    "Comment": "sets .dontshootwhilemoving on actor. presumably keeps them from shooting while they're moving"
+    "Comment": ""
   },
   {
     "Name": "script_dot",
@@ -788,20 +674,20 @@
   {
     "Name": "script_dronelag",
     "Type": "float",
-    "Side": "client",
+    "Side": "both",
     "Comment": "amount of timed space between drones following vehicle paths"
   },
   {
     "Name": "script_drones_max",
     "Type": "int",
     "Side": "both",
-    "Comment": "Sets the maximum number of drones to spawn."
+    "Comment": ""
   },
   {
     "Name": "script_drones_min",
     "Type": "int",
     "Side": "both",
-    "Comment": "Sets the minimum number of drones to spawn."
+    "Comment": ""
   },
   {
     "Name": "script_dropbombs",
@@ -822,12 +708,6 @@
     "Comment": "used to delay the start of bomb ground traces for X secs (in case it has to pass thru a collidable surface)."
   },
   {
-    "Name": "script_dropweapon",
-    "Type": "string",
-    "Side": "both",
-    "Comment": ""
-  },
-  {
     "Name": "script_duration",
     "Type": "float",
     "Side": "both",
@@ -846,18 +726,6 @@
     "Comment": "When you go through a trigger with this on it, any spawners that have the same # will have their count set to 0."
   },
   {
-    "Name": "script_enable_cqbwalk",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "enables cqb if set"
-  },
-  {
-    "Name": "script_enable_heat",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "enables heat if set"
-  },
-  {
     "Name": "script_ender",
     "Type": "string",
     "Side": "both",
@@ -866,26 +734,14 @@
   {
     "Name": "script_engage",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used in checks to fire weapons on helicopter path origins or nodes"
   },
   {
     "Name": "script_engagedelay",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used in checks to delay weapons firing on helicopter path origins or nodes"
-  },
-  {
-    "Name": "script_ent_flag_clear",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "flag will be cleared by a node if set on it while going to the node"
-  },
-  {
-    "Name": "script_ent_flag_set",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "flag will be set by a node if set on it while going to the node"
   },
   {
     "Name": "script_ent_trailfxsound",
@@ -896,7 +752,7 @@
   {
     "Name": "script_explode",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Tells a plane to explode with this exploder."
   },
   {
@@ -912,16 +768,10 @@
     "Comment": "Sets the exploder to be on the server side"
   },
   {
-    "Name": "script_fade_duration",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
     "Name": "script_fallback",
     "Type": "int",
     "Side": "both",
-    "Comment": "For fallback retreat behavior"
+    "Comment": ""
   },
   {
     "Name": "script_fallback_group",
@@ -932,7 +782,7 @@
   {
     "Name": "script_falldirection",
     "Type": "float",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Used to specify the direction a treeburst tree trunk falls towards"
   },
   {
@@ -999,7 +849,7 @@
     "Name": "script_flag_set",
     "Type": "string",
     "Side": "both",
-    "Comment": "this flag will be set when this trigger is used"
+    "Comment": "helis using helipath will set this flag when they reach this point"
   },
   {
     "Name": "script_flag_true",
@@ -1016,19 +866,19 @@
   {
     "Name": "script_flak88",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used for spawning and setting up flak88s"
   },
   {
     "Name": "script_flakaicount",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "for setting the amount of ai to spawn on a flak"
   },
   {
     "Name": "script_flashbangs",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "set this to > 0 to give an AI flashbangs instead of frag grenades."
   },
   {
@@ -1040,24 +890,24 @@
   {
     "Name": "script_followmax",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
     "Name": "script_followmin",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
     "Name": "script_followmode",
     "Type": "string",
     "Side": "both",
-    "Comment": "refers to the style in which ai are set to follow a vehicle."
+    "Comment": ""
   },
   {
     "Name": "script_force_count",
-    "Type": "int",
+    "Type": "string",
     "Side": "both",
     "Comment": "set to true on spawner - flood spawner will not increment this spawners count if the player didnt see the guy die"
   },
@@ -1068,28 +918,16 @@
     "Comment": "forces an AI to use all nodes of this color"
   },
   {
-    "Name": "script_forcegib",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "Set to cause forcegib on the AI. String is gib reference for gib parts"
-  },
-  {
     "Name": "script_forcegoal",
     "Type": "int",
     "Side": "both",
-    "Comment": "Force an AI to ignore whatever else is going on and just get to the current goal position"
+    "Comment": "forces an AI to use the goal radius of the node they target, rather than switch to 2000 (for flood_and_secure spawners)"
   },
   {
     "Name": "script_forcegrenade",
     "Type": "int",
     "Side": "both",
     "Comment": "Set to 1 to enable AI to throw as many grenades as they want rather than extremely rarely."
-  },
-  {
-    "Name": "script_forcerambo",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set to 1 then AI will always do rambo from this cover node."
   },
   {
     "Name": "script_forcespawn",
@@ -1100,7 +938,7 @@
   {
     "Name": "script_forceyaw",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used in checks for a target or goal yaw on helicopter path origins or nodes"
   },
   {
@@ -1178,7 +1016,7 @@
   {
     "Name": "script_ghettotag",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
@@ -1203,12 +1041,12 @@
     "Name": "script_grenades",
     "Type": "int",
     "Side": "both",
-    "Comment": "sets a spawner's .grenadeammo, which is the # of grenades an actor starts with when spawned"
+    "Comment": ""
   },
   {
     "Name": "script_grenadespeed",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used for setting magic grenade launch speeds on script origins"
   },
   {
@@ -1233,43 +1071,13 @@
     "Name": "script_health",
     "Type": "int",
     "Side": "both",
-    "Comment": "for setting the health of windows in _interactive_objects"
-  },
-  {
-    "Name": "script_hero",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set, makes this AI a hero character ( calls make_hero ) function in the script."
+    "Comment": "bringing it back!"
   },
   {
     "Name": "script_hidden",
     "Type": "string",
     "Side": "both",
     "Comment": "the thing which is hidden and appears later (mortars)"
-  },
-  {
-    "Name": "script_hidingdoor_action",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "indicates a specific action you want the AI to perform when the behavior kicks off"
-  },
-  {
-    "Name": "script_hidingdoor_ends_closed",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set to 1 on spawner, the door will close when the behavior ends"
-  },
-  {
-    "Name": "script_hidingdoor_model",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "override for default door or window model"
-  },
-  {
-    "Name": "script_hidingdoor_starts_open",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set to 1 on spawner, the door will start in the open state when the behavior kicks off"
   },
   {
     "Name": "script_hint",
@@ -1280,31 +1088,31 @@
   {
     "Name": "script_hoverwait",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used in checks to set hovering times on helicopter path origins or nodes"
   },
   {
     "Name": "script_ignore_suppression",
     "Type": "int",
     "Side": "both",
-    "Comment": "sets .ignoreSuppression to true if its set. actors will not be suppressed by gun fire."
+    "Comment": "sets .ignoreSuppression to true if its set."
   },
   {
     "Name": "script_ignoreall",
     "Type": "int",
     "Side": "both",
-    "Comment": "sets .ignoreall to true if its set. makes actors ignore all suppression/damage/danger."
+    "Comment": "sets .ignoreall to true if its set."
   },
   {
     "Name": "script_ignoreme",
     "Type": "int",
     "Side": "both",
-    "Comment": "If this setting exists on a spawner this guy will have his .ignoreme set to true and will be ignored by other ai."
+    "Comment": "If this setting exists on a spawner this guy will have his .ignoreme set to true"
   },
   {
     "Name": "script_increment",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
@@ -1346,14 +1154,14 @@
   {
     "Name": "script_killspawner_group",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
     "Name": "script_label",
     "Type": "string",
     "Side": "both",
-    "Comment": "used in audio, gametypes scripts"
+    "Comment": ""
   },
   {
     "Name": "script_landmark",
@@ -1362,214 +1170,10 @@
     "Comment": "used by battlechatter system"
   },
   {
-    "Name": "script_light2_burst_intensity",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_burst_max",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_burst_min",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_burst_time",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_color",
-    "Type": "vector",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_delay_max",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_delay_min",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_exponent",
-    "Type": "int",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_fade_duration",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_fx",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_inner_fov",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_intensity",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_intensity_max",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_intensity_min",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_outer_fov",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_radius",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_sound",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light2_targetname",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_fx",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_fx_offset",
-    "Type": "vector",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_label",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_model",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_no_range_check",
-    "Type": "int",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_off_model",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_off_spin_model",
-    "Type": "string",
-    "Side": "client",
-    "Comment": ""
-  },
-  {
-    "Name": "script_light_on_model",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_on_spin_model",
-    "Type": "string",
-    "Side": "client",
-    "Comment": ""
-  },
-  {
-    "Name": "script_light_onetime",
-    "Type": "int",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_rotate_yaw",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_sound",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_light_spin_fx",
-    "Type": "string",
-    "Side": "client",
-    "Comment": ""
-  },
-  {
-    "Name": "script_light_spin_tag",
-    "Type": "string",
-    "Side": "client",
-    "Comment": ""
-  },
-  {
     "Name": "script_light_toggle",
     "Type": "int",
-    "Side": "client",
-    "Comment": "set to 1 on vehicle enables vehicles ability to turn on and off lights."
-  },
-  {
-    "Name": "script_light_type",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_lights_on",
-    "Type": "int",
     "Side": "both",
-    "Comment": "set to 1 on vehicle or vehicle node to turn on lights"
+    "Comment": "set to 1 on vehicle enables vehicles ability to turn on and off lights."
   },
   {
     "Name": "script_linkname",
@@ -1599,7 +1203,7 @@
     "Name": "script_looping",
     "Type": "int",
     "Side": "both",
-    "Comment": "Setting to \"1\" has same functionality as setting script_noteworthy/\"looping\"."
+    "Comment": ""
   },
   {
     "Name": "script_mapsize_08",
@@ -1632,12 +1236,6 @@
     "Comment": "the limit of how far banzai guys will look for a target"
   },
   {
-    "Name": "script_max_fog_opacity",
-    "Type": "float",
-    "Side": "both",
-    "Comment": "The maximum fog opacity"
-  },
-  {
     "Name": "script_maxdist",
     "Type": "int",
     "Side": "both",
@@ -1646,7 +1244,7 @@
   {
     "Name": "script_maxspawn",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used on flood spawn trigger to regulate the max number of ai"
   },
   {
@@ -1664,43 +1262,13 @@
   {
     "Name": "script_mgturret",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Group AI with a node that targets an mg42 and the AI will keep the gun in use."
-  },
-  {
-    "Name": "script_mixer_event",
-    "Type": "string",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_mixer_ltr_ramp",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_mixer_robot_max",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_mixer_robot_min",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
-  },
-  {
-    "Name": "script_mixer_rtl_ramp",
-    "Type": "float",
-    "Side": "client",
-    "Comment": "clientside lights"
   },
   {
     "Name": "script_mortargroup",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "to group mortars with their triggers"
   },
   {
@@ -1712,14 +1280,8 @@
   {
     "Name": "script_namenumber",
     "Type": "string",
-    "Side": "client",
-    "Comment": "General purpose string identifier that used to be in this file that I use frequently"
-  },
-  {
-    "Name": "script_next_spawn_manager",
-    "Type": "string",
     "Side": "both",
-    "Comment": "used by spawn manager, enables next spawn manager, when this spawn manager is killed"
+    "Comment": "General purpose string identifier that used to be in this file that I use frequently"
   },
   {
     "Name": "script_no_respawn",
@@ -1736,26 +1298,14 @@
   {
     "Name": "script_nodestate",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "generic identifier for nodes"
-  },
-  {
-    "Name": "script_nodropsecondaryweapon",
-    "Type": "int",
-    "Side": "both",
-    "Comment": ""
-  },
-  {
-    "Name": "script_nodropsidearm",
-    "Type": "int",
-    "Side": "both",
-    "Comment": ""
   },
   {
     "Name": "script_nodropweapon",
     "Type": "int",
     "Side": "both",
-    "Comment": ""
+    "Comment": "Used in _spawner to disallow weapon drop on enemies. Ask a lead before using!"
   },
   {
     "Name": "script_noenemyinfo",
@@ -1766,19 +1316,19 @@
   {
     "Name": "script_nofriendlywave",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "disables tracking of this ai for friendly_wave's"
   },
   {
     "Name": "script_nohealth",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "makes the guy not drop health"
   },
   {
     "Name": "script_nomantle",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "If set, disables mantling for the tank, even discards setting up the variables/fx/animations for the tank."
   },
   {
@@ -1792,12 +1342,6 @@
     "Type": "int",
     "Side": "both",
     "Comment": "replaces script_flak88 to define nonmoving vehicles in order to prevent vehicle script errors"
-  },
-  {
-    "Name": "script_norambo",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if set to 1 on node then AI will not perform rambo behavior at this node."
   },
   {
     "Name": "script_noteworthy",
@@ -1814,7 +1358,7 @@
   {
     "Name": "script_nowall",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "make AI play a special set of corner animations that dont require a wall"
   },
   {
@@ -1826,31 +1370,31 @@
   {
     "Name": "script_objective",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
     "Name": "script_objective_active",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used with flood_and_Secure and \"friendlychain\"s to only be active if this objective"
   },
   {
     "Name": "script_objective_inactive",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "is active"
   },
   {
     "Name": "script_offradius",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Guys get off a flak if a player gets this close to a flak after hitting the off-trigger, default 350"
   },
   {
     "Name": "script_offtime",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Number of milliseconds before guys get off a flak when you hit the off-trigger, defaults to 20000"
   },
   {
@@ -1863,7 +1407,7 @@
     "Name": "script_pacifist",
     "Type": "int",
     "Side": "both",
-    "Comment": "makes an ai be a pacifist (sets their .pacifist = true)"
+    "Comment": ""
   },
   {
     "Name": "script_parameters",
@@ -1872,16 +1416,10 @@
     "Comment": "generic string used for similar purpose as script_noteworthy"
   },
   {
-    "Name": "script_patrol_walk_anim",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "patrol walk override"
-  },
-  {
     "Name": "script_patroller",
     "Type": "int",
     "Side": "both",
-    "Comment": "used to set up a spawner for patrolling through _patrol"
+    "Comment": ""
   },
   {
     "Name": "script_percent",
@@ -1892,7 +1430,7 @@
   {
     "Name": "script_personality",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "This guy will use this personality type"
   },
   {
@@ -1910,13 +1448,13 @@
   {
     "Name": "script_pilottalk",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used in checks to trigger dialogue on helicopter path origins or nodes"
   },
   {
     "Name": "script_plane",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Specifies which plane set this is, so they can all be started together."
   },
   {
@@ -1941,19 +1479,13 @@
     "Name": "script_playerseek",
     "Type": "int",
     "Side": "both",
-    "Comment": "if set then this AI will seek the player"
+    "Comment": ""
   },
   {
     "Name": "script_prefab_exploder",
     "Type": "int",
     "Side": "both",
     "Comment": "Override an exploder since exploders in prefabs get unique'd."
-  },
-  {
-    "Name": "script_prefab_id",
-    "Type": "int",
-    "Side": "client",
-    "Comment": ""
   },
   {
     "Name": "script_presound",
@@ -1970,13 +1502,13 @@
   {
     "Name": "script_random_killspawner",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "group a trigger with some spawners"
   },
   {
     "Name": "script_randomspawn",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "use with a script_random_killspawner - script will randomly spawn one of the groups"
   },
   {
@@ -1994,19 +1526,19 @@
   {
     "Name": "script_reuse",
     "Type": "float",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
     "Name": "script_reuse_max",
     "Type": "float",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Maximum time before a new AI will use this turret."
   },
   {
     "Name": "script_reuse_min",
     "Type": "float",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Minimum time before a new AI will use this turret."
   },
   {
@@ -2014,12 +1546,6 @@
     "Type": "string",
     "Side": "both",
     "Comment": "rumble file to play on an exploder"
-  },
-  {
-    "Name": "script_rusher",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "make an AI a rusher when he spawns"
   },
   {
     "Name": "script_savetrigger_timer",
@@ -2041,12 +1567,6 @@
   },
   {
     "Name": "script_seekgoal",
-    "Type": "int",
-    "Side": "client",
-    "Comment": ""
-  },
-  {
-    "Name": "script_selected_spawner_count",
     "Type": "int",
     "Side": "both",
     "Comment": ""
@@ -2070,27 +1590,15 @@
     "Comment": ""
   },
   {
-    "Name": "script_sirens_on",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "set to 1 on vehicle or vehicle node to turn on sirens"
-  },
-  {
     "Name": "script_skilloverride",
     "Type": "string",
     "Side": "both",
-    "Comment": "used in setting the difficult of mg turrets. see _mgturret.gsc"
+    "Comment": ""
   },
   {
     "Name": "script_sound",
     "Type": "string",
     "Side": "both",
-    "Comment": "Plays level.scr_sound [\"string\"]"
-  },
-  {
-    "Name": "script_sound2",
-    "Type": "string",
-    "Side": "client",
     "Comment": "Plays level.scr_sound [\"string\"]"
   },
   {
@@ -2100,58 +1608,10 @@
     "Comment": "play this soundalias on exploders"
   },
   {
-    "Name": "script_spawn_active_count",
-    "Type": "int",
-    "Side": "both",
-    "Comment": ""
-  },
-  {
-    "Name": "script_spawn_active_count_max",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "script_int"
-  },
-  {
-    "Name": "script_spawn_active_count_min",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "script_int"
-  },
-  {
-    "Name": "script_spawn_delay",
-    "Type": "float",
-    "Side": "both",
-    "Comment": "script_float"
-  },
-  {
-    "Name": "script_spawn_group_size",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "script_cheap"
-  },
-  {
     "Name": "script_spawn_here",
     "Type": "int",
     "Side": "both",
     "Comment": "for camper_spawner"
-  },
-  {
-    "Name": "script_spawner_targets",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "used by spawn manager for assigning spawner targets to spawners, independent of spawn manager"
-  },
-  {
-    "Name": "script_special",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "general purpose KVP;Use as you wish;"
-  },
-  {
-    "Name": "script_specialops",
-    "Type": "int",
-    "Side": "both",
-    "Comment": ""
   },
   {
     "Name": "script_spiderhole",
@@ -2172,15 +1632,9 @@
     "Comment": "set the chance to charge at the player ( 0 - 100)"
   },
   {
-    "Name": "script_sprint",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "enables/disables cqb or regular sprint if set"
-  },
-  {
     "Name": "script_squad",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Group spawners/ai so they share enemy information"
   },
   {
@@ -2192,13 +1646,13 @@
   {
     "Name": "script_stack",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "for walls where friendlies hang out"
   },
   {
     "Name": "script_stance",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "General purpose string identifier useful for stance related scripting"
   },
   {
@@ -2217,19 +1671,13 @@
     "Name": "script_startinghealth",
     "Type": "int",
     "Side": "both",
-    "Comment": "sets a spawner or vehicle's health right when it's spawned in"
+    "Comment": ""
   },
   {
     "Name": "script_startingposition",
     "Type": "int",
     "Side": "both",
     "Comment": "used for riders of vehicles to manually designate riding postions (also used for walkers)"
-  },
-  {
-    "Name": "script_stealth",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "if defined, then this AI is put into stealth mode"
   },
   {
     "Name": "script_stealth_dontseek",
@@ -2246,7 +1694,7 @@
   {
     "Name": "script_stoptoshoot",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used for tanks, setting this to greater than zero will make a tank stop before firing it's main cannon"
   },
   {
@@ -2256,40 +1704,10 @@
     "Comment": "Generic STRING for anyone to use"
   },
   {
-    "Name": "script_sun_color",
-    "Type": "vector",
-    "Side": "both",
-    "Comment": "The sun color"
-  },
-  {
-    "Name": "script_sun_direction",
-    "Type": "vector",
-    "Side": "both",
-    "Comment": "The sun direction"
-  },
-  {
-    "Name": "script_sun_start_ang",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "The start angle for the sun"
-  },
-  {
-    "Name": "script_sun_stop_ang",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "The stop angle of the sun"
-  },
-  {
     "Name": "script_suppression",
     "Type": "float",
     "Side": "both",
     "Comment": "Suppression wait for this AI"
-  },
-  {
-    "Name": "script_tag",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "generic tag specification.  used for vehicle riders."
   },
   {
     "Name": "script_tankgroup",
@@ -2335,15 +1753,15 @@
   },
   {
     "Name": "script_timer",
-    "Type": "float",
+    "Type": "int",
     "Side": "both",
-    "Comment": "Timeout for friendly_chat or general time value"
+    "Comment": "Timeout for friendly_chat"
   },
   {
     "Name": "script_trace",
     "Type": "int",
     "Side": "both",
-    "Comment": "If set to \"1\", drones will not spawn in unless the player is looking away from the spawn points."
+    "Comment": ""
   },
   {
     "Name": "script_trailfx",
@@ -2390,13 +1808,13 @@
   {
     "Name": "script_triggered_playerseek",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "group a trigger and an ai with this and he the grouped ai will do playerseek behaviour when the trigger is hit"
   },
   {
     "Name": "script_triggername",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "Z: used for elevators in the dam"
   },
   {
@@ -2404,12 +1822,6 @@
     "Type": "string",
     "Side": "both",
     "Comment": "set this to the direction of the anim set you want a vehicle to use.  \"right\",\"hard_right\",\"left\",\"hard_left\",\"forward\""
-  },
-  {
-    "Name": "script_turnrate",
-    "Type": "float",
-    "Side": "both",
-    "Comment": "override for the default turnrate (ai_turnrate dvar). Degrees per second (360 = one complete turn)"
   },
   {
     "Name": "script_turret",
@@ -2445,7 +1857,7 @@
     "Name": "script_unload",
     "Type": "string",
     "Side": "both",
-    "Comment": "tells the vehicle to unload this group of guys examples are \"all\", \"passengers\", and \"rear_passengers\""
+    "Comment": "tells the vehicle to unload this group of guys"
   },
   {
     "Name": "script_unloaddelay",
@@ -2474,13 +1886,13 @@
   {
     "Name": "script_vehicle_lights_off",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "set to a group of lights to turn them off"
   },
   {
     "Name": "script_vehicle_lights_on",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "set to a group of lights to turn them on"
   },
   {
@@ -2522,13 +1934,13 @@
   {
     "Name": "script_vehicledetourtype",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": "describing how a vehicledetour node works,  first non default type being \"scriptswitch\" which will let the script notify the path to become a switch node. Useful in situations where a tank will fight in circles and then procede on whatever script condition."
   },
   {
     "Name": "script_vehiclegroup",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "links a vehicle to its spawners"
   },
   {
@@ -2540,14 +1952,14 @@
   {
     "Name": "script_vehiclenodegroup",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used for getting an array of vehicle nodes"
   },
   {
     "Name": "script_vehicleride",
     "Type": "int",
     "Side": "both",
-    "Comment": "groups spawners with a vehicle they're set to ride"
+    "Comment": ""
   },
   {
     "Name": "script_vehiclespawngroup",
@@ -2571,7 +1983,7 @@
     "Name": "script_vehiclewalk",
     "Type": "int",
     "Side": "both",
-    "Comment": "groups spawners with a vehcile they're set to follow on foot"
+    "Comment": ""
   },
   {
     "Name": "script_vision",
@@ -2634,18 +2046,6 @@
     "Comment": "Minimum wait time between actions"
   },
   {
-    "Name": "script_waittill",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "General key of a notify to wait for"
-  },
-  {
-    "Name": "script_walk",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "enables/disables cqb or regular walk if set"
-  },
-  {
     "Name": "script_wheeldirection",
     "Type": "int",
     "Side": "both",
@@ -2660,50 +2060,14 @@
   {
     "Name": "script_wtf",
     "Type": "string",
-    "Side": "client",
+    "Side": "both",
     "Comment": ""
   },
   {
     "Name": "script_yawspeed",
     "Type": "int",
-    "Side": "client",
+    "Side": "both",
     "Comment": "used in checks for setting yaw speed on helicopter path origins or nodes"
-  },
-  {
-    "Name": "sm_active_count",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "Total bumber of AI that can be active from this spawner, defaults to number of spawners in the spawn manager. Supports min and max seperated by space."
-  },
-  {
-    "Name": "sm_count",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "Total number of AI that can be spawned from this spawn manager. Default = infinity. Supports min and max seperated by space."
-  },
-  {
-    "Name": "sm_die",
-    "Type": "int",
-    "Side": "both",
-    "Comment": "Used for killing the spawn manager, set on the spawn manager and compared against the trigger sm_kill"
-  },
-  {
-    "Name": "sm_group_size",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "The number of AI that can spawn from a spawner at once. Default = 1. Supports min and max seperated by space."
-  },
-  {
-    "Name": "sm_kill",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "Used for killing the spawn manager, set on the trigger"
-  },
-  {
-    "Name": "sm_spawner_count",
-    "Type": "string",
-    "Side": "both",
-    "Comment": "The number of spawners that spawn manager will randomly select from the full set of the available spawners, defaults to number of spawners in the spawn manager. Supports min and max seperated by space."
   },
   {
     "Name": "spawner_id",
@@ -2726,14 +2090,8 @@
   {
     "Name": "squadnum",
     "Type": "int",
-    "Side": "client",
-    "Comment": ""
-  },
-  {
-    "Name": "start_exclude",
-    "Type": "int",
     "Side": "both",
-    "Comment": "set to 1 to exclude this magicbox from the set of random start positions"
+    "Comment": ""
   },
   {
     "Name": "target",
@@ -2746,6 +2104,12 @@
     "Type": "string",
     "Side": "both",
     "Comment": ""
+  },
+  {
+    "Name": "tosser",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "set this to 1 to have the AI supplement system use this spawner, can also specify \"banzai\", \"grenadesuicide\", or \"standard\" for the type of tosser"
   },
   {
     "Name": "twar_allies_dependants",

@@ -24,31 +24,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Api\t7_api_gsc.json">
+    <!-- Every bundled game data file, by pattern rather than by name. Listing them individually
+         meant a new game's data silently failed to reach the output while everything still built
+         and most tests still passed, because the loaders treat a missing file as "this game ships
+         none". -->
+    <None Update="Api\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Api\t7_api_csc.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Api\t7_stock_scripts.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Api\t7_object_fields.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Api\t7_radiant_keys.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Api\cod4_api_gsc.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Api\cod4_object_fields.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Api\cod4_radiant_keys.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Api\cod4_stock_scripts.txt">
+    <None Update="Api\*.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

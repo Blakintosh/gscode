@@ -24,6 +24,9 @@ GenerateWordfileGameData(
     "cod4",
     Path.Combine(originalsDir, "cod4_wordfile.txt"),
     Path.Combine(originalsDir, "cod4_keys.txt"),
+    // CoD4 has no client scripts and ships no clientkeys.txt, which is the cross-check that the
+    // two-file split is a Treyarch convention rather than an engine-wide one.
+    clientKeysPath: null,
     apiDir,
     Environment.GetEnvironmentVariable("GSCODE_COD4_DOCS"),
     curatedDir);
@@ -35,6 +38,19 @@ GenerateWordfileGameData(
     "bo1",
     Path.Combine(originalsDir, "bo1_wordfile.txt"),
     Path.Combine(originalsDir, "bo1_keys.txt"),
+    Path.Combine(originalsDir, "bo1_clientkeys.txt"),
+    apiDir,
+    docsRoot: null,
+    curatedDir,
+    enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"));
+
+// WaW sits between the two in the same lineage and ships the same shaped wordfile and the same
+// split radiant keys.
+GenerateWordfileGameData(
+    "waw",
+    Path.Combine(originalsDir, "waw_wordfile.txt"),
+    Path.Combine(originalsDir, "waw_keys.txt"),
+    Path.Combine(originalsDir, "waw_clientkeys.txt"),
     apiDir,
     docsRoot: null,
     curatedDir,
@@ -89,7 +105,14 @@ static void GenerateObjectFields(string curatedDir, string outputPath)
 }
 
 // Parses radiant/keys.txt: optional 'client' prefix, <type> <field>, optional // comment.
-static void GenerateRadiantKeys(string keysPath, string outputPath)
+//
+// The games express "this key is client-side" two different ways. BO3 keeps ONE keys.txt and marks
+// such lines with a leading 'client'. The pre-BO3 Treyarch games instead SPLIT the data across
+// keys.txt and clientkeys.txt, and their keys.txt carries no prefix at all — so on those games the
+// prefix rule is inert and every key would otherwise be recorded as visible to both sides. Reading
+// the second file supplies the distinction the prefix cannot, and it is where the client-only keys
+// live at all: 126 of BO1's 369 client keys appear nowhere in its keys.txt.
+static void GenerateRadiantKeys(string keysPath, string outputPath, string? clientKeysPath = null)
 {
     if ( !File.Exists(keysPath) )
     {
@@ -98,8 +121,34 @@ static void GenerateRadiantKeys(string keysPath, string outputPath)
         return;
     }
 
+    List<RadiantKey> keys = ParseKeysFile(keysPath, out int corrected);
+
+    // Keys that exist only in the client file are client-side; one present in both is visible to
+    // both, which is what keys.txt already recorded it as.
+    int clientOnly = 0;
+    if ( clientKeysPath is not null && File.Exists(clientKeysPath) )
+    {
+        HashSet<string> known = new(keys.Select(static k => k.Name), StringComparer.OrdinalIgnoreCase);
+        foreach ( RadiantKey key in ParseKeysFile(clientKeysPath, out _) )
+        {
+            if ( known.Add(key.Name) )
+            {
+                keys.Add(key with { Side = "client" });
+                clientOnly++;
+            }
+        }
+    }
+
+    List<RadiantKey> sorted = [.. keys.OrderBy(static k => k.Name, StringComparer.Ordinal)];
+    Console.WriteLine($"  radiant keys: {sorted.Count} ({clientOnly} client-only, {corrected} side corrections applied)");
+    WriteJson(outputPath, sorted);
+}
+
+// One keys file into records. Shared by keys.txt and clientkeys.txt, which have the same shape.
+static List<RadiantKey> ParseKeysFile(string keysPath, out int corrected)
+{
     List<RadiantKey> keys = [];
-    int corrected = 0;
+    corrected = 0;
 
     foreach ( string rawLine in File.ReadAllLines(keysPath) )
     {
@@ -146,9 +195,7 @@ static void GenerateRadiantKeys(string keysPath, string outputPath)
         keys.Add(new RadiantKey(name, parts[cursor].ToLowerInvariant(), correctedSide, comment));
     }
 
-    List<RadiantKey> sorted = [.. keys.OrderBy(static k => k.Name, StringComparer.Ordinal)];
-    Console.WriteLine($"  radiant keys: {sorted.Count} ({corrected} side corrections applied)");
-    WriteJson(outputPath, sorted);
+    return keys;
 }
 
 // keys.txt mismarks a few keys as client-only that are in fact readable from both sides.
@@ -171,7 +218,7 @@ static string CorrectSide(string name, string parsedSide)
 // entity properties is the mod-tools syntax-highlighting wordfile. This reads the CODSCRIPT block's
 // sections into the same runtime artifacts BO3 ships. Names only — the wordfile carries no types,
 // signatures or docs; those are a later enrichment pass. BO1's wordfile has the same shape.
-static void GenerateWordfileGameData(string prefix, string wordfilePath, string keysPath, string apiDir, string? docsRoot, string curatedDir, string? enrichFrom = null)
+static void GenerateWordfileGameData(string prefix, string wordfilePath, string keysPath, string? clientKeysPath, string apiDir, string? docsRoot, string curatedDir, string? enrichFrom = null)
 {
     if ( !File.Exists(wordfilePath) )
     {
@@ -201,7 +248,7 @@ static void GenerateWordfileGameData(string prefix, string wordfilePath, string 
     // Radiant keys come from the game's own keys.txt (the same file Radiant loads), not the
     // wordfile's bare-name /C6 — it carries types, client/both sides and comments for hover.
     Console.Write($"  {prefix}");
-    GenerateRadiantKeys(keysPath, Path.Combine(apiDir, $"{prefix}_radiant_keys.json"));
+    GenerateRadiantKeys(keysPath, Path.Combine(apiDir, $"{prefix}_radiant_keys.json"), clientKeysPath);
 
     // /C2 "Common Entity Properties" — script-accessible .fields (the wordfile writes the leading
     // dot); untyped, under one generic kind.

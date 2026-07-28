@@ -130,15 +130,25 @@ public class BuiltinHarvestTests
     /// Writes the findings as JSON next to the harvest, so curating the library is a matter of
     /// reading a file rather than scraping test output.
     /// </summary>
+    /// <summary>
+    /// Writes the findings as JSON, one file per KIND. They are separate deliverables: the builtin
+    /// list feeds curating the engine library, while the script list is about files the distribution
+    /// did not ship. Mixing them means whoever is doing one job has to filter out the other's rows.
+    /// </summary>
     private void WriteReport(
         GameProfile profile,
         int scriptsSwept,
         Dictionary<string, Candidate> builtinCandidates,
         Dictionary<string, Candidate> scriptMisses)
     {
-        List<MissingFunction> functions = [];
-        functions.AddRange(Describe(builtinCandidates, "builtin"));
-        functions.AddRange(Describe(scriptMisses, "script"));
+        WriteOne(profile, scriptsSwept, builtinCandidates, "builtin", "missing_builtins");
+        WriteOne(profile, scriptsSwept, scriptMisses, "script", "missing_script_functions");
+    }
+
+    private void WriteOne(
+        GameProfile profile, int scriptsSwept, Dictionary<string, Candidate> bucket, string kind, string fileStem)
+    {
+        List<MissingFunction> functions = [.. Describe(bucket, kind)];
 
         // Most-wanted first: a real engine function is called from many files, a typo from one.
         functions.Sort(static (left, right) =>
@@ -154,7 +164,7 @@ public class BuiltinHarvestTests
         // is not beside it (a packaged run).
         string directory = Path.Combine(FindProjectRoot() ?? AppContext.BaseDirectory, "harvest");
         Directory.CreateDirectory(directory);
-        string file = Path.Combine(directory, $"{profile.ShortName}_missing_functions.json");
+        string file = Path.Combine(directory, $"{profile.ShortName}_{fileStem}.json");
 
         string json = JsonSerializer.Serialize(report, new JsonSerializerOptions
         {
@@ -165,7 +175,7 @@ public class BuiltinHarvestTests
         });
 
         File.WriteAllText(file, json + "\n", new System.Text.UTF8Encoding(false));
-        _output.WriteLine($"Report: {file}");
+        _output.WriteLine($"Report: {file} ({functions.Count})");
     }
 
     /// <summary>The test project folder, found by walking up to the one holding the .csproj.</summary>

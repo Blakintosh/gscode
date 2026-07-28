@@ -1,0 +1,566 @@
+[
+    {
+        "name": "Ceil",
+        "description": "Returns the ceiling of floating point value <a>. This effectively rounds up Ceil(2.7) == 3, Ceil(3.9) == 4.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "a",
+                        "description": "A float or integer value.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "number"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "float"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "ClearAllCorpses",
+        "description": "Removes every corpse currently in the level.",
+        "overloads": [
+            {
+                "parameters": [],
+                "returns": {
+                    "void": true
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library."
+        ]
+    },
+    {
+        "name": "EndLobby",
+        "description": "Ends the current lobby session.",
+        "overloads": [
+            {
+                "parameters": [],
+                "returns": {
+                    "void": true
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "EndParty",
+        "description": "Ends the current party session.",
+        "overloads": [
+            {
+                "parameters": [],
+                "returns": {
+                    "void": true
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. Named and shaped after EndLobby, which Black Ops III documents."
+        ]
+    },
+    {
+        "name": "Floor",
+        "description": "Returns the floor of floating point value <a>. This effectively rounds down Floor(2.7) == 2, Floor(3.9) == 3.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "a",
+                        "description": "A float or integer value.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "number"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "float"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "GetCorpseAnim",
+        "description": "Get the animation that the corpse will play.",
+        "overloads": [
+            {
+                "calledOn": {
+                    "name": "player",
+                    "description": ""
+                },
+                "parameters": [],
+                "returns": {
+                    "type": {
+                        "dataType": "string"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "GetDifficulty",
+        "description": "Returns the current difficulty setting.",
+        "overloads": [
+            {
+                "parameters": [],
+                "returns": {
+                    "type": {
+                        "dataType": "string"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. Called with no arguments; a two-argument form also appears, so this signature may be incomplete."
+        ]
+    },
+    {
+        "name": "GetGuid",
+        "description": "Gets the unique identifier (GUID) of the player.",
+        "overloads": [
+            {
+                "calledOn": {
+                    "name": "player",
+                    "description": "The player."
+                },
+                "parameters": [],
+                "returns": {
+                    "type": {
+                        "dataType": "int"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "GetXuid",
+        "description": "Gets the unique online identifier (XUID) of the given player.",
+        "overloads": [
+            {
+                "calledOn": {
+                    "name": "player",
+                    "description": "The player to get the XUID of."
+                },
+                "parameters": [
+                    {
+                        "name": "formatToDecimal",
+                        "description": "When set to `true`, the XUID is returned in decimal format. Otherwise, it is returned in hexadecimal format.",
+                        "mandatory": false,
+                        "type": {
+                            "dataType": "bool"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "string"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "LogString",
+        "description": "Writes a string to the game log.",
+        "overloads": [
+            {
+                "calledOn": {
+                    "name": "player",
+                    "description": "The player the entry is logged against."
+                },
+                "parameters": [
+                    {
+                        "name": "text",
+                        "description": "The text to log.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "string"
+                        }
+                    }
+                ],
+                "returns": {
+                    "void": true
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. Called on an entity at all 53 call sites."
+        ]
+    },
+    {
+        "name": "Max",
+        "description": "Returns whichever of <a> or <b> is larger.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "a",
+                        "description": "A float or integer value.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "number"
+                        }
+                    },
+                    {
+                        "name": "b",
+                        "description": "A float or integer value.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "number"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "float"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "Min",
+        "description": "Returns whichever of <a> or <b> is smallest.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "a",
+                        "description": "A float or integer value.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "number"
+                        }
+                    },
+                    {
+                        "name": "b",
+                        "description": "A float or integer value.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "number"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "float"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "PredictAnim",
+        "description": "Predicts the outcome of an animation for an actor.",
+        "overloads": [
+            {
+                "calledOn": {
+                    "name": "actor",
+                    "description": "The actor to predict for."
+                },
+                "parameters": [
+                    {
+                        "name": "animation",
+                        "description": "The animation to predict.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "anim"
+                        }
+                    }
+                ],
+                "returns": {
+                    "void": true
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. Only call sites are in animscripts/predict.gsc."
+        ]
+    },
+    {
+        "name": "SetDamageStage",
+        "description": "Sets the damage stage of the vehicle.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "stage",
+                        "description": "the damage stage to set.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "int"
+                        }
+                    }
+                ]
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "ShootVolley",
+        "description": "Fires a volley from the vehicle or turret.",
+        "overloads": [
+            {
+                "parameters": [],
+                "returns": {
+                    "void": true
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. A single call site, so the signature is weak evidence."
+        ]
+    },
+    {
+        "name": "SpawnHelicopter",
+        "description": "Spawns a helicopter.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "owner",
+                        "description": "the owner entity.",
+                        "mandatory": true
+                    },
+                    {
+                        "name": "origin",
+                        "description": "the location.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "vector"
+                        }
+                    },
+                    {
+                        "name": "angles",
+                        "description": "the angles.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "vector"
+                        }
+                    },
+                    {
+                        "name": "vehicleName",
+                        "description": "the vehicle name.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "string"
+                        }
+                    },
+                    {
+                        "name": "modelName",
+                        "description": "the model name.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "string"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "entity"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "SpawnPlane",
+        "description": "Spawns a plane at the origin.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "player",
+                        "description": "the owner.",
+                        "mandatory": true
+                    },
+                    {
+                        "name": "classname",
+                        "description": "class of entity.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "string"
+                        }
+                    },
+                    {
+                        "name": "origin",
+                        "description": "location to spawn at.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "vector"
+                        }
+                    },
+                    {
+                        "name": "spawnflags",
+                        "description": "optional spawn flags.",
+                        "mandatory": false,
+                        "type": {
+                            "dataType": "int"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "entity"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "Sqrt",
+        "description": "Returns the square-root of floating point value <a>.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "a",
+                        "description": "A float or integer value.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "number"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "float"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    },
+    {
+        "name": "TableLookupIString",
+        "description": "look up a row in a table and pull out a particular column from that row.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "filename",
+                        "description": "The table to look up.",
+                        "mandatory": true
+                    },
+                    {
+                        "name": "searchColumnNum",
+                        "description": "The column number of the stats table to search through.",
+                        "mandatory": true
+                    },
+                    {
+                        "name": "searchValue",
+                        "description": "The value to use when searching the <search column num>.",
+                        "mandatory": true
+                    },
+                    {
+                        "name": "returnValueColumnNum",
+                        "description": "The column number value to return after we find the correct row.",
+                        "mandatory": true
+                    }
+                ]
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+        ]
+    }
+]

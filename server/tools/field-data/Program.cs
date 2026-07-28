@@ -47,7 +47,10 @@ static void GenerateObjectFields(string curatedDir, string outputPath)
     JsonSerializerOptions readOptions = new() { PropertyNameCaseInsensitive = true, ReadCommentHandling = JsonCommentHandling.Skip };
     SortedDictionary<string, List<FieldEntry>> byKind = new(StringComparer.Ordinal);
 
-    foreach ( string file in Directory.EnumerateFiles(curatedDir, "*.json").OrderBy(static f => f, StringComparer.Ordinal) )
+    // Only the *_fields*.json files (weapon_fields_simple.json included): curated/ also holds
+    // other curated data, such as reconstructed builtins, and sweeping every .json here would turn
+    // each of those into a bogus entity kind.
+    foreach ( string file in Directory.EnumerateFiles(curatedDir, "*_fields*.json").OrderBy(static f => f, StringComparer.Ordinal) )
     {
         string kind = EntityKindFromFileName(Path.GetFileNameWithoutExtension(file));
 
@@ -172,6 +175,7 @@ static void GenerateCod4Data(string wordfilePath, string keysPath, string apiDir
     GenerateCod4Api(
         Environment.GetEnvironmentVariable("GSCODE_COD4_DOCS"),
         functions,
+        Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(wordfilePath)!)!, "curated", "cod4_ai_builtins.json"),
         Path.Combine(apiDir, "cod4_api_gsc.json"));
 
     // Radiant keys come from the game's own keys.txt (the same file Radiant loads), not the
@@ -339,9 +343,9 @@ static void WriteJson<T>(string path, T value, bool camelCase = false)
 
 // Converts the per-function documentation pages into the builtin library, merged with the
 // wordfile's bare name list so a function documented nowhere is still known to exist.
-static void GenerateCod4Api(string? htmRoot, List<string> wordfileNames, string outputPath)
+static void GenerateCod4Api(string? htmRoot, List<string> wordfileNames, string curatedPath, string outputPath)
 {
-    Dictionary<string, Cod4Entry> byName = new(StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, object> byName = new(StringComparer.OrdinalIgnoreCase);
 
     if ( !string.IsNullOrWhiteSpace(htmRoot) && Directory.Exists(htmRoot) )
     {
@@ -365,6 +369,27 @@ static void GenerateCod4Api(string? htmRoot, List<string> wordfileNames, string 
     }
 
     int documented = byName.Count;
+
+    // Entries written for functions the pages do not cover, carried in curated/ so they survive a
+    // regeneration. They fill gaps only: a documented page always wins, since it is the primary
+    // source and these are reconstructions.
+    int curated = 0;
+    if ( File.Exists(curatedPath) )
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(curatedPath));
+        foreach ( JsonElement entry in document.RootElement.EnumerateArray() )
+        {
+            string? name = entry.GetProperty("name").GetString();
+            if ( name is null || byName.ContainsKey(name) )
+            {
+                continue;
+            }
+
+            byName[name] = entry.Clone();
+            curated++;
+        }
+    }
+
     foreach ( string name in wordfileNames )
     {
         if ( !byName.ContainsKey(name) )
@@ -373,9 +398,9 @@ static void GenerateCod4Api(string? htmRoot, List<string> wordfileNames, string 
         }
     }
 
-    List<Cod4Entry> all = [.. byName.Values.OrderBy(static e => e.Name, StringComparer.OrdinalIgnoreCase)];
+    List<object> all = [.. byName.OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(static pair => pair.Value)];
     WriteJson(outputPath, new Cod4ApiFile(all), camelCase: true);
-    Console.WriteLine($"  cod4 api functions: {all.Count} ({documented} with signatures, {all.Count - documented} name-only)");
+    Console.WriteLine($"  cod4 api functions: {all.Count} ({documented} documented, {curated} reconstructed, {all.Count - documented - curated} name-only)");
 }
 
 // One documentation page. The pages use two templates; both put the signature in H1 and label
@@ -592,7 +617,7 @@ internal sealed record ApiEntryOut(string Name, IReadOnlyList<object> Overloads)
 
 // The richer shape the documented pages fill in. Mirrors what ApiLoader reads; WriteJson's
 // WhenWritingDefault drops the nulls and falses, so a sparse entry stays sparse.
-internal sealed record Cod4ApiFile(List<Cod4Entry> Api);
+internal sealed record Cod4ApiFile(List<object> Api);
 internal sealed record Cod4Entry(
     string Name,
     string? Description,

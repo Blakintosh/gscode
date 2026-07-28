@@ -80,4 +80,27 @@ public enum GscDiagnosticCode
 
     /// <summary>An #include whose target contributes nothing this file uses. Hint, not an error.</summary>
     UnusedInclude = 5012,
+
+    /// <summary>
+    /// A call that names a SCRIPT function which does not exist — a qualified <c>ns::foo()</c> or a
+    /// path-qualified <c>maps\mp\_util::foo()</c>. Both name a script location explicitly, so the
+    /// call cannot have meant a builtin and the failure is unambiguous.
+    ///
+    /// v1 reported this and the builtin case as one code (<c>FunctionDoesNotExist = 3035</c>),
+    /// because its <c>SymbolTable.TryGetFunction</c> fell back from script functions to the API
+    /// inside a single lookup and returned one verdict. Splitting them keeps each failure to the
+    /// one domain that can explain it.
+    /// </summary>
+    ScriptFunctionNotFound = 5013,
+
+    /// <summary>
+    /// A call that resolves to no script function and no entry in the builtin API — an unqualified
+    /// <c>foo()</c> or an explicit <c>sys::foo()</c>. Either the name is a typo, or it is a real
+    /// engine builtin missing from our API data, which is why this code is reported separately:
+    /// swept over a corpus it yields the candidate list for curating the builtin library.
+    ///
+    /// Only meaningful where the game HAS builtin data (<see cref="GameProfile.DataFilePrefix"/>);
+    /// without it every builtin call would look unresolved.
+    /// </summary>
+    BuiltinFunctionNotFound = 5014,
 }

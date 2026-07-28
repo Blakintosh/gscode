@@ -27,9 +27,19 @@ namespace GSCode.Workspace.Analysis;
 /// code useful as a DATA SOURCE: swept over a corpus it is the candidate list for builtins the API
 /// is missing, ranked by how often they are called.
 ///
-/// Suppressed wholesale unless the game ships builtin data — without it every builtin call would
-/// look unresolved. Private functions count as existing (the lookup passes
-/// <c>includePrivate</c>), since "exists but is private" is <c>5003</c>'s job, not this one's.
+/// Both are ERRORS, because the engine's verdict is harsher than a style note: a call that resolves
+/// to nothing fails to LINK, so the script does not load. That severity is only defensible because
+/// the lint refuses to guess — it reports nothing at all unless it can see everything that could
+/// have explained the call:
+///
+/// * the game must ship builtin data, or every builtin call would look unresolved;
+/// * a function declared in the file being edited counts from the PARSE IN HAND, not the store,
+///   which lags the buffer;
+/// * private functions count as existing (the lookup passes <c>includePrivate</c>), since "exists
+///   but is private" is <c>5003</c>'s story;
+/// * class methods reachable unqualified from the file's own classes are excluded;
+/// * a null-namespace call in a dialect with classes is skipped, since <c>sys::foo()</c> and a
+///   method call are keyed alike there.
 /// </summary>
 public static class FunctionResolutionLint
 {
@@ -51,6 +61,16 @@ public static class FunctionResolutionLint
 
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 
+        // Functions declared in THIS file, taken from the parse in hand rather than the store. The
+        // store holds the last INDEXED copy, which lags the buffer being edited — so without this,
+        // writing a function and calling it reports "not found" until a reindex catches up, which is
+        // the worst possible moment to be wrong.
+        HashSet<string> ownFunctions = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( FunctionSymbol function in result.Extraction.Functions )
+        {
+            ownFunctions.Add(function.KeyName);
+        }
+
         // Path-qualified calls name a FILE, so they are script-domain regardless of dialect. They
         // are keyed with a null namespace like everything else, and are told apart by their range.
         HashSet<TextRange> pathCallRanges = [];
@@ -71,6 +91,14 @@ public static class FunctionResolutionLint
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
             if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            {
+                continue;
+            }
+
+            // Declared right here. Only counts for a call that could reach it unqualified — one
+            // naming this file's own namespace, or none at all under a merge dialect.
+            if ( ownFunctions.Contains(entry.Key.Name)
+                && (entry.Key.Namespace is null || DeclaresNamespace(ownNamespaces, entry.Key.Namespace)) )
             {
                 continue;
             }
@@ -97,7 +125,7 @@ public static class FunctionResolutionLint
             {
                 diagnostics.Add(Diagnostic.Create(
                     entry.Range,
-                    DiagnosticSeverity.Warning,
+                    DiagnosticSeverity.Error,
                     GscDiagnosticCode.ScriptFunctionNotFound,
                     entry.Key.Name));
                 continue;
@@ -119,7 +147,7 @@ public static class FunctionResolutionLint
 
             diagnostics.Add(Diagnostic.Create(
                 entry.Range,
-                DiagnosticSeverity.Warning,
+                DiagnosticSeverity.Error,
                 GscDiagnosticCode.BuiltinFunctionNotFound,
                 entry.Key.Name));
         }

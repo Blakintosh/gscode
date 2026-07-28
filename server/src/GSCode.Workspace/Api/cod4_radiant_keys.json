@@ -45,7 +45,7 @@
     "Name": "dontdrawoncompass",
     "Type": "int",
     "Side": "both",
-    "Comment": "If set, the AI will not be drawn on the player\u0027s compass. Only matters for friendlies"
+    "Comment": "If set, the AI will not be drawn on the player's compass. Only matters for friendlies"
   },
   {
     "Name": "dontdropweapon",
@@ -249,7 +249,7 @@
     "Name": "script_badplace",
     "Type": "int",
     "Side": "both",
-    "Comment": "no badplaces on tanks.  for tanks that won\u0027t be near ai. on big tank battles."
+    "Comment": "no badplaces on tanks.  for tanks that won't be near ai. on big tank battles."
   },
   {
     "Name": "script_balcony",
@@ -279,7 +279,7 @@
     "Name": "script_bg_offset",
     "Type": "vector",
     "Side": "both",
-    "Comment": "I\u0027m using this in cobrapilot to move the background pieces into place"
+    "Comment": "I'm using this in cobrapilot to move the background pieces into place"
   },
   {
     "Name": "script_bombmode_dual",
@@ -387,7 +387,7 @@
     "Name": "script_crashtypeoverride",
     "Type": "string",
     "Side": "both",
-    "Comment": "override the type of crash a vehicle will do when it dies values are \u0022tank\u0022, \u0022mobile\u0022"
+    "Comment": "override the type of crash a vehicle will do when it dies values are \"tank\", \"mobile\""
   },
   {
     "Name": "script_damage",
@@ -717,7 +717,7 @@
     "Name": "script_flashbangs",
     "Type": "int",
     "Side": "both",
-    "Comment": "set this to \u003E 0 to give an AI flashbangs instead of frag grenades."
+    "Comment": "set this to > 0 to give an AI flashbangs instead of frag grenades."
   },
   {
     "Name": "script_followmax",
@@ -999,7 +999,7 @@
     "Name": "script_linkto",
     "Type": "string",
     "Side": "both",
-    "Comment": "A compound string that is a list of script_linkname\u0027d entities that this entity links to."
+    "Comment": "A compound string that is a list of script_linkname'd entities that this entity links to."
   },
   {
     "Name": "script_location",
@@ -1125,7 +1125,7 @@
     "Name": "script_nofriendlywave",
     "Type": "int",
     "Side": "both",
-    "Comment": "disables tracking of this ai for friendly_wave\u0027s"
+    "Comment": "disables tracking of this ai for friendly_wave's"
   },
   {
     "Name": "script_nohealth",
@@ -1137,7 +1137,7 @@
     "Name": "script_nomg",
     "Type": "int",
     "Side": "both",
-    "Comment": "makes machineguns not spawn at all on a tank. used for big tank battles where they aren\u0027t necessary on all the tanks."
+    "Comment": "makes machineguns not spawn at all on a tank. used for big tank battles where they aren't necessary on all the tanks."
   },
   {
     "Name": "script_noteworthy",
@@ -1161,7 +1161,7 @@
     "Name": "script_objective_active",
     "Type": "string",
     "Side": "both",
-    "Comment": "used with flood_and_Secure and \u0022friendlychain\u0022s to only be active if this objective"
+    "Comment": "used with flood_and_Secure and \"friendlychain\"s to only be active if this objective"
   },
   {
     "Name": "script_objective_inactive",
@@ -1251,7 +1251,7 @@
     "Name": "script_prefab_exploder",
     "Type": "int",
     "Side": "both",
-    "Comment": "Override an exploder since exploders in prefabs get unique\u0027d."
+    "Comment": "Override an exploder since exploders in prefabs get unique'd."
   },
   {
     "Name": "script_presound",
@@ -1263,7 +1263,7 @@
     "Name": "script_radius",
     "Type": "int",
     "Side": "both",
-    "Comment": "Sets an AI\u0027s starting goal radius. On an exploder this sets the radius damage\u0027s radius."
+    "Comment": "Sets an AI's starting goal radius. On an exploder this sets the radius damage's radius."
   },
   {
     "Name": "script_random_killspawner",
@@ -1353,7 +1353,7 @@
     "Name": "script_sound",
     "Type": "string",
     "Side": "both",
-    "Comment": "Plays level.scr_sound [\u0022string\u0022]"
+    "Comment": "Plays level.scr_sound [\"string\"]"
   },
   {
     "Name": "script_soundalias",
@@ -1413,7 +1413,7 @@
     "Name": "script_stealth_dontseek",
     "Type": "int",
     "Side": "both",
-    "Comment": "dont set your goalpos to the enemy\u0027s goalpos on combat"
+    "Comment": "dont set your goalpos to the enemy's goalpos on combat"
   },
   {
     "Name": "script_stopnode",
@@ -1425,7 +1425,7 @@
     "Name": "script_stoptoshoot",
     "Type": "int",
     "Side": "both",
-    "Comment": "used for tanks, setting this to greater than zero will make a tank stop before firing it\u0027s main cannon"
+    "Comment": "used for tanks, setting this to greater than zero will make a tank stop before firing it's main cannon"
   },
   {
     "Name": "script_suppression",
@@ -1449,7 +1449,7 @@
     "Name": "script_targettype",
     "Type": "string",
     "Side": "both",
-    "Comment": "\u0022air\u0022 or \u0022ground\u0022 - used for helicopter pilot levels"
+    "Comment": "\"air\" or \"ground\" - used for helicopter pilot levels"
   },
   {
     "Name": "script_team",
@@ -1509,7 +1509,7 @@
     "Name": "script_turningdir",
     "Type": "string",
     "Side": "both",
-    "Comment": "set this to the direction of the anim set you want a vehicle to use.  \u0022right\u0022,\u0022hard_right\u0022,\u0022left\u0022,\u0022hard_left\u0022,\u0022forward\u0022"
+    "Comment": "set this to the direction of the anim set you want a vehicle to use.  \"right\",\"hard_right\",\"left\",\"hard_left\",\"forward\""
   },
   {
     "Name": "script_turret",
@@ -1545,7 +1545,7 @@
     "Name": "script_unloaddelay",
     "Type": "int",
     "Side": "both",
-    "Comment": "make a vehicle delay this long before unloading at the end of a path. \u003C 1 means never unload // nate we should remove this or make it work on all of the unloads."
+    "Comment": "make a vehicle delay this long before unloading at the end of a path. < 1 means never unload // nate we should remove this or make it work on all of the unloads."
   },
   {
     "Name": "script_unloadmgguy",
@@ -1599,7 +1599,7 @@
     "Name": "script_vehicledetourtype",
     "Type": "string",
     "Side": "both",
-    "Comment": "describing how a vehicledetour node works,  first non default type being \u0022scriptswitch\u0022 which will let the script notify the path to become a switch node. Useful in situations where a tank will fight in circles and then procede on whatever script condition."
+    "Comment": "describing how a vehicledetour node works,  first non default type being \"scriptswitch\" which will let the script notify the path to become a switch node. Useful in situations where a tank will fight in circles and then procede on whatever script condition."
   },
   {
     "Name": "script_vehiclegroup",
@@ -1611,7 +1611,7 @@
     "Name": "script_vehiclegroupdelete",
     "Type": "int",
     "Side": "both",
-    "Comment": "Deletes associated vehicles and their aigroups (as still designated by script_vehiclegroup on the vehicles and the ai\u0027s)"
+    "Comment": "Deletes associated vehicles and their aigroups (as still designated by script_vehiclegroup on the vehicles and the ai's)"
   },
   {
     "Name": "script_vehiclenodegroup",
@@ -1629,25 +1629,25 @@
     "Name": "script_vehiclespawngroup",
     "Type": "int",
     "Side": "both",
-    "Comment": "spawns associated vehicles and their aigroups (as still designated by script_vehiclegroup on the vehicles and the ai\u0027s)"
+    "Comment": "spawns associated vehicles and their aigroups (as still designated by script_vehiclegroup on the vehicles and the ai's)"
   },
   {
     "Name": "script_vehiclestartmove",
     "Type": "int",
     "Side": "both",
-    "Comment": "initiates associated vehicles movement on its path, note that if no script_vehicleStart nodes or triggers exist then the vehicle will stay and wait for the level script to initiate it\u0027s movement stacking this with script_VehicleSpawngroup will make spawn and go right away."
+    "Comment": "initiates associated vehicles movement on its path, note that if no script_vehicleStart nodes or triggers exist then the vehicle will stay and wait for the level script to initiate it's movement stacking this with script_VehicleSpawngroup will make spawn and go right away."
   },
   {
     "Name": "script_vehicletriggergroup",
     "Type": "int",
     "Side": "both",
-    "Comment": "a more generic grouping.  I\u0027m using this so that paths can be shared easier.   setting this on a node with other vehicle trigger functions will only effect vehicles in the matching group."
+    "Comment": "a more generic grouping.  I'm using this so that paths can be shared easier.   setting this on a node with other vehicle trigger functions will only effect vehicles in the matching group."
   },
   {
     "Name": "script_volume",
     "Type": "int",
     "Side": "both",
-    "Comment": "set to 1 if you want to control the vehicle\u0027s volume in your script rather than have it lerp automatically"
+    "Comment": "set to 1 if you want to control the vehicle's volume in your script rather than have it lerp automatically"
   },
   {
     "Name": "script_volumedown",

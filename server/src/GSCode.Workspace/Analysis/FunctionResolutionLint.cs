@@ -32,7 +32,9 @@ namespace GSCode.Workspace.Analysis;
 /// the lint refuses to guess — it reports nothing at all unless it can see everything that could
 /// have explained the call:
 ///
-/// * the game must ship builtin data, or every builtin call would look unresolved;
+/// * the builtin half needs a library we trust — the game must ship one AND be verified — or the
+///   library's own gaps would be reported as the user's mistakes; the script half needs only the
+///   workspace, so it applies to every game;
 /// * a function declared in the file being edited counts from the PARSE IN HAND, not the store,
 ///   which lags the buffer;
 /// * private functions count as existing (the lookup passes <c>includePrivate</c>), since "exists
@@ -53,11 +55,15 @@ public static class FunctionResolutionLint
     {
         GameProfile game = profile ?? GameProfile.Active;
 
-        // No builtin library for this game means no way to tell a missing builtin from a known one.
-        if ( game.DataFilePrefix is null || builtins.Count == 0 )
-        {
-            return [];
-        }
+        // The two codes have different evidence requirements, so they are gated separately.
+        //
+        // A SCRIPT miss needs only the workspace, which every game has — an explicitly qualified call
+        // that resolves to nothing is wrong whatever we know about the engine — so it is always
+        // reported. A BUILTIN miss additionally requires a library we trust to be complete: without
+        // one, every engine call looks unresolved. So it needs both a loaded library and a VERIFIED
+        // profile, since an unverified game's library has never been measured against real scripts
+        // and would report its own gaps as the user's mistakes.
+        bool canJudgeBuiltins = game.Verified && game.DataFilePrefix is not null && builtins.Count > 0;
 
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 
@@ -131,8 +137,9 @@ public static class FunctionResolutionLint
                 continue;
             }
 
-            // Everything else could have meant a builtin, so ask the API before reporting.
-            if ( builtins.Find(entry.Key.Name) is not null )
+            // Everything else could have meant a builtin, so it is only reportable where the library
+            // is trustworthy — and then only if the library does not have it.
+            if ( !canJudgeBuiltins || builtins.Find(entry.Key.Name) is not null )
             {
                 continue;
             }

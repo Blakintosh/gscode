@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 
 // Generates the runtime engine-field artifacts (t7_object_fields.json, t7_radiant_keys.json)
@@ -160,10 +161,18 @@ static void GenerateCod4Data(string wordfilePath, string keysPath, string apiDir
     string[] lines = File.ReadAllLines(wordfilePath);
 
     // /C7 "Script Commands" — the engine builtin functions. Case preserved (as BO3's api file does).
+    // Names ONLY: the wordfile is an editor syntax file and carries no signatures. They are merged
+    // with the documented pages, which do, so the library keeps full coverage and gains detail
+    // wherever a page exists.
+    // The documentation pages are NOT vendored — they are a third party's — so the generator reads
+    // them from wherever they live via GSCODE_COD4_DOCS, the same way the corpus tests locate game
+    // scripts. Unset means the wordfile names alone, which is what this artifact already held, so a
+    // regeneration without the docs never silently loses detail; it just stops gaining it.
     List<string> functions = CleanNames(ParseWordfileSection(lines, 7), stripLeadingDot: false, lowercase: false);
-    ApiFileOut api = new([.. functions.Select(static name => new ApiEntryOut(name, []))]);
-    WriteJson(Path.Combine(apiDir, "cod4_api_gsc.json"), api, camelCase: true);
-    Console.WriteLine($"  cod4 api functions: {functions.Count}");
+    GenerateCod4Api(
+        Environment.GetEnvironmentVariable("GSCODE_COD4_DOCS"),
+        functions,
+        Path.Combine(apiDir, "cod4_api_gsc.json"));
 
     // Radiant keys come from the game's own keys.txt (the same file Radiant loads), not the
     // wordfile's bare-name /C6 — it carries types, client/both sides and comments for hover.
@@ -319,8 +328,258 @@ static void WriteJson<T>(string path, T value, bool camelCase = false)
         NewLine = "\n",
         PropertyNamingPolicy = camelCase ? JsonNamingPolicy.CamelCase : null,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+        // The default encoder escapes the HTML-sensitive set — < > & ' + — as \uXXXX, which in
+        // documentation text full of <target> placeholders means thousands of escapes and an
+        // artifact nobody can read in a diff. These files are never interpolated into HTML, so the
+        // relaxed encoder is safe here and writes them literally, as the t7 files already are.
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     });
-    File.WriteAllText(path, json + "\n");
+    File.WriteAllText(path, json + "\n", new System.Text.UTF8Encoding(false));
+}
+
+// Converts the per-function documentation pages into the builtin library, merged with the
+// wordfile's bare name list so a function documented nowhere is still known to exist.
+static void GenerateCod4Api(string? htmRoot, List<string> wordfileNames, string outputPath)
+{
+    Dictionary<string, Cod4Entry> byName = new(StringComparer.OrdinalIgnoreCase);
+
+    if ( !string.IsNullOrWhiteSpace(htmRoot) && Directory.Exists(htmRoot) )
+    {
+        List<string> pages = [.. Directory.EnumerateFiles(htmRoot, "*.htm", SearchOption.AllDirectories)];
+        pages.Sort(StringComparer.OrdinalIgnoreCase);
+
+        foreach ( string page in pages )
+        {
+            Cod4Entry? entry = ParseCod4Page(File.ReadAllText(page));
+            if ( entry is not null && !byName.ContainsKey(entry.Name) )
+            {
+                byName[entry.Name] = entry;
+            }
+        }
+
+        Console.WriteLine($"  cod4 documented pages: {byName.Count} of {pages.Count}");
+    }
+    else
+    {
+        Console.WriteLine("  cod4 documentation not found (set GSCODE_COD4_DOCS); names only.");
+    }
+
+    int documented = byName.Count;
+    foreach ( string name in wordfileNames )
+    {
+        if ( !byName.ContainsKey(name) )
+        {
+            byName[name] = new Cod4Entry(name, null, [], null, null, null, null);
+        }
+    }
+
+    List<Cod4Entry> all = [.. byName.Values.OrderBy(static e => e.Name, StringComparer.OrdinalIgnoreCase)];
+    WriteJson(outputPath, new Cod4ApiFile(all), camelCase: true);
+    Console.WriteLine($"  cod4 api functions: {all.Count} ({documented} with signatures, {all.Count - documented} name-only)");
+}
+
+// One documentation page. The pages use two templates; both put the signature in H1 and label
+// their sections with H2, so the parse keys off those rather than the surrounding markup.
+static Cod4Entry? ParseCod4Page(string html)
+{
+    string? heading = MatchInner(html, @"<H1>(.*?)</H1>");
+    if ( heading is null )
+    {
+        return null;
+    }
+
+    int paren = heading.IndexOf('(');
+    string name = (paren < 0 ? heading : heading[..paren]).Trim();
+    // Index and navigation pages have prose headings rather than a call signature.
+    if ( name.Length == 0 || name.Contains(' ') || name.Contains('-') )
+    {
+        return null;
+    }
+
+    string? module = MatchInner(html, @"Module:\s*([^<]*)<") ?? MatchInner(html, @"Module<PRE>(.*?)</PRE>");
+    string? spmp = html.Contains("SP Only", StringComparison.OrdinalIgnoreCase) ? "SP"
+        : html.Contains("MP Only", StringComparison.OrdinalIgnoreCase) ? "MP"
+        : null;
+
+    Dictionary<string, string> sections = Cod4Sections(html);
+    string? description = SectionText(sections, "Summary");
+    string? example = SectionText(sections, "Example");
+
+    Cod4CalledOn? calledOn = null;
+    string? calledOnText = SectionText(sections, "Call this on") ?? SectionText(sections, "Call this function on");
+    if ( !string.IsNullOrWhiteSpace(calledOnText) )
+    {
+        string? target = MatchInner(calledOnText, @"^<([^>]*)>");
+        string rest = target is null ? calledOnText : calledOnText[(calledOnText.IndexOf('>') + 1)..].Trim();
+        calledOn = new Cod4CalledOn(NormalizeArgName(target ?? "self", 1), rest.Length == 0 ? null : rest);
+    }
+
+    List<Cod4Parameter> parameters = [];
+    parameters.AddRange(Cod4Args(sections, "Required Args", mandatory: true));
+    parameters.AddRange(Cod4Args(sections, "Optional Args", mandatory: false));
+
+    List<Cod4Overload> overloads = [];
+    if ( calledOn is not null || parameters.Count > 0 )
+    {
+        overloads.Add(new Cod4Overload(calledOn, parameters));
+    }
+
+    return new Cod4Entry(
+        name,
+        description,
+        overloads,
+        example,
+        string.IsNullOrWhiteSpace(module) ? null : module.Trim(),
+        spmp,
+        ["documented"]);
+}
+
+// Splits the page into H2-labelled sections. Headings carry stray markup and a trailing colon in
+// one template but not the other, so both are stripped to give one lookup key.
+static Dictionary<string, string> Cod4Sections(string html)
+{
+    Dictionary<string, string> sections = new(StringComparer.OrdinalIgnoreCase);
+    MatchCollection headings = Regex.Matches(html, @"<H2>(.*?)</H2>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+    for ( int i = 0; i < headings.Count; i++ )
+    {
+        string key = StripTags(headings[i].Groups[1].Value).Trim().TrimEnd(':').Trim();
+        int start = headings[i].Index + headings[i].Length;
+        int end = i + 1 < headings.Count ? headings[i + 1].Index : html.Length;
+        if ( key.Length > 0 && !sections.ContainsKey(key) )
+        {
+            sections[key] = html[start..end];
+        }
+    }
+
+    return sections;
+}
+
+static string? SectionText(Dictionary<string, string> sections, string key)
+{
+    if ( !sections.TryGetValue(key, out string? body) )
+    {
+        return null;
+    }
+
+    // An example is preformatted, so its own text is the whole value; everything else is prose.
+    string? pre = MatchInner(body, @"<PRE>(.*?)</PRE>");
+    string text = StripTags(pre ?? body).Trim();
+    return text.Length == 0 ? null : text;
+}
+
+// `1 : <target> (entity) The entity to check.` — the index, name, type and description are each
+// optional in practice, so every part is matched independently.
+static List<Cod4Parameter> Cod4Args(Dictionary<string, string> sections, string key, bool mandatory)
+{
+    List<Cod4Parameter> parameters = [];
+    if ( !sections.TryGetValue(key, out string? body) )
+    {
+        return parameters;
+    }
+
+    int index = 0;
+    foreach ( Match item in Regex.Matches(body, @"<LI>(.*?)</LI>", RegexOptions.IgnoreCase | RegexOptions.Singleline) )
+    {
+        index++;
+        string text = StripTags(item.Groups[1].Value).Trim();
+        text = Regex.Replace(text, @"^\d+\s*:\s*", "");
+
+        string? argName = MatchInner(text, @"^<([^>]*)>");
+        if ( argName is not null )
+        {
+            text = text[(text.IndexOf('>') + 1)..].Trim();
+        }
+
+        string? type = MatchInner(text, @"^\(([^)]*)\)");
+        if ( type is not null )
+        {
+            text = text[(text.IndexOf(')') + 1)..].Trim();
+        }
+
+        parameters.Add(new Cod4Parameter(
+            NormalizeArgName(argName, index),
+            text.Length == 0 ? null : text,
+            mandatory,
+            type is null ? null : new Cod4Type(NormalizeType(type))));
+    }
+
+    return parameters;
+}
+
+// Documentation names an argument in prose ("aim at point"); an identifier is wanted.
+static string NormalizeArgName(string? raw, int index)
+{
+    if ( string.IsNullOrWhiteSpace(raw) )
+    {
+        return "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    string cleaned = Regex.Replace(raw.Trim().ToLowerInvariant(), @"[^a-z0-9]+", "_").Trim('_');
+    return cleaned.Length == 0 ? "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) : cleaned;
+}
+
+// The pages spell types in prose; these map onto the vocabulary the api files already use.
+static string NormalizeType(string raw)
+{
+    string type = raw.Trim().ToLowerInvariant();
+    if ( type.StartsWith("const ", StringComparison.Ordinal) )
+    {
+        type = type[6..];
+    }
+
+    return type switch
+    {
+        "boolean" => "bool",
+        "integer" => "int",
+        "floating point number" => "float",
+        "point" or "a point" => "vector",
+        "node" or "path node" => "entity",
+        "animation" => "anim",
+        _ => type,
+    };
+}
+
+static string? MatchInner(string input, string pattern)
+{
+    Match match = Regex.Match(input, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    return match.Success ? System.Net.WebUtility.HtmlDecode(match.Groups[1].Value).Trim() : null;
+}
+
+static string StripTags(string html)
+{
+    string text = Regex.Replace(html, @"<[^>]+>", " ");
+    text = System.Net.WebUtility.HtmlDecode(text);
+    return Ascii(Regex.Replace(text, @"\s+", " ").Trim());
+}
+
+// Documentation prose carries typographic characters — smart quotes, dashes, non-breaking spaces —
+// which serialize as \uXXXX escapes and read as noise. The ones with an obvious ASCII equivalent are
+// folded to it; anything else is dropped rather than guessed at, so the artifact stays plain ASCII.
+static string Ascii(string text)
+{
+    System.Text.StringBuilder builder = new(text.Length);
+    foreach ( char c in text )
+    {
+        switch ( c )
+        {
+            case '‘' or '’' or 'ʼ': builder.Append('\''); break;
+            case '“' or '”': builder.Append('"'); break;
+            case '–' or '—' or '−': builder.Append('-'); break;
+            case '…': builder.Append("..."); break;
+            case ' ': builder.Append(' '); break;
+            case '°': builder.Append(" degrees"); break;
+            default:
+                if ( c <= '~' && c >= ' ' )
+                {
+                    builder.Append(c);
+                }
+
+                break;
+        }
+    }
+
+    return builder.ToString();
 }
 
 internal sealed record FieldEntry(string Name, string Type, bool ReadOnly = false);
@@ -330,3 +589,19 @@ internal sealed record RadiantKey(string Name, string Type, string Side, string 
 // wordfile only names are known, so overloads is empty until the online-API enrichment pass.
 internal sealed record ApiFileOut(List<ApiEntryOut> Api);
 internal sealed record ApiEntryOut(string Name, IReadOnlyList<object> Overloads);
+
+// The richer shape the documented pages fill in. Mirrors what ApiLoader reads; WriteJson's
+// WhenWritingDefault drops the nulls and falses, so a sparse entry stays sparse.
+internal sealed record Cod4ApiFile(List<Cod4Entry> Api);
+internal sealed record Cod4Entry(
+    string Name,
+    string? Description,
+    List<Cod4Overload> Overloads,
+    string? Example,
+    string? Module,
+    string? Spmp,
+    List<string>? Flags);
+internal sealed record Cod4Overload(Cod4CalledOn? CalledOn, List<Cod4Parameter> Parameters);
+internal sealed record Cod4CalledOn(string Name, string? Description);
+internal sealed record Cod4Parameter(string Name, string? Description, bool Mandatory, Cod4Type? Type);
+internal sealed record Cod4Type(string DataType);

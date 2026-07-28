@@ -1,0 +1,130 @@
+{
+  "game": "bo3",
+  "scriptsSwept": 980,
+  "distinct": 7,
+  "functions": [
+    {
+      "name": "hide_for_target",
+      "kind": "script",
+      "calls": 5,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "scripts\\shared\\vehicles\\_quadtank.gsc(110)",
+        "scripts\\shared\\vehicles\\_quadtank.gsc(366)",
+        "scripts\\shared\\vehicles\\_quadtank.gsc(447)",
+        "scripts\\shared\\vehicles\\_quadtank.gsc(603)",
+        "scripts\\shared\\vehicles\\_quadtank.gsc(668)"
+      ]
+    },
+    {
+      "name": "stop",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "scripts\\shared\\ai_shared.gsc(850)"
+      ]
+    },
+    {
+      "name": "set",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "scripts\\shared\\vehicles\\_quadtank.gsc(109)"
+      ]
+    },
+    {
+      "name": "show_for_target",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "scripts\\shared\\vehicles\\_quadtank.gsc(599)"
+      ]
+    },
+    {
+      "name": "triggerweakpointdamage",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "scripts\\shared\\vehicles\\_quadtank.gsc(1741)"
+      ]
+    },
+    {
+      "name": "destroyweakpointwidget",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "scripts\\shared\\vehicles\\_quadtank.gsc(1754)"
+      ]
+    },
+    {
+      "name": "createweakpointwidget",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "scripts\\shared\\vehicles\\_quadtank.gsc(1761)"
+      ]
+    }
+  ]
+}

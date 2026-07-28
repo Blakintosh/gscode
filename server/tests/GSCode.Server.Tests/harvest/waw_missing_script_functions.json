@@ -1,0 +1,80 @@
+{
+  "game": "waw",
+  "scriptsSwept": 1649,
+  "distinct": 4,
+  "functions": [
+    {
+      "name": "getclass",
+      "kind": "script",
+      "calls": 4,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_gamestats.gsc(191)",
+        "maps\\mp\\gametypes\\_gamestats.gsc(604)",
+        "maps\\mp\\gametypes\\_gamestats.gsc(614)",
+        "maps\\mp\\gametypes\\_gamestats.gsc(618)"
+      ]
+    },
+    {
+      "name": "delay_rush",
+      "kind": "script",
+      "calls": 3,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\hol3_retreat.gsc(424)",
+        "maps\\hol3_retreat.gsc(447)",
+        "maps\\hol3_retreat.gsc(469)"
+      ]
+    },
+    {
+      "name": "setup_later_tanks",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\see2_tiger.gsc(16)"
+      ]
+    },
+    {
+      "name": "cleanup_early_tanks",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\see2_town.gsc(561)"
+      ]
+    }
+  ]
+}

@@ -231,8 +231,18 @@ public class BuiltinHarvestTests
             foreach ( Diagnostic diagnostic in FunctionResolutionLint.Analyze(
                 result, store, contextId, path, apiSet.For(language), profile,
                 // The harvest is how a library gets measured, so it must see past the Verified gate.
-                judgeUnverifiedBuiltins: true) )
+                judgeUnverifiedBuiltins: true, resolver: resolver) )
             {
+                // The lint also reports the missing TARGET FILE (as UsingNotFound) when a path call
+                // points at a file the distribution does not ship. That is a different finding and
+                // belongs in neither bucket — counting it here would inflate the script list with one
+                // row per absent file.
+                if ( diagnostic.Code != GscDiagnosticCode.BuiltinFunctionNotFound
+                    && diagnostic.Code != GscDiagnosticCode.ScriptFunctionNotFound )
+                {
+                    continue;
+                }
+
                 Dictionary<string, Candidate> bucket = diagnostic.Code == GscDiagnosticCode.BuiltinFunctionNotFound
                     ? builtinCandidates
                     : scriptMisses;

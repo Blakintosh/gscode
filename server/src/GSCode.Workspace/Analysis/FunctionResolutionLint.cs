@@ -7,6 +7,7 @@ using GSCode.Parser;
 using GSCode.Parser.Extraction;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
+using GSCode.Workspace.Resolution;
 
 namespace GSCode.Workspace.Analysis;
 
@@ -41,7 +42,9 @@ namespace GSCode.Workspace.Analysis;
 ///   but is private" is <c>5003</c>'s story;
 /// * class methods reachable unqualified from the file's own classes are excluded;
 /// * a null-namespace call in a dialect with classes is skipped, since <c>sys::foo()</c> and a
-///   method call are keyed alike there.
+///   method call are keyed alike there;
+/// * a path call whose TARGET FILE does not exist reports the missing file once, rather than every
+///   function called from it — the distribution not shipping a file is one problem, not thousands.
 /// </summary>
 public static class FunctionResolutionLint
 {
@@ -52,7 +55,8 @@ public static class FunctionResolutionLint
         string askingPath,
         BuiltinApi builtins,
         GameProfile? profile = null,
-        bool judgeUnverifiedBuiltins = false)
+        bool judgeUnverifiedBuiltins = false,
+        PathResolver? resolver = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
 
@@ -73,6 +77,7 @@ public static class FunctionResolutionLint
             && game.DataFilePrefix is not null
             && builtins.Count > 0;
 
+        List<Diagnostic> diagnosticsForMissingFiles = [];
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 
         // Functions declared in THIS file, taken from the parse in hand rather than the store. The
@@ -87,10 +92,47 @@ public static class FunctionResolutionLint
 
         // Path-qualified calls name a FILE, so they are script-domain regardless of dialect. They
         // are keyed with a null namespace like everything else, and are told apart by their range.
-        HashSet<TextRange> pathCallRanges = [];
+        Dictionary<TextRange, string> pathCallTargets = [];
         foreach ( PathCallReference pathCall in result.Extraction.PathCalls )
         {
-            pathCallRanges.Add(pathCall.NameRange);
+            pathCallTargets[pathCall.NameRange] = pathCall.Path;
+        }
+
+        // Which of those target files do not exist. A distribution routinely ships scripts that call
+        // into files it does not include — WaW's clientscripts\_fx, BO1's whole animscripts folder —
+        // and every call into one is unresolvable for a single reason. Reporting each call would bury
+        // the actual problem under thousands of identical errors (4,824 for one WaW file), so the
+        // MISSING FILE is reported once and its calls are left alone: one cause, one diagnostic.
+        HashSet<string> missingTargets = new(StringComparer.OrdinalIgnoreCase);
+        if ( resolver is not null && pathCallTargets.Count > 0 )
+        {
+            ResolutionContext context = resolver.GetContext(askingPath);
+            string extension = game.ExtensionFor(game.LanguageFromPath(askingPath));
+            Dictionary<string, TextRange> firstSite = [];
+
+            foreach ( KeyValuePair<TextRange, string> call in pathCallTargets )
+            {
+                if ( missingTargets.Contains(call.Value) || firstSite.ContainsKey(call.Value) )
+                {
+                    continue;
+                }
+
+                if ( resolver.Resolve(context, call.Value + extension) is null )
+                {
+                    missingTargets.Add(call.Value);
+                    firstSite[call.Value] = call.Key;
+                }
+                else
+                {
+                    firstSite[call.Value] = call.Key;
+                }
+            }
+
+            foreach ( string target in missingTargets )
+            {
+                diagnosticsForMissingFiles.Add(Diagnostic.Create(
+                    firstSite[target], DiagnosticSeverity.Error, GscDiagnosticCode.UsingNotFound, target));
+            }
         }
 
         // Methods callable unqualified from inside this file's classes. A method call written inside
@@ -101,6 +143,7 @@ public static class FunctionResolutionLint
         HashSet<string> methodNames = ClassMethodNames(result, store, askingContextId, askingPath);
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        diagnostics.AddRange(diagnosticsForMissingFiles);
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -131,7 +174,14 @@ public static class FunctionResolutionLint
                 continue;
             }
 
-            bool isPathCall = pathCallRanges.Contains(entry.Range);
+            bool isPathCall = pathCallTargets.TryGetValue(entry.Range, out string? target);
+
+            // The target file itself is missing and has already been reported once; naming every
+            // function inside it adds nothing the user can act on.
+            if ( isPathCall && target is not null && missingTargets.Contains(target) )
+            {
+                continue;
+            }
 
             // An explicitly script-targeted call: a path call, or a namespace this file does not
             // declare (so it was written ns::foo, not left unqualified). Neither could be a builtin.

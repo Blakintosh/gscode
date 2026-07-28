@@ -20,7 +20,25 @@ Console.WriteLine($"Output:    {apiDir}");
 
 GenerateObjectFields(curatedDir, Path.Combine(apiDir, "t7_object_fields.json"));
 GenerateRadiantKeys(Path.Combine(originalsDir, "keys.txt"), Path.Combine(apiDir, "t7_radiant_keys.json"));
-GenerateCod4Data(Path.Combine(originalsDir, "cod4_wordfile.txt"), Path.Combine(originalsDir, "cod4_keys.txt"), apiDir);
+GenerateWordfileGameData(
+    "cod4",
+    Path.Combine(originalsDir, "cod4_wordfile.txt"),
+    Path.Combine(originalsDir, "cod4_keys.txt"),
+    apiDir,
+    Environment.GetEnvironmentVariable("GSCODE_COD4_DOCS"),
+    curatedDir);
+
+// BO1's wordfile has the identical CODSCRIPT layout, so the same reader produces its data. Its
+// docs/script_docs tree ships with every page stripped, leaving only folder names, so there is no
+// documentation source to enrich these names with.
+GenerateWordfileGameData(
+    "bo1",
+    Path.Combine(originalsDir, "bo1_wordfile.txt"),
+    Path.Combine(originalsDir, "bo1_keys.txt"),
+    apiDir,
+    docsRoot: null,
+    curatedDir,
+    enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"));
 
 Console.WriteLine("Done.");
 return 0;
@@ -153,11 +171,11 @@ static string CorrectSide(string name, string parsedSide)
 // entity properties is the mod-tools syntax-highlighting wordfile. This reads the CODSCRIPT block's
 // sections into the same runtime artifacts BO3 ships. Names only — the wordfile carries no types,
 // signatures or docs; those are a later enrichment pass. BO1's wordfile has the same shape.
-static void GenerateCod4Data(string wordfilePath, string keysPath, string apiDir)
+static void GenerateWordfileGameData(string prefix, string wordfilePath, string keysPath, string apiDir, string? docsRoot, string curatedDir, string? enrichFrom = null)
 {
     if ( !File.Exists(wordfilePath) )
     {
-        Console.WriteLine($"  cod4 wordfile not found at {wordfilePath}; skipping cod4 data.");
+        Console.WriteLine($"  {prefix} wordfile not found at {wordfilePath}; skipping {prefix} data.");
         return;
     }
 
@@ -172,24 +190,26 @@ static void GenerateCod4Data(string wordfilePath, string keysPath, string apiDir
     // scripts. Unset means the wordfile names alone, which is what this artifact already held, so a
     // regeneration without the docs never silently loses detail; it just stops gaining it.
     List<string> functions = CleanNames(ParseWordfileSection(lines, 7), stripLeadingDot: false, lowercase: false);
-    GenerateCod4Api(
-        Environment.GetEnvironmentVariable("GSCODE_COD4_DOCS"),
+    GenerateWordfileApi(
+        prefix,
+        docsRoot,
         functions,
-        Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(wordfilePath)!)!, "curated", "cod4_ai_builtins.json"),
-        Path.Combine(apiDir, "cod4_api_gsc.json"));
+        Path.Combine(curatedDir, $"{prefix}_ai_builtins.json"),
+        enrichFrom,
+        Path.Combine(apiDir, $"{prefix}_api_gsc.json"));
 
     // Radiant keys come from the game's own keys.txt (the same file Radiant loads), not the
     // wordfile's bare-name /C6 — it carries types, client/both sides and comments for hover.
-    Console.Write("  cod4");
-    GenerateRadiantKeys(keysPath, Path.Combine(apiDir, "cod4_radiant_keys.json"));
+    Console.Write($"  {prefix}");
+    GenerateRadiantKeys(keysPath, Path.Combine(apiDir, $"{prefix}_radiant_keys.json"));
 
     // /C2 "Common Entity Properties" — script-accessible .fields (the wordfile writes the leading
     // dot); untyped, under one generic kind.
     List<FieldEntry> fieldEntries = [.. CleanNames(ParseWordfileSection(lines, 2), stripLeadingDot: true, lowercase: true)
         .Select(static name => new FieldEntry(name, ""))];
     SortedDictionary<string, List<FieldEntry>> fields = new(StringComparer.Ordinal) { ["entity"] = fieldEntries };
-    WriteJson(Path.Combine(apiDir, "cod4_object_fields.json"), fields);
-    Console.WriteLine($"  cod4 object fields: {fieldEntries.Count}");
+    WriteJson(Path.Combine(apiDir, $"{prefix}_object_fields.json"), fields);
+    Console.WriteLine($"  {prefix} object fields: {fieldEntries.Count}");
 }
 
 // The entries of a /C&lt;index&gt; section within a wordfile's GSC language block. UltraEdit wordfiles
@@ -343,7 +363,7 @@ static void WriteJson<T>(string path, T value, bool camelCase = false)
 
 // Converts the per-function documentation pages into the builtin library, merged with the
 // wordfile's bare name list so a function documented nowhere is still known to exist.
-static void GenerateCod4Api(string? htmRoot, List<string> wordfileNames, string curatedPath, string outputPath)
+static void GenerateWordfileApi(string prefix, string? htmRoot, List<string> wordfileNames, string curatedPath, string? enrichFromPath, string outputPath)
 {
     Dictionary<string, object> byName = new(StringComparer.OrdinalIgnoreCase);
 
@@ -361,11 +381,11 @@ static void GenerateCod4Api(string? htmRoot, List<string> wordfileNames, string 
             }
         }
 
-        Console.WriteLine($"  cod4 documented pages: {byName.Count} of {pages.Count}");
+        Console.WriteLine($"  {prefix} documented pages: {byName.Count} of {pages.Count}");
     }
     else
     {
-        Console.WriteLine("  cod4 documentation not found (set GSCODE_COD4_DOCS); names only.");
+        Console.WriteLine($"  {prefix} documentation not found; names only.");
     }
 
     int documented = byName.Count;
@@ -390,17 +410,45 @@ static void GenerateCod4Api(string? htmRoot, List<string> wordfileNames, string 
         }
     }
 
+    // A name this game shares with an already-enriched sibling in the same engine lineage takes
+    // that entry rather than staying bare. BO1's wordfile lists the SAME functions as CoD4's — the
+    // syntax file was carried forward across CoD4, WaW and BO1 unchanged — so the signatures
+    // apply, and a name-only entry would throw away work already done.
+    int inherited = 0;
+    Dictionary<string, JsonElement> sibling = new(StringComparer.OrdinalIgnoreCase);
+    if ( enrichFromPath is not null && File.Exists(enrichFromPath) )
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(enrichFromPath));
+        foreach ( JsonElement entry in document.RootElement.GetProperty("api").EnumerateArray() )
+        {
+            string? name = entry.GetProperty("name").GetString();
+            if ( name is not null )
+            {
+                sibling[name] = entry.Clone();
+            }
+        }
+    }
+
     foreach ( string name in wordfileNames )
     {
-        if ( !byName.ContainsKey(name) )
+        if ( byName.ContainsKey(name) )
         {
-            byName[name] = new Cod4Entry(name, null, [], null, null, null, null);
+            continue;
         }
+
+        if ( sibling.TryGetValue(name, out JsonElement match) )
+        {
+            byName[name] = match;
+            inherited++;
+            continue;
+        }
+
+        byName[name] = new Cod4Entry(name, null, [], null, null, null, null);
     }
 
     List<object> all = [.. byName.OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(static pair => pair.Value)];
     WriteJson(outputPath, new Cod4ApiFile(all), camelCase: true);
-    Console.WriteLine($"  cod4 api functions: {all.Count} ({documented} documented, {curated} reconstructed, {all.Count - documented - curated} name-only)");
+    Console.WriteLine($"  {prefix} api functions: {all.Count} ({documented} documented, {curated} reconstructed, {inherited} inherited, {all.Count - documented - curated - inherited} name-only)");
 }
 
 // One documentation page. The pages use two templates; both put the signature in H1 and label

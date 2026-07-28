@@ -82,6 +82,7 @@ public sealed partial record GameProfile
         HasInlinePathCalls = true,
         HasClientScripts = true,
         HasHashStrings = true,
+        DataFilePrefix = "bo1",
         Keywords = [.. BaseKeywords, "prof_begin", "prof_end"],
     };
 

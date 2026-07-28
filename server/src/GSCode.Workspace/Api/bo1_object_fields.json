@@ -1,0 +1,436 @@
+{
+  "entity": [
+    {
+      "Name": "accumulate",
+      "Type": ""
+    },
+    {
+      "Name": "accuracy",
+      "Type": ""
+    },
+    {
+      "Name": "accuracystationarymod",
+      "Type": ""
+    },
+    {
+      "Name": "allowdeath",
+      "Type": ""
+    },
+    {
+      "Name": "anglelerprate",
+      "Type": ""
+    },
+    {
+      "Name": "angles",
+      "Type": ""
+    },
+    {
+      "Name": "anim_pose",
+      "Type": ""
+    },
+    {
+      "Name": "animscript",
+      "Type": ""
+    },
+    {
+      "Name": "archivetime",
+      "Type": ""
+    },
+    {
+      "Name": "attackeraccuracy",
+      "Type": ""
+    },
+    {
+      "Name": "bottomarc",
+      "Type": ""
+    },
+    {
+      "Name": "bravery",
+      "Type": ""
+    },
+    {
+      "Name": "bulletsinclip",
+      "Type": ""
+    },
+    {
+      "Name": "chainfallback",
+      "Type": ""
+    },
+    {
+      "Name": "chainnode",
+      "Type": ""
+    },
+    {
+      "Name": "classname",
+      "Type": ""
+    },
+    {
+      "Name": "convergencetime",
+      "Type": ""
+    },
+    {
+      "Name": "count",
+      "Type": ""
+    },
+    {
+      "Name": "coveridleselecttime",
+      "Type": ""
+    },
+    {
+      "Name": "cursorhint",
+      "Type": ""
+    },
+    {
+      "Name": "damagedir",
+      "Type": ""
+    },
+    {
+      "Name": "damagelocation",
+      "Type": ""
+    },
+    {
+      "Name": "damagetaken",
+      "Type": ""
+    },
+    {
+      "Name": "damageyaw",
+      "Type": ""
+    },
+    {
+      "Name": "deaths",
+      "Type": ""
+    },
+    {
+      "Name": "defaultsightlatency",
+      "Type": ""
+    },
+    {
+      "Name": "desiredangle",
+      "Type": ""
+    },
+    {
+      "Name": "disablearrivals",
+      "Type": ""
+    },
+    {
+      "Name": "disableexits",
+      "Type": ""
+    },
+    {
+      "Name": "dmg",
+      "Type": ""
+    },
+    {
+      "Name": "dontavoidplayer",
+      "Type": ""
+    },
+    {
+      "Name": "dontshootwhilemoving",
+      "Type": ""
+    },
+    {
+      "Name": "drawoncompass",
+      "Type": ""
+    },
+    {
+      "Name": "dropweapon",
+      "Type": ""
+    },
+    {
+      "Name": "endon",
+      "Type": ""
+    },
+    {
+      "Name": "enemy",
+      "Type": ""
+    },
+    {
+      "Name": "favoriteenemy",
+      "Type": ""
+    },
+    {
+      "Name": "finished_spawning",
+      "Type": ""
+    },
+    {
+      "Name": "fixednode",
+      "Type": ""
+    },
+    {
+      "Name": "followmax",
+      "Type": ""
+    },
+    {
+      "Name": "followmin",
+      "Type": ""
+    },
+    {
+      "Name": "fovcosine",
+      "Type": ""
+    },
+    {
+      "Name": "goalradius",
+      "Type": ""
+    },
+    {
+      "Name": "grenade",
+      "Type": ""
+    },
+    {
+      "Name": "grenadeammo",
+      "Type": ""
+    },
+    {
+      "Name": "grenadeawareness",
+      "Type": ""
+    },
+    {
+      "Name": "grenadeweapon",
+      "Type": ""
+    },
+    {
+      "Name": "groundtype",
+      "Type": ""
+    },
+    {
+      "Name": "group",
+      "Type": ""
+    },
+    {
+      "Name": "groupname",
+      "Type": ""
+    },
+    {
+      "Name": "hatmodel",
+      "Type": ""
+    },
+    {
+      "Name": "headicon",
+      "Type": ""
+    },
+    {
+      "Name": "headiconteam",
+      "Type": ""
+    },
+    {
+      "Name": "health",
+      "Type": ""
+    },
+    {
+      "Name": "hintstring",
+      "Type": ""
+    },
+    {
+      "Name": "ignoreme",
+      "Type": ""
+    },
+    {
+      "Name": "interval",
+      "Type": ""
+    },
+    {
+      "Name": "lastscriptstate",
+      "Type": ""
+    },
+    {
+      "Name": "leftarc",
+      "Type": ""
+    },
+    {
+      "Name": "light",
+      "Type": ""
+    },
+    {
+      "Name": "lookahead",
+      "Type": ""
+    },
+    {
+      "Name": "lookforward",
+      "Type": ""
+    },
+    {
+      "Name": "lookright",
+      "Type": ""
+    },
+    {
+      "Name": "lookup",
+      "Type": ""
+    },
+    {
+      "Name": "maxhealth",
+      "Type": ""
+    },
+    {
+      "Name": "maxsightdistsqrd",
+      "Type": ""
+    },
+    {
+      "Name": "members",
+      "Type": ""
+    },
+    {
+      "Name": "model",
+      "Type": ""
+    },
+    {
+      "Name": "modelscale",
+      "Type": ""
+    },
+    {
+      "Name": "name",
+      "Type": ""
+    },
+    {
+      "Name": "node",
+      "Type": ""
+    },
+    {
+      "Name": "notify",
+      "Type": ""
+    },
+    {
+      "Name": "offnoise",
+      "Type": ""
+    },
+    {
+      "Name": "origin",
+      "Type": ""
+    },
+    {
+      "Name": "pacifist",
+      "Type": ""
+    },
+    {
+      "Name": "pacifistwait",
+      "Type": ""
+    },
+    {
+      "Name": "pers",
+      "Type": ""
+    },
+    {
+      "Name": "personality_type",
+      "Type": ""
+    },
+    {
+      "Name": "personalspace",
+      "Type": ""
+    },
+    {
+      "Name": "proneok",
+      "Type": ""
+    },
+    {
+      "Name": "rambochance",
+      "Type": ""
+    },
+    {
+      "Name": "rightarc",
+      "Type": ""
+    },
+    {
+      "Name": "scalespeed",
+      "Type": ""
+    },
+    {
+      "Name": "scariness",
+      "Type": ""
+    },
+    {
+      "Name": "score",
+      "Type": ""
+    },
+    {
+      "Name": "scriptstate",
+      "Type": ""
+    },
+    {
+      "Name": "secondaryweapon",
+      "Type": ""
+    },
+    {
+      "Name": "sessionstate",
+      "Type": ""
+    },
+    {
+      "Name": "sessionteam",
+      "Type": ""
+    },
+    {
+      "Name": "spectatorclient",
+      "Type": ""
+    },
+    {
+      "Name": "speed",
+      "Type": ""
+    },
+    {
+      "Name": "statechangereason",
+      "Type": ""
+    },
+    {
+      "Name": "statusicon",
+      "Type": ""
+    },
+    {
+      "Name": "suppressionwait",
+      "Type": ""
+    },
+    {
+      "Name": "takedamage",
+      "Type": ""
+    },
+    {
+      "Name": "team",
+      "Type": ""
+    },
+    {
+      "Name": "teamname",
+      "Type": ""
+    },
+    {
+      "Name": "threatbias",
+      "Type": ""
+    },
+    {
+      "Name": "threshold",
+      "Type": ""
+    },
+    {
+      "Name": "toparc",
+      "Type": ""
+    },
+    {
+      "Name": "type",
+      "Type": ""
+    },
+    {
+      "Name": "useable",
+      "Type": ""
+    },
+    {
+      "Name": "visibilitythreshold",
+      "Type": ""
+    },
+    {
+      "Name": "voice",
+      "Type": ""
+    },
+    {
+      "Name": "waittill",
+      "Type": ""
+    },
+    {
+      "Name": "walkdist",
+      "Type": ""
+    },
+    {
+      "Name": "weapon",
+      "Type": ""
+    },
+    {
+      "Name": "weaponinfo",
+      "Type": ""
+    }
+  ]
+}

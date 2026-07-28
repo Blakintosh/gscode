@@ -56,7 +56,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.DuplicateFunction] = "Function '{0}' is already defined in namespace '{1}'.",
         [GscDiagnosticCode.AmbiguousFunction] =
             "'{0}' is declared in {2} of the files this script imports, all in namespace '{1}' — which one this call reaches is undefined.",
-        [GscDiagnosticCode.UnusedLocal] = "'{0}' is assigned but never read.",
+        [GscDiagnosticCode.UnusedLocal] = "'{0}' is assigned but never used.",
         [GscDiagnosticCode.UsingNotFound] = "Cannot find script '{0}'.",
         [GscDiagnosticCode.CaseUndefined] =
             "'case undefined' never matches — a switch compares values, so this branch is unreachable.",

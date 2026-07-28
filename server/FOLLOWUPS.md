@@ -10,6 +10,54 @@ per-project `FOLDER.md` convention).
 
 ## Backlog
 
+### There is no "function not found" diagnostic (designed, deliberately not built)
+
+Nothing reports a call to a function that does not exist — the highest-value diagnostic still
+missing, since a typo'd name means the script fails to LINK at runtime. The nearest codes all
+assume the function exists and check a rule about it: `5000 NamespaceNotImported`,
+`5003 PrivateFunctionNotVisible`, `5007 AmbiguousFunction`. `5009 UsingNotFound` is about the
+FILE, not the function. Next free code is **5013**.
+
+**Why it is categorically harder than the lints we have.** Every other 5xxx lint asks "is this
+call allowed?". This one must prove a NEGATIVE — that a name exists nowhere — and proving absence
+needs complete knowledge. `NamespaceUsageLint` is the template ("zero false positives by
+construction": it suppresses itself the moment a `#using` will not resolve), but the bar here is
+higher and the suppression will trigger far more often.
+
+**The one that has no workaround:** `5009` had the same shape and was fixed by asking the
+PathResolver — the filesystem — instead of the index, so it stopped depending on indexing being
+finished. **There is no filesystem fallback for a function name.** This diagnostic genuinely
+cannot answer before the index is populated, so incomplete-index suppression is mandatory rather
+than a nicety.
+
+Four false-positive sources, in severity order:
+
+1. **Three of the five verified games ship no builtin API at all.** Only `cod4` and `t7` set
+   `DataFilePrefix`; WaW, MW2 and BO1 get `BuiltinApi.Empty`, so every builtin call would report
+   as missing. A hard gate on `profile.DataFilePrefix is not null`, not a follow-up. Even then
+   CoD4's 752 wordfile-derived functions are a much thinner set than T7's 2,191, so CoD4 may still
+   misfire.
+2. **Index completeness** — see above.
+3. **The `#include` closure must fully resolve.** Merge dialects key functions `(null, name)` and
+   pull them in from every include, so one unresolvable include makes absence unprovable. The IW
+   games lean on merge far harder than BO3 leans on `#using`, so this will suppress often.
+4. **Indirect calls are not name-resolvable** and must be excluded: `[[ ptr ]]()`,
+   `call [[ ptr ]]()`, pointers held in fields (`level.func[ x ]`), and `::name` / path-qualified
+   pointers passed to helpers like `array_thread`.
+
+Also excluded: names produced by macro expansion, and calls inside `#insert`ed regions.
+
+**Reuse plan — no new resolution machinery needed.** `DatabaseQueries.LookupFunctions` for script
+functions, `PreferIncludeScope` / `IsInIncludeScope` for the merge-dialect closure, and
+`BuiltinApi.Find(name)` (returns null when absent) for builtins. The work is entirely the
+suppression policy, not the lookup.
+
+**Severity path when it happens:** ship at Warning and promote to Error only after real-world use,
+for exactly the reason `5000` is still a Warning — promoting a rule the same day its false
+positives are understood is how you get red squiggles on working code. Note the engine's own
+verdict is harsher than Warning (an unresolved call genuinely will not link), so the Warning is
+about OUR confidence, not the language's.
+
 ### `gscode-5000 NamespaceNotImported` should be an Error, not a Warning
 
 Calling into a namespace no `#using` imports fails to LINK at runtime — the script does not load.

@@ -51,7 +51,8 @@ public static class FunctionResolutionLint
         string askingContextId,
         string askingPath,
         BuiltinApi builtins,
-        GameProfile? profile = null)
+        GameProfile? profile = null,
+        bool judgeUnverifiedBuiltins = false)
     {
         GameProfile game = profile ?? GameProfile.Active;
 
@@ -63,7 +64,14 @@ public static class FunctionResolutionLint
         // one, every engine call looks unresolved. So it needs both a loaded library and a VERIFIED
         // profile, since an unverified game's library has never been measured against real scripts
         // and would report its own gaps as the user's mistakes.
-        bool canJudgeBuiltins = game.Verified && game.DataFilePrefix is not null && builtins.Count > 0;
+        // <paramref name="judgeUnverifiedBuiltins"/> lifts only the Verified half, for the corpus
+        // harvest. Without it the gate is circular: Verified means "measured against real scripts",
+        // and the harvest is HOW a library gets measured — so a game being brought up would report
+        // nothing at exactly the point its gaps need finding. A library must still be loaded, since
+        // there is nothing to compare an unknown name against otherwise.
+        bool canJudgeBuiltins = (game.Verified || judgeUnverifiedBuiltins)
+            && game.DataFilePrefix is not null
+            && builtins.Count > 0;
 
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 

@@ -1,7 +1,7 @@
 {
   "game": "waw",
-  "scriptsSwept": 1649,
-  "distinct": 4,
+  "scriptsSwept": 1976,
+  "distinct": 9,
   "functions": [
     {
       "name": "getclass",
@@ -43,6 +43,74 @@
       ]
     },
     {
+      "name": "has_weapon_or_upgrade",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory.gsc(582)"
+      ]
+    },
+    {
+      "name": "is_weapon_upgraded",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory.gsc(1518)"
+      ]
+    },
+    {
+      "name": "special_powerup_drop",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory_teleporter.gsc(367)"
+      ]
+    },
+    {
+      "name": "special_dog_spawn",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory_teleporter.gsc(374)"
+      ]
+    },
+    {
       "name": "setup_later_tanks",
       "kind": "script",
       "calls": 1,
@@ -74,6 +142,23 @@
       ],
       "sites": [
         "maps\\see2_town.gsc(561)"
+      ]
+    },
+    {
+      "name": "change_anim_set",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_zombiemode_dogs.gsc(530)"
       ]
     }
   ]

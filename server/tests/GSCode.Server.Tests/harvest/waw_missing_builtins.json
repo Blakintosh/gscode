@@ -1,8 +1,30 @@
 {
   "game": "waw",
-  "scriptsSwept": 1649,
-  "distinct": 155,
+  "scriptsSwept": 1976,
+  "distinct": 167,
   "functions": [
+    {
+      "name": "getplayers",
+      "kind": "builtin",
+      "calls": 65,
+      "fileCount": 28,
+      "observedArgCounts": [
+        0,
+        2
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\banzai.gsc(1399)",
+        "animscripts\\battlechatter.gsc(556)",
+        "animscripts\\battlechatter.gsc(663)",
+        "animscripts\\battlechatter.gsc(1469)",
+        "animscripts\\battlechatter.gsc(1486)"
+      ]
+    },
     {
       "name": "numremoteclients",
       "kind": "builtin",
@@ -25,25 +47,24 @@
       ]
     },
     {
-      "name": "getplayers",
+      "name": "angleclamp180",
       "kind": "builtin",
-      "calls": 36,
-      "fileCount": 17,
+      "calls": 69,
+      "fileCount": 23,
       "observedArgCounts": [
-        0,
-        2
+        1
       ],
       "calledAsMethod": false,
-      "access": "unknown",
+      "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\ber1_asylum.gsc(575)",
-        "maps\\ber1_asylum.gsc(679)",
-        "maps\\ber3_event_steps.gsc(493)",
-        "maps\\ber3_event_steps.gsc(754)",
-        "maps\\nazi_zombie_sumpf.gsc(512)"
+        "animscripts\\combat.gsc(1185)",
+        "animscripts\\combat.gsc(1191)",
+        "animscripts\\combat.gsc(1200)",
+        "animscripts\\combat_utility.gsc(831)",
+        "animscripts\\combat_utility.gsc(1867)"
       ]
     },
     {
@@ -71,8 +92,8 @@
     {
       "name": "spawncollision",
       "kind": "builtin",
-      "calls": 100,
-      "fileCount": 12,
+      "calls": 105,
+      "fileCount": 14,
       "observedArgCounts": [
         4
       ],
@@ -90,24 +111,25 @@
       ]
     },
     {
-      "name": "angleclamp180",
+      "name": "min",
       "kind": "builtin",
-      "calls": 22,
-      "fileCount": 11,
+      "calls": 30,
+      "fileCount": 12,
       "observedArgCounts": [
-        1
+        1,
+        2
       ],
-      "calledAsMethod": false,
+      "calledAsMethod": true,
       "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\animscripts\\dog_move.gsc(198)",
-        "maps\\mp\\animscripts\\dog_move.gsc(201)",
-        "maps\\mp\\animscripts\\dog_move.gsc(305)",
-        "maps\\mp\\animscripts\\dog_move.gsc(335)",
-        "maps\\mp\\animscripts\\shared.gsc(190)"
+        "animscripts\\combat_utility.gsc(1275)",
+        "animscripts\\combat_utility.gsc(1412)",
+        "animscripts\\combat_utility.gsc(1469)",
+        "animscripts\\init.gsc(1338)",
+        "maps\\mp\\gametypes\\koth.gsc(126)"
       ]
     },
     {
@@ -134,28 +156,6 @@
       ]
     },
     {
-      "name": "min",
-      "kind": "builtin",
-      "calls": 26,
-      "fileCount": 10,
-      "observedArgCounts": [
-        1,
-        2
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\koth.gsc(126)",
-        "maps\\mp\\gametypes\\sur.gsc(127)",
-        "maps\\mp\\gametypes\\_dev.gsc(170)",
-        "maps\\mp\\gametypes\\_globallogic.gsc(863)",
-        "maps\\mp\\gametypes\\_globallogic.gsc(1837)"
-      ]
-    },
-    {
       "name": "newdebughudelem",
       "kind": "builtin",
       "calls": 25,
@@ -175,6 +175,28 @@
         "maps\\mp\\gametypes\\_dev.gsc(1469)",
         "maps\\mp\\gametypes\\_dev.gsc(1551)",
         "maps\\mp\\_createfx.gsc(207)"
+      ]
+    },
+    {
+      "name": "max",
+      "kind": "builtin",
+      "calls": 13,
+      "fileCount": 9,
+      "observedArgCounts": [
+        1,
+        2
+      ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\combat_utility.gsc(860)",
+        "animscripts\\combat_utility.gsc(1027)",
+        "maps\\mp\\gametypes\\_dev.gsc(171)",
+        "maps\\mp\\gametypes\\_hud.gsc(213)",
+        "maps\\mp\\gametypes\\_killcam.gsc(337)"
       ]
     },
     {
@@ -199,6 +221,27 @@
       ]
     },
     {
+      "name": "absangleclamp180",
+      "kind": "builtin",
+      "calls": 15,
+      "fileCount": 8,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\combat.gsc(1142)",
+        "animscripts\\combat_utility.gsc(385)",
+        "animscripts\\combat_utility.gsc(397)",
+        "animscripts\\corner.gsc(1121)",
+        "animscripts\\cover_arrival.gsc(455)"
+      ]
+    },
+    {
       "name": "badplacesenable",
       "kind": "builtin",
       "calls": 13,
@@ -220,28 +263,6 @@
       ]
     },
     {
-      "name": "max",
-      "kind": "builtin",
-      "calls": 11,
-      "fileCount": 8,
-      "observedArgCounts": [
-        1,
-        2
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_dev.gsc(171)",
-        "maps\\mp\\gametypes\\_hud.gsc(213)",
-        "maps\\mp\\gametypes\\_killcam.gsc(337)",
-        "maps\\mp\\gametypes\\_weapons.gsc(516)",
-        "maps\\mp\\_geometry.gsc(731)"
-      ]
-    },
-    {
       "name": "getvehicleoccupied",
       "kind": "builtin",
       "calls": 12,
@@ -260,6 +281,27 @@
         "maps\\mp\\gametypes\\_globallogic.gsc(5423)",
         "maps\\mp\\gametypes\\_globallogic.gsc(5454)",
         "maps\\mp\\gametypes\\_globallogic.gsc(5784)"
+      ]
+    },
+    {
+      "name": "getplayersquadid",
+      "kind": "builtin",
+      "calls": 10,
+      "fileCount": 6,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\ctf.gsc(706)",
+        "maps\\mp\\gametypes\\dom.gsc(605)",
+        "maps\\mp\\gametypes\\dom.gsc(628)",
+        "maps\\mp\\gametypes\\koth.gsc(468)",
+        "maps\\mp\\gametypes\\sab.gsc(533)"
       ]
     },
     {
@@ -302,27 +344,6 @@
         "maps\\ber3b_event_roof.gsc(1834)",
         "maps\\ber3b_event_roof.gsc(1857)",
         "maps\\pel2_airfield.gsc(489)"
-      ]
-    },
-    {
-      "name": "getplayersquadid",
-      "kind": "builtin",
-      "calls": 10,
-      "fileCount": 6,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\ctf.gsc(706)",
-        "maps\\mp\\gametypes\\dom.gsc(605)",
-        "maps\\mp\\gametypes\\dom.gsc(628)",
-        "maps\\mp\\gametypes\\koth.gsc(468)",
-        "maps\\mp\\gametypes\\sab.gsc(533)"
       ]
     },
     {
@@ -454,6 +475,51 @@
       ]
     },
     {
+      "name": "setinvisibletoplayer",
+      "kind": "builtin",
+      "calls": 6,
+      "fileCount": 4,
+      "observedArgCounts": [
+        1,
+        2
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory_teleporter.gsc(434)",
+        "maps\\nazi_zombie_sumpf_bouncing_betties.gsc(66)",
+        "maps\\nazi_zombie_sumpf_bouncing_betties.gsc(92)",
+        "maps\\_zombiemode_betty.gsc(67)",
+        "maps\\_zombiemode_betty.gsc(93)"
+      ]
+    },
+    {
+      "name": "createdynentandlaunch",
+      "kind": "builtin",
+      "calls": 6,
+      "fileCount": 4,
+      "observedArgCounts": [
+        5,
+        6,
+        7
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\death.gsc(578)",
+        "animscripts\\death.gsc(2238)",
+        "maps\\mp\\_gib.gsc(537)",
+        "maps\\oki3_util.gsc(2302)",
+        "maps\\pel1.gsc(2617)"
+      ]
+    },
+    {
       "name": "setwatersheeting",
       "kind": "builtin",
       "calls": 5,
@@ -582,27 +648,6 @@
       ]
     },
     {
-      "name": "removeinfluencer",
-      "kind": "builtin",
-      "calls": 7,
-      "fileCount": 3,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\twar.gsc(2985)",
-        "maps\\mp\\gametypes\\_hardpoints.gsc(356)",
-        "maps\\mp\\gametypes\\_spawning.gsc(453)",
-        "maps\\mp\\gametypes\\_spawning.gsc(458)",
-        "maps\\mp\\gametypes\\_spawning.gsc(463)"
-      ]
-    },
-    {
       "name": "getplayersquad",
       "kind": "builtin",
       "calls": 7,
@@ -624,13 +669,12 @@
       ]
     },
     {
-      "name": "createdynentandlaunch",
+      "name": "removeinfluencer",
       "kind": "builtin",
-      "calls": 4,
+      "calls": 7,
       "fileCount": 3,
       "observedArgCounts": [
-        5,
-        6
+        1
       ],
       "calledAsMethod": false,
       "access": "mp",
@@ -638,10 +682,53 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\_gib.gsc(537)",
-        "maps\\oki3_util.gsc(2302)",
-        "maps\\pel1.gsc(2617)",
-        "maps\\pel1.gsc(5419)"
+        "maps\\mp\\gametypes\\twar.gsc(2985)",
+        "maps\\mp\\gametypes\\_hardpoints.gsc(356)",
+        "maps\\mp\\gametypes\\_spawning.gsc(453)",
+        "maps\\mp\\gametypes\\_spawning.gsc(458)",
+        "maps\\mp\\gametypes\\_spawning.gsc(463)"
+      ]
+    },
+    {
+      "name": "floor",
+      "kind": "builtin",
+      "calls": 6,
+      "fileCount": 3,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\cover_arrival.gsc(1752)",
+        "animscripts\\utility.gsc(1037)",
+        "maps\\mp\\gametypes\\_globallogic.gsc(3257)",
+        "maps\\mp\\gametypes\\_globallogic.gsc(3258)",
+        "maps\\mp\\gametypes\\_globallogic.gsc(3754)"
+      ]
+    },
+    {
+      "name": "launchragdoll",
+      "kind": "builtin",
+      "calls": 4,
+      "fileCount": 3,
+      "observedArgCounts": [
+        1,
+        2
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\death.gsc(176)",
+        "animscripts\\death.gsc(2330)",
+        "maps\\nazi_zombie_sumpf_bridge.gsc(216)",
+        "maps\\nazi_zombie_sumpf_trap_pendulum.gsc(383)"
       ]
     },
     {
@@ -665,6 +752,26 @@
       ]
     },
     {
+      "name": "achievement_notify",
+      "kind": "builtin",
+      "calls": 4,
+      "fileCount": 3,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory.gsc(1530)",
+        "maps\\nazi_zombie_factory_teleporter.gsc(637)",
+        "maps\\nazi_zombie_factory_teleporter.gsc(722)",
+        "maps\\_zombiemode_cymbal_monkey.gsc(73)"
+      ]
+    },
+    {
       "name": "disablegrenadesuicide",
       "kind": "builtin",
       "calls": 3,
@@ -681,6 +788,25 @@
         "maps\\_zombiemode.gsc(110)",
         "maps\\_zombiemode_asylum.gsc(107)",
         "maps\\_zombiemode_prototype.gsc(88)"
+      ]
+    },
+    {
+      "name": "setelectrified",
+      "kind": "builtin",
+      "calls": 3,
+      "fileCount": 3,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory.gsc(1165)",
+        "maps\\nazi_zombie_sumpf_trap_perk_electric.gsc(348)",
+        "maps\\_zombiemode_tesla.gsc(529)"
       ]
     },
     {
@@ -803,27 +929,6 @@
       ]
     },
     {
-      "name": "destructible_loopsound",
-      "kind": "builtin",
-      "calls": 40,
-      "fileCount": 2,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\_destructible_types.gsc(158)",
-        "maps\\mp\\_destructible_types.gsc(161)",
-        "maps\\mp\\_destructible_types.gsc(397)",
-        "maps\\mp\\_destructible_types.gsc(400)",
-        "maps\\mp\\_destructible_types.gsc(533)"
-      ]
-    },
-    {
       "name": "destructible_physics",
       "kind": "builtin",
       "calls": 40,
@@ -842,6 +947,27 @@
         "maps\\mp\\_destructible_types.gsc(516)",
         "maps\\mp\\_destructible_types.gsc(518)",
         "maps\\mp\\_destructible_types.gsc(636)"
+      ]
+    },
+    {
+      "name": "destructible_loopsound",
+      "kind": "builtin",
+      "calls": 40,
+      "fileCount": 2,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\_destructible_types.gsc(158)",
+        "maps\\mp\\_destructible_types.gsc(161)",
+        "maps\\mp\\_destructible_types.gsc(397)",
+        "maps\\mp\\_destructible_types.gsc(400)",
+        "maps\\mp\\_destructible_types.gsc(533)"
       ]
     },
     {
@@ -929,6 +1055,28 @@
         "maps\\_arcademode.gsc(695)",
         "maps\\_arcademode.gsc(747)",
         "maps\\_arcademode.gsc(761)"
+      ]
+    },
+    {
+      "name": "create_and_play_dialog",
+      "kind": "builtin",
+      "calls": 13,
+      "fileCount": 2,
+      "observedArgCounts": [
+        3,
+        4
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory.gsc(1418)",
+        "maps\\nazi_zombie_factory.gsc(1460)",
+        "maps\\nazi_zombie_factory.gsc(1803)",
+        "maps\\nazi_zombie_factory.gsc(1844)",
+        "maps\\nazi_zombie_factory.gsc(1848)"
       ]
     },
     {
@@ -1160,42 +1308,60 @@
       ]
     },
     {
-      "name": "setdoublevision",
+      "name": "bbprint",
       "kind": "builtin",
       "calls": 3,
       "fileCount": 2,
       "observedArgCounts": [
-        2
+        7
       ],
-      "calledAsMethod": true,
+      "calledAsMethod": false,
       "access": "unknown",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\see1_opening.gsc(178)",
-        "maps\\see1_opening.gsc(334)",
-        "maps\\_utility.gsc(9495)"
+        "maps\\_zombiemode_blockers_new.gsc(161)",
+        "maps\\_zombiemode_blockers_new.gsc(410)",
+        "maps\\_zombiemode_bowie.gsc(97)"
       ]
     },
     {
-      "name": "setinvisibletoplayer",
+      "name": "sqrt",
       "kind": "builtin",
       "calls": 3,
       "fileCount": 2,
       "observedArgCounts": [
-        1,
-        2
+        1
       ],
-      "calledAsMethod": true,
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\combat.gsc(1138)",
+        "maps\\mp\\gametypes\\_hardpoints.gsc(454)",
+        "maps\\mp\\gametypes\\_hardpoints.gsc(703)"
+      ]
+    },
+    {
+      "name": "modelhasphyspreset",
+      "kind": "builtin",
+      "calls": 3,
+      "fileCount": 2,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
       "access": "unknown",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\nazi_zombie_sumpf_bouncing_betties.gsc(66)",
-        "maps\\nazi_zombie_sumpf_bouncing_betties.gsc(92)",
-        "maps\\_zombiemode_perks.gsc(597)"
+        "animscripts\\death.gsc(147)",
+        "animscripts\\death.gsc(539)",
+        "maps\\oki3_util.gsc(2263)"
       ]
     },
     {
@@ -1218,6 +1384,25 @@
       ]
     },
     {
+      "name": "setdoublevision",
+      "kind": "builtin",
+      "calls": 3,
+      "fileCount": 2,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\see1_opening.gsc(178)",
+        "maps\\see1_opening.gsc(334)",
+        "maps\\_utility.gsc(9495)"
+      ]
+    },
+    {
       "name": "setspawnpointsbaseweight",
       "kind": "builtin",
       "calls": 3,
@@ -1237,24 +1422,6 @@
       ]
     },
     {
-      "name": "launchragdoll",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 2,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\nazi_zombie_sumpf_bridge.gsc(216)",
-        "maps\\nazi_zombie_sumpf_trap_pendulum.gsc(383)"
-      ]
-    },
-    {
       "name": "resetailimit",
       "kind": "builtin",
       "calls": 2,
@@ -1270,42 +1437,6 @@
       "sites": [
         "maps\\ber2_event1.gsc(2456)",
         "maps\\mak.gsc(5938)"
-      ]
-    },
-    {
-      "name": "endparty",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 2,
-      "observedArgCounts": [
-        0
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_globallogic.gsc(4632)",
-        "maps\\mp\\gametypes\\_menus.gsc(243)"
-      ]
-    },
-    {
-      "name": "setelectrified",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 2,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\nazi_zombie_sumpf_trap_perk_electric.gsc(348)",
-        "maps\\_zombiemode_tesla.gsc(529)"
       ]
     },
     {
@@ -1364,6 +1495,24 @@
       ]
     },
     {
+      "name": "endparty",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 2,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_globallogic.gsc(4632)",
+        "maps\\mp\\gametypes\\_menus.gsc(243)"
+      ]
+    },
+    {
       "name": "destructible_anim",
       "kind": "builtin",
       "calls": 45,
@@ -1385,46 +1534,25 @@
       ]
     },
     {
-      "name": "sayspecificdialogue",
+      "name": "include_achievement",
       "kind": "builtin",
-      "calls": 7,
+      "calls": 10,
       "fileCount": 1,
       "observedArgCounts": [
-        3,
-        4
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_anim.gsc(691)",
-        "maps\\_anim.gsc(695)",
-        "maps\\_anim.gsc(934)",
-        "maps\\_anim.gsc(939)",
-        "maps\\_anim.gsc(1374)"
-      ]
-    },
-    {
-      "name": "visionsetberserker",
-      "kind": "builtin",
-      "calls": 5,
-      "fileCount": 1,
-      "observedArgCounts": [
+        1,
         2
       ],
-      "calledAsMethod": true,
+      "calledAsMethod": false,
       "access": "unknown",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\_collectibles_game.gsc(174)",
-        "maps\\_collectibles_game.gsc(305)",
-        "maps\\_collectibles_game.gsc(307)",
-        "maps\\_collectibles_game.gsc(331)",
-        "maps\\_collectibles_game.gsc(333)"
+        "maps\\nazi_zombie_factory.gsc(171)",
+        "maps\\nazi_zombie_factory.gsc(172)",
+        "maps\\nazi_zombie_factory.gsc(173)",
+        "maps\\nazi_zombie_factory.gsc(174)",
+        "maps\\nazi_zombie_factory.gsc(175)"
       ]
     },
     {
@@ -1449,6 +1577,27 @@
       ]
     },
     {
+      "name": "visionsetberserker",
+      "kind": "builtin",
+      "calls": 5,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_collectibles_game.gsc(174)",
+        "maps\\_collectibles_game.gsc(305)",
+        "maps\\_collectibles_game.gsc(307)",
+        "maps\\_collectibles_game.gsc(331)",
+        "maps\\_collectibles_game.gsc(333)"
+      ]
+    },
+    {
       "name": "disablegunnerfiring",
       "kind": "builtin",
       "calls": 5,
@@ -1470,46 +1619,6 @@
       ]
     },
     {
-      "name": "setdamagestage",
-      "kind": "builtin",
-      "calls": 4,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\_helicopter.gsc(608)",
-        "maps\\mp\\_helicopter.gsc(629)",
-        "maps\\mp\\_helicopter.gsc(635)",
-        "maps\\mp\\_helicopter.gsc(704)"
-      ]
-    },
-    {
-      "name": "floor",
-      "kind": "builtin",
-      "calls": 4,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_globallogic.gsc(3257)",
-        "maps\\mp\\gametypes\\_globallogic.gsc(3258)",
-        "maps\\mp\\gametypes\\_globallogic.gsc(3754)",
-        "maps\\mp\\gametypes\\_globallogic.gsc(7158)"
-      ]
-    },
-    {
       "name": "addcylinderinfluencer",
       "kind": "builtin",
       "calls": 4,
@@ -1528,6 +1637,26 @@
         "maps\\mp\\gametypes\\_spawning.gsc(423)",
         "maps\\mp\\gametypes\\_spawning.gsc(667)",
         "maps\\mp\\gametypes\\_spawning.gsc(751)"
+      ]
+    },
+    {
+      "name": "setdamagestage",
+      "kind": "builtin",
+      "calls": 4,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\_helicopter.gsc(608)",
+        "maps\\mp\\_helicopter.gsc(629)",
+        "maps\\mp\\_helicopter.gsc(635)",
+        "maps\\mp\\_helicopter.gsc(704)"
       ]
     },
     {
@@ -1572,7 +1701,7 @@
       ]
     },
     {
-      "name": "disableberserker",
+      "name": "getvisionsetnaked",
       "kind": "builtin",
       "calls": 3,
       "fileCount": 1,
@@ -1585,9 +1714,28 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\_collectibles_game.gsc(184)",
-        "maps\\_collectibles_game.gsc(231)",
-        "maps\\_collectibles_game.gsc(484)"
+        "maps\\_autosave.gsc(71)",
+        "maps\\_autosave.gsc(217)",
+        "maps\\_autosave.gsc(427)"
+      ]
+    },
+    {
+      "name": "settransported",
+      "kind": "builtin",
+      "calls": 3,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\nazi_zombie_factory_teleporter.gsc(475)",
+        "maps\\nazi_zombie_factory_teleporter.gsc(479)",
+        "maps\\nazi_zombie_factory_teleporter.gsc(516)"
       ]
     },
     {
@@ -1610,12 +1758,12 @@
       ]
     },
     {
-      "name": "getvisionsetnaked",
+      "name": "predictanim",
       "kind": "builtin",
       "calls": 3,
       "fileCount": 1,
       "observedArgCounts": [
-        0
+        1
       ],
       "calledAsMethod": true,
       "access": "unknown",
@@ -1623,9 +1771,9 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\_autosave.gsc(71)",
-        "maps\\_autosave.gsc(217)",
-        "maps\\_autosave.gsc(427)"
+        "animscripts\\predict.gsc(76)",
+        "animscripts\\predict.gsc(106)",
+        "animscripts\\predict.gsc(140)"
       ]
     },
     {
@@ -1648,99 +1796,9 @@
       ]
     },
     {
-      "name": "findpath",
+      "name": "disableberserker",
       "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        2
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_banzai.gsc(475)",
-        "maps\\_banzai.gsc(531)"
-      ]
-    },
-    {
-      "name": "setscoremultiplier",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_arcademode.gsc(1030)",
-        "maps\\_arcademode.gsc(1094)"
-      ]
-    },
-    {
-      "name": "setexploderid",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_load.gsc(1156)",
-        "maps\\_load.gsc(1179)"
-      ]
-    },
-    {
-      "name": "hasusedweapon",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        2
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_endmission.gsc(162)",
-        "maps\\_endmission.gsc(173)"
-      ]
-    },
-    {
-      "name": "artilleryiconlocation",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        3
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_hardpoints.gsc(246)",
-        "maps\\mp\\gametypes\\_hardpoints.gsc(1621)"
-      ]
-    },
-    {
-      "name": "enableberserker",
-      "kind": "builtin",
-      "calls": 2,
+      "calls": 3,
       "fileCount": 1,
       "observedArgCounts": [
         0
@@ -1751,26 +1809,9 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\_collectibles_game.gsc(220)",
-        "maps\\_collectibles_game.gsc(480)"
-      ]
-    },
-    {
-      "name": "ghost",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        0
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\_vehicles.gsc(1197)",
-        "maps\\mp\\_vehicles.gsc(1262)"
+        "maps\\_collectibles_game.gsc(184)",
+        "maps\\_collectibles_game.gsc(231)",
+        "maps\\_collectibles_game.gsc(484)"
       ]
     },
     {
@@ -1792,62 +1833,7 @@
       ]
     },
     {
-      "name": "lookatentity",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        0,
-        1
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\sniper_anim.gsc(1730)",
-        "maps\\sniper_anim.gsc(1739)"
-      ]
-    },
-    {
-      "name": "visionsetlaststand",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        2
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_laststand.gsc(125)",
-        "maps\\_laststand.gsc(375)"
-      ]
-    },
-    {
-      "name": "sqrt",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_hardpoints.gsc(454)",
-        "maps\\mp\\gametypes\\_hardpoints.gsc(703)"
-      ]
-    },
-    {
-      "name": "clearentityowner",
+      "name": "ghost",
       "kind": "builtin",
       "calls": 2,
       "fileCount": 1,
@@ -1860,26 +1846,8 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\_dogs.gsc(243)",
-        "maps\\mp\\_dogs.gsc(275)"
-      ]
-    },
-    {
-      "name": "clear_objective_squad",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_squad.gsc(362)",
-        "maps\\mp\\gametypes\\_squad.gsc(438)"
+        "maps\\mp\\_vehicles.gsc(1197)",
+        "maps\\mp\\_vehicles.gsc(1262)"
       ]
     },
     {
@@ -1901,6 +1869,132 @@
       ]
     },
     {
+      "name": "setscoremultiplier",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_arcademode.gsc(1030)",
+        "maps\\_arcademode.gsc(1094)"
+      ]
+    },
+    {
+      "name": "findpath",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_banzai.gsc(475)",
+        "maps\\_banzai.gsc(531)"
+      ]
+    },
+    {
+      "name": "enableberserker",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_collectibles_game.gsc(220)",
+        "maps\\_collectibles_game.gsc(480)"
+      ]
+    },
+    {
+      "name": "hasusedweapon",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_endmission.gsc(162)",
+        "maps\\_endmission.gsc(173)"
+      ]
+    },
+    {
+      "name": "visionsetlaststand",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_laststand.gsc(125)",
+        "maps\\_laststand.gsc(375)"
+      ]
+    },
+    {
+      "name": "setexploderid",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_load.gsc(1156)",
+        "maps\\_load.gsc(1179)"
+      ]
+    },
+    {
+      "name": "artilleryiconlocation",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_hardpoints.gsc(246)",
+        "maps\\mp\\gametypes\\_hardpoints.gsc(1621)"
+      ]
+    },
+    {
       "name": "visionsetlerpratio",
       "kind": "builtin",
       "calls": 2,
@@ -1916,42 +2010,6 @@
       "sites": [
         "maps\\mp\\_flare.gsc(75)",
         "maps\\mp\\_flare.gsc(91)"
-      ]
-    },
-    {
-      "name": "setwargamedata",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        3
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\twar.gsc(1242)",
-        "maps\\mp\\gametypes\\twar.gsc(1276)"
-      ]
-    },
-    {
-      "name": "playersighttrace",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        3
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\_flare.gsc(41)",
-        "maps\\mp\\_flare.gsc(79)"
       ]
     },
     {
@@ -1991,88 +2049,75 @@
       ]
     },
     {
-      "name": "forcelevelend",
+      "name": "setwargamedata",
       "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        0
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_cooplogic.gsc(28)"
-      ]
-    },
-    {
-      "name": "unsetcollectible",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_collectibles_game.gsc(247)"
-      ]
-    },
-    {
-      "name": "iscollectors",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_rank.gsc(462)"
-      ]
-    },
-    {
-      "name": "collisiontestpointsinsphere",
-      "kind": "builtin",
-      "calls": 1,
+      "calls": 2,
       "fileCount": 1,
       "observedArgCounts": [
         3
       ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\twar.gsc(1242)",
+        "maps\\mp\\gametypes\\twar.gsc(1276)"
+      ]
+    },
+    {
+      "name": "clear_objective_squad",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
       "calledAsMethod": false,
       "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\_geometry.gsc(466)"
+        "maps\\mp\\gametypes\\_squad.gsc(362)",
+        "maps\\mp\\gametypes\\_squad.gsc(438)"
       ]
     },
     {
-      "name": "clearspawnpoints",
+      "name": "clearentityowner",
       "kind": "builtin",
-      "calls": 1,
+      "calls": 2,
       "fileCount": 1,
       "observedArgCounts": [
         0
       ],
-      "calledAsMethod": false,
+      "calledAsMethod": true,
       "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_spawning.gsc(793)"
+        "maps\\mp\\_dogs.gsc(243)",
+        "maps\\mp\\_dogs.gsc(275)"
+      ]
+    },
+    {
+      "name": "playersighttrace",
+      "kind": "builtin",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\_flare.gsc(41)",
+        "maps\\mp\\_flare.gsc(79)"
       ]
     },
     {
@@ -2093,7 +2138,7 @@
       ]
     },
     {
-      "name": "setspawnpointrandomvariation",
+      "name": "locksquad",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2106,24 +2151,92 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_spawning.gsc(996)"
+        "maps\\mp\\gametypes\\_globallogic.gsc(2350)"
       ]
     },
     {
-      "name": "getsortedspawnpoints",
+      "name": "makegrenadedud",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
       "observedArgCounts": [
-        3
+        0
       ],
-      "calledAsMethod": false,
+      "calledAsMethod": true,
       "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_spawning.gsc(1180)"
+        "maps\\mp\\gametypes\\_weapons.gsc(885)"
+      ]
+    },
+    {
+      "name": "reportclientdisconnected",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_introscreen.gsc(572)"
+      ]
+    },
+    {
+      "name": "startpoisoning",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_weapons.gsc(611)"
+      ]
+    },
+    {
+      "name": "unsetcollectible",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_collectibles_game.gsc(247)"
+      ]
+    },
+    {
+      "name": "forcelevelend",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_cooplogic.gsc(28)"
       ]
     },
     {
@@ -2161,37 +2274,20 @@
       ]
     },
     {
-      "name": "playbattlechattertoteam",
+      "name": "create_zombie_point_of_interest_attractor_positions",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
       "observedArgCounts": [
-        4
+        2
       ],
       "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_battlechatter_mp.gsc(634)"
-      ]
-    },
-    {
-      "name": "animarraypickrandom",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
       "access": "unknown",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\_drones.gsc(1835)"
+        "maps\\_zombiemode_cymbal_monkey.gsc(93)"
       ]
     },
     {
@@ -2212,58 +2308,24 @@
       ]
     },
     {
-      "name": "ispoisoned",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        0
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_missions.gsc(446)"
-      ]
-    },
-    {
-      "name": "usingboltactionweapon",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        0
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_gameskill.gsc(1021)"
-      ]
-    },
-    {
-      "name": "reportclientdisconnected",
+      "name": "shootup",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
       "observedArgCounts": [
         1
       ],
-      "calledAsMethod": false,
-      "access": "unknown",
+      "calledAsMethod": true,
+      "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\_introscreen.gsc(572)"
+        "maps\\mp\\gametypes\\_weapons.gsc(999)"
       ]
     },
     {
-      "name": "isflared",
+      "name": "stoppoisoning",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2276,7 +2338,7 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_missions.gsc(433)"
+        "maps\\mp\\gametypes\\_weapons.gsc(617)"
       ]
     },
     {
@@ -2314,20 +2376,20 @@
       ]
     },
     {
-      "name": "launchbomb",
+      "name": "setspawnpointrandomvariation",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
       "observedArgCounts": [
-        3
+        1
       ],
-      "calledAsMethod": true,
+      "calledAsMethod": false,
       "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_hardpoints.gsc(811)"
+        "maps\\mp\\gametypes\\_spawning.gsc(996)"
       ]
     },
     {
@@ -2399,7 +2461,143 @@
       ]
     },
     {
-      "name": "spawnplane",
+      "name": "getpersistentprofilevar",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\banzai.gsc(1403)"
+      ]
+    },
+    {
+      "name": "clearspawnpoints",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_spawning.gsc(793)"
+      ]
+    },
+    {
+      "name": "unlocksquad",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_globallogic.gsc(2355)"
+      ]
+    },
+    {
+      "name": "isswitchingweapons",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_zombiemode_bowie.gsc(62)"
+      ]
+    },
+    {
+      "name": "create_zombie_point_of_interest",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_zombiemode_cymbal_monkey.gsc(62)"
+      ]
+    },
+    {
+      "name": "resetmissiledetonationtime",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_zombiemode_cymbal_monkey.gsc(81)"
+      ]
+    },
+    {
+      "name": "check_point_in_active_zone",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_zombiemode_cymbal_monkey.gsc(84)"
+      ]
+    },
+    {
+      "name": "check_point_in_playable_area",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_zombiemode_cymbal_monkey.gsc(88)"
+      ]
+    },
+    {
+      "name": "getsortedspawnpoints",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2412,50 +2610,16 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_hardpoints.gsc(645)"
+        "maps\\mp\\gametypes\\_spawning.gsc(1180)"
       ]
     },
     {
-      "name": "animarray",
+      "name": "setentityowner",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
       "observedArgCounts": [
         1
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_drones.gsc(1839)"
-      ]
-    },
-    {
-      "name": "leavesquad",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_globallogic.gsc(2328)"
-      ]
-    },
-    {
-      "name": "startpoisoning",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        0
       ],
       "calledAsMethod": true,
       "access": "mp",
@@ -2463,11 +2627,11 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_weapons.gsc(611)"
+        "maps\\mp\\_dogs.gsc(266)"
       ]
     },
     {
-      "name": "getyawtoorigin",
+      "name": "spawn_ai_supplement",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2480,7 +2644,58 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\_anim.gsc(2416)"
+        "maps\\_ai_supplements.gsc(605)"
+      ]
+    },
+    {
+      "name": "score_spawner",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_ai_supplements.gsc(593)"
+      ]
+    },
+    {
+      "name": "matrix4x4transformpoints",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\_geometry.gsc(407)"
+      ]
+    },
+    {
+      "name": "collisiontestpointsinsphere",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\_geometry.gsc(466)"
       ]
     },
     {
@@ -2518,12 +2733,12 @@
       ]
     },
     {
-      "name": "endlobby",
+      "name": "spawnhelicopter",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
       "observedArgCounts": [
-        0
+        5
       ],
       "calledAsMethod": false,
       "access": "mp",
@@ -2531,7 +2746,7 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_globallogic.gsc(1351)"
+        "maps\\mp\\_helicopter.gsc(218)"
       ]
     },
     {
@@ -2552,7 +2767,7 @@
       ]
     },
     {
-      "name": "setentityowner",
+      "name": "setenemymodel",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2565,7 +2780,7 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\_dogs.gsc(266)"
+        "maps\\mp\\_dogs.gsc(189)"
       ]
     },
     {
@@ -2586,41 +2801,7 @@
       ]
     },
     {
-      "name": "setenemymodel",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\_dogs.gsc(189)"
-      ]
-    },
-    {
-      "name": "launchvehicle",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        2
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\_vehicles.gsc(1856)"
-      ]
-    },
-    {
-      "name": "unlocksquad",
+      "name": "setcurvebspline",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2628,29 +2809,12 @@
         1
       ],
       "calledAsMethod": false,
-      "access": "mp",
+      "access": "unknown",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_globallogic.gsc(2355)"
-      ]
-    },
-    {
-      "name": "ceil",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_globallogic.gsc(3705)"
+        "maps\\living_battlefield.gsc(246)"
       ]
     },
     {
@@ -2671,80 +2835,12 @@
       ]
     },
     {
-      "name": "modelhasphyspreset",
+      "name": "launchvehicle",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
       "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\oki3_util.gsc(2263)"
-      ]
-    },
-    {
-      "name": "getyaw",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_anim.gsc(2590)"
-      ]
-    },
-    {
-      "name": "locksquad",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_globallogic.gsc(2350)"
-      ]
-    },
-    {
-      "name": "createsquad",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_globallogic.gsc(2335)"
-      ]
-    },
-    {
-      "name": "shootup",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
+        2
       ],
       "calledAsMethod": true,
       "access": "mp",
@@ -2752,11 +2848,11 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_weapons.gsc(999)"
+        "maps\\mp\\_vehicles.gsc(1856)"
       ]
     },
     {
-      "name": "makegrenadedud",
+      "name": "ispoisoned",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2769,7 +2865,211 @@
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\_weapons.gsc(885)"
+        "maps\\mp\\gametypes\\_missions.gsc(446)"
+      ]
+    },
+    {
+      "name": "weaponcliptype",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\utility.gsc(2277)"
+      ]
+    },
+    {
+      "name": "geteyeapprox",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\shared.gsc(1367)"
+      ]
+    },
+    {
+      "name": "shootvolley",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\scripted\\truckride_backoftruck.gsc(64)"
+      ]
+    },
+    {
+      "name": "clearspawnpointsbaseweight",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\twar.gsc(2861)"
+      ]
+    },
+    {
+      "name": "iscollectors",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_rank.gsc(462)"
+      ]
+    },
+    {
+      "name": "playbattlechattertoteam",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        4
+      ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_battlechatter_mp.gsc(634)"
+      ]
+    },
+    {
+      "name": "ceil",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_globallogic.gsc(3705)"
+      ]
+    },
+    {
+      "name": "stopsound",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\face.gsc(235)"
+      ]
+    },
+    {
+      "name": "endlobby",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_globallogic.gsc(1351)"
+      ]
+    },
+    {
+      "name": "weaponmountable",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "animscripts\\death.gsc(1342)"
+      ]
+    },
+    {
+      "name": "launchbomb",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_hardpoints.gsc(811)"
+      ]
+    },
+    {
+      "name": "spawnplane",
+      "kind": "builtin",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calledAsMethod": false,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\_hardpoints.gsc(645)"
       ]
     },
     {
@@ -2790,24 +3090,7 @@
       ]
     },
     {
-      "name": "stoppoisoning",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        0
-      ],
-      "calledAsMethod": true,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\gametypes\\_weapons.gsc(617)"
-      ]
-    },
-    {
-      "name": "setcurvebspline",
+      "name": "leavesquad",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2815,12 +3098,12 @@
         1
       ],
       "calledAsMethod": false,
-      "access": "unknown",
+      "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\living_battlefield.gsc(246)"
+        "maps\\mp\\gametypes\\_globallogic.gsc(2328)"
       ]
     },
     {
@@ -2875,41 +3158,7 @@
       ]
     },
     {
-      "name": "score_spawner",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        3
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_ai_supplements.gsc(593)"
-      ]
-    },
-    {
-      "name": "spawn_ai_supplement",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_ai_supplements.gsc(605)"
-      ]
-    },
-    {
-      "name": "matrix4x4transformpoints",
+      "name": "setpersistentprofilevar",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
@@ -2917,46 +3166,29 @@
         2
       ],
       "calledAsMethod": false,
-      "access": "mp",
+      "access": "unknown",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\_geometry.gsc(407)"
+        "animscripts\\banzai.gsc(1410)"
       ]
     },
     {
-      "name": "clearspawnpointsbaseweight",
+      "name": "isflared",
       "kind": "builtin",
       "calls": 1,
       "fileCount": 1,
       "observedArgCounts": [
-        1
+        0
       ],
-      "calledAsMethod": false,
+      "calledAsMethod": true,
       "access": "mp",
       "languages": [
         "Gsc"
       ],
       "sites": [
-        "maps\\mp\\gametypes\\twar.gsc(2861)"
-      ]
-    },
-    {
-      "name": "spawnhelicopter",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        5
-      ],
-      "calledAsMethod": false,
-      "access": "mp",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\mp\\_helicopter.gsc(218)"
+        "maps\\mp\\gametypes\\_missions.gsc(433)"
       ]
     }
   ]

@@ -1,6 +1,145 @@
 {
   "game": "bo1",
-  "scriptsSwept": 1337,
-  "distinct": 0,
-  "functions": []
+  "scriptsSwept": 2960,
+  "distinct": 8,
+  "functions": [
+    {
+      "name": "maindebug",
+      "kind": "script",
+      "calls": 2,
+      "fileCount": 2,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "frontend\\maps\\_load.gsc(546)",
+        "maps\\_zombietron_load.gsc(432)"
+      ]
+    },
+    {
+      "name": "server_safe_ground_trace_ignore_water",
+      "kind": "script",
+      "calls": 2,
+      "fileCount": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\zombie_coast.gsc(1347)",
+        "maps\\zombie_temple.gsc(611)"
+      ]
+    },
+    {
+      "name": "resetteamoutcomenotify",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        7
+      ],
+      "calledAsMethod": true,
+      "access": "mp",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\mp\\gametypes\\twar.gsc(702)"
+      ]
+    },
+    {
+      "name": "vending_machine_trigger_think",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\zombie_moon.gsc(1452)"
+      ]
+    },
+    {
+      "name": "update_perk_hud",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\zombie_moon.gsc(2115)"
+      ]
+    },
+    {
+      "name": "add_cusom_zombie_spawn_logic",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\zombie_moon_sq_ctt.gsc(18)"
+      ]
+    },
+    {
+      "name": "to_mins",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\zombie_moon_teleporter.gsc(450)"
+      ]
+    },
+    {
+      "name": "default_box_move_logic",
+      "kind": "script",
+      "calls": 1,
+      "fileCount": 1,
+      "observedArgCounts": [
+        0
+      ],
+      "calledAsMethod": false,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_zombiemode_hackables_box.gsc(55)"
+      ]
+    }
+  ]
 }

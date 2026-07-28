@@ -10,53 +10,42 @@ per-project `FOLDER.md` convention).
 
 ## Backlog
 
-### There is no "function not found" diagnostic (designed, deliberately not built)
+### Function-not-found: BUILT, and what remains of it
 
-Nothing reports a call to a function that does not exist — the highest-value diagnostic still
-missing, since a typo'd name means the script fails to LINK at runtime. The nearest codes all
-assume the function exists and check a rule about it: `5000 NamespaceNotImported`,
-`5003 PrivateFunctionNotVisible`, `5007 AmbiguousFunction`. `5009 UsingNotFound` is about the
-FILE, not the function. Next free code is **5013**.
+Reported as two codes, since an unresolved call has two possible explanations and only one of
+them is ever the user's mistake:
 
-**Why it is categorically harder than the lints we have.** Every other 5xxx lint asks "is this
-call allowed?". This one must prove a NEGATIVE — that a name exists nowhere — and proving absence
-needs complete knowledge. `NamespaceUsageLint` is the template ("zero false positives by
-construction": it suppresses itself the moment a `#using` will not resolve), but the bar here is
-higher and the suppression will trigger far more often.
+- **`5013 ScriptFunctionNotFound`** — the call named a script location explicitly (`ns::foo()`
+  for a namespace the file does not declare, or a path-qualified `maps\mp\_util::foo()`). A
+  builtin cannot be written that way.
+- **`5014 BuiltinFunctionNotFound`** — the call was unqualified, so either domain could have
+  explained it and neither does.
 
-**The one that has no workaround:** `5009` had the same shape and was fixed by asking the
-PathResolver — the filesystem — instead of the index, so it stopped depending on indexing being
-finished. **There is no filesystem fallback for a function name.** This diagnostic genuinely
-cannot answer before the index is populated, so incomplete-index suppression is mandatory rather
-than a nicety.
+v1 had one code (`FunctionDoesNotExist = 3035`) because its lookup fell back from script
+functions to the API inside a single call and returned one verdict. Splitting them is what makes
+`5014` usable as a DATA SOURCE: swept over a corpus it is the candidate list for builtins a
+library is missing (`BuiltinHarvestTests`).
 
-Four false-positive sources, in severity order:
+Both are Errors — an unresolved call fails to LINK, so the script never loads. That is only
+defensible because the lint refuses to guess. It reports nothing unless it can see everything
+that could have explained the call, and each of those conditions was added because it fired
+wrongly without it:
 
-1. **Three of the five verified games ship no builtin API at all.** Only `cod4` and `t7` set
-   `DataFilePrefix`; WaW, MW2 and BO1 get `BuiltinApi.Empty`, so every builtin call would report
-   as missing. A hard gate on `profile.DataFilePrefix is not null`, not a follow-up. Even then
-   CoD4's 752 wordfile-derived functions are a much thinner set than T7's 2,191, so CoD4 may still
-   misfire.
-2. **Index completeness** — see above.
-3. **The `#include` closure must fully resolve.** Merge dialects key functions `(null, name)` and
-   pull them in from every include, so one unresolvable include makes absence unprovable. The IW
-   games lean on merge far harder than BO3 leans on `#using`, so this will suppress often.
-4. **Indirect calls are not name-resolvable** and must be excluded: `[[ ptr ]]()`,
-   `call [[ ptr ]]()`, pointers held in fields (`level.func[ x ]`), and `::name` / path-qualified
-   pointers passed to helpers like `array_thread`.
+- the builtin half needs a library known complete (`HasCompleteBuiltinLibrary`), which is a
+  different claim from `Verified`;
+- a function declared in the file being edited counts from the parse in hand, not the store,
+  which lags the buffer;
+- private functions count as existing — that is `5003`'s story;
+- class methods reachable unqualified from the file's own classes are excluded;
+- a null-namespace call in a dialect with classes is skipped, since `sys::foo()` and a method
+  call are keyed alike;
+- a path call whose TARGET FILE does not exist reports the missing file once instead of every
+  function called from it.
 
-Also excluded: names produced by macro expansion, and calls inside `#insert`ed regions.
-
-**Reuse plan — no new resolution machinery needed.** `DatabaseQueries.LookupFunctions` for script
-functions, `PreferIncludeScope` / `IsInIncludeScope` for the merge-dialect closure, and
-`BuiltinApi.Find(name)` (returns null when absent) for builtins. The work is entirely the
-suppression policy, not the lookup.
-
-**Severity path when it happens:** ship at Warning and promote to Error only after real-world use,
-for exactly the reason `5000` is still a Warning — promoting a rule the same day its false
-positives are understood is how you get red squiggles on working code. Note the engine's own
-verdict is harsher than Warning (an unresolved call genuinely will not link), so the Warning is
-about OUR confidence, not the language's.
+**What is left.** The unqualified case cannot separate a typo from a builtin we lack; frequency
+is the only discriminator, and only the harvest applies it. If `5014` proves noisy on real mod
+code, the answer is a better library rather than a weaker rule — see the harvest reports under
+`tests/GSCode.Server.Tests/harvest/`.
 
 ### `gscode-5000 NamespaceNotImported` should be an Error, not a Warning
 

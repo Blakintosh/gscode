@@ -46,13 +46,17 @@ HasDoWhile         => Keywords contains "do"
 
 ```
 if  else  for  while  switch  case  default  break  continue  return
-thread  wait  waittill  waittillframeend  notify  endon  isdefined
+thread  wait  waittill  waittillmatch  waittillframeend  notify  endon  isdefined
 assert  assertmsg  true  false  undefined
 ```
 
 That is the whole base. Note what is **not** here: `foreach`/`in`, `do`, `const`, `function`, the
-class words, `childthread`/`call`, and the BO3 intrinsics (`waittillmatch`, `waitrealtime`,
+class words, `childthread`/`call`, the profiler pair, and the BO3 intrinsics (`waitrealtime`,
 `vectorscale`, `profilestart`, `profilestop`) — each is an addition made by a specific game.
+
+`waittillmatch` IS in the base: it is used in every game from CoD4 to BO3 (205/218/245/57 uses in
+CoD4/WaW/MW2/BO1). It was briefly mistaken for a missing builtin by the corpus harvest, which is
+what a language feature looks like when it is absent from the keyword set.
 
 ### `ClassKeywords` — the class system, added as one group
 
@@ -68,11 +72,11 @@ group — they are function modifiers, so a dialect could have them without clas
 
 | game   | additions over `BaseKeywords` |
 |--------|-------------------------------|
-| cod4   | *(none — base exactly)* |
-| waw    | *(none)* |
-| mw2    | `foreach` `in` · `childthread` `call` |
-| bo1    | *(none)* |
-| bo3    | `foreach` `in` · `.. ClassKeywords` · `do` `function` `autoexec` `private` `const` · `waittillmatch` `waitrealtime` `vectorscale` `profilestart` `profilestop` |
+| cod4   | `prof_begin` `prof_end` |
+| waw    | `prof_begin` `prof_end` |
+| mw2    | `foreach` `in` · `childthread` `call` · `prof_begin` `prof_end` |
+| bo1    | `prof_begin` `prof_end` |
+| bo3    | `foreach` `in` · `.. ClassKeywords` · `do` `function` `autoexec` `private` `const` · `waitrealtime` `vectorscale` `profilestart` `profilestop` |
 | *cores*| *(none — base exactly)* |
 
 `childthread` and `call` are their own token kinds (`TokenKind.ChildThread` / `TokenKind.Call`), not
@@ -174,11 +178,24 @@ and stock-script list — named from the prefix (`<prefix>_api_gsc.json`, `<pref
 `<prefix>_radiant_keys.json`, `<prefix>_stock_scripts.txt`). The client API is listed only when the
 game has `.csc`.
 
-| game | `DataFilePrefix` | ships data? |
-|------|:----------------:|:-----------:|
-| cod4 | `cod4` | ✓ (752 functions, 297 radiant keys, 108 fields, 894 stock scripts) |
-| bo3  | `t7`   | ✓ (full T7 set, incl. `t7_api_csc.json`) |
-| waw / mw2 / bo1 / all cores | *(null)* | ✗ — a workspace on that game loads no builtin data rather than BO3's |
+| game | `DataFilePrefix` | complete? | ships |
+|------|:----------------:|:---------:|-------|
+| cod4 | `cod4` | ✓ | 819 functions (792 documented, 19 reconstructed), 297 radiant keys, 108 fields, 894 stock scripts |
+| bo3  | `t7`   | ✓ | the full T7 set, including `t7_api_csc.json` |
+| waw  | `waw`  | ✗ | 891 functions (781 inherited from CoD4, 110 its own), 360 radiant keys (11 client-only), 105 fields |
+| bo1  | `bo1`  | ✗ | 751 functions (all inherited from CoD4), 466 radiant keys (126 client-only), 108 fields |
+| mw2 / all cores | *(null)* | — | nothing; a workspace on that game loads no builtin data rather than another game's |
+
+**`HasCompleteBuiltinLibrary` is a separate claim from `Verified`.** Verified is about the DIALECT —
+proven against the game's own scripts. Completeness is about the FUNCTION LIST, and WaW's and BO1's
+come from a mod-tools wordfile that is demonstrably partial: sweeping BO1's own scripts against it
+finds 620 names it lacks, because its wordfile is the CoD4-era list carried forward unchanged. Those
+libraries are therefore used for completion, hover and signature help, but never to claim a name is
+NOT an engine function — `BuiltinFunctionNotFound` stands down for them.
+
+Radiant keys carry a side (`both` or `client`). BO3 marks client keys with a `client` prefix inside
+one `keys.txt`; WaW and BO1 instead split them across `keys.txt` and `clientkeys.txt`. Either way,
+completion and hover offer client-side keys to `.csc` only.
 
 ---
 

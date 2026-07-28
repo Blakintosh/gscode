@@ -139,8 +139,8 @@ public sealed partial record GameProfile
     public static readonly ImmutableArray<string> BaseKeywords =
     [
         "if", "else", "for", "while", "switch", "case", "default", "break", "continue", "return",
-        "thread", "wait", "waittill", "waittillframeend", "notify", "endon", "isdefined",
-        "assert", "assertmsg", "true", "false", "undefined",
+        "thread", "wait", "waittill", "waittillmatch", "waittillframeend", "notify", "endon",
+        "isdefined", "assert", "assertmsg", "true", "false", "undefined",
     ];
 
     /// <summary>

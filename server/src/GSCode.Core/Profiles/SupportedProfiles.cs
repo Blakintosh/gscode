@@ -28,7 +28,7 @@ public sealed partial record GameProfile
         Verified = true,
         HasInlinePathCalls = true,
         DataFilePrefix = "cod4",
-        // Keywords = BaseKeywords (the default).
+        Keywords = [.. BaseKeywords, "prof_begin", "prof_end"],
     };
 
     /// <summary>Call of Duty: World at War (2008) — Treyarch. The base plus client scripts (.csc).</summary>
@@ -43,6 +43,7 @@ public sealed partial record GameProfile
         Verified = true,
         HasInlinePathCalls = true,
         HasClientScripts = true,
+        Keywords = [.. BaseKeywords, "prof_begin", "prof_end"],
     };
 
     /// <summary>
@@ -61,7 +62,7 @@ public sealed partial record GameProfile
         Verified = true,
         HasInlinePathCalls = true,
         HasFileScopeConstants = true,
-        Keywords = [.. BaseKeywords, "foreach", "in", "childthread", "call"],
+        Keywords = [.. BaseKeywords, "foreach", "in", "childthread", "call", "prof_begin", "prof_end"],
     };
 
     /// <summary>
@@ -81,6 +82,7 @@ public sealed partial record GameProfile
         HasInlinePathCalls = true,
         HasClientScripts = true,
         HasHashStrings = true,
+        Keywords = [.. BaseKeywords, "prof_begin", "prof_end"],
     };
 
     /// <summary>
@@ -122,7 +124,7 @@ public sealed partial record GameProfile
             // extra intrinsics.
             .. ClassKeywords,
             "do", "function", "autoexec", "private", "const",
-            "waittillmatch", "waitrealtime", "vectorscale", "profilestart", "profilestop",
+            "waitrealtime", "vectorscale", "profilestart", "profilestop",
         ],
     };
 

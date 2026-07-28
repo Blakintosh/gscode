@@ -57,6 +57,8 @@ public static class Keywords
         ["vectorscale"] = TokenKind.VectorScale,
         ["profilestart"] = TokenKind.ProfileStart,
         ["profilestop"] = TokenKind.ProfileStop,
+        ["prof_begin"] = TokenKind.ProfileStart,
+        ["prof_end"] = TokenKind.ProfileStop,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenDictionary<string, TokenKind>.AlternateLookup<ReadOnlySpan<char>> s_keywordSpanLookup =

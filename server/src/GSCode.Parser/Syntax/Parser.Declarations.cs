@@ -487,8 +487,21 @@ public sealed partial class Parser
                 case TokenKind.PrecacheDirective:
                     declarations.Add(ParsePrecache());
                     continue;
+                case TokenKind.Semicolon:
+                    Advance();
+                    continue;
                 default:
                 {
+                    // The Infinity Ward games wrap whole debug FUNCTIONS in a dev block, written
+                    // keyword-less: `/# drawLookaheadDir() { … } #/`. Without this the first such
+                    // function fails and takes the rest of the file's declarations with it, which is
+                    // by far the most common shape in their scripts.
+                    if ( StartsBareFunction() )
+                    {
+                        declarations.Add(ParseFunction());
+                        continue;
+                    }
+
                     AddError(GscDiagnosticCode.ExpectedDeclaration, Current.RootRange, DescribeCurrent());
                     RecoverToDeclarationOrDevClose();
                     continue;

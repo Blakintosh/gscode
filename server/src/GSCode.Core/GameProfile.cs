@@ -80,9 +80,14 @@ public sealed partial record GameProfile
     public EngineFamily Family { get; init; } = EngineFamily.Unknown;
 
     /// <summary>
-    /// Whether this profile's capabilities have been implemented and verified end to end. Only BO3 is
-    /// verified today; the other four SUPPORTED games have their capabilities filled in but not yet
-    /// their parser fork, and the CORES carry nothing game-specific at all.
+    /// Whether this dialect is proven against the game's OWN scripts, not just filled in from a
+    /// worksheet. The bar is the corpus gate: every script in the game's script tree analyses without
+    /// throwing, lex/parse errors stay under 1% (the residue being genuinely malformed files that no
+    /// compiler would accept either), and the formatter round-trips a sample of them without changing
+    /// a token or moving after a second pass.
+    ///
+    /// All five SUPPORTED games clear it. A CORE never does — it carries no game-specific capabilities
+    /// to prove.
     /// </summary>
     public bool Verified { get; init; }
 

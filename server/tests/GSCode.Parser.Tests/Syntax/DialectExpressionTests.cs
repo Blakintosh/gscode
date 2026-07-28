@@ -170,6 +170,53 @@ public class DialectExpressionTests
     }
 
     [Fact]
+    public void ADevBlockCanHoldWholeFunctions()
+    {
+        // The Infinity Ward games wrap debug functions in a top-level dev block, keyword-less. This
+        // shape is everywhere in their scripts, and missing it used to fail the block's first
+        // function and every declaration after it.
+        ParseTree tree = ParserTestHelper.Parse(
+            "run()\n{\n}\n\n/#\ndrawDebug()\n{\n\twait( 0.05 );\n}\n#/\n\nafter()\n{\n}\n", Cod4);
+
+        Assert.Empty(tree.Diagnostics);
+
+        // The declarations after the dev block still parse — that is what regressed before.
+        Assert.Equal(3, tree.Root.Elements.Length);
+        Assert.IsType<DevBlockDeclNode>(tree.Root.Elements[1]);
+    }
+
+    [Theory]
+    [InlineData("if ( deathanim != %dying_crawl_death_v2 )\n\t{\n\t}")]
+    [InlineData("x = a == %walk;")]
+    [InlineData("x = !%walk;")]
+    public void AnAnimReferenceParsesAfterAnyOperator(string statement)
+    {
+        // %walk is an anim reference wherever no operand can sit to its left. An allowlist of
+        // "after = ( , : ? return" missed every comparison operator, so real code lexed % as modulo.
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\t" + statement + "\n}\n", Cod4);
+
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    [Fact]
+    public void ModuloStillParsesAfterAnOperand()
+    {
+        // The other side of the same rule: after an operand, % is modulo, not an anim reference.
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tx = a % b;\n\ty = 7 % 2;\n}\n", Cod4);
+
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    [Fact]
+    public void AKeywordCanBeAFieldName()
+    {
+        // self.wait / ent.size — a keyword is a fine field name, and scripts really do use them.
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tself.wait = 1;\n\tx = spawner.thread;\n}\n", Cod4);
+
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    [Fact]
     public void BlackOps3TreatsCallAsAnOrdinaryIdentifier()
     {
         // BO3's keyword set omits call (its corpus uses it as a variable), so `call = 1;` is a plain

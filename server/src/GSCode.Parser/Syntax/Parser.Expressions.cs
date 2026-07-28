@@ -140,6 +140,23 @@ public sealed partial class Parser
         }
     }
 
+    /// <summary>
+    /// The field name after <c>.</c>. A keyword is a perfectly good field name — scripts really do
+    /// write <c>self.wait</c>, <c>spawner.Wait</c>, <c>ent.size</c> — and nothing is ambiguous in
+    /// member position, so a keyword token is accepted here and used as the name. Which words this
+    /// covers is per-dialect, since the keyword set is; accepting them all means a field named after
+    /// a keyword works in every game.
+    /// </summary>
+    private PToken ExpectFieldName()
+    {
+        if ( TokenFacts.IsKeyword(Kind) )
+        {
+            return Advance();
+        }
+
+        return Expect(TokenKind.Identifier, "field name");
+    }
+
     /// <summary>True when the tokens ahead form a callee for method notation.</summary>
     private bool IsMethodCalleeAhead()
     {
@@ -437,7 +454,7 @@ public sealed partial class Parser
                 case TokenKind.Dot:
                 {
                     Advance();
-                    PToken nameToken = Expect(TokenKind.Identifier, "field name");
+                    PToken nameToken = ExpectFieldName();
                     expression = new MemberNode(new TextRange(expression.Range.Start, nameToken.RootRange.End), expression, nameToken);
                     continue;
                 }

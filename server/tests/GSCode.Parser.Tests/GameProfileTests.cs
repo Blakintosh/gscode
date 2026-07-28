@@ -163,11 +163,18 @@ public class GameProfileTests
     }
 
     [Fact]
-    public void OnlyBlackOps3IsVerified()
+    public void EverySupportedGameIsVerified_AndNoCoreIs()
     {
-        // Supported means "filled in and in scope"; Verified means "verified for the game".
-        // Only BO3 is the latter.
-        Assert.Same(GameProfile.BlackOps3, GameProfile.All.Single(static profile => profile.Verified));
+        // Verified is earned by the per-game corpus gate (GameCorpusTests): the game's own scripts
+        // analyse without throwing, parse within budget, and survive the formatter. All five
+        // supported games clear it; a core has no game-specific capabilities to prove.
+        Assert.Equal(
+            new[] { "cod4", "waw", "mw2", "bo1", "bo3" },
+            GameProfile.All.Where(static profile => profile.Verified).Select(static profile => profile.ShortName).ToArray());
+
+        Assert.All(
+            GameProfile.All.Where(static profile => !profile.Supported),
+            static profile => Assert.False(profile.Verified, profile.ShortName));
     }
 
     [Fact]

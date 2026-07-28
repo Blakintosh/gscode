@@ -506,15 +506,32 @@ public sealed class Lexer
         AddOperator1(TokenKind.Percent, '=', TokenKind.PercentAssign);
     }
 
+    /// <summary>
+    /// Whether a <c>%word</c> here is an animation reference rather than modulo. Stated as the
+    /// complement of the modulo case — <c>%</c> divides only when the token to its left can END an
+    /// operand — because the set of operand-enders is small and closed, where the set of positions an
+    /// anim reference may appear in is not. An allowlist of "after = ( , : ? return" misses every
+    /// other operator, so real code like <c>if ( deathanim != %dying_crawl_death_v2 )</c> and
+    /// <c>anim == %walk</c> lexed as modulo and failed to parse.
+    /// </summary>
     private bool IsAnimReferenceContext()
     {
-        return _lastSignificantKind is null
-            or TokenKind.Assign
-            or TokenKind.OpenParen
-            or TokenKind.Comma
-            or TokenKind.Colon
-            or TokenKind.QuestionMark
-            or TokenKind.Return;
+        return _lastSignificantKind is not (
+            TokenKind.Identifier
+            or TokenKind.Integer
+            or TokenKind.Float
+            or TokenKind.Hex
+            or TokenKind.String
+            or TokenKind.LocalizedString
+            or TokenKind.HashString
+            or TokenKind.AnimReference
+            or TokenKind.CloseParen
+            or TokenKind.CloseBracket
+            or TokenKind.PlusPlus
+            or TokenKind.MinusMinus
+            or TokenKind.True
+            or TokenKind.False
+            or TokenKind.Undefined);
     }
 
     // --- Small operator helpers ---

@@ -25,6 +25,7 @@ public sealed partial record GameProfile
         ReleaseYear = 2007,
         Family = EngineFamily.InfinityWard,
         Supported = true,
+        Verified = true,
         HasInlinePathCalls = true,
         DataFilePrefix = "cod4",
         // Keywords = BaseKeywords (the default).
@@ -39,6 +40,7 @@ public sealed partial record GameProfile
         ReleaseYear = 2008,
         Family = EngineFamily.Treyarch,
         Supported = true,
+        Verified = true,
         HasInlinePathCalls = true,
         HasClientScripts = true,
     };
@@ -56,6 +58,7 @@ public sealed partial record GameProfile
         ReleaseYear = 2009,
         Family = EngineFamily.InfinityWard,
         Supported = true,
+        Verified = true,
         HasInlinePathCalls = true,
         HasFileScopeConstants = true,
         Keywords = [.. BaseKeywords, "foreach", "in", "childthread", "call"],
@@ -74,6 +77,7 @@ public sealed partial record GameProfile
         ReleaseYear = 2010,
         Family = EngineFamily.Treyarch,
         Supported = true,
+        Verified = true,
         HasInlinePathCalls = true,
         HasClientScripts = true,
         HasHashStrings = true,

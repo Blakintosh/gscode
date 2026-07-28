@@ -210,18 +210,6 @@ import chain. If a mod turns out to rely on transitivity, this is the place to w
 `LookupClasses` is deliberately left unfiltered so go-to-definition still works on a class
 written without its import.
 
-### Completion word lists are not dialect-gated
-
-`GscKeywords.StatementKeywords`/`TopLevelKeywords` are static lists that offer every keyword
-regardless of game — so a CoD4 file is still offered `do`, `foreach`, `class`, `new`, and the
-global objects include none of BO3's `classes`. The lexer already gates these keywords per
-profile (`Keywords.TryMatchKeyword`), so completion is the one surface still game-blind. The
-profile carried a `GlobalObjectNames` field for exactly this, but nothing read it, so it was
-removed rather than left as dead intent; when this pass happens, reintroduce the global list on
-the profile and drive both it and the keyword lists from the active `GameProfile`'s capability
-flags. Low urgency — offering a keyword the dialect lacks is a soft wrong, and only BO3 is a
-supported target today.
-
 ### Find-references is not include-scoped on the merge dialects
 
 On the Infinity Ward games `#include` merges functions into scope, so the extractor keys a

@@ -42,6 +42,11 @@ public enum TokenKind
     WaitTillFrameEnd,
     WaitRealTime,
     Thread,
+    // childthread (MW2+, Infinity Ward line) spawns a child thread; call (MW2+) invokes a function
+    // pointer synchronously (call [[ ptr ]]( … )). Distinct kinds from Thread so they highlight as
+    // their own keywords and a dialect that lacks them keeps the word as an identifier.
+    ChildThread,
+    Call,
     If,
     Else,
     Do,

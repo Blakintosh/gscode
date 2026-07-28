@@ -120,13 +120,12 @@ public class GameProfileTests
     }
 
     [Fact]
-    public void TheLineageIsInReleaseOrderAndTargetsThroughBo3()
+    public void TheLineageRunsFromCod4ToBo6InReleaseOrder()
     {
-        // The after-BO3 shells live in a gitignored file, so the lineage may or may not reach past
-        // BO3 depending on whether that file is present. What is guaranteed is that it starts at
-        // CoD4, is release-ordered, and the last SUPPORTED game is BO3.
+        // Every mainline game from CoD4 to BO6 is listed, release-ordered. CoD4 is first, BO6 last.
         Assert.Equal("cod4", GameProfile.All[0].ShortName);
-        Assert.Equal("bo3", GameProfile.All.Last(static profile => profile.Supported).ShortName);
+        Assert.Equal("bo6", GameProfile.All[^1].ShortName);
+        Assert.Equal(18, GameProfile.All.Length);
 
         for ( int i = 1; i < GameProfile.All.Length; i++ )
         {
@@ -137,16 +136,30 @@ public class GameProfileTests
     }
 
     [Fact]
-    public void SupportedGamesRunFromCod4ThroughBo3()
+    public void SupportedGamesAreTheFiveVerifiedSpecGames()
     {
-        // Everything up to and including BO3 is targeted; everything after is left open.
+        // Only five games have their capabilities verified against real scripts; everything else in
+        // the lineage is a CORE (a nameable identity over the base dialect, capabilities unset).
         Assert.Equal(
-            new[] { "cod4", "waw", "mw2", "bo1", "mw3", "bo2", "ghosts", "aw", "bo3" },
+            new[] { "cod4", "waw", "mw2", "bo1", "bo3" },
             GameProfile.All.Where(static profile => profile.Supported).Select(static profile => profile.ShortName).ToArray());
+    }
 
-        Assert.All(
-            GameProfile.All.Where(static profile => !profile.Supported),
-            static profile => Assert.True(profile.ReleaseYear > 2015, $"{profile.ShortName} should be after BO3"));
+    [Fact]
+    public void CoresMatchTheBaseDialect()
+    {
+        // A core sets no capabilities: it is the base IW-style shape (base keywords, #include merge,
+        // path calls) until a contributor fills it in. BO2 is a good example — a Treyarch core with
+        // none of the Treyarch specifics (.csc, hash strings) filled in yet.
+        GameProfile bo2 = GameProfile.ByName("bo2")!;
+        Assert.False(bo2.Supported);
+        Assert.False(bo2.Verified);
+        Assert.False(bo2.HasClientScripts);
+        Assert.False(bo2.HasHashStrings);
+        Assert.False(bo2.HasClasses);
+        Assert.Equal(GameProfile.BaseKeywords, bo2.Keywords);
+        Assert.Equal(ImportStyle.Include, bo2.ImportStyle);
+        Assert.True(bo2.HasInlinePathCalls);
     }
 
     [Fact]
@@ -160,9 +173,10 @@ public class GameProfileTests
     [Fact]
     public void TreyarchGamesBeforeBo3_HaveClientScriptsButNotTheRestOfTheBo3Shape()
     {
-        // The nice detail from the worksheet: WaW/BO1/BO2 shipped .csc, but not headers, classes,
-        // the function keyword or #namespace.
-        foreach ( string name in new[] { "waw", "bo1", "bo2" } )
+        // The nice detail from the worksheet: the supported Treyarch games before BO3 (WaW, BO1)
+        // shipped .csc, but not headers, classes, the function keyword or #namespace. (BO2 is a core,
+        // so its .csc is not filled in yet.)
+        foreach ( string name in new[] { "waw", "bo1" } )
         {
             GameProfile game = GameProfile.ByName(name)!;
             Assert.True(game.HasClientScripts, name);
@@ -182,13 +196,14 @@ public class GameProfileTests
     }
 
     [Fact]
-    public void ForeachArrivesInMw2()
+    public void ForeachIsAFamilyFork_Mw2OnTheIwLineAndBo3OnTheTreyarchLine()
     {
-        // CoD4 (2007) and WaW (2008) have only for/while; MW2 (2009) onward has foreach.
+        // foreach is the Infinity Ward line's MW2 (2009) addition; the Treyarch line does NOT get it
+        // until BO3, so BO1 has none despite being newer than MW2.
         Assert.False(GameProfile.ByName("cod4")!.HasForeach);
         Assert.False(GameProfile.ByName("waw")!.HasForeach);
         Assert.True(GameProfile.ByName("mw2")!.HasForeach);
-        Assert.True(GameProfile.ByName("bo1")!.HasForeach);
+        Assert.False(GameProfile.ByName("bo1")!.HasForeach);
         Assert.True(GameProfile.BlackOps3.HasForeach);
     }
 
@@ -214,9 +229,9 @@ public class GameProfileTests
     [Fact]
     public void HashStringsAreATreyarchFeature()
     {
-        // #"..." a Treyarch feature (BO1, BO2, BO3); the Infinity Ward games have none.
+        // #"..." a Treyarch feature; the supported Treyarch games (BO1, BO3) have it and the Infinity
+        // Ward games have none. (BO2 is an unfilled core.)
         Assert.True(GameProfile.ByName("bo1")!.HasHashStrings);
-        Assert.True(GameProfile.ByName("bo2")!.HasHashStrings);
         Assert.True(GameProfile.BlackOps3.HasHashStrings);
         Assert.False(GameProfile.ByName("mw2")!.HasHashStrings);
         Assert.False(GameProfile.ByName("cod4")!.HasHashStrings);

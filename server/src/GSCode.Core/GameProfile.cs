@@ -80,16 +80,17 @@ public sealed partial record GameProfile
     public EngineFamily Family { get; init; } = EngineFamily.Unknown;
 
     /// <summary>
-    /// Whether this profile's capabilities have been verified. Only BO3 is
-    /// verified; every other entry is a SHELL with placeholder capabilities, present so the game is
-    /// nameable and its facts can be filled in, not relied on yet.
+    /// Whether this profile's capabilities have been implemented and verified end to end. Only BO3 is
+    /// verified today; the other four SUPPORTED games have their capabilities filled in but not yet
+    /// their parser fork, and the CORES carry nothing game-specific at all.
     /// </summary>
     public bool Verified { get; init; }
 
     /// <summary>
-    /// Whether the extension targets this game — the worksheet is filled in and it is within current
-    /// scope. True for CoD4 through BO3; false for everything after, which is left open for a
-    /// contributor to fill in and implement.
+    /// Whether this game's capabilities are filled in and verified against its real scripts. True for
+    /// the five supported games (CoD4, WaW, MW2, BO1, BO3); false for every CORE, whose capabilities
+    /// are left at the base until a contributor fills them in — including the pre-BO3 cores (MW3, BO2,
+    /// Ghosts, AW), which are not supported despite predating BO3.
     /// </summary>
     public bool Supported { get; init; }
 
@@ -111,8 +112,8 @@ public sealed partial record GameProfile
     /// </summary>
     public string? DataFilePrefix { get; init; }
 
-    // --- Capabilities: which language features and worlds exist in this dialect. Shells leave
-    //     these at the conservative defaults below until confirmed. ---
+    // --- Capabilities: which language features and worlds exist in this dialect. Cores leave
+    //     these at the conservative base defaults below until a contributor confirms them. ---
 
     /// <summary>Whether the game has client-side scripts (<c>.csc</c>). CSC is a Treyarch feature.</summary>
     public bool HasClientScripts { get; init; }
@@ -120,8 +121,58 @@ public sealed partial record GameProfile
     /// <summary>Whether the game has preprocessor headers (<c>.gsh</c> / <c>#insert</c>). BO3 onward.</summary>
     public bool HasHeaders { get; init; }
 
-    /// <summary>Whether the language has classes (<c>class</c>, <c>new</c>, <c>-&gt;</c>). T7 only.</summary>
-    public bool HasClasses { get; init; }
+    /// <summary>
+    /// The language keywords this dialect recognizes. A word is a keyword only if it is in this set,
+    /// so a dialect that lacks one (e.g. <c>foreach</c> before MW2, <c>function</c>/<c>class</c> in
+    /// the Infinity Ward games) leaves it an ordinary identifier. Built as <c>[..BaseKeywords, …]</c>:
+    /// the base is the CoD4/WaW/BO1 set that every game shares, and each dialect adds its own on top.
+    /// Directives are gated separately by their feature flags, not listed here.
+    /// </summary>
+    public ImmutableArray<string> Keywords { get; init; } = BaseKeywords;
+
+    /// <summary>The keywords every CoD GSC dialect has — the true base MW2 and BO3 extend.</summary>
+    public static readonly ImmutableArray<string> BaseKeywords =
+    [
+        "if", "else", "for", "while", "switch", "case", "default", "break", "continue", "return",
+        "thread", "wait", "waittill", "waittillframeend", "notify", "endon", "isdefined",
+        "assert", "assertmsg", "true", "false", "undefined",
+    ];
+
+    /// <summary>
+    /// The class-system keywords, kept as one group so a dialect adds them together with a single
+    /// <c>.. ClassKeywords</c> — they all arrive with BO3's class system and none exists without it.
+    /// <see cref="HasClasses"/> keys off <c>class</c>, so including this group turns the whole class
+    /// feature on. <c>autoexec</c>/<c>private</c> are NOT here — they are function modifiers, not
+    /// part of the class system, so a dialect can have them without classes.
+    /// </summary>
+    public static readonly ImmutableArray<string> ClassKeywords =
+        ["class", "var", "new", "constructor", "destructor"];
+
+    private bool HasKeyword(string keyword)
+    {
+        return Keywords.Contains(keyword, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether the given word is a keyword in this dialect. Called only after the central table has
+    /// already recognised the word as a possible keyword, so the scan is over the profile's own set
+    /// (~two dozen entries) and allocation-free — no per-identifier cost on the lexer's hot path.
+    /// </summary>
+    public bool IsKeyword(ReadOnlySpan<char> word)
+    {
+        foreach ( string keyword in Keywords )
+        {
+            if ( word.Equals(keyword, StringComparison.OrdinalIgnoreCase) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether the language has classes (<c>class</c>, <c>new</c>, <c>-&gt;</c>). T7 only. Derived from the keyword set.</summary>
+    public bool HasClasses => HasKeyword("class");
 
     /// <summary>
     /// Whether the engine exposes the <c>world</c> global object. Added in BO3 and present in the
@@ -130,8 +181,8 @@ public sealed partial record GameProfile
     /// </summary>
     public bool HasWorldObject { get; init; }
 
-    /// <summary>Whether a function declaration begins with the <c>function</c> keyword. IW omits it.</summary>
-    public bool HasFunctionKeyword { get; init; }
+    /// <summary>Whether a function declaration begins with the <c>function</c> keyword. IW omits it. Derived from the keyword set.</summary>
+    public bool HasFunctionKeyword => HasKeyword("function");
 
     /// <summary>Whether a file declares its namespace with <c>#namespace</c>. IW keys off the path.</summary>
     public bool HasNamespaceDirective { get; init; }
@@ -174,16 +225,13 @@ public sealed partial record GameProfile
     public bool HasHashStrings { get; init; }
 
     /// <summary>
-    /// Whether the <c>foreach ( item in collection )</c> loop exists. Introduced in MW2 (2009);
-    /// CoD4 and WaW have only <c>for</c> and <c>while</c>.
+    /// Whether the <c>foreach ( item in collection )</c> loop exists. Introduced in MW2 (2009) on the
+    /// Infinity Ward line; the Treyarch line has none until BO3. Derived from the keyword set.
     /// </summary>
-    public bool HasForeach { get; init; }
+    public bool HasForeach => HasKeyword("foreach");
 
-    /// <summary>
-    /// Whether the <c>do { … } while ( … )</c> loop exists. Present in BO3; not seen in any pre-BO3
-    /// script (the axis is usage-derived for the middle games, and CoD4 has none).
-    /// </summary>
-    public bool HasDoWhile { get; init; }
+    /// <summary>Whether the <c>do { … } while ( … )</c> loop exists. BO3 only. Derived from the keyword set.</summary>
+    public bool HasDoWhile => HasKeyword("do");
 
     /// <summary>
     /// Whether assets are precached with the <c>#precache( "type", "asset" )</c> directive. BO3 only;
@@ -343,46 +391,14 @@ public sealed partial record GameProfile
         get { return [.. ScriptExtensions.Select(static extension => "*" + extension)]; }
     }
 
-    /// <summary>
-    /// A game the extension targets (CoD4 through BO3), with its capabilities filled in from the
-    /// worksheet. Anything not passed matches the shared pre-BO3 shape: <c>#include</c> imports,
-    /// path-qualified function pointers, arrays by value, <c>/# #/</c> ScriptDoc, and no headers,
-    /// classes, <c>function</c> keyword or <c>#namespace</c>. <see cref="Verified"/> stays false
-    /// until the capabilities are verified and the parser fork lands.
-    ///
-    /// The profiles themselves live one-per-area under <c>Profiles/</c>, so this file stays the
-    /// record and the registry rather than a wall of game data.
-    /// </summary>
-    internal static GameProfile Targeted(
-        string shortName, string displayName, int year, EngineFamily family,
-        bool hasClientScripts = false, bool hasFileScopeConstants = false, bool hasHashStrings = false,
-        bool hasForeach = true)
-    {
-        return new GameProfile
-        {
-            Id = shortName,
-            ShortName = shortName,
-            DisplayName = displayName,
-            ReleaseYear = year,
-            Family = family,
-            Supported = true,
-            HasClientScripts = hasClientScripts,
-            HasFileScopeConstants = hasFileScopeConstants,
-            HasHashStrings = hasHashStrings,
-            HasForeach = hasForeach,
-            // Every pre-BO3 game shares this: a function reached inline by its file path. do-while
-            // is not seen before BO3, so it stays at the default false here.
-            HasInlinePathCalls = true,
-        };
-    }
-
     private static readonly Lazy<ImmutableArray<GameProfile>> s_lineage = new(BuildLineage);
 
     /// <summary>
-    /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. CoD4 through BO3
-    /// are targeted with capabilities filled in (only BO3 is also <see cref="Verified"/>). The
-    /// after-BO3 shells live in a gitignored file (<c>Profiles/UnsupportedProfiles.cs</c>), so the
-    /// repo stops at BO3 — when that file is absent, the lineage simply ends there.
+    /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. Five are SUPPORTED
+    /// with capabilities verified against real scripts (CoD4, WaW, MW2, BO1, BO3 — only BO3 is also
+    /// <see cref="Verified"/>); the rest are CORES (see <see cref="Core"/>) — nameable identities over
+    /// the shared base dialect, left for a contributor to fill in. All live in
+    /// <c>Profiles/SupportedProfiles.cs</c>.
     /// </summary>
     public static ImmutableArray<GameProfile> All => s_lineage.Value;
 
@@ -399,20 +415,20 @@ public sealed partial record GameProfile
             Ghosts,
             AdvancedWarfare,
             BlackOps3,
+            InfiniteWarfare,
+            WorldWar2,
+            BlackOps4,
+            ModernWarfare2019,
+            BlackOpsColdWar,
+            Vanguard,
+            ModernWarfare2_2022,
+            ModernWarfare3_2023,
+            BlackOps6,
         ];
-
-        AddUnsupportedShells(profiles);
 
         profiles.Sort(static (left, right) => left.ReleaseYear.CompareTo(right.ReleaseYear));
         return [.. profiles];
     }
-
-    /// <summary>
-    /// Appends the after-BO3 shells. Implemented in the gitignored <c>Profiles/UnsupportedProfiles.cs</c>;
-    /// a void partial method, so when that file is absent the call is elided and nothing after BO3
-    /// is listed.
-    /// </summary>
-    static partial void AddUnsupportedShells(List<GameProfile> profiles);
 
     /// <summary>The profile whose short name or id matches (case-insensitive), or null.</summary>
     public static GameProfile? ByName(string name)

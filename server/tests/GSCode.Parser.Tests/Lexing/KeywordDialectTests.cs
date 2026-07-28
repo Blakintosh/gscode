@@ -56,6 +56,33 @@ public class KeywordDialectTests
         Assert.Equal(TokenKind.Identifier, FirstKind("class", Mw2));
     }
 
+    [Fact]
+    public void ChildThreadAndCall_AreMw2KeywordsButBo3AndCod4Identifiers()
+    {
+        // childthread and call are the Infinity Ward line's MW2 additions (their own token kinds).
+        Assert.Equal(TokenKind.ChildThread, FirstKind("childthread", Mw2));
+        Assert.Equal(TokenKind.Call, FirstKind("call", Mw2));
+
+        // BO3 uses neither (its corpus uses `call` as an ordinary identifier ~69x), so there they
+        // stay identifiers — which is exactly what keeps BO3 lexing byte-identical.
+        Assert.Equal(TokenKind.Identifier, FirstKind("childthread", Bo3));
+        Assert.Equal(TokenKind.Identifier, FirstKind("call", Bo3));
+
+        // And the base dialect (CoD4) has neither.
+        Assert.Equal(TokenKind.Identifier, FirstKind("childthread", Cod4));
+        Assert.Equal(TokenKind.Identifier, FirstKind("call", Cod4));
+    }
+
+    [Fact]
+    public void Const_IsBlackOps3Only()
+    {
+        // const is a BO3 addition; the earlier games have no file-scope const keyword, so the word is
+        // an ordinary identifier there.
+        Assert.Equal(TokenKind.Const, FirstKind("const", Bo3));
+        Assert.Equal(TokenKind.Identifier, FirstKind("const", Mw2));
+        Assert.Equal(TokenKind.Identifier, FirstKind("const", Cod4));
+    }
+
     [Theory]
     [InlineData("if", TokenKind.If)]
     [InlineData("else", TokenKind.Else)]

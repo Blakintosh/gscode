@@ -21,6 +21,9 @@ public class DialectCompletionTests
     [InlineData("class")]   // BO3
     [InlineData("new")]     // BO3
     [InlineData("function")] // BO3
+    [InlineData("const")]   // BO3
+    [InlineData("autoexec")] // BO3
+    [InlineData("private")]  // BO3
     [InlineData("#using")]  // BO3 import
     [InlineData("#namespace")]
     [InlineData("#insert")]
@@ -45,7 +48,7 @@ public class DialectCompletionTests
     [InlineData("while")]
     [InlineData("return")]
     [InlineData("waittill")]
-    [InlineData("const")]
+    [InlineData("thread")]
     [InlineData("#define")]
     [InlineData("#if")]
     public void UniversalKeywordsAreOfferedEverywhere(string keyword)

@@ -78,24 +78,35 @@ public static class GscKeywords
 
     /// <summary>
     /// Whether a keyword/directive exists in the given dialect, so completion offers only what the
-    /// game has. Mirrors the lexer's per-profile keyword gating (<c>Keywords.IsEnabled</c>): the
-    /// class family, <c>function</c>, <c>foreach</c> and <c>do</c> follow their capability flags,
-    /// the import/header/precache directives follow theirs, and everything else is universal.
+    /// game has. Directives are gated by their own capability flags (import style, headers, precache);
+    /// every plain keyword is gated by the profile's keyword SET — the same data the lexer gates on
+    /// (<see cref="GameProfile.IsKeyword"/>), so completion and lexing can never disagree about which
+    /// words a game treats as keywords.
     /// </summary>
     public static bool IsAvailable(string keyword, GameProfile profile)
     {
-        return keyword switch
+        switch ( keyword )
         {
-            "foreach" => profile.HasForeach,
-            "do" => profile.HasDoWhile,
-            "function" => profile.HasFunctionKeyword,
-            "class" or "var" or "new" or "autoexec" or "private" or "constructor" or "destructor" => profile.HasClasses,
-            "#using" => profile.ImportStyle == ImportStyle.Namespace,
-            "#include" => profile.ImportStyle == ImportStyle.Include,
-            "#namespace" => profile.HasNamespaceDirective,
-            "#insert" => profile.HasHeaders,
-            "#precache" => profile.HasPrecacheDirective,
-            _ => true,
-        };
+            case "#using":
+                return profile.ImportStyle == ImportStyle.Namespace;
+            case "#include":
+                return profile.ImportStyle == ImportStyle.Include;
+            case "#namespace":
+                return profile.HasNamespaceDirective;
+            case "#insert":
+                return profile.HasHeaders;
+            case "#precache":
+                return profile.HasPrecacheDirective;
+        }
+
+        // The remaining directives (#define, #using_animtree, #animtree, the #if family) exist across
+        // the whole lineage.
+        if ( keyword.StartsWith('#') )
+        {
+            return true;
+        }
+
+        // Everything else is a keyword iff the dialect's keyword set lists it.
+        return profile.IsKeyword(keyword);
     }
 }

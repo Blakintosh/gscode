@@ -364,8 +364,3 @@ FodyWeavers.xsd
 
 # IDEA
 .idea/
-
-# Unsupported after-BO3 game profiles: the repo stops at BO3. Copy
-# UnsupportedProfiles.cs.example to UnsupportedProfiles.cs to work with the shells locally; a game
-# is committed only once it is filled in and moved to SupportedProfiles.cs.
-src/GSCode.Core/Profiles/UnsupportedProfiles.cs

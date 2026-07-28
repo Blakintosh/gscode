@@ -116,10 +116,13 @@ public sealed partial class Parser
 
         while ( true )
         {
-            if ( Kind == TokenKind.Thread )
+            // thread / childthread run the callee on a (child) thread; call invokes a function
+            // pointer synchronously. All three are method-notation modifiers over the target.
+            if ( Kind == TokenKind.Thread || Kind == TokenKind.ChildThread || Kind == TokenKind.Call )
             {
+                bool isThread = Kind != TokenKind.Call;
                 Advance();
-                expression = ParseCallCore(expression, isThread: true);
+                expression = ParseCallCore(expression, isThread);
                 expression = ParsePostfixChain(expression);
                 continue;
             }
@@ -326,10 +329,17 @@ public sealed partial class Parser
         switch ( Kind )
         {
             case TokenKind.Thread:
+            case TokenKind.ChildThread:
             {
-                // thread foo() with no target.
+                // thread foo() / childthread foo() with no target.
                 Advance();
                 return ParseCallCore(target: null, isThread: true);
+            }
+            case TokenKind.Call:
+            {
+                // call [[ ptr ]]( … ) with no target — a synchronous function-pointer call.
+                Advance();
+                return ParseCallCore(target: null, isThread: false);
             }
             case TokenKind.Bang:
             case TokenKind.Tilde:
@@ -641,6 +651,8 @@ public sealed partial class Parser
             or TokenKind.Minus
             or TokenKind.Ampersand
             or TokenKind.Thread
+            or TokenKind.ChildThread
+            or TokenKind.Call
             or TokenKind.New;
     }
 

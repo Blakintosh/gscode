@@ -22,6 +22,12 @@ public static class Keywords
         ["waittillframeend"] = TokenKind.WaitTillFrameEnd,
         ["waitrealtime"] = TokenKind.WaitRealTime,
         ["thread"] = TokenKind.Thread,
+        // childthread and call (MW2+, Infinity Ward line) are their own kinds — childthread parses
+        // like a threaded call, call like a synchronous one. Both are gated per profile, so they are
+        // keywords only where the dialect's keyword set lists them (BO3 uses neither, so there they
+        // stay ordinary identifiers).
+        ["childthread"] = TokenKind.ChildThread,
+        ["call"] = TokenKind.Call,
         ["if"] = TokenKind.If,
         ["else"] = TokenKind.Else,
         ["do"] = TokenKind.Do,
@@ -90,34 +96,7 @@ public static class Keywords
     /// </summary>
     public static bool TryMatchKeyword(ReadOnlySpan<char> word, GameProfile profile, out TokenKind kind)
     {
-        return s_keywordSpanLookup.TryGetValue(word, out kind) && IsEnabled(kind, profile);
-    }
-
-    /// <summary>Whether a keyword exists in the given game's dialect.</summary>
-    private static bool IsEnabled(TokenKind kind, GameProfile profile)
-    {
-        switch ( kind )
-        {
-            case TokenKind.Function:
-                return profile.HasFunctionKeyword;
-            case TokenKind.Foreach:
-                return profile.HasForeach;
-            case TokenKind.Do:
-                return profile.HasDoWhile;
-
-            // The class system and its function modifiers are all BO3-only.
-            case TokenKind.Class:
-            case TokenKind.New:
-            case TokenKind.Var:
-            case TokenKind.Constructor:
-            case TokenKind.Destructor:
-            case TokenKind.Autoexec:
-            case TokenKind.Private:
-                return profile.HasClasses;
-
-            default:
-                return true;
-        }
+        return s_keywordSpanLookup.TryGetValue(word, out kind) && profile.IsKeyword(word);
     }
 
     /// <summary>Matches the word after '#' against the directive table (case-sensitive, whole word).</summary>

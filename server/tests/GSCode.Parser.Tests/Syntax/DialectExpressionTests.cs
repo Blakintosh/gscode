@@ -15,6 +15,7 @@ namespace GSCode.Parser.Tests.Syntax;
 public class DialectExpressionTests
 {
     private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
     private static readonly GameProfile Bo3 = GameProfile.BlackOps3;
 
     /// <summary>Parses a snippet as the body of a function and returns its first expression.</summary>
@@ -134,5 +135,49 @@ public class DialectExpressionTests
         CallNode call = Assert.IsType<CallNode>(FirstExpression("_utility::foo();", Bo3));
 
         Assert.IsType<QualifiedNode>(call.Callee);
+    }
+
+    [Fact]
+    public void ChildThreadIsAThreadedCall()
+    {
+        // childthread foo() runs on a child thread, so it parses like thread — a threaded call.
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("childthread foo();", Mw2));
+
+        Assert.True(call.IsThread);
+        Assert.Null(call.Target);
+    }
+
+    [Fact]
+    public void CallInvokesAFunctionPointerSynchronously()
+    {
+        // call [[ level.func ]]( a ) — a synchronous (non-thread) pointer-deref call.
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("call [[ level.func ]]( a );", Mw2));
+
+        Assert.False(call.IsThread);
+        Assert.IsType<PointerDerefNode>(call.Callee);
+        Assert.Single(call.Arguments);
+    }
+
+    [Fact]
+    public void CallTakesAMethodNotationTarget()
+    {
+        // self call [[ func ]]() — call applies to a target object, like thread does.
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("self call [[ func ]]();", Mw2));
+
+        Assert.False(call.IsThread);
+        Assert.NotNull(call.Target);
+        Assert.IsType<PointerDerefNode>(call.Callee);
+    }
+
+    [Fact]
+    public void BlackOps3TreatsCallAsAnOrdinaryIdentifier()
+    {
+        // BO3's keyword set omits call (its corpus uses it as a variable), so `call = 1;` is a plain
+        // assignment there — the word never becomes a keyword.
+        ExprNode expression = FirstExpression("call = 1;", Bo3);
+
+        AssignmentNode assignment = Assert.IsType<AssignmentNode>(expression);
+        IdentifierNode target = Assert.IsType<IdentifierNode>(assignment.Target);
+        Assert.Equal("call", target.Token.Text);
     }
 }

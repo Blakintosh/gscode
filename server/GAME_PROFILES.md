@@ -1,153 +1,191 @@
-# Game profile worksheet
+# Game profiles — the dialect matrix
 
-Fill in what each game supports. Every row maps to a `GameProfile` shell in
-`src/GSCode.Core/GameProfile.cs`. Only **bo3** is verified today; the rest are `?` until someone
-confirms them. Replace a `?` with the value, and when a whole row is done say so and it gets
-promoted to a real profile with `Verified = true`.
+Every mainline Call of Duty from CoD4 (2007) to BO6 (2024) is a `GameProfile` in
+`src/GSCode.Core/GameProfile.cs`, registered in `Profiles/SupportedProfiles.cs`. A profile is the
+portability seam: every dialect difference — which words are keywords, how imports work, how a
+pointer is written, where the raw scripts live — is reached through it, never through an inline
+constant.
 
-## Legend
+Profiles come in two grades:
 
-- **✓ / ✗** — has it / does not
-- **?** — unknown, fill in
-- **import** — `ns` = `#using` imports a namespace, calls stay qualified (`ns::foo`) · `inc` =
-  `#include` merges functions into the file, calls are unqualified
-- **fptr** — how a function pointer is written: `&` = `&foo` / `&ns::foo` (BO3 style) · `::` = a bare
-  qualified name is the pointer, `maps\mp\_utility::foo` with no parens (IW / pre-BO3 style)
-- **arr-ref** — array parameters passed by reference (✓) or copied by value (✗)
-- **csc** = client scripts (`.csc`) · **gsh** = headers (`.gsh` / `#insert`) · **class** =
-  `class`/`new`/`->` · **func** = the `function` keyword on declarations · **#ns** = the
-  `#namespace` directive
+- **Supported (5):** `cod4`, `waw`, `mw2`, `bo1`, `bo3`. Capabilities verified against each game's
+  real mod-tools scripts (not the wordfile — the scripts are the ground truth). Of these, only
+  **`bo3`** is also **Verified**: implemented end to end, and held byte-identical by the corpus
+  gate. The other four have their capabilities filled in but not yet their parser fork.
+- **Cores (13):** everything else in the lineage — `mw3`, `bo2`, `ghosts`, `aw`, `iw`, `wwii`,
+  `bo4`, `mw19`, `bocw`, `vg`, `mw22`, `mw23`, `bo6`. A core is a **nameable identity over the
+  shared base dialect**: it carries only `Id`/`ShortName`/`DisplayName`/`ReleaseYear`/`Family` (and
+  `HasInlinePathCalls`, the base IW shape). Everything else matches the base until a contributor
+  with that game's tools fills it in and promotes it. A core deliberately encodes **nothing
+  game-specific** — a guess in the matrix is worse than a known blank.
 
-## Matrix
+> Because cores match the base, do not read their rows below as claims about those games. `bo2`
+> shipped `.csc` and hash strings in reality, but its **core** has neither set — that is unfilled
+> work, not a statement that BO2 lacks them.
 
-| game   | studio      | year | csc | gsh | class | func | #ns | import | fptr | arr-ref |
-|--------|-------------|-----:|:---:|:---:|:-----:|:----:|:---:|:------:|:----:|:-------:|
-| cod4   | InfinityWard| 2007 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
-| waw    | Treyarch    | 2008 |  ✓  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
-| mw2    | InfinityWard| 2009 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
-| bo1    | Treyarch    | 2010 |  ✓  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
-| mw3    | InfinityWard| 2011 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
-| bo2    | Treyarch    | 2012 |  ✓  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
-| ghosts | InfinityWard| 2013 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
-| aw     | Sledgehammer| 2014 |  ✗  |  ✗  |   ✗   |  ✗   |  ✗  |   inc    |  ::   |    ✗    |
-| **bo3**| Treyarch    | 2015 |  ✓  |  ✓  |   ✓   |  ✓   |  ✓  |  ns    |  &   |    ✓    |
-| iw     | InfinityWard| 2016 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| wwii   | Sledgehammer| 2017 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| bo4    | Treyarch    | 2018 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| mw19   | InfinityWard| 2019 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| bocw   | Treyarch    | 2020 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| vg     | Sledgehammer| 2021 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| mw22   | InfinityWard| 2022 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| mw23   | Sledgehammer| 2023 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
-| bo6    | Treyarch    | 2024 |  ?  |  ?  |   ?   |  ?   |  ?  |   ?    |  ?   |    ?    |
+---
 
-## The two axes you called out
+## Keywords are data
 
-**Function pointer (`fptr`).** BO3 made a pointer explicit with `&`: `level.f = &foo;` or
-`&namespace::foo;`, and a bare `ns::foo` is always a call. Before BO3 the qualified name itself was
-the pointer — `level.f = maps\mp\_utility::foo;` with **no** parentheses — and `::foo` referenced a
-function in the same file. This is modelled as `FunctionPointerStyle` (`Ampersand` vs
-`PathQualified`) on the profile. It is a per-dialect default now; when the parser fork lands (D2) it
-can also be surfaced as a user setting to override per workspace, since some codebases mix eras.
+The heart of the model. A profile carries a `Keywords` set (an `ImmutableArray<string>`), and a word
+is a keyword **only if it is in that set** — otherwise the lexer leaves it an ordinary identifier, so
+a script may use it as a name. The set is always built as `[.. BaseKeywords, … additions]`: the base
+every CoD GSC dialect shares, plus that dialect's own additions on top.
 
-**Arrays (`arr-ref`).** BO3 passes arrays to functions **by reference only** — a callee that mutates
-an array changes the caller's. Earlier games copy arrays by value. This is `ArraysPassedByReference`
-on the profile; it affects analysis (aliasing), not syntax.
+The presence flags derive from the set rather than being set independently, so they can never drift
+from what the lexer actually does:
 
-## Other differences to record
+```
+HasClasses         => Keywords contains "class"
+HasFunctionKeyword => Keywords contains "function"
+HasForeach         => Keywords contains "foreach"
+HasDoWhile         => Keywords contains "do"
+```
 
-You mentioned there are more (directives especially). Add them here as you find them, and we will
-grow the capability set to match. Candidates already on the radar for the IW family:
+### `BaseKeywords` — the true base (CoD4 / WaW / BO1, and every core)
 
-- `#include` vs `#using` (captured as `import` above)
-- No `function` keyword; a declaration is `name( args ) { }` (captured as `func`)
-- No `#namespace`; a file's namespace is its path (captured as `#ns`)
-- `#using_animtree( "name" )` — present in both families, so probably not a difference
-- Any game-specific directives not in the T7 set (`#precache` variants, etc.) — list them per game:
+```
+if  else  for  while  switch  case  default  break  continue  return
+thread  wait  waittill  waittillframeend  notify  endon  isdefined
+assert  assertmsg  true  false  undefined
+```
 
-| game | directive / feature | notes |
-|------|---------------------|-------|
-|      |                     |       |
+That is the whole base. Note what is **not** here: `foreach`/`in`, `do`, `const`, `function`, the
+class words, `childthread`/`call`, and the BO3 intrinsics (`waittillmatch`, `waitrealtime`,
+`vectorscale`, `profilestart`, `profilestop`) — each is an addition made by a specific game.
 
-- mw2 supports file-scope constants: `CONST_FOO = 4;` outside any function, and they can reference
-  each other (`RUN_N_GUN_TRANSITION_POINT = 60 / MAX_RUN_N_GUN_ANGLE;`). CoD4 does not — the axis is
-  MW2-onward. Parser support is D2.
-- ScriptDoc: BO3 uses `/@ @/`. Every earlier game (both IW and Treyarch) fences it with
-  `///ScriptDocBegin` / `///ScriptDocEnd` lines inside an ordinary `/* */` comment. (Not `/# #/`;
-  that is a dev block.)
+### `ClassKeywords` — the class system, added as one group
 
-## Feature evolution
+```
+class  var  new  constructor  destructor
+```
 
-The lineage alternates between two shapes — an **Infinity Ward shape** and a **Treyarch shape** —
-that stay put through each studio's games, until BO3 rewrites everything. Each row is the diff from
-the prior release, so the toggling is visible.
+Kept together because they all arrive with BO3's class system and none exists without it; a dialect
+adds the whole feature with a single `.. ClassKeywords`. `autoexec`/`private` are **not** in this
+group — they are function modifiers, so a dialect could have them without classes.
 
-| game   | Δ from the prior release |
-|--------|--------------------------|
-| CoD4   | **Baseline (IW3).** `#include`; `::` inline path calls + pointers; `///ScriptDoc`; function-call precache. No csc, no `function` kw, no classes, no hash strings, no file-scope consts. |
-| WaW    | **+ client scripts (`.csc`)** — Treyarch adds them. Everything else as CoD4. |
-| MW2    | **− csc** (IW again); **+ file-scope constants** (`CONST = 4;`). |
-| BO1    | **+ csc**, **+ hash strings** (`#"…"`); **− file-scope consts**. |
-| MW3    | **− csc, − hash strings** (IW shape). |
-| BO2    | **+ csc, + hash strings** (Treyarch shape). |
-| Ghosts | **− csc, − hash strings** (IW shape). |
-| AW     | ~ same as Ghosts — Sledgehammer on an IW-derived engine. |
-| BO3    | **Wholesale rewrite (T7).** + `function` kw, + classes (`class`/`new`/`->`), + `#namespace`, + `#using` namespace imports (replaces `#include`), + `&` pointers (replaces `::`), + `.gsh`/`#insert`, + `#precache` directive, + `/@ @/` ScriptDoc, + arrays by-reference. **− inline path calls.** Keeps csc + hash strings. |
-| IW     | (after BO3) Reverts to the **IW shape**, not T7: no `function` kw, `::` pointers. |
-| WW2    | (after BO3) Sledgehammer. |
+### Per-game keyword additions over the base
 
-Capability axes on `GameProfile`:
+| game   | additions over `BaseKeywords` |
+|--------|-------------------------------|
+| cod4   | *(none — base exactly)* |
+| waw    | *(none)* |
+| mw2    | `foreach` `in` · `childthread` `call` |
+| bo1    | *(none)* |
+| bo3    | `foreach` `in` · `.. ClassKeywords` · `do` `function` `autoexec` `private` `const` · `waittillmatch` `waitrealtime` `vectorscale` `profilestart` `profilestop` |
+| *cores*| *(none — base exactly)* |
 
-- **HasInlinePathCalls** — call/reference a function by its file path, `maps\mp\_utility::foo()`.
-  Every pre-BO3 game; BO3 has none (it uses `#using` + `ns::foo`).
-- **HasHashStrings** — `#"some_string"`, hashed at compile time. Treyarch only (BO1, BO2, BO3); the
-  IW games have none.
-- **HasPrecacheDirective** — `#precache( "type", "asset" )`. BO3 only. Every earlier game precaches
-  with function calls (`PrecacheModel`, `PrecacheItem`, …).
-- **ScriptDocStyle** — `TripleSlash` (pre-BO3) vs `AtSign` (BO3).
+`childthread` and `call` are their own token kinds (`TokenKind.ChildThread` / `TokenKind.Call`), not
+aliases of `thread`: `childthread foo()` parses as a threaded call, `call [[ ptr ]]( … )` as a
+synchronous function-pointer call. They are gated by the set, so in BO3 — whose corpus uses `call`
+as an ordinary variable ~69× — the word stays an identifier, which is exactly what keeps BO3 lexing
+byte-identical.
 
-Also: no `.csc` in any IW game; `.csc` in the Treyarch games; no `function` keyword, no classes, no
-`->`/`new`/varargs, `#include` imports and `::` path-qualified pointers in every pre-BO3 game.
+---
 
-## Language constructs
+## Category matrix (the 5 supported games)
 
-Beyond the shape axes above, individual language constructs appear at different points in the
-lineage. Modelled on `GameProfile` as `Has*` flags, set from what the scripts actually use.
+Columns are the supported games; a core would be an all-base column (same as `cod4` except it ships
+no bundled data).
 
-| construct | availability |
-|-----------|--------------|
-| `foreach ( item in coll )` | **MW2 (2009) onward.** CoD4 and WaW have only `for`/`while` (0 uses; MW2 has 2,523). `HasForeach`. |
-| `do { … } while ( … )` | **BO3.** Not seen in any pre-BO3 script (usage-derived for the middle games; CoD4 has none). `HasDoWhile`. |
-| classes (`class`/`new`/`->`) | **BO3.** `HasClasses`. |
-| varargs (`…`) | **BO3.** `HasClasses`-era; absent pre-BO3. |
+### Imports & function pointers
 
-Shared baseline — present in **every** game, so not axes: `for`, `while`, `if`/`else`, `switch`/
-`case`/`default`, `break`, `continue`, `return`, `wait`, `waittill` / `notify` / `endon` /
-`waittillframeend` / `waittillmatch`, `thread`, `isdefined`, `#define` macros, `#using_animtree`,
-`%anim` references, `/# #/` dev blocks.
+| axis | cod4 | waw | mw2 | bo1 | bo3 |
+|------|:----:|:---:|:---:|:---:|:---:|
+| import style (`ImportStyle`) | `#include` | `#include` | `#include` | `#include` | `#using` |
+| inline path calls (`HasInlinePathCalls`) — `maps\mp\_utility::foo()` | ✓ | ✓ | ✓ | ✓ | ✗ |
+| function pointer (`FunctionPointerStyle`) | `::` | `::` | `::` | `::` | `&` |
+| `#namespace` directive (`HasNamespaceDirective`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 
-Still to pin down (constructs whose exact introduction point is unconfirmed): the ternary `?:`
-(barely present in CoD4, common from MW2), `assert`/`assertmsg`, `breakpoint`, and any per-game
-builtins. Add them as flags once a construct is confirmed to differ between games.
+`::` = a bare qualified name **is** the pointer (`level.f = maps\mp\_utility::foo;`, no parens);
+parentheses would call it. `&` = BO3 makes the pointer explicit (`level.f = &foo;` / `&ns::foo`), and
+a bare `ns::foo` is always a call.
+
+### Loops, classes & declarations (all derived from the keyword set)
+
+| axis | cod4 | waw | mw2 | bo1 | bo3 |
+|------|:----:|:---:|:---:|:---:|:---:|
+| `foreach ( x in coll )` (`HasForeach`) | ✗ | ✗ | ✓ | ✗ | ✓ |
+| `do { … } while ( … )` (`HasDoWhile`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| classes `class`/`new`/`->` (`HasClasses`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| `function` keyword on decls (`HasFunctionKeyword`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| `const` keyword | ✗ | ✗ | ✗ | ✗ | ✓ |
+| `autoexec` / `private` modifiers | ✗ | ✗ | ✗ | ✗ | ✓ |
+| `childthread` / `call` | ✗ | ✗ | ✓ | ✗ | ✗ |
+| file-scope constants `CONST = 4;` (`HasFileScopeConstants`) | ✗ | ✗ | ✓ | ✗ | ✗ |
+
+**`foreach` is a family fork, not a timeline.** It is the Infinity Ward line's MW2 (2009) addition;
+the Treyarch line does **not** get it until BO3. So BO1 (2010) has none despite being newer than
+MW2 — grepping the games confirms it (0 uses in CoD4/WaW/BO1, 2,523 in MW2). Modelling it as a flat
+"MW2 onward" would wrongly hand it to BO1.
+
+### World objects (`GlobalObjectNames`)
+
+| object | cod4 | waw | mw2 | bo1 | bo3 |
+|--------|:----:|:---:|:---:|:---:|:---:|
+| `self` `level` `game` `anim` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `world` (`HasWorldObject`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| `classes` (with the class system) | ✗ | ✗ | ✗ | ✗ | ✓ |
+
+`world` was added in BO3 and is present in the Treyarch games from then on; the earlier games and
+the whole Infinity Ward line have `self`/`level`/`game`/`anim` but no `world` (pre-BO3 `world` hits
+in the corpus are strings and comments).
+
+### Other language features
+
+| axis | cod4 | waw | mw2 | bo1 | bo3 |
+|------|:----:|:---:|:---:|:---:|:---:|
+| client scripts `.csc` (`HasClientScripts`) | ✗ | ✓ | ✗ | ✓ | ✓ |
+| headers `.gsh` / `#insert` (`HasHeaders`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| hash strings `#"…"` (`HasHashStrings`) | ✗ | ✗ | ✗ | ✓ | ✓ |
+| `#precache( "type", … )` directive (`HasPrecacheDirective`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| arrays passed by reference (`ArraysPassedByReference`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| ScriptDoc style (`ScriptDocStyle`) | `///` | `///` | `///` | `///` | `/@ @/` |
+
+`///` = the pre-BO3 form, `///ScriptDocBegin` / `///ScriptDocEnd` lines inside an ordinary `/* */`
+comment (not `/# #/`, which is a dev block). BO3 uses `/@ … @/`. Hash strings and `.csc` are Treyarch
+features — hence BO1 and BO3 have them and the Infinity Ward line has none. BO3 passes arrays **by
+reference only**; earlier games copy by value, which changes aliasing analysis, not syntax.
+
+### Directives
+
+Directives are gated by capability flags, **not** by the keyword set. `#include` is the IW import;
+`#using`/`#namespace`/`#insert`/`#precache` are BO3. `#define`, `#using_animtree`, `#animtree`, and
+the `#if`/`#elif`/`#else`/`#endif` preprocessor family exist across the whole lineage and are never
+gated.
+
+---
 
 ## Root discovery (where the raw scripts live)
 
 Only BO3 has an install the extension can find on its own — the `TA_TOOLS_PATH` environment variable
-plus the `share\raw` subfolder, both recorded on its profile. No other game ships that, so **every
-non-BO3 game takes a user-defined raw path**: the existing `gscode.rawPath` (and `gscode.modsPath`)
-settings, which override the profile's env-var lookup for any game. With none set, the workspace
-runs in workspace-only mode, which is first-class.
+plus the `share\raw` subfolder (and `mods`), all recorded on its profile. No other game ships that,
+so **every non-BO3 game takes a user-defined raw path**: `gscode.rawPath` / `gscode.modsPath`, which
+override the profile's env-var lookup. With none set, the workspace runs in workspace-only mode,
+which is first-class and tested.
 
-So the model is: BO3 auto-detects via the env var; every earlier game points `gscode.rawPath` at
-its own raw scripts folder. The profile already encodes this (`RootEnvironmentVariable` /
-`RawSubfolder` / `ModsSubfolder` are null for every game but BO3), so nothing hardcodes BO3's paths.
+`RootEnvironmentVariable` / `RawSubfolder` / `ModsSubfolder` are therefore null on every profile but
+BO3 — nothing hardcodes BO3's paths.
 
-Planned enhancement (not built): after switching to a non-BO3 game with no raw path set, prompt once
-to configure `gscode.rawPath` — the same nudge as the game-mismatch prompt. A per-game raw path
-(so switching games remembers each) is a possible later refinement; a workspace is one game, so a
-single `gscode.rawPath` is enough for now.
+## Bundled data files (`DataFilePrefix`)
 
-## Coverage
+A profile with a `DataFilePrefix` ships bundled data — the builtin API, object fields, radiant keys,
+and stock-script list — named from the prefix (`<prefix>_api_gsc.json`, `<prefix>_object_fields.json`,
+`<prefix>_radiant_keys.json`, `<prefix>_stock_scripts.txt`). The client API is listed only when the
+game has `.csc`.
 
-Every game CoD4 through BO3 has its profile filled in. Still open (unsupported shells): everything
-after BO3 except IW and WW2 — **BO4, MW19, BOCW, VG, MW22, MW23, BO6**.
+| game | `DataFilePrefix` | ships data? |
+|------|:----------------:|:-----------:|
+| cod4 | `cod4` | ✓ (752 functions, 297 radiant keys, 108 fields, 894 stock scripts) |
+| bo3  | `t7`   | ✓ (full T7 set, incl. `t7_api_csc.json`) |
+| waw / mw2 / bo1 / all cores | *(null)* | ✗ — a workspace on that game loads no builtin data rather than BO3's |
+
+---
+
+## Promoting a core
+
+To turn a core into a supported profile: grep ~15 real scripts from that game's `maps/mp/gametypes/`
+folder to confirm each axis (scripts over wordfile), replace the `Core(…)` call with an explicit
+`new() { … }` in `SupportedProfiles.cs`, set `Supported = true`, add its keyword additions and
+capability flags, and — once implemented end to end — `Verified = true`. Add rows here for the new
+game and update the tables.

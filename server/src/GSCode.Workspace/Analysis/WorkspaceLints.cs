@@ -73,6 +73,7 @@ public static class WorkspaceLints
         lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path));
         lints.AddRange(UnusedLocalLint.Analyze(result));
         lints.AddRange(CaseLabelLint.Analyze(result));
+        lints.AddRange(UnreachableCodeLint.Analyze(result));
         // One typer for both field rules: each of them runs the assignment inference, and the
         // walk is the expensive half.
         FlowTyper typer = new(languageBuiltins, objectFields);

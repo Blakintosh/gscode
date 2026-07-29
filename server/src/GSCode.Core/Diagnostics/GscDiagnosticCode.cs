@@ -105,4 +105,5 @@ public enum GscDiagnosticCode
     /// without it every builtin call would look unresolved.
     /// </summary>
     BuiltinFunctionNotFound = 5014,
+    UnreachableCode = 5015,
 }

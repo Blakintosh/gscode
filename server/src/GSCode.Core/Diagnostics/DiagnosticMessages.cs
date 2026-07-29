@@ -81,6 +81,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.ReadOnlyFieldWrite] = "Engine field '{0}' is read-only; assigning to it has no effect.",
         [GscDiagnosticCode.SizeIsReadOnly] = "'.size' is read-only and cannot be assigned.",
         [GscDiagnosticCode.DevOnlyFunctionCalledFromRelease] = "'{0}' is declared inside a '/# #/' dev block and will not exist in a release build.",
+        [GscDiagnosticCode.UnreachableCode] = "Unreachable: the preceding '{0}' always leaves this block.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

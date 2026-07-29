@@ -59,7 +59,11 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         if ( hit.Kind != HitKind.Reference )
         {
-            return Task.FromResult<LocationOrLocationLinks?>(null);
+            // Not something the reference index knows, which is every LOCAL: the index is keyed by
+            // SymbolKey and shared workspace-wide, so an `i` in one function would collide with an
+            // `i` in every other. Locals are resolved from the AST instead, per function, which is
+            // the scope they actually have.
+            return Task.FromResult(LocalDefinitionAt(target, request.Position.ToCore()));
         }
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
@@ -80,6 +84,23 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         return Task.FromResult<LocationOrLocationLinks?>(
             new LocationOrLocationLinks(definitions.Select(location => new LocationOrLocationLink(location))));
+    }
+
+    /// <summary>The parameter or assignment that introduced the local under the cursor, if any.</summary>
+    private static LocationOrLocationLinks? LocalDefinitionAt(
+        NavigationTarget target, GSCode.Core.Text.Position position)
+    {
+        GSCode.Core.Text.TextRange? range = LocalDefinition.Find(target.Result, position);
+        if ( range is null )
+        {
+            return null;
+        }
+
+        return new LocationOrLocationLinks(new Location
+        {
+            Uri = DocumentUri.FromFileSystemPath(target.Path),
+            Range = range.Value.ToLsp(),
+        });
     }
 
     /// <summary>

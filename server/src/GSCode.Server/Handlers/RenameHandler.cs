@@ -1,4 +1,5 @@
 using GSCode.Core.Symbols;
+using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -10,18 +11,24 @@ using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 namespace GSCode.Server.Handlers;
 
 /// <summary>
-/// Renames functions, classes, and macros across every reference in the visible context.
-/// Because mods never see each other, a rename in one mod can never touch another. Builtins,
-/// keywords, and literals are not renameable (prepareRename rejects them).
+/// Renames anything the SCRIPTS define, across every reference in the visible context: functions,
+/// classes, macros, their own fields, and the string/hash/anim literals they coin. Because mods
+/// never see each other, a rename in one mod can never touch another. What the ENGINE defines -
+/// builtins and engine fields - and the keywords are rejected by prepareRename.
 /// </summary>
 public sealed class RenameHandler : RenameHandlerBase
 {
     private readonly NavigationSupport _support;
+    private readonly BuiltinApiSet _builtins;
+    private readonly ObjectFields _objectFields;
     private readonly TextDocumentSelector _selector;
 
-    public RenameHandler(NavigationSupport support, TextDocumentSelector selector)
+    public RenameHandler(
+        NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields, TextDocumentSelector selector)
     {
         _support = support;
+        _builtins = builtins;
+        _objectFields = objectFields;
         _selector = selector;
     }
 
@@ -39,7 +46,7 @@ public sealed class RenameHandler : RenameHandlerBase
         }
 
         PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
-        if ( !IsRenameable(hit) )
+        if ( !IsRenameable(hit, _builtins.For(target.Language), _objectFields) )
         {
             return Task.FromResult<WorkspaceEdit?>(null);
         }
@@ -70,14 +77,47 @@ public sealed class RenameHandler : RenameHandlerBase
         return Task.FromResult<WorkspaceEdit?>(new WorkspaceEdit { Changes = changes });
     }
 
-    /// <summary>Only script-defined symbols are renameable; builtins/fields/literals are not.</summary>
-    internal static bool IsRenameable(PositionHit hit)
+    /// <summary>
+    /// Whether the thing under the cursor is the SCRIPT'S to rename.
+    ///
+    /// The line is ownership, not kind. Anything the scripts define — functions, classes, macros,
+    /// their own fields, and the string/hash/anim literals they coin — can be renamed, because
+    /// every occurrence is in the workspace and the edit is complete. Anything the ENGINE defines
+    /// cannot: renaming <c>GetTime</c> or <c>.origin</c> would rewrite the call sites while the
+    /// engine kept the old name, turning working code into code that silently resolves to nothing.
+    ///
+    /// Restricting it to Function/Class/Macro was a cruder version of the same idea — it excluded
+    /// the engine, but took the scripts' own fields and literals with it, and a notify string is
+    /// exactly the kind of name worth renaming everywhere at once.
+    /// </summary>
+    internal static bool IsRenameable(PositionHit hit, BuiltinApi builtins, ObjectFields objectFields)
     {
         if ( hit.Kind != HitKind.Reference )
         {
             return false;
         }
 
-        return hit.Key.Kind is SymbolKind.Function or SymbolKind.Class or SymbolKind.Macro;
+        switch ( hit.Key.Kind )
+        {
+            case SymbolKind.Function:
+                // A builtin call is keyed as a Function like any other, so the library is what
+                // tells them apart.
+                return builtins.Find(hit.Key.Name) is null;
+
+            case SymbolKind.Field:
+                // An engine field is the engine's name in the same way a builtin is.
+                return objectFields.FindField(hit.Key.Name).Length == 0;
+
+            case SymbolKind.Class:
+            case SymbolKind.Macro:
+            case SymbolKind.StringLiteral:
+            case SymbolKind.HashString:
+            case SymbolKind.LocalizedString:
+            case SymbolKind.AnimReference:
+                return true;
+
+            default:
+                return false;
+        }
     }
 }

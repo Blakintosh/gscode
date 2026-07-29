@@ -37,6 +37,14 @@ Log.Information("GSCode v2 language server starting");
 TransportOptions transportOptions = new();
 CommandLine.Parser.Default.ParseArguments<TransportOptions>(args).WithParsed(parsed => transportOptions = parsed);
 
+// Before anything resolves the bundled data: those singletons read whichever game is active when
+// they are first requested, and that happens during container construction.
+if ( !string.IsNullOrWhiteSpace(transportOptions.Game) )
+{
+    GameProfile.Select(transportOptions.Game);
+    Log.Information("Game profile: {Game} ({Display})", GameProfile.Active.ShortName, GameProfile.Active.DisplayName);
+}
+
 TransportResolver.ResolvedTransport transport = await TransportResolver.ResolveAsync(transportOptions, CancellationToken.None);
 Log.Information("Transport connected (pipe={Pipe}, socket={Socket}, stdio fallback otherwise)", transportOptions.PipeName, transportOptions.SocketPort);
 
@@ -146,13 +154,10 @@ LanguageServer server = await LanguageServer.From(options =>
                 settings.Apply(initializationOptions);
                 levelSwitch.MinimumLevel = ServerLogLevel.FromSetting(settings.ServerLogLevel);
 
-                // Select the game HERE, not only in ConfigurationHandler. The data-file singletons
-                // are deliberately lazy so GameProfile.Active can be the workspace's game before
-                // they load — but nothing set it this early, so whatever resolved one first loaded
-                // the DEFAULT game's data, and the later Select moved the profile without reloading
-                // it. A CoD4 workspace then ran on BO3 builtins, fields and dev-only list.
+                // A safety net for hosts that do not pass --game: the profile is normally chosen
+                // from the command line before the container is built, because the bundled data
+                // resolves during construction and would otherwise load for the default game.
                 GameProfile.Select(settings.Game);
-                Log.Information("Game profile: {Game} ({Display})", GameProfile.Active.ShortName, GameProfile.Active.DisplayName);
             }
 
             List<string> workspaceFolders = [];

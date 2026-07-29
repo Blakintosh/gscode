@@ -74,9 +74,17 @@ export async function createLanguageClient(
     );
     log.info(`Launching server: dotnet ${serverDll}`);
 
+    // The game goes on the COMMAND LINE, not only in initializationOptions. The server picks its
+    // bundled data (builtin API, engine fields) from the active profile while its container is
+    // built, which happens before the initialize handshake — so a game learned from the handshake
+    // arrives too late and the data has already loaded for the default game.
+    const settings = readSettings();
+    const serverArgs = [serverDll, "--game", settings.game];
+    log.info(`Server game: ${settings.game}`);
+
     const serverOptions: ServerOptions = {
-        run: { command: "dotnet", transport: TransportKind.pipe, args: [serverDll] },
-        debug: { command: "dotnet", transport: TransportKind.pipe, args: [serverDll] },
+        run: { command: "dotnet", transport: TransportKind.pipe, args: serverArgs },
+        debug: { command: "dotnet", transport: TransportKind.pipe, args: serverArgs },
     };
 
     // Server stderr (Serilog) lands in this channel; the "GSCode" LogOutputChannel
@@ -94,7 +102,7 @@ export async function createLanguageClient(
             configurationSection: "gscode",
         },
         initializationOptions: {
-            gscode: readSettings(),
+            gscode: settings,
         },
         outputChannel: serverChannel,
     };

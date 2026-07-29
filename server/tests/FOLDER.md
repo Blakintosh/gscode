@@ -57,11 +57,15 @@ branch hint · `InsertTests` `#insert`, including cycles and depth limits.
 unmatched `#/`, which stock scripts really do ship · `DialectDeclarationTests` keyword-less function
 declarations · `DialectExpressionTests` path calls `maps\mp\_util::foo()`, `childthread`, `call [[ ]]`,
 anim references, dev blocks holding whole functions, keywords as field names ·
-`DialectImportTests` `#include` against `#using`.
+`DialectImportTests` `#include` against `#using` · `ParserTerminationTests` that the parser always
+terminates, under a timeout so a regression fails the suite instead of eating all available memory
+on half-typed text.
 
 **Extraction.** `ExtractionTests` symbols and references · `DuplicateFunctionTests` ·
 `LoopVariableTests` induction variables · `MacroDefaultParameterTests`, `MacroExpansionReferenceTests`
-macro provenance · `SemanticTokenBuilderTests` · `DialectResolutionTests` per-dialect symbol keys.
+macro provenance · `SemanticTokenBuilderTests`, which pins what is deliberately NOT emitted (comments, keywords,
+strings and numbers all belong to the grammar) · `TripleSlashScriptDocTests` ScriptDoc on the pre-BO3
+games · `DialectResolutionTests` per-dialect symbol keys.
 
 **Other.** `GameProfileTests` the profile registry — the 18-game lineage, which games are Supported
 and Verified, keyword sets, and every capability flag · `NameTableTests` interning ·
@@ -81,7 +85,9 @@ including which dev-only builtin candidates the stock corpus contradicts · `Amb
 `FunctionResolutionLintTests` 5013/5014, the split between a script miss and a builtin miss and every
 condition that makes an Error defensible · `PathCallResolutionTests` a path call into a file the
 distribution does not ship, reported once for the file rather than once per call ·
-`GameShapeDetectorTests` inferring a workspace's game.
+`UnreachableCodeLintTests` 5015 · `UnassignedVariableLintTests` 5016, and the ten shapes that are
+NOT mistakes — each appeared in code that ships and works · `PragmaDirectiveTests` in-comment
+suppression · `GameShapeDetectorTests` inferring a workspace's game.
 
 **Api.** `ApiLoaderTests` the builtin library · `ObjectFieldsTests` engine fields, and that only
 weapon fields are read-only · `RadiantKeyVisibilityTests` client-side keys — hidden from GSC, offered
@@ -96,7 +102,10 @@ to CSC — covering both how BO3 marks them (a `client` prefix) and how WaW/BO1 
 **Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order ·
 `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·
 `MacroNavigationTests`, `GshMacroLookupTests` macros across the three language worlds ·
-`DialectDependencyTests`, `DialectIncludeScopeTests` the `#include` merge graph.
+`DialectDependencyTests`, `DialectIncludeScopeTests` the `#include` merge graph ·
+`LocalDefinitionTests` go-to-definition on a local, which the shared reference index deliberately
+does not carry · `RootDerivationTests` finding the game when nothing is configured ·
+`ServerBuildIdentityTests` that two games can never share a cache.
 
 **Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` · `StaleAnalysisTests` edits
 racing analysis · `WatchedFileUpdaterTests` · `FlowTyperTests`, `TypeFlowConvergenceTests` local type
@@ -122,18 +131,24 @@ each profile's `ShortName`.
 - `CorpusDiagnosticSweepTests` — the whole lint pipeline over shipped scripts, where anything
   reported is either a real defect in the game's code or a false positive in ours.
 - `ScriptDocCorpusTests` — ScriptDoc parsing against real doc blocks.
+- `UnassignedVariableSweepTests` — measures 5016's false-positive RATE on shipped scripts rather
+  than gating on a count. It went 2,742 reports on CoD4 alone down to 17 across all 7,309 scripts
+  as each dialect fact was learned, so a jump means a gap in the rule's exclusions.
 
 **Formatting.** `GscFormatterTests` the formatter at large · `FormatMinimalEditsTests` minimal edits ·
 `StaleFormatEditTests` edits against a changed buffer · `UnbracedBodyFormattingTests`,
 `UnbracedBodyShapeTests` braceless bodies · `ElseIfChainTests` · `OperatorSpacingTests`,
 `BracketSpacingTests` · `ColumnAlignerTests`, `AssignmentAlignerTests` · `DirectiveSorterTests` ·
-`FormatOptionsTests` the settings layer · `GuidelineExampleTests` the examples in `FORMATTING.md`.
+`FormatOptionsTests` the settings layer · `FormatPragmaTests` `#pragma warning disable format` ·
+`GuidelineExampleTests` the examples in `FORMATTING.md`.
 
 **Handlers.** `CodeActionHandlerTests` quick fixes · `CodeLensArgumentTests` the lens command payload,
 which must be primitives so no serializer can case-mangle it · `CompletionResolveDataTests` ·
 `DiagnosticsScopeTests` `gscode.diagnostics.scope` · `BuiltinAtTests` the builtin-under-cursor
 request · `OnTypeBlockScopeTests` · `UntitledDocumentTests` documents with no path ·
-`WorkspaceFoldersHandlerTests` · `IndexProgressNotifierTests`, `ServerStatusNotifierTests`.
+`WorkspaceFoldersHandlerTests` · `IndexProgressNotifierTests`, `ServerStatusNotifierTests` ·
+`DocumentSymbolNamelessTests` a half-typed declaration, which used to fail the WHOLE outline
+request · `RenameScopeTests` what may be renamed, drawn on ownership rather than kind.
 
 **Configuration and mapping.** `SettingsReachTheServerTests` that a setting actually arrives ·
 `EffectiveSummaryTests` · `DiagnosticMappingTests` our diagnostics to LSP.

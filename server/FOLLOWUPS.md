@@ -267,25 +267,26 @@ import chain. If a mod turns out to rely on transitivity, this is the place to w
 `LookupClasses` is deliberately left unfiltered so go-to-definition still works on a class
 written without its import.
 
-### Find-references is not include-scoped on the merge dialects
+### Find-references include-scoping on the merge dialects — DONE
 
-On the Infinity Ward games `#include` merges functions into scope, so the extractor keys a
-function and every call to it as `(null, name)` — no namespace — and go-to-definition resolves
-by name, then narrows to the asking file's include scope (`DefinitionHandler.ScopeToIncludes`).
-Find-references and the CodeLens count do **not** narrow: two unrelated files that both define
-`spawn()` share the one key, so find-references on either lists the other's uses too, and the
-lens counts both.
+Kept for the reasoning, because the shape of the fix was not the one predicted here, and the
+prediction that it was low-value was wrong within a day of a real IW workspace using it.
 
-Deliberately left for now. Scoping it correctly means resolving **each use** to its definition
-file — an include-set membership test per referencing record (the `#include` dependency edges
-now make this possible) — and applying it to the shared `DatabaseQueries.FindAllReferences`, not
-just `ReferencesHandler`: the CodeLens count runs through the same query, and narrowing one
-without the other rewidens exactly the count-vs-peek disagreement the shared query was
-introduced to kill. That is a cross-cutting, `O(refs × include-set)` change on the hottest names,
-for the lowest-value of the merge-resolution refinements (go-to-definition precision, which users
-hit far more often, is already done). Revisit if a real IW workspace makes the noise a problem;
-this is the place, and both surfaces must move together. BO3 (`#using`, namespace-qualified) is
-unaffected — its keys already disambiguate.
+The note below called for an include-set membership test per referencing FILE. That was tried and
+was wrong twice. Checking `#include` alone missed path calls entirely, taking a function whose
+callers all reach it by path from 1,230 references to zero — a confidently wrong small answer that
+reads as "this is dead code". Keeping or dropping a whole FILE then meant a file that reaches the
+declaring one contributed every same-named reference it holds, including its own declaration.
+
+Scoping is per REFERENCE. A path call names its file outright, so the path at that exact site
+decides it; anything else is a bare name, which a merge dialect resolves locally first, so it
+belongs to the referencing file when that file declares it. `DatabaseQueries.ScopeToIncludeGraph`
+is shared by find-references, rename and the CodeLens count, so the number and the peek list cannot
+disagree. `ReferenceScopingTests` covers both reported symptoms.
+
+The original note follows.
+
+### Find-references is not include-scoped on the merge dialects (superseded)
 
 ### ScriptDoc coverage is 499 of 572 blocks
 

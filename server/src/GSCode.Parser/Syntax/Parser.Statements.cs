@@ -16,7 +16,20 @@ public sealed partial class Parser
 
         while ( Kind != TokenKind.CloseBrace && Kind != TokenKind.EndOfFile )
         {
+            int before = _index;
             statements.Add(ParseStatement());
+
+            // Belt and braces. Every statement parser is meant to consume something, and one that
+            // did not spun here forever while appending a diagnostic each pass — a non-terminating
+            // parse that presents as unbounded memory rather than as a hang, in the editor's
+            // analysis path, on text the user is midway through typing.
+            //
+            // The cost of being wrong is severe enough, and the check cheap enough, that the loop
+            // should not be able to fail this way whatever a future statement parser does.
+            if ( _index == before )
+            {
+                Advance();
+            }
         }
 
         if ( !Match(TokenKind.CloseBrace) )
@@ -109,7 +122,17 @@ public sealed partial class Parser
         if ( !CanStartExpression(Kind) )
         {
             AddError(GscDiagnosticCode.ExpectedStatement, Current.RootRange, DescribeCurrent());
-            RecoverToStatement();
+
+            // This path has consumed NOTHING, which is the one case RecoverToStatement cannot
+            // handle: it returns without advancing when the current token is itself a sync point,
+            // on the documented assumption that its caller already moved. `function` is both a sync
+            // point and unable to start an expression, so a bare `function` inside a block left the
+            // position exactly where it was — and ParseBlock's loop, which only stops at `}` or end
+            // of file, called straight back in.
+            //
+            // That is not a slow parse but a non-terminating one, and every pass appends another
+            // diagnostic, so it fails as unbounded memory rather than as a hang.
+            RecoverUnstuck();
             return new ErrorNode(RangeFrom(start));
         }
 
@@ -158,6 +181,25 @@ public sealed partial class Parser
                 return;
             }
 
+            Advance();
+        }
+    }
+
+    /// <summary>
+    /// <see cref="RecoverToStatement"/>, guaranteed to consume at least one token.
+    ///
+    /// For callers that have not already advanced. Checking whether recovery actually moved is
+    /// better than advancing first: advancing unconditionally would step over a sync point that
+    /// recovery was right to stop at, so error recovery would resume one statement further on than
+    /// it should and swallow a construct that parses perfectly well.
+    /// </summary>
+    private void RecoverUnstuck()
+    {
+        int before = _index;
+        RecoverToStatement();
+
+        if ( _index == before )
+        {
             Advance();
         }
     }

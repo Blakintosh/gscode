@@ -26,9 +26,29 @@ public class LexerBasicsTests
     [InlineData(".5", TokenKind.Float)]
     [InlineData("0xFF", TokenKind.Hex)]
     [InlineData("0x1a2B", TokenKind.Hex)]
+    // Exponents. The reported case is 0.5e-09, from a vector literal in stock script.
+    [InlineData("0.5e-09", TokenKind.Float)]
+    [InlineData("1e5", TokenKind.Float)]      // no dot, still a float
+    [InlineData("1E5", TokenKind.Float)]
+    [InlineData("2.5e+3", TokenKind.Float)]
+    [InlineData(".5e3", TokenKind.Float)]     // leading dot and an exponent together
     public void Lex_NumericLiterals(string source, TokenKind expected)
     {
         LexTestHelper.AssertSingle(source, expected);
+    }
+
+    [Theory]
+    [InlineData("1e")]      // marker with nothing after it
+    [InlineData("1e+")]     // sign with no digits
+    [InlineData("1etc")]    // a word that merely starts with e
+    public void Lex_AnEThatIsNotAnExponent_LeavesTheNumberAlone(string source)
+    {
+        // The suffix is validated before ANY of it is consumed, because the lexer cannot back up:
+        // eating the marker first would take the "e" out of the identifier that follows it.
+        List<TokenKind> kinds = LexTestHelper.SignificantKinds(source);
+
+        Assert.Equal(TokenKind.Integer, kinds[0]);
+        Assert.DoesNotContain(TokenKind.Float, kinds);
     }
 
     [Fact]

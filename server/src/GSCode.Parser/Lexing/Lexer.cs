@@ -249,6 +249,7 @@ public sealed class Lexer
         }
 
         // A dot with a digit after it makes this a float; a bare trailing dot does not.
+        bool isFloat = false;
         if ( _offset < _source.Length && _source[_offset] == '.' && char.IsAsciiDigit(Peek(1)) )
         {
             _offset++;
@@ -257,11 +258,53 @@ public sealed class Lexer
                 _offset++;
             }
 
-            AddToken(TokenKind.Float, start, _offset - start);
-            return;
+            isFloat = true;
         }
 
-        AddToken(TokenKind.Integer, start, _offset - start);
+        // An exponent makes it a float with or without a dot, so 1e5 is one just as 0.5e-09 is.
+        if ( TryLexExponent() )
+        {
+            isFloat = true;
+        }
+
+        AddToken(isFloat ? TokenKind.Float : TokenKind.Integer, start, _offset - start);
+    }
+
+    /// <summary>
+    /// Consumes an exponent suffix — <c>e</c>/<c>E</c>, an optional sign, then digits — and reports
+    /// whether one was there. Stock scripts write vectors like
+    /// <c>self.angles = ( 0.0, 0.0, 0.5e-09 );</c>, which did not lex at all without this.
+    ///
+    /// The whole suffix is validated BEFORE any of it is consumed, so an <c>e</c> that does not
+    /// begin one is left for the next token. That matters because the lexer has no way back: were
+    /// the marker eaten first, a hypothetical <c>1etc</c> would already have lost its <c>e</c> and
+    /// the identifier after the number would silently change.
+    /// </summary>
+    private bool TryLexExponent()
+    {
+        if ( Peek(0) is not ('e' or 'E') )
+        {
+            return false;
+        }
+
+        int ahead = 1;
+        if ( Peek(ahead) is '+' or '-' )
+        {
+            ahead++;
+        }
+
+        if ( !char.IsAsciiDigit(Peek(ahead)) )
+        {
+            return false;
+        }
+
+        _offset += ahead;
+        while ( _offset < _source.Length && char.IsAsciiDigit(_source[_offset]) )
+        {
+            _offset++;
+        }
+
+        return true;
     }
 
     private void LexDot()
@@ -275,6 +318,9 @@ public sealed class Lexer
             {
                 _offset++;
             }
+
+            // ".5e3" is as much a float as "0.5e3"; the leading zero is the only difference.
+            TryLexExponent();
 
             AddToken(TokenKind.Float, start, _offset - start);
             return;

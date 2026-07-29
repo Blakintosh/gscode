@@ -56,7 +56,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
         {
             if ( macro.SourceFile is null )
             {
-                roots.Add(MakeSymbol(macro.Name, SymbolKind.Constant, macro.NameRange.ToLsp(), macro.NameRange.ToLsp(), []));
+                AddIfNamed(roots, MakeSymbol(macro.Name, SymbolKind.Constant, macro.NameRange.ToLsp(), macro.NameRange.ToLsp(), []));
             }
         }
 
@@ -73,7 +73,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
                     && classSymbol.Namespace == namespaceSpan.KeyName
                     && namespaceSpan.GovernedRange.Contains(classSymbol.FullRange.Start) )
                 {
-                    children.Add(MakeClassSymbol(classSymbol));
+                    AddIfNamed(children, MakeClassSymbol(classSymbol));
                 }
             }
 
@@ -83,7 +83,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
                     && function.Namespace == namespaceSpan.KeyName
                     && namespaceSpan.GovernedRange.Contains(function.FullRange.Start) )
                 {
-                    children.Add(MakeFunctionSymbol(function));
+                    AddIfNamed(children, MakeFunctionSymbol(function));
                 }
             }
 
@@ -103,7 +103,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
                 ? namespaceSpan.NameRange.ToLsp()
                 : FirstSelectionRange(children);
 
-            roots.Add(MakeSymbol(
+            AddIfNamed(roots, MakeSymbol(
                 namespaceSpan.Name,
                 SymbolKind.Namespace,
                 namespaceSpan.GovernedRange.ToLsp(),
@@ -115,7 +115,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
             new SymbolInformationOrDocumentSymbolContainer(roots));
     }
 
-    private SymbolInformationOrDocumentSymbol MakeFunctionSymbol(FunctionSymbol function)
+    private SymbolInformationOrDocumentSymbol? MakeFunctionSymbol(FunctionSymbol function)
     {
         List<SymbolInformationOrDocumentSymbol> children = [];
 
@@ -139,7 +139,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
 
                 if ( seen.Add(display) )
                 {
-                    children.Add(MakeSymbol(display, SymbolKind.Variable, assignment.Range.ToLsp(), assignment.Range.ToLsp(), []));
+                    AddIfNamed(children, MakeSymbol(display, SymbolKind.Variable, assignment.Range.ToLsp(), assignment.Range.ToLsp(), []));
                 }
             }
         }
@@ -152,18 +152,18 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
             children);
     }
 
-    private SymbolInformationOrDocumentSymbol MakeClassSymbol(ClassSymbol classSymbol)
+    private SymbolInformationOrDocumentSymbol? MakeClassSymbol(ClassSymbol classSymbol)
     {
         List<SymbolInformationOrDocumentSymbol> children = [];
 
         foreach ( MemberSymbol member in classSymbol.Members )
         {
-            children.Add(MakeSymbol(member.Name, SymbolKind.Field, member.Range.ToLsp(), member.Range.ToLsp(), []));
+            AddIfNamed(children, MakeSymbol(member.Name, SymbolKind.Field, member.Range.ToLsp(), member.Range.ToLsp(), []));
         }
 
         foreach ( FunctionSymbol method in classSymbol.Methods )
         {
-            children.Add(MakeFunctionSymbol(method));
+            AddIfNamed(children, MakeFunctionSymbol(method));
         }
 
         return MakeSymbol(
@@ -193,13 +193,32 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
         return new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range();
     }
 
-    private static SymbolInformationOrDocumentSymbol MakeSymbol(
+    /// <summary>
+    /// Builds one outline node, or NULL when it has no name yet.
+    ///
+    /// The outline is rebuilt on every keystroke, so it sees the file mid-declaration constantly:
+    /// the instant `function` is typed there is a function whose name is still empty, and the same
+    /// goes for `class` and a bare `#define`. LSP forbids an empty DocumentSymbol name, so those
+    /// reached the client as "Request textDocument/documentSymbol failed. Error: name must not be
+    /// falsy" — an error toast raised by ordinary typing, and raised for the WHOLE request, so one
+    /// half-written declaration took the entire outline with it.
+    ///
+    /// Nameless is the normal intermediate state of a file being written, not a fault, so it is
+    /// filtered here at the single point every node is constructed rather than at each of the six
+    /// places nodes are collected — a new collection site would otherwise reintroduce it.
+    /// </summary>
+    private static SymbolInformationOrDocumentSymbol? MakeSymbol(
         string name,
         SymbolKind kind,
         OmniSharp.Extensions.LanguageServer.Protocol.Models.Range fullRange,
         OmniSharp.Extensions.LanguageServer.Protocol.Models.Range selectionRange,
         List<SymbolInformationOrDocumentSymbol> children)
     {
+        if ( string.IsNullOrWhiteSpace(name) )
+        {
+            return null;
+        }
+
         DocumentSymbol symbol = new()
         {
             Name = name,
@@ -210,5 +229,15 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
         };
 
         return new SymbolInformationOrDocumentSymbol(symbol);
+    }
+
+    /// <summary>Adds a node when it exists. A nameless one is dropped, taking nothing else with it.</summary>
+    private static void AddIfNamed(
+        List<SymbolInformationOrDocumentSymbol> list, SymbolInformationOrDocumentSymbol? symbol)
+    {
+        if ( symbol is not null )
+        {
+            list.Add(symbol);
+        }
     }
 }

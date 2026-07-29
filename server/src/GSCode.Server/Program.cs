@@ -268,7 +268,8 @@ LanguageServer server = await LanguageServer.From(options =>
                         }
 
                         string databasePath = SqliteCache.ResolveDatabasePath(cacheKeyRoots);
-                        string identity = ServerBuildIdentity.Compute(BundledDataFilePaths());
+                        string identity = ServerBuildIdentity.Compute(
+                            BundledDataFilePaths(), GameProfile.Active.ShortName);
                         SqliteCache workspaceCache = SqliteCache.Open(databasePath, identity);
                         cacheHolder.Set(workspaceCache, databasePath);
                         indexer.UseCache(workspaceCache, workspaceCache.LoadAll());

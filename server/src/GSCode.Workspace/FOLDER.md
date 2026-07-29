@@ -107,9 +107,12 @@ Typing lands P10.)*
 
 ## Cache/ServerBuildIdentity.cs
 
-- `static ServerBuildIdentity.Compute(dataFilePaths)` — a SHA-256 fingerprint of the
-  engine assembly MVIDs + the bundled data-file hashes. Any rebuild that could change
-  analysis output changes this, invalidating the cache automatically.
+- `static ServerBuildIdentity.Compute(dataFilePaths, game)` — a SHA-256 fingerprint of the
+  active game + the engine assembly MVIDs + the bundled data-file hashes. Any rebuild that
+  could change analysis output changes this, invalidating the cache automatically. The game
+  is in the material explicitly: a record is dialect-specific, and restoring one game's into
+  another's session is undetectable downstream. It used to invalidate only because each game
+  bundles differently-named data files, which MW2 (no data at all) already broke.
 
 ## Cache/RecordSerializer.cs
 

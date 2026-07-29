@@ -6,16 +6,34 @@ namespace GSCode.Workspace.Cache;
 
 /// <summary>
 /// A fingerprint of the running server that changes whenever analysis behavior might
-/// have: the module version IDs (MVIDs) of the engine assemblies plus SHA-256 of the
-/// bundled data files. A mismatch against the cached identity invalidates the whole
-/// cache — this catches rebuilds the hand-bumped version numbers would miss.
+/// have: the active game, the module version IDs (MVIDs) of the engine assemblies, and
+/// SHA-256 of the bundled data files. A mismatch against the cached identity invalidates
+/// the whole cache — this catches rebuilds the hand-bumped version numbers would miss.
 /// </summary>
 public static class ServerBuildIdentity
 {
-    /// <summary>Computes the identity from the given data-file paths (missing files are skipped).</summary>
-    public static string Compute(IEnumerable<string> dataFilePaths)
+    /// <summary>
+    /// Computes the identity from the active game and the given data-file paths (missing files are
+    /// skipped).
+    /// </summary>
+    /// <param name="game">
+    /// The game the records were analysed under. Every cached record is dialect-specific: the same
+    /// source text yields different keywords, a different import style and different builtins per
+    /// game, so restoring one game's records into another's session is wrong in a way nothing
+    /// downstream can detect — the records look entirely valid and simply describe another language.
+    ///
+    /// A game change did already invalidate before this was explicit, but only as a SIDE EFFECT of
+    /// each game bundling differently-named data files. That is not a property worth resting on:
+    /// MW2 ships no data at all, so its material was the assembly MVIDs alone, and a second
+    /// data-less game added later would have shared an identity with it exactly.
+    /// </param>
+    public static string Compute(IEnumerable<string> dataFilePaths, string game)
     {
         StringBuilder material = new();
+
+        material.Append("game=");
+        material.Append(game);
+        material.Append(';');
 
         // Assembly MVIDs change on every recompilation of that assembly.
         foreach ( Assembly assembly in EngineAssemblies() )

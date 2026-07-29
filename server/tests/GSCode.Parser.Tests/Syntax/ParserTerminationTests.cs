@@ -106,4 +106,87 @@ public class ParserTerminationTests
         Assert.Equal(0, AnalyzeWithinBudget(
             "#namespace test;\n\nfunction foo()\n{\n\tx = 1;\n\treturn x;\n}\n"));
     }
+
+    // --- Every other loop bounded only by a closing token ---
+    //
+    // The statement loop was the one that failed, and it failed because a recovery helper could
+    // return without advancing. Each loop below has the same shape — `while` stopping only at a
+    // closer or end of file, with a default branch that recovers — so each is asked the same
+    // question directly rather than by reading its recovery helper and concluding it looks fine.
+
+    [Theory]
+    [InlineData(")")]
+    [InlineData("]")]
+    [InlineData(",")]
+    [InlineData(":")]
+    [InlineData("=")]
+    [InlineData("else")]
+    [InlineData("case")]
+    [InlineData("#endif")]
+    public void GarbageAtTopLevel(string garbage)
+    {
+        AnalyzeWithinBudget(garbage + "\n");
+    }
+
+    [Theory]
+    [InlineData(")")]
+    [InlineData(",")]
+    [InlineData("else")]
+    [InlineData("function")]
+    public void GarbageInAClassBody(string garbage)
+    {
+        AnalyzeWithinBudget("class C\n{\n\t" + garbage + "\n}\n");
+    }
+
+    [Theory]
+    [InlineData(")")]
+    [InlineData(",")]
+    [InlineData("else")]
+    public void GarbageInADevBlock(string garbage)
+    {
+        AnalyzeWithinBudget("/#\n" + garbage + "\n#/\n");
+    }
+
+    [Theory]
+    [InlineData("function f( , ) {}")]
+    [InlineData("function f( ) ) {}")]
+    [InlineData("function f( else ) {}")]
+    [InlineData("function f( a b c ) {}")]
+    public void GarbageInAParameterList(string source)
+    {
+        AnalyzeWithinBudget(source + "\n");
+    }
+
+    [Theory]
+    [InlineData("g( , );")]
+    [InlineData("g( else );")]
+    [InlineData("g( a b );")]
+    [InlineData("x = [ , ];")]
+    public void GarbageInAnArgumentList(string statement)
+    {
+        AnalyzeWithinBudget("function f()\n{\n\t" + statement + "\n}\n");
+    }
+
+    [Theory]
+    [InlineData("switch ( x )\n{\n\t)\n}")]
+    [InlineData("switch ( x )\n{\n\tcase\n}")]
+    [InlineData("switch ( x )\n{\n\tcase 1:\n\t\t)\n}")]
+    public void GarbageInASwitch(string statement)
+    {
+        AnalyzeWithinBudget("function f()\n{\n" + statement + "\n}\n");
+    }
+
+    [Theory]
+    [InlineData("function f()\n{")]
+    [InlineData("class C\n{")]
+    [InlineData("/#\nfunction f()\n{\n}")]
+    [InlineData("function f( ")]
+    [InlineData("function f()\n{\n\tg( ")]
+    [InlineData("switch ( x )\n{\n\tcase 1:")]
+    public void UnterminatedConstructs(string source)
+    {
+        // Everything above ends mid-construct, which is what a file looks like while it is being
+        // written — the parser's normal input, not an edge case.
+        AnalyzeWithinBudget(source);
+    }
 }

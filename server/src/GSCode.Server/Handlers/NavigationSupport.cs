@@ -153,6 +153,23 @@ public sealed class NavigationSupport
             return "";
         }
 
+        // A declaration in the ASKING FILE wins outright, and this is the common case: a lens sits
+        // on one. Reaching another file that happens to declare the same name does not make the
+        // local symbol ambiguous — a bare main() inside combat.gsc means combat.gsc's main, even
+        // though combat.gsc also path-calls cover_prone and _mgturret, which each declare their own.
+        // Without this, any animscript that path-calls another animscript loses all narrowing,
+        // which is every one of them.
+        foreach ( FunctionSymbol declared in asking.Functions )
+        {
+            if ( string.Equals(declared.KeyName, key.Name, StringComparison.OrdinalIgnoreCase) )
+            {
+                Log.Debug(
+                    "Reference scope: {Name} — declared in the asking file, scoping to '{Chosen}'",
+                    key.Name, asking.RelativePath);
+                return asking.RelativePath;
+            }
+        }
+
         string only = "";
         int candidates = 0;
         int reachable = 0;

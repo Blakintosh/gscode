@@ -103,6 +103,23 @@ public class ReferenceScopingTests
     }
 
     [Fact]
+    public void ReachingAnotherDeclarationDoesNotDropTheReacher()
+    {
+        // combat.gsc path-calls cover_prone and _mgturret, and all three declare main(). The lens on
+        // combat.gsc's own main must still narrow to combat.gsc — the reachable strangers are other
+        // functions entirely, not competing definitions of this one.
+        ScriptRecord combat = Record(
+            @"animscripts\combat.gsc",
+            pathCalls: [@"animscripts\cover_prone", @"maps\_mgturret"]);
+        ScriptRecord stranger = Record(@"animscripts\cover_prone.gsc");
+
+        ImmutableArray<(ScriptRecord, ReferenceEntry)> kept = DatabaseQueries.ScopeToIncludeGraph(
+            Refs(combat, stranger), @"animscripts\combat.gsc", Cod4);
+
+        Assert.Single(kept);
+    }
+
+    [Fact]
     public void BlackOps3IsUntouched()
     {
         // #using puts the namespace in the key, so the ambiguity never arises and nothing is dropped.

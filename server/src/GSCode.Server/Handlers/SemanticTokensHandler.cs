@@ -1,7 +1,5 @@
-using System.Collections.Concurrent;
 using GSCode.Parser;
 using GSCode.Workspace.Documents;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -11,13 +9,16 @@ using GscTokenBuilder = GSCode.Parser.Extraction.SemanticTokenBuilder;
 namespace GSCode.Server.Handlers;
 
 /// <summary>
-/// Full-document semantic highlighting. The legend order matches
-/// <see cref="SemanticTokenType"/>; the base class handles the delta encoding once we push
-/// each token's line/char/length/type in document order.
+/// Full-document semantic highlighting, for IDENTIFIERS only — what a name means is the one
+/// question the TextMate grammar cannot answer, and everything it can (comments, keywords,
+/// strings, numbers) is left to it so the file is not coloured twice.
 /// </summary>
 public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
 {
-    // Order MUST match GSCode.Parser.Extraction.SemanticTokenType's integer values.
+    // Order MUST match GSCode.Parser.Extraction.SemanticTokenType's integer values: the protocol
+    // identifies a type by its INDEX here, so this is an index map rather than a list of what gets
+    // sent. Comment, Keyword, String and Number are no longer emitted but keep their slots, since
+    // removing them would renumber every type after them.
     private static readonly SemanticTokensLegend s_legend = new()
     {
         TokenTypes = new Container<SemanticTokenType>(
@@ -38,18 +39,6 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
     private readonly DocumentStore _documents;
     private readonly TextDocumentSelector _selector;
 
-    /// <summary>
-    /// The per-file delta baseline: what was last sent to the client for each document.
-    ///
-    /// The base class computes <c>semanticTokens/full/delta</c> against this, so it has to be the
-    /// SAME instance across requests for one file. Handing back a fresh one each time — which is
-    /// what this did — left the server with no memory of what it had sent, so every delta was
-    /// computed against nothing while the client applied it on top of what it already had. That is
-    /// the whole shape of the reported bug: correct on open, because the first request is a full
-    /// one, and wrong after an edit, because every request after that is a delta.
-    /// </summary>
-    private readonly ConcurrentDictionary<DocumentUri, SemanticTokensDocument> _baselines = new();
-
     public SemanticTokensHandler(DocumentStore documents, TextDocumentSelector selector)
     {
         _documents = documents;
@@ -63,7 +52,17 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
         {
             DocumentSelector = _selector,
             Legend = s_legend,
-            Full = new SemanticTokensCapabilityRequestFull { Delta = true },
+
+            // Deltas are NOT advertised. OmniSharp's own SemanticTokensDocument.GetSemanticTokensEdits
+            // throws ArgumentOutOfRangeException while computing the edit set — reproducibly, by
+            // undoing an edit — and it throws inside the library, on the far side of the boundary
+            // where nothing we pass can prevent it.
+            //
+            // Turning them off is not much of a loss here. A delta saves resending a token set,
+            // and this server's token set is now small: comments, keywords, strings and numbers
+            // are all left to the TextMate grammar, so only identifiers are sent at all. Paying
+            // full price for something that cannot crash beats optimising a request that can.
+            Full = new SemanticTokensCapabilityRequestFull { Delta = false },
             Range = true,
         };
     }
@@ -97,14 +96,10 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
     protected override Task<SemanticTokensDocument> GetSemanticTokensDocument(
         ITextDocumentIdentifierParams @params, CancellationToken cancellationToken)
     {
-        // One per file, kept: see _baselines. A new instance per call silently broke every delta.
-        return Task.FromResult(_baselines.GetOrAdd(
-            @params.TextDocument.Uri, static _ => new SemanticTokensDocument(s_legend)));
-    }
-
-    /// <summary>Drops a closed file's baseline so the cache cannot grow for the whole session.</summary>
-    public void Forget(DocumentUri uri)
-    {
-        _baselines.TryRemove(uri, out _);
+        // A fresh one per request, because nothing reads it across requests: it is the delta
+        // BASELINE, and deltas are not advertised. Keeping a cache of these was only ever in
+        // service of the delta path, and holding one per open file for the session is not worth
+        // paying for something no request asks about.
+        return Task.FromResult(new SemanticTokensDocument(s_legend));
     }
 }

@@ -85,9 +85,9 @@ LanguageServer server = await LanguageServer.From(options =>
             // Lazy factories, not eager instances: the game (and so which data files to read) is
             // selected after ConfigureServices, so loading is deferred to first resolution to give
             // GameProfile.Active a chance to be the workspace's game rather than the startup default.
-            services.AddSingleton(_ => BuiltinApiSet.Load(Path.Combine(AppContext.BaseDirectory, "Api"), GameProfile.Active));
-            services.AddSingleton(_ => ObjectFields.Load(Path.Combine(AppContext.BaseDirectory, "Api"), GameProfile.Active));
-            services.AddSingleton(_ => StockScripts.Load(Path.Combine(AppContext.BaseDirectory, "Api"), GameProfile.Active));
+            services.AddSingleton(_ => LoadBuiltinApi());
+            services.AddSingleton(_ => LoadObjectFields());
+            services.AddSingleton(_ => LoadStockScripts());
             services.AddSingleton(provider => new NavigationSupport(
                 provider.GetRequiredService<DocumentStore>(),
                 provider.GetRequiredService<ScriptDatabase>(),
@@ -145,6 +145,14 @@ LanguageServer server = await LanguageServer.From(options =>
             {
                 settings.Apply(initializationOptions);
                 levelSwitch.MinimumLevel = ServerLogLevel.FromSetting(settings.ServerLogLevel);
+
+                // Select the game HERE, not only in ConfigurationHandler. The data-file singletons
+                // are deliberately lazy so GameProfile.Active can be the workspace's game before
+                // they load — but nothing set it this early, so whatever resolved one first loaded
+                // the DEFAULT game's data, and the later Select moved the profile without reloading
+                // it. A CoD4 workspace then ran on BO3 builtins, fields and dev-only list.
+                GameProfile.Select(settings.Game);
+                Log.Information("Game profile: {Game} ({Display})", GameProfile.Active.ShortName, GameProfile.Active.DisplayName);
             }
 
             List<string> workspaceFolders = [];
@@ -508,6 +516,82 @@ static void LogMemoryReport(string phase, IndexOutcome outcome)
 
 // Locates the bundled data files whose contents feed the server build identity — the active
 // game's set, named by its profile, so a dialect port's data invalidates the cache like BO3's.
+// The three data loads, wrapped so each says what it looked for and what it got. GSCode.Workspace
+// carries no Serilog reference by design, so the reporting lives here at the call site.
+//
+// Worth logging loudly: a missing data file is NOT an error to the loaders — it means "this game
+// ships none" — so a game whose files failed to deploy behaves exactly like a game that has none,
+// and every engine function silently becomes unknown. That failure mode is invisible without this.
+static BuiltinApiSet LoadBuiltinApi()
+{
+    GameProfile game = GameProfile.Active;
+    string directory = Path.Combine(AppContext.BaseDirectory, "Api");
+    LogDataFile(game, directory, game.ApiFileName(ScriptLanguage.Gsc), "builtin API (gsc)");
+    if ( game.HasClientScripts )
+    {
+        LogDataFile(game, directory, game.ApiFileName(ScriptLanguage.Csc), "builtin API (csc)");
+    }
+
+    BuiltinApiSet set = BuiltinApiSet.Load(directory, game);
+    Log.Information(
+        "Builtin API loaded for {Game}: {Gsc} gsc, {Csc} csc functions",
+        game.ShortName, set.For(ScriptLanguage.Gsc).Count, set.For(ScriptLanguage.Csc).Count);
+
+    if ( game.DataFilePrefix is not null && set.For(ScriptLanguage.Gsc).Count == 0 )
+    {
+        Log.Warning(
+            "{Game} declares data prefix '{Prefix}' but its builtin API is EMPTY — every engine "
+            + "function will look unknown. Expected {File} in {Directory}.",
+            game.ShortName, game.DataFilePrefix, game.ApiFileName(ScriptLanguage.Gsc), directory);
+    }
+
+    return set;
+}
+
+static ObjectFields LoadObjectFields()
+{
+    GameProfile game = GameProfile.Active;
+    string directory = Path.Combine(AppContext.BaseDirectory, "Api");
+    LogDataFile(game, directory, game.ObjectFieldsFileName, "object fields");
+    LogDataFile(game, directory, game.RadiantKeysFileName, "radiant keys");
+
+    ObjectFields fields = ObjectFields.Load(directory, game);
+    Log.Information(
+        "Engine data loaded for {Game}: {Fields} field names, {Keys} radiant keys",
+        game.ShortName, fields.FieldNames().Length, fields.RadiantKeysFor(ScriptLanguage.Gsc).Length);
+
+    return fields;
+}
+
+static StockScripts LoadStockScripts()
+{
+    GameProfile game = GameProfile.Active;
+    string directory = Path.Combine(AppContext.BaseDirectory, "Api");
+    LogDataFile(game, directory, game.StockScriptsFileName, "stock scripts");
+
+    return StockScripts.Load(directory, game);
+}
+
+/// <summary>Reports one data file: what the profile asked for, and whether it is actually there.</summary>
+static void LogDataFile(GameProfile game, string directory, string? fileName, string what)
+{
+    if ( fileName is null )
+    {
+        Log.Debug("{Game} ships no {What} (no data prefix)", game.ShortName, what);
+        return;
+    }
+
+    string path = Path.Combine(directory, fileName);
+    if ( File.Exists(path) )
+    {
+        Log.Debug("{Game} {What}: {File} ({Bytes} bytes)", game.ShortName, what, fileName, new FileInfo(path).Length);
+    }
+    else
+    {
+        Log.Warning("{Game} {What}: {File} NOT FOUND in {Directory}", game.ShortName, what, fileName, directory);
+    }
+}
+
 static IEnumerable<string> BundledDataFilePaths()
 {
     string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");

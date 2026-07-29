@@ -728,8 +728,14 @@ public sealed class SymbolExtractor
     // --- Doc comments ---
 
     /// <summary>
-    /// Finds the /@ @/ block that ends within two lines above a root-file declaration.
+    /// Finds the doc block that ends within two lines above a root-file declaration.
     /// Inserted declarations get no doc association (their text is another file's).
+    ///
+    /// Which token counts depends on the dialect. BO3 has a doc comment of its own
+    /// (<c>/@ … @/</c>, its own token kind), while every earlier game writes the block inside an
+    /// ordinary <c>/* … */</c> comment fenced by <c>///ScriptDocBegin</c>. Only the first was ever
+    /// looked for, so on CoD4, WaW, MW2 and BO1 no function had documentation at all — the profile
+    /// recorded which style each game uses and nothing read it.
     /// </summary>
     private ScriptDocComment FindDocComment(int declarationStartLine, string? sourceFile)
     {
@@ -740,7 +746,7 @@ public sealed class SymbolExtractor
 
         foreach ( Token token in _rawTokens )
         {
-            if ( token.Kind != TokenKind.DocComment )
+            if ( !IsDocCommentToken(token) )
             {
                 continue;
             }
@@ -758,6 +764,24 @@ public sealed class SymbolExtractor
         }
 
         return ScriptDocComment.None;
+    }
+
+    /// <summary>
+    /// Whether a token is this dialect's doc block.
+    ///
+    /// Under <see cref="ScriptDocStyle.TripleSlash"/> the fence is the only thing that separates
+    /// documentation from an ordinary comment above a function, so it is required — without it
+    /// every banner and copyright header would become the function's hover text.
+    /// </summary>
+    private bool IsDocCommentToken(Token token)
+    {
+        if ( _profile.ScriptDocStyle == ScriptDocStyle.AtSign )
+        {
+            return token.Kind == TokenKind.DocComment;
+        }
+
+        return token.Kind == TokenKind.BlockComment
+            && ScriptDocComment.HasTripleSlashFence(token.GetText(_text));
     }
 
     private static string Unquote(string text)

@@ -66,7 +66,52 @@ public sealed record ScriptDocComment
         return trimmed;
     }
 
-    /// <summary>Parses the text of a doc block (delimiters included or not).</summary>
+    /// <summary>
+    /// Drops the <c>///ScriptDocBegin</c>/<c>///ScriptDocEnd</c> lines and anything outside them.
+    ///
+    /// Anything BEFORE the fence is discarded too: a stock header comment routinely carries a
+    /// banner or a copyright line above the block, and folding that into the summary would put it
+    /// on every hover.
+    /// </summary>
+    private static string StripTripleSlashFence(string body)
+    {
+        int begin = body.IndexOf(TripleSlashBegin, StringComparison.OrdinalIgnoreCase);
+        if ( begin < 0 )
+        {
+            return body;
+        }
+
+        body = body[(begin + TripleSlashBegin.Length)..];
+
+        int end = body.IndexOf(TripleSlashEnd, StringComparison.OrdinalIgnoreCase);
+        return end < 0 ? body : body[..end];
+    }
+
+    /// <summary>The fence lines the pre-BO3 games use inside an ordinary block comment.</summary>
+    private const string TripleSlashBegin = "///ScriptDocBegin";
+    private const string TripleSlashEnd = "///ScriptDocEnd";
+
+    /// <summary>
+    /// Whether a block comment's text actually contains a ScriptDoc block.
+    ///
+    /// The pre-BO3 games have no doc-comment delimiter of their own — a doc block is an ordinary
+    /// <c>/* … */</c> comment with <c>///ScriptDocBegin</c>/<c>///ScriptDocEnd</c> lines inside it.
+    /// So the fence is the only thing separating documentation from a comment that happens to sit
+    /// above a function, and without this check every such comment would become one.
+    /// </summary>
+    public static bool HasTripleSlashFence(ReadOnlySpan<char> commentText)
+    {
+        return commentText.Contains(TripleSlashBegin, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Parses the text of a doc block, in either dialect's spelling and with the delimiters
+    /// included or not: BO3's <c>/@ … @/</c>, or a pre-BO3 <c>/* … */</c> fenced by
+    /// <c>///ScriptDocBegin</c> and <c>///ScriptDocEnd</c>.
+    ///
+    /// Both reduce to the same key-value line format, so only the wrapper differs and the rest of
+    /// the parse is shared.
+    /// </summary>
     public static ScriptDocComment Parse(string docBlockText)
     {
         string body = docBlockText.Trim();
@@ -79,6 +124,18 @@ public sealed record ScriptDocComment
         {
             body = body[..^2];
         }
+
+        if ( body.StartsWith("/*", StringComparison.Ordinal) )
+        {
+            body = body[2..];
+        }
+
+        if ( body.EndsWith("*/", StringComparison.Ordinal) )
+        {
+            body = body[..^2];
+        }
+
+        body = StripTripleSlashFence(body);
 
         string name = "";
         string summary = "";

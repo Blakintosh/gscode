@@ -513,11 +513,26 @@ public sealed partial record GameProfile
     public static GameProfile Active => s_active ?? BlackOps3;
 
     /// <summary>
-    /// Selects the active profile by short name or id (see <see cref="ByName"/>). An unknown name
-    /// falls back to BO3 rather than throwing, so a stray setting cannot break the server.
+    /// Selects the active profile by short name or id (see <see cref="ByName"/>), returning whether
+    /// the name was recognised. An unknown or unimplemented name falls back to BO3 rather than
+    /// throwing, so a stray setting cannot break the server — but it returns false so the CALLER
+    /// can say so, which is the whole point of the return value.
+    ///
+    /// Falling back silently is what made "gscode.game does nothing" so hard to see: the setting
+    /// read back exactly as written while the server ran as BO3, and nothing anywhere disagreed.
+    /// A profile that exists but is not <see cref="Supported"/> is treated the same way, since
+    /// selecting it would activate a dialect nobody has implemented.
     /// </summary>
-    public static void Select(string name)
+    public static bool Select(string name)
     {
-        s_active = ByName(name) ?? BlackOps3;
+        GameProfile? chosen = ByName(name);
+        if ( chosen is null || !chosen.Supported )
+        {
+            s_active = BlackOps3;
+            return false;
+        }
+
+        s_active = chosen;
+        return true;
     }
 }

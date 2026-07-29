@@ -41,7 +41,16 @@ CommandLine.Parser.Default.ParseArguments<TransportOptions>(args).WithParsed(par
 // they are first requested, and that happens during container construction.
 if ( !string.IsNullOrWhiteSpace(transportOptions.Game) )
 {
-    GameProfile.Select(transportOptions.Game);
+    if ( !GameProfile.Select(transportOptions.Game) )
+    {
+        // Loudly, because the symptom otherwise is "gscode.game does nothing": the setting reads
+        // back exactly as written while the server runs as BO3, and nothing disagrees anywhere.
+        Log.Warning(
+            "Game {Requested} is not a supported dialect — falling back to bo3. Supported: {Supported}",
+            transportOptions.Game,
+            string.Join(", ", GameProfile.All.Where(static p => p.Supported).Select(static p => p.ShortName)));
+    }
+
     Log.Information("Game profile: {Game} ({Display})", GameProfile.Active.ShortName, GameProfile.Active.DisplayName);
 }
 

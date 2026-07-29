@@ -327,19 +327,15 @@
 				"gscode.game": {
 					"type": "string",
 					"default": "bo3",
-					"enum": [ "cod4", "waw", "mw2", "bo1", "mw3", "bo2", "ghosts", "aw", "bo3" ],
+					"enum": [ "cod4", "waw", "mw2", "bo1", "bo3" ],
 					"enumDescriptions": [
 						"Call of Duty 4: Modern Warfare (2007)",
 						"Call of Duty: World at War (2008)",
 						"Call of Duty: Modern Warfare 2 (2009)",
 						"Call of Duty: Black Ops (2010)",
-						"Call of Duty: Modern Warfare 3 (2011)",
-						"Call of Duty: Black Ops II (2012)",
-						"Call of Duty: Ghosts (2013)",
-						"Call of Duty: Advanced Warfare (2014)",
 						"Call of Duty: Black Ops III (2015)"
 					],
-					"description": "Which Call of Duty game's GSC dialect this workspace targets. Black Ops III is the default and the only fully-supported dialect today; the earlier games select their profile but their dialect handling is still being implemented. If a file does not look like the selected game, the extension offers to switch.",
+					"description": "Which Call of Duty game's GSC dialect this workspace targets. All five are verified against the game's own scripts. Only games with an implemented dialect are listed: naming any other resolves to Black Ops III, which used to happen silently and is now reported in the server log. If a file does not look like the selected game, the extension offers to switch.",
 					"scope": "window"
 				}
 			}

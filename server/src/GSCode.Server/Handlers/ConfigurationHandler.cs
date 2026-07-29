@@ -39,11 +39,16 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
         _settings.Apply(settingsRoot);
         _levelSwitch.MinimumLevel = ServerLogLevel.FromSetting(_settings.ServerLogLevel);
 
-        // The game drives the active profile (extensions, capabilities). Selecting an unknown name
-        // falls back to BO3, so a typo cannot break the server. It is also selected at initialize,
-        // BEFORE the bundled data resolves; this call only handles a change mid-session.
+        // The game drives the active profile (extensions, capabilities). It is also selected at
+        // initialize, BEFORE the bundled data resolves; this call only handles a change mid-session.
         string previousGame = GSCode.Core.GameProfile.Active.ShortName;
-        GSCode.Core.GameProfile.Select(_settings.Game);
+        if ( !GSCode.Core.GameProfile.Select(_settings.Game) )
+        {
+            // A typo cannot break the server, but it must not pass unremarked either — the setting
+            // reads back as written while the server runs as BO3.
+            Log.Warning(
+                "Game {Requested} is not a supported dialect — falling back to bo3", _settings.Game);
+        }
 
         // The bundled data (builtin API, engine fields, stock scripts) resolves once and keeps
         // whatever game was active then, so changing the game mid-session leaves the profile and the

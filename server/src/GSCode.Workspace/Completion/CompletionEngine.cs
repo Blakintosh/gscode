@@ -935,9 +935,15 @@ public sealed class CompletionEngine
             case KeywordShape.StatementCall:
                 return punctuate ? keyword + callSuffix : "";
 
-            // `waittillframeend;` — nothing but the terminator.
+            // `waittillframeend;`, `break;`, `continue;` — nothing but the terminator.
             case KeywordShape.BareStatement:
                 return statement ? keyword + ";" : "";
+
+            // `return$0;` — the caret sits before the terminator, so typing nothing leaves
+            // `return;` while typing a value leaves `return 5;`. Neither needs a correction
+            // afterwards, which is what a bare `return;` would cost in the value case.
+            case KeywordShape.ValueStatement:
+                return statement ? keyword + "$0;" : "";
 
             default:
                 // Empty means "insert the label", which is what a plain word wants.

@@ -499,21 +499,44 @@ public class CompletionEngineTests
         Assert.Equal(keyword + "($0);", KeywordEntry("", keyword).InsertText);
     }
 
-    [Fact]
-    public void WaittillframeendTakesNothingButATerminator()
+    [Theory]
+    [InlineData("waittillframeend")]
+    [InlineData("break")]
+    [InlineData("continue")]
+    public void StatementsTakingNoValueBringTheirTerminator(string keyword)
     {
-        Assert.Equal("waittillframeend;", KeywordEntry("", "waittillframeend").InsertText);
+        // Nothing can follow these on the line, so unlike a call their semicolon is never in doubt.
+        Assert.Equal(keyword + ";", KeywordEntry("", keyword).InsertText);
+    }
+
+    [Fact]
+    public void ReturnPutsTheCaretBeforeItsTerminator()
+    {
+        // `return;` and `return 5;` are both whole statements, so the caret goes before the
+        // semicolon: typing nothing leaves the first, typing a value leaves the second, and
+        // neither needs a correction afterwards.
+        Assert.Equal("return$0;", KeywordEntry("", "return").InsertText);
+    }
+
+    [Theory]
+    [InlineData("break")]
+    [InlineData("continue")]
+    [InlineData("return")]
+    public void JumpKeywordsRespectPunctuationBeingOff(string keyword)
+    {
+        // The setting governs these on the same terms as everything else.
+        Assert.Equal("", KeywordEntry("", keyword, CallPunctuation.Off).InsertText);
     }
 
     [Theory]
     [InlineData("else")]
-    [InlineData("break")]
     [InlineData("true")]
     [InlineData("if")]
     public void PlainWordsAreUnchanged(string keyword)
     {
-        // Empty insert text means "insert the label". Control-flow keywords are left alone
-        // because completing `if` usefully means a body too, which is a different job.
+        // Empty insert text means "insert the label". The BRANCHING control-flow keywords are left
+        // alone because completing `if` usefully means a body too, which is a different job. The
+        // jumps are not in that category and are covered above.
         Assert.Equal("", KeywordEntry("", keyword).InsertText);
     }
 

@@ -277,6 +277,32 @@ public class GameProfileTests
     }
 
     [Fact]
+    public void Select_ReportsWhetherTheNameWasRecognised()
+    {
+        // The reported symptom was "gscode.game does nothing": package.json offered mw3, bo2,
+        // ghosts and aw, none of which has a profile, and selecting one fell back to BO3 without
+        // a word — the setting read back exactly as written while the server ran as BO3. The
+        // return value is what lets the caller say so.
+        try
+        {
+            Assert.True(GameProfile.Select("cod4"));
+            Assert.Equal("cod4", GameProfile.Active.ShortName);
+
+            Assert.False(GameProfile.Select("ghosts"));
+            Assert.Equal("bo3", GameProfile.Active.ShortName);
+
+            Assert.False(GameProfile.Select("halo"));
+            Assert.Equal("bo3", GameProfile.Active.ShortName);
+        }
+        finally
+        {
+            // Active is global, so a test that leaves it moved would change what every later test
+            // in this assembly parses.
+            GameProfile.Select("bo3");
+        }
+    }
+
+    [Fact]
     public void Abbreviation_UpperCasesTheShortNameUnlessTheGameSaysOtherwise()
     {
         // The status bar shows this, so it is the game as people write it rather than as the

@@ -6,7 +6,7 @@ namespace GSCode.Workspace.Completion;
 /// <summary>What punctuation a keyword takes when it is completed.</summary>
 public enum KeywordShape
 {
-    /// <summary>A plain word: `else`, `break`, `true`. Completes to itself.</summary>
+    /// <summary>A plain word: `else`, `true`. Completes to itself.</summary>
     Word,
 
     /// <summary>
@@ -15,8 +15,18 @@ public enum KeywordShape
     /// </summary>
     StatementCall,
 
-    /// <summary>A statement taking nothing at all: `waittillframeend;`.</summary>
+    /// <summary>A statement taking nothing at all: `waittillframeend;`, `break;`, `continue;`.</summary>
     BareStatement,
+
+    /// <summary>
+    /// A statement that MAY carry a value: `return;` and `return 5;` are both whole statements.
+    ///
+    /// Distinct from <see cref="BareStatement"/> only because of where the cursor lands. Completing
+    /// to a bare `return;` would be right half the time and cost a cursor move the other half; this
+    /// leaves the caret before the terminator, so typing nothing gives `return;` and typing a value
+    /// gives `return 5;` without either case needing a correction.
+    /// </summary>
+    ValueStatement,
 }
 
 /// <summary>The language keywords offered in statement-scope completion.</summary>
@@ -33,8 +43,10 @@ public static class GscKeywords
     /// `wait` accepts both `wait 0.5;` and `wait( 0.5 );`; the parenthesised form is used, being
     /// the one that reads the same as everything around it.
     ///
-    /// Control-flow keywords are deliberately absent: `if` needs a body as well as a header, so
-    /// completing it usefully is a different job from punctuating a call.
+    /// The BRANCHING control-flow keywords are deliberately absent: `if` needs a body as well as a
+    /// header, so completing it usefully is a different job from punctuating a call. The JUMPS are
+    /// not in that category — `break`, `continue` and `return` end a statement and nothing follows
+    /// them on the line, so their semicolon is never in doubt the way a call's is.
     /// </summary>
     private static readonly Dictionary<string, KeywordShape> s_shapes = new(StringComparer.Ordinal)
     {
@@ -46,6 +58,9 @@ public static class GscKeywords
         ["wait"] = KeywordShape.StatementCall,
         ["waitrealtime"] = KeywordShape.StatementCall,
         ["waittillframeend"] = KeywordShape.BareStatement,
+        ["break"] = KeywordShape.BareStatement,
+        ["continue"] = KeywordShape.BareStatement,
+        ["return"] = KeywordShape.ValueStatement,
     };
 
     /// <summary>The shape of a keyword, defaulting to a plain word.</summary>

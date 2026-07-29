@@ -15,16 +15,22 @@ output before trusting a green run.
 
 | Variable | Used by | Points at |
 |---|---|---|
-| `TA_TOOLS_PATH` | `CorpusFixture` (BO3) | The BO3 mod-tools install. The corpus is `<path>\share\raw`. |
 | `GSCODE_CORPUS_COD4` | `GameCorpusFixture` | CoD4's raw script root, e.g. `…\CoD4-Mod-Tools\raw` |
 | `GSCODE_CORPUS_WAW` | `GameCorpusFixture` | WaW's raw script root, e.g. `…\cod5-mod-tools\raw` |
 | `GSCODE_CORPUS_MW2` | `GameCorpusFixture` | MW2's script root (no `raw` subfolder — the repo root itself) |
 | `GSCODE_CORPUS_BO1` | `GameCorpusFixture` | BO1's raw script root, e.g. `…\Call of Duty Black Ops 42740\raw` |
+| `GSCODE_CORPUS_BO3` | `CorpusFixture` | BO3's raw script root, e.g. `…\Call of Duty Black Ops III\share\raw` |
 | `GSCODE_COD4_DOCS` | `tools/field-data` (not tests) | The CoD4 documentation pages. See `tools/field-data/FOLDER.md`. |
 | `GSCODE_INSTRUMENTATION` | Compile-time constant, not an env var | Gates `PerfTracker.Report`; see `PERF.md`. |
 
-The per-game ones are read at process start, so a terminal opened before they were set will not see
-them — restart it, or pass them inline for one run.
+Every corpus variable names the game's raw folder **directly**. BO3 was once the exception, found
+through `%TA_TOOLS_PATH%` with `share\raw` appended by the fixture; it now follows the same rule as
+the rest, so there is one way to point a corpus at a game.
+
+They are read at process start, so a terminal opened before they were set will not see them, and
+setting one at user scope does NOT reach an already-running shell. Restart it, or pass them inline
+for a single run — and watch the duration: a BO3 corpus run is minutes, so a `Category=Corpus` pass
+finishing in milliseconds means every test no-opped.
 
 Corpus tests carry `[Trait("Category", "Corpus")]`, so `--filter "Category=Corpus"` runs exactly the
 suite that touches real game scripts.
@@ -103,7 +109,8 @@ inference and that the walk terminates.
 The LSP layer, the formatter, and the real-corpus sweeps.
 
 **Corpus** (all `Category=Corpus`, all no-op without their game). `CorpusFixture` locates BO3 via
-`TA_TOOLS_PATH`; `GameCorpusFixture` locates the others via `GSCODE_CORPUS_<GAME>`.
+`GSCODE_CORPUS_BO3`; `GameCorpusFixture` locates the others via `GSCODE_CORPUS_<GAME>`, built from
+each profile's `ShortName`.
 - `CorpusTests` — BO3: nothing throws, lex/parse errors stay within budget, and the formatter
   preserves the token stream, is idempotent, produces line edits that reproduce the whole-document
   format, and neither loses nor invents a line when sorting directives or aligning.

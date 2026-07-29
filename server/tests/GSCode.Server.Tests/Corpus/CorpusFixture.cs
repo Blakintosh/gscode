@@ -8,7 +8,7 @@ using GSCode.Workspace.Resolution;
 namespace GSCode.Server.Tests.Corpus;
 
 /// <summary>
-/// Locates the real BO3 script corpus under <c>%TA_TOOLS_PATH%\share\raw</c> and analyses files
+/// Locates the real BO3 script corpus under <c>%GSCODE_CORPUS_BO3%</c> and analyses files
 /// from it exactly as the server would, inserts resolved and all.
 ///
 /// The corpus is not committed and is absent on CI, so these tests no-op when it cannot be
@@ -26,14 +26,13 @@ internal static class CorpusFixture
     {
         get
         {
-            string? toolsPath = Environment.GetEnvironmentVariable("TA_TOOLS_PATH");
-            if ( string.IsNullOrWhiteSpace(toolsPath) )
-            {
-                return null;
-            }
-
-            string raw = Path.Combine(toolsPath, "share", "raw");
-            return Directory.Exists(raw) ? raw : null;
+            // GSCODE_CORPUS_BO3, the same convention the other four games use. This used to name
+            // the tools install and derive the raw folder beneath it, until the server stopped
+            // discovering roots from an environment variable at all; the fixture followed, so there
+            // is one way to point a corpus at a game rather than one for BO3 and another for
+            // everyone else. It names the raw folder directly.
+            string? root = Environment.GetEnvironmentVariable("GSCODE_CORPUS_BO3");
+            return !string.IsNullOrWhiteSpace(root) && Directory.Exists(root) ? root : null;
         }
     }
 
@@ -74,13 +73,7 @@ internal static class CorpusFixture
     public static PathResolver Resolver()
     {
         PhysicalFileSystem fileSystem = new();
-        RootConfig config = RootConfig.Create(
-            rawEnabled: true,
-            rawPathOverride: RawRoot,
-            modsPathOverride: null,
-            taToolsPath: null,
-            workspaceFolders: [],
-            fileSystem: fileSystem);
+        RootConfig config = RootConfig.Create(rawEnabled: true, rawPath: RawRoot, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
 
         return new PathResolver(config, fileSystem);
     }

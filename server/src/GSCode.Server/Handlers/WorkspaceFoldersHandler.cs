@@ -193,15 +193,14 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
     /// <summary>Rebuilds the root configuration from settings plus the given folder set.</summary>
     public static RootConfig BuildConfig(ServerSettings settings, IEnumerable<string> workspaceFolders, IFileSystem fileSystem)
     {
-        // The tools-install path comes from the game's own environment variable, if it has one.
-        string? environmentVariable = GSCode.Core.GameProfile.Active.RootEnvironmentVariable;
-        string? toolsPath = environmentVariable is null ? null : Environment.GetEnvironmentVariable(environmentVariable);
-
+        // Settings only. The game install is not discovered: one game in the lineage ships an
+        // environment variable pointing at its tools, and a workspace folder — typically a mod that
+        // lives nowhere near the install — cannot imply which install it belongs to. So the user
+        // says where the game is, and that is the same answer for every game.
         return RootConfig.Create(
             settings.RawEnabled,
-            settings.RawPathOverride.Length == 0 ? null : settings.RawPathOverride,
-            settings.ModsPathOverride.Length == 0 ? null : settings.ModsPathOverride,
-            toolsPath,
+            settings.RawPath.Length == 0 ? null : settings.RawPath,
+            settings.ModsPath.Length == 0 ? null : settings.ModsPath,
             workspaceFolders,
             fileSystem);
     }

@@ -116,9 +116,6 @@ public sealed partial record GameProfile
         HasPrecacheDirective = true,
         // BO3 dropped inline path calls: a function is reached by #using + ns::foo, never by path.
         HasInlinePathCalls = false,
-        RootEnvironmentVariable = "TA_TOOLS_PATH",
-        RawSubfolder = @"share\raw",
-        ModsSubfolder = "mods",
         Keywords =
         [
             .. BaseKeywords,

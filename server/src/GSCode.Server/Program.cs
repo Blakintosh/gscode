@@ -182,13 +182,10 @@ LanguageServer server = await LanguageServer.From(options =>
             if ( rootConfig.RawRoot is null )
             {
                 // Workspace-only mode is first-class: one info line, never a popup.
-                // Name the variable this GAME uses, not BO3's: CoD4, WaW, MW2 and BO1 have no root
-                // environment variable at all, so telling their users that TA_TOOLS_PATH is unset
-                // sends them looking for something that was never going to apply.
-                string reason = GameProfile.Active.RootEnvironmentVariable is string variable
-                    ? $"raw disabled or %{variable}% not set"
-                    : $"{GameProfile.Active.ShortName} has no tools environment variable — set gscode.rawPath";
-                Log.Information("Raw root unavailable ({Reason}) — workspace-only resolution", reason);
+                Log.Information(
+                    "No game root for {Game} — set gscode.rawPath to the game's raw folder. "
+                    + "Resolving against the workspace folders only.",
+                    GameProfile.Active.ShortName);
             }
             else
             {
@@ -479,14 +476,14 @@ static void LogEffectiveSettings(ServerSettings settings)
 
     // Only when set: an override is unusual and worth seeing, but a line saying "no override" on
     // every start would be noise.
-    if ( settings.RawPathOverride.Length > 0 )
+    if ( settings.RawPath.Length > 0 )
     {
-        Log.Information("Setting: rawPath overridden to {Path}", settings.RawPathOverride);
+        Log.Information("Setting: rawPath overridden to {Path}", settings.RawPath);
     }
 
-    if ( settings.ModsPathOverride.Length > 0 )
+    if ( settings.ModsPath.Length > 0 )
     {
-        Log.Information("Setting: modsPath overridden to {Path}", settings.ModsPathOverride);
+        Log.Information("Setting: modsPath overridden to {Path}", settings.ModsPath);
     }
 }
 

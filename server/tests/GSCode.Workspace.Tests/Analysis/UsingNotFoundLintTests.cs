@@ -33,7 +33,7 @@ public class UsingNotFoundLintTests
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -57,7 +57,7 @@ public class UsingNotFoundLintTests
         // indexed) and a resolver whose file system does have the file.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
-        RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
         PathResolver resolver = new(config, files);
 
         string path = @$"{Raw}\scripts\main.gsc";

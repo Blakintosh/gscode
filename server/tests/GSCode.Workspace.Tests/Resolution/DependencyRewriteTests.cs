@@ -27,7 +27,7 @@ public class DependencyRewriteTests
             .AddFile(@$"{Raw}\scripts\b.gsc", "#using scripts\\shared\\util;\nfunction other()\n{\n}\n")
             .AddFile(@$"{Raw}\scripts\c.gsc", "#using scripts\\shared\\other_thing;\nfunction third()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

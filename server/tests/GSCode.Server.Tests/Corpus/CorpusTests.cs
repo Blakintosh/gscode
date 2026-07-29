@@ -12,7 +12,7 @@ using Xunit.Abstractions;
 namespace GSCode.Server.Tests.Corpus;
 
 /// <summary>
-/// The real-corpus category: lex/parse every stock script under %TA_TOOLS_PATH%\share\raw, and
+/// The real-corpus category: lex/parse every stock script under %GSCODE_CORPUS_BO3%, and
 /// run the formatter's two property gates over a sample of it. No-ops wherever the corpus is
 /// absent (CI, and any machine without the mod tools) — each test reports which branch it took.
 /// </summary>
@@ -33,7 +33,7 @@ public class CorpusTests
             return false;
         }
 
-        _output.WriteLine("SKIPPED: %TA_TOOLS_PATH%\\share\\raw not found — corpus tests need a local mod-tools install.");
+        _output.WriteLine("SKIPPED: %GSCODE_CORPUS_BO3% not found — corpus tests need a local copy of the game scripts.");
         return true;
     }
 

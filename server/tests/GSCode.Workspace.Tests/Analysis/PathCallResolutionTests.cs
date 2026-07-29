@@ -46,7 +46,7 @@ public class PathCallResolutionTests
         string utilityPath = @$"{Raw}\maps\mp\_utility.gsc";
         FakeFileSystem files = new FakeFileSystem().AddFile(utilityPath, "shown()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, Raw, null, null, [], files);
+        RootConfig config = RootConfig.Create(true, Raw, null, [], files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
 

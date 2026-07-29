@@ -93,7 +93,7 @@ public class CorpusDiagnosticSweepTests
     {
         if ( !CorpusFixture.Available )
         {
-            _output.WriteLine("SKIPPED: %TA_TOOLS_PATH%\\share\\raw not found.");
+            _output.WriteLine("SKIPPED: %GSCODE_CORPUS_BO3% not found.");
             return;
         }
 
@@ -132,7 +132,7 @@ public class CorpusDiagnosticSweepTests
         // trip this lint now.
         if ( !CorpusFixture.Available )
         {
-            _output.WriteLine("SKIPPED: %TA_TOOLS_PATH%\\share\\raw not found.");
+            _output.WriteLine("SKIPPED: %GSCODE_CORPUS_BO3% not found.");
             return;
         }
 
@@ -152,7 +152,7 @@ public class CorpusDiagnosticSweepTests
         // stock files were told that import was pointless.
         if ( !CorpusFixture.Available )
         {
-            _output.WriteLine("SKIPPED: %TA_TOOLS_PATH%\\share\\raw not found.");
+            _output.WriteLine("SKIPPED: %GSCODE_CORPUS_BO3% not found.");
             return;
         }
 

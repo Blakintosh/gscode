@@ -162,14 +162,21 @@ gated.
 
 ## Root discovery (where the raw scripts live)
 
-Only BO3 has an install the extension can find on its own — the `TA_TOOLS_PATH` environment variable
-plus the `share\raw` subfolder (and `mods`), all recorded on its profile. No other game ships that,
-so **every non-BO3 game takes a user-defined raw path**: `gscode.rawPath` / `gscode.modsPath`, which
-override the profile's env-var lookup. With none set, the workspace runs in workspace-only mode,
-which is first-class and tested.
+**The user says where the game is; nothing is discovered.** Two settings drive it — `gscode.rawPath`
+naming the game's raw script folder, `gscode.modsPath` naming the folder its mods live under — and
+with neither set the workspace runs in workspace-only mode, which is first-class and tested.
 
-`RootEnvironmentVariable` / `RawSubfolder` / `ModsSubfolder` are therefore null on every profile but
-BO3 — nothing hardcodes BO3's paths.
+No profile carries path knowledge, because the folder layout is not a property of the dialect. BO3
+did once resolve itself from `%TA_TOOLS_PATH%\share\raw`, recorded on its profile as an environment
+variable plus two subfolder names. That generalised to exactly one game: the variable is set by
+Treyarch's mod tools, and CoD4, WaW, MW2 and BO1 ship nothing equivalent, so every other game needed
+a configured path regardless. Keeping the special case bought one game a shortcut in exchange for two
+resolution paths to reason about, and it also conflated two things that are not the same — **where
+you are editing** and **where the game is**. A mod checked out at `C:\work\my_mod` is a normal setup,
+and it needs the raw folder found by configuration, not by proximity.
+
+So the workspace folder is where you edit, the settings are where the game is, and the two are
+independent. `TA_TOOLS_PATH` still exists on a BO3 install; the extension simply does not read it.
 
 ## Bundled data files (`DataFilePrefix`)
 
@@ -235,16 +242,20 @@ accept either — not a grammar gap:
 
 ### Configuring the corpora
 
-BO3 is found through `%TA_TOOLS_PATH%\share\raw`. Each other game points at its own script root
-through an environment variable, so no machine-specific path is committed and an absent corpus is a
-no-op rather than a failure:
+Every game points at its own script root through one environment variable, named for the game and
+set to the raw folder itself. No machine-specific path is committed, and an absent corpus is a no-op
+rather than a failure, so the suite stays runnable for anyone without the tools:
 
 ```
 GSCODE_CORPUS_COD4   …\CoD4-Mod-Tools\raw
 GSCODE_CORPUS_WAW    …\cod5-mod-tools\raw
 GSCODE_CORPUS_MW2    …\IW4
 GSCODE_CORPUS_BO1    …\Call of Duty Black Ops 42740\raw
+GSCODE_CORPUS_BO3    …\Call of Duty Black Ops III\share\raw
 ```
+
+BO3 used to be the exception here too, located from `%TA_TOOLS_PATH%` with `share\raw` appended by
+the fixture. It now follows the same convention as the other four.
 
 ### Dialect gaps this exposed
 

@@ -6,11 +6,11 @@ namespace GSCode.Workspace.Tests.Resolution;
 
 /// <summary>
 /// The resolver matrix: mod overlay shadowing, raw-only isolation, whole-root-open
-/// classification, rawPath override, and workspace-only (raw disabled / no TA_TOOLS_PATH).
+/// classification, configured roots, and workspace-only (raw disabled / no configured root).
 /// </summary>
 public class PathResolverTests
 {
-    private const string ToolsRoot = @"C:\bo3";
+    private const string InstallRoot = @"C:\bo3";
     private const string Raw = @"C:\bo3\share\raw";
     private const string Mods = @"C:\bo3\mods";
 
@@ -28,12 +28,7 @@ public class PathResolverTests
     private static PathResolver StandardResolver(FakeFileSystem fileSystem, params string[] workspaceFolders)
     {
         RootConfig config = RootConfig.Create(
-            rawEnabled: true,
-            rawPathOverride: null,
-            modsPathOverride: null,
-            taToolsPath: ToolsRoot,
-            workspaceFolders: workspaceFolders,
-            fileSystem: fileSystem);
+            rawEnabled: true, rawPath: Raw, modsPath: Mods, workspaceFolders: workspaceFolders, fileSystem: fileSystem);
 
         return new PathResolver(config, fileSystem);
     }
@@ -60,10 +55,10 @@ public class PathResolverTests
     }
 
     [Fact]
-    public void GetContext_WholeToolsRootOpen_ModAndRawStillClassifyThemselves()
+    public void GetContext_WholeInstallOpen_ModAndRawStillClassifyThemselves()
     {
-        // The workspace IS the tools root: mods/raw prefixes win over the workspace match.
-        PathResolver resolver = StandardResolver(StandardTree(), ToolsRoot);
+        // The workspace IS the folder holding both roots: mods/raw prefixes win over the workspace match.
+        PathResolver resolver = StandardResolver(StandardTree(), InstallRoot);
 
         Assert.Equal(ResolutionContextKind.Mod, resolver.GetContext(@$"{Mods}\mod_b\scripts\b_only.gsc").Kind);
         Assert.Equal(ResolutionContextKind.Raw, resolver.GetContext(@$"{Raw}\scripts\codescripts\struct.gsc").Kind);
@@ -157,36 +152,39 @@ public class PathResolverTests
         Assert.Null(resolver.Resolve(ResolutionContext.RawContext, scriptPath));
     }
 
-    // --- rawPath override + workspace-only mode ---
+    // --- Configured roots + workspace-only mode ---
 
     [Fact]
-    public void Create_RawPathOverride_WinsOverToolsPath()
+    public void Create_RawPath_IsTakenVerbatim()
     {
-        FakeFileSystem fileSystem = new FakeFileSystem()
-            .AddFile(@"D:\customraw\scripts\foo.gsc")
-            .AddFile(@$"{Raw}\scripts\foo.gsc");
+        // The setting IS the root; nothing is derived from it and nothing competes with it. The
+        // raw folder need not sit under the install, or anywhere near the workspace.
+        FakeFileSystem fileSystem = new FakeFileSystem().AddFile(@"D:\customraw\scripts\foo.gsc");
 
-        RootConfig config = RootConfig.Create(
-            rawEnabled: true,
-            rawPathOverride: @"D:\customraw",
-            modsPathOverride: null,
-            taToolsPath: ToolsRoot,
-            workspaceFolders: [],
-            fileSystem: fileSystem);
+        RootConfig config = RootConfig.Create(rawEnabled: true, rawPath: @"D:\customraw", modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
 
         Assert.Equal(PathUtil.NormalizeAbsolute(@"D:\customraw"), config.RawRoot);
     }
 
     [Fact]
-    public void Create_RawDisabled_NoRootsRegardlessOfEnvironment()
+    public void Create_ConfiguredPathNotOnDisk_DropsToNull()
     {
+        // A typo in the setting must degrade to workspace-only rather than producing a root that
+        // resolves nothing: every lookup beneath it would miss, and the misses would read as the
+        // user's scripts being wrong rather than the path being wrong.
         RootConfig config = RootConfig.Create(
-            rawEnabled: false,
-            rawPathOverride: @"D:\customraw",
-            modsPathOverride: null,
-            taToolsPath: ToolsRoot,
-            workspaceFolders: [@"C:\work"],
-            fileSystem: StandardTree());
+            rawEnabled: true, rawPath: @"D:\nope", modsPath: @"D:\alsonope", workspaceFolders: [],
+            fileSystem: new FakeFileSystem().AddFile(@"C:\work\scripts\main.gsc"));
+
+        Assert.Null(config.RawRoot);
+        Assert.Null(config.ModsRoot);
+    }
+
+    [Fact]
+    public void Create_RawDisabled_NoRootsEvenWhenBothPathsAreSet()
+    {
+        // Explicit off beats explicit paths — the master switch is not advisory.
+        RootConfig config = RootConfig.Create(rawEnabled: false, rawPath: Raw, modsPath: Mods, workspaceFolders: [@"C:\work"], fileSystem: StandardTree());
 
         Assert.Null(config.RawRoot);
         Assert.Null(config.ModsRoot);
@@ -194,15 +192,9 @@ public class PathResolverTests
     }
 
     [Fact]
-    public void Create_MissingToolsPath_WorkspaceOnlyMode()
+    public void Create_NoRawPath_WorkspaceOnlyMode()
     {
-        RootConfig config = RootConfig.Create(
-            rawEnabled: true,
-            rawPathOverride: null,
-            modsPathOverride: null,
-            taToolsPath: null,
-            workspaceFolders: [@"C:\work"],
-            fileSystem: new FakeFileSystem().AddFile(@"C:\work\scripts\main.gsc"));
+        RootConfig config = RootConfig.Create(rawEnabled: true, rawPath: null, modsPath: null, workspaceFolders: [@"C:\work"], fileSystem: new FakeFileSystem().AddFile(@"C:\work\scripts\main.gsc"));
 
         Assert.Null(config.RawRoot);
         Assert.Null(config.ModsRoot);
@@ -215,13 +207,7 @@ public class PathResolverTests
             .AddFile(@"C:\work\scripts\main.gsc")
             .AddFile(@$"{Raw}\scripts\raw_thing.gsc");
 
-        RootConfig config = RootConfig.Create(
-            rawEnabled: false,
-            rawPathOverride: null,
-            modsPathOverride: null,
-            taToolsPath: ToolsRoot,
-            workspaceFolders: [@"C:\work"],
-            fileSystem: fileSystem);
+        RootConfig config = RootConfig.Create(rawEnabled: false, rawPath: null, modsPath: null, workspaceFolders: [@"C:\work"], fileSystem: fileSystem);
         PathResolver resolver = new(config, fileSystem);
 
         ResolutionContext context = resolver.GetContext(@"C:\work\scripts\main.gsc");
@@ -236,7 +222,7 @@ public class PathResolverTests
     public void EnumerateIndexTargets_CoversRawModsAndWorkspace_Deduplicated()
     {
         FakeFileSystem fileSystem = StandardTree().AddFile(@"C:\work\scripts\main.csc");
-        PathResolver resolver = StandardResolver(fileSystem, @"C:\work", ToolsRoot);
+        PathResolver resolver = StandardResolver(fileSystem, @"C:\work", InstallRoot);
 
         List<string> targets = [.. resolver.EnumerateIndexTargets()];
 

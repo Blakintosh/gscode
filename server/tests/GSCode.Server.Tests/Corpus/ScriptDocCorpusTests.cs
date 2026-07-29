@@ -15,7 +15,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// in double quotes, and the key regex starts at <c>\w</c>, so a leading quote made it match
 /// nothing. 15,226 of 15,231 functions parsed to an empty doc while the suite stayed green.
 ///
-/// A floor rather than an exact count: the corpus is whatever mod-tools version is installed, so
+/// A floor rather than an exact count: the corpus is whatever version is configured, so
 /// the assertion has to survive a different one. Anything near zero means association broke again.
 /// </summary>
 [Trait("Category", "Corpus")]
@@ -33,7 +33,7 @@ public class ScriptDocCorpusTests
     {
         if ( !CorpusFixture.Available )
         {
-            _output.WriteLine("SKIPPED: %TA_TOOLS_PATH%\\share\\raw not found.");
+            _output.WriteLine("SKIPPED: %GSCODE_CORPUS_BO3% not found.");
             return;
         }
 

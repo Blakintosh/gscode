@@ -159,11 +159,12 @@ Typing lands P10.)*
 
 ## Resolution/RootConfig.cs
 
-- `sealed record RootConfig` — the resolved roots: `RawRoot` (share\raw), `ModsRoot`,
-  `WorkspaceFolders`. Null raw/mods roots = workspace-only mode, a first-class state.
-  - `Create(rawEnabled, rawPathOverride, modsPathOverride, taToolsPath, workspaceFolders, fileSystem)`
-    — rawEnabled=false forces BOTH roots null regardless of overrides or TA_TOOLS_PATH
-    (explicit off wins); overrides beat the env var; roots missing on disk drop to null.
+- `sealed record RootConfig` — the resolved roots: `RawRoot`, `ModsRoot`, `WorkspaceFolders`. Null
+  raw/mods roots = workspace-only mode, a first-class state.
+  - `Create(rawEnabled, rawPath, modsPath, workspaceFolders, fileSystem)` — both roots come from
+    settings and nowhere else. rawEnabled=false forces BOTH null whatever the paths say (explicit
+    off wins), and a path naming a folder that is not on disk drops to null rather than being
+    trusted. Nothing is read from the environment, so one code path serves every game.
 
 ## Resolution/ResolutionContext.cs
 

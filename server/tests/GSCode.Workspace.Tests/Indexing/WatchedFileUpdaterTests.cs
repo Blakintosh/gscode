@@ -20,7 +20,7 @@ public class WatchedFileUpdaterTests
             .AddFile(@$"{Raw}\scripts\shared\shared.gsh", "#define CAP 5\n")
             .AddFile(@$"{Raw}\scripts\uses_it.gsc", "#insert scripts\\shared\\shared.gsh;\nfunction f()\n{\nx = CAP;\n}\n");
 
-        RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

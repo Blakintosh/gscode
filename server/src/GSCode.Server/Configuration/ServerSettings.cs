@@ -13,8 +13,8 @@ public sealed class ServerSettings
     public string WorkspaceIndexingMode { get; set; } = "partial";
     public bool EnableWorkspaceCache { get; set; } = true;
     public bool RawEnabled { get; set; } = true;
-    public string RawPathOverride { get; set; } = "";
-    public string ModsPathOverride { get; set; } = "";
+    public string RawPath { get; set; } = "";
+    public string ModsPath { get; set; } = "";
     public string RawFileWarningMode { get; set; } = "stock";
     public bool OutlineShowAssignments { get; set; } = true;
     public bool CodeLensEnabled { get; set; } = true;
@@ -93,8 +93,8 @@ public sealed class ServerSettings
         WorkspaceIndexingMode = section.Value<string>("workspaceIndexingMode") ?? WorkspaceIndexingMode;
         EnableWorkspaceCache = section.Value<bool?>("enableWorkspaceCache") ?? EnableWorkspaceCache;
         RawEnabled = section.Value<bool?>("raw.enabled") ?? section["raw"]?.Value<bool?>("enabled") ?? RawEnabled;
-        RawPathOverride = section.Value<string>("rawPath") ?? RawPathOverride;
-        ModsPathOverride = section.Value<string>("modsPath") ?? ModsPathOverride;
+        RawPath = section.Value<string>("rawPath") ?? RawPath;
+        ModsPath = section.Value<string>("modsPath") ?? ModsPath;
         RawFileWarningMode = section.Value<string>("rawFileWarningMode") ?? RawFileWarningMode;
         OutlineShowAssignments = section.Value<bool?>("outline.showAssignments")
             ?? section["outline"]?.Value<bool?>("showAssignments")

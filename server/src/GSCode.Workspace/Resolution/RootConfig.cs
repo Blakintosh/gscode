@@ -25,14 +25,21 @@ public sealed record RootConfig
 
     /// <summary>
     /// Builds the config from settings + environment. When <paramref name="rawEnabled"/>
-    /// is false, NO raw/mods roots are set regardless of overrides or TA_TOOLS_PATH —
+    /// is false, NO raw/mods roots are set regardless of the configured paths —
     /// explicit off wins. Roots that do not exist on disk are dropped to null.
+    /// </summary>
+    /// <summary>
+    /// The roots this workspace resolves against. Three inputs, and they answer different questions:
+    /// the WORKSPACE FOLDERS are where you are editing — usually a mod, which may live anywhere —
+    /// while <paramref name="rawPath"/> and <paramref name="modsPath"/> say where the GAME is. Those
+    /// are settings rather than anything discovered, because only one game in the lineage ships a
+    /// tools environment variable to discover it from, and a mod folder tells you nothing about
+    /// which install it belongs to.
     /// </summary>
     public static RootConfig Create(
         bool rawEnabled,
-        string? rawPathOverride,
-        string? modsPathOverride,
-        string? taToolsPath,
+        string? rawPath,
+        string? modsPath,
         IEnumerable<string> workspaceFolders,
         IFileSystem fileSystem)
     {
@@ -47,8 +54,8 @@ public sealed record RootConfig
             return new RootConfig { WorkspaceFolders = folders.ToImmutable() };
         }
 
-        string? rawRoot = ResolveRoot(rawPathOverride, taToolsPath, GameProfile.Active.RawSubfolder, fileSystem);
-        string? modsRoot = ResolveRoot(modsPathOverride, taToolsPath, GameProfile.Active.ModsSubfolder, fileSystem);
+        string? rawRoot = ResolveRoot(rawPath, fileSystem);
+        string? modsRoot = ResolveRoot(modsPath, fileSystem);
 
         return new RootConfig
         {
@@ -58,25 +65,15 @@ public sealed record RootConfig
         };
     }
 
-    private static string? ResolveRoot(string? overridePath, string? taToolsPath, string? taToolsSubfolder, IFileSystem fileSystem)
+    /// <summary>The configured root, or null when it is unset or does not exist on disk.</summary>
+    private static string? ResolveRoot(string? configured, IFileSystem fileSystem)
     {
-        string? candidate = null;
-
-        if ( !string.IsNullOrWhiteSpace(overridePath) )
-        {
-            candidate = overridePath;
-        }
-        else if ( !string.IsNullOrWhiteSpace(taToolsPath) && !string.IsNullOrWhiteSpace(taToolsSubfolder) )
-        {
-            candidate = Path.Combine(taToolsPath, taToolsSubfolder);
-        }
-
-        if ( candidate is null )
+        if ( string.IsNullOrWhiteSpace(configured) )
         {
             return null;
         }
 
-        string normalized = PathUtil.NormalizeAbsolute(candidate);
+        string normalized = PathUtil.NormalizeAbsolute(configured);
         if ( !fileSystem.DirectoryExists(normalized) )
         {
             return null;

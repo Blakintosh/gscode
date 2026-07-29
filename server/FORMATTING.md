@@ -3,7 +3,7 @@
 What `Format Document` produces, and why each rule is what it is.
 
 Every rule below was derived by measuring the shipped Treyarch scripts — 980 files, 397,111 lines
-under `%TA_TOOLS_PATH%\share\raw` — not by preference. Where the corpus is decisive the counts are
+in BO3's raw folder — not by preference. Where the corpus is decisive the counts are
 given and there is no setting. Where it is genuinely split, that is called out and the choice is
 explained.
 

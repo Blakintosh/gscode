@@ -41,13 +41,7 @@ public class ScriptDatabaseTests
     private static async Task<(ScriptDatabase Database, PathResolver Resolver)> IndexFixtureAsync()
     {
         FakeFileSystem fileSystem = FixtureTree();
-        RootConfig config = RootConfig.Create(
-            rawEnabled: true,
-            rawPathOverride: null,
-            modsPathOverride: null,
-            taToolsPath: ToolsRoot,
-            workspaceFolders: [],
-            fileSystem: fileSystem);
+        RootConfig config = RootConfig.Create(rawEnabled: true, rawPath: Raw, modsPath: Mods, workspaceFolders: [], fileSystem: fileSystem);
 
         PathResolver resolver = new(config, fileSystem);
         ScriptDatabase database = new();
@@ -201,7 +195,7 @@ public class ScriptDatabaseTests
         FakeFileSystem fileSystem = FixtureTree()
             .AddFile(@$"{Raw}\scripts\secret.gsc", "function private hidden()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, null, null, ToolsRoot, [], fileSystem);
+        RootConfig config = RootConfig.Create(true, ToolsRoot + @"\share\raw", ToolsRoot + @"\mods", [], fileSystem);
         PathResolver resolver = new(config, fileSystem);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, new NameTable());

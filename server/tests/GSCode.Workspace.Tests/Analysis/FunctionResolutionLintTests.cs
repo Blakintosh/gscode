@@ -32,7 +32,7 @@ public class FunctionResolutionLintTests
                 @$"{Raw}\scripts\util.gsc",
                 "#namespace util;\nfunction shown()\n{\n}\nfunction private hidden()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

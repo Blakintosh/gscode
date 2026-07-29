@@ -32,7 +32,7 @@ public class GshMacroLookupTests
                 @$"{Raw}\scripts\shared\array_shared.csc",
                 "#insert scripts\\shared\\shared.gsh;\n#namespace array;\nfunction run( v )\n{\n    if ( IS_TRUE( v ) )\n    {\n    }\n}\n");
 
-        RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

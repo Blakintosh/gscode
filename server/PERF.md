@@ -109,7 +109,7 @@ nothing for either.
 
 ## Corpus tests
 
-`GSCode.Server.Tests/Corpus` runs the real %TA_TOOLS_PATH%\share\raw tree, tagged
+`GSCode.Server.Tests/Corpus` runs the real BO3 raw tree named by `GSCODE_CORPUS_BO3`, tagged
 `Category=Corpus` and excluded on CI (which has no mod-tools install; the tests also no-op on
 their own when the corpus is absent). Four checks: every script analyses without throwing,
 lex/parse errors stay under 1% of the corpus, and the formatter's two property gates —
@@ -124,9 +124,9 @@ the suite.
 
 ## How to run the pass
 
-1. Set `TA_TOOLS_PATH` to the BO3 mod-tools install (so `share\raw` and `mods\` resolve), set
-   `gscode.serverLogLevel = verbose` (the memory lines are Verbose) and
-   `gscode.workspaceIndexingMode = full`.
+1. Point `gscode.rawPath` at the game's raw folder (and `gscode.modsPath` at its mods folder, to
+   exercise overlay resolution), set `gscode.serverLogLevel = verbose` (the memory lines are
+   Verbose) and `gscode.workspaceIndexingMode = full`.
 2. Launch the extension against the tools root (see the client `.env` debug flow, or install the
    packaged extension).
 3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and

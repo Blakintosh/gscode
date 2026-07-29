@@ -25,7 +25,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// a missing builtin, and no static rule separates them — but a real engine function is called from
 /// many files, while a typo appears once. The ranking is therefore the finding; the raw list is not.
 ///
-/// Reports rather than asserts a count: the corpus is whatever mod-tools version is installed, so a
+/// Reports rather than asserts a count: the corpus is whatever version is configured, so a
 /// hard number would be brittle. The gate is that the sweep RUNS and the script-side stays clean.
 /// </summary>
 [Trait("Category", "Corpus")]
@@ -81,7 +81,7 @@ public class BuiltinHarvestTests
     {
         if ( !CorpusFixture.Available )
         {
-            _output.WriteLine("SKIPPED: %TA_TOOLS_PATH%\\share\\raw not found.");
+            _output.WriteLine("SKIPPED: %GSCODE_CORPUS_BO3% not found.");
             return;
         }
 

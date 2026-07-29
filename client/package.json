@@ -191,19 +191,19 @@
 				"gscode.raw.enabled": {
 					"type": "boolean",
 					"default": true,
-					"description": "Master switch for reading the game's raw files. When disabled, no share/raw or mods folders are consulted at all (regardless of gscode.rawPath or TA_TOOLS_PATH) and resolution becomes workspace-only.",
+					"description": "Master switch for reading the game's raw files. When disabled, gscode.rawPath and gscode.modsPath are ignored entirely and resolution uses the open workspace folders alone.",
 					"scope": "window"
 				},
 				"gscode.rawPath": {
 					"type": "string",
 					"default": "",
-					"description": "Overrides the game raw folder (normally %TA_TOOLS_PATH%\\share\\raw). Ignored when gscode.raw.enabled is false.",
+					"description": "Absolute path to the game's raw script folder. Set this when the folder you have open is a mod or a loose set of scripts, so its includes and path calls resolve against the game's own scripts. Left empty, only the open workspace folders are indexed.",
 					"scope": "window"
 				},
 				"gscode.modsPath": {
 					"type": "string",
 					"default": "",
-					"description": "Overrides the mods folder (normally %TA_TOOLS_PATH%\\mods).",
+					"description": "Absolute path to the folder holding your mods, one subfolder per mod. A script inside a mod resolves against that mod first and the raw folder second, so a mod copy shadows the stock file it replaces.",
 					"scope": "window"
 				},
 				"gscode.rawFileWarningMode": {

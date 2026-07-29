@@ -30,7 +30,7 @@ public class UnusedUsingLintTests
             .AddFile(@$"{Raw}\scripts\boot.gsc", "#namespace boot;\nfunction autoexec start()\n{\n}\n")
             .AddFile(@$"{Raw}\scripts\shapes.gsc", "#namespace shapes;\nclass Circle\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, null, null, @"C:\bo3", [], files);
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

@@ -98,7 +98,7 @@ tightly-paired handlers may share one heading (`Parser.cs (+ .Declarations / .St
 `tests/FOLDER.md` is the exception to the full-dump rule: 127 test classes listed one per
 section would be unreadable, so it groups them by area with a keyword-bearing sentence each —
 the point being to find the right class by searching for the construct. It also carries the
-canonical list of ENVIRONMENT VARIABLES (`TA_TOOLS_PATH`, `GSCODE_CORPUS_<GAME>`,
+canonical list of ENVIRONMENT VARIABLES (`GSCODE_CORPUS_<GAME>`,
 `GSCODE_COD4_DOCS`, `GSCODE_INSTRUMENTATION`), since most of them exist to point tests at game
 data and were otherwise discoverable only by reading fixture source.
 

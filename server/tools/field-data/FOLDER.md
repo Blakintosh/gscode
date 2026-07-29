@@ -9,6 +9,10 @@ game install at runtime.
 Verbatim copies from a game install, kept as provenance for the curated layer.
 Re-imported only if a game update changes them.
 
+`%TA_TOOLS_PATH%` below is shorthand for a BO3 mod-tools install, which is where its own tools
+set that variable. Neither this tool nor the extension reads it — it says where a human finds
+the file, not how any code locates it.
+
 - `ScriptObjectFields.xlsx` — from `%TA_TOOLS_PATH%\docs_modtools\`; 10 tabs
   (Weapons, CG DynEnt, CG Cent, Actor, Client, HudElem, Vehicle, Ent, PathNode,
   Sentient) mapping field name → engine type token (F_INT, F_FLOAT, F_STRING,
@@ -107,8 +111,8 @@ The run prints the split, e.g.
   artifact was already in — a regeneration without the docs never silently loses detail, it
   just stops gaining it.
 
-The corpus environment variables (`TA_TOOLS_PATH`, `GSCODE_CORPUS_<GAME>`) belong to the
-tests; see `tests/FOLDER.md`.
+The corpus environment variables (`GSCODE_CORPUS_<GAME>`) belong to the tests; see
+`tests/FOLDER.md`.
 
 ### Output conventions
 

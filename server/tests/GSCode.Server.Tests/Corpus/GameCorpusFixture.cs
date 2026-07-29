@@ -12,7 +12,7 @@ internal sealed record GameCorpus(GameProfile Profile, string RawRoot);
 
 /// <summary>
 /// The per-game corpus, for the games beyond BO3. Where <see cref="CorpusFixture"/> covers BO3 via
-/// <c>%TA_TOOLS_PATH%</c>, each other supported game points at its own scripts through an
+/// <c>%GSCODE_CORPUS_BO3%</c>, each other supported game points at its own scripts through an
 /// environment variable — <c>GSCODE_CORPUS_COD4</c>, <c>GSCODE_CORPUS_WAW</c>,
 /// <c>GSCODE_CORPUS_MW2</c>, <c>GSCODE_CORPUS_BO1</c> — set to that game's raw script root.
 ///
@@ -91,13 +91,7 @@ internal static class GameCorpusFixture
     public static PathResolver Resolver(GameCorpus corpus)
     {
         PhysicalFileSystem fileSystem = new();
-        RootConfig config = RootConfig.Create(
-            rawEnabled: true,
-            rawPathOverride: corpus.RawRoot,
-            modsPathOverride: null,
-            taToolsPath: null,
-            workspaceFolders: [],
-            fileSystem: fileSystem);
+        RootConfig config = RootConfig.Create(rawEnabled: true, rawPath: corpus.RawRoot, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
 
         return new PathResolver(config, fileSystem);
     }

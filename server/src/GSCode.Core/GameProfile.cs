@@ -273,16 +273,13 @@ public sealed partial record GameProfile
     /// </summary>
     public bool HasPrecacheDirective { get; init; }
 
-    // --- Root discovery: where the game's scripts live. ---
-
-    /// <summary>The environment variable naming the game's tools install, or null if it has none.</summary>
-    public string? RootEnvironmentVariable { get; init; }
-
-    /// <summary>The raw-scripts folder relative to the tools install (e.g. <c>share\raw</c>), or null.</summary>
-    public string? RawSubfolder { get; init; }
-
-    /// <summary>The mods folder relative to the tools install (e.g. <c>mods</c>), or null.</summary>
-    public string? ModsSubfolder { get; init; }
+    // --- Root discovery: the user says where the game is. ---
+    //
+    // There is deliberately nothing here. Only BO3 ever shipped an environment variable naming its
+    // tools install, and a workspace folder — typically a mod living nowhere near the game — cannot
+    // imply which install it belongs to. So the raw and mods roots come from gscode.rawPath and
+    // gscode.modsPath, which is the same answer for all eighteen games instead of one mechanism for
+    // one of them and a second for the rest.
 
     /// <summary>
     /// The builtin-API filename for a language world (e.g. <c>t7_api_gsc.json</c>), or null when

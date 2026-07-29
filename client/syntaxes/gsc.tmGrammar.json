@@ -27,7 +27,7 @@
         },
         {
             "name": "meta.preprocessor.file-directives.gsc",
-            "match": "(#(?:using|insert))\\s([^ ;]*)(;)?",
+            "match": "(#(?:using|insert|include))\\s([^ ;]*)(;)?",
             "captures": {
                 "1": { "name": "keyword.control.directive.using.gsc" },
                 "2": { "name": "string.quoted.other.blank.using.gsc" },
@@ -195,8 +195,8 @@
         },
         "control": {
             "name": "keyword.control.gsc",
-            "comment": "Reserved control keywords in GSC/CSC",
-            "match": "(?i)\\b(class|return|wait|thread|classes|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|isdefined|vectorscale)\\b"
+            "comment": "Reserved control keywords across the GSC/CSC dialects. A TextMate grammar cannot see the active game — it runs before the server is asked — so this is the UNION of every dialect's keywords rather than one game's. Over-highlighting a word the current game lacks is harmless; the server owns the dialect-accurate verdict through semantic tokens and gscode-1004. Under-highlighting is the real failure, and is what left #include and the profiler pair plain in the Infinity Ward games.",
+            "match": "(?i)\\b(class|return|wait|thread|childthread|call|classes|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|prof_begin|prof_end|isdefined|vectorscale)\\b"
         },
         "escape": {
             "name": "constant.character.escape",

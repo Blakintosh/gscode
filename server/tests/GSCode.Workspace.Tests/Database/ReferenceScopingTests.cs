@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
+using GSCode.Parser.Extraction;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -21,8 +22,12 @@ public class ReferenceScopingTests
 {
     private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
 
+    /// <summary>The range every synthetic path call and reference shares, so they attribute to it.</summary>
+    private static readonly TextRange PathCallRange = new(new Position(1, 1), new Position(1, 5));
+
     private static ScriptRecord Record(
-        string relativePath, ImmutableArray<string> includes = default, ImmutableArray<string> pathCalls = default)
+        string relativePath, ImmutableArray<string> includes = default, ImmutableArray<string> pathCalls = default,
+        ImmutableArray<FunctionSymbol> functions = default)
     {
         ImmutableArray<DependencyEdge>.Builder edges = ImmutableArray.CreateBuilder<DependencyEdge>();
         foreach ( string include in includes.IsDefault ? [] : includes )
@@ -38,7 +43,10 @@ public class ReferenceScopingTests
             Language = ScriptLanguage.Gsc,
             RelativePath = relativePath,
             Dependencies = edges.ToImmutable(),
-            PathCallTargets = pathCalls.IsDefault ? [] : pathCalls,
+            Functions = functions.IsDefault ? [] : functions,
+            PathCallTargets = pathCalls.IsDefault
+                ? []
+                : [.. pathCalls.Select(static path => new PathCallReference(path, PathCallRange))],
         };
     }
 
@@ -50,7 +58,7 @@ public class ReferenceScopingTests
         foreach ( ScriptRecord record in records )
         {
             builder.Add((record, new ReferenceEntry(
-                new SymbolKey(null, "main", SymbolKind.Function), new TextRange(), ReferenceKind.Call)));
+                new SymbolKey(null, "main", SymbolKind.Function), PathCallRange, ReferenceKind.Call)));
         }
 
         return builder.ToImmutable();
@@ -103,20 +111,46 @@ public class ReferenceScopingTests
     }
 
     [Fact]
-    public void ReachingAnotherDeclarationDoesNotDropTheReacher()
+    public void AFilesOwnDeclarationIsNotAReferenceToAnotherFilesFunction()
     {
-        // combat.gsc path-calls cover_prone and _mgturret, and all three declare main(). The lens on
-        // combat.gsc's own main must still narrow to combat.gsc — the reachable strangers are other
-        // functions entirely, not competing definitions of this one.
-        ScriptRecord combat = Record(
-            @"animscripts\combat.gsc",
-            pathCalls: [@"animscripts\cover_prone", @"maps\_mgturret"]);
-        ScriptRecord stranger = Record(@"animscripts\cover_prone.gsc");
+        // The reported symptom: find-references on combat's main() listed cover_prone's own main()
+        // and _mgturret's own main(), because both files path-call combat and so were kept whole.
+        // A bare name in a file that declares it means THAT file's function.
+        ImmutableArray<FunctionSymbol> declaresMain =
+        [
+            new FunctionSymbol { Name = "main", KeyName = "main", Namespace = "", NameRange = PathCallRange, FullRange = PathCallRange },
+        ];
 
-        ImmutableArray<(ScriptRecord, ReferenceEntry)> kept = DatabaseQueries.ScopeToIncludeGraph(
-            Refs(combat, stranger), @"animscripts\combat.gsc", Cod4);
+        ScriptRecord coverProne = Record(
+            @"animscripts\cover_prone.gsc",
+            pathCalls: [@"animscripts\combat"],
+            functions: declaresMain);
 
-        Assert.Single(kept);
+        // Its OWN main(), at a range that is not one of its path-call sites.
+        ImmutableArray<(ScriptRecord, ReferenceEntry)> ownDeclaration =
+        [
+            (coverProne, new ReferenceEntry(
+                new SymbolKey(null, "main", SymbolKind.Function),
+                new TextRange(new Position(99, 1), new Position(99, 5)),
+                ReferenceKind.Definition)),
+        ];
+
+        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(ownDeclaration, @"animscripts\combat.gsc", Cod4));
+
+        // But its combat::main() call, which IS at a path-call site, still counts.
+        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(coverProne), @"animscripts\combat.gsc", Cod4));
+    }
+
+    [Fact]
+    public void APathCallToADifferentFileIsNotAReference()
+    {
+        // corner.gsc calls both combat::main() and cover_behavior::main(). Only the first belongs to
+        // combat, and the path at each site is what says so.
+        ScriptRecord corner = Record(
+            @"animscripts\corner.gsc",
+            pathCalls: [@"animscripts\cover_behavior"]);
+
+        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(Refs(corner), @"animscripts\combat.gsc", Cod4));
     }
 
     [Fact]

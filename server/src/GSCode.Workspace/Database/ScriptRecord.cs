@@ -56,6 +56,11 @@ public sealed record ScriptRecord
     public ImmutableArray<DependencyEdge> Dependencies { get; init; } = [];
 
     /// <summary>
+    /// The path calls this script makes, each with the file it names and the range of the called
+    /// name. The RANGE is what matters: scoping has to decide per REFERENCE, not per file. A file
+    /// that path-calls combat also declares its own main() and may call cover_behavior::main(), and
+    /// those are three different functions sharing one key.
+    ///
     /// The files this script reaches by PATH — <c>maps\mp\_utility::foo()</c> — as script-relative
     /// paths without extension, deduplicated.
     ///
@@ -65,7 +70,7 @@ public sealed record ScriptRecord
     /// would misdirect the dependency rewrite. But they ARE how one file reaches another's
     /// functions, so reference scoping has to see them.
     /// </summary>
-    public ImmutableArray<string> PathCallTargets { get; init; } = [];
+    public ImmutableArray<GSCode.Parser.Extraction.PathCallReference> PathCallTargets { get; init; } = [];
     public ImmutableArray<ReferenceEntry> References { get; init; } = [];
     public ImmutableArray<Diagnostic> Diagnostics { get; init; } = [];
 

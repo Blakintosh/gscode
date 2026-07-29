@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
+using GSCode.Parser.Extraction;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Database;
@@ -322,13 +323,56 @@ public static class DatabaseQueries
 
         foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
         {
-            if ( CanReach(record, declaring) )
+            if ( MeansDeclaringFile(record, entry, declaring) )
             {
                 kept.Add((record, entry));
             }
         }
 
         return kept.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether ONE reference means the declaring file's function, decided per reference rather than
+    /// per file — because a single file routinely holds references to several different functions
+    /// that share the key. corner.gsc calls both <c>combat::main()</c> and
+    /// <c>cover_behavior::main()</c>, and cover_prone.gsc calls <c>combat::main()</c> while also
+    /// declaring a <c>main()</c> of its own. Keeping a whole file because it reaches the declaring
+    /// one sweeps all three in.
+    ///
+    /// So each reference is attributed to the file it actually names:
+    ///   * a PATH CALL names its file outright — the path at that exact site decides it;
+    ///   * anything else is a bare name, which a merge dialect resolves locally first, so it belongs
+    ///     to the referencing file when that file declares it, and otherwise to whatever it imports.
+    /// </summary>
+    private static bool MeansDeclaringFile(ScriptRecord record, ReferenceEntry entry, string declaring)
+    {
+        foreach ( PathCallReference pathCall in record.PathCallTargets )
+        {
+            if ( pathCall.NameRange == entry.Range )
+            {
+                return NormalizeScriptPath(pathCall.Path) == declaring;
+            }
+        }
+
+        // A bare name in a file that declares it means THAT file's function, wherever else the name
+        // also lives. This is the rule that keeps cover_prone's own main() out of combat's list.
+        bool declaresItself = false;
+        foreach ( FunctionSymbol function in record.Functions )
+        {
+            if ( string.Equals(function.KeyName, entry.Key.Name, StringComparison.OrdinalIgnoreCase) )
+            {
+                declaresItself = true;
+                break;
+            }
+        }
+
+        if ( declaresItself )
+        {
+            return NormalizeScriptPath(record.RelativePath) == declaring;
+        }
+
+        return CanReach(record, declaring);
     }
 
     /// <summary>
@@ -355,9 +399,9 @@ public static class DatabaseQueries
             }
         }
 
-        foreach ( string target in record.PathCallTargets )
+        foreach ( PathCallReference pathCall in record.PathCallTargets )
         {
-            if ( NormalizeScriptPath(target) == declaring )
+            if ( NormalizeScriptPath(pathCall.Path) == declaring )
             {
                 return true;
             }

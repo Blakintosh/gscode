@@ -174,23 +174,14 @@ public sealed class ScriptDatabase
     /// these are lifted out here or they are lost — and reference scoping on the merge dialects
     /// needs them: a path call reaches another file's function without importing it.
     /// </summary>
-    private static ImmutableArray<string> PathCallTargetsOf(ParseResult result)
+    private static ImmutableArray<GSCode.Parser.Extraction.PathCallReference> PathCallTargetsOf(ParseResult result)
     {
         if ( result.Extraction.PathCalls.Length == 0 )
         {
             return [];
         }
 
-        HashSet<string> distinct = new(StringComparer.OrdinalIgnoreCase);
-        foreach ( GSCode.Parser.Extraction.PathCallReference pathCall in result.Extraction.PathCalls )
-        {
-            if ( pathCall.Path.Length > 0 )
-            {
-                distinct.Add(pathCall.Path);
-            }
-        }
-
-        return [.. distinct];
+        return result.Extraction.PathCalls;
     }
 
     /// <summary>Builds the immutable record from a pipeline result.</summary>

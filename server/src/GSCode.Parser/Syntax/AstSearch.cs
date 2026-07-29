@@ -38,6 +38,37 @@ public static class AstSearch
         }
     }
 
+    /// <summary>
+    /// The innermost identifier under <paramref name="position"/> and the function enclosing it —
+    /// the two things every question about a LOCAL starts from, since a local means nothing without
+    /// the function that scopes it.
+    ///
+    /// Shared because hover ("what type is this?") and go-to-definition ("where did this come
+    /// from?") were each walking the chain and picking the same two nodes out of it.
+    /// </summary>
+    public static bool TryFindLocalContext(
+        ScriptNode root, Position position, out IdentifierNode identifier, out FunctionNode function)
+    {
+        IdentifierNode? foundIdentifier = null;
+        FunctionNode? foundFunction = null;
+
+        foreach ( AstNode node in ChainAt(root, position) )
+        {
+            if ( node is FunctionNode enclosing )
+            {
+                foundFunction = enclosing;
+            }
+            else if ( node is IdentifierNode candidate )
+            {
+                foundIdentifier = candidate;
+            }
+        }
+
+        identifier = foundIdentifier!;
+        function = foundFunction!;
+        return foundIdentifier is not null && foundFunction is not null;
+    }
+
     /// <summary>Direct structural children of a node (expression operands included).</summary>
     public static IEnumerable<AstNode> ChildrenOf(AstNode node)
     {

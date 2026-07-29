@@ -31,23 +31,8 @@ public static class LocalDefinition
     /// </summary>
     public static TextRange? Find(ParseResult result, Position position)
     {
-        List<AstNode> chain = AstSearch.ChainAt(result.Tree.Root, position);
-
-        IdentifierNode? identifier = null;
-        FunctionNode? function = null;
-        foreach ( AstNode node in chain )
-        {
-            if ( node is FunctionNode enclosingFunction )
-            {
-                function = enclosingFunction;
-            }
-            else if ( node is IdentifierNode identifierNode )
-            {
-                identifier = identifierNode;
-            }
-        }
-
-        if ( identifier is null || function is null )
+        if ( !AstSearch.TryFindLocalContext(
+            result.Tree.Root, position, out IdentifierNode identifier, out FunctionNode function) )
         {
             return null;
         }

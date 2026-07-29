@@ -128,23 +128,9 @@ public sealed class FlowTyper
     {
         hover = default;
 
-        // Find the innermost identifier under the cursor and the function that encloses it.
-        List<AstNode> chain = AstSearch.ChainAt(result.Tree.Root, position);
-        IdentifierNode? identifier = null;
-        FunctionNode? function = null;
-        foreach ( AstNode node in chain )
-        {
-            if ( node is FunctionNode enclosingFunction )
-            {
-                function = enclosingFunction;
-            }
-            else if ( node is IdentifierNode identifierNode )
-            {
-                identifier = identifierNode;
-            }
-        }
-
-        if ( identifier is null || function is null )
+        // The innermost identifier under the cursor and the function that encloses it.
+        if ( !AstSearch.TryFindLocalContext(
+            result.Tree.Root, position, out IdentifierNode identifier, out FunctionNode function) )
         {
             return false;
         }

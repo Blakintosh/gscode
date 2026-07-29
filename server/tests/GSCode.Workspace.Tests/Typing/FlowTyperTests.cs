@@ -41,6 +41,45 @@ public class FlowTyperTests
     }
 
     [Fact]
+    public void FieldAssignments_AreTypedLikeLocals()
+    {
+        // The reported gap: `foo = "lol"` showed its <string> hint and `level.foo = "lol"` showed
+        // nothing, purely because the field branch returned before any hint was recorded.
+        Dictionary<string, ScrType> types = InferByFirstToken(
+            "    level.name = \"lol\";\n    self.count = 5;\n    level.on = true;\n    a.b.deep = 1.5;");
+
+        Assert.Equal(ScrType.String, types["name"]);
+        Assert.Equal(ScrType.Int, types["count"]);
+        Assert.Equal(ScrType.Bool, types["on"]);
+        Assert.Equal(ScrType.Float, types["deep"]);
+    }
+
+    [Fact]
+    public void AFieldTakesTheAssignedValuesType_NotTheEngineDatas()
+    {
+        // `origin` is an engine field the data types as a vector. Reading the type back through the
+        // field data would report that instead of what was actually assigned - and would say
+        // nothing at all about the invented fields, which are most of them.
+        Dictionary<string, ScrType> types = InferByFirstToken("    level.origin = \"a string\";");
+
+        Assert.Equal(ScrType.String, types["origin"]);
+    }
+
+    [Fact]
+    public void TheSameFieldNameOnDifferentOwnersIsHintedSeparately()
+    {
+        // Keyed by the whole path, so hinting `self.count` does not suppress `level.count`. Both
+        // are first-for-name, which is what the inlay surface filters on.
+        string source = "function f()\n{\n    self.count = 1;\n    level.count = 2;\n}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        ImmutableArray<InferredAssignment> inferred = NewTyper().InferAssignments(result);
+
+        Assert.Equal(2, inferred.Count(a => a.Name == "count" && a.IsFirstForName));
+    }
+
+    [Fact]
     public void Literals_AreTyped()
     {
         Dictionary<string, ScrType> types = InferByFirstToken("    a = 5;\n    b = 3.14;\n    c = \"hi\";\n    d = true;\n    v = ( 0, 0, 0 );\n    ls = &\"MENU\";");

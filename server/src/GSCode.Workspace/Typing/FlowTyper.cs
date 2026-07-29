@@ -461,6 +461,29 @@ public sealed class FlowTyper
                 member.NameToken.Text,
                 TypeOf(member.Object, environment),
                 assignment.Operator == TokenKind.Assign ? assignment.Value : null));
+
+            // A field assignment is an assignment: `level.foo = "lol"` says as much about foo as
+            // `foo = "lol"` says about the local, and the hint was missing on one and not the other
+            // purely because this branch returned first.
+            //
+            // The type is the VALUE's, not the field's. Reading it back through TypeOfField would
+            // consult the engine data instead and say nothing at all about a field the scripts
+            // invented, which is most of them.
+            if ( assignment.Operator == TokenKind.Assign
+                && member.NameToken.Provenance.DefinitionSite is null )
+            {
+                ScrType fieldType = TypeOf(assignment.Value, environment);
+                if ( fieldType.IsKnown() )
+                {
+                    // Keyed by the whole path, so `self.count` and `level.count` are separate names
+                    // and hinting one does not silently suppress the other.
+                    string path = FieldPathOf(member);
+                    hints.Add(new InferredAssignment(
+                        member.NameToken.RootRange, fieldType, member.NameToken.Text,
+                        IsFirstForName: hinted.Add(path)));
+                }
+            }
+
             return;
         }
 
@@ -536,6 +559,24 @@ public sealed class FlowTyper
                 return TypeOfField(member);
             default:
                 return ScrType.Unknown;
+        }
+    }
+
+    /// <summary>
+    /// The dotted path a field write names — <c>self.count</c>, <c>level.a.b</c> — for use as a
+    /// hint key, so two fields sharing a name on different owners stay distinct. Falls back to the
+    /// field name alone when the owner is something less nameable, like a call result.
+    /// </summary>
+    private static string FieldPathOf(MemberNode member)
+    {
+        switch ( member.Object )
+        {
+            case IdentifierNode owner:
+                return owner.Token.Text + "." + member.NameToken.Text;
+            case MemberNode owner:
+                return FieldPathOf(owner) + "." + member.NameToken.Text;
+            default:
+                return member.NameToken.Text;
         }
     }
 

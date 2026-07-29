@@ -82,6 +82,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.SizeIsReadOnly] = "'.size' is read-only and cannot be assigned.",
         [GscDiagnosticCode.DevOnlyFunctionCalledFromRelease] = "'{0}' is declared inside a '/# #/' dev block and will not exist in a release build.",
         [GscDiagnosticCode.UnreachableCode] = "Unreachable: the preceding '{0}' always leaves this block.",
+        [GscDiagnosticCode.VariableNeverAssigned] = "'{0}' is read but never assigned in this function.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

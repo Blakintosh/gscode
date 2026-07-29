@@ -106,4 +106,5 @@ public enum GscDiagnosticCode
     /// </summary>
     BuiltinFunctionNotFound = 5014,
     UnreachableCode = 5015,
+    VariableNeverAssigned = 5016,
 }

@@ -101,6 +101,31 @@ public sealed class CompletionEngine
                 : [];
         }
 
+        // `function <here>` — a declaration NAME, not a reference to anything.
+        //
+        // Nothing callable can legally follow the keyword, so the statement-scope list was pure
+        // noise here: every builtin, every macro, every global. What is left is small and genuinely
+        // belongs — the modifiers that may follow the keyword, and the script functions already
+        // declared, which are worth seeing so an override lands on the right name and a collision
+        // is visible before it is written.
+        if ( triggerIndex >= 0 && IsFunctionDeclarationName(tokens, triggerIndex) )
+        {
+            return DeclarationNameCompletions(result, contextId);
+        }
+
+        // `case 1:` — the colon ENDS a label, so there is nothing to suggest at it.
+        //
+        // ':' is a completion trigger because of `ns::`, and a lone colon is a different token, so
+        // this position simply fell through to statement scope and popped the whole list over a
+        // finished label. A ternary's colon is the opposite case — `a ? b : <here>` begins an
+        // expression and genuinely wants suggestions — so the two are told apart rather than
+        // suppressing every colon.
+        if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Colon
+            && IsCaseLabelColon(tokens, triggerIndex) )
+        {
+            return [];
+        }
+
         // ns:: — offer functions in that namespace only.
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.ScopeResolution )
         {
@@ -144,6 +169,110 @@ public sealed class CompletionEngine
         }
 
         return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether the cursor sits where a function's NAME goes: directly after the <c>function</c>
+    /// keyword, or after one of the modifiers that may follow it (<c>function private foo()</c>).
+    ///
+    /// Only meaningful on a dialect that has the keyword at all — under <c>#include</c> a
+    /// declaration opens with the bare name, so there is no such position to detect.
+    /// </summary>
+    private static bool IsFunctionDeclarationName(ImmutableArray<Token> tokens, int triggerIndex)
+    {
+        switch ( tokens[triggerIndex].Kind )
+        {
+            case TokenKind.Function:
+                return true;
+
+            // A modifier only puts us here when it is itself modifying a `function`; `private` can
+            // introduce other things, and guessing from the modifier alone would suppress the list
+            // wherever else it appears.
+            case TokenKind.Private:
+            case TokenKind.Autoexec:
+                int previous = PreviousSignificant(tokens, triggerIndex);
+                return previous >= 0 && tokens[previous].Kind == TokenKind.Function;
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// What may follow the <c>function</c> keyword: the declaration modifiers, and the script
+    /// functions already visible. No builtins, macros or globals — none of them can be declared.
+    /// </summary>
+    private ImmutableArray<CompletionEntry> DeclarationNameCompletions(ParseResult result, string contextId)
+    {
+        ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+        GameProfile game = GameProfile.Active;
+
+        foreach ( string modifier in (string[])["private", "autoexec"] )
+        {
+            if ( GscKeywords.IsAvailable(modifier, game) )
+            {
+                entries.Add(new CompletionEntry(
+                    modifier, CompletionKind.Keyword, "", "", KeywordDocs.Find(modifier) ?? ""));
+            }
+        }
+
+        LanguageStore store = _database.StoreFor(result.Language);
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+        // The file's own declarations come from the live extraction as well as the store, so a
+        // function written a moment ago is offered before the record is reindexed.
+        foreach ( FunctionSymbol function in result.Extraction.Functions )
+        {
+            if ( function.SourceFile.Length == 0 && seen.Add(function.Name) )
+            {
+                entries.Add(new CompletionEntry(function.Name, CompletionKind.Function, "function"));
+            }
+        }
+
+        foreach ( NamespaceSpan span in result.Extraction.Namespaces )
+        {
+            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(
+                store, contextId, result.FilePath, span.KeyName, DatabaseQueries.DeclaredNamespaces(result)) )
+            {
+                if ( seen.Add(function.Name) )
+                {
+                    entries.Add(new CompletionEntry(function.Name, CompletionKind.Function, "function"));
+                }
+            }
+        }
+
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether the colon at <paramref name="colonIndex"/> terminates a <c>case</c>/<c>default</c>
+    /// label rather than dividing a ternary.
+    ///
+    /// Decided by scanning back for whichever comes first: the <c>case</c>/<c>default</c> that owns
+    /// it, the <c>?</c> that would make it a ternary, or a statement boundary meaning neither is in
+    /// play. Matching `case` alone would be wrong inside a switch, where
+    /// <c>case 1: x = a ? b : c;</c> has both in the same statement and the nearest one is what
+    /// decides.
+    /// </summary>
+    private static bool IsCaseLabelColon(ImmutableArray<Token> tokens, int colonIndex)
+    {
+        for ( int index = colonIndex - 1; index >= 0; index-- )
+        {
+            switch ( tokens[index].Kind )
+            {
+                case TokenKind.Case:
+                case TokenKind.Default:
+                    return true;
+
+                case TokenKind.QuestionMark:
+                case TokenKind.Semicolon:
+                case TokenKind.OpenBrace:
+                case TokenKind.CloseBrace:
+                    return false;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

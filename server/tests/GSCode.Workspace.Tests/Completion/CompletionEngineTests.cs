@@ -592,6 +592,34 @@ public class CompletionEngineTests
     }
 
     [Theory]
+    [InlineData("switch ( x ) { case 1:")]
+    [InlineData("switch ( x ) { case \"name\":")]
+    [InlineData("switch ( x ) { default:")]
+    public void ACaseLabelColonSuggestsNothing(string line)
+    {
+        // ':' is a completion trigger because of `ns::`, and a lone colon is a different token, so
+        // this position fell through to statement scope and popped the whole list over a label the
+        // user had just finished typing.
+        Assert.Empty(CompleteInsideFunction(line));
+    }
+
+    [Fact]
+    public void ATernaryColonStillSuggests()
+    {
+        // The opposite case, and why every colon is not simply suppressed: `a ? b : <here>` begins
+        // an expression and genuinely wants the list.
+        Assert.NotEmpty(CompleteInsideFunction("x = a ? b :"));
+    }
+
+    [Fact]
+    public void ATernaryInsideACaseIsStillATernary()
+    {
+        // Both are in play in the same statement, so the NEAREST one decides. Matching `case`
+        // anywhere behind the cursor would suppress this one wrongly.
+        Assert.NotEmpty(CompleteInsideFunction("switch ( x ) { case 1: y = a ? b :"));
+    }
+
+    [Theory]
     [InlineData("self notify(#")]
     [InlineData("x = #")]
     [InlineData("#")]
@@ -727,6 +755,53 @@ public class CompletionEngineTests
         ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", line + "\n\nfunction run()\n{\n}\n");
 
         return engine.Complete(result, "raw", new Position(0, line.Length));
+    }
+
+    [Theory]
+    [InlineData("function ")]
+    [InlineData("function private ")]
+    [InlineData("function autoexec ")]
+    public void AfterTheFunctionKeywordOnlyDeclarableThingsAreOffered(string line)
+    {
+        // A declaration takes a NAME, so nothing callable can follow the keyword. The list used to
+        // be everything statement scope offers: builtins, macros, globals, control-flow keywords.
+        ImmutableArray<CompletionEntry> entries = CompleteAfter(line);
+
+        // Only the two modifiers and declared script functions survive. Asserting the SHAPE rather
+        // than naming absent builtins keeps this from depending on what the API data happens to
+        // hold, which is the thing most likely to change underneath it.
+        Assert.All(entries, entry => Assert.True(
+            entry.Kind is CompletionKind.Keyword or CompletionKind.Function,
+            $"{entry.Label} ({entry.Kind}) cannot follow the function keyword"));
+
+        Assert.DoesNotContain(entries, e => e.Label is "if" or "return" or "level" or "self");
+    }
+
+    [Fact]
+    public void AfterTheFunctionKeywordTheModifiersAreOffered()
+    {
+        // `function private foo()` is how a private declaration is written, so these belong here
+        // even though nothing else does.
+        ImmutableArray<CompletionEntry> entries = CompleteAfter("function ");
+
+        Assert.Contains(entries, e => e.Label == "private");
+        Assert.Contains(entries, e => e.Label == "autoexec");
+    }
+
+    [Fact]
+    public void AfterTheFunctionKeywordExistingScriptFunctionsAreOffered()
+    {
+        // Worth seeing: an override has to land on the right name, and a collision is better
+        // spotted before it is written than after.
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(
+            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction alreadyHere()\n{\n}\nfunction ");
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 9));
+
+        Assert.Contains(entries, e => e.Label == "alreadyHere");
     }
 
     [Fact]

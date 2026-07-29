@@ -603,6 +603,18 @@ public class CompletionEngineTests
         Assert.Empty(CompleteInsideFunction(line));
     }
 
+    [Theory]
+    [InlineData("switch ( x ) { case 1: lev")]
+    [InlineData("switch ( x ) { case 1: self not")]
+    [InlineData("switch ( x ) { default: g")]
+    public void TypingInsideACaseBodyStillSuggests(string line)
+    {
+        // The trigger token stays the case colon for everything up to the end of the first
+        // statement, so suppressing on it alone silenced the whole case body. A word under the
+        // cursor means a statement is being written, and that wants the ordinary list.
+        Assert.NotEmpty(CompleteInsideFunction(line));
+    }
+
     [Fact]
     public void ATernaryColonStillSuggests()
     {

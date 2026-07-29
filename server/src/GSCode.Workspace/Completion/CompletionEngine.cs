@@ -113,14 +113,19 @@ public sealed class CompletionEngine
             return DeclarationNameCompletions(result, contextId);
         }
 
-        // `case 1:` — the colon ENDS a label, so there is nothing to suggest at it.
+        // `case 1:` with nothing typed after it — the colon ENDS a label, so the list popped over
+        // something already finished. ':' is a completion trigger because of `ns::`, and a lone
+        // colon is a different token, so the position fell through to statement scope.
         //
-        // ':' is a completion trigger because of `ns::`, and a lone colon is a different token, so
-        // this position simply fell through to statement scope and popped the whole list over a
-        // finished label. A ternary's colon is the opposite case — `a ? b : <here>` begins an
-        // expression and genuinely wants suggestions — so the two are told apart rather than
-        // suppressing every colon.
-        if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Colon
+        // ONLY when nothing is being typed. The trigger token stays the colon for everything up to
+        // the end of the first statement in that case, so suppressing on it alone silenced the
+        // whole case body — `case 1:` then `lev` offered nothing at all, which is far worse than
+        // the list appearing a moment early. A word under the cursor means a statement is being
+        // written, and that wants the ordinary suggestions.
+        //
+        // A ternary's colon is a separate matter — `a ? b : <here>` begins an expression and wants
+        // the list immediately — so the two are still told apart.
+        if ( currentIndex < 0 && triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Colon
             && IsCaseLabelColon(tokens, triggerIndex) )
         {
             return [];

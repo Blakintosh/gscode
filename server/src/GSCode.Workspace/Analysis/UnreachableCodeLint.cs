@@ -103,6 +103,19 @@ public static class UnreachableCodeLint
 
                 return;
 
+            case DevBlockStmtNode devBlock:
+                // Statements NESTED inside the block are walked, so dead code within it is still
+                // reported. The block's own run is not checked against a terminator before it,
+                // which is the point of ReportAfterTerminator skipping dev blocks: `/# … #/` is
+                // compiled out of a release build, so a debugging aid after a return is something
+                // the author put there knowingly rather than a leftover.
+                foreach ( AstNode statement in devBlock.Statements )
+                {
+                    Walk(statement, diagnostics);
+                }
+
+                return;
+
             default:
                 return;
         }

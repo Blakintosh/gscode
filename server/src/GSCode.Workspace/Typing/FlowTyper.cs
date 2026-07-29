@@ -287,6 +287,18 @@ public sealed class FlowTyper
             case SwitchNode switchNode:
                 WalkSwitch(switchNode, environment, hinted, hints, writes);
                 return;
+            case DevBlockStmtNode devBlock:
+                // `/# … #/` is real code — it runs in a debug build, and assignments inside it want
+                // their hints exactly as anywhere else. It was simply never visited, so nothing
+                // inside a dev block had an inferred type at all.
+                //
+                // Walked as an ALTERNATIVE path rather than inline, on the same reasoning as a loop
+                // body: the block is compiled out of a release build, so code after it cannot
+                // assume anything it assigned still holds. Inside the block the assignments are
+                // exact; outside, a name typed only there joins with the environment as it stood
+                // before and becomes Unknown, which is the honest answer.
+                MergeDevBlock(devBlock, environment, hinted, hints, writes);
+                return;
             default:
                 return;
         }
@@ -296,6 +308,39 @@ public sealed class FlowTyper
     /// Walks a loop body as an alternative path: the body may run zero times, so its effects
     /// are joined with the environment as it stood before the loop.
     /// </summary>
+    /// <summary>
+    /// Walks a dev block's statements as an alternative path.
+    ///
+    /// Takes the STATEMENTS rather than the node, because handing the node back to
+    /// <see cref="WalkStatement"/> would land on the dev-block case again and recurse forever.
+    /// </summary>
+    private void MergeDevBlock(
+        DevBlockStmtNode devBlock,
+        Dictionary<string, ScrType> environment,
+        HashSet<string> hinted,
+        ImmutableArray<InferredAssignment>.Builder hints,
+        ImmutableArray<FieldWrite>.Builder writes)
+    {
+        // Inside the block, the code at the cursor is on the path where it ran.
+        if ( ContainsCursor(devBlock) )
+        {
+            foreach ( AstNode statement in devBlock.Statements )
+            {
+                WalkStatement(statement, environment, hinted, hints, writes);
+            }
+
+            return;
+        }
+
+        Dictionary<string, ScrType> blockEnvironment = Clone(environment);
+        foreach ( AstNode statement in devBlock.Statements )
+        {
+            WalkStatement(statement, blockEnvironment, hinted, hints, writes);
+        }
+
+        MergeAlternatives(environment, environment, blockEnvironment);
+    }
+
     private void MergeLoopBody(
         AstNode body,
         Dictionary<string, ScrType> environment,

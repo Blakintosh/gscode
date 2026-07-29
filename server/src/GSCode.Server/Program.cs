@@ -182,7 +182,13 @@ LanguageServer server = await LanguageServer.From(options =>
             if ( rootConfig.RawRoot is null )
             {
                 // Workspace-only mode is first-class: one info line, never a popup.
-                Log.Information("Raw root unavailable (raw disabled or TA_TOOLS_PATH not set) — workspace-only resolution");
+                // Name the variable this GAME uses, not BO3's: CoD4, WaW, MW2 and BO1 have no root
+                // environment variable at all, so telling their users that TA_TOOLS_PATH is unset
+                // sends them looking for something that was never going to apply.
+                string reason = GameProfile.Active.RootEnvironmentVariable is string variable
+                    ? $"raw disabled or %{variable}% not set"
+                    : $"{GameProfile.Active.ShortName} has no tools environment variable — set gscode.rawPath";
+                Log.Information("Raw root unavailable ({Reason}) — workspace-only resolution", reason);
             }
             else
             {

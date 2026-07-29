@@ -50,13 +50,16 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
 
         foreach ( FunctionSymbol function in target.Result.Extraction.Functions )
         {
-            SymbolKey key = new(function.Namespace.Length > 0 ? function.Namespace : null, function.KeyName, SymbolKind.Function);
+            // The KEY namespace, not the declared one: a merge dialect keys functions by bare
+            // name, but still reports a namespace (the file stem), so using it here looked up a
+            // key nothing is stored under and every lens read "0 references".
+            SymbolKey key = new(GSCode.Core.GameProfile.Active.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
             lenses.Add(MakeLens(request.TextDocument.Uri, function.NameRange, key, target));
         }
 
         foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
         {
-            SymbolKey key = new(classSymbol.Namespace.Length > 0 ? classSymbol.Namespace : null, classSymbol.KeyName, SymbolKind.Class);
+            SymbolKey key = new(GSCode.Core.GameProfile.Active.KeyNamespace(classSymbol.Namespace), classSymbol.KeyName, SymbolKind.Class);
             lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target));
         }
 

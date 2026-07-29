@@ -208,6 +208,21 @@ public sealed partial record GameProfile
     /// <summary>How imports work — see <see cref="Core.ImportStyle"/>.</summary>
     public ImportStyle ImportStyle { get; init; } = ImportStyle.Include;
 
+    /// <summary>
+    /// The namespace a function is KEYED under in this dialect, which is not the same as the
+    /// namespace it is declared in. Under <c>#include</c> the file's functions merge into the
+    /// caller's scope and are reached by bare name, so the key drops the namespace entirely; under
+    /// <c>#using</c> the call stays qualified and the namespace is part of the identity.
+    ///
+    /// This matters because a merge dialect still HAS a namespace — it defaults to the file stem —
+    /// so anything rebuilding a key from a symbol's declared namespace silently produces a key that
+    /// matches nothing. Route every such construction through here.
+    /// </summary>
+    public string? KeyNamespace(string namespaceName)
+    {
+        return ImportStyle == ImportStyle.Include || namespaceName.Length == 0 ? null : namespaceName;
+    }
+
     /// <summary>How a function pointer is written — see <see cref="Core.FunctionPointerStyle"/>.</summary>
     public FunctionPointerStyle FunctionPointerStyle { get; init; } = FunctionPointerStyle.PathQualified;
 

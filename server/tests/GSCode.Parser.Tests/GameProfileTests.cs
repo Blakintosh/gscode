@@ -280,6 +280,23 @@ public class GameProfileTests
     }
 
     [Fact]
+    public void KeyNamespace_DropsTheNamespaceOnMergeDialects()
+    {
+        // A merge dialect keys functions by BARE NAME - #include pulls them into the caller's scope -
+        // yet it still reports a namespace, defaulting to the file stem. Anything rebuilding a lookup
+        // key from a symbol's declared namespace must go through this, or it builds a key nothing is
+        // stored under: that is what made every CoD4 CodeLens read "0 references".
+        Assert.Null(GameProfile.ByName("cod4")!.KeyNamespace("battlechatter_ai"));
+        Assert.Null(GameProfile.ByName("waw")!.KeyNamespace("anything"));
+
+        // BO3 qualifies the call, so the namespace is part of the identity and must survive.
+        Assert.Equal("util", GameProfile.BlackOps3.KeyNamespace("util"));
+
+        // An absent namespace is null in either dialect.
+        Assert.Null(GameProfile.BlackOps3.KeyNamespace(""));
+    }
+
+    [Fact]
     public void EveryShortNameIsUnique()
     {
         Assert.Equal(GameProfile.All.Length, GameProfile.All.Select(static profile => profile.ShortName).Distinct().Count());

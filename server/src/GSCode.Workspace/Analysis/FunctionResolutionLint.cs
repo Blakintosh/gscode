@@ -56,8 +56,18 @@ public static class FunctionResolutionLint
         BuiltinApi builtins,
         GameProfile? profile = null,
         bool judgeUnverifiedBuiltins = false,
-        PathResolver? resolver = null)
+        PathResolver? resolver = null,
+        bool indexReady = true)
     {
+        // Nothing at all until the workspace has been indexed once. This lint is the only one that
+        // asserts a name does NOT exist, and that claim is worthless against a half-built index —
+        // every function in every not-yet-indexed file reads as missing. Defaults to true so the
+        // corpus harness and unit tests, which build their store up front, are unaffected.
+        if ( !indexReady )
+        {
+            return [];
+        }
+
         GameProfile game = profile ?? GameProfile.Active;
 
         // The two codes have different evidence requirements, so they are gated separately.

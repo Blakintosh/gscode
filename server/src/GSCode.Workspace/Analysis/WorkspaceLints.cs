@@ -81,7 +81,9 @@ public static class WorkspaceLints
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
         // Cannot double-report with the lint above: this one looks up with includePrivate, so a
         // private function counts as EXISTING and only 5003 speaks for it.
-        lints.AddRange(FunctionResolutionLint.Analyze(result, store, contextId, path, languageBuiltins, resolver: resolver));
+        lints.AddRange(FunctionResolutionLint.Analyze(
+            result, store, contextId, path, languageBuiltins,
+            resolver: resolver, indexReady: database.HasCompletedIndex));
         lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));
         lints.AddRange(DevBlockCallLint.Analyze(
             result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));

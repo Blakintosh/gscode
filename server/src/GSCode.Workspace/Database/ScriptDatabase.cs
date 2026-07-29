@@ -19,6 +19,23 @@ namespace GSCode.Workspace.Database;
 public sealed class ScriptDatabase
 {
     /// <summary>The GSC world.</summary>
+    /// <summary>
+    /// Whether a workspace index has finished at least once.
+    ///
+    /// Most analysis degrades gracefully on a partial index — a lookup that finds nothing simply
+    /// offers nothing. FUNCTION RESOLUTION does not: it reports a name as nonexistent, and before
+    /// the index is populated every script function in the workspace looks nonexistent. So that one
+    /// lint has to know, and there is no cheaper signal — unlike a missing FILE, which the resolver
+    /// can answer from the filesystem, a missing FUNCTION can only be answered by the index.
+    /// </summary>
+    public bool HasCompletedIndex { get; private set; }
+
+    /// <summary>Marks the index complete; called by the indexer when a full pass finishes.</summary>
+    public void MarkIndexComplete()
+    {
+        HasCompletedIndex = true;
+    }
+
     public LanguageStore Gsc { get; } = new();
 
     /// <summary>The CSC world.</summary>

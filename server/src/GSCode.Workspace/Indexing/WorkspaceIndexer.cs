@@ -203,6 +203,10 @@ public sealed class WorkspaceIndexer
         // Restored files that phase two re-parsed were analysed after all, so they count as
         // analysed rather than restored — the split is what tells a cold run from a warm one.
         int restored = restoredRecords.Count - reparsedAfterHeaderChange;
+        // Function resolution cannot speak until this point: before it, every script function in
+        // the workspace looks nonexistent.
+        _database.MarkIndexComplete();
+
         return new IndexOutcome(completed, restored, completed - restored, _skippedOversized);
     }
 

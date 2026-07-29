@@ -42,6 +42,7 @@ public enum GscDiagnosticCode
     UsingAfterDeclaration = 3009,
     ExpectedScriptPath = 3010,
     ExpectedNamespaceName = 3011,
+    InvalidAssignmentTarget = 3012,
 
     // Extraction / per-file semantics (4xxx)
     UnknownPrecacheType = 4000,

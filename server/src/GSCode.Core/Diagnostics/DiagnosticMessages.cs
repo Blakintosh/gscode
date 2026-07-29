@@ -46,6 +46,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.UsingAfterDeclaration] = "'#using' directives must appear before the first function or class declaration.",
         [GscDiagnosticCode.ExpectedScriptPath] = "Expected a script path after '{0}'.",
         [GscDiagnosticCode.ExpectedNamespaceName] = "Expected a namespace name after '#namespace'.",
+        [GscDiagnosticCode.InvalidAssignmentTarget] = "Cannot assign to {0} — assignment needs a variable, field or array element on the left.",
 
         // Extraction / per-file semantics
         [GscDiagnosticCode.UnknownPrecacheType] = "'{0}' is not a known #precache asset type.",

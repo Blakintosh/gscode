@@ -16,12 +16,57 @@ public sealed partial class Parser
 
         if ( IsAssignmentOperator(Kind) )
         {
+            TextRange operatorRange = Current.RootRange;
             TokenKind op = Advance().Kind;
             ExprNode value = ParseExpression();
+
+            // `true = false;` parses cleanly — a literal IS an expression and `=` follows it — so
+            // nothing objected here and the only complaint came from whatever mis-parsed after it,
+            // which is how it surfaced as a bare "unexpected TOKEN_EQUALS". Assignment needs
+            // somewhere to PUT the value, and a literal, a call result or an arithmetic result is
+            // not somewhere.
+            if ( !IsAssignableTarget(left) )
+            {
+                AddError(GscDiagnosticCode.InvalidAssignmentTarget, operatorRange, DescribeTarget(left));
+            }
+
             return new AssignmentNode(SpanOf(left, value), left, op, value);
         }
 
         return left;
+    }
+
+    /// <summary>
+    /// Whether a value can be stored INTO this expression: a variable, a field, an array element,
+    /// or whatever a pointer dereference names. A parenthesised target is judged by its contents,
+    /// since `( x ) = 1` stores into x exactly as `x = 1` does.
+    /// </summary>
+    private static bool IsAssignableTarget(ExprNode target)
+    {
+        return target switch
+        {
+            IdentifierNode => true,
+            MemberNode => true,
+            IndexNode => true,
+            PointerDerefNode => true,
+            ParenNode paren => IsAssignableTarget(paren.Inner),
+            _ => false,
+        };
+    }
+
+    /// <summary>What the invalid target IS, so the message names the mistake and not a token kind.</summary>
+    private static string DescribeTarget(ExprNode target)
+    {
+        return target switch
+        {
+            LiteralNode literal => "'" + literal.Token.Text + "'",
+            CallNode or ArrowCallNode => "a function call",
+            BinaryNode => "an arithmetic result",
+            TernaryNode => "a conditional result",
+            VectorNode => "a vector literal",
+            NewNode => "a new object",
+            _ => "this expression",
+        };
     }
 
     /// <summary>cond ? whenTrue : whenFalse — supported by the engine though absent from the PDF.</summary>

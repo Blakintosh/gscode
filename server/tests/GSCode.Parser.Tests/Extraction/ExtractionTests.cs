@@ -135,6 +135,41 @@ public class ExtractionTests
     }
 
     [Theory]
+    [InlineData("true = false;")]
+    [InlineData("false = 1;")]
+    [InlineData("undefined = 1;")]
+    [InlineData("5 = x;")]
+    [InlineData("\"name\" = x;")]
+    [InlineData("foo() = 1;")]
+    [InlineData("a + b = 1;")]
+    public void Assignment_ToSomethingThatIsNotAPlace(string statement)
+    {
+        // These parse cleanly - a literal IS an expression and `=` follows it - so nothing objected
+        // and the complaint came from whatever mis-parsed afterwards, surfacing as a bare
+        // "unexpected TOKEN_EQUALS" that named a token rather than the mistake.
+        Assert.Contains(
+            Analyze("function f()\n{\n    " + statement + "\n}\n").AllDiagnostics,
+            diagnostic => diagnostic.Code == GscDiagnosticCode.InvalidAssignmentTarget);
+    }
+
+    [Theory]
+    [InlineData("x = 1;")]
+    [InlineData("self.field = 1;")]
+    [InlineData("level.a.b = 1;")]
+    [InlineData("arr[ 0 ] = 1;")]
+    [InlineData("arr[ \"key\" ].field = 1;")]
+    [InlineData("x += 1;")]
+    [InlineData("( x ) = 1;")]
+    public void Assignment_ToARealPlaceIsFine(string statement)
+    {
+        // Everything a value can actually be stored into. `( x ) = 1` stores into x exactly as
+        // `x = 1` does, so a parenthesised target is judged by its contents.
+        Assert.DoesNotContain(
+            Analyze("function f()\n{\n    " + statement + "\n}\n").AllDiagnostics,
+            diagnostic => diagnostic.Code == GscDiagnosticCode.InvalidAssignmentTarget);
+    }
+
+    [Theory]
     [InlineData("client_fx")]
     [InlineData("client_model")]
     [InlineData("client_string")]

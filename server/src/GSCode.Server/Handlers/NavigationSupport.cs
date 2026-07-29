@@ -1,4 +1,5 @@
 using GSCode.Core;
+using Serilog;
 using GSCode.Core.Paths;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
@@ -146,13 +147,19 @@ public sealed class NavigationSupport
 
         if ( !target.Store.TryGet(PathUtil.NormalizeAbsolute(target.Path), out ScriptRecord asking) )
         {
+            Log.Debug(
+                "Reference scope: {Name} — asking file {Path} is not in the store, so no narrowing",
+                key.Name, target.Path);
             return "";
         }
 
         string only = "";
+        int candidates = 0;
+        int reachable = 0;
         foreach ( ResolvedFunction candidate in DatabaseQueries.LookupFunctions(
             target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true) )
         {
+            candidates++;
             if ( !DatabaseQueries.Reaches(asking, candidate.Record.RelativePath) )
             {
                 continue;
@@ -160,11 +167,19 @@ public sealed class NavigationSupport
 
             if ( only.Length > 0 && only != candidate.Record.RelativePath )
             {
+                Log.Debug(
+                    "Reference scope: {Name} — reachable from BOTH '{First}' and '{Second}', so no narrowing",
+                    key.Name, only, candidate.Record.RelativePath);
                 return "";
             }
 
             only = candidate.Record.RelativePath;
+            reachable++;
         }
+
+        Log.Debug(
+            "Reference scope: {Name} — {Candidates} declarations, {Reachable} reachable from {Asking}, scoping to '{Chosen}'",
+            key.Name, candidates, reachable, asking.RelativePath, only);
 
         return only;
     }

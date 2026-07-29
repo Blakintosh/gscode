@@ -116,7 +116,7 @@ public sealed class HoverHandler : HoverHandlerBase
                     : null;
             }
             case SymbolKind.Field:
-                return RenderField(key.Name, target.Language);
+                return RenderField(key.Name, target.Language, target);
             case SymbolKind.StringLiteral:
             case SymbolKind.HashString:
             case SymbolKind.LocalizedString:
@@ -243,7 +243,41 @@ public sealed class HoverHandler : HoverHandlerBase
         return kind >= TokenKind.UsingDirective && kind <= TokenKind.EndifDirective;
     }
 
-    private string RenderField(string name, ScriptLanguage language)
+    /// <summary>
+    /// The type this file's own writes give a field, or Unknown when they disagree or there are
+    /// none. Every write has to agree: <c>self.state = "idle"</c> in one function and
+    /// <c>self.state = 3</c> in another means the field genuinely holds both, and picking whichever
+    /// came last would report a type that is wrong half the places it is read.
+    /// </summary>
+    private ScrType InferredFieldType(NavigationTarget target, string name)
+    {
+        FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
+        ScrType agreed = ScrType.Unknown;
+        bool seen = false;
+
+        foreach ( InferredAssignment assignment in typer.InferAssignments(target.Result) )
+        {
+            if ( !assignment.IsField
+                || !string.Equals(assignment.Name, name, StringComparison.OrdinalIgnoreCase) )
+            {
+                continue;
+            }
+
+            if ( !seen )
+            {
+                agreed = assignment.Type;
+                seen = true;
+            }
+            else if ( agreed != assignment.Type )
+            {
+                return ScrType.Unknown;
+            }
+        }
+
+        return agreed;
+    }
+
+    private string RenderField(string name, ScriptLanguage language, NavigationTarget target)
     {
         // The .size pseudo-member has its own documentation.
         if ( string.Equals(name, "size", StringComparison.OrdinalIgnoreCase) )
@@ -262,7 +296,15 @@ public sealed class HoverHandler : HoverHandlerBase
 
         if ( known.Length == 0 && radiant is null )
         {
-            return $"```gsc\n(field) {name}\n```";
+            // Nothing in the engine data, which is the ordinary case for a field the scripts
+            // invented — and most of them are. What the file itself assigns is the only evidence
+            // there is, so it is used, but only when every write agrees. That is the rule the
+            // engine data already follows for a name several entity kinds declare: disagreement
+            // means the answer is not knowable from here, and a guess is worse than a blank.
+            ScrType inferred = InferredFieldType(target, name);
+            return inferred.IsKnown()
+                ? $"```gsc\n(field) {name}: {inferred.DisplayName()}\n```"
+                : $"```gsc\n(field) {name}\n```";
         }
 
         System.Text.StringBuilder markdown = new();

@@ -22,7 +22,14 @@ namespace GSCode.Workspace.Typing;
 /// started with. The list carries every assignment and each consumer filters, because building it
 /// for the hint case alone is what made hover report a stale type.
 /// </param>
-public readonly record struct InferredAssignment(TextRange NameRange, ScrType Type, string Name, bool IsFirstForName = true);
+/// <param name="IsField">
+/// Whether this is a field write (`self.count = 1`) rather than a local (`count = 1`). The two
+/// share a Name, so a consumer asking about a FIELD would otherwise be answered by a local that
+/// happens to be spelled the same - which is common, since a field and the local feeding it are
+/// usually named alike.
+/// </param>
+public readonly record struct InferredAssignment(
+    TextRange NameRange, ScrType Type, string Name, bool IsFirstForName = true, bool IsField = false);
 
 /// <summary>The inferred type of the local identifier under a cursor (for hover).</summary>
 public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrType Type);
@@ -51,10 +58,27 @@ public sealed class FlowTyper
     private readonly BuiltinApi _builtins;
     private readonly ObjectFields _objectFields;
 
+    /// <summary>
+    /// Set only for the hover pass, and null for the hint pass.
+    ///
+    /// The hint pass wants every assignment in the file; hover wants the environment as it stands
+    /// at ONE position, which is a different question and cannot be answered by filtering the
+    /// hints afterwards. A hint records what a name became at each assignment site, while the
+    /// environment records what it is HERE — including the join of two branches that have both
+    /// already run, which no single assignment site represents.
+    /// </summary>
+    private Position? _cursor;
+
     public FlowTyper(BuiltinApi builtins, ObjectFields objectFields)
     {
         _builtins = builtins;
         _objectFields = objectFields;
+    }
+
+    /// <summary>Whether the hover cursor, if there is one, falls inside this node.</summary>
+    private bool ContainsCursor(AstNode node)
+    {
+        return _cursor is Position cursor && node.Range.Contains(cursor);
     }
 
     /// <summary>Infers a type for the first assignment of each local that resolves to a concrete type.</summary>
@@ -125,42 +149,57 @@ public sealed class FlowTyper
             return false;
         }
 
-        // The identifier is only a local if the flow pass typed an assignment to that name
-        // inside this same function.
+        // The environment as it stands AT the cursor, which is a different question from "what did
+        // the last assignment say". Reading the hint list reported whichever arm of an if/else was
+        // written last, because a hint records what a name became at one assignment site and no
+        // site represents the join of two branches that have both already run.
         //
-        // The LAST assignment at or before the cursor, not the first. A variable reassigned to a
-        // different type used to keep reporting the type it started with, so hovering the final
-        // `x` in `x = 1; … x = "hello"; use( x );` said int. Assignments BELOW the cursor are
-        // skipped outright: they say nothing about the value here.
+        // The walk already computes that join; it simply threw the environment away. Running it
+        // with a stop position keeps it.
         string name = identifier.Token.Text;
-        bool found = false;
+        Dictionary<string, ScrType> environment = EnvironmentAt(function, position);
 
-        foreach ( InferredAssignment assignment in InferAssignments(result) )
+        if ( !environment.TryGetValue(name, out ScrType type) || !type.IsKnown() )
         {
-            if ( !function.Range.Contains(assignment.NameRange.Start) )
-            {
-                continue;
-            }
-
-            if ( !string.Equals(assignment.Name, name, StringComparison.OrdinalIgnoreCase) )
-            {
-                continue;
-            }
-
-            if ( assignment.NameRange.Start > position )
-            {
-                continue;
-            }
-
-            // Assignments arrive in source order, so a later one simply overwrites an earlier.
-            // Straight-line code is then exact. Across branches this reports whichever arm is
-            // written last rather than the join of both — narrowing that further needs the walk's
-            // environment sampled at a position, which it does not currently retain.
-            hover = new LocalTypeHover(name, identifier.Range, assignment.Type);
-            found = true;
+            return false;
         }
 
-        return found;
+        hover = new LocalTypeHover(name, identifier.Range, type);
+        return true;
+    }
+
+    /// <summary>
+    /// The local environment of one function as it stands at <paramref name="position"/>.
+    ///
+    /// Parameters seed it as <see cref="ScrType.Unknown"/> so that a name is at least KNOWN to be a
+    /// local — an assignment to a parameter then types it from that point, which is exactly what
+    /// the flow says, while an untyped parameter still reports nothing rather than a guess. Typing
+    /// one properly needs call-site analysis, which is a different pass.
+    /// </summary>
+    private Dictionary<string, ScrType> EnvironmentAt(FunctionNode function, Position position)
+    {
+        Dictionary<string, ScrType> environment = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( ParameterNode parameter in function.Parameters )
+        {
+            environment[parameter.NameToken.Text] = ScrType.Unknown;
+        }
+
+        ImmutableArray<InferredAssignment>.Builder hints = ImmutableArray.CreateBuilder<InferredAssignment>();
+        ImmutableArray<FieldWrite>.Builder writes = ImmutableArray.CreateBuilder<FieldWrite>();
+
+        _cursor = position;
+        try
+        {
+            WalkStatement(function.Body, environment, new HashSet<string>(StringComparer.OrdinalIgnoreCase), hints, writes);
+        }
+        finally
+        {
+            // Cleared so the same instance can serve a hint pass afterwards, which must see the
+            // whole function rather than stopping partway through it.
+            _cursor = null;
+        }
+
+        return environment;
     }
 
     private void TypeFunction(FunctionNode function, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
@@ -172,6 +211,14 @@ public sealed class FlowTyper
 
     private void WalkStatement(AstNode statement, Dictionary<string, ScrType> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
     {
+        // Everything below the cursor is skipped when one is set: it says nothing about the value
+        // being read at the cursor, and letting it run would report a type the variable has not
+        // taken yet.
+        if ( _cursor is Position stop && statement.Range.Start > stop )
+        {
+            return;
+        }
+
         switch ( statement )
         {
             case BlockNode block:
@@ -186,6 +233,23 @@ public sealed class FlowTyper
                 return;
             case IfNode ifNode:
             {
+                // A cursor INSIDE one arm is on that path, not at the merge: the other arm has not
+                // run and joining it in would report a type the code at the cursor cannot see.
+                // Walking the containing arm directly is what makes the answer the arm's own.
+                if ( ContainsCursor(ifNode.Then) )
+                {
+                    ApplyIsDefinedNarrowing(ifNode.Condition, environment, Clone(environment));
+                    WalkStatement(ifNode.Then, environment, hinted, hints, writes);
+                    return;
+                }
+
+                if ( ifNode.Else is not null && ContainsCursor(ifNode.Else) )
+                {
+                    ApplyIsDefinedNarrowing(ifNode.Condition, Clone(environment), environment);
+                    WalkStatement(ifNode.Else, environment, hinted, hints, writes);
+                    return;
+                }
+
                 // The two arms are alternatives, so each walks its own copy and the results
                 // are joined. Sharing one environment would let whichever arm ran last win.
                 Dictionary<string, ScrType> thenEnvironment = Clone(environment);
@@ -239,6 +303,14 @@ public sealed class FlowTyper
         ImmutableArray<InferredAssignment>.Builder hints,
         ImmutableArray<FieldWrite>.Builder writes)
     {
+        // Inside the body the loop HAS run, so the zero-iteration alternative is not a possibility
+        // the code at the cursor has to allow for.
+        if ( ContainsCursor(body) )
+        {
+            WalkStatement(body, environment, hinted, hints, writes);
+            return;
+        }
+
         Dictionary<string, ScrType> bodyEnvironment = Clone(environment);
         WalkStatement(body, bodyEnvironment, hinted, hints, writes);
 
@@ -480,7 +552,7 @@ public sealed class FlowTyper
                     string path = FieldPathOf(member);
                     hints.Add(new InferredAssignment(
                         member.NameToken.RootRange, fieldType, member.NameToken.Text,
-                        IsFirstForName: hinted.Add(path)));
+                        IsFirstForName: hinted.Add(path), IsField: true));
                 }
             }
 

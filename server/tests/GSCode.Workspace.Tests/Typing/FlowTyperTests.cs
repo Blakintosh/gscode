@@ -213,6 +213,75 @@ public class FlowTyperTests
         Assert.False(found);
     }
 
+    // --- Branches: the environment at the cursor, not the last arm written ---
+
+    private static bool HoverAt(string source, Position position, out LocalTypeHover hover)
+    {
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        return NewTyper().TryGetLocalTypeAt(result, position, out hover);
+    }
+
+    [Fact]
+    public void AfterAnIfElse_DisagreeingArmsJoinRatherThanTakingTheLastOne()
+    {
+        // The reported gap. Reading the hint list reported `string` here, because a hint records
+        // what a name became at one assignment SITE and no site represents the join of two
+        // branches that have both already run. The walk always computed the join; hover simply
+        // never looked at it.
+        string source =
+            "function f( c )\n{\n\tif ( c )\n\t{\n\t\tx = 1;\n\t}\n\telse\n\t{\n\t\tx = \"s\";\n\t}\n\n\tuse( x );\n}\n";
+
+        // `x` inside use(), after the whole if/else.
+        Assert.False(HoverAt(source, new Position(11, 6), out _));
+    }
+
+    [Fact]
+    public void AfterAnIfElse_AgreeingArmsKeepTheirType()
+    {
+        // The join only moves toward Unknown when the arms actually disagree.
+        string source =
+            "function f( c )\n{\n\tif ( c )\n\t{\n\t\tx = 1;\n\t}\n\telse\n\t{\n\t\tx = 2;\n\t}\n\n\tuse( x );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(11, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void InsideAnArm_TheArmsOwnTypeIsReported()
+    {
+        // A cursor inside one arm is ON that path: the other arm has not run, so joining it in
+        // would report a type the code at the cursor cannot see.
+        string source =
+            "function f( c )\n{\n\tif ( c )\n\t{\n\t\tx = 1;\n\t\tuse( x );\n\t}\n\telse\n\t{\n\t\tx = \"s\";\n\t}\n}\n";
+
+        Assert.True(HoverAt(source, new Position(5, 7), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void InsideALoopBody_TheBodyHasRun()
+    {
+        // The zero-iteration alternative is not a possibility the code inside the body allows for.
+        string source =
+            "function f( items )\n{\n\tforeach ( item in items )\n\t{\n\t\tn = 5;\n\t\tuse( n );\n\t}\n}\n";
+
+        Assert.True(HoverAt(source, new Position(5, 7), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void AfterALoop_TheBodyMightNotHaveRun()
+    {
+        // Outside it, the loop may have run zero times, so a name typed only inside it joins with
+        // the environment as it stood before - and becomes Unknown.
+        string source =
+            "function f( items )\n{\n\tforeach ( item in items )\n\t{\n\t\tn = 5;\n\t}\n\n\tuse( n );\n}\n";
+
+        Assert.False(HoverAt(source, new Position(7, 6), out _));
+    }
+
     // --- The type AT the cursor, not the type it started as ---
 
     private static ParseResult Reassigned()

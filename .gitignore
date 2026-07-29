@@ -1,7 +1,12 @@
-# Editor and tool state: per-machine, never shared.
-.claude/
+# Editor and tool state: per-machine, never shared. settings.local.json is the
+# one that kept getting committed.
+.claude/*
 .vs/
 .DS_Store
+
+# Skills are the exception: they are project tooling, written once and useful to
+# everyone working here, so they belong in the repo rather than on one machine.
+!.claude/skills/
 
 # Debug profiles carry local paths, so they stay out for every project rather
 # than being listed one project at a time.

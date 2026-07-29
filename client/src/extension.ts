@@ -324,6 +324,10 @@ function registerIndexingStatusBar(
     // memory figure frozen at whatever it was the instant indexing finished.
     let indexSummary: { files: number; seconds: string } | undefined;
     let memoryMegabytes: number | undefined;
+    // Which game the SERVER selected, held from gscode/serverReady. The status bar text is rebuilt
+    // from it after indexing too, so the label is the same string in both states rather than one
+    // the client re-derives and can get wrong.
+    let activeGame: { game: string; gameName: string } | undefined;
 
     const renderTooltip = () => {
         if (indexSummary === undefined) {
@@ -331,7 +335,7 @@ function registerIndexingStatusBar(
         }
 
         const lines = [
-            "**GSCode** — ready",
+            `**GSCode** — ${activeGame?.gameName ?? "ready"}`,
             "",
             `Indexed **${formatCount(indexSummary.files)}** files in **${indexSummary.seconds}s**`,
         ];
@@ -348,6 +352,16 @@ function registerIndexingStatusBar(
     languageClient.onNotification("gscode/serverStatus", (params: { workingSetMegabytes: number }) => {
         memoryMegabytes = params.workingSetMegabytes;
         renderTooltip();
+    });
+
+    // The game, as early as the connection allows and independent of indexing. Held so the
+    // indexing-complete tooltip can name the game even though only this notification carries it,
+    // and so the label survives an indexing mode that never completes anything.
+    languageClient.onNotification("gscode/serverReady", (params: { game: string; gameName: string }) => {
+        activeGame = params;
+        statusBar.text = `$(check) GSCode: ${params.game}`;
+        statusBar.tooltip = `GSCode — ${params.gameName}`;
+        statusBar.show();
     });
 
     languageClient.onNotification("gscode/indexingStarted", (params: { totalFiles: number }) => {
@@ -445,7 +459,11 @@ function registerIndexingStatusBar(
             elapsedMilliseconds: number;
             workingSetMegabytes: number;
         }) => {
-            statusBar.text = "$(check) GSCode: ready";
+            // The game rather than "ready": which dialect is parsing decides what counts as a
+            // keyword, whether #include or #using resolves, and which builtins exist, so it is the
+            // one thing worth a permanent place on screen. "Ready" only ever said that the thing
+            // which just finished had finished — and the check mark still says that.
+            statusBar.text = `$(check) GSCode: ${activeGame?.game ?? "ready"}`;
 
             indexSummary = {
                 files: params.filesIndexed,

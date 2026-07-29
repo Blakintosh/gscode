@@ -5,6 +5,13 @@ using Serilog;
 
 namespace GSCode.Server.Handlers;
 
+/// <summary>
+/// Payload for gscode/serverReady: which game the server actually selected, sent once the
+/// connection is live and before any indexing decision, so the status bar can name it whatever
+/// the indexing mode is.
+/// </summary>
+public sealed record ServerReadyParams(string Game, string GameName);
+
 /// <summary>Payload for gscode/indexingStarted.</summary>
 public sealed record IndexingStartedParams(int TotalFiles);
 

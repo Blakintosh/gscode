@@ -73,6 +73,20 @@ public sealed partial record GameProfile
     /// <summary>Human-readable game name shown in diagnostics and docs.</summary>
     public required string DisplayName { get; init; }
 
+    /// <summary>
+    /// The game as it should read in a few characters — the status bar, where <see cref="DisplayName"/>
+    /// would not fit. Defaults to the short name upper-cased, which is already right for BO3, MW2 and
+    /// BO1; the ones whose community spelling is mixed-case (CoD4, WaW) say so explicitly rather than
+    /// being rendered as COD4.
+    /// </summary>
+    public string Abbreviation
+    {
+        get { return _abbreviation ?? ShortName.ToUpperInvariant(); }
+        init { _abbreviation = value; }
+    }
+
+    private readonly string? _abbreviation;
+
     /// <summary>Release year, so the lineage keeps a sensible order.</summary>
     public int ReleaseYear { get; init; }
 

@@ -277,6 +277,30 @@ public class GameProfileTests
     }
 
     [Fact]
+    public void Abbreviation_UpperCasesTheShortNameUnlessTheGameSaysOtherwise()
+    {
+        // The status bar shows this, so it is the game as people write it rather than as the
+        // selector spells it: upper-casing renders CoD4 and WaW as COD4 and WAW, and neither is
+        // how anyone writes them.
+        Assert.Equal("BO3", GameProfile.BlackOps3.Abbreviation);
+        Assert.Equal("MW2", GameProfile.ByName("mw2")!.Abbreviation);
+        Assert.Equal("BO1", GameProfile.ByName("bo1")!.Abbreviation);
+        Assert.Equal("CoD4", GameProfile.ByName("cod4")!.Abbreviation);
+        Assert.Equal("WaW", GameProfile.ByName("waw")!.Abbreviation);
+    }
+
+    [Fact]
+    public void EveryProfileHasANonEmptyAbbreviation()
+    {
+        // The default is computed from ShortName, so this holds for the unsupported games too and
+        // keeps holding as more are added — an empty status bar would be the only symptom.
+        foreach ( GameProfile profile in GameProfile.All )
+        {
+            Assert.False(string.IsNullOrWhiteSpace(profile.Abbreviation));
+        }
+    }
+
+    [Fact]
     public void KeyNamespace_DropsTheNamespaceOnMergeDialects()
     {
         // A merge dialect keys functions by BARE NAME - #include pulls them into the caller's scope -

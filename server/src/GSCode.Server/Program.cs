@@ -221,6 +221,19 @@ LanguageServer server = await LanguageServer.From(options =>
         })
         .OnStarted((languageServer, cancellationToken) =>
         {
+            // Which game is actually parsing, sent as soon as the connection can carry it. The
+            // status bar shows this permanently, so it must not depend on indexing: with
+            // workspaceIndexingMode=off nothing below this line runs, and a label that arrived only
+            // with gscode/indexingComplete would never appear for those users at all.
+            //
+            // It is also the server's own answer rather than the client's gscode.game setting. An
+            // unrecognised name falls back to BO3, so the setting says what was asked for while this
+            // says what was selected — and a status bar confirming a game that is not in use is
+            // worse than none, because it rules out the very thing that is wrong.
+            languageServer.SendNotification(
+                "gscode/serverReady",
+                new ServerReadyParams(GameProfile.Active.Abbreviation, GameProfile.Active.DisplayName));
+
             // Kick off cold-start indexing only once the server is fully started — the
             // client connection is ready to receive gscode/indexing* notifications now
             // (sending them during OnInitialized drops them). Editor traffic is unaffected.

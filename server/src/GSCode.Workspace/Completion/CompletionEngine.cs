@@ -54,7 +54,7 @@ public sealed class CompletionEngine
             // the asset type is a closed vocabulary, not a convenience.
             if ( IsPrecacheAssetTypeLiteral(tokens, literalIndex) )
             {
-                return AssetTypeCompletions(quoted: false);
+                return AssetTypeCompletions(result.Language, quoted: false);
             }
 
             if ( !includeLiterals )
@@ -81,7 +81,7 @@ public sealed class CompletionEngine
             // #precache( "type" ...) — offer asset types as the first argument.
             if ( TryPrecacheContext(tokens, triggerIndex) )
             {
-                return AssetTypeCompletions();
+                return AssetTypeCompletions(result.Language);
             }
 
             // #using / #insert path — offer path segments.
@@ -126,16 +126,18 @@ public sealed class CompletionEngine
     // --- Contexts ---
 
     /// <summary>
-    /// The precache asset types.
+    /// The precache asset types this file may actually use. The <c>client_*</c> family belongs to
+    /// the client world, so a <c>.gsc</c> is never offered one it could not honour.
     /// </summary>
+    /// <param name="language">The asking file's language, which decides the client half.</param>
     /// <param name="quoted">
     /// Whether to insert the quotes too. False when the cursor already sits inside a string —
     /// otherwise accepting a suggestion produces <c>""model""</c>.
     /// </param>
-    private ImmutableArray<CompletionEntry> AssetTypeCompletions(bool quoted = true)
+    private ImmutableArray<CompletionEntry> AssetTypeCompletions(ScriptLanguage language, bool quoted = true)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
-        foreach ( string name in PrecacheAssetTypes.AllNames.OrderBy(static n => n, StringComparer.Ordinal) )
+        foreach ( string name in PrecacheAssetTypes.NamesFor(language).OrderBy(static n => n, StringComparer.Ordinal) )
         {
             entries.Add(new CompletionEntry(
                 name, CompletionKind.AssetType, "precache asset type", quoted ? "\"" + name + "\"" : name));

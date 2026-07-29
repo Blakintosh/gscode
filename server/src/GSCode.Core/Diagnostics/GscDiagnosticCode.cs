@@ -50,6 +50,7 @@ public enum GscDiagnosticCode
     DestructorHasParameters = 4003,
     NonValueDefaultParameter = 4004,
     DuplicateFunction = 4005,
+    ClientOnlyPrecacheType = 4006,
 
     // Cross-file / workspace semantics (5xxx)
     NamespaceNotImported = 5000,

@@ -135,6 +135,39 @@ public class ExtractionTests
     }
 
     [Theory]
+    [InlineData("client_fx")]
+    [InlineData("client_model")]
+    [InlineData("client_string")]
+    [InlineData("client_tagfxset")]
+    public void Precache_ClientTypesBelongToClientScripts(string typeName)
+    {
+        string source = $"#precache( \"{typeName}\", \"asset\" );";
+
+        // In a .csc it is ordinary.
+        Assert.DoesNotContain(
+            Analyze(source, @"c:\work\scripts\test.csc").AllDiagnostics,
+            diagnostic => diagnostic.Code is GscDiagnosticCode.UnknownPrecacheType
+                or GscDiagnosticCode.ClientOnlyPrecacheType);
+
+        // In a .gsc it is a real type in the wrong world, and reported apart from "unknown"
+        // because the two call for opposite responses: an unknown type is probably a typo, while
+        // this one is spelled correctly and simply belongs in the other file.
+        Assert.Contains(
+            Analyze(source, @"c:\work\scripts\test.gsc").AllDiagnostics,
+            diagnostic => diagnostic.Code == GscDiagnosticCode.ClientOnlyPrecacheType);
+    }
+
+    [Fact]
+    public void Precache_AHeaderMayUseEitherWorldsTypes()
+    {
+        // A .gsh is inserted into whichever world includes it, so the language it ends up in is not
+        // knowable from the header. Reporting here would blame a correct file for its caller.
+        Assert.DoesNotContain(
+            Analyze("#precache( \"client_fx\", \"asset\" );", @"c:\work\scripts\shared.gsh").AllDiagnostics,
+            diagnostic => diagnostic.Code == GscDiagnosticCode.ClientOnlyPrecacheType);
+    }
+
+    [Theory]
     [InlineData("xmodel")]
     [InlineData("model")]
     [InlineData("xmodelalias")]

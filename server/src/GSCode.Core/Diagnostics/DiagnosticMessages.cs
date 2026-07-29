@@ -49,6 +49,7 @@ public static class DiagnosticMessages
 
         // Extraction / per-file semantics
         [GscDiagnosticCode.UnknownPrecacheType] = "'{0}' is not a known #precache asset type.",
+        [GscDiagnosticCode.ClientOnlyPrecacheType] = "'{0}' is a client-side asset type and can only be precached from a client script.",
         [GscDiagnosticCode.WrongPrecacheArgumentCount] = "#precache type '{0}' expects {1} value(s) after the type but got {2}.",
         [GscDiagnosticCode.ConstructorHasParameters] = "Constructors cannot declare parameters.",
         [GscDiagnosticCode.DestructorHasParameters] = "Destructors cannot declare parameters.",

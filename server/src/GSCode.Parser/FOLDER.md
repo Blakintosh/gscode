@@ -120,9 +120,16 @@ LSP types anywhere.
 
 ## Syntax/PrecacheAssetTypes.cs
 
-- `record PrecacheAssetType(Name, MinValues, MaxValues)` + `static PrecacheAssetTypes` —
-  the declarative asset-type table from the language reference (string-family types
-  accept extra values). P4 validates PrecacheNodes against it; P8 completes from it.
+- `record PrecacheAssetType(Name, MinValues, MaxValues, Side)` + `enum PrecacheSide` +
+  `static PrecacheAssetTypes` — the declarative asset-type table from the language
+  reference (string-family types accept extra values). P4 validates PrecacheNodes
+  against it; P8 completes from it.
+- The `client_*` family (`client_fx`, `client_model`, `client_string`, `client_tagfxset`)
+  is `PrecacheSide.Client`: `NamesFor(language)` keeps it out of GSC completion and
+  `IsAvailableIn` drives `4006 ClientOnlyPrecacheType`, kept separate from
+  `4000 UnknownPrecacheType` because a real type in the wrong world and a typo call for
+  opposite responses. A `.gsh` is allowed everything, since which world inserts it is
+  not knowable from the header.
 
 ## Syntax/AstPrinter.cs
 

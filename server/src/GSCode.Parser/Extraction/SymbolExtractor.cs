@@ -324,6 +324,15 @@ public sealed class SymbolExtractor
             return;
         }
 
+        // A real type used in the wrong world. Reported apart from "unknown" because the two call
+        // for opposite responses: an unknown type is probably a typo, while this one is spelled
+        // correctly and simply belongs in the other file.
+        if ( !PrecacheAssetTypes.IsAvailableIn(assetType, _profile.LanguageFromPath(_rootFilePath)) )
+        {
+            AddDiagnostic(GscDiagnosticCode.ClientOnlyPrecacheType, groups[0][0].RootRange, typeName);
+            return;
+        }
+
         int valueCount = groups.Count - 1;
         if ( valueCount < assetType.MinValues || valueCount > assetType.MaxValues )
         {

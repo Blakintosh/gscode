@@ -83,15 +83,27 @@ public static class SemanticTokenBuilder
             case TokenKind.BlockComment:
             case TokenKind.DocComment:
                 return null;
+            // Same reasoning as comments, and the same visible symptom: the file is coloured by the
+            // grammar the moment it opens and REPAINTED when the server's tokens arrive, so any
+            // category both describe flickers from one colour to another on startup.
+            //
+            // A semantic token can only add or repaint — it can never suppress a grammar scope. So
+            // for a category the grammar already recognises, the two possibilities are that they
+            // agree, in which case the semantic token changes only the shade, or that they
+            // disagree, in which case the grammar's colour stands anyway because nothing removed
+            // it. Neither outcome is an improvement, and the first is the flicker.
+            //
+            // That covers every purely LEXICAL category. A string is a string, a number is a
+            // number, and `function` is a keyword, by their spelling alone — no surrounding context
+            // changes the answer, which is exactly the kind of question a grammar settles.
             case TokenKind.String:
             case TokenKind.LocalizedString:
             case TokenKind.HashString:
             case TokenKind.AnimReference:
-                return SemanticTokenType.String;
             case TokenKind.Integer:
             case TokenKind.Float:
             case TokenKind.Hex:
-                return SemanticTokenType.Number;
+                return null;
             case TokenKind.Identifier:
             {
                 if ( classified.TryGetValue((token.Range.Start.Line, token.Range.Start.Character), out SemanticTokenType type) )
@@ -103,8 +115,11 @@ public static class SemanticTokenBuilder
                 return null;
             }
             default:
-                // Keywords get semantic keyword styling; everything else is left to TextMate.
-                return TokenFacts.IsKeyword(token.Kind) ? SemanticTokenType.Keyword : null;
+                // Keywords included — see above. What is left for this pass is the one thing a
+                // grammar genuinely cannot do: decide what an IDENTIFIER means. Whether `foo` is a
+                // function, a macro, a parameter or a field is a question about the workspace, not
+                // about the characters, and that is the whole reason semantic tokens exist.
+                return null;
         }
     }
 

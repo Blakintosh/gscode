@@ -27,14 +27,44 @@ public class SemanticTokenBuilderTests
     }
 
     [Fact]
-    public void Keywords_NumbersAndStrings_AreClassified()
+    public void Keywords_NumbersAndStrings_AreLeftToTheGrammar()
     {
-        // function (kw) on line 0; wait 0.05 (number) and "hi" (string) inside.
+        // These are LEXICAL categories: a string is a string and `function` is a keyword by their
+        // spelling alone, with no surrounding context that could change the answer. That is exactly
+        // what a grammar settles, and the grammar has already coloured the file by the time the
+        // server's tokens arrive — so emitting them again only repainted the same words in a
+        // different shade, which is the startup flicker.
+        //
+        // Standing down cannot cost correctness either, because a semantic token can only add or
+        // repaint and never suppress: where the two agree only the shade changed, and where they
+        // disagree the grammar's colour stood regardless.
         ImmutableArray<SemanticToken> tokens = Build("function f()\n{\n    wait 0.05;\n    x = \"hi\";\n}\n");
 
-        Assert.True(HasTypeOnLine(tokens, 0, SemanticTokenType.Keyword));
-        Assert.True(HasTypeOnLine(tokens, 2, SemanticTokenType.Number));
-        Assert.True(HasTypeOnLine(tokens, 3, SemanticTokenType.String));
+        Assert.DoesNotContain(tokens, token => token.Type == SemanticTokenType.Keyword);
+        Assert.DoesNotContain(tokens, token => token.Type == SemanticTokenType.Number);
+        Assert.DoesNotContain(tokens, token => token.Type == SemanticTokenType.String);
+    }
+
+    [Fact]
+    public void OnlyIdentifiersAreClassified()
+    {
+        // What is left is the one question a grammar genuinely cannot answer: what an IDENTIFIER
+        // means. Whether `foo` is a function, a macro, a parameter or a field is a fact about the
+        // workspace rather than about the characters.
+        ImmutableArray<SemanticToken> tokens = Build(
+            "#define CAP 5\nfunction f( p )\n{\n    wait 0.05;\n    x = self.health;\n    y = CAP;\n    g( p );\n}\n");
+
+        Assert.NotEmpty(tokens);
+        Assert.All(tokens, token => Assert.Contains(token.Type, new[]
+        {
+            SemanticTokenType.Function,
+            SemanticTokenType.Macro,
+            SemanticTokenType.Parameter,
+            SemanticTokenType.Variable,
+            SemanticTokenType.Property,
+            SemanticTokenType.Namespace,
+            SemanticTokenType.Type,
+        }));
     }
 
     [Fact]

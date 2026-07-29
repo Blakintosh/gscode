@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
+using GSCode.Parser.Extraction;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
@@ -36,7 +37,38 @@ public static class WorkspaceLints
         ImmutableArray<Diagnostic> lints = LintsOnly(
             result, language, path, database, resolver, builtins, objectFields);
 
-        return lints.IsEmpty ? result.AllDiagnostics : result.AllDiagnostics.AddRange(lints);
+        ImmutableArray<Diagnostic> all =
+            lints.IsEmpty ? result.AllDiagnostics : result.AllDiagnostics.AddRange(lints);
+
+        return ApplyPragmas(result, all);
+    }
+
+    /// <summary>
+    /// Drops what an in-source pragma suppresses.
+    ///
+    /// Applied HERE, over the combined set, rather than inside each lint: suppression is the same
+    /// idea whatever produced the diagnostic, and a parse error is as suppressible as a lint. Doing
+    /// it per-lint would mean thirteen implementations of one rule, and any lint that forgot would
+    /// ignore a pragma for no reason the user could see.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> ApplyPragmas(ParseResult result, ImmutableArray<Diagnostic> diagnostics)
+    {
+        ImmutableArray<PragmaDirective> directives = PragmaDirectives.Scan(result.Lexed.Tokens, result.Text);
+        if ( directives.IsEmpty )
+        {
+            return diagnostics;
+        }
+
+        ImmutableArray<Diagnostic>.Builder kept = ImmutableArray.CreateBuilder<Diagnostic>();
+        foreach ( Diagnostic diagnostic in diagnostics )
+        {
+            if ( !PragmaDirectives.IsSuppressed(directives, diagnostic.Code, diagnostic.Range.Start.Line) )
+            {
+                kept.Add(diagnostic);
+            }
+        }
+
+        return kept.ToImmutable();
     }
 
     /// <summary>

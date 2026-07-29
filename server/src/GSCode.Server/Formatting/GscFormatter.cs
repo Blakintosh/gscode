@@ -3,6 +3,7 @@ using System.Text;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser;
+using GSCode.Parser.Extraction;
 using GSCode.Parser.Lexing;
 
 namespace GSCode.Server.Formatting;
@@ -35,6 +36,15 @@ public static class GscFormatter
     /// </summary>
     public static FormatEdit? FormatMinimal(ParseResult result, FormatOptions? options = null)
     {
+        // A file with a format pragma has to go through the per-region path: a single edit spanning
+        // the first change to the last would cover the protected lines as collateral, and there is
+        // no way to carve a hole out of one replacement.
+        if ( HasFormatPragma(result) )
+        {
+            ImmutableArray<FormatEdit> edits = FormatMinimalEdits(result, options);
+            return edits.Length == 1 ? edits[0] : null;
+        }
+
         string? formatted = Format(result, options);
         if ( formatted is null )
         {
@@ -96,7 +106,109 @@ public static class GscFormatter
             return [];
         }
 
-        return DiffByLines(result.Text, original, formatted);
+        formatted = RestoreProtectedLines(result, original, formatted, out bool lineCountMatched);
+
+        ImmutableArray<FormatEdit> edits = DiffByLines(result.Text, original, formatted);
+
+        // The line-for-line restore is exact when the formatter kept the line count, which is the
+        // ordinary case for a whitespace-only pass. When it did not — blank-line capping removes
+        // lines — the lines no longer correspond and the coarser filter takes over.
+        return lineCountMatched ? edits : DropEditsInProtectedRegions(result, edits);
+    }
+
+    /// <summary>
+    /// Puts the ORIGINAL text back on every line inside a protected region, so the diff that
+    /// follows sees them as unchanged and emits nothing for them.
+    ///
+    /// Done before diffing rather than by filtering edits afterwards, because a hunk is a run of
+    /// CONSECUTIVE changed lines: the pragma comments themselves get reindented, which joins them
+    /// to the protected lines and to whatever follows, and dropping that hunk would take the
+    /// unprotected code with it. Making the protected lines identical splits the hunk exactly where
+    /// the region ends.
+    /// </summary>
+    private static string RestoreProtectedLines(
+        ParseResult result, string original, string formatted, out bool lineCountMatched)
+    {
+        lineCountMatched = false;
+
+        ImmutableArray<PragmaDirective> directives = PragmaDirectives.Scan(result.Lexed.Tokens, result.Text);
+        if ( directives.IsEmpty )
+        {
+            return formatted;
+        }
+
+        List<LineSpan> originalLines = SplitLines(original);
+        List<LineSpan> formattedLines = SplitLines(formatted);
+        if ( originalLines.Count != formattedLines.Count )
+        {
+            return formatted;
+        }
+
+        lineCountMatched = true;
+
+        // LineSpan.Text carries its own line terminator, so the lines are simply concatenated —
+        // adding a separator here would double every newline.
+        StringBuilder rebuilt = new(formatted.Length);
+        for ( int line = 0; line < formattedLines.Count; line++ )
+        {
+            bool isProtected = PragmaDirectives.IsFormatDisabled(directives, line);
+            rebuilt.Append(isProtected ? originalLines[line].Text : formattedLines[line].Text);
+        }
+
+        return rebuilt.ToString();
+    }
+
+    /// <summary>Whether the file carries any <c>#pragma warning disable format</c>.</summary>
+    private static bool HasFormatPragma(ParseResult result)
+    {
+        foreach ( PragmaDirective directive in PragmaDirectives.Scan(result.Lexed.Tokens, result.Text) )
+        {
+            if ( directive.Target == PragmaTarget.Format )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Drops any edit touching a region the author switched the formatter off for.
+    ///
+    /// Filtering EDITS rather than reformatting differently is what makes this safe. The formatter
+    /// still runs over the whole file and still passes its corruption guard on the whole file; only
+    /// the resulting changes to protected lines are discarded, so a bug here can leave code
+    /// unformatted but can never rewrite it wrongly.
+    ///
+    /// An edit spanning the boundary is dropped whole. Splitting it would mean re-deriving what the
+    /// formatter intended for each half, and refusing to touch a hand-laid-out block is exactly
+    /// what was asked for.
+    /// </summary>
+    private static ImmutableArray<FormatEdit> DropEditsInProtectedRegions(
+        ParseResult result, ImmutableArray<FormatEdit> edits)
+    {
+        ImmutableArray<PragmaDirective> directives = PragmaDirectives.Scan(result.Lexed.Tokens, result.Text);
+        if ( directives.IsEmpty || edits.IsEmpty )
+        {
+            return edits;
+        }
+
+        ImmutableArray<FormatEdit>.Builder kept = ImmutableArray.CreateBuilder<FormatEdit>();
+        foreach ( FormatEdit edit in edits )
+        {
+            bool protectedRegion = false;
+            for ( int line = edit.Range.Start.Line; line <= edit.Range.End.Line && !protectedRegion; line++ )
+            {
+                protectedRegion = PragmaDirectives.IsFormatDisabled(directives, line);
+            }
+
+            if ( !protectedRegion )
+            {
+                kept.Add(edit);
+            }
+        }
+
+        return kept.ToImmutable();
     }
 
     /// <summary>Beyond this many changed lines on either side, one whole-region edit is used

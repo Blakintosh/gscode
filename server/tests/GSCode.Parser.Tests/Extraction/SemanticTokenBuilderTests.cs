@@ -57,10 +57,20 @@ public class SemanticTokenBuilderTests
     }
 
     [Fact]
-    public void Comments_AreClassified()
+    public void Comments_AreLeftToTheGrammar()
     {
-        ImmutableArray<SemanticToken> tokens = Build("// header\nfunction f()\n{\n}\n");
-        Assert.True(HasTypeOnLine(tokens, 0, SemanticTokenType.Comment));
+        // A semantic token OVERRIDES the TextMate scopes across the range it covers, so emitting
+        // one for a comment flattened everything the grammar colours inside it — which for a
+        // /@ … @/ block is its descriptors, argument names and types, and is why ScriptDoc rendered
+        // as one block of comment grey.
+        //
+        // Nothing is lost: a comment is a comment whatever the surrounding code means, which makes
+        // it the one thing a grammar answers completely on its own.
+        ImmutableArray<SemanticToken> lineComment = Build("// header\nfunction f()\n{\n}\n");
+        Assert.False(HasTypeOnLine(lineComment, 0, SemanticTokenType.Comment));
+
+        ImmutableArray<SemanticToken> docComment = Build("/@\n\"Name: f()\"\n@/\nfunction f()\n{\n}\n");
+        Assert.DoesNotContain(docComment, token => token.Type == SemanticTokenType.Comment);
     }
 
     [Fact]

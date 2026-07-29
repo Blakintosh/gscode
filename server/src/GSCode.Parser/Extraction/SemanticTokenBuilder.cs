@@ -72,10 +72,17 @@ public static class SemanticTokenBuilder
     {
         switch ( token.Kind )
         {
+            // Comments are left to the TextMate grammar, which knows more about them than this
+            // does. A semantic token OVERRIDES the grammar's scopes across the range it covers, so
+            // painting a whole /@ … @/ block as one Comment flattened the descriptors, argument
+            // names and types the grammar colours inside it — the reported "pure commented-out
+            // grey". Nothing is lost by standing down: a comment is a comment whatever the
+            // surrounding code means, which makes it the one case a grammar answers completely on
+            // its own.
             case TokenKind.LineComment:
             case TokenKind.BlockComment:
             case TokenKind.DocComment:
-                return SemanticTokenType.Comment;
+                return null;
             case TokenKind.String:
             case TokenKind.LocalizedString:
             case TokenKind.HashString:

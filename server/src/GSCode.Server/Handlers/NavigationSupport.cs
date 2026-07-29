@@ -109,18 +109,9 @@ public sealed class NavigationSupport
     /// document is a header. The single entry point, so the count a CodeLens shows and the list a
     /// peek opens are computed the same way.
     /// </summary>
-    /// <param name="declaringRelativePath">
-    /// The file that DECLARES the symbol, when the caller knows it. Under a merge dialect a function
-    /// carries no namespace, so every same-named function in the workspace shares one key — passing
-    /// the declaring file narrows the answer to the files that can actually see it. Empty means no
-    /// narrowing, which is right when the declaration is unknown and always right under #using.
-    /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
-        NavigationTarget target, SymbolKey key, string declaringRelativePath = "")
+        NavigationTarget target, SymbolKey key)
     {
-        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
-            DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key);
-
-        return DatabaseQueries.ScopeToIncludeGraph(all, declaringRelativePath);
+        return DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key);
     }
 }

@@ -104,6 +104,8 @@ public sealed partial record GameProfile
         Supported = true,
         DataFilePrefix = "t7",
         HasCompleteBuiltinLibrary = true,
+        // The only game that buries raw a level down; every earlier one sits at <install>\raw.
+        RawSubfolder = @"share\raw",
         HasClientScripts = true,
         HasHeaders = true,
         HasWorldObject = true,

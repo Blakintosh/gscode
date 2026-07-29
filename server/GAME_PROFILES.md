@@ -162,21 +162,36 @@ gated.
 
 ## Root discovery (where the raw scripts live)
 
-**The user says where the game is; nothing is discovered.** Two settings drive it — `gscode.rawPath`
-naming the game's raw script folder, `gscode.modsPath` naming the folder its mods live under — and
-with neither set the workspace runs in workspace-only mode, which is first-class and tested.
+**Configuration first, derivation second, workspace-only last.** Two settings say where the game is
+— `gscode.rawPath` naming its raw script folder and `gscode.modsPath` naming the folder its mods live
+under — and either one, when set to a folder that exists, is used verbatim.
 
-No profile carries path knowledge, because the folder layout is not a property of the dialect. BO3
-did once resolve itself from `%TA_TOOLS_PATH%\share\raw`, recorded on its profile as an environment
-variable plus two subfolder names. That generalised to exactly one game: the variable is set by
-Treyarch's mod tools, and CoD4, WaW, MW2 and BO1 ship nothing equivalent, so every other game needed
-a configured path regardless. Keeping the special case bought one game a shortcut in exchange for two
-resolution paths to reason about, and it also conflated two things that are not the same — **where
-you are editing** and **where the game is**. A mod checked out at `C:\work\my_mod` is a normal setup,
-and it needs the raw folder found by configuration, not by proximity.
+Whatever is left unset is **derived**, by walking up from each workspace folder looking for the
+install's own layout. That covers the ordinary case with no configuration at all: a mod at
+`<install>\mods\my_mod` finds both roots, and so does opening the install itself, or the raw folder,
+or anything beneath either. A mod checked out at `C:\work\my_mod` finds nothing, falls back to
+workspace-only mode, and needs the settings — which is exactly why they exist.
 
-So the workspace folder is where you edit, the settings are where the game is, and the two are
-independent. `TA_TOOLS_PATH` still exists on a BO3 install; the extension simply does not read it.
+The layout is per-game, and this is the one path fact a profile carries:
+
+| | raw | mods |
+|---|---|---|
+| BO3 | `<install>\share\raw` | `<install>\mods` |
+| every earlier game | `<install>\raw` | `<install>\mods` |
+
+Nothing is read from the **environment**, which is the part that never generalised. BO3 once resolved
+itself from `%TA_TOOLS_PATH%`, but that variable is set by Treyarch's mod tools and CoD4, WaW, MW2 and
+BO1 ship nothing equivalent — so it was one mechanism serving one game while the rest went without.
+Deriving from the workspace instead gives all five the same zero-configuration path, and keeps
+**where you are editing** separable from **where the game is** whenever they genuinely differ.
+`TA_TOOLS_PATH` still exists on a BO3 install; the extension simply does not read it.
+
+The server log says which route each root took, since "why is it using *that* raw folder" is
+otherwise unanswerable:
+
+```
+Roots: raw=…\share\raw (derived), mods=…\mods (derived), workspace folders=1
+```
 
 ## Bundled data files (`DataFilePrefix`)
 

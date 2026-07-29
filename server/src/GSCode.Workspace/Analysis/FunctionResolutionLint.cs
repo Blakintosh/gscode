@@ -78,9 +78,21 @@ public static class FunctionResolutionLint
         // measured, so a game being brought up would report nothing at exactly the point its gaps
         // need finding. A library must still be loaded, since there is nothing to compare against
         // otherwise.
+        // A third requirement, and the one that fails in practice: every import must have RESOLVED.
+        // An unresolved #insert takes its macros with it, and an unexpanded macro is an ordinary
+        // identifier followed by an argument list — indistinguishable from a call to a function
+        // nobody has. One missing shared.gsh produced forty of these against IS_TRUE, VAL and SQR,
+        // every one blaming the user for a macro they did not write. An unresolved #using is the
+        // same story for a merge dialect, where an included file's functions are called unqualified.
+        //
+        // This is the rule the path-call case already follows: one cause, one diagnostic. The missing
+        // FILE is reported (2006/5009) and the names that could only have come from it are left
+        // alone. The script half keeps working, since a qualified call naming a location that does
+        // not exist is wrong regardless of what any header would have defined.
         bool canJudgeBuiltins = (game.HasCompleteBuiltinLibrary || judgeUnverifiedBuiltins)
             && game.DataFilePrefix is not null
-            && builtins.Count > 0;
+            && builtins.Count > 0
+            && !HasUnresolvedImports(result);
 
         List<Diagnostic> diagnosticsForMissingFiles = [];
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
@@ -223,6 +235,23 @@ public static class FunctionResolutionLint
         }
 
         return diagnostics.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether any <c>#insert</c> or <c>#using</c> in this file failed to resolve, which makes the
+    /// set of names legally available here unknowable and so makes "this matches nothing" unsound.
+    /// </summary>
+    private static bool HasUnresolvedImports(ParseResult result)
+    {
+        foreach ( Diagnostic diagnostic in result.AllDiagnostics )
+        {
+            if ( diagnostic.Code is GscDiagnosticCode.InsertNotFound or GscDiagnosticCode.UsingNotFound )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

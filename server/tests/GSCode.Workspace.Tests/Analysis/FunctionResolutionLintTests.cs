@@ -133,6 +133,48 @@ public class FunctionResolutionLintTests
     }
 
     [Fact]
+    public void AnUnresolvedInsert_StandsDownTheBuiltinHalf()
+    {
+        // The reported case. shared.gsh could not be found, so IS_TRUE, VAL, SQR and the rest were
+        // never expanded - and an unexpanded macro is an identifier with an argument list, which is
+        // exactly what a call to a nonexistent function looks like. Forty of these landed on one
+        // file, every one naming a macro the user never wrote.
+        string source =
+            "#insert scripts\\shared\\nonexistent.gsh;\n#namespace vibing3;\n"
+            + "function main()\n{\n    if ( IS_TRUE( level.thing ) )\n    {\n    }\n}\n";
+
+        // Built here rather than through Lint() so both halves of the rule can be asserted: the
+        // missing FILE is reported by the preprocessor, and the lint adds nothing on top of it.
+        ScriptDatabase database = BuildWorkspace();
+        string path = @$"{Raw}\scripts\main.gsc";
+        ParseResult result = ScriptAnalysis.Analyze(
+            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        Assert.Contains(result.AllDiagnostics, static d => d.Code == GscDiagnosticCode.InsertNotFound);
+
+        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
+        ImmutableArray<Diagnostic> diagnostics = FunctionResolutionLint.Analyze(
+            result, database.Gsc, "raw", path, builtins.For(ScriptLanguage.Gsc), GameProfile.BlackOps3);
+
+        Assert.DoesNotContain(diagnostics, static d => d.Code == GscDiagnosticCode.BuiltinFunctionNotFound);
+    }
+
+    [Fact]
+    public void AnUnresolvedInsert_DoesNotStandDownTheScriptHalf()
+    {
+        // Only the builtin half is unsound: a header defines macros, so it could have explained a
+        // bare name. It could never explain other::foo(), which names a script location that either
+        // exists or does not - so suppressing that too would hide a real error behind an unrelated one.
+        string source =
+            "#insert scripts\\shared\\nonexistent.gsh;\n#namespace vibing3;\n"
+            + "function main()\n{\n    other::scriptFunctionDoesNotExist();\n}\n";
+
+        ImmutableArray<Diagnostic> diagnostics = Lint(source);
+
+        Assert.Contains(diagnostics, static d => d.Code == GscDiagnosticCode.ScriptFunctionNotFound);
+    }
+
+    [Fact]
     public void AGameWithoutBuiltinData_ReportsNothing()
     {
         // Without an API library every builtin call would look unresolved, so the lint stands down.

@@ -4,6 +4,7 @@
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { createLanguageClient } from "./server";
+import { registerReloadPrompt } from "./reloadPrompt";
 
 let client: LanguageClient | undefined;
 
@@ -26,7 +27,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
-    // Restart the language server (e.g. after changing an environment variable it reads).
+    // Settings the running server reads once and cannot pick up afterwards.
+    registerReloadPrompt(context, log);
+
+    // Restart the language server, for clearing a wedged session or picking up a rebuilt server
+    // binary. It does NOT pick up changed settings: the launch arguments and initializationOptions
+    // are captured when the client is constructed, so a restart relaunches with the ones this
+    // session started with. Reloading the window is what re-reads them, which is why a settings
+    // change prompts for that instead.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.restartServer", async () => {
             log.info("Restarting GSCode language server");

@@ -197,7 +197,7 @@
 				"gscode.rawPath": {
 					"type": "string",
 					"default": "",
-					"description": "Absolute path to the game's raw script folder. Set this when the folder you have open is a mod or a loose set of scripts, so its includes and path calls resolve against the game's own scripts. Left empty, only the open workspace folders are indexed.",
+					"description": "Absolute path to the game's raw script folder. Set this when the folder you have open is a mod or a loose set of scripts, so its includes and path calls resolve against the game's own scripts. Left empty, the raw folder is looked for above the open workspace folders — so a mod inside the game install needs no setting at all — and if none is found, only those folders are indexed.",
 					"scope": "window"
 				},
 				"gscode.modsPath": {

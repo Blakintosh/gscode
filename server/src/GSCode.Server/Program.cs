@@ -181,16 +181,27 @@ LanguageServer server = await LanguageServer.From(options =>
 
             if ( rootConfig.RawRoot is null )
             {
-                // Workspace-only mode is first-class: one info line, never a popup.
+                // Workspace-only mode is first-class: one info line, never a popup. It names the
+                // folder that was searched for, because the commonest reason to find nothing is
+                // being in the wrong game mode — share\raw and raw are not interchangeable.
                 Log.Information(
-                    "No game root for {Game} — set gscode.rawPath to the game's raw folder. "
+                    "No game root for {Game}: nothing configured, and no {Subfolder} folder above "
+                    + "the workspace folders. Set gscode.rawPath to the game's raw folder. "
                     + "Resolving against the workspace folders only.",
-                    GameProfile.Active.ShortName);
+                    GameProfile.Active.ShortName,
+                    GameProfile.Active.RawSubfolder);
             }
             else
             {
-                Log.Information("Roots: raw={RawRoot}, mods={ModsRoot}, workspace folders={FolderCount}",
-                    rootConfig.RawRoot, rootConfig.ModsRoot, rootConfig.WorkspaceFolders.Length);
+                // Whether each root was asked for or worked out: "why is it using THAT raw folder"
+                // is otherwise unanswerable from the log alone.
+                Log.Information(
+                    "Roots: raw={RawRoot} ({RawSource}), mods={ModsRoot} ({ModsSource}), workspace folders={FolderCount}",
+                    rootConfig.RawRoot,
+                    RootSource(settings.RawPath, rootConfig.RawRoot),
+                    rootConfig.ModsRoot,
+                    RootSource(settings.ModsPath, rootConfig.ModsRoot),
+                    rootConfig.WorkspaceFolders.Length);
             }
 
             Log.Information("Initialize received from {ClientName}", request.ClientInfo?.Name ?? "unknown client");
@@ -425,6 +436,25 @@ static string FormatLanguageLine(string label, int raw, int mod, int workspace)
 
     string split = parts.Count > 0 ? "  (" + string.Join(" · ", parts) + ")" : "";
     return $"    {label}  {total,6:N0} files{split}";
+}
+
+// Whether a resolved root is the one the user asked for, or one worked out from the workspace.
+// Compares the paths rather than just testing whether the setting is non-empty, so a setting
+// naming a folder that is not on disk - which falls back to derivation - reports honestly.
+static string RootSource(string configured, string? resolved)
+{
+    if ( resolved is null )
+    {
+        return "none";
+    }
+
+    if ( configured.Length > 0
+        && string.Equals(GSCode.Core.Paths.PathUtil.NormalizeAbsolute(configured), resolved, StringComparison.Ordinal) )
+    {
+        return "configured";
+    }
+
+    return "derived";
 }
 
 // Compacts the heap once, at the indexing -> serving transition, when indexing left enough

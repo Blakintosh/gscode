@@ -161,10 +161,16 @@ Typing lands P10.)*
 
 - `sealed record RootConfig` — the resolved roots: `RawRoot`, `ModsRoot`, `WorkspaceFolders`. Null
   raw/mods roots = workspace-only mode, a first-class state.
-  - `Create(rawEnabled, rawPath, modsPath, workspaceFolders, fileSystem)` — both roots come from
-    settings and nowhere else. rawEnabled=false forces BOTH null whatever the paths say (explicit
-    off wins), and a path naming a folder that is not on disk drops to null rather than being
-    trusted. Nothing is read from the environment, so one code path serves every game.
+  - `Create(rawEnabled, rawPath, modsPath, workspaceFolders, fileSystem, profile?)` — configuration
+    first, derivation second. A configured path that exists on disk is used verbatim; one naming a
+    missing folder is dropped rather than trusted, since a root under which every lookup misses
+    reports the user's scripts as broken instead of the setting. Whatever is left unset is derived
+    by `FindRootAbove`, walking up from each workspace folder probing for the profile's
+    `RawSubfolder` / `ModsSubfolder`. rawEnabled=false forces BOTH null by either route — explicit
+    off beats configuration and derivation alike. Nothing is read from the environment.
+  - `FindRootAbove(startFolders, subfolder, fileSystem)` — each start folder is exhausted to the
+    drive before the next is tried, so an earlier workspace folder wins outright rather than losing
+    to a shallower match under one the user listed second.
 
 ## Resolution/ResolutionContext.cs
 

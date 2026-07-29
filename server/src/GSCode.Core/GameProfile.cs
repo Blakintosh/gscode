@@ -273,13 +273,23 @@ public sealed partial record GameProfile
     /// </summary>
     public bool HasPrecacheDirective { get; init; }
 
-    // --- Root discovery: the user says where the game is. ---
+    // --- Install layout ---
     //
-    // There is deliberately nothing here. Only BO3 ever shipped an environment variable naming its
-    // tools install, and a workspace folder — typically a mod living nowhere near the game — cannot
-    // imply which install it belongs to. So the raw and mods roots come from gscode.rawPath and
-    // gscode.modsPath, which is the same answer for all eighteen games instead of one mechanism for
-    // one of them and a second for the rest.
+    // gscode.rawPath and gscode.modsPath say WHERE the game is, and nothing is read from the
+    // environment. These two say what those folders are CALLED, which is a different question and
+    // one the dialect really does answer: BO3 keeps its scripts under share\raw, every earlier game
+    // under raw, and all of them keep mods under mods.
+    //
+    // That is enough to derive both roots when a workspace folder sits inside an install — a mod at
+    // <install>\mods\my_mod, or the install itself being open — which is the ordinary case and the
+    // one that should need no configuration at all. It is NOT enough for a mod checked out
+    // somewhere else entirely, which is why the settings exist and always win.
+
+    /// <summary>The raw folder's path relative to the install root: <c>share\raw</c> on BO3, <c>raw</c> elsewhere.</summary>
+    public string RawSubfolder { get; init; } = "raw";
+
+    /// <summary>The mods folder's path relative to the install root. Every game in the lineage uses <c>mods</c>.</summary>
+    public string ModsSubfolder { get; init; } = "mods";
 
     /// <summary>
     /// The builtin-API filename for a language world (e.g. <c>t7_api_gsc.json</c>), or null when

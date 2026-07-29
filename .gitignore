@@ -1,6 +1,13 @@
-/server/GSCode.CLI/Properties/
+# Editor and tool state: per-machine, never shared.
+.claude/
+.vs/
 .DS_Store
+
+# Debug profiles carry local paths, so they stay out for every project rather
+# than being listed one project at a time.
 launchSettings.json
+
+# Site build output. client/, server/ and site/ each have their own .gitignore
+# for the rest; these two are the roots nothing else claims.
 .svelte-kit/
 .vite/
-server/GSCode.CLI/Properties/launchSettings.json

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Paths;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Database;
@@ -282,6 +283,57 @@ public static class DatabaseQueries
     /// Whether a record is in an asking file's <c>#include</c> merge scope: the file itself, or one
     /// of its included files. Paths compare in normalized script-relative form.
     /// </summary>
+    /// <summary>
+    /// Narrows references to those that can actually SEE the declaring file, for the merge dialects.
+    ///
+    /// Under <c>#include</c> a function carries no namespace, so every <c>main()</c> in a workspace
+    /// shares one key — 1,230 of them in CoD4's animscripts. Unnarrowed, find-references and the
+    /// CodeLens count report all of them for any one of them, which is not a large answer but a
+    /// wrong one: those functions have nothing to do with each other.
+    ///
+    /// A reference counts only if its file is the declaring file, or imports it. The record's own
+    /// dependency edges answer that without re-parsing, which is what makes this affordable.
+    ///
+    /// A no-op under <c>#using</c>: there the namespace is already part of the key, so the question
+    /// never arises and BO3 behaviour is untouched.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludeGraph(
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references,
+        string declaringRelativePath,
+        GameProfile? profile = null)
+    {
+        GameProfile game = profile ?? GameProfile.Active;
+        if ( game.ImportStyle != ImportStyle.Include || declaringRelativePath.Length == 0 )
+        {
+            return references;
+        }
+
+        string declaring = NormalizeScriptPath(declaringRelativePath);
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder kept =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
+        {
+            if ( NormalizeScriptPath(record.RelativePath) == declaring )
+            {
+                kept.Add((record, entry));
+                continue;
+            }
+
+            foreach ( DependencyEdge edge in record.Dependencies )
+            {
+                if ( !edge.IsInsert && NormalizeScriptPath(edge.RawPath) == declaring )
+                {
+                    kept.Add((record, entry));
+                    break;
+                }
+            }
+        }
+
+        return kept.ToImmutable();
+    }
+
     public static bool IsInIncludeScope(
         string recordRelativePath,
         string selfRelativePath,

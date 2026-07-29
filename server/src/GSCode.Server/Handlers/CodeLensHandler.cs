@@ -46,6 +46,13 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             return Task.FromResult<CodeLensContainer?>(null);
         }
 
+        // Every lens here sits on a declaration in THIS file, so the declaring path is known
+        // exactly — which is what lets a merge dialect narrow the count to the files that can see it.
+        string declaringRelativePath =
+            target.Store.TryGet(GSCode.Core.Paths.PathUtil.NormalizeAbsolute(target.Path), out ScriptRecord self)
+                ? self.RelativePath
+                : "";
+
         List<CodeLens> lenses = [];
 
         foreach ( FunctionSymbol function in target.Result.Extraction.Functions )
@@ -54,13 +61,13 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             // name, but still reports a namespace (the file stem), so using it here looked up a
             // key nothing is stored under and every lens read "0 references".
             SymbolKey key = new(GSCode.Core.GameProfile.Active.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
-            lenses.Add(MakeLens(request.TextDocument.Uri, function.NameRange, key, target));
+            lenses.Add(MakeLens(request.TextDocument.Uri, function.NameRange, key, target, declaringRelativePath));
         }
 
         foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
         {
             SymbolKey key = new(GSCode.Core.GameProfile.Active.KeyNamespace(classSymbol.Namespace), classSymbol.KeyName, SymbolKind.Class);
-            lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target));
+            lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target, declaringRelativePath));
         }
 
         // Macros defined in THIS file. Headers are mostly macros, so without this a .gsh carried
@@ -73,7 +80,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             }
 
             SymbolKey key = new(null, macro.Name, SymbolKind.Macro);
-            lenses.Add(MakeLens(request.TextDocument.Uri, macro.NameRange, key, target));
+            lenses.Add(MakeLens(request.TextDocument.Uri, macro.NameRange, key, target, declaringRelativePath));
         }
 
         return Task.FromResult<CodeLensContainer?>(new CodeLensContainer(lenses));
@@ -84,13 +91,13 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         return Task.FromResult(request);
     }
 
-    private CodeLens MakeLens(DocumentUri uri, GSCode.Core.Text.TextRange nameRange, SymbolKey key, NavigationTarget target)
+    private CodeLens MakeLens(DocumentUri uri, GSCode.Core.Text.TextRange nameRange, SymbolKey key, NavigationTarget target, string declaringRelativePath)
     {
         // The same query the peek list uses, so the number and the list cannot disagree. A
         // single-store count under-reported a function called from CSC or a macro used from a
         // header, while clicking the lens went through the client's reference provider.
         int count = 0;
-        foreach ( (ScriptRecord _, ReferenceEntry entry) in _support.FindAllReferences(target, key) )
+        foreach ( (ScriptRecord _, ReferenceEntry entry) in _support.FindAllReferences(target, key, declaringRelativePath) )
         {
             if ( entry.Kind != ReferenceKind.Definition )
             {

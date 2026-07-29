@@ -28,6 +28,11 @@ namespace GSCode.Workspace.Analysis;
 /// code useful as a DATA SOURCE: swept over a corpus it is the candidate list for builtins the API
 /// is missing, ranked by how often they are called.
 ///
+/// PRECONDITION: the store must hold a COMPLETE index. This is the only lint that asserts a name
+/// does not exist, and that claim is worthless against a half-built one — every function in every
+/// not-yet-indexed file reads as missing. The caller enforces it (see <c>WorkspaceLints</c>), rather
+/// than the lint carrying a flag, so the ordering is visible where the pipeline is assembled.
+///
 /// Both are ERRORS, because the engine's verdict is harsher than a style note: a call that resolves
 /// to nothing fails to LINK, so the script does not load. That severity is only defensible because
 /// the lint refuses to guess — it reports nothing at all unless it can see everything that could
@@ -56,18 +61,8 @@ public static class FunctionResolutionLint
         BuiltinApi builtins,
         GameProfile? profile = null,
         bool judgeUnverifiedBuiltins = false,
-        PathResolver? resolver = null,
-        bool indexReady = true)
+        PathResolver? resolver = null)
     {
-        // Nothing at all until the workspace has been indexed once. This lint is the only one that
-        // asserts a name does NOT exist, and that claim is worthless against a half-built index —
-        // every function in every not-yet-indexed file reads as missing. Defaults to true so the
-        // corpus harness and unit tests, which build their store up front, are unaffected.
-        if ( !indexReady )
-        {
-            return [];
-        }
-
         GameProfile game = profile ?? GameProfile.Active;
 
         // The two codes have different evidence requirements, so they are gated separately.

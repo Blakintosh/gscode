@@ -79,11 +79,19 @@ public static class WorkspaceLints
 
         lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins, objectFields, typer));
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
-        // Cannot double-report with the lint above: this one looks up with includePrivate, so a
-        // private function counts as EXISTING and only 5003 speaks for it.
-        lints.AddRange(FunctionResolutionLint.Analyze(
-            result, store, contextId, path, languageBuiltins,
-            resolver: resolver, indexReady: database.HasCompletedIndex));
+        // Only once the workspace has been indexed. Every other lint degrades gracefully on a
+        // partial index — a lookup that finds nothing simply offers nothing — but this one reports
+        // a name as nonexistent, and before indexing finishes every script function in the
+        // workspace looks nonexistent. Unlike a missing FILE, which the resolver answers from the
+        // filesystem, a missing FUNCTION can only be answered by the index.
+        //
+        // Cannot double-report with the lint above either: this one looks up with includePrivate,
+        // so a private function counts as EXISTING and only 5003 speaks for it.
+        if ( database.HasCompletedIndex )
+        {
+            lints.AddRange(FunctionResolutionLint.Analyze(
+                result, store, contextId, path, languageBuiltins, resolver: resolver));
+        }
         lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));
         lints.AddRange(DevBlockCallLint.Analyze(
             result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));

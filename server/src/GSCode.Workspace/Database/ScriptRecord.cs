@@ -54,6 +54,18 @@ public sealed record ScriptRecord
     public ImmutableArray<ClassSymbol> Classes { get; init; } = [];
     public ImmutableArray<MacroRecord> Macros { get; init; } = [];
     public ImmutableArray<DependencyEdge> Dependencies { get; init; } = [];
+
+    /// <summary>
+    /// The files this script reaches by PATH — <c>maps\mp\_utility::foo()</c> — as script-relative
+    /// paths without extension, deduplicated.
+    ///
+    /// Kept separate from <see cref="Dependencies"/> on purpose: a path call is not an import. The
+    /// Infinity Ward games reach a function by naming its file inline, with no <c>#include</c> at
+    /// all, so folding these into the dependency edges would make an unused import look used and
+    /// would misdirect the dependency rewrite. But they ARE how one file reaches another's
+    /// functions, so reference scoping has to see them.
+    /// </summary>
+    public ImmutableArray<string> PathCallTargets { get; init; } = [];
     public ImmutableArray<ReferenceEntry> References { get; init; } = [];
     public ImmutableArray<Diagnostic> Diagnostics { get; init; } = [];
 

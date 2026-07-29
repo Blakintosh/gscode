@@ -169,6 +169,30 @@ public sealed class ScriptDatabase
         }
     }
 
+    /// <summary>
+    /// The distinct files a script reaches by path call. Records do not keep the ParseResult, so
+    /// these are lifted out here or they are lost — and reference scoping on the merge dialects
+    /// needs them: a path call reaches another file's function without importing it.
+    /// </summary>
+    private static ImmutableArray<string> PathCallTargetsOf(ParseResult result)
+    {
+        if ( result.Extraction.PathCalls.Length == 0 )
+        {
+            return [];
+        }
+
+        HashSet<string> distinct = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( GSCode.Parser.Extraction.PathCallReference pathCall in result.Extraction.PathCalls )
+        {
+            if ( pathCall.Path.Length > 0 )
+            {
+                distinct.Add(pathCall.Path);
+            }
+        }
+
+        return [.. distinct];
+    }
+
     /// <summary>Builds the immutable record from a pipeline result.</summary>
     public static ScriptRecord BuildRecord(ParseResult result, ResolutionContext context, bool isDirty, string relativePath = "")
     {
@@ -226,6 +250,7 @@ public sealed class ScriptDatabase
             Classes = result.Extraction.Classes,
             Macros = macros.ToImmutable(),
             Dependencies = dependencies.ToImmutable(),
+            PathCallTargets = PathCallTargetsOf(result),
             References = result.Extraction.References,
             Diagnostics = result.AllDiagnostics,
             IsDirty = isDirty,

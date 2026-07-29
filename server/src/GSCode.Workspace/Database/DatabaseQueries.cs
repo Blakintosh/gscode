@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 
@@ -282,6 +283,89 @@ public static class DatabaseQueries
     /// Whether a record is in an asking file's <c>#include</c> merge scope: the file itself, or one
     /// of its included files. Paths compare in normalized script-relative form.
     /// </summary>
+    /// <summary>
+    /// Narrows references to the files that can actually REACH the declaring file, for the merge
+    /// dialects.
+    ///
+    /// Under <c>#include</c> a function carries no namespace, so every same-named function in the
+    /// workspace shares one key — 1,230 <c>main()</c>s in CoD4's animscripts. Unnarrowed, the count
+    /// and the peek report all of them for any one of them: not a large answer but a wrong one.
+    ///
+    /// A file reaches another's function three ways, and all three must count:
+    ///   1. it IS the declaring file;
+    ///   2. it <c>#include</c>s it, so the function merged into its scope and is called bare;
+    ///   3. it PATH-CALLS it — <c>animscripts\combat::main()</c> — which needs no import at all.
+    ///
+    /// Missing (3) is not a small error. The first attempt at this checked only imports, and
+    /// combat.gsc's main() went from 1,230 references to zero, because every one of its real callers
+    /// reaches it by path without importing it. Zero hides callers and reads as "this is dead",
+    /// which is worse than the noise it replaced.
+    ///
+    /// A no-op under <c>#using</c>: there the namespace is already part of the key, so the question
+    /// never arises and BO3 is untouched.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludeGraph(
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references,
+        string declaringRelativePath,
+        GameProfile? profile = null)
+    {
+        GameProfile game = profile ?? GameProfile.Active;
+        if ( game.ImportStyle != ImportStyle.Include || declaringRelativePath.Length == 0 )
+        {
+            return references;
+        }
+
+        string declaring = NormalizeScriptPath(declaringRelativePath);
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder kept =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
+        {
+            if ( CanReach(record, declaring) )
+            {
+                kept.Add((record, entry));
+            }
+        }
+
+        return kept.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether a file can reach a declaring file's functions: it is that file, imports it, or path-
+    /// calls it. The three ways a merge dialect makes another file's functions callable.
+    /// </summary>
+    public static bool Reaches(ScriptRecord record, string declaringRelativePath)
+    {
+        return CanReach(record, NormalizeScriptPath(declaringRelativePath));
+    }
+
+    private static bool CanReach(ScriptRecord record, string declaring)
+    {
+        if ( NormalizeScriptPath(record.RelativePath) == declaring )
+        {
+            return true;
+        }
+
+        foreach ( DependencyEdge edge in record.Dependencies )
+        {
+            if ( !edge.IsInsert && NormalizeScriptPath(edge.RawPath) == declaring )
+            {
+                return true;
+            }
+        }
+
+        foreach ( string target in record.PathCallTargets )
+        {
+            if ( NormalizeScriptPath(target) == declaring )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static bool IsInIncludeScope(
         string recordRelativePath,
         string selfRelativePath,

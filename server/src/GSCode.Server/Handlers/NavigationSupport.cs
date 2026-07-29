@@ -1,3 +1,5 @@
+using GSCode.Core;
+using GSCode.Core.Paths;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -112,6 +114,58 @@ public sealed class NavigationSupport
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         NavigationTarget target, SymbolKey key)
     {
-        return DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key);
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
+            DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key);
+
+        // Narrowing happens HERE, in the one query both the CodeLens count and the peek list run,
+        // so the number and the list cannot disagree. Scoping only the lens once produced a count of
+        // 0 beside a list of 1,970.
+        return DatabaseQueries.ScopeToIncludeGraph(all, DeclaringFile(target, key));
+    }
+
+    /// <summary>
+    /// The file whose declaration this key means FROM THIS DOCUMENT, or empty when that is not one
+    /// specific file.
+    ///
+    /// Under a merge dialect a function has no namespace, so the key alone names every same-named
+    /// function in the workspace; what disambiguates it is the asking file, which can only reach
+    /// declarations it owns, imports or path-calls. Resolving from the asking document therefore
+    /// answers both callers correctly with one rule: a CodeLens sits on a declaration and resolves
+    /// to the file it is already in, while find-references on a call resolves to the declaration
+    /// that call actually reaches.
+    ///
+    /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
+    /// recoverable and a confidently wrong narrow one is not.
+    /// </summary>
+    private string DeclaringFile(NavigationTarget target, SymbolKey key)
+    {
+        if ( key.Kind != SymbolKind.Function || GameProfile.Active.ImportStyle != ImportStyle.Include )
+        {
+            return "";
+        }
+
+        if ( !target.Store.TryGet(PathUtil.NormalizeAbsolute(target.Path), out ScriptRecord asking) )
+        {
+            return "";
+        }
+
+        string only = "";
+        foreach ( ResolvedFunction candidate in DatabaseQueries.LookupFunctions(
+            target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true) )
+        {
+            if ( !DatabaseQueries.Reaches(asking, candidate.Record.RelativePath) )
+            {
+                continue;
+            }
+
+            if ( only.Length > 0 && only != candidate.Record.RelativePath )
+            {
+                return "";
+            }
+
+            only = candidate.Record.RelativePath;
+        }
+
+        return only;
     }
 }

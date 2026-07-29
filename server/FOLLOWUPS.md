@@ -8,6 +8,26 @@ per-project `FOLDER.md` convention).
 
 ---
 
+## Final corpus sweep — triage
+
+Run across all five games after the bug-fix pass. **No crashes, every formatter gate clean, every
+parse budget met.** What follows is everything the sweep still reports, rated by severity and by
+ease of fix, easiest first.
+
+| What | Where | Severity | Ease | Notes |
+|---|---|---|:---:|---|
+| `error`, `add_object`, `warning` reported as unknown builtins | BO3 `scene_shared.csc/.gsc` | Low | **Easy** | Almost certainly real CSC builtins missing from `t7_api_csc.json`. Confirm against the site's library before adding |
+| ~~`print3d`, `debugstar` still reported~~ | BO3 `audio_shared.csc`, `util_shared.csc` | Low | **Easy** | **FIXED.** Both were added to the GSC library only; the hits are in **.csc**. Verified — present in `t7_api_gsc.json`, absent from `t7_api_csc.json` — and the entries are now copied across |
+| 7 script misses (`hide_for_target`, `triggerweakpointdamage`, …) | BO3 `_quadtank.gsc` and 3 others | Low | Medium | Calls into files the mod tools do not ship. Same class as `scripts\zm\_bb` below — our diagnostic is correct |
+| `gib.gsc(58)` / `gib.csc(35)` parse failure | BO3 | Low | Medium | Object-like macro invoked as `GET_GIB_BUNDLES()`. Fix is letting `ParsePostfixChain` accept `(`. Deliberately left — the game has shipped |
+| 6 × `5006 DevOnlyFunctionCalledFromRelease` | BO3, 5 files | **High** | Hard | Unchanged and still the only Error on shipped code. See its own section below |
+| WaW 8 / MW2 7 / CoD4 2 / BO1 2 parse failures | all four | None | — | Every one inspected: genuinely malformed files. Listed in `GAME_PROFILES.md` |
+
+**The API was NOT regenerated as part of this.** The five builtin candidates are a five-name data
+question, and regenerating rewrites fifteen files and invalidates every workspace cache through
+`ServerBuildIdentity`. Adding five verified names by hand is the smaller, more reviewable change —
+and the CSC/GSC split above is the thing to check first, since it explains four of the five.
+
 ## Backlog
 
 ### Function-not-found: BUILT, and what remains of it

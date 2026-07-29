@@ -236,10 +236,14 @@ Measured over the games' own script trees:
 | game | scripts | crashes | lex/parse failures | formatter sample |
 |------|--------:|--------:|-------------------:|-----------------:|
 | cod4 |     894 |       0 |      2 (0.22%)     | 250 clean |
-| waw  |   1,632 |       0 |      4 (0.25%)     | 250 clean |
+| waw  |   1,976 |       0 |      8 (0.40%)     | 250 clean |
 | mw2  |   1,479 |       0 |      7 (0.47%)     | 250 clean |
-| bo1  |   1,337 |       0 |      1 (0.07%)     | 250 clean |
+| bo1  |   2,960 |       0 |      2 (0.07%)     | 250 clean |
 | bo3  |     980 |       0 |      2 (0.20%)     | 250 clean |
+
+WaW and BO1 grew from 1,632 and 1,337 when the missing subfolders were merged in from the `t4`/`t5`
+script sets. Their failure RATES moved with the file count rather than against it, which is the
+point of recording a percentage as well as a count.
 
 Every remaining failure was inspected and is a **genuinely malformed file** that no compiler would
 accept either — not a grammar gap:

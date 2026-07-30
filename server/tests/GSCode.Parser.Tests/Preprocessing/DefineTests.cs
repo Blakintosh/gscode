@@ -155,4 +155,58 @@ public class DefineTests
         Assert.Equal(1, expanded.Provenance.RootSite!.Value.Start.Line);
         Assert.Equal(0, expanded.Provenance.DefinitionSite!.Value.Start.Line);
     }
+
+    // --- 2015: a function-like macro invoked with the wrong number of arguments ---
+
+    private static bool HasArgumentCountError(string source)
+    {
+        return PreprocessTestHelper.Run(source).Diagnostics
+            .Any(diagnostic => diagnostic.Code == GscDiagnosticCode.WrongMacroArgumentCount);
+    }
+
+    [Theory]
+    [InlineData("#define ADD( a, b ) ( a + b )\nx = ADD( 1 );\n")]
+    [InlineData("#define ADD( a, b ) ( a + b )\nx = ADD( 1, 2, 3 );\n")]
+    [InlineData("#define ADD( a, b ) ( a + b )\nx = ADD();\n")]
+    [InlineData("#define ONE( a ) ( a )\nx = ONE();\n")]
+    public void AMacroInvokedWithTheWrongCount(string source)
+    {
+        // EXACT, unlike a call to a script function, where passing fewer arguments than declared is
+        // legal and the rest are undefined. A macro is textual substitution: a parameter with no
+        // argument leaves its own name sitting in the expansion. So both directions are wrong here.
+        Assert.True(HasArgumentCountError(source));
+    }
+
+    [Theory]
+    [InlineData("#define ADD( a, b ) ( a + b )\nx = ADD( 1, 2 );\n")]
+    [InlineData("#define NONE() ( 0 )\nx = NONE();\n")]
+    [InlineData("#define ONE( a ) ( a )\nx = ONE( 5 );\n")]
+    public void AMacroInvokedCorrectly(string source)
+    {
+        Assert.False(HasArgumentCountError(source));
+    }
+
+    [Fact]
+    public void NoArgumentsIsZeroRatherThanOneEmptyOne()
+    {
+        // The collector always holds at least one group, so `NONE()` arrives as a single EMPTY group.
+        // Counting groups rather than recognising that case would read it as one argument and report
+        // every correct zero-argument invocation.
+        Assert.False(HasArgumentCountError("#define NONE() ( 0 )\nx = NONE();\n"));
+    }
+
+    [Fact]
+    public void AnArgumentMayItselfContainCommas()
+    {
+        // Commas inside nested parentheses belong to the inner expression, so this is ONE argument.
+        Assert.False(HasArgumentCountError("#define ONE( a ) ( a )\nx = ONE( f( 1, 2 ) );\n"));
+    }
+
+    [Fact]
+    public void AnObjectLikeMacroIsNotJudged()
+    {
+        // `PI` declares no parameter list, so a following `(` is the author's own parenthesis and
+        // there is no argument count to be wrong about.
+        Assert.False(HasArgumentCountError("#define PI 3.14\nx = PI;\ny = ( PI );\n"));
+    }
 }

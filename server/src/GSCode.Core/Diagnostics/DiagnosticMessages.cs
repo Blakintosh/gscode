@@ -33,6 +33,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.UnterminatedMacroArguments] = "The argument list for macro '{0}' is missing its closing ')'.",
         [GscDiagnosticCode.InactiveConditionalBranch] = "Inactive preprocessor branch; this code is excluded from the build.",
         [GscDiagnosticCode.InsertNotAHeader] = "'{0}' is not a header; '#insert' expects a '{1}' file.",
+        [GscDiagnosticCode.WrongMacroArgumentCount] = "Macro '{0}' takes {1} argument(s) but {2} were passed.",
 
         // Parsing
         [GscDiagnosticCode.ExpectedToken] = "Expected '{0}' but found '{1}'.",
@@ -49,11 +50,13 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.ExpectedNamespaceName] = "Expected a namespace name after '#namespace'.",
         [GscDiagnosticCode.InvalidAssignmentTarget] = "Cannot assign to {0} — assignment needs a variable, field or array element on the left.",
         [GscDiagnosticCode.AssignmentUsedAsCondition] = "This assigns to '{0}' and tests the assigned value; '==' compares. Wrap it in parentheses if the assignment is deliberate.",
+        [GscDiagnosticCode.MissingSemicolon] = "Expected ';' at the end of this statement.",
 
         // Extraction / per-file semantics
         [GscDiagnosticCode.UnknownPrecacheType] = "'{0}' is not a known #precache asset type.",
         [GscDiagnosticCode.ClientOnlyPrecacheType] = "'{0}' is a client-side asset type and can only be precached from a client script.",
         [GscDiagnosticCode.DuplicateParameter] = "Parameter '{0}' is declared more than once.",
+        [GscDiagnosticCode.VarargNotLastParameter] = "'...' must be the last entry in the parameter list.",
         [GscDiagnosticCode.WrongPrecacheArgumentCount] = "#precache type '{0}' expects {1} value(s) after the type but got {2}.",
         [GscDiagnosticCode.ConstructorHasParameters] = "Constructors cannot declare parameters.",
         [GscDiagnosticCode.DestructorHasParameters] = "Destructors cannot declare parameters.",
@@ -73,6 +76,11 @@ public static class DiagnosticMessages
         // kinds of name the author binds and never uses.
         [GscDiagnosticCode.UnusedBinding] = "{0} '{1}' is never used.",
         [GscDiagnosticCode.ClassInheritanceCycle] = "'{0}' inherits from itself through {1}.",
+        // Two codes rather than one, because the RULE differs by side: a builtin is validated
+        // by the engine at both bounds, while a script function accepts fewer arguments than it
+        // declares (the missing ones are undefined) and is only wrong when given too many.
+        [GscDiagnosticCode.TooManyArguments] = "'{0}' declares {1} parameter(s) but {2} were passed.",
+        [GscDiagnosticCode.WrongBuiltinArgumentCount] = "'{0}' needs at least {1} argument(s) but {2} were passed.",
 
         // Cross-file / workspace semantics
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
@@ -93,6 +101,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.DevOnlyFunctionCalledFromRelease] = "'{0}' is declared inside a '/# #/' dev block and will not exist in a release build.",
         [GscDiagnosticCode.UnreachableCode] = "Unreachable: the preceding '{0}' always leaves this block.",
         [GscDiagnosticCode.VariableNeverAssigned] = "'{0}' is read but never assigned in this function.",
+        [GscDiagnosticCode.VarargOutsideVarargFunction] = "'{0}' is only bound in a function declaring '...'; add it to the parameter list to use the pack here.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

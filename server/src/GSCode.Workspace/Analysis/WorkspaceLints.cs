@@ -111,6 +111,7 @@ public static class WorkspaceLints
         lints.AddRange(UnusedBindingLint.Analyze(result));
         lints.AddRange(VoidResultLint.Analyze(result, languageBuiltins));
         lints.AddRange(ClassCycleLint.Analyze(result, store, contextId));
+        lints.AddRange(ArgumentCountLint.Analyze(result, store, contextId, path, languageBuiltins));
         // One typer for both field rules: each of them runs the assignment inference, and the
         // walk is the expensive half.
         FlowTyper typer = new(languageBuiltins, objectFields);

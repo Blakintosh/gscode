@@ -690,6 +690,30 @@ public sealed class Preprocessor
         // Map by parameter name; missing arguments expand to nothing (engine behavior).
         arguments = new Dictionary<string, List<PToken>>(StringComparer.Ordinal);
         ImmutableArray<string> parameters = definition.Parameters ?? [];
+
+        // A macro's parameter list is EXACT, unlike a script function's. A function called with
+        // fewer arguments than it declares leaves the rest undefined, which is idiomatic; a macro
+        // invoked with fewer substitutes NOTHING for the missing one, so the expansion is silently
+        // malformed — `IS_TRUE( )` becomes `isdefined(  ) &&  `. An extra argument is simply
+        // dropped. Neither is ever intended, and the definition is right there to compare against,
+        // so unlike the builtin case there is no data-quality question.
+        //
+        // `collected` always holds at least one group, so `FOO()` arrives as one EMPTY group rather
+        // than as zero groups — counting the groups alone would read that as one argument.
+        int supplied = collected.Count == 1 && collected[0].Count == 0 ? 0 : collected.Count;
+
+        // Only when the list actually closed: an unterminated one is already reported, and its
+        // count is whatever the scan happened to reach.
+        if ( closed && supplied != parameters.Length )
+        {
+            AddDiagnostic(
+                frame,
+                frame.Tokens[openParenIndex].Range,
+                GscDiagnosticCode.WrongMacroArgumentCount,
+                definition.Name,
+                parameters.Length,
+                supplied);
+        }
         for ( int position = 0; position < parameters.Length; position++ )
         {
             arguments[parameters[position]] = position < collected.Count ? collected[position] : [];

@@ -29,6 +29,7 @@ public enum GscDiagnosticCode
     UnterminatedMacroArguments = 2012,
     InactiveConditionalBranch = 2013,
     InsertNotAHeader = 2014,
+    WrongMacroArgumentCount = 2015,
 
     // Parsing (3xxx)
     ExpectedToken = 3000,
@@ -46,6 +47,14 @@ public enum GscDiagnosticCode
     InvalidAssignmentTarget = 3012,
     AssignmentUsedAsCondition = 3013,
 
+    /// <summary>
+    /// A statement with no terminating <c>;</c>. Split out from <see cref="ExpectedToken"/> because
+    /// it is the one missing token whose report belongs somewhere OTHER than the token that revealed
+    /// it — see Parser.ReportMissingSemicolon — and because a distinct code lets it be recognised
+    /// without matching on message text.
+    /// </summary>
+    MissingSemicolon = 3014,
+
     // Extraction / per-file semantics (4xxx)
     UnknownPrecacheType = 4000,
     WrongPrecacheArgumentCount = 4001,
@@ -55,6 +64,14 @@ public enum GscDiagnosticCode
     DuplicateFunction = 4005,
     ClientOnlyPrecacheType = 4006,
     DuplicateParameter = 4007,
+
+    /// <summary>
+    /// <c>...</c> written anywhere but last in a parameter list — <c>f( ..., a )</c>, or a second
+    /// <c>...</c>. It marks the point where the named parameters stop and the pack begins, so a
+    /// parameter after it can never be bound by position: the pack has already swallowed everything
+    /// the caller passed.
+    /// </summary>
+    VarargNotLastParameter = 4008,
 
     // Cross-file / workspace semantics (5xxx)
     NamespaceNotImported = 5000,
@@ -115,4 +132,15 @@ public enum GscDiagnosticCode
     VoidResultAssigned = 5019,
     UnusedBinding = 5020,
     ClassInheritanceCycle = 5021,
+    TooManyArguments = 5022,
+    WrongBuiltinArgumentCount = 5023,
+
+    /// <summary>
+    /// The parameter-pack name (BO3's <c>vararg</c>) read in a function that does not declare
+    /// <c>...</c>, so nothing ever binds it. Reported separately from
+    /// <see cref="VariableNeverAssigned"/>, which would say the same thing far less usefully: the
+    /// fix is not to assign the name but to add <c>...</c> to the declaration, and only a message
+    /// that knows what the name IS can say so.
+    /// </summary>
+    VarargOutsideVarargFunction = 5024,
 }

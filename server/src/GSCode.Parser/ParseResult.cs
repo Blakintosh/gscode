@@ -39,12 +39,14 @@ public static class ScriptAnalysis
         SourceText text,
         IInsertProvider insertProvider,
         NameTable names,
-        GameProfile? profile = null)
+        GameProfile? profile = null,
+        IHeaderMacroCache? headerCache = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
 
         LexResult lexed = Lexer.Lex(text, game);
-        PreprocessResult preprocessed = Preprocessor.Process(filePath, lexed.Tokens, text, insertProvider, names, game);
+        PreprocessResult preprocessed =
+            Preprocessor.Process(filePath, lexed.Tokens, text, insertProvider, names, game, headerCache);
         ParseTree tree = Syntax.Parser.Parse(preprocessed.Tokens, game);
         ExtractionResult extraction = SymbolExtractor.Extract(filePath, tree, preprocessed, lexed.Tokens, text, names, game);
 

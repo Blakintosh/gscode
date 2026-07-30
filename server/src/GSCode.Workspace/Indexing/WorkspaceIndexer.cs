@@ -104,12 +104,17 @@ public sealed class WorkspaceIndexer
     private IReadOnlyDictionary<string, ScriptRecord> _restored = new Dictionary<string, ScriptRecord>();
 
     /// <summary>Reads the current resolver each call, so resolver swaps take effect immediately.</summary>
-    public WorkspaceIndexer(ScriptDatabase database, Func<PathResolver> resolverProvider, IFileSystem fileSystem, NameTable names)
+    private readonly IHeaderMacroCache? _headerCache;
+
+    public WorkspaceIndexer(
+        ScriptDatabase database, Func<PathResolver> resolverProvider, IFileSystem fileSystem, NameTable names,
+        IHeaderMacroCache? headerCache = null)
     {
         _database = database;
         _resolverProvider = resolverProvider;
         _fileSystem = fileSystem;
         _names = names;
+        _headerCache = headerCache;
     }
 
     /// <summary>Enables persistent caching: unchanged files restore from <paramref name="restored"/>, fresh analyses are written to <paramref name="cache"/>.</summary>
@@ -263,7 +268,9 @@ public sealed class WorkspaceIndexer
             ScriptAnalysis.LanguageFromPath(normalized),
             SourceText.From(content),
             new CachingInsertProvider(this, context),
-            _names);
+            _names,
+            profile: null,
+            headerCache: _headerCache);
 
         string relativePath = Resolver.GetScriptRelativePath(normalized, context);
         ScriptRecord record = _database.Commit(result, context, isDirty: false, relativePath);

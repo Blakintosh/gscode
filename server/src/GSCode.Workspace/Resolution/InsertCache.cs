@@ -32,7 +32,7 @@ namespace GSCode.Workspace.Resolution;
 /// against a read plus a lex, and it is self-correcting whatever else goes wrong.
 /// </para>
 /// </remarks>
-public sealed class InsertCache
+public sealed class InsertCache : IHeaderMacroCache
 {
     private sealed record Entry(InsertedFile File, DateTime LastWriteUtc);
 
@@ -58,20 +58,43 @@ public sealed class InsertCache
             return null;
         }
 
+        // The file moved, so whatever it used to contribute is no longer what it contributes.
+        _contributions.TryRemove(resolvedPath, out _);
         _entries[resolvedPath] = new Entry(file, stamp);
         return file;
+    }
+
+    /// <summary>
+    /// What a header CONTRIBUTES once walked - the macros it defines and the insert edges it
+    /// carries - so the next file inserting it need not walk it again. Kept beside the lexed
+    /// tokens because it is the same header, the same key and the same lifetime; a header whose
+    /// timestamp moved drops both together.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, HeaderContribution> _contributions =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    public bool TryGet(string resolvedPath, out HeaderContribution contribution)
+    {
+        return _contributions.TryGetValue(resolvedPath, out contribution!);
+    }
+
+    public void Store(string resolvedPath, HeaderContribution contribution)
+    {
+        _contributions[resolvedPath] = contribution;
     }
 
     /// <summary>Drops one header, for a caller that knows it changed and will not wait for the stat.</summary>
     public void Invalidate(string resolvedPath)
     {
         _entries.TryRemove(resolvedPath, out _);
+        _contributions.TryRemove(resolvedPath, out _);
     }
 
     /// <summary>Drops everything — used when the resolution roots change, so paths mean new files.</summary>
     public void Clear()
     {
         _entries.Clear();
+        _contributions.Clear();
     }
 
     /// <summary>How many headers are held. For diagnostics and tests.</summary>

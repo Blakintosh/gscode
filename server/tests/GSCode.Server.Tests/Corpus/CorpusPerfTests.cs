@@ -51,7 +51,7 @@ public class CorpusPerfTests
         foreach ( string path in CorpusFixture.Scripts() )
         {
             ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), new PhysicalFileSystem(), CorpusFixture.Inserts);
-            timings.Add(Time(path, GameProfile.BlackOps3, inserts, names, () => CorpusFixture.Analyze(path, resolver, names)));
+            timings.Add(Time(path, GameProfile.BlackOps3, inserts, names, CorpusFixture.Inserts, () => CorpusFixture.Analyze(path, resolver, names)));
         }
 
         Report("bo3", timings, CorpusFixture.RawRoot!, CorpusFixture.Inserts.Count);
@@ -76,7 +76,7 @@ public class CorpusPerfTests
             foreach ( string path in GameCorpusFixture.Scripts(corpus) )
             {
                 ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), new PhysicalFileSystem(), GameCorpusFixture.Inserts);
-                timings.Add(Time(path, corpus.Profile, inserts, names, () => GameCorpusFixture.Analyze(corpus, path, resolver, names)));
+                timings.Add(Time(path, corpus.Profile, inserts, names, GameCorpusFixture.Inserts, () => GameCorpusFixture.Analyze(corpus, path, resolver, names)));
             }
 
             Report(corpus.Profile.ShortName, timings, corpus.RawRoot, GameCorpusFixture.Inserts.Count);
@@ -84,7 +84,8 @@ public class CorpusPerfTests
     }
 
     private static PerfReport.Item Time(
-        string path, GameProfile game, IInsertProvider inserts, NameTable names, Func<ParseResult> analyse)
+        string path, GameProfile game, IInsertProvider inserts, NameTable names,
+        IHeaderMacroCache headerCache, Func<ParseResult> analyse)
     {
         long bytes = new FileInfo(path).Length;
 
@@ -111,7 +112,7 @@ public class CorpusPerfTests
         double lex = phase.Elapsed.TotalMilliseconds;
 
         phase.Restart();
-        PreprocessResult preprocessed = Preprocessor.Process(path, lexed.Tokens, text, inserts, names, game);
+        PreprocessResult preprocessed = Preprocessor.Process(path, lexed.Tokens, text, inserts, names, game, headerCache);
         double preprocess = phase.Elapsed.TotalMilliseconds;
 
         phase.Restart();

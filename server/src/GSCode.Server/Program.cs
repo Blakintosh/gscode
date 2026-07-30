@@ -98,7 +98,8 @@ LanguageServer server = await LanguageServer.From(options =>
                 InsertCache inserts = provider.GetRequiredService<InsertCache>();
                 return new DocumentStore(
                     path => new ResolverInsertProvider(holder.Current, holder.Current.GetContext(path), files, inserts),
-                    provider.GetRequiredService<NameTable>());
+                    provider.GetRequiredService<NameTable>(),
+                    inserts);
             });
 
             services.AddSingleton(provider =>
@@ -129,7 +130,8 @@ LanguageServer server = await LanguageServer.From(options =>
                 provider.GetRequiredService<ScriptDatabase>(),
                 () => resolverHolder.Current,
                 provider.GetRequiredService<IFileSystem>(),
-                provider.GetRequiredService<NameTable>()));
+                provider.GetRequiredService<NameTable>(),
+                provider.GetRequiredService<InsertCache>()));
 
             services.AddSingleton(provider => new WatchedFileUpdater(
                 provider.GetRequiredService<ScriptDatabase>(),

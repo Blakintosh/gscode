@@ -50,10 +50,15 @@ public sealed class DocumentStore
     private readonly Func<string, IInsertProvider> _insertProviderFactory;
     private readonly NameTable _names;
 
-    public DocumentStore(Func<string, IInsertProvider> insertProviderFactory, NameTable names)
+    private readonly IHeaderMacroCache? _headerCache;
+
+    public DocumentStore(
+        Func<string, IInsertProvider> insertProviderFactory, NameTable names,
+        IHeaderMacroCache? headerCache = null)
     {
         _insertProviderFactory = insertProviderFactory;
         _names = names;
+        _headerCache = headerCache;
     }
 
     public OpenDocument Open(string path, string text, int version)
@@ -114,7 +119,9 @@ public sealed class DocumentStore
             document.Language,
             document.Text,
             _insertProviderFactory(document.Path),
-            _names);
+            _names,
+            profile: null,
+            headerCache: _headerCache);
 
         document.LatestResult = result;
         document.AnalyzedVersion = version;

@@ -31,6 +31,15 @@ public sealed class Preprocessor
 
     // Guards: inserts currently on the splice stack (cycle detection), and macros
     // currently being expanded (self-recursion is left unexpanded, like C).
+    private readonly IHeaderMacroCache? _headerCache;
+
+    /// <summary>
+    /// Non-null while an inserted header is being walked for the FIRST time: every macro it
+    /// defines is appended here, in order, so the walk can be replayed for the next file that
+    /// inserts the same header instead of repeated.
+    /// </summary>
+    private List<MacroDefinition>? _recordingDefinitions;
+
     private readonly HashSet<string> _activeInsertPaths = new(StringComparer.Ordinal);
     private readonly HashSet<string> _expansionStack = new(StringComparer.Ordinal);
 
@@ -38,12 +47,14 @@ public sealed class Preprocessor
     private sealed record FileFrame(ImmutableArray<Token> Tokens, SourceText Text, string? SourceFile, TextRange? RootSite, int Depth);
 
     private Preprocessor(
-        string rootFilePath, IInsertProvider insertProvider, NameTable names, GameProfile profile)
+        string rootFilePath, IInsertProvider insertProvider, NameTable names, GameProfile profile,
+        IHeaderMacroCache? headerCache = null)
     {
         _rootFilePath = rootFilePath;
         _insertProvider = insertProvider;
         _names = names;
         _profile = profile;
+        _headerCache = headerCache;
     }
 
     /// <summary>Preprocesses a lexed file into the parse stream + macro/insert knowledge.</summary>
@@ -53,9 +64,10 @@ public sealed class Preprocessor
         SourceText text,
         IInsertProvider insertProvider,
         NameTable names,
-        GameProfile? profile = null)
+        GameProfile? profile = null,
+        IHeaderMacroCache? headerCache = null)
     {
-        Preprocessor preprocessor = new(rootFilePath, insertProvider, names, profile ?? GameProfile.Active);
+        Preprocessor preprocessor = new(rootFilePath, insertProvider, names, profile ?? GameProfile.Active, headerCache);
 
         FileFrame rootFrame = new(tokens, text, SourceFile: null, RootSite: null, Depth: 0);
         preprocessor.ProcessRange(rootFrame, 0, tokens.Length, preprocessor._output);
@@ -201,7 +213,9 @@ public sealed class Preprocessor
             index++;
         }
 
-        _macros.Define(new MacroDefinition(name, frame.SourceFile, nameToken.Range, parameters, [.. body], documentation));
+        MacroDefinition definition = new(name, frame.SourceFile, nameToken.Range, parameters, [.. body], documentation);
+        _macros.Define(definition);
+        _recordingDefinitions?.Add(definition);
         return index;
     }
 
@@ -338,10 +352,61 @@ public sealed class Preprocessor
 
         _inserts.Add(new InsertEdge(rawPath, inserted.Path, pathRange, frame.SourceFile));
 
+        // Already known: replay what this header contributes instead of walking it again. The
+        // definitions go back in the order they were made, so a redefinition still shadows what
+        // it shadowed, and the nested insert edges come with them because dependency tracking
+        // needs them whether or not the walk happened.
+        if ( _headerCache is not null
+            && _headerCache.TryGet(inserted.Path, out HeaderContribution known) )
+        {
+            foreach ( MacroDefinition definition in known.Definitions )
+            {
+                _macros.Define(definition);
+                _recordingDefinitions?.Add(definition);
+            }
+
+            _inserts.AddRange(known.Inserts);
+            return index;
+        }
+
+        // First time: walk it, recording what it contributes. The counters bracket the walk so
+        // the result is only kept when the header behaved like a macro bank and nothing else -
+        // see below.
+        int outputBefore = sink.Count;
+        int diagnosticsBefore = _diagnostics.Count;
+        int invocationsBefore = _invocations.Count;
+        int insertsBefore = _inserts.Count;
+
+        List<MacroDefinition> recorded = [];
+        List<MacroDefinition>? outerRecording = _recordingDefinitions;
+        _recordingDefinitions = recorded;
+
         _activeInsertPaths.Add(inserted.Path);
         FileFrame insertedFrame = new(inserted.Tokens, inserted.Text, inserted.Path, rootSite, frame.Depth + 1);
         ProcessRange(insertedFrame, 0, inserted.Tokens.Length, sink);
         _activeInsertPaths.Remove(inserted.Path);
+
+        _recordingDefinitions = outerRecording;
+
+        // A definition recorded inside this header also belongs to whatever header inserted it.
+        outerRecording?.AddRange(recorded);
+
+        // Cached ONLY when the header emitted no tokens, reported nothing and invoked nothing -
+        // that is, when its whole effect was to define macros. Anything else is per-includer:
+        // emitted tokens land in that file's stream, and a diagnostic or an invocation carries
+        // the invoking site's range, which differs for every file that inserts it. Those headers
+        // keep being walked, exactly as before. BO3's are all macro banks, so in practice this
+        // refuses nothing.
+        bool pureMacroBank = sink.Count == outputBefore
+            && _diagnostics.Count == diagnosticsBefore
+            && _invocations.Count == invocationsBefore;
+
+        if ( _headerCache is not null && pureMacroBank )
+        {
+            ImmutableArray<InsertEdge> nested =
+                [.. _inserts.Skip(insertsBefore).Take(_inserts.Count - insertsBefore)];
+            _headerCache.Store(inserted.Path, new HeaderContribution([.. recorded], nested));
+        }
 
         return index;
     }

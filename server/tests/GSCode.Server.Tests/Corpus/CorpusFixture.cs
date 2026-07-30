@@ -95,6 +95,7 @@ internal static class CorpusFixture
             ScriptAnalysis.LanguageFromPath(path),
             SourceText.From(File.ReadAllText(path)),
             inserts,
-            names);
+            names,
+            headerCache: Inserts);
     }
 }

@@ -114,6 +114,7 @@ internal static class GameCorpusFixture
             SourceText.From(File.ReadAllText(path)),
             inserts,
             names,
-            corpus.Profile);
+            corpus.Profile,
+            Inserts);
     }
 }

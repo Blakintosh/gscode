@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
+using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Analysis;
@@ -42,15 +43,23 @@ public static class CaseLabelLint
             case null:
                 return;
             case SwitchNode switchNode:
+            {
+                // Per SWITCH, not per group: `case 1:` in one group and `case 1:` in another is the
+                // same collision, and grouping is a formatting choice rather than a scope.
+                HashSet<string> seenLabels = new(StringComparer.Ordinal);
+
                 foreach ( CaseGroupNode group in switchNode.Cases )
                 {
                     foreach ( ExprNode? label in group.Labels )
                     {
                         // A null label is `default:`, which has no value to check.
-                        if ( label is not null )
+                        if ( label is null )
                         {
-                            Inspect(label, diagnostics);
+                            continue;
                         }
+
+                        Inspect(label, diagnostics);
+                        InspectDuplicate(label, seenLabels, diagnostics);
                     }
 
                     foreach ( AstNode statement in group.Statements )
@@ -60,6 +69,7 @@ public static class CaseLabelLint
                 }
 
                 return;
+            }
             case FunctionNode function:
                 Walk(function.Body, diagnostics);
                 return;
@@ -110,6 +120,37 @@ public static class CaseLabelLint
             default:
                 return;
         }
+    }
+
+    /// <summary>
+    /// Reports a label the switch has already seen. Only the first can ever match, so the second
+    /// branch is unreachable — the same class of finding as 5015, but invisible in the code's shape
+    /// because nothing about the second `case` looks wrong.
+    ///
+    /// Compared by the label's printed form, and only for labels that are already known constant:
+    /// 5011 speaks for anything else, and comparing two expressions this rule cannot evaluate would
+    /// be guessing. Case-SENSITIVE, because a string label is matched by value and `"A"` and `"a"`
+    /// are different events.
+    /// </summary>
+    private static void InspectDuplicate(
+        ExprNode label, HashSet<string> seenLabels, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        if ( !IsConstant(label) )
+        {
+            return;
+        }
+
+        string printed = AstPrinter.Print(label);
+        if ( seenLabels.Add(printed) )
+        {
+            return;
+        }
+
+        diagnostics.Add(Diagnostic.Create(
+            label.Range,
+            DiagnosticSeverity.Warning,
+            GscDiagnosticCode.DuplicateCaseLabel,
+            printed));
     }
 
     private static void Inspect(ExprNode label, ImmutableArray<Diagnostic>.Builder diagnostics)

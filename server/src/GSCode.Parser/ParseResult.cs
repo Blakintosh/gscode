@@ -44,7 +44,7 @@ public static class ScriptAnalysis
         GameProfile game = profile ?? GameProfile.Active;
 
         LexResult lexed = Lexer.Lex(text, game);
-        PreprocessResult preprocessed = Preprocessor.Process(filePath, lexed.Tokens, text, insertProvider, names);
+        PreprocessResult preprocessed = Preprocessor.Process(filePath, lexed.Tokens, text, insertProvider, names, game);
         ParseTree tree = Syntax.Parser.Parse(preprocessed.Tokens, game);
         ExtractionResult extraction = SymbolExtractor.Extract(filePath, tree, preprocessed, lexed.Tokens, text, names, game);
 

@@ -19,6 +19,9 @@ public sealed class Preprocessor
     private readonly IInsertProvider _insertProvider;
     private readonly NameTable _names;
 
+    /// <summary>Only for the header-extension rule; everything else here is dialect-independent.</summary>
+    private readonly GameProfile _profile;
+
     private readonly MacroTable _macros = new();
     private readonly List<PToken> _output = [];
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
@@ -34,11 +37,13 @@ public sealed class Preprocessor
     /// <summary>One file being walked: its tokens, its text, and how it anchors to the root file.</summary>
     private sealed record FileFrame(ImmutableArray<Token> Tokens, SourceText Text, string? SourceFile, TextRange? RootSite, int Depth);
 
-    private Preprocessor(string rootFilePath, IInsertProvider insertProvider, NameTable names)
+    private Preprocessor(
+        string rootFilePath, IInsertProvider insertProvider, NameTable names, GameProfile profile)
     {
         _rootFilePath = rootFilePath;
         _insertProvider = insertProvider;
         _names = names;
+        _profile = profile;
     }
 
     /// <summary>Preprocesses a lexed file into the parse stream + macro/insert knowledge.</summary>
@@ -47,9 +52,10 @@ public sealed class Preprocessor
         ImmutableArray<Token> tokens,
         SourceText text,
         IInsertProvider insertProvider,
-        NameTable names)
+        NameTable names,
+        GameProfile? profile = null)
     {
-        Preprocessor preprocessor = new(rootFilePath, insertProvider, names);
+        Preprocessor preprocessor = new(rootFilePath, insertProvider, names, profile ?? GameProfile.Active);
 
         FileFrame rootFrame = new(tokens, text, SourceFile: null, RootSite: null, Depth: 0);
         preprocessor.ProcessRange(rootFrame, 0, tokens.Length, preprocessor._output);
@@ -293,6 +299,18 @@ public sealed class Preprocessor
         if ( IsIllegalInsertPath(rawPath) )
         {
             AddDiagnostic(frame, pathRange, GscDiagnosticCode.InvalidInsertPath, rawPath);
+            return index;
+        }
+
+        // `#insert` takes a HEADER. Naming a script instead resolves to a real file and then pastes
+        // its function declarations into the middle of this one, so the errors surface far from the
+        // directive and look nothing like the cause. Reported and skipped rather than reported and
+        // inserted, because inserting it is what produces the confusing wreckage.
+        if ( _profile.HeaderExtension.Length > 0
+            && !rawPath.EndsWith(_profile.HeaderExtension, StringComparison.OrdinalIgnoreCase) )
+        {
+            AddDiagnostic(
+                frame, pathRange, GscDiagnosticCode.InsertNotAHeader, rawPath, _profile.HeaderExtension);
             return index;
         }
 

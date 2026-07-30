@@ -32,6 +32,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.MissingMacroArguments] = "Macro '{0}' expects an argument list.",
         [GscDiagnosticCode.UnterminatedMacroArguments] = "The argument list for macro '{0}' is missing its closing ')'.",
         [GscDiagnosticCode.InactiveConditionalBranch] = "Inactive preprocessor branch; this code is excluded from the build.",
+        [GscDiagnosticCode.InsertNotAHeader] = "'{0}' is not a header; '#insert' expects a '{1}' file.",
 
         // Parsing
         [GscDiagnosticCode.ExpectedToken] = "Expected '{0}' but found '{1}'.",
@@ -47,10 +48,12 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.ExpectedScriptPath] = "Expected a script path after '{0}'.",
         [GscDiagnosticCode.ExpectedNamespaceName] = "Expected a namespace name after '#namespace'.",
         [GscDiagnosticCode.InvalidAssignmentTarget] = "Cannot assign to {0} — assignment needs a variable, field or array element on the left.",
+        [GscDiagnosticCode.AssignmentUsedAsCondition] = "This assigns to '{0}' and tests the assigned value; '==' compares. Wrap it in parentheses if the assignment is deliberate.",
 
         // Extraction / per-file semantics
         [GscDiagnosticCode.UnknownPrecacheType] = "'{0}' is not a known #precache asset type.",
         [GscDiagnosticCode.ClientOnlyPrecacheType] = "'{0}' is a client-side asset type and can only be precached from a client script.",
+        [GscDiagnosticCode.DuplicateParameter] = "Parameter '{0}' is declared more than once.",
         [GscDiagnosticCode.WrongPrecacheArgumentCount] = "#precache type '{0}' expects {1} value(s) after the type but got {2}.",
         [GscDiagnosticCode.ConstructorHasParameters] = "Constructors cannot declare parameters.",
         [GscDiagnosticCode.DestructorHasParameters] = "Destructors cannot declare parameters.",
@@ -63,6 +66,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.CaseUndefined] =
             "'case undefined' never matches — a switch compares values, so this branch is unreachable.",
         [GscDiagnosticCode.NonConstantCaseLabel] = "A case label must be a constant value.",
+        [GscDiagnosticCode.DuplicateCaseLabel] = "'{0}' is already a case label in this switch; only the first can ever match.",
 
         // Cross-file / workspace semantics
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",

@@ -28,6 +28,7 @@ public enum GscDiagnosticCode
     MissingMacroArguments = 2011,
     UnterminatedMacroArguments = 2012,
     InactiveConditionalBranch = 2013,
+    InsertNotAHeader = 2014,
 
     // Parsing (3xxx)
     ExpectedToken = 3000,
@@ -43,6 +44,7 @@ public enum GscDiagnosticCode
     ExpectedScriptPath = 3010,
     ExpectedNamespaceName = 3011,
     InvalidAssignmentTarget = 3012,
+    AssignmentUsedAsCondition = 3013,
 
     // Extraction / per-file semantics (4xxx)
     UnknownPrecacheType = 4000,
@@ -52,6 +54,7 @@ public enum GscDiagnosticCode
     NonValueDefaultParameter = 4004,
     DuplicateFunction = 4005,
     ClientOnlyPrecacheType = 4006,
+    DuplicateParameter = 4007,
 
     // Cross-file / workspace semantics (5xxx)
     NamespaceNotImported = 5000,
@@ -107,4 +110,5 @@ public enum GscDiagnosticCode
     BuiltinFunctionNotFound = 5014,
     UnreachableCode = 5015,
     VariableNeverAssigned = 5016,
+    DuplicateCaseLabel = 5017,
 }

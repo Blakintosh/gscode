@@ -148,6 +148,47 @@ public sealed partial class Parser
     }
 
     /// <summary>
+    /// Reports `if ( x = 5 )` — an assignment where a comparison was almost certainly meant.
+    ///
+    /// GSC accepts it: the assignment happens and its value is tested, so the mistake is silent and
+    /// the branch reads as though it compared. `==` is what was wanted virtually every time.
+    ///
+    /// Parentheses are the escape hatch, as they are in every C-family compiler that reports this:
+    /// `if ( ( x = next() ) )` says the assignment is deliberate, because a ParenNode wraps it and
+    /// the check only looks at a BARE assignment.
+    /// </summary>
+    private void CheckConditionIsNotAnAssignment(ExprNode condition)
+    {
+        if ( condition is not AssignmentNode assignment )
+        {
+            return;
+        }
+
+        // Compound forms (`+=`, `|=`) are not plausible `==` typos, so reporting them would be
+        // noise; only a bare `=` is the mistake this describes.
+        if ( assignment.Operator != TokenKind.Assign )
+        {
+            return;
+        }
+
+        AddError(
+            GscDiagnosticCode.AssignmentUsedAsCondition,
+            assignment.Range,
+            DescribeAssignmentTarget(assignment.Target));
+    }
+
+    /// <summary>The assigned name, for the message. Falls back to a description of the shape.</summary>
+    private static string DescribeAssignmentTarget(ExprNode target)
+    {
+        return target switch
+        {
+            IdentifierNode identifier => identifier.Token.Text,
+            MemberNode member => member.NameToken.Text,
+            _ => "this",
+        };
+    }
+
+    /// <summary>
     /// Skips to the next statement boundary; consumes a found ';'. The sync check runs
     /// BEFORE any advance (a statement keyword like 'return' must survive recovery);
     /// callers have always consumed at least one token first, so progress holds.
@@ -225,6 +266,7 @@ public sealed partial class Parser
         PToken keyword = Advance();
         Expect(TokenKind.OpenParen, "(");
         ExprNode condition = ParseExpression();
+        CheckConditionIsNotAnAssignment(condition);
         Expect(TokenKind.CloseParen, ")");
 
         AstNode thenBranch = ParseStatement();
@@ -243,6 +285,7 @@ public sealed partial class Parser
         PToken keyword = Advance();
         Expect(TokenKind.OpenParen, "(");
         ExprNode condition = ParseExpression();
+        CheckConditionIsNotAnAssignment(condition);
         Expect(TokenKind.CloseParen, ")");
         AstNode body = ParseStatement();
 
@@ -256,6 +299,7 @@ public sealed partial class Parser
         Expect(TokenKind.While, "while");
         Expect(TokenKind.OpenParen, "(");
         ExprNode condition = ParseExpression();
+        CheckConditionIsNotAnAssignment(condition);
         Expect(TokenKind.CloseParen, ")");
         Expect(TokenKind.Semicolon, ";");
 
@@ -280,6 +324,7 @@ public sealed partial class Parser
         if ( Kind != TokenKind.Semicolon )
         {
             condition = ParseExpression();
+            CheckConditionIsNotAnAssignment(condition);
         }
 
         Expect(TokenKind.Semicolon, ";");

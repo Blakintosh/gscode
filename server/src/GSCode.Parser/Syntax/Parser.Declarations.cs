@@ -376,6 +376,21 @@ public sealed partial class Parser
         }
 
         Expect(TokenKind.CloseParen, ")");
+
+        // A repeated name is unreachable rather than ambiguous: every call binds the later one, so
+        // the earlier parameter can never be read and one of the two arguments is silently lost.
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( ParameterNode parameter in parameters )
+        {
+            if ( !seen.Add(parameter.NameToken.Text) )
+            {
+                AddError(
+                    GscDiagnosticCode.DuplicateParameter,
+                    parameter.NameToken.RootRange,
+                    parameter.NameToken.Text);
+            }
+        }
+
         return parameters.ToImmutable();
     }
 

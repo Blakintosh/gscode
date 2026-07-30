@@ -95,4 +95,44 @@ public class CaseLabelLintTests
 
         Assert.Equal(GscDiagnosticCode.CaseUndefined, Assert.Single(CaseLabelLint.Analyze(result)).Code);
     }
+
+    // --- 5017: a label the switch already has ---
+
+    [Fact]
+    public void ALabelTheSwitchAlreadyHas()
+    {
+        // Only the first can ever match, so the second branch is unreachable — the same class of
+        // finding as 5015, but invisible in the code's shape: nothing about the second `case` looks
+        // wrong on its own.
+        Assert.Contains(
+            Lint("        case 1:\n            break;\n        case 1:\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.DuplicateCaseLabel);
+    }
+
+    [Fact]
+    public void DuplicatesAreFoundAcrossCaseGroups()
+    {
+        // Grouping is a formatting choice rather than a scope, so the check spans the whole switch.
+        Assert.Contains(
+            Lint("        case \"a\":\n        case \"b\":\n            break;\n        case \"a\":\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.DuplicateCaseLabel);
+    }
+
+    [Fact]
+    public void StringLabelsAreComparedCaseSensitively()
+    {
+        // A string label is matched by VALUE, so "A" and "a" are different events — unlike a
+        // function name, which GSC resolves case-insensitively.
+        Assert.DoesNotContain(
+            Lint("        case \"A\":\n            break;\n        case \"a\":\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.DuplicateCaseLabel);
+    }
+
+    [Fact]
+    public void DistinctLabelsAndDefaultAreFine()
+    {
+        Assert.DoesNotContain(
+            Lint("        case 1:\n            break;\n        case 2:\n            break;\n        default:\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.DuplicateCaseLabel);
+    }
 }

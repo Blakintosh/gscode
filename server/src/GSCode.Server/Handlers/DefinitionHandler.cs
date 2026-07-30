@@ -114,16 +114,16 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     }
 
     /// <summary>
-    /// On a merge dialect (#include), narrows definitions to the file the call actually reaches. A
-    /// path call (<c>maps\x::foo()</c>) names ONE file, so it pins to that; an unqualified call
-    /// prefers the asking file's include scope (itself + its #included files). Either way it is a
-    /// PREFERENCE — the full set comes back when nothing matches, so a missing #include still
-    /// resolves. BO3 (#using) qualifies by namespace and needs no scoping.
+    /// On a merge dialect, narrows definitions to the file the call actually reaches. A path call
+    /// (<c>maps\x::foo()</c>) names ONE file, so it pins to that; an unqualified call prefers the
+    /// asking file's include scope (itself + its #included files). Either way it is a PREFERENCE —
+    /// the full set comes back when nothing matches, so a missing #include still resolves. A
+    /// namespace-driven dialect (BO3) already qualifies by namespace and needs no scoping.
     /// </summary>
     private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludes(
         NavigationTarget target, PositionHit hit, ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> definitions)
     {
-        if ( GameProfile.Active.ImportStyle != ImportStyle.Include )
+        if ( GameProfile.Active.ResolvesByNamespace )
         {
             return definitions;
         }

@@ -269,6 +269,41 @@ public class ExtractionTests
     }
 
     [Fact]
+    public void References_ClassDefinitionAndUseShareOneKey()
+    {
+        // A class name is GLOBAL in T7 — `new Throttle()` names it bare, and the language has no
+        // `ns::Throttle` to qualify one with — so its key carries no namespace on either side.
+        //
+        // The definition used to be keyed under the file's namespace while every use was keyed under
+        // none, so the two could never meet: go-to-definition on `new Throttle()` found nothing, and
+        // the CodeLens over `class Throttle` counted no references. Asserted together here because
+        // the bug was not in either key on its own, it was in the pair disagreeing.
+        ParseResult result = Analyze(
+            "#namespace throttle_shared;\n\nclass Throttle\n{\n}\n\nfunction f()\n{\n\tlevel.t = new Throttle();\n}\n");
+
+        SymbolKey key = new(null, "throttle", SymbolKind.Class);
+        List<ReferenceEntry> references = [.. result.Extraction.References];
+
+        Assert.Contains(references, entry => entry.Key == key && entry.Kind == ReferenceKind.Definition);
+        Assert.Contains(references, entry => entry.Key == key && entry.Kind == ReferenceKind.ClassUse);
+    }
+
+    [Fact]
+    public void References_AParentClassSharesThatSameKey()
+    {
+        // `class Derived : Throttle` is the other way a class is named, and it has to resolve to the
+        // same declaration `new Throttle()` does.
+        ParseResult result = Analyze(
+            "#namespace a;\n\nclass Throttle\n{\n}\n\nclass Derived : Throttle\n{\n}\n");
+
+        SymbolKey key = new(null, "throttle", SymbolKind.Class);
+        List<ReferenceEntry> references = [.. result.Extraction.References];
+
+        Assert.Contains(references, entry => entry.Key == key && entry.Kind == ReferenceKind.Definition);
+        Assert.Contains(references, entry => entry.Key == key && entry.Kind == ReferenceKind.ClassUse);
+    }
+
+    [Fact]
     public void References_LiteralsWithCaseRules()
     {
         ParseResult result = Analyze("function f()\n{\nself notify(\"Death_Event\");\nx = #\"Hash_Val\";\ny = &\"MENU_LABEL\";\n}");

@@ -139,7 +139,7 @@ public sealed class NavigationSupport
     /// </summary>
     private string DeclaringFile(NavigationTarget target, SymbolKey key)
     {
-        if ( key.Kind != SymbolKind.Function || GameProfile.Active.ImportStyle != ImportStyle.Include )
+        if ( key.Kind != SymbolKind.Function || GameProfile.Active.ResolvesByNamespace )
         {
             return "";
         }

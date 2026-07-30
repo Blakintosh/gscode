@@ -302,8 +302,8 @@ public static class DatabaseQueries
     /// reaches it by path without importing it. Zero hides callers and reads as "this is dead",
     /// which is worse than the noise it replaced.
     ///
-    /// A no-op under <c>#using</c>: there the namespace is already part of the key, so the question
-    /// never arises and BO3 is untouched.
+    /// A no-op where resolution is namespace-driven: there the namespace is already part of the key,
+    /// so the question never arises and BO3 is untouched.
     /// </summary>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludeGraph(
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references,
@@ -311,7 +311,7 @@ public static class DatabaseQueries
         GameProfile? profile = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
-        if ( game.ImportStyle != ImportStyle.Include || declaringRelativePath.Length == 0 )
+        if ( game.ResolvesByNamespace || declaringRelativePath.Length == 0 )
         {
             return references;
         }

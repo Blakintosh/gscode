@@ -162,14 +162,14 @@ public sealed class SymbolExtractor
     }
 
     /// <summary>
-    /// The namespace component of a function's reference key. Under an #include (merge) dialect a
-    /// function is reached by NAME across the merged scope — the file it lives in is not a
-    /// namespace — so its key carries none, and a call keyed the same way resolves to it wherever
-    /// it lives. Under #using (BO3) the namespace is part of the function's identity and is kept.
+    /// The namespace component of a function's reference key. On a merge dialect a function is
+    /// reached by NAME across the merged scope — the file it lives in is not a namespace — so its key
+    /// carries none, and a call keyed the same way resolves to it wherever it lives. Where resolution
+    /// is namespace-driven (BO3) the namespace is part of the function's identity and is kept.
     /// </summary>
     private string? FunctionKeyNamespace(string namespaceName)
     {
-        return _profile.ImportStyle == ImportStyle.Include ? null : namespaceName;
+        return _profile.ResolvesByNamespace ? namespaceName : null;
     }
 
     private FunctionSymbol ExtractFunction(FunctionNode function, string namespaceName)
@@ -207,7 +207,13 @@ public sealed class SymbolExtractor
 
     private void ExtractClass(ClassNode classNode)
     {
-        SymbolKey classKey = new(_currentNamespace, _names.InternLower(classNode.NameToken.Text), SymbolKind.Class);
+        // NO namespace, unlike a function. A class name is global in T7: it is reached as a bare
+        // `new Throttle()` or `class Derived : Throttle`, and the language has no `ns::Throttle` form
+        // to qualify one with. Keying the DEFINITION under its file's namespace while every USE is
+        // keyed under none — see the parent below, and NewNode in WalkExpression — meant the two
+        // could never meet, so go-to-definition on `new Throttle()` found nothing and the CodeLens
+        // over `class Throttle` counted no references.
+        SymbolKey classKey = new(null, _names.InternLower(classNode.NameToken.Text), SymbolKind.Class);
         AddReference(classKey, classNode.NameToken, ReferenceKind.Definition);
 
         if ( classNode.ParentToken is not null )

@@ -59,7 +59,12 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
 
         foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
         {
-            SymbolKey key = new(GSCode.Core.GameProfile.Active.KeyNamespace(classSymbol.Namespace), classSymbol.KeyName, SymbolKind.Class);
+            // A class key carries NO namespace, for the same reason the function key above carries
+            // the KEY one rather than the declared one: it has to match what uses are stored under.
+            // A class name is global in T7 — `new Throttle()` names it bare and there is no
+            // `ns::Throttle` — so KeyNamespace is the wrong question to ask here. Asking it made
+            // every class lens read "0 references".
+            SymbolKey key = new(null, classSymbol.KeyName, SymbolKind.Class);
             lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target));
         }
 

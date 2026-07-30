@@ -111,4 +111,8 @@ public enum GscDiagnosticCode
     UnreachableCode = 5015,
     VariableNeverAssigned = 5016,
     DuplicateCaseLabel = 5017,
+    DuplicateImport = 5018,
+    VoidResultAssigned = 5019,
+    UnusedBinding = 5020,
+    ClassInheritanceCycle = 5021,
 }

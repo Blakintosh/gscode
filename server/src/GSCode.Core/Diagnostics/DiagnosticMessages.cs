@@ -67,6 +67,12 @@ public static class DiagnosticMessages
             "'case undefined' never matches — a switch compares values, so this branch is unreachable.",
         [GscDiagnosticCode.NonConstantCaseLabel] = "A case label must be a constant value.",
         [GscDiagnosticCode.DuplicateCaseLabel] = "'{0}' is already a case label in this switch; only the first can ever match.",
+        [GscDiagnosticCode.DuplicateImport] = "'{0}' is already imported by an earlier '{1}'.",
+        [GscDiagnosticCode.VoidResultAssigned] = "'{0}' returns nothing, so this assigns undefined.",
+        // {0} is the noun -- "Parameter" or "waittill output" -- since one rule covers both
+        // kinds of name the author binds and never uses.
+        [GscDiagnosticCode.UnusedBinding] = "{0} '{1}' is never used.",
+        [GscDiagnosticCode.ClassInheritanceCycle] = "'{0}' inherits from itself through {1}.",
 
         // Cross-file / workspace semantics
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",

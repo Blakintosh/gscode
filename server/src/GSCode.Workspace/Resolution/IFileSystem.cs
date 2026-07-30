@@ -12,6 +12,13 @@ public interface IFileSystem
 
     string ReadAllText(string absolutePath);
 
+    /// <summary>
+    /// When the file was last written, or <see cref="DateTime.MinValue"/> when that cannot be read.
+    /// Lets a cache tell a live entry from a stale one without re-reading the contents — which is
+    /// the whole point of caching the file in the first place.
+    /// </summary>
+    DateTime GetLastWriteTimeUtc(string absolutePath);
+
     /// <summary>Recursively enumerates files under <paramref name="directory"/> matching the pattern (e.g. "*.gsc").</summary>
     IEnumerable<string> EnumerateFiles(string directory, string searchPattern);
 }
@@ -32,6 +39,22 @@ public sealed class PhysicalFileSystem : IFileSystem
     public string ReadAllText(string absolutePath)
     {
         return File.ReadAllText(absolutePath);
+    }
+
+    public DateTime GetLastWriteTimeUtc(string absolutePath)
+    {
+        try
+        {
+            return File.GetLastWriteTimeUtc(absolutePath);
+        }
+        catch ( IOException )
+        {
+            return DateTime.MinValue;
+        }
+        catch ( UnauthorizedAccessException )
+        {
+            return DateTime.MinValue;
+        }
     }
 
     public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)

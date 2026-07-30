@@ -75,6 +75,10 @@ LanguageServer server = await LanguageServer.From(options =>
             services.AddSingleton(settings);
             services.AddSingleton(levelSwitch);
             services.AddSingleton<IFileSystem>(fileSystem);
+
+            // Shared across the whole session. Keyed by resolved path, so a mod's header and the
+            // raw one it shadows stay separate entries.
+            services.AddSingleton<InsertCache>();
             services.AddSingleton(resolverHolder);
             services.AddSingleton(cacheHolder);
             services.AddSingleton(NameTable.Shared);
@@ -88,8 +92,12 @@ LanguageServer server = await LanguageServer.From(options =>
                 // Each analyzed file gets an insert provider bound to its own context.
                 ResolverHolder holder = provider.GetRequiredService<ResolverHolder>();
                 IFileSystem files = provider.GetRequiredService<IFileSystem>();
+
+                // ONE cache for every document: a provider is per file, and a header is read by
+                // many, which is the whole reason the cache exists.
+                InsertCache inserts = provider.GetRequiredService<InsertCache>();
                 return new DocumentStore(
-                    path => new ResolverInsertProvider(holder.Current, holder.Current.GetContext(path), files),
+                    path => new ResolverInsertProvider(holder.Current, holder.Current.GetContext(path), files, inserts),
                     provider.GetRequiredService<NameTable>());
             });
 

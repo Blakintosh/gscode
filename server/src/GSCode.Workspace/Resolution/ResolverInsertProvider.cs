@@ -7,21 +7,24 @@ using GSCode.Parser.Preprocessing;
 namespace GSCode.Workspace.Resolution;
 
 /// <summary>
-/// The real #insert provider: resolves the raw path through the asking file's
-/// resolution context, reads and lexes the target. (A shared lexed-GSH cache lands
-/// with the indexer in P5; open-document usage is light enough without it.)
+/// The real #insert provider: resolves the path as written through the asking file's resolution
+/// context, then reads and lexes the target - or takes it from <see cref="InsertCache"/>, which is
+/// shared across every file, since a provider is built per file and a header is inserted by many.
 /// </summary>
 public sealed class ResolverInsertProvider : IInsertProvider
 {
     private readonly PathResolver _resolver;
     private readonly ResolutionContext _context;
     private readonly IFileSystem _fileSystem;
+    private readonly InsertCache? _cache;
 
-    public ResolverInsertProvider(PathResolver resolver, ResolutionContext context, IFileSystem fileSystem)
+    public ResolverInsertProvider(
+        PathResolver resolver, ResolutionContext context, IFileSystem fileSystem, InsertCache? cache = null)
     {
         _resolver = resolver;
         _context = context;
         _fileSystem = fileSystem;
+        _cache = cache;
     }
 
     public bool TryGetInsert(string rawInsertPath, out InsertedFile inserted)
@@ -34,6 +37,24 @@ public sealed class ResolverInsertProvider : IInsertProvider
             return false;
         }
 
+        // The cache is keyed by the RESOLVED path, so a header in a mod and the raw header it
+        // shadows are different entries even though both were asked for by the same written path.
+        InsertedFile? file = _cache is not null
+            ? _cache.GetOrAdd(resolved, _fileSystem, () => Read(resolved))
+            : Read(resolved);
+
+        if ( file is null )
+        {
+            return false;
+        }
+
+        inserted = file;
+        return true;
+    }
+
+    /// <summary>Reads and lexes one header, or null when it cannot be read.</summary>
+    private InsertedFile? Read(string resolved)
+    {
         string content;
         try
         {
@@ -41,16 +62,15 @@ public sealed class ResolverInsertProvider : IInsertProvider
         }
         catch ( IOException )
         {
-            return false;
+            return null;
         }
         catch ( UnauthorizedAccessException )
         {
-            return false;
+            return null;
         }
 
         SourceText text = SourceText.From(content);
         ImmutableArray<Token> tokens = Lexer.Lex(text).Tokens;
-        inserted = new InsertedFile(resolved, text, tokens);
-        return true;
+        return new InsertedFile(resolved, text, tokens);
     }
 }

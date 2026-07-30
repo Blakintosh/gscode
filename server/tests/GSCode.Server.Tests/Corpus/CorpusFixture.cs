@@ -78,11 +78,17 @@ internal static class CorpusFixture
         return new PathResolver(config, fileSystem);
     }
 
+    /// <summary>
+    /// Shared lexed headers, as the server has. Without it every file re-lexes the headers it
+    /// inserts, which is what the perf sweep is measuring.
+    /// </summary>
+    public static InsertCache Inserts { get; } = new();
+
     /// <summary>Analyses one corpus file the way the server does, with inserts resolved.</summary>
     public static ParseResult Analyze(string path, PathResolver resolver, NameTable names)
     {
         PhysicalFileSystem fileSystem = new();
-        ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), fileSystem);
+        ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), fileSystem, Inserts);
 
         return ScriptAnalysis.Analyze(
             path,

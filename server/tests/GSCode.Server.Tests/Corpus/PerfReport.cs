@@ -22,7 +22,38 @@ internal static class PerfReport
         }
     }
 
-    public static void Write(string outputPath, string game, IReadOnlyList<Item> items, string corpusRoot)
+    /// <summary>A snapshot of the pools that actually decide the server's footprint.</summary>
+    internal sealed record Memory(long ManagedLive, long HeapSize, long Committed, long Fragmented, long WorkingSet, int Gen0, int Gen1, int Gen2);
+
+    /// <summary>
+    /// Taken AFTER a forced collection, so it reports what is retained rather than what happens to
+    /// be uncollected. Fragmented is the gap between the heap and what is live in it, which on an
+    /// indexing run is mostly large-object heap and is the number that has misled before: a large
+    /// working set with a small live graph is holes, not a leak.
+    /// </summary>
+    public static Memory Sample()
+    {
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+
+        GCMemoryInfo info = GC.GetGCMemoryInfo();
+        long live = GC.GetTotalMemory(forceFullCollection: false);
+
+        return new Memory(
+            ManagedLive: live,
+            HeapSize: info.HeapSizeBytes,
+            Committed: info.TotalCommittedBytes,
+            Fragmented: info.FragmentedBytes,
+            WorkingSet: Environment.WorkingSet,
+            Gen0: GC.CollectionCount(0),
+            Gen1: GC.CollectionCount(1),
+            Gen2: GC.CollectionCount(2));
+    }
+
+    public static void Write(
+        string outputPath, string game, IReadOnlyList<Item> items, string corpusRoot,
+        IReadOnlyDictionary<string, int> worldCounts, Memory memory, int cachedHeaders)
     {
         List<double> sorted = [.. items.Select(static i => i.Milliseconds).Order()];
         double total = sorted.Sum();
@@ -61,6 +92,30 @@ internal static class PerfReport
         Stat(html, $"slowest {tailCount}", total > 0 ? $"{tail / total * 100:F1}% of total" : "-");
         html.AppendLine("</div>");
 
+        // Per world, because a .gsc and a .csc are separate universes to the database, and "980
+        // files" hides which of the two the time went to.
+        html.AppendLine("<h2>Files by world</h2>");
+        html.AppendLine("<table><tr><th>world</th><th>files</th></tr>");
+        foreach ( KeyValuePair<string, int> world in worldCounts.OrderByDescending(static w => w.Value) )
+        {
+            html.AppendLine($"<tr><td>{Escape(world.Key)}</td><td class=\"n\">{world.Value}</td></tr>");
+        }
+
+        html.AppendLine($"<tr><td>headers held in the insert cache</td><td class=\"n\">{cachedHeaders}</td></tr>");
+        html.AppendLine("</table>");
+
+        html.AppendLine("<h2>Memory after the sweep</h2>");
+        html.AppendLine("<div class=\"sub\">Sampled after a forced gen2 collection, so this is what is RETAINED.</div>");
+        html.AppendLine("<table><tr><th>pool</th><th>MB</th><th>what it means</th></tr>");
+        Row(html, "managed live", memory.ManagedLive, "the object graph still reachable");
+        Row(html, "heap size", memory.HeapSize, "what the GC has carved out");
+        Row(html, "committed", memory.Committed, "backed by real memory");
+        Row(html, "fragmented", memory.Fragmented, "holes in the heap, mostly large-object");
+        Row(html, "working set", memory.WorkingSet, "what the OS reports for the process");
+        html.AppendLine($"<tr><td>collections</td><td class=\"n\">{memory.Gen0}/{memory.Gen1}/{memory.Gen2}</td>"
+            + "<td>gen0 / gen1 / gen2</td></tr>");
+        html.AppendLine("</table>");
+
         Table(html, "Slowest by absolute time",
             "Where the wall-clock went.",
             [.. items.OrderByDescending(static i => i.Milliseconds).Take(25)], corpusRoot);
@@ -73,6 +128,12 @@ internal static class PerfReport
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         File.WriteAllText(outputPath, html.ToString());
+    }
+
+    private static void Row(StringBuilder html, string label, long bytes, string meaning)
+    {
+        html.AppendLine($"<tr><td>{Escape(label)}</td><td class=\"n\">{bytes / 1024.0 / 1024.0:F1}</td>"
+            + $"<td>{Escape(meaning)}</td></tr>");
     }
 
     private static void Stat(StringBuilder html, string label, string value)

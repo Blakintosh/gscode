@@ -48,7 +48,7 @@ public class CorpusPerfTests
             timings.Add(Time(path, () => CorpusFixture.Analyze(path, resolver, names)));
         }
 
-        Report("bo3", timings, CorpusFixture.RawRoot!);
+        Report("bo3", timings, CorpusFixture.RawRoot!, CorpusFixture.Inserts.Count);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class CorpusPerfTests
                 timings.Add(Time(path, () => GameCorpusFixture.Analyze(corpus, path, resolver, names)));
             }
 
-            Report(corpus.Profile.ShortName, timings, corpus.RawRoot);
+            Report(corpus.Profile.ShortName, timings, corpus.RawRoot, GameCorpusFixture.Inserts.Count);
         }
     }
 
@@ -91,7 +91,7 @@ public class CorpusPerfTests
         return new PerfReport.Item(path, watch.Elapsed.TotalMilliseconds, bytes);
     }
 
-    private void Report(string game, List<PerfReport.Item> timings, string root)
+    private void Report(string game, List<PerfReport.Item> timings, string root, int cachedHeaders)
     {
         if ( timings.Count == 0 )
         {
@@ -133,7 +133,27 @@ public class CorpusPerfTests
                 + $"{timing.MillisecondsPerKilobyte,6:F2} ms/KB  {Path.GetFileName(timing.Path)}");
         }
 
-        WriteReport(game, timings, root);
+        // Per world: a .gsc and a .csc are separate universes to the database, and one total
+        // hides which of the two the time went to. Headers are counted separately again - they are
+        // inserted rather than indexed, so they belong to neither.
+        Dictionary<string, int> worlds = new(StringComparer.Ordinal)
+        {
+            ["gsc (server)"] = timings.Count(static t => t.Path.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase)),
+            ["csc (client)"] = timings.Count(static t => t.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase)),
+            ["gsh (headers)"] = timings.Count(static t => t.Path.EndsWith(".gsh", StringComparison.OrdinalIgnoreCase)),
+        };
+
+        foreach ( KeyValuePair<string, int> world in worlds )
+        {
+            _output.WriteLine($"    {world.Key,-16} {world.Value}");
+        }
+
+        PerfReport.Memory memory = PerfReport.Sample();
+        _output.WriteLine(
+            $"    memory: live {memory.ManagedLive / 1048576.0:F0} MB | heap {memory.HeapSize / 1048576.0:F0} MB | "
+            + $"fragmented {memory.Fragmented / 1048576.0:F0} MB | working set {memory.WorkingSet / 1048576.0:F0} MB");
+
+        WriteReport(game, timings, root, worlds, memory, cachedHeaders);
     }
 
     private static double Percentile(List<double> sorted, double fraction)
@@ -147,7 +167,9 @@ public class CorpusPerfTests
     /// overwrites a diagnostic report someone is still reading. <c>GSCODE_PERF_REPORT</c> overrides
     /// the directory, matching GSCODE_SWEEP_REPORT.
     /// </summary>
-    private void WriteReport(string game, IReadOnlyList<PerfReport.Item> timings, string root)
+    private void WriteReport(
+        string game, IReadOnlyList<PerfReport.Item> timings, string root,
+        IReadOnlyDictionary<string, int> worlds, PerfReport.Memory memory, int cachedHeaders)
     {
         string directory = Environment.GetEnvironmentVariable("GSCODE_PERF_REPORT") is string configured
             && configured.Length > 0
@@ -155,7 +177,7 @@ public class CorpusPerfTests
                 : ScratchDirectory();
 
         string path = Path.Combine(directory, $"gscode-perf-{game}.html");
-        PerfReport.Write(path, game, timings, root);
+        PerfReport.Write(path, game, timings, root, worlds, memory, cachedHeaders);
         _output.WriteLine($"Report [{game}]: {path}");
     }
 

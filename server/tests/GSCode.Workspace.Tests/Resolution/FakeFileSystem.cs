@@ -38,6 +38,15 @@ public sealed class FakeFileSystem : IFileSystem
         return _files[PathUtil.NormalizeAbsolute(absolutePath)];
     }
 
+    /// <summary>
+    /// A fixed stamp: an in-memory tree has no clock, and a test that wants to model an edit calls
+    /// the cache's Invalidate rather than pretending time passed.
+    /// </summary>
+    public DateTime GetLastWriteTimeUtc(string absolutePath)
+    {
+        return FileExists(absolutePath) ? DateTime.UnixEpoch : DateTime.MinValue;
+    }
+
     public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
     {
         string normalizedDirectory = PathUtil.NormalizeAbsolute(directory);

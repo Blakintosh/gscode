@@ -96,11 +96,17 @@ internal static class GameCorpusFixture
         return new PathResolver(config, fileSystem);
     }
 
+    /// <summary>
+    /// Shared lexed headers, as the server has. Without it every file re-lexes the headers it
+    /// inserts, which is what the perf sweep is measuring.
+    /// </summary>
+    public static InsertCache Inserts { get; } = new();
+
     /// <summary>Analyses one file with THIS game's profile — the whole point of the per-game sweep.</summary>
     public static ParseResult Analyze(GameCorpus corpus, string path, PathResolver resolver, NameTable names)
     {
         PhysicalFileSystem fileSystem = new();
-        ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), fileSystem);
+        ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), fileSystem, Inserts);
 
         return ScriptAnalysis.Analyze(
             path,

@@ -1,5 +1,10 @@
 using System.Diagnostics;
 using GSCode.Core;
+using GSCode.Core.Text;
+using GSCode.Parser.Extraction;
+using GSCode.Parser.Lexing;
+using GSCode.Parser.Preprocessing;
+using GSCode.Parser.Syntax;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Resolution;
@@ -45,7 +50,8 @@ public class CorpusPerfTests
 
         foreach ( string path in CorpusFixture.Scripts() )
         {
-            timings.Add(Time(path, () => CorpusFixture.Analyze(path, resolver, names)));
+            ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), new PhysicalFileSystem(), CorpusFixture.Inserts);
+            timings.Add(Time(path, GameProfile.BlackOps3, inserts, names, () => CorpusFixture.Analyze(path, resolver, names)));
         }
 
         Report("bo3", timings, CorpusFixture.RawRoot!, CorpusFixture.Inserts.Count);
@@ -69,14 +75,16 @@ public class CorpusPerfTests
 
             foreach ( string path in GameCorpusFixture.Scripts(corpus) )
             {
-                timings.Add(Time(path, () => GameCorpusFixture.Analyze(corpus, path, resolver, names)));
+                ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), new PhysicalFileSystem(), GameCorpusFixture.Inserts);
+                timings.Add(Time(path, corpus.Profile, inserts, names, () => GameCorpusFixture.Analyze(corpus, path, resolver, names)));
             }
 
             Report(corpus.Profile.ShortName, timings, corpus.RawRoot, GameCorpusFixture.Inserts.Count);
         }
     }
 
-    private static PerfReport.Item Time(string path, Func<ParseResult> analyse)
+    private static PerfReport.Item Time(
+        string path, GameProfile game, IInsertProvider inserts, NameTable names, Func<ParseResult> analyse)
     {
         long bytes = new FileInfo(path).Length;
 
@@ -88,7 +96,34 @@ public class CorpusPerfTests
         analyse();
         watch.Stop();
 
-        return new PerfReport.Item(path, watch.Elapsed.TotalMilliseconds, bytes);
+        // The same four phases again, timed individually. Run separately from the total so the
+        // total stays comparable with earlier sweeps rather than carrying four stopwatches' overhead.
+        //
+        // Per PHASE rather than per function, because only two of the four are per-function work at
+        // all: the lexer and the preprocessor walk the file once, whatever it declares. A file slow
+        // in `preprocess` is slow because of what it INSERTS; slow in `parse` because of its size or
+        // shape; slow in `extract` because of how much it declares.
+        SourceText text = SourceText.From(File.ReadAllText(path));
+        ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
+
+        Stopwatch phase = Stopwatch.StartNew();
+        LexResult lexed = Lexer.Lex(text, game);
+        double lex = phase.Elapsed.TotalMilliseconds;
+
+        phase.Restart();
+        PreprocessResult preprocessed = Preprocessor.Process(path, lexed.Tokens, text, inserts, names, game);
+        double preprocess = phase.Elapsed.TotalMilliseconds;
+
+        phase.Restart();
+        ParseTree tree = GSCode.Parser.Syntax.Parser.Parse(preprocessed.Tokens, game);
+        double parse = phase.Elapsed.TotalMilliseconds;
+
+        phase.Restart();
+        SymbolExtractor.Extract(path, tree, preprocessed, lexed.Tokens, text, names, game);
+        double extract = phase.Elapsed.TotalMilliseconds;
+
+        return new PerfReport.Item(
+            path, watch.Elapsed.TotalMilliseconds, bytes, lex, preprocess, parse, extract);
     }
 
     private void Report(string game, List<PerfReport.Item> timings, string root, int cachedHeaders)
@@ -146,6 +181,18 @@ public class CorpusPerfTests
         foreach ( KeyValuePair<string, int> world in worlds )
         {
             _output.WriteLine($"    {world.Key,-16} {world.Value}");
+        }
+
+        double lex = timings.Sum(static t => t.Lex);
+        double pre = timings.Sum(static t => t.Preprocess);
+        double par = timings.Sum(static t => t.Parse);
+        double ext = timings.Sum(static t => t.Extract);
+        double phases = lex + pre + par + ext;
+        if ( phases > 0 )
+        {
+            _output.WriteLine(
+                $"    phases: lex {lex / phases * 100:F0}% | preprocess {pre / phases * 100:F0}% | "
+                + $"parse {par / phases * 100:F0}% | extract {ext / phases * 100:F0}%");
         }
 
         PerfReport.Memory memory = PerfReport.Sample();

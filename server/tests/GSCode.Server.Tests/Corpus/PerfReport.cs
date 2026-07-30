@@ -14,7 +14,9 @@ namespace GSCode.Server.Tests.Corpus;
 /// </summary>
 internal static class PerfReport
 {
-    internal sealed record Item(string Path, double Milliseconds, long Bytes)
+    internal sealed record Item(
+        string Path, double Milliseconds, long Bytes,
+        double Lex = 0, double Preprocess = 0, double Parse = 0, double Extract = 0)
     {
         public double MillisecondsPerKilobyte
         {
@@ -116,6 +118,24 @@ internal static class PerfReport
             + "<td>gen0 / gen1 / gen2</td></tr>");
         html.AppendLine("</table>");
 
+        // Which PHASE the time went to, across the whole corpus. Only two of the four are
+        // per-function work, so this is the level at which "why is this file slow" has an answer:
+        // preprocess points at what it inserts, parse at its size and shape, extract at how much it
+        // declares.
+        double lex = items.Sum(static i => i.Lex);
+        double pre = items.Sum(static i => i.Preprocess);
+        double par = items.Sum(static i => i.Parse);
+        double ext = items.Sum(static i => i.Extract);
+        double phases = lex + pre + par + ext;
+
+        html.AppendLine("<h2>Where the time goes, by phase</h2>");
+        html.AppendLine("<table><tr><th>phase</th><th>ms</th><th>share</th></tr>");
+        Phase(html, "lex", lex, phases);
+        Phase(html, "preprocess", pre, phases);
+        Phase(html, "parse", par, phases);
+        Phase(html, "extract", ext, phases);
+        html.AppendLine("</table>");
+
         Table(html, "Slowest by absolute time",
             "Where the wall-clock went.",
             [.. items.OrderByDescending(static i => i.Milliseconds).Take(25)], corpusRoot);
@@ -128,6 +148,13 @@ internal static class PerfReport
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         File.WriteAllText(outputPath, html.ToString());
+    }
+
+    private static void Phase(StringBuilder html, string label, double ms, double total)
+    {
+        string share = total > 0 ? $"{ms / total * 100:F1}%" : "-";
+        html.AppendLine($"<tr><td>{Escape(label)}</td><td class=\"n\">{ms:F0}</td>"
+            + $"<td class=\"n\">{Escape(share)}</td></tr>");
     }
 
     private static void Row(StringBuilder html, string label, long bytes, string meaning)
@@ -145,7 +172,8 @@ internal static class PerfReport
     {
         html.AppendLine($"<h2>{Escape(title)}</h2>");
         html.AppendLine($"<div class=\"sub\">{Escape(blurb)}</div>");
-        html.AppendLine("<table><tr><th>ms</th><th>KB</th><th>ms/KB</th><th>file</th></tr>");
+        html.AppendLine("<table><tr><th>ms</th><th>KB</th><th>ms/KB</th>"
+            + "<th>lex</th><th>pre</th><th>parse</th><th>extract</th><th>file</th></tr>");
 
         foreach ( Item row in rows )
         {
@@ -157,6 +185,8 @@ internal static class PerfReport
                 $"<tr><td class=\"n\">{row.Milliseconds:F1}</td>"
                 + $"<td class=\"n\">{row.Bytes / 1024.0:F0}</td>"
                 + $"<td class=\"n\">{row.MillisecondsPerKilobyte:F2}</td>"
+                + $"<td class=\"n\">{row.Lex:F1}</td><td class=\"n\">{row.Preprocess:F1}</td>"
+                + $"<td class=\"n\">{row.Parse:F1}</td><td class=\"n\">{row.Extract:F1}</td>"
                 + $"<td><code>{Escape(relative)}</code></td></tr>");
         }
 

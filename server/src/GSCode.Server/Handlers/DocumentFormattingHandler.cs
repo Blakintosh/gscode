@@ -77,12 +77,6 @@ public sealed class DocumentFormattingHandler : DocumentFormattingHandlerBase
     /// </summary>
     private FormatOptions OptionsFrom(FormattingOptions requested)
     {
-        return new FormatOptions(
-            IndentWidth: requested.TabSize > 0 ? (int)requested.TabSize : 4,
-            UseTabs: !requested.InsertSpaces,
-            PadParens: _settings.FormatPadParens,
-            MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines),
-            SortDirectives: _settings.FormatSortDirectives,
-            AlignConsecutive: _settings.FormatAlignConsecutive);
+        return FormatOptions.From((int)requested.TabSize, requested.InsertSpaces, _settings);
     }
 }

@@ -85,13 +85,9 @@ public sealed class DocumentRangeFormattingHandler : DocumentRangeFormattingHand
     /// </summary>
     private FormatOptions OptionsFrom(FormattingOptions requested)
     {
-        return new FormatOptions(
-            IndentWidth: requested.TabSize > 0 ? (int)requested.TabSize : 4,
-            UseTabs: !requested.InsertSpaces,
-            PadParens: _settings.FormatPadParens,
-            MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines),
-            // Never here: this formats a fragment, and hoisting the whole file's
-            // directive block from under a partial edit would be startling.
-            SortDirectives: false);
+        // Same reasoning as the on-type handler: a fragment format must not move the file's
+        // directive block. Alignment is left to the setting.
+        return FormatOptions.From((int)requested.TabSize, requested.InsertSpaces, _settings)
+            with { SortDirectives = false };
     }
 }

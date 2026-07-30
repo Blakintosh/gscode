@@ -36,7 +36,7 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
         string query = request.Query ?? "";
         List<WorkspaceSymbol> results = [];
 
-        foreach ( ScriptRecord record in AllRecords() )
+        foreach ( ScriptRecord record in _database.AllRecords )
         {
             if ( results.Count >= MaxResults )
             {
@@ -63,18 +63,6 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
         return Task.FromResult<Container<WorkspaceSymbol>?>(new Container<WorkspaceSymbol>(results));
     }
 
-    private IEnumerable<ScriptRecord> AllRecords()
-    {
-        foreach ( ScriptRecord record in _database.Gsc.AllRecords )
-        {
-            yield return record;
-        }
-
-        foreach ( ScriptRecord record in _database.Csc.AllRecords )
-        {
-            yield return record;
-        }
-    }
 
     private static bool Matches(string name, string query)
     {

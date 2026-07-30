@@ -97,18 +97,18 @@ public static class FormatScope
             return new LineKind(Role.Other, "", "");
         }
 
-        if ( lineTokens.All(static token => IsComment(token.Kind)) )
+        if ( lineTokens.All(static token => LineFacts.IsComment(token.Kind)) )
         {
             return new LineKind(Role.Comment, "", "");
         }
 
-        List<Token> code = [.. lineTokens.Where(static token => !IsComment(token.Kind))];
+        List<Token> code = [.. lineTokens.Where(static token => !LineFacts.IsComment(token.Kind))];
         if ( code.Count == 0 || code[^1].Kind != TokenKind.Semicolon )
         {
             return new LineKind(Role.Other, "", "");
         }
 
-        string indent = LeadingWhitespace(lineText);
+        string indent = LineFacts.LeadingWhitespace(lineText);
 
         // A top-level assignment operator with something before it makes this an assignment.
         int depth = 0;
@@ -180,21 +180,7 @@ public static class FormatScope
         return byLine;
     }
 
-    private static string LeadingWhitespace(string line)
-    {
-        int end = 0;
-        while ( end < line.Length && (line[end] == ' ' || line[end] == '\t') )
-        {
-            end++;
-        }
 
-        return line[..end];
-    }
-
-    private static bool IsComment(TokenKind kind)
-    {
-        return kind is TokenKind.LineComment or TokenKind.BlockComment or TokenKind.DocComment;
-    }
 
     private static bool IsAssignmentOperator(TokenKind kind)
     {

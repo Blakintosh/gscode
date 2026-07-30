@@ -42,7 +42,7 @@ public static class DependencyRewrite
 
         ImmutableArray<DependencyEdit>.Builder edits = ImmutableArray.CreateBuilder<DependencyEdit>();
 
-        foreach ( ScriptRecord record in AllRecords(database) )
+        foreach ( ScriptRecord record in database.AllRecords )
         {
             foreach ( DependencyEdge edge in record.Dependencies )
             {
@@ -95,21 +95,4 @@ public static class DependencyRewrite
     }
 
     /// <summary>Both language worlds plus the shared headers — a .gsh can insert another .gsh.</summary>
-    private static IEnumerable<ScriptRecord> AllRecords(ScriptDatabase database)
-    {
-        foreach ( ScriptRecord record in database.Gsc.AllRecords )
-        {
-            yield return record;
-        }
-
-        foreach ( ScriptRecord record in database.Csc.AllRecords )
-        {
-            yield return record;
-        }
-
-        foreach ( ScriptRecord record in database.AllGshRecords )
-        {
-            yield return record;
-        }
-    }
 }

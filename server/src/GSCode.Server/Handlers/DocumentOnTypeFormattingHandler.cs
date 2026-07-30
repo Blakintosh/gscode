@@ -100,16 +100,11 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
     /// </summary>
     private FormatOptions OptionsFrom(FormattingOptions requested)
     {
-        return new FormatOptions(
-            IndentWidth: requested.TabSize > 0 ? (int)requested.TabSize : 4,
-            UseTabs: !requested.InsertSpaces,
-            PadParens: _settings.FormatPadParens,
-            MaxBlankLines: Math.Max(0, _settings.FormatMaxBlankLines),
-            // Never here: this formats a fragment, and hoisting the whole file's
-            // directive block from under a partial edit would be startling.
-            SortDirectives: false,
-            // Alignment is welcome: the edits are then clipped to the group around the cursor, so a
-            // run re-aligns as you type its next member without touching anything else.
-            AlignConsecutive: _settings.FormatAlignConsecutive);
+        // SortDirectives is never on here: this formats a FRAGMENT, and hoisting the whole file's
+        // directive block out from under a partial edit would be startling. Alignment stays on —
+        // the edits are then clipped to the group around the cursor, so a run re-aligns as you
+        // type its next member without touching anything else.
+        return FormatOptions.From((int)requested.TabSize, requested.InsertSpaces, _settings)
+            with { SortDirectives = false };
     }
 }

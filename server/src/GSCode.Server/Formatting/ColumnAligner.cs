@@ -189,13 +189,13 @@ public static class ColumnAligner
             return Row.Other;
         }
 
-        if ( lineTokens.All(static token => IsComment(token.Kind)) )
+        if ( lineTokens.All(static token => LineFacts.IsComment(token.Kind)) )
         {
             return Row.CommentOnly;
         }
 
         // A statement ending in ';', ignoring a trailing line comment. Anything else breaks a run.
-        List<Token> code = [.. lineTokens.Where(static token => !IsComment(token.Kind))];
+        List<Token> code = [.. lineTokens.Where(static token => !LineFacts.IsComment(token.Kind))];
         if ( code.Count == 0 || code[^1].Kind != TokenKind.Semicolon )
         {
             return Row.Other;
@@ -244,7 +244,7 @@ public static class ColumnAligner
             signature.Append(token.Kind == TokenKind.Semicolon ? ";" : TokenText(lineText, token));
         }
 
-        return new Row(RowRole.Alignable, LeadingWhitespace(lineText), signature.ToString(), aligned);
+        return new Row(RowRole.Alignable, LineFacts.LeadingWhitespace(lineText), signature.ToString(), aligned);
     }
 
     private enum CellRole
@@ -281,21 +281,7 @@ public static class ColumnAligner
         return lineText.Substring(token.Range.Start.Character, token.Range.End.Character - token.Range.Start.Character);
     }
 
-    private static string LeadingWhitespace(string line)
-    {
-        int end = 0;
-        while ( end < line.Length && (line[end] == ' ' || line[end] == '\t') )
-        {
-            end++;
-        }
 
-        return line[..end];
-    }
-
-    private static bool IsComment(TokenKind kind)
-    {
-        return kind is TokenKind.LineComment or TokenKind.BlockComment or TokenKind.DocComment;
-    }
 
     private static bool IsStructural(TokenKind kind)
     {

@@ -66,4 +66,25 @@ public readonly record struct FormatOptions(
     {
         get { return UseTabs ? "\t" : new string(' ', Math.Max(1, IndentWidth)); }
     }
+
+    /// <summary>
+    /// The options for a WHOLE-document format: the editor's own indentation settings, which arrive
+    /// per request, plus the GSC knobs from configuration.
+    /// </summary>
+    /// <remarks>
+    /// The two fragment formatters — range and on-type — differ from this by one or two flags each
+    /// and explain themselves at their own call sites, so they start here and use <c>with</c> rather
+    /// than restating the four lines all three agree on. Those four were written out three times,
+    /// which is three places to remember when the editor gains a setting.
+    /// </remarks>
+    public static FormatOptions From(int tabSize, bool insertSpaces, Configuration.ServerSettings settings)
+    {
+        return new FormatOptions(
+            IndentWidth: tabSize > 0 ? tabSize : 4,
+            UseTabs: !insertSpaces,
+            PadParens: settings.FormatPadParens,
+            MaxBlankLines: Math.Max(0, settings.FormatMaxBlankLines),
+            SortDirectives: settings.FormatSortDirectives,
+            AlignConsecutive: settings.FormatAlignConsecutive);
+    }
 }

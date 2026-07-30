@@ -107,7 +107,7 @@ public sealed class WorkspaceDiagnosticsPublisher
         {
             HashSet<DocumentUri> stillPublished = [];
 
-            foreach ( ScriptRecord record in AllRecords() )
+            foreach ( ScriptRecord record in _database.AllRecords )
             {
                 if ( !IsInScope(scope, record.ContextId) || record.Diagnostics.IsEmpty )
                 {
@@ -170,21 +170,4 @@ public sealed class WorkspaceDiagnosticsPublisher
         }
     }
 
-    private IEnumerable<ScriptRecord> AllRecords()
-    {
-        foreach ( ScriptRecord record in _database.Gsc.AllRecords )
-        {
-            yield return record;
-        }
-
-        foreach ( ScriptRecord record in _database.Csc.AllRecords )
-        {
-            yield return record;
-        }
-
-        foreach ( ScriptRecord record in _database.AllGshRecords )
-        {
-            yield return record;
-        }
-    }
 }

@@ -180,13 +180,13 @@ public static class AssignmentAligner
         }
 
         // A comment on its own line is transparent.
-        if ( lineTokens.All(static token => IsComment(token.Kind)) )
+        if ( lineTokens.All(static token => LineFacts.IsComment(token.Kind)) )
         {
             return new LineKind(LineRole.Comment, "", 0, 0);
         }
 
         // Drop a trailing line comment; `a = 1; // note` is still an assignment.
-        List<Token> code = [.. lineTokens.Where(static token => !IsComment(token.Kind))];
+        List<Token> code = [.. lineTokens.Where(static token => !LineFacts.IsComment(token.Kind))];
         if ( code.Count < 3 || code[^1].Kind != TokenKind.Semicolon )
         {
             return new LineKind(LineRole.Other, "", 0, 0);
@@ -237,26 +237,12 @@ public static class AssignmentAligner
 
         int operatorColumn = code[operatorIndex].Range.Start.Character;
         string left = lineText[..operatorColumn].TrimEnd();
-        string indent = LeadingWhitespace(lineText);
+        string indent = LineFacts.LeadingWhitespace(lineText);
 
         return new LineKind(LineRole.Assignment, indent, left.Length, operatorColumn);
     }
 
-    private static string LeadingWhitespace(string line)
-    {
-        int end = 0;
-        while ( end < line.Length && (line[end] == ' ' || line[end] == '\t') )
-        {
-            end++;
-        }
 
-        return line[..end];
-    }
-
-    private static bool IsComment(TokenKind kind)
-    {
-        return kind is TokenKind.LineComment or TokenKind.BlockComment or TokenKind.DocComment;
-    }
 
     private static bool IsAssignmentOperator(TokenKind kind)
     {

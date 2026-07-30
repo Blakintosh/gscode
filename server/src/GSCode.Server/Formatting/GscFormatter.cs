@@ -503,7 +503,7 @@ public static class GscFormatter
             else
             {
                 Token previous = significant[index - 1].Token;
-                bool trailingComment = IsComment(token.Kind) && newlinesBefore == 0;
+                bool trailingComment = LineFacts.IsComment(token.Kind) && newlinesBefore == 0;
 
                 if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth) )
                 {
@@ -951,10 +951,6 @@ public static class GscFormatter
             or TokenKind.Switch;
     }
 
-    private static bool IsComment(TokenKind kind)
-    {
-        return kind is TokenKind.LineComment or TokenKind.BlockComment or TokenKind.DocComment;
-    }
 
     /// <summary>Refuses formatting when the file has lexer (1xxx) or parser (3xxx) errors.</summary>
     private static bool HasSyntaxErrors(ParseResult result)

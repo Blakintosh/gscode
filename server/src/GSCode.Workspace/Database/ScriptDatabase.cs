@@ -110,6 +110,35 @@ public sealed class ScriptDatabase
         get { return _gshRecords.Values; }
     }
 
+    /// <summary>
+    /// Every indexed record, across both language worlds and the shared headers.
+    /// </summary>
+    /// <remarks>
+    /// Lives here because three consumers had written it out themselves — and one of the three left
+    /// the headers off, so workspace symbol search could not see anything a <c>.gsh</c> declares.
+    /// A traversal copied per caller is one each caller can get subtly wrong.
+    /// </remarks>
+    public IEnumerable<ScriptRecord> AllRecords
+    {
+        get
+        {
+            foreach ( ScriptRecord record in Gsc.AllRecords )
+            {
+                yield return record;
+            }
+
+            foreach ( ScriptRecord record in Csc.AllRecords )
+            {
+                yield return record;
+            }
+
+            foreach ( ScriptRecord record in AllGshRecords )
+            {
+                yield return record;
+            }
+        }
+    }
+
     /// <summary>Removes a file from whichever store holds it.</summary>
     public void Remove(string normalizedPath, ScriptLanguage language)
     {

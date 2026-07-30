@@ -684,11 +684,26 @@ static string ServerVersion()
 {
     System.Reflection.Assembly assembly = typeof(TransportOptions).Assembly;
 
-    // The informational version carries any suffix (a "+sha" from CI, a "-beta"); the plain
-    // AssemblyVersion drops it, so prefer it and fall back only if it is absent.
+    // The informational version carries any suffix; the plain AssemblyVersion drops it, so prefer
+    // it and fall back only if it is absent.
     string? informational = System.Reflection.CustomAttributeExtensions
         .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(assembly)
         ?.InformationalVersion;
 
-    return informational ?? assembly.GetName().Version?.ToString() ?? "unknown";
+    string version = informational ?? assembly.GetName().Version?.ToString() ?? "unknown";
+
+    // Since .NET 8 the SDK appends "+<full git sha>" to the informational version whenever it builds
+    // inside a repository, so this read "2.0.0+95362d3b2dbd71dbb3cf..." - forty hex characters in
+    // every startup line. The commit is worth keeping for triage (it identifies the exact build a
+    // user is reporting against), so it is shortened to the usual seven rather than switched off.
+    int plus = version.IndexOf('+', StringComparison.Ordinal);
+    if ( plus >= 0 )
+    {
+        string revision = version[(plus + 1)..];
+        version = revision.Length > 7
+            ? string.Concat(version.AsSpan(0, plus + 1), revision.AsSpan(0, 7))
+            : version;
+    }
+
+    return version;
 }

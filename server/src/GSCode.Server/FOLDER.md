@@ -1,7 +1,8 @@
 # GSCode.Server
 
-The LSP host — the only project referencing OmniSharp. P4 lights up the first live
-features: diagnostics while typing, the hierarchical outline, folding, selection ranges.
+The LSP host — the only project referencing OmniSharp. Every live feature is served from here:
+diagnostics while typing, the hierarchical outline, folding, selection ranges, navigation,
+completion, hover, signature help, code lens, rename, the hierarchies, inlay hints and formatting.
 
 ## Mapping/LspMapping.cs
 
@@ -259,6 +260,45 @@ only on >= 1 MB changes (so a stable process stays quiet).
 - `static class InitializationOptionsReader`
   - `ReadServerLogLevel(JToken)` — extracts `gscode.serverLogLevel` from the raw
     `initialize` options; returns null when the section or key is absent.
+
+## Configuration/CacheHolder.cs
+
+- `CacheHolder` — owns the persistent cache's lifetime so handlers can reach it through DI. The
+  cache opens during startup, after settings and workspace folders have arrived, which is too late
+  for constructor injection — hence a holder, matching `ResolverHolder`.
+
+## Formatting/
+
+`FORMATTING.md` is the behaviour spec — every rule, and the measurements over the shipped scripts
+that chose it. These are the pieces that implement it:
+
+- `FormatOptions` — the knobs the formatter honours: the editor's indentation settings, which arrive
+  per request in the LSP payload, plus the GSC-specific ones from configuration. The defaults are a
+  fallback for callers with no editor to ask.
+- `FormatScope` — which lines an on-type format may touch: the alignment GROUP around the cursor
+  rather than the whole block, so a keystroke tidies what you are working on and stops there.
+- `AssignmentAligner` — lines up the operators in a run of assignments at one indentation level, one
+  space past the longest left-hand side.
+- `ColumnAligner` — the same idea for the INTERIOR of subscripts and call arguments: a run of
+  statements sharing a shape has each bracket and argument column padded to its widest.
+- `DirectiveSorter` — groups and sorts the directive block at the top of a file. The formatter's one
+  operation that MOVES code rather than whitespace, so it runs as a post-pass on already-reflowed
+  text, after the token-stream equality gate.
+
+## Handlers/ — the remainder
+
+- `BuiltinAtHandler` — serves the `gscode/builtinAt` request behind `shift+f1`, since the client has
+  no symbol knowledge of its own and cannot tell a builtin from a script function.
+- `ClearCacheHandler` — drains the cache and deletes only THIS workspace's database, server-side
+  where the paths are known.
+- `PrepareRenameHandler` — validates a rename before the UI opens: the symbol's range for anything
+  the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
+  the editor says "cannot rename here" instead of prompting and then failing. Shares
+  `RenameHandler.IsRenameable`, so the preview and the rename cannot disagree.
+- `ServerStatusNotifier` — keeps the status-bar tooltip's memory figure current. It was previously
+  set once from the `gscode/indexingComplete` payload and never updated again.
+- `WorkspaceDiagnosticsPublisher` — publishes problems for files that are not open, per
+  `gscode.diagnostics.scope`.
 
 ## .editorconfig
 

@@ -1,12 +1,16 @@
 # GSCode v2 — Server Architecture
 
-End-to-end map of the GSCode language server and its VSCode client. Updated in every
-phase that changes structure. (Phase status: **P0–P12 complete.** The full LSP feature suite is
-live end to end — analysis pipeline, database + SQLite cache, navigation, completion (incl.
-literals), signature help, semantic tokens, code lens, rename, call/type hierarchy, inlay hints,
-type-flow inference, formatting, and code actions — plus the client command surface, docs, and
-packaging. Remaining work is tracked as optional/blocked P13 follow-ups: apiUpdate.ts,
-completion.fieldScope, old-CodeActionHandler mining, and the perf-corpus tooling.)
+End-to-end map of the GSCode language server and its VSCode client. Updated whenever the structure
+changes.
+
+**The rewrite is complete.** The full LSP feature suite is live end to end — analysis pipeline,
+database + SQLite cache, navigation, completion (including literals and fields), signature help,
+semantic tokens, code lens, rename, call/type hierarchy, inlay hints, type-flow inference,
+formatting, and code actions — plus the client command surface, snippets, docs and packaging. Five
+games are supported rather than one; `GAME_PROFILES.md` says what each dialect claims and why.
+
+Whatever is still open lives in `FOLLOWUPS.md` and nowhere else. A phase number repeated here is a
+second copy of a fact that moves, which is exactly what went stale in the paragraph this replaced.
 
 ## Required toolchain
 
@@ -104,6 +108,7 @@ data and were otherwise discoverable only by reading fixture source.
 
 ## Known gaps
 
-P0–P14 are complete. `FOLLOWUPS.md` holds only what still needs a decision: the opt-in
-`apiUpdate.ts` refresh and the optional headless CLI, plus two corpus grammar gaps
-consciously left alone. Everything the 2026-07-20 audit found missing has since been built.
+`FOLLOWUPS.md` holds only what still needs a decision, and is the single place that tracks it. The
+larger items there today: modelling variadic builtins (which is what blocks restoring the upper
+bound on argument counts), the opt-in `apiUpdate.ts` refresh, the optional headless CLI, and two
+corpus grammar gaps consciously left alone.

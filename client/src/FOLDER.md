@@ -1,6 +1,6 @@
 # client/src
 
-The VSCode extension sources. Three small files; the heavy lifting lives in the server.
+The VSCode extension sources. Four small files; the heavy lifting lives in the server.
 
 ## extension.ts
 
@@ -31,6 +31,13 @@ The VSCode extension sources. Three small files; the heavy lifting lives in the 
 
 ## settings.ts
 
-- `interface GscodeSettings` — the settings payload shape shared with the server
-  (currently `serverLogLevel`; grows as features land).
+- `interface GscodeSettings` — the settings payload shape shared with the server: log level,
+  indexing mode, cache, the raw/mods paths and their enable flag, the raw-file warning mode, and
+  the per-feature toggles (outline assignments, code lens, both inlay-hint kinds, literal
+  completion, completion punctuation, diagnostics scope, formatter knobs).
 - `readSettings()` — reads the current `gscode.*` configuration into that shape.
+
+## reloadPrompt.ts
+
+- `registerReloadPrompt(...)` — offers a window reload when a change needs one to take effect,
+  rather than leaving the editor in a state the server can no longer describe.

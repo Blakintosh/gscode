@@ -1,10 +1,13 @@
 # Post-rewrite follow-ups
 
 **P0–P14 are complete.** This file holds only what still needs a decision. Anything finished
-has been removed — its record lives in the git history, and its outcomes are documented where
-they belong: `tests/PORTING.md` (every v1 test class resolved), `PERF.md` (measured budgets,
-the cold/warm memory answer, the corpus category), and `ARCHITECTURE.md` (structure and the
-per-project `FOLDER.md` convention).
+has been removed — its record lives in the git history, and its outcomes are documented where they
+belong: `PERF.md` (measured budgets, the cold/warm memory answer, the corpus category),
+`GAME_PROFILES.md` (what each dialect claims and the evidence for it), `ARCHITECTURE.md` (structure
+and the per-project `FOLDER.md` convention), and each project's own `FOLDER.md`.
+
+A lesson worth keeping belongs in a comment beside the code it constrains, not here. This file is a
+worklist; when its last entry goes, so does it.
 
 ---
 
@@ -17,18 +20,51 @@ ease of fix, easiest first.
 | What | Where | Severity | Ease | Notes |
 |---|---|---|:---:|---|
 | `error`, `add_object`, `warning` reported as unknown builtins | BO3 `scene_shared.csc/.gsc` | Low | **Easy** | Almost certainly real CSC builtins missing from `t7_api_csc.json`. Confirm against the site's library before adding |
-| ~~`print3d`, `debugstar` still reported~~ | BO3 `audio_shared.csc`, `util_shared.csc` | Low | **Easy** | **FIXED.** Both were added to the GSC library only; the hits are in **.csc**. Verified — present in `t7_api_gsc.json`, absent from `t7_api_csc.json` — and the entries are now copied across |
 | 7 script misses (`hide_for_target`, `triggerweakpointdamage`, …) | BO3 `_quadtank.gsc` and 3 others | Low | Medium | Calls into files the mod tools do not ship. Same class as `scripts\zm\_bb` below — our diagnostic is correct |
 | `gib.gsc(58)` / `gib.csc(35)` parse failure | BO3 | Low | Medium | Object-like macro invoked as `GET_GIB_BUNDLES()`. Fix is letting `ParsePostfixChain` accept `(`. Deliberately left — the game has shipped |
 | 6 × `5006 DevOnlyFunctionCalledFromRelease` | BO3, 5 files | **High** | Hard | Unchanged and still the only Error on shipped code. See its own section below |
 | WaW 8 / MW2 7 / CoD4 2 / BO1 2 parse failures | all four | None | — | Every one inspected: genuinely malformed files. Listed in `GAME_PROFILES.md` |
 
-**The API was NOT regenerated as part of this.** The five builtin candidates are a five-name data
-question, and regenerating rewrites fifteen files and invalidates every workspace cache through
-`ServerBuildIdentity`. Adding five verified names by hand is the smaller, more reviewable change —
-and the CSC/GSC split above is the thing to check first, since it explains four of the five.
+CoD4's `animscripts\traverse\stairs_down.gsc` and `stairs_up.gsc` now report MORE than they used to,
+and correctly: both genuinely omit a semicolon, and one of them was hidden entirely because
+`ParseCallChain` looped and absorbed the following statement as a method call on the previous call's
+result. Reporting them is the fix working, not a regression.
+
+Regenerating the API rewrites fifteen files and invalidates every workspace cache through
+`ServerBuildIdentity`, so it is done deliberately rather than casually. The CoD4/WaW/BO1 libraries
+were regenerated once, to carry the curated signature overrides; the remaining BO3 builtin
+candidates above are a handful of names and are still better added by hand than by a run.
 
 ## Backlog
+
+### Variadic builtins are not modelled — and that is what blocks 5023's upper bound
+
+`BuiltinOverload` carries `CalledOn`, `Parameters`, `ReturnTypeText`, `ReturnsVoid` and no notion of
+a variadic. So `array( a, b, c )` (data: one parameter) and `Record3DText` (data: one parameter, six
+real) look like fixed-arity functions, and checking an upper bound against them reported **634 errors
+across 134 shipped BO3 scripts** — every one the library's fault, not the code's. That is why
+`ArgumentCountLint` checks only the lower bound on builtins.
+
+The signal already exists and is thrown away: the CoD4 documentation pages declare it in the H1
+signature line — `GetAIArray( <team>, <team>, ... )`, `BadPlace_Cylinder( …, <team>, <team>... )` —
+and `ParseCod4Page` reads only the name before the `(`. Carrying it through
+`JSON → ApiLoader → BuiltinOverload → ArgumentCountLint` would fix those functions at the source
+rather than by override, restore the upper bound, and improve signature help and hover, which today
+present a variadic as though it took one argument.
+
+A second, cheaper signal from the same line: a page whose signature is `Foo()` with empty parens has
+no mandatory parameters whatever its "Required Args" section claims. `StartPath` contradicts itself
+in exactly that way. Both rules deserve a corpus measurement, since either could reach many more
+functions than the handful found by hand.
+
+### Recovery after a missing semicolon no longer skips — audit the other sync sites
+
+`ParseExpressionStatement` used to call `RecoverToStatement()` after reporting a missing `;`, which
+threw away the statement that followed — a whole `assert( isdefined( endnode ) );` line vanished from
+the tree in CoD4's `stairs_down.gsc`, taking its references and its outline entry with it. It no
+longer does: panic-mode recovery is for a failure whose extent is unknown, and this one's is known
+exactly, so parsing simply continues. The other `RecoverToStatement` callers were not audited for the
+same over-reach and may deserve the same treatment.
 
 ### Function-not-found: BUILT, and what remains of it
 
@@ -94,36 +130,11 @@ so those 10 zm files had namespace checking quietly disabled with nothing saying
 Users are not shown this by default: `gscode.diagnostics.scope` is `workspace`, which excludes the
 stock scripts. It fires on their own code, where it is actionable.
 
-### Two findings left from the corpus diagnostic sweep
+### One finding left from the corpus diagnostic sweep
 
 `CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since
-those shipped, anything it reports is either a real defect in Treyarch's code or a false positive
-in ours. Two groups are still unexplained:
-
-**`gscode-5004 ReadOnlyFieldWrite` — RESOLVED. Flags now sourced; the lint is dormant.**
-
-The 87 warnings were ours, not Treyarch's. `ScriptObjectFields.xlsx` maps field name to engine type
-token and nothing else — it has no read-only column. All 362 flags in the curated sources were
-applied by hand during the manual import.
-
-They were removed, and then 240 came back with a real source: `Weapon Fields.txt` in the same
-folder lists exactly the weapon fields under "These are read only fields accessible on weapon ID
-values returned by GetWeapon()". That is now the ONLY read-only authority in the data, it is cited
-in the weapon file's header, and regenerating asserts every flagged name appears in that list.
-
-The lint no longer lets a weapon fact speak for an entity owner. Weapon read-only applies to the
-value `GetWeapon()` returns, not to an entity sharing the field name — `self.meleedamage` was
-several of the original 87. Since the lattice has no weapon type, a weapon owner cannot be typed at
-all, so weapon declarations are excluded from the entity check outright.
-
-Net: corpus 3,305 → 3,218, exactly the 87 and nothing else. The field half of the lint cannot
-currently fire, which is the intended state; `5005 SizeIsReadOnly` is unaffected and still does.
-`ObjectFieldsTests.OnlyWeaponFieldsAreMarkedReadOnly` pins it.
-
-Related, same root cause: `bool` was removed as a field type entirely (135 fields). GSC has no
-bool — 0 is false, anything else true — so `F_BYTE` and `F_BITFLAG` are ints. `bool` was another
-hand-applied inference from the same import, and `forceDamageHitLocation` (F_BYTE, a hit location)
-showed it was wrong in general.
+those shipped, anything it reports is either a real defect in Treyarch's code or a false positive in
+ours. One group is still unexplained.
 
 **`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 ERRORS in 5 files.** The highest severity
 anything reports on shipped code: `error` (3x), `debug_spherical_cone`, `Print3d`,
@@ -266,27 +277,6 @@ stock scripts name the declaring file in their own `#using` list, so nothing rea
 import chain. If a mod turns out to rely on transitivity, this is the place to widen.
 `LookupClasses` is deliberately left unfiltered so go-to-definition still works on a class
 written without its import.
-
-### Find-references include-scoping on the merge dialects — DONE
-
-Kept for the reasoning, because the shape of the fix was not the one predicted here, and the
-prediction that it was low-value was wrong within a day of a real IW workspace using it.
-
-The note below called for an include-set membership test per referencing FILE. That was tried and
-was wrong twice. Checking `#include` alone missed path calls entirely, taking a function whose
-callers all reach it by path from 1,230 references to zero — a confidently wrong small answer that
-reads as "this is dead code". Keeping or dropping a whole FILE then meant a file that reaches the
-declaring one contributed every same-named reference it holds, including its own declaration.
-
-Scoping is per REFERENCE. A path call names its file outright, so the path at that exact site
-decides it; anything else is a bare name, which a merge dialect resolves locally first, so it
-belongs to the referencing file when that file declares it. `DatabaseQueries.ScopeToIncludeGraph`
-is shared by find-references, rename and the CodeLens count, so the number and the peek list cannot
-disagree. `ReferenceScopingTests` covers both reported symptoms.
-
-The original note follows.
-
-### Find-references is not include-scoped on the merge dialects (superseded)
 
 ### ScriptDoc coverage is 499 of 572 blocks
 

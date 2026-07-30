@@ -565,8 +565,8 @@ public sealed class FlowTyper
                 TypeOf(member.Object, environment),
                 assignment.Operator == TokenKind.Assign ? assignment.Value : null));
 
-            // A field assignment is an assignment: `level.foo = "lol"` says as much about foo as
-            // `foo = "lol"` says about the local, and the hint was missing on one and not the other
+            // A field assignment is an assignment: `level.foo = "text"` says as much about foo as
+            // `foo = "text"` says about the local, and the hint was missing on one and not the other
             // purely because this branch returned first.
             //
             // The type is the VALUE's, not the field's. Reading it back through TypeOfField would

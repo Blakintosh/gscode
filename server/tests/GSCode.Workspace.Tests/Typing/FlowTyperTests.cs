@@ -75,10 +75,10 @@ public class FlowTyperTests
     [Fact]
     public void FieldAssignments_AreTypedLikeLocals()
     {
-        // The reported gap: `foo = "lol"` showed its <string> hint and `level.foo = "lol"` showed
+        // The reported gap: `foo = "text"` showed its <string> hint and `level.foo = "text"` showed
         // nothing, purely because the field branch returned before any hint was recorded.
         Dictionary<string, ScrType> types = InferByFirstToken(
-            "    level.name = \"lol\";\n    self.count = 5;\n    level.on = true;\n    a.b.deep = 1.5;");
+            "    level.name = \"text\";\n    self.count = 5;\n    level.on = true;\n    a.b.deep = 1.5;");
 
         Assert.Equal(ScrType.String, types["name"]);
         Assert.Equal(ScrType.Int, types["count"]);

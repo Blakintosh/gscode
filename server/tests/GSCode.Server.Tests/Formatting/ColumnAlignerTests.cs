@@ -34,14 +34,14 @@ public class ColumnAlignerTests
         string formatted = Format("""
             function f()
             {
-            	foo[ "lol" ][ "lol2" ] = "something";
+            	foo[ "key" ][ "key2" ] = "something";
             	foo[ "somethingelse" ][ "other" ] = "garbage";
             }
             """);
 
         const string expected = "function f()\n"
             + "{\n"
-            + "\tfoo[ \"lol\"           ][ \"lol2\"  ] = \"something\";\n"
+            + "\tfoo[ \"key\"           ][ \"key2\"  ] = \"something\";\n"
             + "\tfoo[ \"somethingelse\" ][ \"other\" ] = \"garbage\";\n"
             + "}\n";
 
@@ -111,15 +111,15 @@ public class ColumnAlignerTests
         string formatted = Format("""
             function f()
             {
-            	foo[ "bar" ][ "lol" ] = "other";
-            	bash[ "garbage" ][ "other" ] = "lol";
+            	foo[ "bar" ][ "key" ] = "other";
+            	bash[ "garbage" ][ "other" ] = "key";
             }
             """);
 
         const string expected = "function f()\n"
             + "{\n"
-            + "\tfoo [ \"bar\"     ][ \"lol\"   ] = \"other\";\n"
-            + "\tbash[ \"garbage\" ][ \"other\" ] = \"lol\";\n"
+            + "\tfoo [ \"bar\"     ][ \"key\"   ] = \"other\";\n"
+            + "\tbash[ \"garbage\" ][ \"other\" ] = \"key\";\n"
             + "}\n";
 
         Assert.Equal(expected, formatted);
@@ -181,7 +181,7 @@ public class ColumnAlignerTests
         string once = Format("""
             function f()
             {
-            	foo[ "lol" ][ "lol2" ] = "something";
+            	foo[ "key" ][ "key2" ] = "something";
             	foo[ "somethingelse" ][ "other" ] = "garbage";
             	register( "a", 1, "x" );
             	register( "bbbb", 22, "y" );
@@ -200,12 +200,12 @@ public class ColumnAlignerTests
         ParseResult result = ScriptAnalysis.Analyze(
             @"c:\ws\scripts\t.gsc",
             ScriptLanguage.Gsc,
-            SourceText.From("function f()\n{\nfoo[ \"lol\" ] = 1;\nfoo[ \"somethingelse\" ] = 2;\n}\n"),
+            SourceText.From("function f()\n{\nfoo[ \"key\" ] = 1;\nfoo[ \"somethingelse\" ] = 2;\n}\n"),
             NullInsertProvider.Instance,
             new NameTable());
 
         string formatted = GscFormatter.Format(result, FormatOptions.Default with { UseTabs = true })!;
 
-        Assert.Contains("\tfoo[ \"lol\" ] = 1;\n", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tfoo[ \"key\" ] = 1;\n", formatted, StringComparison.Ordinal);
     }
 }

@@ -1,20 +1,73 @@
 # GSCode
 
-A Visual Studio Code language extension that provides IntelliSense support for Call of Duty: Black Ops III's scripting languages, GSC and CSC.
+A Visual Studio Code language extension providing IntelliSense for Call of Duty's scripting languages — GSC, CSC and GSH.
 
-This repository contains the source code for the GSCode language server, which uses the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) to provide IntelliSense support for GSC and CSC. Additionally, it contains the source code for the GSCode VSCode extension, which is a language client that communicates with the language server to provide the actual IntelliSense.
+This repository holds two halves: the GSCode **language server** (C#), which speaks the
+[Language Server Protocol](https://microsoft.github.io/language-server-protocol/), and the GSCode
+**VSCode extension** (TypeScript), the client that runs it.
 
-For the latest information on GSCode's releases and features, please see [README.md](https://github.com/Blakintosh/gscode/blob/main/client/README.md) of the client directory.
+For release notes and the user-facing feature list, see the
+[client README](https://github.com/Blakintosh/gscode/blob/main/client/README.md).
 
-## Reporting Issues and Tweaks
+## Supported games
 
-As GSCode is an indepedent implementation of a GSC language parser, it may not immediately have feature parity with the GSC compiler. However, we're aiming for it to catch all errors that are typically caught at compile-time, and additionally, a wide range of errors previously only caught at runtime.
+Black Ops III is the verified target and the most complete. Four earlier games are supported with
+their capabilities checked against their own shipped scripts:
 
-With that in mind, if you encounter any situations where the GSC compiler (Linker) reports an error, but GSCode does not, this constitutes an issue. You can report these issues to the [issue tracker on GitHub](https://github.com/Blakintosh/gscode/issues); please provide the expected error and attach a script that can reproduce the issue. Issues reporting bugs in isolated script cases without attaching a script (snippet) will not be looked into!
+| Game | Dialect notes |
+|---|---|
+| Call of Duty 4 (2007) | `#include` merge, `maps\x::foo()` path calls, `///` ScriptDoc |
+| World at War (2008) | as CoD4, plus client scripts (`.csc`) |
+| Modern Warfare 2 (2009) | adds `foreach`, `childthread`, `call`, file-scope constants |
+| Black Ops (2010) | as WaW, plus `#"hash strings"` |
+| **Black Ops III (2015)** | `#using` namespaces, classes, `function`, `&` pointers, `/@ @/` ScriptDoc, headers |
+
+Every other mainline game up to Black Ops 6 is present as a *core* — a nameable identity over the
+shared base dialect, with its specifics left for a contributor to fill in. See
+[server/GAME_PROFILES.md](server/GAME_PROFILES.md) for how a profile is defined and promoted.
+
+The dialect is data, not branching: one `GameProfile` decides which keywords lex, which directives
+exist, how functions resolve, and which engine data files load.
+
+## Getting started
+
+Open a folder of scripts and GSCode indexes it. Two optional settings tell it where the game's own
+scripts live, so that includes and path calls resolve against them:
+
+- `gscode.rawPath` — the game's raw script folder. Set this when the folder you have open is a mod
+  or a loose set of scripts. Left empty, only the open workspace folders are indexed.
+- `gscode.modsPath` — the folder holding your mods.
+
+Both are derived from the game install where possible, and BO3 is the one game whose raw scripts sit
+a level down (`share\raw`); every earlier game uses `raw` directly.
+
+## Reporting issues
+
+GSCode is an independent implementation of a GSC parser, so it may not have exact parity with the
+game's compiler. The goal is to catch everything the compiler catches at build time, plus a range of
+mistakes that otherwise only surface at runtime.
+
+If the compiler (Linker) reports an error that GSCode does not — or GSCode reports one on code that
+compiles — that is a bug. Please file it on the
+[issue tracker](https://github.com/Blakintosh/gscode/issues) with the expected result **and a script
+that reproduces it**. Reports without a reproducing snippet will not be investigated.
 
 ## Requirements
 
-GSCode's language server requires the .NET 10 Runtime, available at [Download .NET 10.0](https://dotnet.microsoft.com/download/dotnet/10.0). **You do not need the SDK.**
+The language server requires the .NET 10 Runtime, available at
+[Download .NET 10.0](https://dotnet.microsoft.com/download/dotnet/10.0). **You do not need the SDK.**
+
+## Building
+
+```
+cd server && dotnet build GSCode.slnx && dotnet test --filter "Category!=Corpus"
+cd client && npm ci && npm run compile
+```
+
+Warnings are errors. The corpus tests are excluded above because they read real game installs
+through `GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}`; without those set they silently sweep nothing.
+[server/ARCHITECTURE.md](server/ARCHITECTURE.md) is the map of the server, and each project carries a
+`FOLDER.md` describing its own contents.
 
 ## Licence
 

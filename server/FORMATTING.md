@@ -163,8 +163,8 @@ The same setting also aligns the **interior of subscripts and call arguments** w
 statements shares the same shape — the same base or callee, the same delimiters, the same arity:
 
 ```gsc
-foo [ "bar"          ][ "lol"   ] = "other";
-bash[ "somethingelse" ][ "other" ] = "garbage";
+foo [ "bar"          ][ "key"   ] = "other";
+bash[ "somethingelse" ][ "other" ] = "value";
 
 register( "toplayer", PARASITE_ROUND_RING_FX  , VERSION_SHIP, 1, "counter" );
 register( "world"   , "toggle_on_parasite_fog", VERSION_SHIP, 2, "int" );

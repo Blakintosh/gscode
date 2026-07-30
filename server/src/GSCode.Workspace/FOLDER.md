@@ -3,8 +3,10 @@
 Workspace layer: the script database (separate GSC/CSC stores), path/mod-overlay
 resolution, background indexing, the SQLite cache, and the bundled game data. LSP-free.
 
-*(Resolution = P2, Documents = P4, Database/Indexing = P5 (all below); cache lands P6;
-Typing lands P10.)*
+Everything below is built. The folders map to the layers: `Resolution/` turns a script path into a
+file, `Documents/` holds open-buffer state, `Database/` and `Indexing/` own the record store,
+`Api/` the bundled game data, `Analysis/` the lints, `Completion/` and `Typing/` the information
+surfaces.
 
 ## Database/ScriptRecord.cs
 
@@ -240,6 +242,46 @@ Typing lands P10.)*
   that data can carry mistakes). Assignments including compound forms and `++`/`--` all count
   as writes. A field is only flagged when EVERY entity kind declaring the name agrees it is
   read-only, because the owner's kind isn't inferred at this layer.
+
+## Analysis/ — the remaining lints
+
+Each is a `static Analyze(...)` returning diagnostics, run per open document and merged by the
+server's `TextSyncHandler`. Severity is chosen by MEASUREMENT over the corpus, not by taste: a rule
+reported as an Error must never land on code that ships and works.
+
+- `FunctionResolutionLint` (5013/5014) — a call resolving to no script function and no builtin.
+  Splits script from builtin so a corpus sweep of 5014 yields the candidate list for curating the
+  builtin library. Stands down on a game with no builtin data, and where the library is known
+  incomplete.
+- `AmbiguousFunctionLint` (5007) — one name reachable as several distinct declarations.
+- `ArgumentCountLint` (5022/5023) — the rule is NOT symmetric. A **script function** is only wrong
+  with too MANY arguments: passing fewer is legal and idiomatic, the rest being `undefined`. A
+  **builtin** is engine-validated, so its mandatory count is a real lower bound — but only where
+  `HasReliableBuiltinSignatures` says the data can carry the claim. The upper bound is absent on
+  builtins because the library under-declares variadics; restoring it is a data problem, not a code
+  one.
+- `CaseLabelLint` (5010/5011/5017) — a `case` on an undefined value, a non-constant label, and the
+  same label twice in one switch. The third found a real duplicate `case 1:` in shipped BO3 code.
+- `ClassCycleLint` (5021) — a class inheritance cycle, which would otherwise recurse forever.
+- `DevBlockCallLint` (5006) — calling a `/# #/`-only function from release code.
+- `DuplicateImportLint` (5018) — the same file imported twice, tagged `Unnecessary` so the line
+  greys out. Separator and case differences do not make it a different file.
+- `UnassignedVariableLint` (5016/5024) — a local read that nothing in the function writes. Excludes
+  parameters, loop bindings, `waittill` outputs, profile globals, file-scope constants, macro-supplied
+  names, and the `...` parameter pack; reports 5024 instead when the pack is read in a function that
+  does not declare `...`. An unresolved import stands the whole rule down.
+- `UnreachableCodeLint` (5015) — statements after a `return`/`break`/`continue`.
+- `UnusedBindingLint` (5020) — a parameter or `waittill` output nothing reads. A **Hint**, so it
+  never reaches the Problems panel and the fade is the entire output: at any panel-visible severity
+  it would report 5,277 findings on BO3's own scripts, most of them engine-fixed callback signatures.
+- `UnusedIncludeLint` (5012) / `UnusedUsingLint` — an import contributing nothing.
+- `UnusedLocalLint` (5008) — a local assigned and never read.
+- `UsingNotFoundLint` (5009) — an import naming no file.
+- `VoidResultLint` (5019) — keeping the result of a builtin that returns nothing. Only builtins:
+  GSC declares no return type, so the same claim about a script function would be a guess.
+- `GameShapeDetector` — not a lint but the mismatch check behind it: reads a file's directives to
+  judge which family it looks like, and reports when the selected profile disagrees.
+- `WorkspaceLints` — the composition point that runs the cross-file rules for a document.
 
 ## Resolution/RawWriteGuard.cs
 

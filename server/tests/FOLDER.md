@@ -5,8 +5,6 @@ string, the workspace tests need a database, and the server tests need the LSP l
 install. Written so a class can be found by keyword — search this file for the construct, not the
 test directory for a name.
 
-`PORTING.md` records how every v1 test class was resolved; it is history, not an index.
-
 ## Environment variables
 
 Every one is OPTIONAL. A test needing an absent corpus reports SKIPPED and passes, so the suite is

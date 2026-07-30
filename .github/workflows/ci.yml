@@ -19,10 +19,11 @@ jobs:
       - name: Build server
         run: dotnet build server/GSCode.slnx --nologo
 
-      # Corpus/stock-fixture test categories auto-skip when their local data is absent.
       - name: Test server
-        # Corpus tests need a local mod-tools install (%TA_TOOLS_PATH%\shareaw), which CI
-        # does not have. They no-op without it, but excluding them keeps that explicit.
+        # Corpus tests read each game's scripts from GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}, which
+        # point at local game or mod-tools installs CI does not have. They no-op when those are
+        # unset, so excluding them is not what makes CI pass - it makes the omission EXPLICIT, since
+        # a run that silently swept nothing looks exactly like one that swept 7,000 scripts.
         run: dotnet test server/GSCode.slnx --nologo --no-build --filter "Category!=Corpus"
 
       - uses: actions/setup-node@v4

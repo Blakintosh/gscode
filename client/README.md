@@ -1,8 +1,10 @@
 # GSCode
 
-A Visual Studio Code language extension that provides IntelliSense support for Call of Duty: Black Ops III's scripting languages, GSC and CSC.
+A Visual Studio Code language extension that provides IntelliSense support for Call of Duty's scripting languages — GSC, CSC and GSH.
 
 GSCode helps you to find and fix errors before the compiler has to tell you, streamlining scripting. Additionally, it adds rich IntelliSense into your editor to support the scripting process.
+
+Black Ops III is the verified target. Call of Duty 4, World at War, Modern Warfare 2 and Black Ops are also supported, each with its own dialect: which keywords exist, whether imports merge (`#include`) or name a namespace (`#using`), and which engine data loads. The status bar shows which game is active.
 
 ## Requirements
 
@@ -22,6 +24,10 @@ A complete ground-up rewrite of the language server and extension for speed, low
 - Formatting (whole document, selection, and on-type) is whitespace-only and corruption-proof: it refuses files with syntax errors and re-checks its own output so it can never alter your tokens.
 - Code actions cover remove-duplicate-`#using` and add-missing-`#using`, backed by a namespace-usage lint.
 - Macros defined in `.gsh` headers are first-class symbols with go-to-definition, references, and hover via token provenance.
+- Added support for four earlier games — Call of Duty 4, World at War, Modern Warfare 2 and Black Ops — with each dialect's keywords, import style, function-pointer and ScriptDoc syntax, and bundled engine data driven by one game profile rather than by branching.
+- Replaced `TA_TOOLS_PATH` with `gscode.rawPath` and `gscode.modsPath`, both derived from the game install where possible, so a mod or a loose folder of scripts resolves against the game's own scripts.
+- Added snippets for the common constructs, with dialect-specific ones (`function`, `class`, `#using`, ScriptDoc) labelled for the games that have them. `#precache` is split by world, so a `.gsc` is offered only server-side asset types and a `.csc` gets the `client_*` family — a header (`.gsh`) sees both, since it is inserted into whichever world includes it.
+- Expanded diagnostics: argument counts against builtin and script signatures, macro arity, unreachable code, unassigned and unused variables, duplicate imports, duplicate case labels, assignment used as a condition, inheritance cycles, `...` placement, and a missing semicolon reported at the end of the statement that is missing it.
 
 ### 1.5.0
 
@@ -99,8 +105,8 @@ Additionally,
 
 ### 0.2 beta
 
-- Added a 'dumb' completion handler to suggest function completions.
-- Added a 'dumb' handler to provide GSCode API hover documentation on built-in functions.
+- Added a non-contextual completion handler to suggest function completions.
+- Added a non-contextual handler to provide GSCode API hover documentation on built-in functions.
 - Added diagnostic for missing scripts from using.
 - Added basic signature analysis for highlighting of class, function, method and parameter definitions.
 - Added using highlight with script path hint.

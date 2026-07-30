@@ -97,6 +97,7 @@ no bundled data).
 | axis | cod4 | waw | mw2 | bo1 | bo3 |
 |------|:----:|:---:|:---:|:---:|:---:|
 | import style (`ImportStyle`) | `#include` | `#include` | `#include` | `#include` | `#using` |
+| namespace-driven resolution (`ResolvesByNamespace`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | inline path calls (`HasInlinePathCalls`) — `maps\mp\_utility::foo()` | ✓ | ✓ | ✓ | ✓ | ✗ |
 | function pointer (`FunctionPointerStyle`) | `::` | `::` | `::` | `::` | `&` |
 | `#namespace` directive (`HasNamespaceDirective`) | ✗ | ✗ | ✗ | ✗ | ✓ |
@@ -104,6 +105,20 @@ no bundled data).
 `::` = a bare qualified name **is** the pointer (`level.f = maps\mp\_utility::foo;`, no parens);
 parentheses would call it. `&` = BO3 makes the pointer explicit (`level.f = &foo;` / `&ns::foo`), and
 a bare `ns::foo` is always a call.
+
+**Import style and resolution are two claims, not one.** `ImportStyle` is purely lexical — whether
+the directive is spelled `#using` or `#include` — and that is all the lexer, directive completion and
+shape detection need. `ResolvesByNamespace` is the deeper question: whether a function's *identity*
+carries its namespace. Under the merge model a file's functions join the caller's scope and are
+reached by bare name, so the key drops the namespace; under the namespace model the call stays
+qualified and two `main`s in different namespaces are two functions. Five rules turn on the second
+one — how a function is keyed, whether references scope to the include graph, whether a definition
+narrows to one file. They coincide for every game today (a test asserts it), and BO3 is the only
+game that is namespace-driven.
+
+A **class** name is the exception on BO3: it is global, named bare as `new Throttle()` or
+`class Derived : Throttle`, with no `ns::Throttle` form — so a class key never carries a namespace on
+either side, even there.
 
 ### Loops, classes & declarations (all derived from the keyword set)
 
@@ -117,6 +132,12 @@ a bare `ns::foo` is always a call.
 | `autoexec` / `private` modifiers | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `childthread` / `call` | ✗ | ✗ | ✓ | ✗ | ✗ |
 | file-scope constants `CONST = 4;` (`HasFileScopeConstants`) | ✗ | ✗ | ✓ | ✗ | ✗ |
+| `...` parameter pack, read as `vararg` (`HasVarargBinding`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+
+`vararg` is a **keyword** on BO3 but appears in expression position — `foreach ( f in vararg )`,
+`vararg.size` — so it parses as an identifier node wrapping the keyword token, the same shape the
+callable keywords (`waittill`, `notify`) use. Being keyword-gated by the profile means a pre-BO3
+script may still use `vararg` as an ordinary variable name.
 
 **`foreach` is a family fork, not a timeline.** It is the Infinity Ward line's MW2 (2009) addition;
 the Treyarch line does **not** get it until BO3. So BO1 (2010) has none despite being newer than
@@ -214,6 +235,19 @@ come from a mod-tools wordfile that is demonstrably partial: sweeping BO1's own 
 finds 620 names it lacks, because its wordfile is the CoD4-era list carried forward unchanged. Those
 libraries are therefore used for completion, hover and signature help, but never to claim a name is
 NOT an engine function — `BuiltinFunctionNotFound` stands down for them.
+
+**`HasReliableBuiltinSignatures` is a third, narrower claim** — that the *parameters* on each entry
+can be judged against, which is not implied by the name list being complete. BO3's come from a data
+set built for the purpose; CoD4's are reconstructed from a wordfile plus documentation pages, and
+WaW's and BO1's largely *inherit* CoD4's, making them a plausible signature for a related function
+rather than a verified one for theirs. Measured rather than assumed: checking a call against the
+mandatory count reported 4 findings across BO3's shipped scripts and 141 / 280 / 157 across CoD4's,
+WaW's and BO1's, so only BO3 sets it and `WrongBuiltinArgumentCount` is gated on it.
+
+Where the documentation is simply *wrong*, the correction goes in a curated override
+(`tools/field-data/sources/curated/<prefix>_api_overrides.json`) that applies over every other layer,
+because the generated api file is an artifact and an edit made there dies on the next run. WaW and
+BO1 need no entries of their own — they inherit CoD4's corrected output.
 
 Radiant keys carry a side (`both` or `client`). BO3 marks client keys with a `client` prefix inside
 one `keys.txt`; WaW and BO1 instead split them across `keys.txt` and `clientkeys.txt`. Either way,

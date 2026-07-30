@@ -37,6 +37,56 @@ candidates above are a handful of names and are still better added by hand than 
 
 ## Backlog
 
+### BO3 preprocessing: cache a header's DEFINITIONS, not just its tokens
+
+Measured, by phase, over each game's own scripts:
+
+           lex   preprocess   parse   extract
+  cod4     24%       10%       38%      28%
+  bo3      15%       60%       10%      15%
+
+BO3 spends sixty percent of analysis preprocessing. CoD4 spends ten, and that ten
+is the FLOOR: it has 20 `#define` across 894 files, no `#insert` and no `#if`, so
+its preprocess time is the cost of walking every token to discover there is
+nothing to do. The gap is entirely BO3's headers.
+
+`InsertCache` already removed the re-LEXING. What remains is `ProcessRange` on the
+inserted frame (Preprocessor.HandleInsert): the header's whole token stream is
+re-walked and its every `#define` re-registered, once per including file. BO3 has
+2,137 insert directives naming 114 distinct headers, so each header is processed
+about 19 times.
+
+The headers make this cacheable, and they were checked rather than assumed:
+
+- 118 headers, 4,049 meaningful lines, of which 3,850 are directives.
+- ZERO `#if`/`#elif`/`#else`/`#endif` lines in any of them, so a header's define
+  set cannot vary with the including file's state.
+- The 199 non-directive lines are macro-body continuations, not code, so a header
+  emits essentially nothing into the includer's token stream.
+
+So a header's contribution is a set of MacroDefinitions determined by the header
+alone. Caching that per resolved path - the same key InsertCache uses, for the
+same mod-versus-raw reason - and merging it on a repeat insert would take 2,137
+header walks down to 118.
+
+Four things to get right, none of them blocking:
+
+- Nested inserts: the cached set has to be the TRANSITIVE one, and it interacts
+  with the existing cycle guard.
+- Shadowing: a later `#define` of a name wins, so merging a cached set has to
+  produce the same last-wins result a linear walk does. A header's own internal
+  order is fixed, so its final set is deterministic; merging it at the same
+  position is equivalent.
+- Provenance: each macro's DefinitionSite points into the header, which is
+  per-header and caches cleanly.
+- Diagnostics: a malformed `#define` in a header is currently reported once per
+  INCLUDING file. Caching would report it once. That is arguably the fix, but it
+  changes counts, so the corpus sweep will move.
+
+Worth doing: if header re-walking is the bulk of that 60%, BO3's total analysis
+falls by roughly a third. Measure it the same way - `--filter "Category=Perf"`,
+and CoD4 is the control, since it has no headers at all.
+
 ### Variadic builtins are not modelled — and that is what blocks 5023's upper bound
 
 `BuiltinOverload` carries `CalledOn`, `Parameters`, `ReturnTypeText`, `ReturnsVoid` and no notion of

@@ -143,6 +143,36 @@ public class GameProfileTests
     }
 
     [Fact]
+    public void BlackOps3IsTheOnlyNamespaceDrivenGame()
+    {
+        // The whole lineage MERGES except BO3: #include pulls a file's functions into the caller's
+        // scope, so the file a function lives in is not part of its name. BO3 alone makes the
+        // namespace part of a function's identity.
+        //
+        // Asserted over every profile, cores included, because five resolution rules read this —
+        // how a function is keyed, whether references scope to the include graph, whether a
+        // definition narrows to one file — and a core that drifted into the namespace model would
+        // silently take BO3's answer for all of them.
+        Assert.Equal(
+            new[] { "bo3" },
+            GameProfile.All.Where(static profile => profile.ResolvesByNamespace).Select(static profile => profile.ShortName).ToArray());
+    }
+
+    [Fact]
+    public void ResolutionAndDirectiveSpellingAgreeForEveryGameToday()
+    {
+        // Two separate claims that happen to coincide across the whole lineage: which directive is
+        // spelled (#using vs #include), and whether a function's identity carries its namespace.
+        // Nothing REQUIRES them to agree, which is why the call sites read whichever one they mean —
+        // this test records that the day they diverge, it is a deliberate change to a profile and not
+        // a silent drift.
+        foreach ( GameProfile profile in GameProfile.All )
+        {
+            Assert.Equal(profile.ImportStyle == ImportStyle.Namespace, profile.ResolvesByNamespace);
+        }
+    }
+
+    [Fact]
     public void CoresMatchTheBaseDialect()
     {
         // A core sets no capabilities: it is the base IW-style shape (base keywords, #include merge,

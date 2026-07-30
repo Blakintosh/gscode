@@ -106,6 +106,7 @@ public sealed partial record GameProfile
         Supported = true,
         DataFilePrefix = "t7",
         HasCompleteBuiltinLibrary = true,
+        HasReliableBuiltinSignatures = true,
         // The only game that buries raw a level down; every earlier one sits at <install>\raw.
         RawSubfolder = @"share\raw",
         HasClientScripts = true,
@@ -130,6 +131,8 @@ public sealed partial record GameProfile
             .. ClassKeywords,
             "do", "function", "autoexec", "private", "const",
             "waitrealtime", "vectorscale", "profilestart", "profilestop",
+            // The `...` parameter pack, read by name in the body. See HasVarargBinding.
+            "vararg",
         ],
     };
 

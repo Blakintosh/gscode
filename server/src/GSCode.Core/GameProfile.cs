@@ -154,6 +154,21 @@ public sealed partial record GameProfile
     public bool HasCompleteBuiltinLibrary { get; init; }
 
     /// <summary>
+    /// Whether the builtin library's SIGNATURES can be judged against, as opposed to its list of
+    /// NAMES being complete — which is what <see cref="HasCompleteBuiltinLibrary"/> claims.
+    ///
+    /// Two different questions, and only BO3 answers both. Its library is documented per parameter,
+    /// with a description and a mandatory flag that came from the documentation. CoD4's was
+    /// reconstructed from a wordfile plus documentation pages, and WaW's and BO1's largely INHERIT
+    /// CoD4's entries — a plausible signature for a related function, not a verified one for theirs.
+    ///
+    /// Measured rather than assumed. Checking a call against the mandatory count reported 4 findings
+    /// across BO3's 980 shipped scripts and 141, 280 and 157 across CoD4's, WaW's and BO1's. The
+    /// second set is the data disagreeing with the game, not the game being wrong.
+    /// </summary>
+    public bool HasReliableBuiltinSignatures { get; init; }
+
+    /// <summary>
     /// The language keywords this dialect recognizes. A word is a keyword only if it is in this set,
     /// so a dialect that lacks one (e.g. <c>foreach</c> before MW2, <c>function</c>/<c>class</c> in
     /// the Infinity Ward games) leaves it an ordinary identifier. Built as <c>[..BaseKeywords, …]</c>:
@@ -213,6 +228,15 @@ public sealed partial record GameProfile
     /// </summary>
     public bool HasWorldObject { get; init; }
 
+    /// <summary>
+    /// Whether the engine binds the <c>...</c> parameter pack to a name the body can read. BO3 calls
+    /// it <c>vararg</c> and it is an ARRAY: <c>foreach ( str_flag in vararg )</c> and
+    /// <c>vararg.size</c> are how the stock scripts use it (array_shared, util_shared, scene_shared
+    /// and animation_shared all do). Derived from the keyword set, so the name lives in ONE place —
+    /// the lexer table — and a rule that needs to recognise the pack does it by token kind.
+    /// </summary>
+    public bool HasVarargBinding => HasKeyword("vararg");
+
     /// <summary>Whether a function declaration begins with the <c>function</c> keyword. IW omits it. Derived from the keyword set.</summary>
     public bool HasFunctionKeyword => HasKeyword("function");
 
@@ -223,10 +247,32 @@ public sealed partial record GameProfile
     public ImportStyle ImportStyle { get; init; } = ImportStyle.Include;
 
     /// <summary>
+    /// Whether a function's IDENTITY includes the namespace it is declared in — the "namespace-driven"
+    /// model. BO3 is the only game that is: <c>#using</c> imports a namespace and a call stays
+    /// qualified (<c>ns::foo()</c>), so two functions named <c>main</c> in different namespaces are
+    /// two different functions. Every other game in the lineage MERGES: <c>#include</c> pulls a
+    /// file's functions into the caller's scope, calls are bare or path-qualified
+    /// (<c>maps\mp\_util::foo()</c>), and the file a function lives in is not part of its name.
+    ///
+    /// Deliberately separate from <see cref="ImportStyle"/>, which answers a narrower and purely
+    /// LEXICAL question — whether the directive is spelled <c>#using</c> or <c>#include</c>. That is
+    /// all the lexer, directive completion and shape detection need to know. Resolution is a
+    /// different claim: it decides how a function is keyed, whether references scope to the include
+    /// graph, and whether a definition narrows to one file. Reading the directive spelling to answer
+    /// it worked only because the two happen to coincide today, and a call site that says which
+    /// question it is asking is one that stays correct if they ever stop coinciding.
+    ///
+    /// Derived rather than settable so there is exactly ONE fact to keep straight per profile; if a
+    /// dialect ever pairs one model with the other spelling, this becomes an init property and no
+    /// call site changes.
+    /// </summary>
+    public bool ResolvesByNamespace => ImportStyle == ImportStyle.Namespace;
+
+    /// <summary>
     /// The namespace a function is KEYED under in this dialect, which is not the same as the
-    /// namespace it is declared in. Under <c>#include</c> the file's functions merge into the
-    /// caller's scope and are reached by bare name, so the key drops the namespace entirely; under
-    /// <c>#using</c> the call stays qualified and the namespace is part of the identity.
+    /// namespace it is declared in. On a merge dialect the file's functions merge into the caller's
+    /// scope and are reached by bare name, so the key drops the namespace entirely; where resolution
+    /// is namespace-driven the call stays qualified and the namespace is part of the identity.
     ///
     /// This matters because a merge dialect still HAS a namespace — it defaults to the file stem —
     /// so anything rebuilding a key from a symbol's declared namespace silently produces a key that
@@ -234,7 +280,7 @@ public sealed partial record GameProfile
     /// </summary>
     public string? KeyNamespace(string namespaceName)
     {
-        return ImportStyle == ImportStyle.Include || namespaceName.Length == 0 ? null : namespaceName;
+        return !ResolvesByNamespace || namespaceName.Length == 0 ? null : namespaceName;
     }
 
     /// <summary>How a function pointer is written — see <see cref="Core.FunctionPointerStyle"/>.</summary>

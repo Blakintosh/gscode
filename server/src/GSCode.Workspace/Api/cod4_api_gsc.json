@@ -211,6 +211,12 @@
               "type": {
                 "dataType": "string"
               }
+            },
+            {
+              "name": "stance2"
+            },
+            {
+              "name": "stance3"
             }
           ]
         }
@@ -219,7 +225,8 @@
       "module": "AI",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -661,6 +668,9 @@
               "name": "mode",
               "description": "which animmode to use. Must be 'gravity', 'nogravity', 'angle_deltas', 'zonly_physics', 'nophysics', 'none'",
               "mandatory": true
+            },
+            {
+              "name": "update"
             }
           ]
         }
@@ -669,7 +679,8 @@
       "module": "AI",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -778,6 +789,9 @@
               "name": "string",
               "description": "The announcement.",
               "mandatory": true
+            },
+            {
+              "name": "string2"
             }
           ]
         }
@@ -785,7 +799,8 @@
       "module": "Client",
       "spmp": "MP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -842,6 +857,9 @@
               "name": "value",
               "description": "statement that is asserted to be correct",
               "mandatory": true
+            },
+            {
+              "name": "message"
             }
           ]
         }
@@ -849,7 +867,8 @@
       "example": "Assert ( enemyInSight == true );",
       "module": "Debug",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -1042,6 +1061,9 @@
               "name": "team",
               "description": "You must specify at least one team for which this place is bad, but can give several. The allowed teams are 'axis', 'allies', and 'neutral'.",
               "mandatory": true
+            },
+            {
+              "name": "team2"
             }
           ]
         }
@@ -1050,7 +1072,8 @@
       "module": "BadPlaces",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -1078,6 +1101,9 @@
               "name": "team",
               "description": "You must specify at least one team for which this place is bad, but can give several. The allowed teams are 'axis', 'allies', and 'neutral'.",
               "mandatory": true
+            },
+            {
+              "name": "team2"
             }
           ]
         }
@@ -1086,7 +1112,8 @@
       "module": "BadPlaces",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -1363,14 +1390,19 @@
             "name": "self",
             "description": "The player (it will only check the host player's buttons though)"
           },
-          "parameters": []
+          "parameters": [
+            {
+              "name": "button"
+            }
+          ]
         }
       ],
       "example": "while( self ButtonPressed( \"BUTTON_A\" ) ) ...",
       "module": "Player",
       "spmp": "MP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -3556,7 +3588,18 @@
     },
     {
       "name": "EnterProne",
-      "overloads": []
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "transition_time"
+            }
+          ]
+        }
+      ],
+      "flags": [
+        "corrected"
+      ]
     },
     {
       "name": "EntityRadiusDamage",
@@ -3889,6 +3932,9 @@
               "name": "offset_time",
               "description": "The time offset for the damage",
               "mandatory": true
+            },
+            {
+              "name": "offset_time"
             }
           ]
         }
@@ -3897,7 +3943,8 @@
       "module": "Damage",
       "spmp": "MP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -6042,15 +6089,41 @@
     },
     {
       "name": "GetStat",
-      "overloads": []
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "stat_index"
+            }
+          ]
+        }
+      ],
+      "flags": [
+        "corrected"
+      ]
     },
     {
       "name": "GetSubStr",
       "description": "Returns the substring of characters >= <start index> and < <end index>. <end index> is optional.",
-      "overloads": [],
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "string"
+            },
+            {
+              "name": "start_index"
+            },
+            {
+              "name": "end_index"
+            }
+          ]
+        }
+      ],
       "module": "String",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -6665,7 +6738,18 @@
     },
     {
       "name": "GiveAchievement",
-      "overloads": []
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "achievement"
+            }
+          ]
+        }
+      ],
+      "flags": [
+        "corrected"
+      ]
     },
     {
       "name": "GiveMaxAmmo",
@@ -6728,6 +6812,9 @@
               "name": "weapon_name",
               "description": "The weapon name to give to the player.",
               "mandatory": true
+            },
+            {
+              "name": "camo_index"
             }
           ]
         }
@@ -6735,7 +6822,8 @@
       "example": "level.player giveWeapon(\"m1garand\");",
       "module": "Player",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -6900,6 +6988,12 @@
               "name": "text",
               "description": "text to be written",
               "mandatory": true
+            },
+            {
+              "name": "text2"
+            },
+            {
+              "name": "text3"
             }
           ]
         }
@@ -6907,7 +7001,8 @@
       "example": "IPrintLn( \"Where have all the cowboys gone?\" );",
       "module": "Debug",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -6920,6 +7015,9 @@
               "name": "text",
               "description": "text to be written",
               "mandatory": true
+            },
+            {
+              "name": "text2"
             }
           ]
         }
@@ -6927,7 +7025,8 @@
       "example": "IPrintLnBold( \"Mitchell!\" );",
       "module": "Debug",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -7489,10 +7588,22 @@
     {
       "name": "IsSubStr",
       "description": "Returns true/false if <substring> is a substring of <string>. Case sensitive.",
-      "overloads": [],
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "string"
+            },
+            {
+              "name": "substring"
+            }
+          ]
+        }
+      ],
       "module": "String",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -9208,14 +9319,22 @@
             "name": "self",
             "description": "The player"
           },
-          "parameters": []
+          "parameters": [
+            {
+              "name": "notify"
+            },
+            {
+              "name": "command"
+            }
+          ]
         }
       ],
       "example": "player NotifyOnCommand( \"changeweapon\", \"weapnext\" ); waittill \"changeweapon\";",
       "module": "Player",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -9545,6 +9664,9 @@
               "name": "string",
               "description": "One or more (localised) objective strings",
               "mandatory": true
+            },
+            {
+              "name": "parameter"
             }
           ]
         }
@@ -9553,7 +9675,8 @@
       "module": "Objective",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -10074,6 +10197,12 @@
             {
               "name": "tag",
               "description": "The tag to attach the player to"
+            },
+            {
+              "name": "right_arc"
+            },
+            {
+              "name": "left_arc"
             }
           ]
         }
@@ -10082,7 +10211,8 @@
       "module": "Player",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -10153,6 +10283,12 @@
               "name": "end",
               "description": "The end point",
               "mandatory": true
+            },
+            {
+              "name": "ignore_entity"
+            },
+            {
+              "name": "mask"
             }
           ]
         }
@@ -10160,7 +10296,8 @@
       "example": "endpos = PlayerPhysicsTrace( start, end );",
       "module": "Trace",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -11015,6 +11152,27 @@
               "name": "text",
               "description": "text to be written",
               "mandatory": true
+            },
+            {
+              "name": "text2"
+            },
+            {
+              "name": "text3"
+            },
+            {
+              "name": "text4"
+            },
+            {
+              "name": "text5"
+            },
+            {
+              "name": "text6"
+            },
+            {
+              "name": "text7"
+            },
+            {
+              "name": "text8"
             }
           ]
         }
@@ -11022,7 +11180,8 @@
       "example": "PrintLn( \"I could be doing better!\" );",
       "module": "Debug",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -12409,14 +12568,28 @@
           "calledOn": {
             "name": "entity"
           },
-          "parameters": []
+          "parameters": [
+            {
+              "name": "anim"
+            },
+            {
+              "name": "weight"
+            },
+            {
+              "name": "blend_time"
+            },
+            {
+              "name": "rate"
+            }
+          ]
         }
       ],
       "example": "self SetAnimRestart( %precombatrun1, 1, 0.1, 1 );",
       "module": "Animation",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -12451,11 +12624,20 @@
     {
       "name": "SetArchive",
       "description": "deprecated function, does nothing",
-      "overloads": [],
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "archive"
+            }
+          ]
+        }
+      ],
       "module": "System",
       "spmp": "MP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -12610,6 +12792,9 @@
               "name": "value",
               "description": ": The the value to which the dvar will be set",
               "mandatory": true
+            },
+            {
+              "name": "value2"
             }
           ]
         }
@@ -12617,7 +12802,8 @@
       "example": "self SetClientDvar( \"cg_drawhud\", \"0\" );",
       "module": "Player",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -12639,6 +12825,42 @@
               "name": "value",
               "description": ": The the value to which the dvar will be set",
               "mandatory": true
+            },
+            {
+              "name": "dvarname2"
+            },
+            {
+              "name": "value2"
+            },
+            {
+              "name": "dvarname3"
+            },
+            {
+              "name": "value3"
+            },
+            {
+              "name": "dvarname4"
+            },
+            {
+              "name": "value4"
+            },
+            {
+              "name": "dvarname5"
+            },
+            {
+              "name": "value5"
+            },
+            {
+              "name": "dvarname6"
+            },
+            {
+              "name": "value6"
+            },
+            {
+              "name": "dvarname7"
+            },
+            {
+              "name": "value7"
             }
           ]
         }
@@ -12646,7 +12868,8 @@
       "example": "self SetClientDvars( \"cg_drawhud\", \"0\", \"cg_draw2d\", \"0\" );",
       "module": "Player",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -13811,11 +14034,20 @@
     {
       "name": "SetGameEndTime",
       "description": "Sets the time the current match will end",
-      "overloads": [],
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "time"
+            }
+          ]
+        }
+      ],
       "module": "Level",
       "spmp": "MP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -14430,13 +14662,18 @@
             "name": "self",
             "description": "A position"
           },
-          "parameters": []
+          "parameters": [
+            {
+              "name": "origin"
+            }
+          ]
         }
       ],
       "module": "Level",
       "spmp": "MP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -14535,12 +14772,24 @@
     {
       "name": "SetMissionDvar",
       "description": "changes the value of the specified mission dvar",
-      "overloads": [],
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "dvarname"
+            },
+            {
+              "name": "value"
+            }
+          ]
+        }
+      ],
       "example": "SetMissionDvar( \"mission_01\", 1 );",
       "module": "Level",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -14894,7 +15143,24 @@
     },
     {
       "name": "SetPlayerTeamRank",
-      "overloads": []
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "player"
+            },
+            {
+              "name": "team"
+            },
+            {
+              "name": "rank"
+            }
+          ]
+        }
+      ],
+      "flags": [
+        "corrected"
+      ]
     },
     {
       "name": "SetPotentialThreat",
@@ -15429,19 +15695,38 @@
             "name": "self",
             "description": "The player"
           },
-          "parameters": []
+          "parameters": [
+            {
+              "name": "stance"
+            }
+          ]
         }
       ],
       "example": "level.player SetStance( \"stand\" );",
       "module": "Player",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
       "name": "SetStat",
-      "overloads": []
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "stat_index"
+            },
+            {
+              "name": "value"
+            }
+          ]
+        }
+      ],
+      "flags": [
+        "corrected"
+      ]
     },
     {
       "name": "SetSunDirection",
@@ -15945,12 +16230,21 @@
     {
       "name": "SetTimeScale",
       "description": "sets the current timescale.",
-      "overloads": [],
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "scale"
+            }
+          ]
+        }
+      ],
       "example": "SetTimeScale( 0.5 );",
       "module": "Level",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -17790,13 +18084,18 @@
             "name": "entity",
             "description": "An entity"
           },
-          "parameters": []
+          "parameters": [
+            {
+              "name": "alias"
+            }
+          ]
         }
       ],
       "example": "car StopLoopSound();",
       "module": "Sound",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -17899,10 +18198,22 @@
     {
       "name": "StrTok",
       "description": "Tokenizes <string> by the delimiters <delim>. Returns the array of string tokens.",
-      "overloads": [],
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "string"
+            },
+            {
+              "name": "delimiters"
+            }
+          ]
+        }
+      ],
       "module": "String",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -18478,10 +18789,19 @@
     {
       "name": "ToLower",
       "description": "Converts <string> to a lower case string which is returned.",
-      "overloads": [],
+      "overloads": [
+        {
+          "parameters": [
+            {
+              "name": "string"
+            }
+          ]
+        }
+      ],
       "module": "String",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {

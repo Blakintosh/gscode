@@ -607,8 +607,33 @@ static int ApplyOverrides(string prefix, string overridesPath, Dictionary<string
             continue;
         }
 
-        // 1-based, matching how the pages number their own argument lists.
-        int optionalFrom = element.GetProperty("optionalFrom").GetInt32();
+        // 1-based, matching how the pages number their own argument lists. Absent means the mandatory
+        // flags are already right and only the parameter LIST is being corrected.
+        int optionalFrom = element.TryGetProperty("optionalFrom", out JsonElement from)
+            ? from.GetInt32()
+            : int.MaxValue;
+
+        // The function's full parameter list, where the page lists fewer than it takes. Two facts in
+        // one field, and both need a human: how MANY there are, which comes from counting arguments
+        // at real call sites, and what each one IS, which comes from reading the page's own
+        // description and example.
+        //
+        // Named rather than generated. An earlier pass padded these mechanically as `arg1`, `arg2`,
+        // and the result was worse than the gap it filled: hover presented an invented name in the
+        // same place, and the same style, as a documented one. A correction layer may repair what
+        // the documentation gets wrong; it may not fabricate what the documentation does not say.
+        List<string> names = [];
+        if ( element.TryGetProperty("parameters", out JsonElement given) )
+        {
+            foreach ( JsonElement parameterName in given.EnumerateArray() )
+            {
+                string? text = parameterName.GetString();
+                if ( text is not null )
+                {
+                    names.Add(text);
+                }
+            }
+        }
 
         // Loud rather than silent. An override naming something this game does not have is a stale
         // entry — a renamed function, or a correction that landed upstream — and a file of
@@ -627,10 +652,38 @@ static int ApplyOverrides(string prefix, string overridesPath, Dictionary<string
             {
                 Cod4Parameter parameter = overload.Parameters[index];
                 bool mandatory = parameter.Mandatory && index + 1 < optionalFrom;
-                parameters.Add(parameter with { Mandatory = mandatory });
+
+                // A curated name replaces a placeholder, never a documented one: the pages get names
+                // right far more often than they get the count right.
+                string parameterName = index < names.Count && string.IsNullOrEmpty(parameter.Name)
+                    ? names[index]
+                    : parameter.Name;
+
+                parameters.Add(parameter with { Name = parameterName, Mandatory = mandatory });
+            }
+
+            // Everything the page never listed. Optional without exception — widening a list can
+            // then never turn code that works into an error.
+            for ( int index = parameters.Count; index < names.Count; index++ )
+            {
+                parameters.Add(new Cod4Parameter(names[index], null, false, null));
             }
 
             overloads.Add(overload with { Parameters = parameters });
+        }
+
+        // A name the pages cover with no parameters at all: there is no overload to widen, so one is
+        // made. Without this the correction does nothing for exactly the entries needing it most —
+        // `IsSubStr` and `ToLower` list none and are called with two and one.
+        if ( overloads.Count == 0 && names.Count > 0 )
+        {
+            List<Cod4Parameter> created = [];
+            foreach ( string parameterName in names )
+            {
+                created.Add(new Cod4Parameter(parameterName, null, false, null));
+            }
+
+            overloads.Add(new Cod4Overload(null, created));
         }
 
         // Flagged so the correction is visible in the artifact itself rather than only in this tool.

@@ -1,0 +1,206 @@
+// Snippets valid in BOTH script worlds - contributed to .gsc, .csc and .gsh alike.
+//
+// One language id covers five dialects, and a snippet cannot ask which game is active: the
+// extension only learns that from the server. So every entry here is either valid in EVERY
+// dialect, or names its dialect in the description.
+//
+// Bodies are copied from the shape the stock scripts use rather than invented - the ScriptDoc
+// block matches share/raw/scripts/shared/util_shared.gsc, and the brace and spacing style
+// matches the formatter's defaults.
+//
+// #precache lives in precache-server.json and precache-client.json instead, because its asset
+// types differ by world. See PrecacheAssetTypes.IsAvailableIn.
+{
+	"if": {
+		"prefix": "if",
+		"body": ["if ( ${1:condition} )", "{", "\t$0", "}"],
+		"description": "if statement"
+	},
+	"if else": {
+		"prefix": "ifelse",
+		"body": ["if ( ${1:condition} )", "{", "\t$2", "}", "else", "{", "\t$0", "}"],
+		"description": "if/else statement"
+	},
+	"if defined": {
+		"prefix": "ifdef",
+		"body": ["if ( isdefined( ${1:value} ) )", "{", "\t$0", "}"],
+		"description": "Guard on isdefined - the standard GSC null check"
+	},
+	"for": {
+		"prefix": "for",
+		"body": ["for ( ${1:i} = 0; ${1:i} < ${2:array}.size; ${1:i}++ )", "{", "\t$0", "}"],
+		"description": "for loop over an array by index"
+	},
+	"for reverse": {
+		"prefix": "forr",
+		"body": ["for ( ${1:i} = ${2:array}.size - 1; ${1:i} >= 0; ${1:i}-- )", "{", "\t$0", "}"],
+		"description": "Reverse for loop - the safe way to remove entries while iterating"
+	},
+	"foreach": {
+		"prefix": "foreach",
+		"body": ["foreach ( ${1:value} in ${2:array} )", "{", "\t$0", "}"],
+		"description": "foreach loop (MW2 and later on the Infinity Ward line; BO3 on the Treyarch line - earlier games have no foreach)"
+	},
+	"foreach key value": {
+		"prefix": "foreachkv",
+		"body": ["foreach ( ${1:key}, ${2:value} in ${3:array} )", "{", "\t$0", "}"],
+		"description": "foreach binding both key and value (same dialects as foreach)"
+	},
+	"while": {
+		"prefix": "while",
+		"body": ["while ( ${1:condition} )", "{", "\t$0", "}"],
+		"description": "while loop"
+	},
+	"switch": {
+		"prefix": "switch",
+		"body": ["switch ( ${1:value} )", "{", "\tcase ${2:label}:", "\t\t$0", "\t\tbreak;", "\tdefault:", "\t\tbreak;", "}"],
+		"description": "switch statement"
+	},
+	"case": {
+		"prefix": "case",
+		"body": ["case ${1:label}:", "\t$0", "\tbreak;"],
+		"description": "switch case with its break"
+	},
+
+	"function (BO3)": {
+		"prefix": "func",
+		"body": ["function ${1:name}( ${2} )", "{", "\t$0", "}"],
+		"description": "Function declaration - BO3 only, which is the one dialect with the 'function' keyword"
+	},
+	"function (pre-BO3)": {
+		"prefix": "funciw",
+		"body": ["${1:name}( ${2} )", "{", "\t$0", "}"],
+		"description": "Function declaration for CoD4/WaW/MW2/BO1, which open with the bare name"
+	},
+	"autoexec function (BO3)": {
+		"prefix": "funcauto",
+		"body": ["function autoexec ${1:name}()", "{", "\t$0", "}"],
+		"description": "Function that runs once on load - BO3 only"
+	},
+	"private function (BO3)": {
+		"prefix": "funcpriv",
+		"body": ["function private ${1:name}( ${2} )", "{", "\t$0", "}"],
+		"description": "Function visible only to files declaring the same namespace - BO3 only"
+	},
+
+	"class (BO3)": {
+		"prefix": "class",
+		"body": [
+			"class ${1:Name}",
+			"{",
+			"\tvar ${2:member};",
+			"",
+			"\tconstructor()",
+			"\t{",
+			"\t\t$0",
+			"\t}",
+			"",
+			"\tdestructor()",
+			"\t{",
+			"\t}",
+			"}"
+		],
+		"description": "Class with a constructor and destructor - BO3 only"
+	},
+	"new (BO3)": {
+		"prefix": "new",
+		"body": ["${1:instance} = new ${2:Class}();"],
+		"description": "Construct a class instance - BO3 only"
+	},
+
+	"ScriptDoc (BO3)": {
+		"prefix": "doc",
+		"body": [
+			"/@",
+			"\"Name: ${1:name}( <${2:arg}> )\"",
+			"\"Summary: ${3:What it does.}\"",
+			"\"Module: ${4:Utility}\"",
+			"\"CallOn: ${5}\"",
+			"\"MandatoryArg: <${2:arg}> : ${6:description}\"",
+			"\"Example: ${7}\"",
+			"\"SPMP: ${8|both,singleplayer,multiplayer|}\"",
+			"@/"
+		],
+		"description": "ScriptDoc block in BO3's /@ @/ form, with the tags the stock scripts use"
+	},
+	"ScriptDoc (pre-BO3)": {
+		"prefix": "dociw",
+		"body": [
+			"/*",
+			"\tName: ${1:name}( <${2:arg}> )",
+			"\tSummary: ${3:What it does.}",
+			"\tModule: ${4:Utility}",
+			"\tMandatoryArg: <${2:arg}> : ${5:description}",
+			"\tExample: ${6}",
+			"*/"
+		],
+		"description": "ScriptDoc block for CoD4/WaW/MW2/BO1"
+	},
+
+	"using (BO3)": {
+		"prefix": "using",
+		"body": ["#using scripts\\\\${1:shared}\\\\${2:util_shared};"],
+		"description": "Import a namespace - BO3 only, which is the one namespace-driven dialect"
+	},
+	"insert (BO3)": {
+		"prefix": "insert",
+		"body": ["#insert scripts\\\\${1:shared}\\\\${2:shared}.gsh;"],
+		"description": "Paste a header's macros into this file - BO3 only, and the path must name a .gsh"
+	},
+	"namespace (BO3)": {
+		"prefix": "namespace",
+		"body": ["#namespace ${1:name};"],
+		"description": "Declare this file's namespace - BO3 only"
+	},
+	"include (pre-BO3)": {
+		"prefix": "include",
+		"body": ["#include ${1:maps}\\\\${2:_utility};"],
+		"description": "Merge a file's functions into this scope - CoD4/WaW/MW2/BO1"
+	},
+
+	"waittill": {
+		"prefix": "waittill",
+		"body": ["${1:self} waittill( \"${2:event}\" );"],
+		"description": "Wait for a notify"
+	},
+	"waittill with outputs": {
+		"prefix": "waittillargs",
+		"body": ["${1:self} waittill( \"${2:event}\", ${3:attacker} );"],
+		"description": "Wait for a notify and bind the values it carries"
+	},
+	"notify": {
+		"prefix": "notify",
+		"body": ["${1:self} notify( \"${2:event}\" );"],
+		"description": "Send a notify"
+	},
+	"endon": {
+		"prefix": "endon",
+		"body": ["${1:self} endon( \"${2:event}\" );"],
+		"description": "End this thread when the notify fires"
+	},
+	"thread": {
+		"prefix": "thread",
+		"body": ["${1:self} thread ${2:function}();"],
+		"description": "Run a function on its own thread"
+	},
+	"wait": {
+		"prefix": "wait",
+		"body": ["wait ${1:0.05};"],
+		"description": "Wait for a number of seconds"
+	},
+	"assert": {
+		"prefix": "assert",
+		"body": ["assert( isdefined( ${1:value} ) );"],
+		"description": "Assert a condition holds - development builds only"
+	},
+	"dev block": {
+		"prefix": "devblock",
+		"body": ["/#", "\t$0", "#/"],
+		"description": "Development-only block, stripped from a release build"
+	},
+	"define": {
+		"prefix": "define",
+		"body": ["#define ${1:NAME} ${2:value}"],
+		"description": "Preprocessor macro"
+	}
+}

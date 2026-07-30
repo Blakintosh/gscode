@@ -107,6 +107,32 @@
 				"path": "./syntaxes/gsc.tmGrammar.json"
 			}
 		],
+		"snippets": [
+			{
+				"language": "gsc",
+				"path": "./snippets/common.json"
+			},
+			{
+				"language": "csc",
+				"path": "./snippets/common.json"
+			},
+			{
+				"language": "gsh",
+				"path": "./snippets/common.json"
+			},
+			{
+				"language": "gsc",
+				"path": "./snippets/precache-server.json"
+			},
+			{
+				"language": "csc",
+				"path": "./snippets/precache-client.json"
+			},
+			{
+				"language": "gsh",
+				"path": "./snippets/precache-client.json"
+			}
+		],
 		"commands": [
 			{
 				"command": "gscode.showOutput",

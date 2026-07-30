@@ -1394,7 +1394,6 @@
             {
               "name": "offset_from_gun",
               "description": "The offset from the gun muzzle from which to calculate collision.",
-              "mandatory": true,
               "type": {
                 "dataType": "vector"
               }
@@ -1406,7 +1405,8 @@
       "module": "AI",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -4576,8 +4576,7 @@
             },
             {
               "name": "key",
-              "description": "key that name goes with",
-              "mandatory": true
+              "description": "key that name goes with"
             }
           ]
         }
@@ -4585,7 +4584,8 @@
       "example": "spawner = GetEnt( \"doorguy1\", \"targetname\" );",
       "module": "Entity",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -4596,13 +4596,11 @@
           "parameters": [
             {
               "name": "name",
-              "description": "Name to search for.",
-              "mandatory": true
+              "description": "Name to search for."
             },
             {
               "name": "key",
-              "description": "The key to search for.",
-              "mandatory": true
+              "description": "The key to search for."
             }
           ]
         }
@@ -4610,7 +4608,8 @@
       "example": "aeExplosions = GetEntArray( strExplosion, \"targetname\" );",
       "module": "Entity",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {

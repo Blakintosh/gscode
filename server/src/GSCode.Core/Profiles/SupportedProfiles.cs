@@ -30,6 +30,10 @@ public sealed partial record GameProfile
         HasInlinePathCalls = true,
         DataFilePrefix = "cod4",
         HasCompleteBuiltinLibrary = true,
+        // Earned rather than assumed. The mandatory-count check reported 141 findings on CoD4's own
+        // scripts when this was first measured; correcting the 44 signatures its pages under-list or
+        // over-mark took that to ZERO across all 894 of them.
+        HasReliableBuiltinSignatures = true,
         Keywords = [.. BaseKeywords, "prof_begin", "prof_end"],
     };
 

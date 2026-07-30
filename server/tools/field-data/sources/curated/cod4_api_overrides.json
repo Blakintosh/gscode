@@ -346,5 +346,20 @@
             "string"
         ],
         "reason": "The pages list 0 parameter(s); 105 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "GetEntArray",
+        "optionalFrom": 1,
+        "reason": "Both arguments are optional: GetEntArray() returns every entity and GetEntArray( name ) filters by targetname. Six shipped calls pass fewer than the two the page marks required."
+    },
+    {
+        "name": "GetEnt",
+        "optionalFrom": 2,
+        "reason": "The key defaults to targetname, so GetEnt( name ) is the common call. Two shipped calls pass one argument where the page marks both required."
+    },
+    {
+        "name": "CanShoot",
+        "optionalFrom": 2,
+        "reason": "The offset from the gun is optional. Three shipped calls pass only the position."
     }
 ]

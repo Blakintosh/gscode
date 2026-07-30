@@ -157,14 +157,20 @@ public sealed partial record GameProfile
     /// Whether the builtin library's SIGNATURES can be judged against, as opposed to its list of
     /// NAMES being complete — which is what <see cref="HasCompleteBuiltinLibrary"/> claims.
     ///
-    /// Two different questions, and only BO3 answers both. Its library is documented per parameter,
-    /// with a description and a mandatory flag that came from the documentation. CoD4's was
-    /// reconstructed from a wordfile plus documentation pages, and WaW's and BO1's largely INHERIT
-    /// CoD4's entries — a plausible signature for a related function, not a verified one for theirs.
+    /// Two different questions. BO3's library is documented per parameter, with a description and a
+    /// mandatory flag from the documentation. CoD4's was reconstructed from a wordfile plus
+    /// documentation pages, and WaW's and BO1's largely INHERIT CoD4's entries — a plausible
+    /// signature for a related function rather than a verified one for theirs.
     ///
-    /// Measured rather than assumed. Checking a call against the mandatory count reported 4 findings
-    /// across BO3's 980 shipped scripts and 141, 280 and 157 across CoD4's, WaW's and BO1's. The
-    /// second set is the data disagreeing with the game, not the game being wrong.
+    /// Measured rather than assumed, and the measurement is the whole basis for setting it. Checking
+    /// a call against the mandatory count first reported 4 findings across BO3's shipped scripts and
+    /// 141, 280 and 157 across CoD4's, WaW's and BO1's — the data disagreeing with the game, not the
+    /// game being wrong. CoD4 has since been corrected to ZERO across its 894 scripts (44 signatures
+    /// its pages under-list or over-mark) and now sets this too.
+    ///
+    /// WaW and BO1 do not, on ~98 and ~39 remaining calls. Their route is the same one CoD4 took:
+    /// correct the signatures their own scripts contradict, in their own override files, then
+    /// re-measure. Setting it before that would put Errors on code that ships and works.
     /// </summary>
     public bool HasReliableBuiltinSignatures { get; init; }
 

@@ -8,6 +8,7 @@
     "foldingStopMarker": "^\\s*\\}",
     "patterns": [
         { "include": "#function" },
+        { "include": "#iw-function" },
         { "include": "#class" },
         { "include": "#block-comment" },
         { "include": "#expression" },
@@ -274,7 +275,28 @@
                 { "include": "#line-continuation-character" }
             ]
         },
-        "function": {	
+        "iw-function": {
+            "name": "meta.function.gsc",
+            "comment": "A function declaration in the Infinity Ward line and the pre-BO3 Treyarch games, which have no 'function' keyword: main( arg ) written at column 0. Anchored to the line start because that is the only thing telling a declaration from a call - a call always sits indented inside a body. Without this rule those four games got no function-name and no parameter scopes at all, since both live inside the keyword rule below, so a CoD4 declaration rendered as plain text.",
+            "begin": "^([a-zA-Z_$]\\w*)\\s*(\\()",
+            "end": "(?!\\G)(?<=\\))",
+            "beginCaptures": {
+                "1": { "name": "entity.name.function.gsc" },
+                "2": { "name": "punctuation.definition.parameters.begin.gsc" }
+            },
+            "endCaptures": {
+                "1": { "name": "punctuation.definition.parameters.end.gsc" }
+            },
+            "patterns": [
+                { "include": "#function-parameter-defaults" },
+                { "include": "#function-vararg" },
+                { "include": "#function-parameter" },
+                { "name": "keyword.operator.parameter-comma.gsc", "match": "," },
+                { "include": "#block-comment" },
+                { "include": "#line-comment" }
+            ]
+        },
+        "function": {
             "name": "meta.function.gsc",
 			"comment": "match regular function like: function myFunc(arg) { É }",
 			"begin": "\\b(function)(\\s[a-zA-Z_$]\\w*)?\\s+([a-zA-Z_$]\\w*)?\\s*(\\()",

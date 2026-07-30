@@ -1,4 +1,4 @@
-# GSCode v2 — Performance
+# GSCode Performance
 
 Budgets, methodology, and how to reproduce the perf pass. Numbers are gathered on a real
 `share\raw` corpus (thousands of stock scripts) via a `GscodeInstrumentation` build; the results
@@ -12,6 +12,37 @@ table below is filled from a run on the local BO3-tools machine, since the corpu
 | Warm start (cache hit) | < 5 s | SQLite restore of unchanged files; only changed files re-parse. |
 | Steady-state memory | < 400 MB | Records-only retention for closed files; NameTable interning. |
 | Keystroke re-analysis | interactive | Debounced ~250 ms, per-document cancellation; a single file lexes+parses in low single-digit ms. |
+
+## Measured: where analysis time goes
+
+`--filter "Category=Perf"` times every script in a game individually and splits each into the four
+phases, writing `temp/gscode-perf-<game>.html`. It is opted into rather than carried along by the
+diagnostic sweep, since it costs a second pass over every file.
+
+CoD4 is the control throughout: it has no `#insert` and 20 `#define` across 894 files, so its
+preprocess figure is the FLOOR — the cost of walking every token to find nothing to do.
+
+| | files | total | median | lex | preprocess | parse | extract |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| cod4 | 894 | 1,813 ms | 0.26 ms | 24% | 12% | 33% | 31% |
+| bo3 | 980 | 1,369 ms | 0.34 ms | 20% | 24% | 31% | 25% |
+
+BO3 used to sit at 60% preprocess and 5,562 ms, because its headers were re-read, re-lexed and
+re-walked once per including file — 2,137 insert directives naming 114 headers, so about nineteen
+times each. Two caches, both keyed by the RESOLVED path so a mod's header and the raw one it shadows
+stay separate:
+
+- `InsertCache` holds the lexed header. Took BO3 to 3,331 ms.
+- `IHeaderMacroCache` holds what a header CONTRIBUTES — its definitions, in order, plus its nested
+  insert edges — so the second file to insert it replays instead of walking. Took it to 1,369 ms.
+
+Net 4.1x on BO3's analysis, and its phase profile now matches CoD4's rather than being bent around
+preprocessing. CoD4 itself moved within noise, which is what a control with no headers should do.
+
+Read these as ANALYSIS cost, not startup: the sweep is sequential and warms first. A VS Code index of
+the same tree reports much larger per-file numbers because it runs at `ProcessorCount - 1` (so each
+file's wall-clock includes contention), covers record construction and the database insert as well,
+and is cold. Both are honest; they answer different questions.
 
 ## What the server logs (no special build needed)
 

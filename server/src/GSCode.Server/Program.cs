@@ -32,7 +32,7 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(standardErrorFromLevel: LogEventLevel.Verbose)
     .CreateLogger();
 
-Log.Information("GSCode v2 language server starting");
+Log.Information("GSCode {Version} language server starting", ServerVersion());
 
 TransportOptions transportOptions = new();
 CommandLine.Parser.Default.ParseArguments<TransportOptions>(args).WithParsed(parsed => transportOptions = parsed);
@@ -55,7 +55,6 @@ if ( !string.IsNullOrWhiteSpace(transportOptions.Game) )
 }
 
 TransportResolver.ResolvedTransport transport = await TransportResolver.ResolveAsync(transportOptions, CancellationToken.None);
-Log.Information("Transport connected (pipe={Pipe}, socket={Socket}, stdio fallback otherwise)", transportOptions.PipeName, transportOptions.SocketPort);
 
 ServerSettings settings = new();
 PhysicalFileSystem fileSystem = new();
@@ -235,7 +234,7 @@ LanguageServer server = await LanguageServer.From(options =>
             // containing astral characters. UTF-16 is the encoding every LSP client supports.
             response.Capabilities.PositionEncoding = PositionEncodingKind.UTF16;
 
-            Log.Information("GSCode v2 server initialized");
+            Log.Information("GSCode {Version} server initialized", ServerVersion());
             return Task.CompletedTask;
         })
         .OnStarted((languageServer, cancellationToken) =>
@@ -366,7 +365,7 @@ await server.WaitForExit;
 await cacheHolder.CloseAsync();
 
 transport.Owner?.Dispose();
-Log.Information("GSCode v2 server exited");
+Log.Information("GSCode {Version} server exited", ServerVersion());
 await Log.CloseAndFlushAsync();
 
 // Logs a formatted breakdown of what the index holds: per-language file counts with a
@@ -670,4 +669,26 @@ static IEnumerable<string> BundledDataFilePaths()
     {
         yield return Path.Combine(apiDirectory, fileName);
     }
+}
+
+/// <summary>
+/// The server's version, as the build stamped it.
+/// </summary>
+/// <remarks>
+/// Read from the assembly rather than written in the log string, so it cannot drift from what
+/// actually shipped — the three startup lines used to say "v2" indefinitely while the assembly
+/// claimed 1.0.0 and the extension said 2.0.0. The single source is &lt;Version&gt; in
+/// Directory.Build.props, which must match client/package.json since the two ship as one extension.
+/// </remarks>
+static string ServerVersion()
+{
+    System.Reflection.Assembly assembly = typeof(TransportOptions).Assembly;
+
+    // The informational version carries any suffix (a "+sha" from CI, a "-beta"); the plain
+    // AssemblyVersion drops it, so prefer it and fall back only if it is absent.
+    string? informational = System.Reflection.CustomAttributeExtensions
+        .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(assembly)
+        ?.InformationalVersion;
+
+    return informational ?? assembly.GetName().Version?.ToString() ?? "unknown";
 }

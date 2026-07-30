@@ -1,4 +1,4 @@
-# GSCode v2 — Server Architecture
+# GSCode Server Architecture
 
 End-to-end map of the GSCode language server and its VSCode client. Updated whenever the structure
 changes.

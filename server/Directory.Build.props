@@ -10,6 +10,11 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest</AnalysisLevel>
+
+    <!-- The one place the server's version is stated. It must match client/package.json, since the
+         two ship together as one extension and the server reports this in its startup log. Without
+         it every assembly claimed 1.0.0 while the extension said 2.0.0. -->
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
   <!-- Opt-in perf instrumentation: build with -p:GscodeInstrumentation=true to compile in

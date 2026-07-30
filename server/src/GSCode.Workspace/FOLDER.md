@@ -283,6 +283,17 @@ reported as an Error must never land on code that ships and works.
   judge which family it looks like, and reports when the selected profile disagrees.
 - `WorkspaceLints` — the composition point that runs the cross-file rules for a document.
 
+## Resolution/InsertCache.cs
+
+- `InsertCache` — the lexed `#insert` headers, shared across every file that inserts them, plus what
+  each header CONTRIBUTES (`IHeaderMacroCache`). Keyed by the RESOLVED absolute path, never the path
+  as written: `scripts\shared\shared.gsh` means the mod's copy when a mod file asks and raw's when a
+  raw file asks, so keying on the written path would let whichever file asked first decide the
+  contents for everyone.
+- Validated by last-write time rather than by an invalidation message, because a watcher that drops
+  an event leaves a stale header — and a stale header changes what macros expand to with no error to
+  trace back. A failed read is not cached. See `PERF.md` for what the two caches were worth.
+
 ## Resolution/RawWriteGuard.cs
 
 - `RawFileWarningMode` + `static RawWriteGuard` — decides whether saving a file deserves the

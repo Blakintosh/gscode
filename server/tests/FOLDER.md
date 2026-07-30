@@ -33,6 +33,19 @@ finishing in milliseconds means every test no-opped.
 Corpus tests carry `[Trait("Category", "Corpus")]`, so `--filter "Category=Corpus"` runs exactly the
 suite that touches real game scripts.
 
+There is a THIRD category, `Perf`, which is opted into separately: a perf run is a second pass over
+every script, so it must not ride along with the diagnostic sweep. The everyday run therefore excludes
+both — `--filter "Category!=Corpus&Category!=Perf"`, which is what CI uses:
+
+| filter | what it runs |
+|---|---|
+| `Category!=Corpus&Category!=Perf` | the ~1,400 unit tests. Seconds, no game install needed |
+| `Category=Corpus` | the diagnostic/formatter sweep over five games. Minutes |
+| `Category=Perf` | per-file timing and the phase breakdown. Writes `temp/gscode-perf-<game>.html` |
+
+`GSCODE_PERF_REPORT` overrides where the perf pages are written, matching `GSCODE_SWEEP_REPORT`. They
+are deliberately different filenames, so a perf run never overwrites a diagnostic report.
+
 ---
 
 ## GSCode.Parser.Tests

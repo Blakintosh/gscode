@@ -92,6 +92,19 @@ LSP types anywhere.
   one shape for every call form incl. method notation `ent foo()` and `thread` —
   `ArrowCallNode` ([[obj]]->m(args)), `NewNode` (new C()).
 
+## Preprocessing/IHeaderMacroCache.cs
+
+- `HeaderContribution` + `IHeaderMacroCache` — what one inserted header contributes: the macros it
+  defines IN ORDER (a later `#define` of a name wins, so replaying the list reproduces exactly what a
+  linear walk left behind) plus the insert edges from its own nested inserts. The interface lives
+  here because the parser cannot reference the workspace that owns the instance; `InsertCache`
+  implements it.
+- The preprocessor stores a contribution ONLY when the header emitted no tokens, reported no
+  diagnostic and invoked no macro — when its whole effect was to define things. Anything else is
+  per-includer: emitted tokens belong in that file's stream, and a diagnostic or invocation carries
+  the invoking site's range, which differs per file. Those headers keep being walked, so the cache
+  cannot change what anyone sees.
+
 ## Syntax/Parser.cs (+ .Declarations / .Statements / .Expressions partials)
 
 - `sealed partial class Parser` — recursive descent over PTokens; `static Parse(tokens)

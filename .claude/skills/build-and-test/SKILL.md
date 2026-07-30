@@ -48,6 +48,17 @@ shell. Pass them inline for the run:
 $env:GSCODE_CORPUS_BO3='...\share\raw'; dotnet test tests\GSCode.Server.Tests\... -c Release --nologo
 ```
 
+## The three categories
+
+| filter | what it runs |
+|---|---|
+| `Category!=Corpus&Category!=Perf` | the unit tests. This is the everyday run, and what CI uses |
+| `Category=Corpus` | the sweep over five games' real scripts. The arbiter for any diagnostic change |
+| `Category=Perf` | per-file timing and the lex/preprocess/parse/extract split |
+
+Note the everyday filter excludes BOTH. `Category!=Corpus` alone now picks up the perf sweep, which
+needs the game installs and takes a second pass over every script.
+
 ## Read the duration, not just the word "Passed"
 
 This is the trap worth internalising. A `Category=Corpus` run over five games takes **two to three

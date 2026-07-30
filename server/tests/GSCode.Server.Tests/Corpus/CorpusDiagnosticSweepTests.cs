@@ -40,10 +40,57 @@ public class CorpusDiagnosticSweepTests
 
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
-    /// <summary>Indexes the whole corpus, then lints every file against the finished database.</summary>
-    private static async Task<List<Finding>> SweepAsync()
+    /// <summary>One game to sweep: its profile, its raw root, and how to enumerate and analyse it.</summary>
+    private sealed record Target(GameProfile Profile, string RawRoot, Func<PathResolver> Resolver,
+        Func<IReadOnlyList<string>> Scripts, Func<string, PathResolver, NameTable, ParseResult> Analyze);
+
+    /// <summary>
+    /// Every game with a corpus on this machine. BO3 comes from CorpusFixture and the rest from
+    /// GameCorpusFixture, which is the same split the two fixtures already have.
+    /// </summary>
+    private static List<Target> Targets()
     {
-        PathResolver resolver = CorpusFixture.Resolver();
+        List<Target> targets = [];
+
+        if ( CorpusFixture.Available )
+        {
+            targets.Add(new Target(
+                GameProfile.BlackOps3,
+                CorpusFixture.RawRoot!,
+                CorpusFixture.Resolver,
+                CorpusFixture.Scripts,
+                CorpusFixture.Analyze));
+        }
+
+        foreach ( GameCorpus corpus in GameCorpusFixture.Available() )
+        {
+            GameCorpus captured = corpus;
+            targets.Add(new Target(
+                captured.Profile,
+                captured.RawRoot,
+                () => GameCorpusFixture.Resolver(captured),
+                () => GameCorpusFixture.Scripts(captured),
+                (path, resolver, names) => GameCorpusFixture.Analyze(captured, path, resolver, names)));
+        }
+
+        return targets;
+    }
+
+    /// <summary>BO3 alone, for the two findings that were investigated against its scripts.</summary>
+    private static Target Bo3Target()
+    {
+        return new Target(
+            GameProfile.BlackOps3,
+            CorpusFixture.RawRoot ?? "",
+            CorpusFixture.Resolver,
+            CorpusFixture.Scripts,
+            CorpusFixture.Analyze);
+    }
+
+    /// <summary>Indexes one game's corpus, then lints every file against the finished database.</summary>
+    private static async Task<List<Finding>> SweepAsync(Target target)
+    {
+        PathResolver resolver = target.Resolver();
         PhysicalFileSystem fileSystem = new();
         NameTable names = new();
         ScriptDatabase database = new();
@@ -55,13 +102,13 @@ public class CorpusDiagnosticSweepTests
         ObjectFields objectFields = ObjectFields.Load(ApiDirectory);
 
         List<Finding> findings = [];
-        foreach ( string path in CorpusFixture.Scripts() )
+        foreach ( string path in target.Scripts() )
         {
             ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
 
             try
             {
-                GSCode.Parser.ParseResult result = CorpusFixture.Analyze(path, resolver, names);
+                ParseResult result = target.Analyze(path, resolver, names);
 
                 // EVERYTHING the editor would show: the file's own parse and semantic
                 // diagnostics as well as the cross-file lints. Reporting lints alone hid the
@@ -91,17 +138,46 @@ public class CorpusDiagnosticSweepTests
     [Fact]
     public async Task ReportEveryLintFiringOnStockScripts()
     {
-        if ( !CorpusFixture.Available )
+        List<Target> targets = Targets();
+        if ( targets.Count == 0 )
         {
-            _output.WriteLine("SKIPPED: %GSCODE_CORPUS_BO3% not found.");
+            _output.WriteLine("SKIPPED: no corpus configured (see GSCODE_CORPUS_<GAME>).");
             return;
         }
 
-        List<Finding> findings = await SweepAsync();
+        foreach ( Target target in targets )
+        {
+            // The active profile has to MOVE with the sweep. Several lints take an optional profile
+            // and fall back to GameProfile.Active, and the indexer enumerates through
+            // Active.ScriptGlobs — so sweeping CoD4 while BO3 is active measures BO3's rules against
+            // CoD4's scripts and reports the difference as defects.
+            //
+            // Global state, so it is restored afterwards and this class must not run beside anything
+            // that reads Active. Every corpus test carries Category=Corpus and is run as its own
+            // pass for exactly this kind of reason.
+            GameProfile previous = GameProfile.Active;
+            List<Finding> findings;
+            try
+            {
+                GameProfile.Select(target.Profile.ShortName);
+                findings = await SweepAsync(target);
+            }
+            finally
+            {
+                GameProfile.Select(previous.ShortName);
+            }
 
-        WriteReport(findings);
+            WriteReport(target, findings);
+            ReportToConsole(target, findings);
+        }
+    }
 
-        _output.WriteLine($"{findings.Count} diagnostics across the stock corpus.");
+    /// <summary>The per-code breakdown for one game, most-reported first.</summary>
+    private void ReportToConsole(Target target, List<Finding> findings)
+    {
+        int scripts = target.Scripts().Count;
+        _output.WriteLine("");
+        _output.WriteLine($"########## {target.Profile.ShortName}: {findings.Count} diagnostics across {scripts} scripts");
         _output.WriteLine("");
 
         foreach ( IGrouping<GscDiagnosticCode, Finding> group in findings
@@ -136,7 +212,7 @@ public class CorpusDiagnosticSweepTests
             return;
         }
 
-        List<Finding> findings = await SweepAsync();
+        List<Finding> findings = await SweepAsync(Bo3Target());
 
         // Projected to strings so a failure names the files rather than printing a type name.
         Assert.Empty(findings
@@ -156,7 +232,7 @@ public class CorpusDiagnosticSweepTests
             return;
         }
 
-        List<Finding> findings = await SweepAsync();
+        List<Finding> findings = await SweepAsync(Bo3Target());
 
         int wrong = findings.Count(f =>
             f.Code == GscDiagnosticCode.UnusedUsing
@@ -172,22 +248,63 @@ public class CorpusDiagnosticSweepTests
     }
 
     /// <summary>
-    /// Writes the HTML report. Defaults to the user's temp folder rather than the repository: it
-    /// is a snapshot of whatever mod-tools install is on this machine, not a build artifact.
-    /// Set GSCODE_SWEEP_REPORT to put it somewhere else.
+    /// Writes one HTML report PER GAME.
+    ///
+    /// Separate files rather than one combined page, because the games are not comparable: their
+    /// corpora differ in size by a factor of three, their dialects differ, and two of them have no
+    /// builtin library to judge against. A single page invites reading across columns that do not
+    /// mean the same thing.
+    ///
+    /// Written to the repository's gitignored <c>temp/</c> folder, so five reports are one click away
+    /// in the editor rather than buried in the system temp path. The whole folder is ignored rather
+    /// than the filenames: the contents are a snapshot of whichever game installs are on this
+    /// machine, so committing one would be committing somebody's local state, and a filename pattern
+    /// only protects the names somebody thought of.
+    ///
+    /// Falls back to the system temp folder when the repository root cannot be found — a packaged or
+    /// relocated test run should still produce its reports somewhere. GSCODE_SWEEP_REPORT overrides
+    /// the directory outright.
     /// </summary>
-    private void WriteReport(List<Finding> findings)
+    private void WriteReport(Target target, List<Finding> findings)
     {
-        string path = Environment.GetEnvironmentVariable("GSCODE_SWEEP_REPORT") is string configured
+        string directory = Environment.GetEnvironmentVariable("GSCODE_SWEEP_REPORT") is string configured
             && configured.Length > 0
                 ? configured
-                : Path.Combine(Path.GetTempPath(), "gscode-corpus-sweep.html");
+                : ScratchDirectory();
+
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, $"gscode-sweep-{target.Profile.ShortName}.html");
 
         SweepReport.Write(
             path,
             [.. findings.Select(f => new SweepReport.Item(f.Code, f.Severity, f.Message, f.Path, f.Line, f.Character))],
-            CorpusFixture.RawRoot ?? "");
+            target.RawRoot);
 
-        _output.WriteLine($"Report: {path}");
+        _output.WriteLine($"Report [{target.Profile.ShortName}]: {path}");
+    }
+
+    /// <summary>
+    /// The repository's <c>temp/</c> folder, located by walking up from the test binaries looking for
+    /// the <c>.git</c> directory. Falls back to the system temp folder if there is no repository
+    /// above us, which is the case for a packaged run.
+    /// </summary>
+    private static string ScratchDirectory()
+    {
+        DirectoryInfo? current = new(AppContext.BaseDirectory);
+
+        while ( current is not null )
+        {
+            // A directory in a normal clone, a FILE in a worktree — which this repository is, so
+            // checking only for the directory found nothing and silently fell back to system temp.
+            string git = Path.Combine(current.FullName, ".git");
+            if ( Directory.Exists(git) || File.Exists(git) )
+            {
+                return Path.Combine(current.FullName, "temp");
+            }
+
+            current = current.Parent;
+        }
+
+        return Path.GetTempPath();
     }
 }

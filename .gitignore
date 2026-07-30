@@ -16,3 +16,16 @@ launchSettings.json
 # for the rest; these two are the roots nothing else claims.
 .svelte-kit/
 .vite/
+
+# Scratch output: corpus sweep reports and anything else a local run produces.
+#
+# A whole folder rather than a list of filenames, because the point is that
+# NOTHING written here is committable. Their contents are a snapshot of whichever
+# game installs happen to be on one machine, so committing one would be
+# committing somebody's local state — and a filename pattern only protects the
+# names somebody thought of.
+/temp/
+
+# The same reports if they are written anywhere else, since GSCODE_SWEEP_REPORT
+# can point at any directory.
+gscode-sweep-*.html

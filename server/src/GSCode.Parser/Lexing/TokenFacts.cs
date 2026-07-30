@@ -8,12 +8,18 @@ namespace GSCode.Parser.Lexing;
 public static class TokenFacts
 {
     /// <summary>
-    /// True for keyword kinds. Relies on the keyword block in TokenKind being contiguous
-    /// from Class through ProfileStop — the enum documents this ordering requirement.
+    /// True for keyword kinds. Relies on the keyword block in TokenKind being contiguous from
+    /// <see cref="TokenKind.Class"/> through <see cref="TokenKind.Vararg"/> — the enum documents this
+    /// ordering requirement, and <c>TokenFactsTests</c> enforces it against the lexer's own keyword
+    /// table so a kind added outside the range cannot pass unnoticed.
+    ///
+    /// It has already happened once: <c>Vararg</c> was appended after the previous range end, which
+    /// left the word lexing as a keyword while every consumer of this method still treated it as an
+    /// identifier — no hover documentation, and <c>x.vararg</c> rejected as a field name.
     /// </summary>
     public static bool IsKeyword(TokenKind kind)
     {
-        return kind >= TokenKind.Class && kind <= TokenKind.ProfileStop;
+        return kind >= TokenKind.Class && kind <= TokenKind.Vararg;
     }
 
     /// <summary>The canonical lexeme for a fixed-text kind, or null when the source must be sliced.</summary>

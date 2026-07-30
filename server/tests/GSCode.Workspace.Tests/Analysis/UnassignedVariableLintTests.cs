@@ -100,4 +100,45 @@ public class UnassignedVariableLintTests
 
         Assert.Empty(Lint(source));
     }
+
+    // --- The parameter pack: bound by `...`, under a name written nowhere in the source ---
+
+    [Theory]
+    [InlineData("function f( a, ... )\n{\n\tforeach ( flag in vararg )\n\t{\n\t\tuse( flag );\n\t}\n}\n")]
+    [InlineData("function f( ... )\n{\n\tuse( vararg.size );\n}\n")]
+    [InlineData("function f( ... )\n{\n\tuse( vararg[ 0 ] );\n}\n")]
+    public void TheVarargPackIsAssignedByTheEngine(string source)
+    {
+        // Every shape here is from BO3's own shared scripts — array_shared iterates it, util_shared
+        // and scene_shared index and count it. It was reported as never assigned because `...` binds
+        // a name that never appears as a parameter token.
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void ReadingTheVarargPackWithoutDeclaringIt()
+    {
+        Diagnostic diagnostic = Assert.Single(Lint("function f( a )\n{\n\tuse( vararg );\n}\n"));
+
+        // Not the generic message: the fix is to add `...`, not to assign the name, and only a
+        // message that knows what the name is can say so.
+        Assert.Equal(GscDiagnosticCode.VarargOutsideVarargFunction, diagnostic.Code);
+    }
+
+    [Fact]
+    public void ALocalCalledVarargIsStillJustALocal()
+    {
+        // Assigned by the author, so nothing is unbound and neither rule has anything to say.
+        Assert.Empty(Lint("function f()\n{\n\tvararg = 1;\n\tuse( vararg );\n}\n"));
+    }
+
+    [Fact]
+    public void OnADialectWithNoPackTheNameIsOrdinary()
+    {
+        // CoD4 has no `...`, so `vararg` there is a name like any other and gets the generic
+        // message. The rule is driven by GameProfile.VarargBindingName rather than by the spelling.
+        Diagnostic diagnostic = Assert.Single(Lint("f()\n{\n\tuse( vararg );\n}\n", "cod4"));
+
+        Assert.Equal(GscDiagnosticCode.VariableNeverAssigned, diagnostic.Code);
+    }
 }

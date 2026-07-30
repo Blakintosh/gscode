@@ -77,6 +77,16 @@ public enum TokenKind
     ProfileStart,
     ProfileStop,
 
+    /// <summary>
+    /// The parameter pack a <c>...</c> declaration binds. A keyword rather than an identifier so it
+    /// colours as one and cannot be renamed, but it parses as an <see cref="Syntax.Ast.IdentifierNode"/>
+    /// wrapping this token — the same shape the callable keywords use — because unlike every other
+    /// keyword here it appears in EXPRESSION position: <c>foreach ( f in vararg )</c>, <c>vararg.size</c>.
+    /// Gated by the dialect's keyword set, so on a game without the pack it stays an identifier and a
+    /// script may still use the word as a variable name.
+    /// </summary>
+    Vararg,
+
     // Preprocessor directives (matched case-sensitively, lowercase per engine convention)
     UsingDirective,
     IncludeDirective,

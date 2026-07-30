@@ -94,9 +94,84 @@ public sealed partial class Parser
             return Advance();
         }
 
-        AddError(GscDiagnosticCode.ExpectedToken, Current.RootRange, display, DescribeCurrent());
+        // A missing terminator is reported by the rule below rather than as a generic "expected X,
+        // found Y", because for that one token both halves of that message are unhelpful.
+        if ( kind == TokenKind.Semicolon )
+        {
+            ReportMissingSemicolon();
+        }
+        else
+        {
+            AddError(GscDiagnosticCode.ExpectedToken, Current.RootRange, display, DescribeCurrent());
+        }
+
         TextRange collapsed = new(Current.RootRange.Start, Current.RootRange.Start);
         return new PToken(kind, "", collapsed, Provenance.Root);
+    }
+
+    /// <summary>
+    /// Reports a statement that was never terminated, anchored at the END OF THAT STATEMENT rather
+    /// than at the token that revealed it.
+    ///
+    /// The token that reveals it is the first token of the NEXT statement, which is the worst place
+    /// to point: the reader is shown a line that is perfectly correct and told something is wrong
+    /// with it. CoD4's own <c>animscripts\traverse\stairs_down.gsc</c> is the case — line 18 is
+    /// <c>endPos = endnode.origin</c> with no semicolon, and the report landed on line 20 reading
+    /// "Expected ';' but found 'horizontalDelta'", naming a variable that has nothing to do with it.
+    ///
+    /// The message drops the offending token for the same reason. Once the range is on the previous
+    /// line, naming a token from a line further down actively contradicts where the reader is
+    /// looking, and it was never information they needed: the fix is a semicolon, always in the same
+    /// place, whatever came next.
+    ///
+    /// Deliberately not applied to the other tokens <see cref="Expect"/> asks for. Those are tokens
+    /// the offending one was supposed to BE — a name after <c>function</c>, a <c>(</c> after that —
+    /// and there the offender's own range is already exactly where the reader should look.
+    /// </summary>
+    private void ReportMissingSemicolon()
+    {
+        // Where the offending token SITS decides which of two different mistakes this is.
+        //
+        // On the SAME LINE it is almost never a forgotten terminator — nobody writes two statements
+        // on one line and omits the separator — but a stray token. CoD4's
+        // animscripts\traverse\stairs_up.gsc line 29 is the case: `endPos = self endnode.origin +
+        // (0,0,1);` has a leftover `self` (its sibling stairs_down.gsc writes the same statement
+        // without it). The fix is to delete a token, not to add one, so the old report is the right
+        // one: point AT the offender and name it, because the reader can see it.
+        //
+        // On a LATER LINE the statement really was left unterminated, and then naming the offender is
+        // worse than useless — it sends the reader to a line that is correct.
+        if ( _index > 0 && Current.RootRange.Start.Line == _tokens[_index - 1].RootRange.End.Line )
+        {
+            AddError(GscDiagnosticCode.ExpectedToken, Current.RootRange, ";", DescribeCurrent());
+            return;
+        }
+
+        AddError(GscDiagnosticCode.MissingSemicolon, MissingSemicolonRange());
+    }
+
+    private TextRange MissingSemicolonRange()
+    {
+        // Nothing precedes it, so there is no statement to anchor to.
+        if ( _index == 0 )
+        {
+            return Current.RootRange;
+        }
+
+        // RootRange rather than Range so a statement whose last token came from a macro expansion
+        // reports at the invocation the author wrote, not inside the macro body.
+        TextRange previous = _tokens[_index - 1].RootRange;
+
+        // One character wide rather than zero, because the diagnostic has to be FINDABLE: a
+        // zero-width caret at the end of a line is the easiest thing in the panel to miss. A
+        // single-line token gives up its last character; anything else — a multi-line token, or the
+        // zero-width placeholder an earlier failure left behind — reports as it stands.
+        if ( previous.End.Line == previous.Start.Line && previous.End.Character > previous.Start.Character )
+        {
+            return new TextRange(new Position(previous.End.Line, previous.End.Character - 1), previous.End);
+        }
+
+        return previous;
     }
 
     // --- Diagnostics ---

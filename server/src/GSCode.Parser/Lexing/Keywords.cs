@@ -59,6 +59,9 @@ public static class Keywords
         ["profilestop"] = TokenKind.ProfileStop,
         ["prof_begin"] = TokenKind.ProfileStart,
         ["prof_end"] = TokenKind.ProfileStop,
+        // The pack bound by `...`. Gated per profile like childthread/call above: BO3 lists it, so
+        // a pre-BO3 script using `vararg` as a variable name keeps working.
+        ["vararg"] = TokenKind.Vararg,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenDictionary<string, TokenKind>.AlternateLookup<ReadOnlySpan<char>> s_keywordSpanLookup =
@@ -87,6 +90,17 @@ public static class Keywords
     public static bool TryMatchKeyword(ReadOnlySpan<char> word, out TokenKind kind)
     {
         return s_keywordSpanLookup.TryGetValue(word, out kind);
+    }
+
+    /// <summary>
+    /// Every kind this table can produce. Exists so <c>TokenFacts.IsKeyword</c>'s contiguous-range
+    /// assumption can be CHECKED against the table rather than trusted: a kind added here but placed
+    /// outside that range lexes as a keyword while every consumer treats it as an identifier, which
+    /// is a silent failure rather than a build error.
+    /// </summary>
+    public static IEnumerable<TokenKind> AllKeywordKinds
+    {
+        get { return s_keywords.Values.Distinct(); }
     }
 
     /// <summary>

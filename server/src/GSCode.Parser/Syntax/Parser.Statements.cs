@@ -140,8 +140,18 @@ public sealed partial class Parser
 
         if ( !Match(TokenKind.Semicolon) )
         {
-            AddError(GscDiagnosticCode.ExpectedToken, Current.RootRange, ";", DescribeCurrent());
-            RecoverToStatement();
+            ReportMissingSemicolon();
+
+            // No recovery skip. Panic-mode exists for a failure whose EXTENT is unknown, and this
+            // one's is not: the expression parsed cleanly and exactly one token is missing after it,
+            // so whatever comes next is the next statement and is very likely fine. Skipping to a
+            // sync token threw it away — in the stairs_down case that silently dropped a whole
+            // `assert( isdefined( endnode ) );` line from the tree, taking its references and its
+            // outline entry with it.
+            //
+            // Termination is not at risk: reaching here means ParseExpression consumed tokens (the
+            // dispatcher above refuses to enter on a token that cannot start one), so the block loop
+            // always advances.
         }
 
         return new ExprStatementNode(RangeFrom(start), expression);

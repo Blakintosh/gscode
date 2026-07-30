@@ -31,7 +31,10 @@ public class RecoveryTests
     {
         ParseTree tree = ParserTestHelper.Parse("function f()\n{\na = 1\nreturn;\n}");
 
-        Assert.Contains(tree.Diagnostics, diagnostic => diagnostic.Code == GscDiagnosticCode.ExpectedToken);
+        // 3014 rather than the generic 3000: an unterminated statement is reported at its own end
+        // rather than at the token that revealed it. Recovery is unchanged — the point of this test
+        // is that the next statement still parses.
+        Assert.Contains(tree.Diagnostics, diagnostic => diagnostic.Code == GscDiagnosticCode.MissingSemicolon);
         FunctionNode function = Assert.IsType<FunctionNode>(Assert.Single(tree.Root.Elements));
         Assert.Contains(function.Body.Statements, statement => statement is ReturnNode);
     }

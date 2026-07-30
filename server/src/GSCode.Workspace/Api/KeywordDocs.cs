@@ -26,6 +26,7 @@ public static class KeywordDocs
         ["profilestart"] = "Begins a named profiling scope for performance measurement (paired with `profilestop`).",
         ["profilestop"] = "Ends the most recent profiling scope opened by `profilestart`.",
         ["size"] = "The number of elements in an array or characters in a string (read-only `int`).\n\n```gsc\ncount = array.size;\n```",
+        ["vararg"] = "The arguments passed beyond a function's named parameters, as an array. Bound by declaring `...` in the parameter list, where it must be the last entry.\n\n```gsc\nfunction f( first, ... )\n{\n\tforeach ( extra in vararg )\n\t{\n\t\tuse( extra );\n\t}\n}\n```",
 
         // Preprocessor directives.
         ["#using"] = "Imports another script file so its namespace's functions can be called. Must appear before the first function or class.\n\n```gsc\n#using scripts\\shared\\util_shared;\n```",

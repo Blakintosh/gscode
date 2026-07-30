@@ -159,30 +159,40 @@ public sealed partial class Parser
     {
         ExprNode expression = ParseUnary();
 
-        while ( true )
+        // At most ONE method call. Method notation names an object and a function to run on it, and
+        // the object is a VALUE — a name, a field, an element, a pointer deref — never another
+        // method call: GSC has no `a foo() bar()`.
+        //
+        // Looping here did allow it, and the cost was not an odd parse but a HIDDEN ERROR, because
+        // the second callee is free to sit on the next line. CoD4's
+        // animscripts\traverse\stairs_down.gsc is the case:
+        //
+        //     endnode = self getnegotiationendnode()      <- no semicolon
+        //     assert( isdefined( endnode ) );
+        //
+        // parsed as `assert(...)` called ON the result of getnegotiationendnode(), welding two
+        // statements into one and swallowing the missing semicolon entirely. The report then landed
+        // two lines further down, at the next statement that could not be absorbed the same way.
+        //
+        // The postfix level below still runs, so a call RESULT can be indexed or member-accessed as
+        // a temporary — `players[q] getplayerangles()[1]`, `ent getstruct().field`. Only using one
+        // call as the object of the next is refused.
+        //
+        // thread / childthread run the callee on a (child) thread; call invokes a function pointer
+        // synchronously. All three are method-notation modifiers over the target.
+        if ( Kind == TokenKind.Thread || Kind == TokenKind.ChildThread || Kind == TokenKind.Call )
         {
-            // thread / childthread run the callee on a (child) thread; call invokes a function
-            // pointer synchronously. All three are method-notation modifiers over the target.
-            if ( Kind == TokenKind.Thread || Kind == TokenKind.ChildThread || Kind == TokenKind.Call )
-            {
-                bool isThread = Kind != TokenKind.Call;
-                Advance();
-                expression = ParseCallCore(expression, isThread);
-                expression = ParsePostfixChain(expression);
-                continue;
-            }
-
-            if ( IsMethodCalleeAhead() )
-            {
-                expression = ParseCallCore(expression, isThread: false);
-                // A call result can be indexed or member-accessed directly (used as a temporary),
-                // e.g. players[q] getplayerangles()[1] or ent getstruct().field.
-                expression = ParsePostfixChain(expression);
-                continue;
-            }
-
-            return expression;
+            bool isThread = Kind != TokenKind.Call;
+            Advance();
+            return ParsePostfixChain(ParseCallCore(expression, isThread));
         }
+
+        if ( IsMethodCalleeAhead() )
+        {
+            return ParsePostfixChain(ParseCallCore(expression, isThread: false));
+        }
+
+        return expression;
     }
 
     /// <summary>
@@ -591,6 +601,15 @@ public sealed partial class Parser
                 PToken token = Advance();
                 return new LiteralNode(token.RootRange, token);
             }
+            // The parameter pack reads as a value — indexed, counted, iterated — so it becomes an
+            // IdentifierNode like any other name. Being a keyword only changes how it COLOURS and
+            // that it cannot be a declaration target; every expression rule below treats it as the
+            // array it is.
+            case TokenKind.Vararg:
+            {
+                PToken pack = Advance();
+                return new IdentifierNode(pack.RootRange, pack);
+            }
             case TokenKind.Identifier:
             {
                 PToken first = Advance();
@@ -694,7 +713,12 @@ public sealed partial class Parser
             return true;
         }
 
+        // Vararg is a keyword but reads as a value, so it can open a statement the same way a name
+        // can — `vararg[ 0 ] = x;`. Leaving it out made a statement starting with the pack
+        // unrecognisable to recovery, which no stock script would have revealed: they only ever read
+        // it mid-expression.
         return kind is TokenKind.Identifier
+            or TokenKind.Vararg
             or TokenKind.Integer
             or TokenKind.Float
             or TokenKind.Hex

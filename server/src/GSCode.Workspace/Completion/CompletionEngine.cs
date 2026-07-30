@@ -150,7 +150,12 @@ public sealed class CompletionEngine
         }
 
         return StatementScopeCompletions(
-            result, contextId, offset, insideFunction, CallSnippet(tokens, currentIndex, offset, callPunctuation));
+            result,
+            contextId,
+            offset,
+            insideFunction,
+            IsVarargInScope(result, position, GameProfile.Active),
+            CallSnippet(tokens, currentIndex, offset, callPunctuation));
     }
 
     // --- Contexts ---
@@ -873,7 +878,7 @@ public sealed class CompletionEngine
     }
 
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(
-        ParseResult result, string contextId, int offset, bool insideFunction, string callSuffix)
+        ParseResult result, string contextId, int offset, bool insideFunction, bool varargInScope, string callSuffix)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
@@ -895,6 +900,20 @@ public sealed class CompletionEngine
         if ( !insideFunction )
         {
             entries.Add(FunctionDeclarationSnippet(game));
+        }
+
+        // The parameter pack is offered per-FUNCTION rather than from the keyword list, because
+        // unlike every other keyword its availability depends on the declaration this cursor sits
+        // in and not on the dialect alone. It is a Variable rather than a Keyword because that is
+        // what it reads as at a use site: an array to index, count and iterate.
+        if ( varargInScope )
+        {
+            entries.Add(new CompletionEntry(
+                "vararg",
+                CompletionKind.Variable,
+                "array",
+                "vararg",
+                KeywordDocs.Find("vararg") ?? ""));
         }
 
         foreach ( string keyword in words )
@@ -1296,14 +1315,36 @@ public sealed class CompletionEngine
 
     private static bool IsInsideFunctionBody(ParseResult result, Position position)
     {
+        return EnclosingFunction(result, position) is not null;
+    }
+
+    private static FunctionSymbol? EnclosingFunction(ParseResult result, Position position)
+    {
         foreach ( FunctionSymbol function in result.Extraction.Functions )
         {
             if ( function.FullRange.Contains(position) )
             {
-                return true;
+                return function;
             }
         }
 
-        return false;
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the parameter pack is in scope here — the dialect binds one AND the enclosing
+    /// function declares <c>...</c>.
+    /// </summary>
+    /// <remarks>
+    /// Both halves matter. Offering <c>vararg</c> from the plain keyword list would suggest it in
+    /// every function on the dialect, and in a function without <c>...</c> nothing binds it, so
+    /// accepting the suggestion earns a 5024. A completion list that leads to a diagnostic is worse
+    /// than one entry short.
+    /// </remarks>
+    private static bool IsVarargInScope(ParseResult result, Position position, GameProfile game)
+    {
+        return game.HasVarargBinding
+            && EnclosingFunction(result, position) is FunctionSymbol function
+            && function.HasVarargs;
     }
 }

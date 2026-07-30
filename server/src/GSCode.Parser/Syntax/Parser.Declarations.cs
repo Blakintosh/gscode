@@ -335,15 +335,35 @@ public sealed partial class Parser
         ImmutableArray<ParameterNode>.Builder parameters = ImmutableArray.CreateBuilder<ParameterNode>();
         Expect(TokenKind.OpenParen, "(");
 
+        // An `...` seen with nothing after it YET. Anything that follows makes it not-last, and the
+        // report goes on the ellipsis rather than on what follows because that is what has to move.
+        PToken? danglingEllipsis = null;
+
         while ( Kind != TokenKind.CloseParen && Kind != TokenKind.EndOfFile && Kind != TokenKind.OpenBrace )
         {
             if ( Kind == TokenKind.Ellipsis )
             {
                 hasVarargs = true;
-                Advance();
+
+                // A second `...`: the first one is no longer last. Only one pack can exist, and the
+                // earlier of the two is the one in the wrong place.
+                if ( danglingEllipsis is not null )
+                {
+                    AddError(GscDiagnosticCode.VarargNotLastParameter, danglingEllipsis.Value.RootRange);
+                }
+
+                danglingEllipsis = Advance();
             }
             else
             {
+                // A named parameter after the pack can never be bound: the pack has already taken
+                // everything the caller passed.
+                if ( danglingEllipsis is not null )
+                {
+                    AddError(GscDiagnosticCode.VarargNotLastParameter, danglingEllipsis.Value.RootRange);
+                    danglingEllipsis = null;
+                }
+
                 PToken start = Current;
                 bool byRef = Match(TokenKind.Ampersand);
 

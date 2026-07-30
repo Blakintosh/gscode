@@ -19,6 +19,10 @@ namespace GSCode.Workspace.Analysis;
 /// happens:
 ///
 /// * <b>Parameters</b> — supplied by the caller.
+/// * <b>The parameter pack</b> — <c>...</c> in the declaration binds a name that appears nowhere
+///   in the source (BO3's <c>vararg</c>). Reading it in a function that does NOT declare <c>...</c>
+///   is a real mistake, and one this rule is already positioned to catch, so it reports 5024 there
+///   rather than the generic message.
 /// * <b>Loop bindings</b> — <c>foreach ( key, value in … )</c> binds both.
 /// * <b>Globals</b> — <c>level</c>, <c>self</c> and friends come from the profile, and are only
 ///   identifiers on dialects where they are not keywords.
@@ -150,6 +154,28 @@ public static class UnassignedVariableLint
             // Not the author's name to fix, and the range points into an expansion.
             if ( read.Provenance.DefinitionSite is not null )
             {
+                continue;
+            }
+
+            // The pack is bound by `...` in the declaration, so it is never in the assigned set and
+            // reaches here like any unbound name. Where the function DOES declare `...` it is bound
+            // and there is nothing to say; where it does not, "never assigned" is the wrong advice —
+            // nobody assigns the pack, they add `...` — so 5024 says that instead.
+            //
+            // By token kind rather than by name: the dialect gate comes free (on a game without the
+            // pack the word lexes as a plain identifier and gets the ordinary treatment), and a
+            // local the author assigned themselves never gets here at all.
+            if ( read.Kind == TokenKind.Vararg )
+            {
+                if ( !function.HasVarargs )
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        read.RootRange,
+                        DiagnosticSeverity.Warning,
+                        GscDiagnosticCode.VarargOutsideVarargFunction,
+                        read.Text));
+                }
+
                 continue;
             }
 

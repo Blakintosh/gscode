@@ -352,6 +352,31 @@ public class CompletionEngineTests
         Assert.True(HasLabel(entries, "foreach"));
         Assert.True(HasLabel(entries, "CAP"));       // file-local macro
         Assert.True(HasLabel(entries, "IPrintLn") || entries.Any(e => e.Detail == "builtin"));
+
+        // The parameter pack is NOT offered here: `run()` declares no `...`, so nothing would bind
+        // it and accepting the suggestion would earn a 5024.
+        Assert.False(HasLabel(entries, "vararg"));
+    }
+
+    [Fact]
+    public void StatementScope_OffersTheParameterPackOnlyInsideAVarargFunction()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        // `vararg` is bound by the DECLARATION, not by the dialect alone, so it is offered per
+        // function rather than from the keyword list.
+        string text = "function run( first, ... )\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 4));
+
+        CompletionEntry pack = Assert.Single(entries, entry => entry.Label == "vararg");
+
+        // A Variable rather than a Keyword: at a use site it reads as the array it is.
+        Assert.Equal(CompletionKind.Variable, pack.Kind);
+        Assert.Equal("array", pack.Detail);
+        Assert.Contains("...", pack.Documentation, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -234,14 +234,16 @@ static void GenerateWordfileGameData(string prefix, string wordfilePath, string 
     // wherever a page exists.
     // The documentation pages are NOT vendored — they are a third party's — so the generator reads
     // them from wherever they live via GSCODE_COD4_DOCS, the same way the corpus tests locate game
-    // scripts. Unset means the wordfile names alone, which is what this artifact already held, so a
-    // regeneration without the docs never silently loses detail; it just stops gaining it.
+    // scripts. Unset means the wordfile names alone, so the run is guarded below: the artifact in the
+    // repo HOLDS documented detail, and a regeneration on a machine without the docs would replace
+    // every signature with a bare name and then hand the wreckage to WaW and BO1 through enrichFrom.
     List<string> functions = CleanNames(ParseWordfileSection(lines, 7), stripLeadingDot: false, lowercase: false);
     GenerateWordfileApi(
         prefix,
         docsRoot,
         functions,
         Path.Combine(curatedDir, $"{prefix}_ai_builtins.json"),
+        Path.Combine(curatedDir, $"{prefix}_api_overrides.json"),
         enrichFrom,
         Path.Combine(apiDir, $"{prefix}_api_gsc.json"));
 
@@ -410,13 +412,43 @@ static void WriteJson<T>(string path, T value, bool camelCase = false)
 
 // Converts the per-function documentation pages into the builtin library, merged with the
 // wordfile's bare name list so a function documented nowhere is still known to exist.
-static void GenerateWordfileApi(string prefix, string? htmRoot, List<string> wordfileNames, string curatedPath, string? enrichFromPath, string outputPath)
+static void GenerateWordfileApi(
+    string prefix,
+    string? htmRoot,
+    List<string> wordfileNames,
+    string curatedPath,
+    string overridesPath,
+    string? enrichFromPath,
+    string outputPath)
 {
     Dictionary<string, object> byName = new(StringComparer.OrdinalIgnoreCase);
 
-    if ( !string.IsNullOrWhiteSpace(htmRoot) && Directory.Exists(htmRoot) )
+    // Refuse to trade a rich artifact for a poor one. The pages are a third party's and live outside
+    // the repo, so "docs not found" is the NORMAL state of a fresh clone — and without this guard the
+    // first innocent run there would silently strip every documented signature from a file under
+    // source control. Losing data is not a valid outcome of a regeneration; not gaining any is.
+    //
+    // A game with a SIBLING to enrich from is a different case and must not be caught here: WaW and
+    // BO1 have no pages by design (BO1's ship stripped) and rebuild their detail by inheriting CoD4's
+    // output, so a run without docs costs them nothing. The pairing that destroys data is no pages
+    // AND nothing to inherit, which is CoD4 alone.
+    string? docsRoot = !string.IsNullOrWhiteSpace(htmRoot) && Directory.Exists(htmRoot) ? htmRoot : null;
+    bool canInherit = enrichFromPath is not null && File.Exists(enrichFromPath);
+
+    if ( docsRoot is null && !canInherit )
     {
-        List<string> pages = [.. Directory.EnumerateFiles(htmRoot, "*.htm", SearchOption.AllDirectories)];
+        int existing = CountDocumented(outputPath);
+        if ( existing > 0 )
+        {
+            Console.WriteLine(
+                $"  {prefix} REFUSING to regenerate: {outputPath} holds {existing} documented entries, and this run has neither a documentation root nor a sibling to inherit from. Set the docs environment variable, or delete the file to rebuild it from names alone.");
+            return;
+        }
+    }
+
+    if ( docsRoot is not null )
+    {
+        List<string> pages = [.. Directory.EnumerateFiles(docsRoot, "*.htm", SearchOption.AllDirectories)];
         pages.Sort(StringComparer.OrdinalIgnoreCase);
 
         foreach ( string page in pages )
@@ -493,9 +525,126 @@ static void GenerateWordfileApi(string prefix, string? htmRoot, List<string> wor
         byName[name] = new Cod4Entry(name, null, [], null, null, null, null);
     }
 
+    int corrected = ApplyOverrides(prefix, overridesPath, byName);
+
     List<object> all = [.. byName.OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(static pair => pair.Value)];
     WriteJson(outputPath, new Cod4ApiFile(all), camelCase: true);
-    Console.WriteLine($"  {prefix} api functions: {all.Count} ({documented} documented, {curated} reconstructed, {inherited} inherited, {all.Count - documented - curated - inherited} name-only)");
+    Console.WriteLine($"  {prefix} api functions: {all.Count} ({documented} documented, {curated} reconstructed, {inherited} inherited, {all.Count - documented - curated - inherited} name-only, {corrected} corrected)");
+}
+
+/// <summary>
+/// How many entries in an existing artifact came from a documentation page. Read straight off the
+/// flags the last run wrote, so it needs no knowledge of the doc format.
+/// </summary>
+static int CountDocumented(string outputPath)
+{
+    if ( !File.Exists(outputPath) )
+    {
+        return 0;
+    }
+
+    try
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(outputPath));
+        int count = 0;
+        foreach ( JsonElement entry in document.RootElement.GetProperty("api").EnumerateArray() )
+        {
+            if ( !entry.TryGetProperty("flags", out JsonElement flags) )
+            {
+                continue;
+            }
+
+            foreach ( JsonElement flag in flags.EnumerateArray() )
+            {
+                if ( flag.ValueKind == JsonValueKind.String
+                    && string.Equals(flag.GetString(), "documented", StringComparison.Ordinal) )
+                {
+                    count++;
+                    break;
+                }
+            }
+        }
+
+        return count;
+    }
+    catch ( JsonException )
+    {
+        // An unreadable artifact is not something to protect.
+        return 0;
+    }
+}
+
+/// <summary>
+/// Corrects signatures the documentation gets WRONG, as the last word over every other layer.
+///
+/// This is the layer to reach for when a page's facts do not match the engine, and it exists because
+/// the alternative does not survive: the generated api file is an artifact, so an edit made there is
+/// destroyed by the next run, and the pages themselves belong to somebody else. WaW and BO1 need no
+/// entries of their own — they inherit CoD4's corrected output through enrichFrom.
+///
+/// Only <c>optionalFrom</c> is expressible, because that is the correction the documentation actually
+/// needs. Its Required/Optional split is the one thing it gets wrong often, always in the same
+/// direction (a trailing argument documented as required), and optional arguments in GSC are always
+/// trailing — so an index past which everything is optional says all there is to say. A shape that
+/// could rewrite names, types or descriptions would be a second source of truth for the parts the
+/// pages get RIGHT, which is how a curated layer turns into a fork.
+/// </summary>
+static int ApplyOverrides(string prefix, string overridesPath, Dictionary<string, object> byName)
+{
+    if ( !File.Exists(overridesPath) )
+    {
+        return 0;
+    }
+
+    int corrected = 0;
+    using JsonDocument document = JsonDocument.Parse(File.ReadAllText(overridesPath));
+
+    foreach ( JsonElement element in document.RootElement.EnumerateArray() )
+    {
+        string? name = element.GetProperty("name").GetString();
+        if ( name is null )
+        {
+            continue;
+        }
+
+        // 1-based, matching how the pages number their own argument lists.
+        int optionalFrom = element.GetProperty("optionalFrom").GetInt32();
+
+        // Loud rather than silent. An override naming something this game does not have is a stale
+        // entry — a renamed function, or a correction that landed upstream — and a file of
+        // corrections nobody is told have stopped applying is worse than no file.
+        if ( !byName.TryGetValue(name, out object? existing) || existing is not Cod4Entry entry )
+        {
+            Console.WriteLine($"  {prefix} override for '{name}' matched no documented entry; ignoring.");
+            continue;
+        }
+
+        List<Cod4Overload> overloads = [];
+        foreach ( Cod4Overload overload in entry.Overloads )
+        {
+            List<Cod4Parameter> parameters = [];
+            for ( int index = 0; index < overload.Parameters.Count; index++ )
+            {
+                Cod4Parameter parameter = overload.Parameters[index];
+                bool mandatory = parameter.Mandatory && index + 1 < optionalFrom;
+                parameters.Add(parameter with { Mandatory = mandatory });
+            }
+
+            overloads.Add(overload with { Parameters = parameters });
+        }
+
+        // Flagged so the correction is visible in the artifact itself rather than only in this tool.
+        List<string> flags = entry.Flags is null ? [] : [.. entry.Flags];
+        if ( !flags.Contains("corrected") )
+        {
+            flags.Add("corrected");
+        }
+
+        byName[name] = entry with { Overloads = overloads, Flags = flags };
+        corrected++;
+    }
+
+    return corrected;
 }
 
 // One documentation page. The pages use two templates; both put the signature in H1 and label

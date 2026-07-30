@@ -786,8 +786,7 @@
             },
             {
               "name": "message",
-              "description": "error message",
-              "mandatory": true
+              "description": "error message"
             }
           ]
         }
@@ -795,7 +794,8 @@
       "example": "AssertEx( enemyInSight == true, \"Script expected enemy to be in sight.\" );",
       "module": "Debug",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -1043,8 +1043,7 @@
             },
             {
               "name": "team",
-              "description": "You must specify at least one team for which this place is bad, but can give several. The allowed teams are 'axis', 'allies', and 'neutral'.",
-              "mandatory": true
+              "description": "You must specify at least one team for which this place is bad, but can give several. The allowed teams are 'axis', 'allies', and 'neutral'."
             }
           ]
         }
@@ -1053,7 +1052,8 @@
       "module": "BadPlaces",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -3787,8 +3787,7 @@
           "parameters": [
             {
               "name": "team",
-              "description": "a team name, either 'axis', 'allies', or 'neutral'",
-              "mandatory": true
+              "description": "a team name, either 'axis', 'allies', or 'neutral'"
             },
             {
               "name": "team",
@@ -3801,7 +3800,8 @@
       "module": "Sentient",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -7555,8 +7555,7 @@
             },
             {
               "name": "dvar_value",
-              "description": "The new value of the dvar",
-              "mandatory": true
+              "description": "The new value of the dvar"
             }
           ]
         }
@@ -7565,7 +7564,8 @@
       "module": "Client",
       "spmp": "MP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -16176,8 +16176,7 @@
           "parameters": [
             {
               "name": "node_index",
-              "description": "A node on the path to attach.",
-              "mandatory": true
+              "description": "A node on the path to attach."
             }
           ]
         }
@@ -16186,7 +16185,8 @@
       "module": "Vehicles",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {
@@ -17029,7 +17029,6 @@
             {
               "name": "angles",
               "description": "The actor's new angles.",
-              "mandatory": true,
               "type": {
                 "dataType": "vector"
               }
@@ -17041,7 +17040,8 @@
       "module": "AI",
       "spmp": "SP",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ]
     },
     {

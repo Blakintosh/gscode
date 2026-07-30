@@ -67,6 +67,9 @@ extensible beyond stock data. Field entry shape: `{ "name", "type", "readonly"? 
   provenance: thirteen carried over from the Black Ops III library, where the same function
   is documented, and six inferred from call sites alone. Kept here so a regeneration cannot
   drop them, and flagged so a reconstruction is never mistaken for documentation.
+- `cod4_api_overrides.json` — corrections to signatures the documentation states incorrectly,
+  applied over every other layer. Entry shape: `{ "name", "optionalFrom", "reason" }`. See
+  [How an API entry is chosen](#how-an-api-entry-is-chosen).
 
 The object-field sweep matches `*_fields*.json` ONLY. A plain `*.json` glob turned
 `cod4_ai_builtins.json` into a bogus `cod4_ai_builtins` entity kind; narrowing it to
@@ -100,16 +103,35 @@ Four sources, highest precedence first. Each only fills a gap the one above left
    parameters rather than bare: they are the same functions CoD4 documents.
 4. **The bare wordfile name**, so a function documented nowhere is still known to exist.
 
+Then one pass **over the top of all four**: `sources/curated/<prefix>_api_overrides.json`, for
+signatures the documentation gets WRONG. It is the layer to reach for when a page's facts do not
+match the engine, and it exists because the alternatives do not survive — the generated api file is
+an artifact, so an edit there dies on the next run, and the pages belong to somebody else. WaW and
+BO1 need no overrides of their own; they inherit CoD4's corrected output through `enrichFrom`.
+
+Only `optionalFrom` is expressible: a 1-based index past which every parameter is optional. That is
+the correction the documentation actually needs — its Required/Optional split is the one thing it
+gets wrong often, always in the same direction, and optional arguments in GSC are always trailing. A
+shape that could also rewrite names, types or descriptions would become a second source of truth for
+the parts the pages get *right*, which is how a curated layer turns into a fork. Each entry carries a
+`reason`, and a corrected entry is flagged `corrected` in the artifact. An override naming a function
+the game does not have is reported rather than ignored, so the file cannot rot quietly.
+
 The run prints the split, e.g.
-`cod4 api functions: 819 (792 documented, 19 reconstructed, 0 inherited, 8 name-only)`.
+`cod4 api functions: 819 (792 documented, 19 reconstructed, 0 inherited, 8 name-only, 6 corrected)`.
 
 ### Environment variables
 
 - `GSCODE_COD4_DOCS` — the CoD4 per-function documentation pages. **Not vendored**: they are
   a third party's, so the tool reads them from wherever they live, exactly as the corpus
-  tests locate game scripts. Unset means the wordfile names alone, which is the state the
-  artifact was already in — a regeneration without the docs never silently loses detail, it
-  just stops gaining it.
+  tests locate game scripts.
+
+  With the pages absent the tool would rebuild CoD4 from wordfile names alone — 792 documented
+  signatures replaced by bare names, and then handed to WaW and BO1 through `enrichFrom`. Since
+  "docs not found" is the normal state of a fresh clone, the tool **refuses** rather than doing that:
+  a game with no docs *and* no sibling to inherit from will not overwrite an artifact that already
+  holds documented entries. Delete the file if a rebuild from names alone is genuinely wanted. WaW
+  and BO1 are unaffected — they have no pages by design and rebuild by inheriting.
 
 The corpus environment variables (`GSCODE_CORPUS_<GAME>`) belong to the tests; see
 `tests/FOLDER.md`.

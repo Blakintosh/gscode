@@ -5149,13 +5149,14 @@
                         {
                             "name": "team",
                             "description": "You must specify at least one team for which this place is bad, but can give several.  The allowed teams are 'axis', 'allies', and 'neutral'.",
-                            "mandatory": true
+                            "mandatory": false
                         }
                     ]
                 }
             ],
             "flags": [
-                "processed"
+                "processed",
+                "corrected"
             ],
             "example": "BadPlace_Cylinder( \"moody\", -1, level.moodyfall_mn, level.moodyfall_radius, \"neutral\" )",
             "confidence": "medium"

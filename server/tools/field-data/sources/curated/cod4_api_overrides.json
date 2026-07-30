@@ -1,0 +1,32 @@
+[
+    {
+        "name": "GetAIArray",
+        "optionalFrom": 1,
+        "reason": "Called with no arguments throughout the stock scripts, where it returns every AI regardless of team. The page's signature line is 'GetAIArray( <team>, <team>, ... )' and it lists one required team, but the team filter is optional in the engine."
+    },
+    {
+        "name": "StartPath",
+        "optionalFrom": 1,
+        "reason": "The page contradicts itself: its signature line is 'StartPath()' with no parameters while its Required Args list one node index. The signature line is the truthful half - the vehicle follows the path it is already attached to."
+    },
+    {
+        "name": "Teleport",
+        "optionalFrom": 2,
+        "reason": "The angles are optional; teleporting to a position without respecifying the actor's facing is the common call. The page lists both arguments as required."
+    },
+    {
+        "name": "AssertEx",
+        "optionalFrom": 2,
+        "reason": "The message is optional, which is what makes AssertEx degrade to Assert rather than fail to compile. The page lists both arguments as required."
+    },
+    {
+        "name": "MakeDvarServerInfo",
+        "optionalFrom": 2,
+        "reason": "The value is optional: flagging an existing dvar DVAR_CODINFO without changing it is a valid call. The page lists both arguments as required."
+    },
+    {
+        "name": "BadPlace_Cylinder",
+        "optionalFrom": 6,
+        "reason": "The team list is optional - a bad place with no team named is bad for everyone. The page's signature line ends '<team>, <team>...' (variadic) while its Required Args insist on at least one team."
+    }
+]

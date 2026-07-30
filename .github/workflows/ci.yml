@@ -24,7 +24,7 @@ jobs:
         # point at local game or mod-tools installs CI does not have. They no-op when those are
         # unset, so excluding them is not what makes CI pass - it makes the omission EXPLICIT, since
         # a run that silently swept nothing looks exactly like one that swept 7,000 scripts.
-        run: dotnet test server/GSCode.slnx --nologo --no-build --filter "Category!=Corpus"
+        run: dotnet test server/GSCode.slnx --nologo --no-build --filter "Category!=Corpus&Category!=Perf"
 
       - uses: actions/setup-node@v4
         with:

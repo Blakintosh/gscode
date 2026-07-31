@@ -31,14 +31,21 @@ public sealed class CompletionEngine
     /// <summary>Produces completion suggestions for a position in an analysed document.</summary>
     /// <param name="includeLiterals">Whether to offer known literals inside a "..."/&amp;"..."/#"..." string (the gscode.completion.literals setting).</param>
     /// <param name="fieldScope">How widely assignment-derived fields are offered after a `.` (the gscode.completion.fieldScope setting).</param>
+    /// <param name="profile">
+    /// The dialect to complete for; defaults to the active one. Explicit for the same reason
+    /// <c>ScriptAnalysis.Analyze</c> takes it — a test naming its dialect does not have to mutate
+    /// process-global state, and cannot be perturbed by a test that does.
+    /// </param>
     public ImmutableArray<CompletionEntry> Complete(
         ParseResult result,
         string contextId,
         Position position,
         bool includeLiterals = true,
         FieldScope fieldScope = FieldScope.Owner,
-        CallPunctuation callPunctuation = CallPunctuation.Parens)
+        CallPunctuation callPunctuation = CallPunctuation.Parens,
+        GameProfile? profile = null)
     {
+        GameProfile game = profile ?? GameProfile.Active;
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
         int offset = result.Text.GetOffset(position);
 
@@ -84,7 +91,7 @@ public sealed class CompletionEngine
                 return AssetTypeCompletions(result.Language);
             }
 
-            // #using / #insert path — offer path segments.
+            // #using / #insert / #include path — offer path segments.
             ImmutableArray<CompletionEntry> pathCompletions = TryPathContext(result, contextId, tokens, currentIndex, offset);
             if ( !pathCompletions.IsDefault )
             {
@@ -101,6 +108,23 @@ public sealed class CompletionEngine
                 : [];
         }
 
+        // An INLINE path call — `maps\mp\_utility::foo()`. On the dialects that have them a file is
+        // reached by naming its path in the middle of an expression, with no import at all, so the
+        // same folder-walk the directives get belongs here too: there is no other way to discover
+        // what a path may continue into.
+        //
+        // Gated on the capability, so nothing changes where the syntax does not exist. The path is
+        // read from the raw text rather than the tokens for the reason IsAfterDirectiveHash gives —
+        // a half-typed path is a run of identifiers and separators that never lexes as one thing.
+        if ( game.HasInlinePathCalls )
+        {
+            string inlinePath = InlinePathBefore(result.Text, offset);
+            if ( inlinePath.Length > 0 )
+            {
+                return PathSegmentCompletions(result, contextId, isInsert: false, inlinePath);
+            }
+        }
+
         // `function <here>` — a declaration NAME, not a reference to anything.
         //
         // Nothing callable can legally follow the keyword, so the statement-scope list was pure
@@ -110,7 +134,7 @@ public sealed class CompletionEngine
         // is visible before it is written.
         if ( triggerIndex >= 0 && IsFunctionDeclarationName(tokens, triggerIndex) )
         {
-            return DeclarationNameCompletions(result, contextId);
+            return DeclarationNameCompletions(result, contextId, game);
         }
 
         // `case 1:` with nothing typed after it — the colon ENDS a label, so the list popped over
@@ -154,8 +178,9 @@ public sealed class CompletionEngine
             contextId,
             offset,
             insideFunction,
-            IsVarargInScope(result, position, GameProfile.Active),
-            CallSnippet(tokens, currentIndex, offset, callPunctuation));
+            IsVarargInScope(result, position, game),
+            CallSnippet(tokens, currentIndex, offset, callPunctuation),
+            game);
     }
 
     // --- Contexts ---
@@ -212,10 +237,9 @@ public sealed class CompletionEngine
     /// What may follow the <c>function</c> keyword: the declaration modifiers, and the script
     /// functions already visible. No builtins, macros or globals — none of them can be declared.
     /// </summary>
-    private ImmutableArray<CompletionEntry> DeclarationNameCompletions(ParseResult result, string contextId)
+    private ImmutableArray<CompletionEntry> DeclarationNameCompletions(ParseResult result, string contextId, GameProfile game)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
-        GameProfile game = GameProfile.Active;
 
         foreach ( string modifier in (string[])["private", "autoexec"] )
         {
@@ -306,7 +330,7 @@ public sealed class CompletionEngine
 
     private ImmutableArray<CompletionEntry> TryPathContext(ParseResult result, string contextId, ImmutableArray<Token> tokens, int currentIndex, int offset)
     {
-        // Detect a #using/#insert earlier on the same line than the cursor.
+        // Detect a #using/#insert/#include earlier on the same line than the cursor.
         int probe = currentIndex >= 0 ? currentIndex : FirstAtOrAfter(tokens, offset);
         int scan = probe - 1;
         while ( scan >= 0 )
@@ -317,7 +341,12 @@ public sealed class CompletionEngine
                 break;
             }
 
-            if ( kind == TokenKind.UsingDirective || kind == TokenKind.InsertDirective )
+            // #include is the merge dialects' import and takes the same script path as #using —
+            // it was simply missing here, so the whole Infinity Ward line got no path completion on
+            // the one directive it actually writes. It is not an #insert: a header is a Treyarch
+            // thing, and those dialects have none.
+            if ( kind == TokenKind.UsingDirective || kind == TokenKind.InsertDirective
+                || kind == TokenKind.IncludeDirective )
             {
                 string typed = TypedPathBefore(result, tokens[scan].End, offset);
                 return PathSegmentCompletions(
@@ -611,6 +640,41 @@ public sealed class CompletionEngine
     }
 
     /// <summary>
+    /// The script path being typed at the cursor in ordinary code — <c>maps\mp\_ut</c> — or "" when
+    /// the cursor is not in one.
+    /// </summary>
+    /// <remarks>
+    /// A SEPARATOR is required, not merely word characters, and that is the whole of the
+    /// disambiguation: every bare identifier in a function body would otherwise look like the first
+    /// segment of a path, and the suggestion list would become script paths everywhere. Once a '\'
+    /// has been typed the intent is unambiguous — nothing else in GSC expression syntax contains
+    /// one, string literals having already been handled by the caller.
+    /// </remarks>
+    private static string InlinePathBefore(SourceText text, int offset)
+    {
+        int cursor = Math.Clamp(offset, 0, text.Length);
+        int start = cursor;
+        bool sawSeparator = false;
+
+        while ( start > 0 )
+        {
+            char c = text.Text[start - 1];
+            if ( c == '\\' || c == '/' )
+            {
+                sawSeparator = true;
+            }
+            else if ( !IsWordChar(c) )
+            {
+                break;
+            }
+
+            start--;
+        }
+
+        return sawSeparator ? text.Text[start..cursor].Replace('/', '\\') : "";
+    }
+
+    /// <summary>
     /// What accepting a directive actually inserts: its full form, with the cursor placed where
     /// the argument goes. Inserting the bare word left a directive that does not parse until the
     /// parentheses and semicolon are typed by hand — and a half-written directive reddens the
@@ -691,11 +755,10 @@ public sealed class CompletionEngine
     /// bug. Filtering on "precache" matches, and inserting "precache" onto the '#' already in the
     /// buffer avoids producing "##precache". The label keeps its '#' so the list stays readable.
     /// </summary>
-    private static ImmutableArray<CompletionEntry> DirectiveCompletions()
+    private static ImmutableArray<CompletionEntry> DirectiveCompletions(GameProfile game)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
-        GameProfile game = GameProfile.Active;
         foreach ( string keyword in GscKeywords.TopLevelKeywords )
         {
             if ( !keyword.StartsWith('#') || !GscKeywords.IsAvailable(keyword, game) )
@@ -880,7 +943,8 @@ public sealed class CompletionEngine
     }
 
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(
-        ParseResult result, string contextId, int offset, bool insideFunction, bool varargInScope, string callSuffix)
+        ParseResult result, string contextId, int offset, bool insideFunction, bool varargInScope, string callSuffix,
+        GameProfile game)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
@@ -889,12 +953,11 @@ public sealed class CompletionEngine
         // caller has already handled '#' as the start of a hash string.
         if ( !insideFunction && IsAfterDirectiveHash(result.Text, offset) )
         {
-            return DirectiveCompletions();
+            return DirectiveCompletions(game);
         }
 
         // Statement scope adds the dialect's global objects (self, level, …); both scopes are
         // filtered to what the active game actually has, so e.g. CoD4 is not offered class/#using.
-        GameProfile game = GameProfile.Active;
         IEnumerable<string> words = insideFunction
             ? GscKeywords.StatementKeywords.Concat(game.GlobalObjectNames)
             : GscKeywords.TopLevelKeywords;
@@ -1043,15 +1106,28 @@ public sealed class CompletionEngine
     }
 
     /// <summary>
-    /// A function reached through a <c>#using</c> import, offered under its BARE name (so typing
-    /// "init" finds "globallogic::init" without knowing the namespace up front) but INSERTED fully
-    /// qualified — an unqualified call into another namespace does not resolve, so the one useful
-    /// completion is the one that writes the qualifier for you.
+    /// A function reached through a <c>#using</c> import, labelled and inserted FULLY QUALIFIED.
+    ///
+    /// The label carries the qualifier because that is what makes the namespace findable: the
+    /// editor filters on the label, so typing "uti" surfaces every <c>util::</c> function at once
+    /// rather than only the ones whose own name happens to begin that way. Typing the function's
+    /// name still matches it — the qualifier is a prefix, not a replacement — so both routes work.
+    ///
+    /// Inserting the qualifier is not a convenience but a correctness matter: an unqualified call
+    /// into another namespace does not resolve.
     /// </summary>
     private static CompletionEntry ImportedFunctionEntry(FunctionSymbol function, string ns, string callSuffix)
     {
         string qualified = ns + "::" + function.Name;
-        return new CompletionEntry(function.Name, CompletionKind.Function, qualified, qualified + callSuffix, Namespace: ns);
+
+        // ResolveName keeps the function's OWN name, which is what documentation is looked up by.
+        return new CompletionEntry(
+            qualified,
+            CompletionKind.Function,
+            "function",
+            qualified + callSuffix,
+            Namespace: ns,
+            ResolveName: function.Name);
     }
 
     /// <summary>

@@ -399,9 +399,15 @@ public class CompletionEngineTests
 
         // Offered under its bare name — that is what was typed — with the qualifier visible in
         // Detail so the two "init"s (this file's own and globallogic's) are told apart.
-        CompletionEntry entry = entries.First(e => e.Label == "init" && e.Kind == CompletionKind.Function);
-        Assert.Equal("globallogic::init", entry.Detail);
+        // Labelled with the qualifier, which is what makes the namespace findable: the editor
+        // filters on the label, so typing "globallogic" surfaces every one of its functions rather
+        // than only those whose own name starts that way.
+        CompletionEntry entry = entries.First(e => e.Label == "globallogic::init" && e.Kind == CompletionKind.Function);
         Assert.Equal("globallogic", entry.Namespace);
+
+        // The function's OWN name is kept for resolve, which looks documentation up by name and
+        // would find nothing under the qualified label.
+        Assert.Equal("init", entry.ResolveName);
 
         // But INSERTED fully qualified: an unqualified call into another namespace does not
         // resolve, so the useful completion is the one that writes the qualifier for you.
@@ -412,7 +418,7 @@ public class CompletionEngineTests
     public void StatementScope_DoesNotOfferFunctionsFromAnUnimportedNamespace()
     {
         // The mirror of the above: nothing gives a function away just for existing somewhere in
-        // the workspace. Only what this file has actually `#using`'d belongs in the bare-name list.
+        // the workspace. Only what this file has actually `#using`'d belongs in the list.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(@$"{Raw}\scripts\hud_message.gsc", "#namespace globallogic;\nfunction init()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
@@ -422,7 +428,7 @@ public class CompletionEngineTests
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 4));
 
-        Assert.DoesNotContain(entries, e => e.Label == "init");
+        Assert.DoesNotContain(entries, e => e.Label is "init" or "globallogic::init");
     }
 
     [Fact]
@@ -531,7 +537,34 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
         Assert.Contains(entries, e => e.Label == "struct" && e.Kind == CompletionKind.Namespace);
-        Assert.Contains(entries, e => e.Label == "createstruct" && e.Detail == "struct::createstruct");
+        Assert.Contains(entries, e => e.Label == "struct::createstruct");
+    }
+
+    [Fact]
+    public void TypingANamespacePrefix_SurfacesEveryOneOfItsFunctions()
+    {
+        // The point of labelling with the qualifier. The editor filters on the LABEL, so with bare
+        // labels typing "uti" found only `util`'s own name — none of its functions, whose names
+        // share nothing with the namespace holding them. Now the whole namespace comes with it.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(
+                @$"{Raw}\scripts\util_shared.gsc",
+                "#namespace util;\nfunction get_players()\n{\n}\nfunction wait_endon()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\n#using scripts\\util_shared;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
+
+        // Everything a client filtering on the typed prefix would keep.
+        List<string> matching = [.. entries
+            .Where(e => e.Label.StartsWith("uti", StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Label)
+            .Order(StringComparer.Ordinal)];
+
+        Assert.Equal(["util", "util::get_players", "util::wait_endon"], matching);
     }
 
     [Fact]
@@ -546,8 +579,8 @@ public class CompletionEngineTests
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
-        Assert.True(HasLabel(entries, "shown"));
-        Assert.False(HasLabel(entries, "hidden"));
+        Assert.True(HasLabel(entries, "util::shown"));
+        Assert.False(HasLabel(entries, "util::hidden"));
     }
 
     [Fact]

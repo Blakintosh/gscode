@@ -272,7 +272,10 @@ public sealed class CompletionHandler : CompletionHandlerBase
         {
             ["uri"] = uri.ToString(),
             ["kind"] = entry.Kind.ToString(),
-            ["name"] = entry.Label,
+
+            // The symbol's own name, which is not always the label: an imported function is
+            // labelled `ns::name` so the namespace is filterable, and looking THAT up finds nothing.
+            ["name"] = entry.ResolveName.Length > 0 ? entry.ResolveName : entry.Label,
             ["ns"] = entry.Namespace,
         };
     }

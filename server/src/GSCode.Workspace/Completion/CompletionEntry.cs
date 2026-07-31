@@ -71,6 +71,12 @@ public enum CompletionKind
 /// otherwise reopens the list, so the user had to delete the inserted quotes and retype one just
 /// to fire the '"' trigger character again.
 /// </param>
+/// <param name="ResolveName">
+/// The symbol's own name, when the label is not it. Resolve looks a symbol up by name to render
+/// its documentation, and an imported function is LABELLED qualified (<c>util::get_players</c>) so
+/// that typing the namespace finds it — a name no lookup will ever match. Empty means "the label
+/// is the name", which is true of everything else.
+/// </param>
 public sealed record CompletionEntry(
     string Label,
     CompletionKind Kind,
@@ -79,4 +85,5 @@ public sealed record CompletionEntry(
     string Documentation = "",
     string FilterText = "",
     string Namespace = "",
-    bool RetriggerCompletion = false);
+    bool RetriggerCompletion = false,
+    string ResolveName = "");

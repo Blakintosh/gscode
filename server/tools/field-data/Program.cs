@@ -532,10 +532,8 @@ static void GenerateWordfileApi(
     Console.WriteLine($"  {prefix} api functions: {all.Count} ({documented} documented, {curated} reconstructed, {inherited} inherited, {all.Count - documented - curated - inherited} name-only, {corrected} corrected)");
 }
 
-/// <summary>
-/// How many entries in an existing artifact came from a documentation page. Read straight off the
-/// flags the last run wrote, so it needs no knowledge of the doc format.
-/// </summary>
+// How many entries in an existing artifact came from a documentation page. Read straight off the
+// flags the last run wrote, so it needs no knowledge of the doc format.
 static int CountDocumented(string outputPath)
 {
     if ( !File.Exists(outputPath) )
@@ -574,21 +572,19 @@ static int CountDocumented(string outputPath)
     }
 }
 
-/// <summary>
-/// Corrects signatures the documentation gets WRONG, as the last word over every other layer.
-///
-/// This is the layer to reach for when a page's facts do not match the engine, and it exists because
-/// the alternative does not survive: the generated api file is an artifact, so an edit made there is
-/// destroyed by the next run, and the pages themselves belong to somebody else. WaW and BO1 need no
-/// entries of their own — they inherit CoD4's corrected output through enrichFrom.
-///
-/// Only <c>optionalFrom</c> is expressible, because that is the correction the documentation actually
-/// needs. Its Required/Optional split is the one thing it gets wrong often, always in the same
-/// direction (a trailing argument documented as required), and optional arguments in GSC are always
-/// trailing — so an index past which everything is optional says all there is to say. A shape that
-/// could rewrite names, types or descriptions would be a second source of truth for the parts the
-/// pages get RIGHT, which is how a curated layer turns into a fork.
-/// </summary>
+// Corrects signatures the documentation gets WRONG, as the last word over every other layer.
+//
+// This is the layer to reach for when a page's facts do not match the engine, and it exists because
+// the alternative does not survive: the generated api file is an artifact, so an edit made there is
+// destroyed by the next run, and the pages themselves belong to somebody else. WaW and BO1 need no
+// entries of their own — they inherit CoD4's corrected output through enrichFrom.
+//
+// Only optionalFrom is expressible, because that is the correction the documentation actually
+// needs. Its Required/Optional split is the one thing it gets wrong often, always in the same
+// direction (a trailing argument documented as required), and optional arguments in GSC are always
+// trailing — so an index past which everything is optional says all there is to say. A shape that
+// could rewrite names, types or descriptions would be a second source of truth for the parts the
+// pages get RIGHT, which is how a curated layer turns into a fork.
 static int ApplyOverrides(string prefix, string overridesPath, Dictionary<string, object> byName)
 {
     if ( !File.Exists(overridesPath) )

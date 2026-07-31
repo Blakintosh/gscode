@@ -25,7 +25,7 @@ public enum CallPunctuation
     /// <summary>Insert `name()` with the cursor between the parentheses.</summary>
     Parens,
 
-    /// <summary>Also close a STATEMENT with a semicolon: `name(<cursor>);`.</summary>
+    /// <summary>Also close a STATEMENT with a semicolon: `name(&lt;cursor&gt;);`.</summary>
     ParensAndSemicolon,
 }
 
@@ -67,7 +67,7 @@ public enum CompletionKind
 /// Whether accepting this entry should immediately reopen the suggestion list.
 ///
 /// For entries that insert a snippet landing the cursor somewhere with its own vocabulary —
-/// `#precache( "<here>", … )` wants asset types, `#using <here>;` wants path segments. Nothing
+/// `#precache( "&lt;here&gt;", … )` wants asset types, `#using &lt;here&gt;;` wants path segments. Nothing
 /// otherwise reopens the list, so the user had to delete the inserted quotes and retype one just
 /// to fire the '"' trigger character again.
 /// </param>

@@ -284,11 +284,6 @@ public class CorpusTests
     }
 
     /// <summary>
-    /// Formats a bounded sample of the corpus and hands each result to <paramref name="check"/>.
-    /// Files the formatter refuses (syntax errors) are skipped rather than counted, since
-    /// refusing is the correct behaviour there and already has its own coverage.
-    /// </summary>
-    /// <summary>
     /// The directive sorter's own safety net, run over real files. It may move a line but must
     /// never drop, duplicate or edit one -- so the multiset of non-blank lines has to survive.
     /// </summary>
@@ -442,6 +437,11 @@ public class CorpusTests
         Assert.True(aligned > 0, "no file gained alignment, so this gate proved nothing");
     }
 
+    /// <summary>
+    /// Formats a bounded sample of the corpus and hands each result to <paramref name="check"/>.
+    /// Files the formatter refuses (syntax errors) are skipped rather than counted, since
+    /// refusing is the correct behaviour there and already has its own coverage.
+    /// </summary>
     private static int ForEachFormattableSample(
         Action<string, ParseResult, string> check, FormatOptions? options = null)
     {

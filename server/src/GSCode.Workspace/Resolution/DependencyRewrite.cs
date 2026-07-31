@@ -93,6 +93,4 @@ public static class DependencyRewrite
     {
         return directivePath.Replace('/', '\\').TrimStart('\\').ToLowerInvariant();
     }
-
-    /// <summary>Both language worlds plus the shared headers — a .gsh can insert another .gsh.</summary>
 }

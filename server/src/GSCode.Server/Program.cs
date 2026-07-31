@@ -528,10 +528,8 @@ static bool CompactIfFragmented()
 // restore just deserializes records. If the LIVE numbers match across a cold and a warm start
 // while the working set differs, the extra footprint is grown, uncompacted heap rather than
 // retained data — and a one-time compacting collect here is the fix.
-/// <summary>
-/// The settings that shape behaviour, logged once at startup at Information — so they are in the
-/// log a user attaches to a bug report without anyone having to ask for a higher level first.
-/// </summary>
+// The settings that shape behaviour, logged once at startup at Information — so they are in the
+// log a user attaches to a bug report without anyone having to ask for a higher level first.
 static void LogEffectiveSettings(ServerSettings settings)
 {
     Log.Information("Settings: {Settings}", settings.EffectiveSummary);
@@ -549,16 +547,14 @@ static void LogEffectiveSettings(ServerSettings settings)
     }
 }
 
-/// <summary>
-/// The detailed memory breakdown, at Verbose.
-///
-/// Gated by the LOG LEVEL rather than an environment variable. A setting the user can change from
-/// the settings UI beats one that needs an env var and a restart — and GSCODE_INSTRUMENTATION was
-/// doubly confusing, since PerfTracker already uses that name as a COMPILE-TIME symbol for
-/// something else entirely.
-///
-/// Called twice a session, after indexing and after compaction, so it is not the noisy part.
-/// </summary>
+// The detailed memory breakdown, at Verbose.
+//
+// Gated by the LOG LEVEL rather than an environment variable. A setting the user can change from
+// the settings UI beats one that needs an env var and a restart — and GSCODE_INSTRUMENTATION was
+// doubly confusing, since PerfTracker already uses that name as a COMPILE-TIME symbol for
+// something else entirely.
+//
+// Called twice a session, after indexing and after compaction, so it is not the noisy part.
 static void LogMemoryReport(string phase, IndexOutcome outcome)
 {
 
@@ -642,7 +638,7 @@ static StockScripts LoadStockScripts()
     return StockScripts.Load(directory, game);
 }
 
-/// <summary>Reports one data file: what the profile asked for, and whether it is actually there.</summary>
+// Reports one data file: what the profile asked for, and whether it is actually there.
 static void LogDataFile(GameProfile game, string directory, string? fileName, string what)
 {
     if ( fileName is null )
@@ -671,15 +667,12 @@ static IEnumerable<string> BundledDataFilePaths()
     }
 }
 
-/// <summary>
-/// The server's version, as the build stamped it.
-/// </summary>
-/// <remarks>
-/// Read from the assembly rather than written in the log string, so it cannot drift from what
-/// actually shipped — the three startup lines used to say "v2" indefinitely while the assembly
-/// claimed 1.0.0 and the extension said 2.0.0. The single source is &lt;Version&gt; in
-/// Directory.Build.props, which must match client/package.json since the two ship as one extension.
-/// </remarks>
+// The server's version, as the build stamped it.
+//
+// Read from the assembly rather than written in the log string, so it cannot drift from what
+// actually shipped — the three startup lines used to say "v2" indefinitely while the assembly
+// claimed 1.0.0 and the extension said 2.0.0. The single source is <Version> in
+// Directory.Build.props, which must match client/package.json since the two ship as one extension.
 static string ServerVersion()
 {
     System.Reflection.Assembly assembly = typeof(TransportOptions).Assembly;

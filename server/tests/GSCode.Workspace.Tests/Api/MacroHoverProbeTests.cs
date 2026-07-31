@@ -12,7 +12,7 @@ namespace GSCode.Workspace.Tests.Api;
 /// <summary>
 /// The macro hover as the handler actually assembles it, from a real invocation in a real file.
 ///
-/// The unit tests around <see cref="MacroExpansionPreview.Render"/> pass arguments in directly and
+/// The unit tests around <c>MacroExpansionPreview.Render</c> pass arguments in directly and
 /// so cannot see where they come FROM — which is exactly what was wrong: a MacroInvocation's range
 /// covers the NAME alone (`IS_TRUE`, not `IS_TRUE( v )`), so slicing that range yielded text with
 /// no argument list in it and every substitution silently did nothing.

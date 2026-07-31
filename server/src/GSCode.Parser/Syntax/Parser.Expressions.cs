@@ -444,11 +444,11 @@ public sealed partial class Parser
     }
 
     /// <summary>
-    /// Folds an `&` and a following string into the localized-string literal the lexer would
+    /// Folds an `&amp;` and a following string into the localized-string literal the lexer would
     /// have produced had they been written adjacently.
     ///
     /// The token is rebuilt rather than wrapped so that everything downstream treats it exactly
-    /// like a lexed istring: extraction strips the leading `&` before unquoting, so the text
+    /// like a lexed istring: extraction strips the leading `&amp;` before unquoting, so the text
     /// must carry it, and the flow typer keys off the LocalizedString kind. Provenance follows
     /// the STRING, not the ampersand — when the string came from a macro body the literal
     /// belongs to that `#define`, and taking the ampersand's provenance would attribute it to

@@ -129,7 +129,7 @@ public sealed class HoverHandler : HoverHandlerBase
 
     /// <summary>
     /// The macro's body rendered for preview, with THIS call site's arguments substituted where
-    /// the hover is on an invocation — `IS_TRUE( foo )` reads `isdefined( foo ) && foo` rather
+    /// the hover is on an invocation — `IS_TRUE( foo )` reads `isdefined( foo ) &amp;&amp; foo` rather
     /// than showing the macro's own parameter names back to the reader.
     ///
     /// Hovering the DEFINITION has no arguments to substitute, so it keeps the parameter names,

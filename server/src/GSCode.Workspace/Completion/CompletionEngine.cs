@@ -43,7 +43,8 @@ public sealed class CompletionEngine
         bool includeLiterals = true,
         FieldScope fieldScope = FieldScope.Owner,
         CallPunctuation callPunctuation = CallPunctuation.Parens,
-        GameProfile? profile = null)
+        GameProfile? profile = null,
+        bool parameterHints = true)
     {
         GameProfile game = profile ?? GameProfile.Active;
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
@@ -174,7 +175,7 @@ public sealed class CompletionEngine
             {
                 string ns = tokens[nsIndex].GetText(result.Text).ToString().ToLowerInvariant();
                 return NamespaceFunctionCompletions(
-                    result, contextId, ns, CallSnippet(tokens, currentIndex, offset, callPunctuation));
+                    result, contextId, ns, CallSnippet(tokens, currentIndex, offset, callPunctuation), parameterHints);
             }
         }
 
@@ -191,7 +192,8 @@ public sealed class CompletionEngine
             insideFunction,
             IsVarargInScope(result, position, game),
             CallSnippet(tokens, currentIndex, offset, callPunctuation),
-            game);
+            game,
+            parameterHints);
     }
 
     // --- Contexts ---
@@ -657,14 +659,14 @@ public sealed class CompletionEngine
     }
 
     private ImmutableArray<CompletionEntry> NamespaceFunctionCompletions(
-        ParseResult result, string contextId, string ns, string callSuffix)
+        ParseResult result, string contextId, string ns, string callSuffix, bool parameterHints)
     {
         LanguageStore store = _database.StoreFor(result.Language);
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
         foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
         {
-            entries.Add(FunctionEntry(function, callSuffix));
+            entries.Add(FunctionEntry(function, callSuffix, parameterHints));
         }
 
         return entries.ToImmutable();
@@ -1000,7 +1002,7 @@ public sealed class CompletionEngine
 
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(
         ParseResult result, string contextId, int offset, bool insideFunction, bool varargInScope, string callSuffix,
-        GameProfile game)
+        GameProfile game, bool parameterHints)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
@@ -1084,7 +1086,7 @@ public sealed class CompletionEngine
         {
             foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, ownNamespaces) )
             {
-                entries.Add(FunctionEntry(function, callSuffix));
+                entries.Add(FunctionEntry(function, callSuffix, parameterHints));
             }
         }
 
@@ -1108,7 +1110,7 @@ public sealed class CompletionEngine
                 foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(
                     store, contextId, result.FilePath, ns, ownNamespaces) )
                 {
-                    entries.Add(ImportedFunctionEntry(function, ns, callSuffix));
+                    entries.Add(ImportedFunctionEntry(function, ns, callSuffix, parameterHints));
                 }
             }
         }
@@ -1117,7 +1119,7 @@ public sealed class CompletionEngine
             foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInIncludeScope(
                 store, contextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result)) )
             {
-                entries.Add(FunctionEntry(function, callSuffix));
+                entries.Add(FunctionEntry(function, callSuffix, parameterHints));
             }
         }
 
@@ -1144,21 +1146,89 @@ public sealed class CompletionEngine
         // Namespace-less builtins.
         foreach ( BuiltinFunction builtin in _builtins.For(result.Language).All )
         {
-            entries.Add(new CompletionEntry(builtin.Name, CompletionKind.Function, "builtin", builtin.Name + callSuffix));
+            entries.Add(BuiltinEntry(builtin, callSuffix, parameterHints));
         }
 
         return entries.ToImmutable();
     }
 
-    private static CompletionEntry FunctionEntry(FunctionSymbol function, string callSuffix)
+    /// <summary>How much parameter text a label may carry before it is cut short.</summary>
+    /// <remarks>
+    /// A row that runs past the popup's width is truncated by the editor anyway, at whatever
+    /// character it happens to reach — and a name cut mid-word reads as though it were the name.
+    /// Cutting it here, at a separator, keeps the row honest about being incomplete.
+    /// </remarks>
+    private const int MaximumParameterHintLength = 42;
+
+    /// <summary>
+    /// The parameter list shown INLINE in a completion label — <c>( entity, team )</c>.
+    ///
+    /// Names only. The types, defaults and descriptions belong to signature help and the doc
+    /// panel, which have room for them; what the list is for is telling apart the entries whose
+    /// names alone do not, which in this codebase is most of them — <c>on_agent_generic_damaged</c>
+    /// and <c>on_agent_player_damaged</c> differ by their arguments and nothing else.
+    ///
+    /// Free to produce: the parameters are already in hand when the list is built, unlike
+    /// documentation, which is why this does not need the resolve round trip that a doc block does.
+    /// </summary>
+    private static string ParameterHint(ImmutableArray<ParameterSymbol> parameters, bool hasVarargs)
+    {
+        if ( parameters.Length == 0 )
+        {
+            return hasVarargs ? "( ... )" : "()";
+        }
+
+        System.Text.StringBuilder rendered = new();
+        foreach ( ParameterSymbol parameter in parameters )
+        {
+            if ( rendered.Length > 0 )
+            {
+                rendered.Append(", ");
+            }
+
+            if ( rendered.Length > MaximumParameterHintLength )
+            {
+                rendered.Append('…');
+                return "( " + rendered + " )";
+            }
+
+            rendered.Append(parameter.Name);
+        }
+
+        if ( hasVarargs )
+        {
+            rendered.Append(", ...");
+        }
+
+        return "( " + rendered + " )";
+    }
+
+    private static CompletionEntry FunctionEntry(FunctionSymbol function, string callSuffix, bool parameterHints)
     {
         string detail = function.Namespace.Length > 0 ? function.Namespace + "::" + function.Name : function.Name;
 
-        // No Documentation: rendering a doc block for every function in the workspace on every
-        // keystroke is exactly what completionItem/resolve exists to avoid. The namespace rides
-        // along so resolve can find this function again.
+        if ( !parameterHints )
+        {
+            // No Documentation: rendering a doc block for every function in the workspace on every
+            // keystroke is exactly what completionItem/resolve exists to avoid. The namespace rides
+            // along so resolve can find this function again.
+            return new CompletionEntry(
+                function.Name, CompletionKind.Function, detail, function.Name + callSuffix, Namespace: function.Namespace);
+        }
+
+        // FilterText and ResolveName both hold the bare NAME, and both are load-bearing. The editor
+        // matches what you type against the filter text, so without it the parameter names would be
+        // matched too and typing "team" would surface every function taking one. Resolve looks the
+        // symbol up by name to render its documentation, and would find nothing under a label with
+        // parentheses in it.
         return new CompletionEntry(
-            function.Name, CompletionKind.Function, detail, function.Name + callSuffix, Namespace: function.Namespace);
+            function.Name + ParameterHint(function.Parameters, function.HasVarargs),
+            CompletionKind.Function,
+            detail,
+            function.Name + callSuffix,
+            FilterText: function.Name,
+            Namespace: function.Namespace,
+            ResolveName: function.Name);
     }
 
     /// <summary>
@@ -1172,16 +1242,47 @@ public sealed class CompletionEngine
     /// Inserting the qualifier is not a convenience but a correctness matter: an unqualified call
     /// into another namespace does not resolve.
     /// </summary>
-    private static CompletionEntry ImportedFunctionEntry(FunctionSymbol function, string ns, string callSuffix)
+    /// <summary>
+    /// An engine builtin. Its parameters come from the FIRST overload — the data models several,
+    /// but a completion row has space for one shape, and the doc panel behind it lists them all.
+    /// A trailing <c>?</c> marks an optional parameter, matching how signature help renders them.
+    /// </summary>
+    private static CompletionEntry BuiltinEntry(BuiltinFunction builtin, string callSuffix, bool parameterHints)
+    {
+        if ( !parameterHints )
+        {
+            return new CompletionEntry(builtin.Name, CompletionKind.Function, "builtin", builtin.Name + callSuffix);
+        }
+
+        BuiltinOverload? overload = builtin.Overloads.FirstOrDefault();
+        ImmutableArray<ParameterSymbol> parameters = overload is null
+            ? []
+            : [.. overload.Parameters.Select(static p =>
+                new ParameterSymbol(p.Mandatory ? p.Name : p.Name + "?", false, ""))];
+
+        return new CompletionEntry(
+            builtin.Name + ParameterHint(parameters, hasVarargs: false),
+            CompletionKind.Function,
+            "builtin",
+            builtin.Name + callSuffix,
+            FilterText: builtin.Name,
+            ResolveName: builtin.Name);
+    }
+
+    private static CompletionEntry ImportedFunctionEntry(
+        FunctionSymbol function, string ns, string callSuffix, bool parameterHints)
     {
         string qualified = ns + "::" + function.Name;
 
+        // FilterText stays the QUALIFIED name rather than the bare one: filtering on the qualifier
+        // is the whole reason the label carries it, and a bare filter text would undo that.
         // ResolveName keeps the function's OWN name, which is what documentation is looked up by.
         return new CompletionEntry(
-            qualified,
+            parameterHints ? qualified + ParameterHint(function.Parameters, function.HasVarargs) : qualified,
             CompletionKind.Function,
             "function",
             qualified + callSuffix,
+            FilterText: parameterHints ? qualified : "",
             Namespace: ns,
             ResolveName: function.Name);
     }

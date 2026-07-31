@@ -22,6 +22,7 @@ export interface GscodeSettings {
     "completion.literals": boolean;
     "completion.fieldScope": string;
     "completion.callPunctuation": string;
+    "completion.parameterHints": boolean;
     "diagnostics.scope": string;
     "format.padParens": boolean;
     "format.maxBlankLines": number;
@@ -48,6 +49,7 @@ export function readSettings(): GscodeSettings {
         "completion.literals": config.get<boolean>("completion.literals", true),
         "completion.fieldScope": config.get<string>("completion.fieldScope", "owner"),
         "completion.callPunctuation": config.get<string>("completion.callPunctuation", "parensAndSemicolon"),
+        "completion.parameterHints": config.get<boolean>("completion.parameterHints", true),
         "diagnostics.scope": config.get<string>("diagnostics.scope", "workspace"),
         "format.padParens": config.get<boolean>("format.padParens", true),
         "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),

@@ -61,7 +61,9 @@ public class RealisticKeystrokeTests
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(4, line.Length), callPunctuation: CallPunctuation.ParensAndSemicolon);
 
-        CompletionEntry entry = Assert.Single(entries, e => e.Label == "foobar");
+        // The label carries the parameter list ("foobar()"); this test is about the insert text.
+        CompletionEntry entry = Assert.Single(
+            entries, e => e.Label == "foobar" || e.Label.StartsWith("foobar(", StringComparison.Ordinal));
         return entry.InsertText;
     }
 

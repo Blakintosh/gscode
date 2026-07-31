@@ -326,6 +326,12 @@
 						],
 						"description": "How much punctuation completing a function call brings with it.",
 						"scope": "window"
+					},
+					"gscode.completion.parameterHints": {
+						"type": "boolean",
+						"default": true,
+						"description": "Show a function's parameter names inline in the suggestion list: 'get_players( team )' rather than 'get_players'. Filtering and insertion still use the name alone.",
+						"scope": "window"
 					}
 				}
 			},

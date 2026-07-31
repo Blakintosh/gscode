@@ -34,9 +34,15 @@ public class CompletionEngineTests
         return ScriptAnalysis.Analyze(path, ScriptAnalysis.LanguageFromPath(path), SourceText.From(text), GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable());
     }
 
+    /// <summary>
+    /// Whether an entry with this label is offered. A FUNCTION's label carries its parameter list
+    /// ("get_players( team )"), so naming the function still means that entry — matched on the
+    /// opening parenthesis so `alpha` does not also match `alphaBeta( x )`.
+    /// </summary>
     private static bool HasLabel(ImmutableArray<CompletionEntry> entries, string label)
     {
-        return entries.Any(e => string.Equals(e.Label, label, StringComparison.Ordinal));
+        return entries.Any(e => string.Equals(e.Label, label, StringComparison.Ordinal)
+            || (e.Kind == CompletionKind.Function && e.Label.StartsWith(label + "(", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -402,7 +408,7 @@ public class CompletionEngineTests
         // Labelled with the qualifier, which is what makes the namespace findable: the editor
         // filters on the label, so typing "globallogic" surfaces every one of its functions rather
         // than only those whose own name starts that way.
-        CompletionEntry entry = entries.First(e => e.Label == "globallogic::init" && e.Kind == CompletionKind.Function);
+        CompletionEntry entry = entries.First(e => e.Label == "globallogic::init()" && e.Kind == CompletionKind.Function);
         Assert.Equal("globallogic", entry.Namespace);
 
         // The function's OWN name is kept for resolve, which looks documentation up by name and
@@ -445,7 +451,7 @@ public class CompletionEngineTests
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
-        CompletionEntry entry = Assert.Single(entries, e => e.Label == "helper");
+        CompletionEntry entry = Assert.Single(entries, e => e.Label.StartsWith("helper", StringComparison.Ordinal));
         Assert.StartsWith("helper", entry.InsertText, StringComparison.Ordinal);
         Assert.DoesNotContain("::", entry.InsertText, StringComparison.Ordinal);
     }
@@ -537,7 +543,7 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
         Assert.Contains(entries, e => e.Label == "struct" && e.Kind == CompletionKind.Namespace);
-        Assert.Contains(entries, e => e.Label == "struct::createstruct");
+        Assert.Contains(entries, e => e.Label == "struct::createstruct()");
     }
 
     [Fact]
@@ -564,7 +570,114 @@ public class CompletionEngineTests
             .Select(e => e.Label)
             .Order(StringComparer.Ordinal)];
 
-        Assert.Equal(["util", "util::get_players", "util::wait_endon"], matching);
+        Assert.Equal(["util", "util::get_players()", "util::wait_endon()"], matching);
+    }
+
+    // --- Parameter names inline in the label ---
+    //
+    // The names alone frequently do not tell two entries apart — `on_agent_generic_damaged` and
+    // `on_agent_player_damaged` differ by their arguments and nothing else. The parameters are
+    // already in hand when the list is built, so unlike documentation this costs no round trip.
+
+    /// <summary>Completes at an empty statement position in a file importing util.</summary>
+    private static ImmutableArray<CompletionEntry> WithHints(bool parameterHints)
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(
+                @$"{Raw}\scripts\util.gsc",
+                "#namespace util;\nfunction get_players( team, alive )\n{\n}\nfunction now()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(
+            @$"{Raw}\scripts\main.gsc",
+            "#namespace game;\n#using scripts\\util;\n\nfunction run()\n{\n    \n}\n");
+
+        return engine.Complete(
+            result, "raw", new Position(4, 4), parameterHints: parameterHints);
+    }
+
+    [Fact]
+    public void ParameterNamesAppearInTheLabel()
+    {
+        CompletionEntry entry = Assert.Single(
+            WithHints(true), e => e.Label.StartsWith("util::get_players", StringComparison.Ordinal));
+
+        Assert.Equal("util::get_players( team, alive )", entry.Label);
+    }
+
+    [Fact]
+    public void ATakesNothingFunctionShowsEmptyParentheses()
+    {
+        Assert.Contains(WithHints(true), e => e.Label == "util::now()");
+    }
+
+    [Fact]
+    public void FilteringAndInsertionStillUseTheNameAlone()
+    {
+        // The one real hazard of putting the signature in the label: the editor matches what you
+        // type against the FILTER text, which defaults to the label — so without this, typing
+        // "team" would surface every function that happens to take a parameter of that name.
+        CompletionEntry entry = Assert.Single(
+            WithHints(true), e => e.Label.StartsWith("util::get_players", StringComparison.Ordinal));
+
+        Assert.Equal("util::get_players", entry.FilterText);
+        Assert.StartsWith("util::get_players(", entry.InsertText, StringComparison.Ordinal);
+        Assert.DoesNotContain("team", entry.InsertText, StringComparison.Ordinal);
+
+        // And resolve looks documentation up by NAME, which a parenthesised label would never match.
+        Assert.Equal("get_players", entry.ResolveName);
+    }
+
+    [Fact]
+    public void TheSettingTurnsThemOff()
+    {
+        Assert.Contains(WithHints(false), e => e.Label == "util::get_players");
+        Assert.DoesNotContain(WithHints(false), e => e.Label.Contains('(', StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ALongParameterListIsCutShortAtASeparator()
+    {
+        // The editor truncates an over-long row wherever it happens to reach, and a name cut
+        // mid-word reads as though it were the name. Cutting here keeps the row honest.
+        FakeFileSystem files = new FakeFileSystem().AddFile(
+            @$"{Raw}\scripts\util.gsc",
+            "#namespace util;\nfunction many( einflictor, eattacker, idamage, idflags, smeansofdeath, sweapon, vpoint )\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+        ParseResult result = Analyze(
+            @$"{Raw}\scripts\main.gsc",
+            "#namespace game;\n#using scripts\\util;\n\nfunction run()\n{\n    \n}\n");
+
+        CompletionEntry entry = Assert.Single(
+            engine.Complete(result, "raw", new Position(4, 4)),
+            e => e.Label.StartsWith("util::many", StringComparison.Ordinal));
+
+        Assert.EndsWith("… )", entry.Label, StringComparison.Ordinal);
+        Assert.DoesNotContain("vpoint", entry.Label, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuiltinsCarryTheirParametersToo_MarkingOptionalOnes()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuiltinWorld(files);
+
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    \n}\n");
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 4));
+
+        CompletionEntry builtin = entries.First(e => e.Detail == "builtin" && e.Label.Contains('('));
+
+        // The label gained the signature; filtering and resolve keep the bare name.
+        Assert.StartsWith(builtin.FilterText, builtin.Label, StringComparison.Ordinal);
+        Assert.Equal(builtin.FilterText, builtin.ResolveName);
+        Assert.DoesNotContain("(", builtin.FilterText, StringComparison.Ordinal);
+    }
+
+    private static (CompletionEngine Engine, ScriptDatabase Db, PathResolver Resolver) BuiltinWorld(FakeFileSystem files)
+    {
+        return BuildWorld(files);
     }
 
     [Fact]
@@ -620,7 +733,11 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(3, 4 + line.Length), callPunctuation: punctuation);
 
-        return Assert.Single(entries, e => e.Label == "foo" && e.Kind == CompletionKind.Function);
+        // The label carries the parameter list; these tests are about the INSERT text.
+        return Assert.Single(
+            entries,
+            e => e.Kind == CompletionKind.Function
+                && (e.Label == "foo" || e.Label.StartsWith("foo(", StringComparison.Ordinal)));
     }
 
     [Theory]

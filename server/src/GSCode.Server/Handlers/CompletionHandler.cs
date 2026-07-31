@@ -87,7 +87,9 @@ public sealed class CompletionHandler : CompletionHandlerBase
             request.Position.ToCore(),
             _settings.CompletionLiterals,
             FieldScopeFromSetting(_settings.CompletionFieldScope),
-            CallPunctuationFromSetting(_settings.CompletionCallPunctuation)) )
+            CallPunctuationFromSetting(_settings.CompletionCallPunctuation),
+            profile: null,
+            parameterHints: _settings.CompletionParameterHints) )
         {
             items.Add(ToItem(entry, request.TextDocument.Uri));
         }

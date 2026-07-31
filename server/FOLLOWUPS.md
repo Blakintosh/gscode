@@ -37,6 +37,54 @@ candidates above are a handful of names and are still better added by hand than 
 
 ## Backlog
 
+### `CompletionItemLabelDetails` — the official home for the inline parameter list
+
+`gscode.completion.parameterHints` puts a function's parameters in the completion LABEL —
+`get_players( team, alive )` — with `FilterText` and `ResolveName` set back to the bare name so
+filtering and doc lookup are unaffected. That works, and the decoupling is the same trick the
+`#precache` directive entries already use, but it is not where LSP wants this to live.
+
+LSP 3.17 added `CompletionItem.labelDetails`, whose whole purpose is this:
+
+```jsonc
+"labelDetails": {
+  "detail": "( team, alive )",   // appended straight after the label, dimmed, same line
+  "description": "util::"        // right-aligned, dimmed — the SOURCE of the symbol
+}
+```
+
+Why it is better than the label trick, concretely:
+
+* The editor renders `detail` in a dimmer colour than the label, so the eye separates the NAME
+  from its arguments. In the label they are one undifferentiated string.
+* Nothing has to be decoupled. `filterText`, `sortText` and the doc lookup all key off `label`
+  naturally, so the two "keep the bare name here" workarounds — and the risk of a future entry
+  kind forgetting one of them — disappear.
+* `description` gives the namespace a proper home. Today `util::` is glued to the front of the
+  label to make the namespace filterable, which is a real feature (typing `uti` surfaces the
+  whole namespace) but does bury the function's own name behind a prefix. With `labelDetails`
+  the prefix could move to `description` — though note that would COST the prefix filtering,
+  since `description` is not matched against. Worth thinking about rather than assuming.
+
+**Why it is not done: the library cannot express it.** `OmniSharp.Extensions.LanguageServer`
+0.19.9 is pinned in `GSCode.Server.csproj`, and its `CompletionItem` has no `LabelDetails` member
+— confirmed by inspecting the shipped `OmniSharp.Extensions.LanguageProtocol.dll`, which contains
+zero occurrences of the name (and no `InsertReplace` either, the other 3.16/3.17 completion
+addition). So this is an upgrade question, not a feature question.
+
+What closing it needs, in order:
+
+1. A newer OmniSharp release that models 3.17 completion, or a move to a maintained LSP library.
+   Check `InsertReplace` at the same time — the same version gap hides both.
+2. Gate on the client capability `textDocument.completion.completionItem.labelDetailsSupport`.
+   A client without it shows the label alone, so the parameters would silently vanish rather
+   than degrade — the label-based form has to stay as the fallback either way.
+3. Then decide the `description` question above on purpose, since it trades namespace filtering
+   for a cleaner label.
+
+Everything needed to feed it already exists: `ParameterHint` builds the string, and
+`CompletionEntry` already carries `FilterText`/`ResolveName`.
+
 ### Variadic builtins are not modelled — and that is what blocks 5023's upper bound
 
 `BuiltinOverload` carries `CalledOn`, `Parameters`, `ReturnTypeText`, `ReturnsVoid` and no notion of

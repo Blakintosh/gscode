@@ -32,6 +32,16 @@ public sealed class ServerSettings
     public string CompletionCallPunctuation { get; set; } = "parensAndSemicolon";
 
     /// <summary>
+    /// Whether a function's parameter names appear inline in its completion label —
+    /// <c>get_players( team )</c> rather than <c>get_players</c>.
+    ///
+    /// On by default: the parameters are already in hand when the list is built, and in this
+    /// codebase they are frequently the only thing telling two entries apart. Off restores the bare
+    /// names for anyone who finds the rows noisy.
+    /// </summary>
+    public bool CompletionParameterHints { get; set; } = true;
+
+    /// <summary>
     /// Which files get diagnostics published: "open" (only what is open), "workspace" (every
     /// indexed file of your own, the default) or "all" (including the stock scripts).
     /// </summary>
@@ -117,6 +127,9 @@ public sealed class ServerSettings
         CompletionCallPunctuation = section.Value<string>("completion.callPunctuation")
             ?? section["completion"]?.Value<string>("callPunctuation")
             ?? CompletionCallPunctuation;
+        CompletionParameterHints = section.Value<bool?>("completion.parameterHints")
+            ?? section["completion"]?.Value<bool?>("parameterHints")
+            ?? CompletionParameterHints;
         DiagnosticsScope = section.Value<string>("diagnostics.scope")
             ?? section["diagnostics"]?.Value<string>("scope")
             ?? DiagnosticsScope;

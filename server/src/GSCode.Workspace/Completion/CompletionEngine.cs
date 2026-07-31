@@ -155,6 +155,17 @@ public sealed class CompletionEngine
             return [];
         }
 
+        // `util:` — HALF of a `::`, and the same trigger character is what opened the list. The
+        // only thing that can legally follow is the second colon, so statement scope here is a list
+        // of things none of which can be written, sitting over a qualifier mid-keystroke. Showing
+        // nothing lets the next ':' arrive and open the namespace's own list, which is what was
+        // being reached for.
+        if ( currentIndex < 0 && triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Colon
+            && IsIncompleteScopeResolution(tokens, triggerIndex) )
+        {
+            return [];
+        }
+
         // ns:: — offer functions in that namespace only.
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.ScopeResolution )
         {
@@ -309,6 +320,51 @@ public sealed class CompletionEngine
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether the lone colon at <paramref name="colonIndex"/> is the first half of a <c>::</c>
+    /// being typed, rather than a ternary's divider.
+    ///
+    /// Two things decide it, and both are needed. ADJACENCY: a qualifier is written hard against
+    /// its name (<c>util::</c>), so a colon with space before it is not one being typed — this is
+    /// what keeps the ordinary <c>a ? b : c</c> out. And the absence of a <c>?</c> before the
+    /// statement boundary, which catches the unspaced <c>a?b:c</c> that adjacency alone would
+    /// mistake for a qualifier.
+    ///
+    /// A case label is the third reading of a lone colon and is answered before this one.
+    /// </summary>
+    private static bool IsIncompleteScopeResolution(ImmutableArray<Token> tokens, int colonIndex)
+    {
+        int nameIndex = PreviousSignificant(tokens, colonIndex);
+        if ( nameIndex < 0 || tokens[nameIndex].Kind != TokenKind.Identifier )
+        {
+            return false;
+        }
+
+        if ( tokens[nameIndex].End != tokens[colonIndex].Start )
+        {
+            return false;
+        }
+
+        // Nearest wins, exactly as IsCaseLabelColon does it: a '?' in the same statement means the
+        // colon divides a ternary however tightly it is spaced.
+        for ( int index = colonIndex - 1; index >= 0; index-- )
+        {
+            switch ( tokens[index].Kind )
+            {
+                case TokenKind.QuestionMark:
+                    return false;
+
+                case TokenKind.Semicolon:
+                case TokenKind.OpenBrace:
+                case TokenKind.CloseBrace:
+                case TokenKind.Colon:
+                    return true;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

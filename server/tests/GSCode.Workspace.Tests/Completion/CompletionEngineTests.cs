@@ -844,6 +844,45 @@ public class CompletionEngineTests
         Assert.NotEmpty(CompleteInsideFunction(line));
     }
 
+    // --- A lone colon after a name is half of a `::` ---
+
+    [Fact]
+    public void AHalfTypedQualifierSuggestsNothing()
+    {
+        // ':' is the trigger character, so the list opens on the FIRST colon — where the only
+        // thing that can legally follow is the second one. Statement scope there is a list of
+        // things none of which can be written, popped over a qualifier mid-keystroke.
+        Assert.Empty(CompleteInsideFunction("util:"));
+    }
+
+    [Fact]
+    public void TheSecondColonOpensTheNamespacesList()
+    {
+        // What the first colon was on the way to. Suppressing the half-typed form must not cost
+        // the completed one.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction alpha()\n{\n}\n");
+
+        Assert.True(HasLabel(CompleteInsideFunction("util::", files), "alpha"));
+    }
+
+    [Theory]
+    [InlineData("x = a ? b : ")]    // the spaced ternary, kept out by adjacency
+    [InlineData("x = a?b:")]        // and the unspaced one, kept out by the '?' scan
+    public void ATernaryColonIsNotAHalfTypedQualifier(string line)
+    {
+        // `a?b:` has the colon hard against an identifier, exactly like `util:`, so adjacency alone
+        // would silence it. The '?' is what tells them apart.
+        Assert.NotEmpty(CompleteInsideFunction(line));
+    }
+
+    [Fact]
+    public void ASpacedColonAfterANameIsNotAQualifier()
+    {
+        // A qualifier is written hard against its name, so `util :` is not one being typed.
+        Assert.NotEmpty(CompleteInsideFunction("x = a ? util : "));
+    }
+
     [Fact]
     public void ATernaryColonStillSuggests()
     {

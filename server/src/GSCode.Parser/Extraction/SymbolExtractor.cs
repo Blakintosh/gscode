@@ -1,7 +1,8 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Docs;
+using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
@@ -68,7 +69,10 @@ public sealed class SymbolExtractor
     {
         SymbolExtractor extractor = new(rootFilePath, names, text, rawTokens, profile);
         extractor.Run(tree, preprocessed);
+
+        PerfTracker.Begin("extract.duplicates");
         extractor.ReportDuplicateFunctions();
+        PerfTracker.End();
 
         return new ExtractionResult(
             extractor._namespaces.ToImmutable(),
@@ -90,8 +94,15 @@ public sealed class SymbolExtractor
             }
         }
 
+        // The dominant scope, and the parent of extract.doc and extract.body: everything the walk
+        // does is inside it, so the three read as a breakdown rather than as peers.
+        PerfTracker.Begin("extract.declarations");
         WalkDeclarations(tree.Root.Elements, tree.Root.Range);
+        PerfTracker.End();
+
         CloseNamespaceSpan(tree.Root.Range.End);
+
+        PerfTracker.Begin("extract.macros");
 
         // Macro definitions in THIS file are definitions; every invocation is a use.
         foreach ( MacroDefinition macro in preprocessed.Macros.All )
@@ -111,6 +122,8 @@ public sealed class SymbolExtractor
                 _references.Add(new ReferenceEntry(key, invocation.Range, ReferenceKind.MacroUse));
             }
         }
+
+        PerfTracker.End();
     }
 
     // --- Namespace span bookkeeping ---
@@ -178,7 +191,14 @@ public sealed class SymbolExtractor
         AddReference(key, function.NameToken, ReferenceKind.Definition);
 
         ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
+
+        // Recursive over every statement and expression in the function, so this is the other half of
+        // extraction's cost and the one that is genuinely proportional to the code. Separating it
+        // from extract.doc is what makes the two distinguishable: both scale with function count,
+        // but only one of them used to scale with token count as well.
+        PerfTracker.Begin("extract.body");
         WalkStatement(function.Body, assignments);
+        PerfTracker.End();
 
         ImmutableArray<ParameterSymbol>.Builder parameters = ImmutableArray.CreateBuilder<ParameterSymbol>();
         foreach ( ParameterNode parameter in function.Parameters )
@@ -734,6 +754,43 @@ public sealed class SymbolExtractor
     // --- Doc comments ---
 
     /// <summary>
+    /// Doc-comment tokens by the line they END on, built once and shared by every lookup.
+    ///
+    /// This used to be a scan of <see cref="_rawTokens"/> from the top FOR EACH declaration, which is
+    /// O(functions x tokens): a file's function count and its token count both grow with its size, so
+    /// the cost is quadratic in file size. It was invisible on a median file and dominant on the
+    /// largest — `_utility.gsc` is the slowest file in four of the five game corpora, and extraction
+    /// was the majority of it. Non-BO3 dialects paid worse still, because
+    /// <see cref="IsDocCommentToken"/> materialises and fence-scans the TEXT of every block comment
+    /// it passes, and the old scan passed them all again for every function.
+    ///
+    /// Null until first use: a file with no declarations never builds it.
+    /// </summary>
+    private Dictionary<int, Token>? _docCommentsByEndLine;
+
+    private Dictionary<int, Token> DocCommentsByEndLine()
+    {
+        if ( _docCommentsByEndLine is not null )
+        {
+            return _docCommentsByEndLine;
+        }
+
+        _docCommentsByEndLine = new Dictionary<int, Token>();
+        foreach ( Token token in _rawTokens )
+        {
+            if ( IsDocCommentToken(token) )
+            {
+                // TryAdd, not indexer assignment: the old scan walked tokens in source order and
+                // returned the FIRST match, so where two doc blocks end on one line the earlier
+                // token has to keep winning.
+                _docCommentsByEndLine.TryAdd(token.Range.End.Line, token);
+            }
+        }
+
+        return _docCommentsByEndLine;
+    }
+
+    /// <summary>
     /// Finds the doc block that ends within two lines above a root-file declaration.
     /// Inserted declarations get no doc association (their text is another file's).
     ///
@@ -745,27 +802,33 @@ public sealed class SymbolExtractor
     /// </summary>
     private ScriptDocComment FindDocComment(int declarationStartLine, string? sourceFile)
     {
+        // Split from the body rather than fenced with try/finally, so a normal build is left with a
+        // trivial forwarding wrapper the JIT inlines away. try/finally would survive the
+        // [Conditional] calls being removed and make every build pay for instrumentation it does not
+        // have. Matches WorkspaceIndexer's index.total, which is likewise unfenced: an exception
+        // voids the measurement run anyway, and PerfTracker.End ignores an unmatched close.
+        PerfTracker.Begin("extract.doc");
+        ScriptDocComment doc = FindDocCommentCore(declarationStartLine, sourceFile);
+        PerfTracker.End();
+
+        return doc;
+    }
+
+    private ScriptDocComment FindDocCommentCore(int declarationStartLine, string? sourceFile)
+    {
         if ( sourceFile is not null )
         {
             return ScriptDocComment.None;
         }
 
-        foreach ( Token token in _rawTokens )
-        {
-            if ( !IsDocCommentToken(token) )
-            {
-                continue;
-            }
+        Dictionary<int, Token> docComments = DocCommentsByEndLine();
 
-            int endLine = token.Range.End.Line;
-            if ( endLine >= declarationStartLine - 2 && endLine <= declarationStartLine )
+        // Ascending, so the lowest line in the window wins — which is what the source-order scan did.
+        for ( int endLine = declarationStartLine - 2; endLine <= declarationStartLine; endLine++ )
+        {
+            if ( docComments.TryGetValue(endLine, out Token token) )
             {
                 return ScriptDocComment.Parse(token.GetText(_text).ToString());
-            }
-
-            if ( endLine > declarationStartLine )
-            {
-                break;
             }
         }
 

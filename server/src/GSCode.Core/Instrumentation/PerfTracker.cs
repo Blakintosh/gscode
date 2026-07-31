@@ -54,6 +54,35 @@ public static class PerfTracker
     }
 
     /// <summary>
+    /// Copies the scopes recorded since the last <see cref="Reset"/> into <paramref name="into"/>,
+    /// as milliseconds and call counts.
+    ///
+    /// Takes a SINK rather than returning a dictionary so it can be <c>[Conditional]</c>: the
+    /// attribute is only legal on void methods, and illegal with an <c>out</c> parameter (CS0685),
+    /// since a removed call would leave the caller's variable unassigned. <see cref="Report"/> is
+    /// shaped the same way and for the same reason. A caller allocates its collection, calls this,
+    /// and in an ordinary build gets an untouched empty one — the whole call having been compiled
+    /// out rather than having run and found nothing.
+    ///
+    /// Reset before a unit of work and snapshot after it, and the result is that unit's own profile:
+    /// it is how the corpus perf sweep attributes sub-phase time to ONE FILE, which the aggregate
+    /// <see cref="Report"/> cannot do because it sums across the whole run.
+    ///
+    /// Only meaningful once the measured work is QUIESCED. The counters are written under
+    /// <see cref="Interlocked"/> but read here without one, so a snapshot taken while other threads
+    /// are still inside scopes can mix a scope's ticks with another's count.
+    /// </summary>
+    [Conditional("GSCODE_INSTRUMENTATION")]
+    public static void Snapshot(IDictionary<string, (double Milliseconds, long Count)> into)
+    {
+        foreach ( KeyValuePair<string, ScopeStats> pair in s_scopes )
+        {
+            double milliseconds = pair.Value.TotalTicks * 1000.0 / Stopwatch.Frequency;
+            into[pair.Key] = (milliseconds, pair.Value.Count);
+        }
+    }
+
+    /// <summary>
     /// Writes one line per recorded scope (name, call count, total and mean milliseconds).
     /// </summary>
     [Conditional("GSCODE_INSTRUMENTATION")]

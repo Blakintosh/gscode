@@ -107,4 +107,28 @@ public class TripleSlashScriptDocTests
 
         Assert.Same(ScriptDocComment.None, function.Doc);
     }
+
+    [Fact]
+    public void TwoDocBlocksEndingOnOneLine_TheEarlierOneWins()
+    {
+        // Pins a tie-break that is easy to reverse by accident. Doc comments are indexed into a
+        // dictionary keyed by the line they END on, built with TryAdd so the FIRST token at a line
+        // survives — which is what the old top-of-file scan did, since it walked tokens in source
+        // order and returned on the first match. Switching that TryAdd to an indexer assignment
+        // would silently make the LAST block win instead.
+        //
+        // The stock corpora almost certainly contain no such pair, so ScriptDocCorpusTests cannot
+        // catch this: it asserts how MANY blocks are found, not which one a declaration gets.
+        //
+        // Both blocks close on line 2, so both are inside the two-line window above the function.
+        string source =
+            "/@\n"
+            + "\"Name: first()\"\n"
+            + "@/ /@ \"Name: second()\" @/\n"
+            + "function foo()\n{\n}\n";
+
+        FunctionSymbol function = FirstFunction(source, GameProfile.BlackOps3);
+
+        Assert.Equal("first()", function.Doc.Name);
+    }
 }

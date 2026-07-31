@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using GSCode.Core;
+using GSCode.Core.Instrumentation;
 using GSCode.Core.Text;
 using GSCode.Parser.Extraction;
 using GSCode.Parser.Lexing;
@@ -93,12 +94,18 @@ public class CorpusPerfTests
         // rather than of first-touch I/O.
         analyse();
 
-        Stopwatch watch = Stopwatch.StartNew();
-        analyse();
-        watch.Stop();
-
-        // The same four phases again, timed individually. Run separately from the total so the
-        // total stays comparable with earlier sweeps rather than carrying four stopwatches' overhead.
+        // The four phases, timed individually — and their SUM is the total. There used to be a
+        // separate stopwatch around a second `analyse()`, and the two measurements contradicted each
+        // other badly: `_seaknight.gsc` reported 13.0 ms total against 0.2 ms of phases (65x), while
+        // `pby_fly.gsc` reported 64.0 ms total against 74.1 ms of phases. Small files were dominated
+        // by whatever GC pause happened to land in their window, which put them at the top of the
+        // "slowest per kilobyte" table — the one place the report claims to find superlinear code.
+        // So that table was ranking noise, and the files it named had no measurable analysis cost.
+        //
+        // Deriving the total from the phases makes the two agree by construction, and drops a whole
+        // extra analysis pass per file. It does NOT make a single-shot measurement precise: at a
+        // median near 0.1 ms one collection still swamps one file. Read a single row as indicative
+        // and the distribution as real.
         //
         // Per PHASE rather than per function, because only two of the four are per-function work at
         // all: the lexer and the preprocessor walk the file once, whatever it declares. A file slow
@@ -106,6 +113,11 @@ public class CorpusPerfTests
         // shape; slow in `extract` because of how much it declares.
         SourceText text = SourceText.From(File.ReadAllText(path));
         ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
+
+        // AFTER the warm-up, so the scopes this file reports are the ones the timed phases opened
+        // rather than the warm pass's. Reset-then-snapshot is what turns a global aggregate into a
+        // per-file profile; it is only sound because this sweep is sequential.
+        PerfTracker.Reset();
 
         Stopwatch phase = Stopwatch.StartNew();
         LexResult lexed = Lexer.Lex(text, game);
@@ -123,8 +135,13 @@ public class CorpusPerfTests
         SymbolExtractor.Extract(path, tree, preprocessed, lexed.Tokens, text, names, game);
         double extract = phase.Elapsed.TotalMilliseconds;
 
+        // Stays empty in an ordinary build: the Snapshot call is [Conditional] and is not compiled
+        // in at all, so this is the uninstrumented case the report is written to expect.
+        Dictionary<string, (double Milliseconds, long Count)> scopes = new(StringComparer.Ordinal);
+        PerfTracker.Snapshot(scopes);
+
         return new PerfReport.Item(
-            path, watch.Elapsed.TotalMilliseconds, bytes, lex, preprocess, parse, extract);
+            path, lex + preprocess + parse + extract, bytes, lex, preprocess, parse, extract, scopes);
     }
 
     private void Report(string game, List<PerfReport.Item> timings, string root, int cachedHeaders)
@@ -194,6 +211,20 @@ public class CorpusPerfTests
             _output.WriteLine(
                 $"    phases: lex {lex / phases * 100:F0}% | preprocess {pre / phases * 100:F0}% | "
                 + $"parse {par / phases * 100:F0}% | extract {ext / phases * 100:F0}%");
+        }
+
+        IReadOnlyList<(string Name, double Milliseconds, long Count)> subPhases = PerfReport.SubPhaseTotals(timings);
+        if ( subPhases.Count == 0 )
+        {
+            _output.WriteLine("    sub-phases: not instrumented (rebuild with -p:GscodeInstrumentation=true)");
+        }
+        else
+        {
+            foreach ( (string name, double milliseconds, long count) in subPhases )
+            {
+                double mean = count == 0 ? 0 : milliseconds / count;
+                _output.WriteLine($"    {name,-24} {milliseconds,8:F0} ms  {count,8:N0} calls  {mean:F4} ms mean");
+            }
         }
 
         PerfReport.Memory memory = PerfReport.Sample();

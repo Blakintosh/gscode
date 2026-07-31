@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
@@ -80,6 +81,13 @@ public sealed class DocumentStore
     {
         return _documents.TryGetValue(PathUtil.NormalizeAbsolute(path), out document!);
     }
+
+    /// <summary>
+    /// Every document the user currently has open, for the cross-file lints: a file's diagnostics
+    /// depend on its neighbours, so editing one can invalidate another's. A snapshot rather than a
+    /// live view, since the caller re-analyses each one and a document may be closed meanwhile.
+    /// </summary>
+    public ImmutableArray<OpenDocument> OpenDocuments => [.. _documents.Values];
 
     public void Close(string path)
     {

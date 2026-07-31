@@ -104,6 +104,7 @@ LanguageServer server = await LanguageServer.From(options =>
             services.AddSingleton(provider =>
                 new DiagnosticsPublisher(provider.GetRequiredService<ILanguageServerFacade>()));
             services.AddSingleton<WorkspaceDiagnosticsPublisher>();
+            services.AddSingleton<DependentDiagnosticsRefresher>();
             services.AddSingleton<ServerStatusNotifier>();
 
             services.AddSingleton<ScriptDatabase>();

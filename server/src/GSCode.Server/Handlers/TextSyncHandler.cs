@@ -46,6 +46,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ObjectFields _objectFields;
     private readonly ILanguageServerFacade _server;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
+    private readonly DependentDiagnosticsRefresher _dependents;
 
     public TextSyncHandler(
         DocumentStore documents,
@@ -58,8 +59,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         BuiltinApiSet builtins,
         ObjectFields objectFields,
         ILanguageServerFacade server,
-        WorkspaceDiagnosticsPublisher workspaceDiagnostics)
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics,
+        DependentDiagnosticsRefresher dependents)
     {
+        _dependents = dependents;
         _workspaceDiagnostics = workspaceDiagnostics;
         _builtins = builtins;
         _objectFields = objectFields;
@@ -268,7 +271,23 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private void CommitAndRefreshLenses(OpenDocument document, ParseResult result)
     {
         ResolutionContext context = _resolver.Current.GetContext(document.Path);
-        _database.Commit(result, context, isDirty: true, _resolver.Current.GetScriptRelativePath(document.Path, context));
+
+        // Read BEFORE the commit replaces it. A file first opened has no prior record, and its
+        // exports are new to the world, so treat that as a change too.
+        ulong exportsBefore = _database.TryGetAnyRecord(document.Path, out ScriptRecord previous)
+            ? ExportSignature.Of(previous)
+            : 0;
+
+        ScriptRecord committed = _database.Commit(
+            result, context, isDirty: true, _resolver.Current.GetScriptRelativePath(document.Path, context));
+
+        // Other open files' diagnostics are computed against this one, and nothing else republishes
+        // them. Only when something they can actually SEE moved — an ordinary keystroke inside a
+        // function body leaves the signature alone, which is what keeps this off the edit path.
+        if ( ExportSignature.Of(committed) != exportsBefore )
+        {
+            _dependents.Schedule(document.Path);
+        }
 
         if ( !_settings.CodeLensEnabled )
         {

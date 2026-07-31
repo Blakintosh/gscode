@@ -379,6 +379,177 @@ public class CompletionEngineTests
         Assert.Contains("...", pack.Documentation, StringComparison.Ordinal);
     }
 
+    // --- Bare-name completion offers imported namespaces too ---
+    //
+    // `ns::` completion (above) already worked once the namespace was typed by hand. The gap: at
+    // statement scope, typing the bare function name did not surface a function reachable through
+    // a `#using` — the user had to already know and type the qualifier before anything showed up.
+
+    [Fact]
+    public void StatementScope_OffersFunctionsFromAnImportedNamespace()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\hud_message.gsc", "#namespace globallogic;\nfunction init()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\n#using scripts\\hud_message;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
+
+        // Offered under its bare name — that is what was typed — with the qualifier visible in
+        // Detail so the two "init"s (this file's own and globallogic's) are told apart.
+        CompletionEntry entry = entries.First(e => e.Label == "init" && e.Kind == CompletionKind.Function);
+        Assert.Equal("globallogic::init", entry.Detail);
+        Assert.Equal("globallogic", entry.Namespace);
+
+        // But INSERTED fully qualified: an unqualified call into another namespace does not
+        // resolve, so the useful completion is the one that writes the qualifier for you.
+        Assert.StartsWith("globallogic::init", entry.InsertText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StatementScope_DoesNotOfferFunctionsFromAnUnimportedNamespace()
+    {
+        // The mirror of the above: nothing gives a function away just for existing somewhere in
+        // the workspace. Only what this file has actually `#using`'d belongs in the bare-name list.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\hud_message.gsc", "#namespace globallogic;\nfunction init()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 4));
+
+        Assert.DoesNotContain(entries, e => e.Label == "init");
+    }
+
+    [Fact]
+    public void StatementScope_OwnNamespaceFunctions_StayUnqualifiedEvenWhenAlsoImported()
+    {
+        // A file may `#using` another file that shares its OWN namespace (split across files) —
+        // that function is still called bare, so it must not also gain a qualified duplicate.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util_part2.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace util;\n#using scripts\\util_part2;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
+
+        CompletionEntry entry = Assert.Single(entries, e => e.Label == "helper");
+        Assert.StartsWith("helper", entry.InsertText, StringComparison.Ordinal);
+        Assert.DoesNotContain("::", entry.InsertText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StatementScope_OffersTheImportedNamespaceItselfByName()
+    {
+        // The reported gap: typing the NAMESPACE's name ("util") rather than one of its members
+        // ("init") found nothing, because only functions were offered — and most function names
+        // share nothing with their namespace's name. The namespace itself has to be a candidate too.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util_shared.gsc", "#namespace util;\nfunction get_players()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\n#using scripts\\util_shared;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
+
+        CompletionEntry entry = Assert.Single(entries, e => e.Label == "util" && e.Kind == CompletionKind.Namespace);
+
+        // Accepting it inserts the qualifier and reopens the list — the walk-it-down shape a
+        // folder in a #using path already uses — so the next keystroke lands exactly where the
+        // explicit `ns::` handler already lists util's members.
+        Assert.Equal("util::", entry.InsertText);
+        Assert.True(entry.RetriggerCompletion);
+    }
+
+    [Fact]
+    public void StatementScope_DoesNotOfferAnUnimportedNamespaceByName()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util_shared.gsc", "#namespace util;\nfunction get_players()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 4));
+
+        Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.Namespace);
+    }
+
+    // --- The namespace set comes from the functions, not from the spans ---
+    //
+    // NamespaceSpan answers a POSITIONAL question ("what namespace is in effect here"), so a file
+    // whose imports sit above its `#namespace` line has a leading span for the region before it,
+    // named after the file. Reading the span list therefore handed back one phantom namespace per
+    // imported file. The two tests below pin the pair of cases that any fix has to get right at
+    // once — which is why the fix reads function.Namespace rather than filtering spans.
+
+    [Fact]
+    public void StatementScope_DoesNotOfferAPhantomNamespaceNamedAfterTheImportedFile()
+    {
+        // The reported bug: `#using scripts\shared\util_shared` offered BOTH `util` (real) and
+        // `util_shared` (the span governing the import lines above the `#namespace` directive).
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(
+                @$"{Raw}\scripts\util_shared.gsc",
+                "#using scripts\\other;\n#namespace util;\n\nfunction get_players()\n{\n}\n")
+            .AddFile(@$"{Raw}\scripts\other.gsc", "#namespace other;\nfunction thing()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\n#using scripts\\util_shared;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
+
+        Assert.Contains(entries, e => e.Label == "util" && e.Kind == CompletionKind.Namespace);
+        Assert.DoesNotContain(entries, e => e.Label == "util_shared");
+    }
+
+    [Fact]
+    public void StatementScope_StillOffersTheFileNamedNamespace_WhenTheImportDeclaresNone()
+    {
+        // The other half, and the reason the phantom cannot simply be filtered out for being
+        // implicit: a file with NO `#namespace` at all really does live in the namespace named
+        // after it, so struct.gsc must still be offered as `struct`. Only a span governing nothing
+        // is a phantom — and asking the functions distinguishes the two for free.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\struct.gsc", "function createstruct()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\n#using scripts\\struct;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
+
+        Assert.Contains(entries, e => e.Label == "struct" && e.Kind == CompletionKind.Namespace);
+        Assert.Contains(entries, e => e.Label == "createstruct" && e.Detail == "struct::createstruct");
+    }
+
+    [Fact]
+    public void StatementScope_ImportedNamespaceFunctions_RespectPrivacy()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction private hidden()\n{\n}\nfunction shown()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\n#using scripts\\util;\n\nfunction run()\n{\n    \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
+
+        Assert.True(HasLabel(entries, "shown"));
+        Assert.False(HasLabel(entries, "hidden"));
+    }
+
     [Fact]
     public void TopLevel_OffersDeclarationKeywords()
     {

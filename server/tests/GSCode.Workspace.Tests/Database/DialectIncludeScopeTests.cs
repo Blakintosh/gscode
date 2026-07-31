@@ -120,4 +120,54 @@ public class DialectIncludeScopeTests
         Assert.True(DatabaseQueries.IsInIncludeScope(
             @"common_scripts\utility.gsc", @"common_scripts\utility.gsc", includedPaths: []));
     }
+
+    // --- FunctionsInIncludeScope: what completion may offer bare, unqualified ---
+    //
+    // A merge dialect has no namespace, so `#namespace`-driven statement-scope completion (BO3)
+    // finds nothing for it — every function it might offer bare is actually reachable through
+    // `#include`, not a namespace block, and has to be gathered that way instead.
+
+    [Fact]
+    public void FunctionsInIncludeScope_OffersTheFilesOwnFunctions_WithNoIncludeAtAll()
+    {
+        ScriptDatabase database = new();
+        database.Commit(AnalyzeIw(@"c:\ws\main.gsc", "run()\n{\n}\n"), ResolutionContext.RawContext, false, @"scripts\main.gsc");
+
+        ImmutableArray<FunctionSymbol> functions = DatabaseQueries.FunctionsInIncludeScope(
+            database.Gsc, "raw", @"c:\ws\main.gsc", includedPaths: []);
+
+        Assert.Contains(functions, f => f.KeyName == "run");
+    }
+
+    [Fact]
+    public void FunctionsInIncludeScope_OffersFunctionsFromAnIncludedFile()
+    {
+        ScriptDatabase database = new();
+        database.Commit(
+            AnalyzeIw(@"c:\ws\utility.gsc", "helper()\n{\n}\n"), ResolutionContext.RawContext, false, @"common_scripts\utility.gsc");
+        database.Commit(AnalyzeIw(@"c:\ws\main.gsc", "run()\n{\n}\n"), ResolutionContext.RawContext, false, @"scripts\main.gsc");
+
+        ImmutableArray<string> includedPaths = DatabaseQueries.IncludedScriptPaths(
+            AnalyzeIw(@"c:\ws\main.gsc", "#include common_scripts\\utility;\nrun()\n{\n}\n"));
+
+        ImmutableArray<FunctionSymbol> functions = DatabaseQueries.FunctionsInIncludeScope(
+            database.Gsc, "raw", @"c:\ws\main.gsc", includedPaths);
+
+        Assert.Contains(functions, f => f.KeyName == "helper");
+        Assert.Contains(functions, f => f.KeyName == "run");
+    }
+
+    [Fact]
+    public void FunctionsInIncludeScope_DoesNotOfferFunctionsFromAnUnincludedFile()
+    {
+        ScriptDatabase database = new();
+        database.Commit(
+            AnalyzeIw(@"c:\ws\utility.gsc", "helper()\n{\n}\n"), ResolutionContext.RawContext, false, @"common_scripts\utility.gsc");
+        database.Commit(AnalyzeIw(@"c:\ws\main.gsc", "run()\n{\n}\n"), ResolutionContext.RawContext, false, @"scripts\main.gsc");
+
+        ImmutableArray<FunctionSymbol> functions = DatabaseQueries.FunctionsInIncludeScope(
+            database.Gsc, "raw", @"c:\ws\main.gsc", includedPaths: []);
+
+        Assert.DoesNotContain(functions, f => f.KeyName == "helper");
+    }
 }

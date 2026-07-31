@@ -309,10 +309,13 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     internal static List<string> FindMissingUsings(
         ParseResult result, LanguageStore store, string contextId, string askingPath, TextRange selection)
     {
+        // The DECLARED set rather than the namespace spans: the spans include a leading region named
+        // after the file whenever its imports sit above its #namespace line, and a phantom in here
+        // read as "already own that namespace" and silently withheld the add-#using fix.
         HashSet<string> ownNamespaces = new(StringComparer.Ordinal);
-        foreach ( GSCode.Core.Symbols.NamespaceSpan span in result.Extraction.Namespaces )
+        foreach ( string declared in result.Extraction.DeclaredNamespaces )
         {
-            ownNamespaces.Add(span.KeyName);
+            ownNamespaces.Add(declared);
         }
 
         HashSet<string> existingUsings = new(StringComparer.Ordinal);

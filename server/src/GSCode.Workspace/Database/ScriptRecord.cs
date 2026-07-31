@@ -49,7 +49,20 @@ public sealed record ScriptRecord
     /// <summary>xxHash-style content hash of the analysed text (cache invalidation key).</summary>
     public required ulong ContentHash { get; init; }
 
+    /// <summary>
+    /// The namespace REGIONS of the file, for the positional question only. For "which namespaces
+    /// does this file declare into", use <see cref="DeclaredNamespaces"/> — see
+    /// <see cref="NamespaceSpan"/> for why the two are not the same list.
+    /// </summary>
     public ImmutableArray<NamespaceSpan> Namespaces { get; init; } = [];
+
+    /// <summary>
+    /// The namespaces this file declares into. Computed once at build time rather than per query:
+    /// the lints ask it for every <c>#using</c> target and completion asks it for every imported
+    /// file, on every keystroke.
+    /// </summary>
+    public ImmutableArray<string> DeclaredNamespaces { get; init; } = [];
+
     public ImmutableArray<FunctionSymbol> Functions { get; init; } = [];
     public ImmutableArray<ClassSymbol> Classes { get; init; } = [];
     public ImmutableArray<MacroRecord> Macros { get; init; } = [];

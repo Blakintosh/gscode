@@ -144,11 +144,12 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     {
         if ( call.Callee is IdentifierNode identifier )
         {
-            // A script function in one of the file's namespaces, else a builtin.
-            foreach ( NamespaceSpan span in target.Result.Extraction.Namespaces )
+            // A script function in one of the file's namespaces, else a builtin. The declared set,
+            // not the spans — a phantom span cost a full store scan here on every hint.
+            foreach ( string declared in target.Result.Extraction.DeclaredNamespaces )
             {
                 ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                    target.Store, target.ContextId, target.Path, span.KeyName, identifier.Token.Text.ToLowerInvariant(), askingNamespaces: target.Namespaces);
+                    target.Store, target.ContextId, target.Path, declared, identifier.Token.Text.ToLowerInvariant(), askingNamespaces: target.Namespaces);
                 if ( found.Length > 0 )
                 {
                     return [.. found[0].Function.Parameters.Select(static p => p.Name)];

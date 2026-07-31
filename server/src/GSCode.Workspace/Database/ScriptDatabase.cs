@@ -266,6 +266,7 @@ public sealed class ScriptDatabase
             RelativePath = relativePath,
             ContentHash = ComputeContentHash(result.Text.Text),
             Namespaces = result.Extraction.Namespaces,
+            DeclaredNamespaces = result.Extraction.DeclaredNamespaces,
             Functions = result.Extraction.Functions,
             Classes = result.Extraction.Classes,
             Macros = macros.ToImmutable(),

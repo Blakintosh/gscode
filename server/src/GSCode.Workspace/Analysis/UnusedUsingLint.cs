@@ -150,9 +150,13 @@ public static class UnusedUsingLint
 
         // Namespace merging: this import may be what makes the namespace available even
         // though the called function is declared in another contributing file.
-        foreach ( NamespaceSpan span in record.Namespaces )
+        //
+        // The DECLARED set, not the spans: an imported file whose own imports sit above its
+        // #namespace line carries a leading span named after itself, and matching on that made the
+        // import look used whenever anything referenced a namespace of that name.
+        foreach ( string declared in record.DeclaredNamespaces )
         {
-            if ( referencedNamespaces.Contains(span.KeyName) )
+            if ( referencedNamespaces.Contains(declared) )
             {
                 return true;
             }

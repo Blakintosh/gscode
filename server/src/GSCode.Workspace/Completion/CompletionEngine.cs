@@ -239,10 +239,12 @@ public sealed class CompletionEngine
             }
         }
 
-        foreach ( NamespaceSpan span in result.Extraction.Namespaces )
+        ImmutableArray<string> declaredNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+
+        foreach ( string ns in declaredNamespaces )
         {
             foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(
-                store, contextId, result.FilePath, span.KeyName, DatabaseQueries.DeclaredNamespaces(result)) )
+                store, contextId, result.FilePath, ns, declaredNamespaces) )
             {
                 if ( seen.Add(function.Name) )
                 {
@@ -954,16 +956,47 @@ public sealed class CompletionEngine
             }
         }
 
-        // Functions in the file's own namespaces.
-        HashSet<string> namespaces = new(StringComparer.Ordinal);
-        foreach ( NamespaceSpan span in result.Extraction.Namespaces )
+        // Functions in the file's own namespaces. The declared set rather than the namespace spans,
+        // which carry a leading region named after the file whenever its imports sit above its
+        // #namespace line — a phantom that cost a full store scan per keystroke to return nothing.
+        ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+
+        foreach ( string ns in ownNamespaces )
         {
-            namespaces.Add(span.KeyName);
+            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, ownNamespaces) )
+            {
+                entries.Add(FunctionEntry(function, callSuffix));
+            }
         }
 
-        foreach ( string ns in namespaces )
+        // Functions reachable through an import, dialect-dependent. A namespace dialect (BO3) still
+        // needs the qualifier at the call site even though only the bare name was typed — so these
+        // are offered under their bare name (for discovery and filtering) but INSERT the qualified
+        // form. A merge dialect (#include) has already folded the function into local scope, so it
+        // is offered and inserted exactly like one declared in this file.
+        if ( game.ResolvesByNamespace )
         {
-            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
+            ImmutableArray<string> importedPaths = DatabaseQueries.ImportedScriptPaths(result);
+            foreach ( string ns in DatabaseQueries.ImportedNamespaces(store, contextId, importedPaths, ownNamespaces) )
+            {
+                // The namespace ITSELF, so typing its name (rather than one of its members by
+                // heart) finds it too: "util" -> inserts "util::" and reopens the list, which the
+                // ns:: handler above already fills with util's members. Without this, a function
+                // whose name shares nothing with its namespace's name (the common case) was only
+                // reachable by already knowing it existed.
+                entries.Add(NamespaceEntry(ns));
+
+                foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(
+                    store, contextId, result.FilePath, ns, ownNamespaces) )
+                {
+                    entries.Add(ImportedFunctionEntry(function, ns, callSuffix));
+                }
+            }
+        }
+        else
+        {
+            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInIncludeScope(
+                store, contextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result)) )
             {
                 entries.Add(FunctionEntry(function, callSuffix));
             }
@@ -1007,6 +1040,29 @@ public sealed class CompletionEngine
         // along so resolve can find this function again.
         return new CompletionEntry(
             function.Name, CompletionKind.Function, detail, function.Name + callSuffix, Namespace: function.Namespace);
+    }
+
+    /// <summary>
+    /// A function reached through a <c>#using</c> import, offered under its BARE name (so typing
+    /// "init" finds "globallogic::init" without knowing the namespace up front) but INSERTED fully
+    /// qualified — an unqualified call into another namespace does not resolve, so the one useful
+    /// completion is the one that writes the qualifier for you.
+    /// </summary>
+    private static CompletionEntry ImportedFunctionEntry(FunctionSymbol function, string ns, string callSuffix)
+    {
+        string qualified = ns + "::" + function.Name;
+        return new CompletionEntry(function.Name, CompletionKind.Function, qualified, qualified + callSuffix, Namespace: ns);
+    }
+
+    /// <summary>
+    /// An imported namespace, offered by NAME so it is findable without already knowing one of its
+    /// functions. Inserts the qualifier and reopens the list — which the explicit `ns::` handler
+    /// above then fills with that namespace's members — the same walk-it-down shape path segments
+    /// use for a folder.
+    /// </summary>
+    private static CompletionEntry NamespaceEntry(string ns)
+    {
+        return new CompletionEntry(ns, CompletionKind.Namespace, "namespace", ns + "::", Namespace: ns, RetriggerCompletion: true);
     }
 
     /// <summary>

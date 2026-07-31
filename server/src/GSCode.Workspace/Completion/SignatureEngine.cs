@@ -107,10 +107,14 @@ public sealed class SignatureEngine
 
     private ImmutableArray<ResolvedFunction> LookupUnqualified(ParseResult result, LanguageStore store, string contextId, string keyName)
     {
-        // Try each namespace the file participates in.
-        foreach ( NamespaceSpan span in result.Extraction.Namespaces )
+        // Try each namespace the file participates in. Hoisted out of the loop: it was rebuilt on
+        // every iteration, and the spans it was read from included a phantom whose lookup scanned
+        // the whole store to return nothing.
+        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+
+        foreach ( string declared in askingNamespaces )
         {
-            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, span.KeyName, keyName, askingNamespaces: DatabaseQueries.DeclaredNamespaces(result));
+            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, declared, keyName, askingNamespaces: askingNamespaces);
             if ( found.Length > 0 )
             {
                 return found;

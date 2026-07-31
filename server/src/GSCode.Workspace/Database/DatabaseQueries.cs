@@ -151,19 +151,15 @@ public static class DatabaseQueries
     /// <summary>
     /// The lowercase-canonical namespaces a file declares, for the namespace-privacy rule.
     /// Taken from the live parse result so unsaved edits count immediately.
+    ///
+    /// Read from the declarations, not from the namespace SPANS: the spans answer a positional
+    /// question and cover the whole file, so a file whose imports sit above its <c>#namespace</c>
+    /// line has a leading span named after itself. Counting that as declared handed a file the
+    /// private members of any namespace that happened to share its filename.
     /// </summary>
     public static ImmutableArray<string> DeclaredNamespaces(GSCode.Parser.ParseResult result)
     {
-        ImmutableArray<string>.Builder names = ImmutableArray.CreateBuilder<string>();
-        foreach ( NamespaceSpan span in result.Extraction.Namespaces )
-        {
-            if ( !names.Contains(span.KeyName) )
-            {
-                names.Add(span.KeyName);
-            }
-        }
-
-        return names.ToImmutable();
+        return result.Extraction.DeclaredNamespaces;
     }
 
     /// <summary>
@@ -217,6 +213,60 @@ public static class DatabaseQueries
         }
 
         return [.. byName.Values];
+    }
+
+    /// <summary>
+    /// The namespaces a file reaches by <c>#using</c>, excluding any the asking file declares itself
+    /// (those are already offered unqualified elsewhere). For completion: what a bare word may
+    /// resolve to as <c>namespace::name</c> given what is actually imported, rather than every
+    /// namespace in the workspace.
+    ///
+    /// Read from the imported files' FUNCTIONS, not from their
+    /// <see cref="ScriptRecord.Namespaces"/> spans, and that distinction is the whole point.
+    /// <see cref="NamespaceSpan"/> answers a POSITIONAL question — "what namespace is in effect at
+    /// this point in the file" — so a file that writes its imports above its <c>#namespace</c> line
+    /// necessarily has a leading span for the region before it, named after the file (the dialect's
+    /// fallback). That span is real for its purpose and must stay: a file with no <c>#namespace</c>
+    /// at all has only that span, and its functions genuinely do live in the file-named namespace.
+    /// But it governs no declarations here, so reading the span list handed
+    /// <c>scripts\shared\util_shared</c> back both <c>util</c> AND a phantom <c>util_shared</c> —
+    /// one bogus namespace per imported file, every one of them offered in the completion list.
+    ///
+    /// Asking the functions gets both cases right for the same reason: a namespace is reachable
+    /// exactly when something is declared in it. It is also the field
+    /// <see cref="FunctionsInNamespace"/> matches on, so every name returned here is guaranteed to
+    /// yield at least one function rather than an empty submenu.
+    /// </summary>
+    public static ImmutableArray<string> ImportedNamespaces(
+        LanguageStore store,
+        string askingContextId,
+        ImmutableArray<string> importedPaths,
+        ImmutableArray<string> ownNamespaces)
+    {
+        HashSet<string> names = new(StringComparer.Ordinal);
+
+        foreach ( ScriptRecord record in store.AllRecords )
+        {
+            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            if ( !importedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
+            {
+                continue;
+            }
+
+            foreach ( string declared in record.DeclaredNamespaces )
+            {
+                if ( !ownNamespaces.Contains(declared) )
+                {
+                    names.Add(declared);
+                }
+            }
+        }
+
+        return [.. names];
     }
 
     /// <summary>
@@ -448,6 +498,46 @@ public static class DatabaseQueries
         }
 
         return scoped.Count == 0 ? definitions : scoped.ToImmutable();
+    }
+
+    /// <summary>
+    /// Every function reachable UNQUALIFIED under an <c>#include</c> dialect (for completion): this
+    /// file's own, plus those in files it <c>#include</c>s — the two ways a merge dialect brings a
+    /// function into local scope, both callable by bare name. Deduplicated by name, mirroring
+    /// <see cref="AllVisibleClasses"/>, since there is no namespace to qualify with in the first
+    /// place.
+    /// </summary>
+    public static ImmutableArray<FunctionSymbol> FunctionsInIncludeScope(
+        LanguageStore store,
+        string askingContextId,
+        string askingPath,
+        ImmutableArray<string> includedPaths)
+    {
+        Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
+
+        foreach ( ScriptRecord record in store.AllRecords )
+        {
+            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            bool sameFile = normalizedAskingPath.Length > 0
+                && string.Equals(record.Path, normalizedAskingPath, StringComparison.OrdinalIgnoreCase);
+
+            if ( !sameFile && !includedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                byName.TryAdd(function.KeyName, function);
+            }
+        }
+
+        return [.. byName.Values];
     }
 
     /// <summary>

@@ -25,4 +25,12 @@ public sealed record ExtractionResult(
     ImmutableArray<ClassSymbol> Classes,
     ImmutableArray<ReferenceEntry> References,
     ImmutableArray<Diagnostic> Diagnostics,
-    ImmutableArray<PathCallReference> PathCalls);
+    ImmutableArray<PathCallReference> PathCalls)
+{
+    /// <summary>
+    /// The namespaces this file declares into — the SET question, as opposed to the positional one
+    /// <see cref="Namespaces"/> answers. See <see cref="NamespaceSpan"/> for why the two differ and
+    /// why reading the spans as a set yields a phantom named after the file.
+    /// </summary>
+    public ImmutableArray<string> DeclaredNamespaces => DeclaredNamespaceSet.From(Functions, Classes);
+}

@@ -88,8 +88,66 @@ public sealed record ClassSymbol
     public string SourceFile { get; init; } = "";
 }
 
-/// <summary>A #namespace region: the name and the root-file range it governs.</summary>
+/// <summary>
+/// A #namespace region: the name and the root-file range it governs.
+///
+/// A POSITIONAL answer — "which namespace is in effect at this point in the file" — and the spans
+/// cover the file completely, so a file that writes its <c>#using</c> lines above its
+/// <c>#namespace</c> necessarily has a leading span for the region before it, named after the file
+/// (the dialect's fallback for code no directive governs yet). That span is correct for the
+/// positional question and load-bearing for the outline, which renders exactly these regions.
+///
+/// It is NOT the set of namespaces the file declares, and reading it as one is the trap: that
+/// leading span usually governs nothing but imports, so it contributes a phantom namespace named
+/// after the file. Ask <c>DeclaredNamespaces</c> (on the extraction or the record) for the set
+/// question — it reads the declarations themselves, which also keeps the case that makes the
+/// phantom hard to filter: a file with NO <c>#namespace</c> at all has only the implicit span, and
+/// its functions genuinely do live in the namespace named after it.
+/// </summary>
 public sealed record NamespaceSpan(string Name, string KeyName, TextRange NameRange, TextRange GovernedRange);
+
+/// <summary>
+/// The one definition of "which namespaces does this file declare into", shared by the extraction
+/// result and the indexed record so the two can never drift.
+/// </summary>
+public static class DeclaredNamespaceSet
+{
+    /// <summary>
+    /// The namespaces a file contributes declarations to, deduplicated, in first-seen order.
+    ///
+    /// Derived from the declarations rather than from <see cref="NamespaceSpan"/>s because a
+    /// namespace is reachable exactly when something is declared in it — which is both the
+    /// authoritative fact and the one that excludes a leading span governing only imports. Class
+    /// METHODS carry no namespace of their own (the class scopes them) and are skipped by the same
+    /// empty-name test that skips them everywhere else.
+    /// </summary>
+    public static ImmutableArray<string> From(
+        ImmutableArray<FunctionSymbol> functions, ImmutableArray<ClassSymbol> classes)
+    {
+        ImmutableArray<string>.Builder names = ImmutableArray.CreateBuilder<string>();
+
+        foreach ( FunctionSymbol function in functions )
+        {
+            if ( function.Namespace.Length > 0 && !names.Contains(function.Namespace) )
+            {
+                names.Add(function.Namespace);
+            }
+        }
+
+        // Classes count too. A file may declare a namespace and put only a class in it, and the
+        // import that reaches it is just as real — an import lint that called that namespace
+        // unavailable would be reporting a false positive on a legitimate #using.
+        foreach ( ClassSymbol classSymbol in classes )
+        {
+            if ( classSymbol.Namespace.Length > 0 && !names.Contains(classSymbol.Namespace) )
+            {
+                names.Add(classSymbol.Namespace);
+            }
+        }
+
+        return names.ToImmutable();
+    }
+}
 
 /// <summary>How a reference site uses its symbol.</summary>
 public enum ReferenceKind

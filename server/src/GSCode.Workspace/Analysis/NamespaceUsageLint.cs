@@ -29,11 +29,16 @@ public static class NamespaceUsageLint
         PathResolver resolver,
         string askingPath)
     {
-        // Namespaces callable without an import: the file's own #namespace blocks.
+        // Namespaces callable without an import: the ones the file itself declares into.
+        //
+        // From the declarations rather than the namespace spans. The spans cover the file
+        // positionally, so a file whose imports sit above its #namespace line carries a leading span
+        // named after itself — which silently entered this set and suppressed the warning for any
+        // call into a namespace sharing an imported file's name.
         HashSet<string> available = new(StringComparer.Ordinal);
-        foreach ( NamespaceSpan span in result.Extraction.Namespaces )
+        foreach ( string declared in result.Extraction.DeclaredNamespaces )
         {
-            available.Add(span.KeyName);
+            available.Add(declared);
         }
 
         // Add every namespace contributed by a #using target. Bail out (suppress the lint) the
@@ -59,9 +64,9 @@ public static class NamespaceUsageLint
                 return [];
             }
 
-            foreach ( NamespaceSpan span in record.Namespaces )
+            foreach ( string declared in record.DeclaredNamespaces )
             {
-                available.Add(span.KeyName);
+                available.Add(declared);
             }
         }
 

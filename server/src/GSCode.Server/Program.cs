@@ -390,9 +390,9 @@ static void LogIndexBreakdown(ScriptDatabase database)
         functions += record.Functions.Length;
         classes += record.Classes.Length;
         macros += record.Macros.Length;
-        foreach ( NamespaceSpan span in record.Namespaces )
+        foreach ( string declared in record.DeclaredNamespaces )
         {
-            namespaces.Add(span.KeyName);
+            namespaces.Add(declared);
         }
     }
 
@@ -402,9 +402,9 @@ static void LogIndexBreakdown(ScriptDatabase database)
         functions += record.Functions.Length;
         classes += record.Classes.Length;
         macros += record.Macros.Length;
-        foreach ( NamespaceSpan span in record.Namespaces )
+        foreach ( string declared in record.DeclaredNamespaces )
         {
-            namespaces.Add(span.KeyName);
+            namespaces.Add(declared);
         }
     }
 

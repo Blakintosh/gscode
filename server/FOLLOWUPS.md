@@ -169,6 +169,35 @@ rewrite avoided. Options, roughly in order of appeal:
 Whichever, the count in the status bar and the Problems panel should agree, so decide before
 adding any "N problems" summary.
 
+**Revisited, and deliberately still not done.** The OPEN half of this is now solved — an edit that
+changes what other files can see republishes their diagnostics (`ExportSignature` +
+`DependentDiagnosticsRefresher`). That fix is cheap for exactly two reasons, and it is worth being
+precise about them because NEITHER holds for closed files:
+
+* open documents are the user's tabs, so there are a handful of them; and
+* their text has not changed, so the parse is reused and only the lint pass re-runs.
+
+Closed files are the opposite on both counts: there are thousands, and none has a retained parse.
+Measured against the corpus sweep, which does precisely this work, a parse-plus-all-lints pass runs
+at roughly 44 ms/file — about 43 s for BO3's 980 stock scripts, or a second or two for a mod of
+fifty.
+
+The trap is that option 1 reads like a ONE-OFF cost and is not. Stored lint results go stale on the
+same trigger the open files do: rename a function and every stored diagnostic that mentions it is
+wrong. So it is a sweep per rename, not a sweep per session — seconds of background CPU on a common
+keystroke, which is a louder problem than the quiet gap it closes.
+
+Doing it properly therefore needs incremental invalidation, not a re-sweep: a reverse-dependency
+index answering "which files reach this one", so only genuinely affected files re-lint. That index
+is the hard part, and the difficulty is documented rather than assumed — under the merge dialects an
+unqualified call resolves by NAME across the whole workspace, so a narrow answer is wrong rather
+than merely conservative (see the same problem in `DatabaseQueries.ScopeToIncludeGraph`).
+
+That is a subsystem, not a bolt-on, so it stays here until it is worth one. What DID land meanwhile:
+an on-disk change now republishes closed files' stored diagnostics (`WatchedFilesHandler` calls
+`WorkspaceDiagnosticsPublisher.Refresh()`), so what closed files do report is at least no longer
+stale after a branch switch.
+
 ### Completed-call punctuation is now a setting
 
 `gscode.completion.callPunctuation` (`off` | `parens` | `parensAndSemicolon`, default the last)

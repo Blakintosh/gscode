@@ -78,7 +78,11 @@ public sealed class DependentDiagnosticsRefresher
     /// Queues a refresh of every open document except <paramref name="originPath"/>, which the
     /// caller is already publishing for. Supersedes any refresh still waiting.
     /// </summary>
-    public void Schedule(string originPath)
+    /// <param name="originPath">
+    /// The document the caller publishes itself, or "" when there is none — an on-disk change
+    /// behind the editor's back belongs to no open document, so every one of them is a dependent.
+    /// </param>
+    public void Schedule(string originPath = "")
     {
         CancellationTokenSource pending = new();
 

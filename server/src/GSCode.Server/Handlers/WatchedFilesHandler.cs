@@ -1,3 +1,4 @@
+using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using MediatR;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -15,10 +16,20 @@ namespace GSCode.Server.Handlers;
 public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
 {
     private readonly WatchedFileUpdater _updater;
+    private readonly ScriptDatabase _database;
+    private readonly DependentDiagnosticsRefresher _dependents;
+    private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
 
-    public WatchedFilesHandler(WatchedFileUpdater updater)
+    public WatchedFilesHandler(
+        WatchedFileUpdater updater,
+        ScriptDatabase database,
+        DependentDiagnosticsRefresher dependents,
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics)
     {
         _updater = updater;
+        _database = database;
+        _dependents = dependents;
+        _workspaceDiagnostics = workspaceDiagnostics;
     }
 
     protected override DidChangeWatchedFilesRegistrationOptions CreateRegistrationOptions(
@@ -41,6 +52,9 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
 
     public override Task<Unit> Handle(DidChangeWatchedFilesParams request, CancellationToken cancellationToken)
     {
+        bool exportsMoved = false;
+        bool applied = false;
+
         foreach ( FileEvent change in request.Changes )
         {
             WatchedFileChange kind = change.Type switch
@@ -52,7 +66,15 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
 
             try
             {
-                _updater.Apply(change.Uri.GetFileSystemPath(), kind);
+                string path = change.Uri.GetFileSystemPath();
+
+                // Whether this change is one an OPEN file's diagnostics could notice. Read either
+                // side of the update, the same test the edit path uses — a branch switch that
+                // rewrites a hundred bodies moves no signature and needs no re-linting.
+                ulong before = SignatureOf(path);
+                _updater.Apply(path, kind);
+                exportsMoved |= SignatureOf(path) != before;
+                applied = true;
             }
             catch ( Exception exception )
             {
@@ -60,6 +82,27 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
             }
         }
 
+        // Closed files carry their own stored diagnostics, which the update above just recomputed;
+        // nothing was republishing them, so a file fixed on disk kept showing its old problems.
+        // Cheap: this republishes what is already stored rather than re-analysing anything.
+        if ( applied )
+        {
+            _workspaceDiagnostics.Refresh();
+        }
+
+        // Open files are computed against the changed ones, and a change arriving behind the
+        // editor's back belongs to no open document — so every one of them is a dependent.
+        if ( exportsMoved )
+        {
+            _dependents.Schedule();
+        }
+
         return Unit.Task;
+    }
+
+    /// <summary>The file's export signature, or 0 when it is not (or no longer) indexed.</summary>
+    private ulong SignatureOf(string path)
+    {
+        return _database.TryGetAnyRecord(path, out ScriptRecord record) ? ExportSignature.Of(record) : 0;
     }
 }

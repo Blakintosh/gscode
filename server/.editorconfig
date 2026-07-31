@@ -24,9 +24,14 @@ csharp_prefer_braces = true:error
 csharp_space_between_parentheses = control_flow_statements
 csharp_space_after_keywords_in_control_flow_statements = true
 
-# --- Explicit types over var (var only when the type is apparent on the right) ---
+# --- Explicit types over var, everywhere ---
+#
+# All three agree now. The middle one used to prefer `var` where the type is apparent, which
+# contradicted the other two AND the code: every declaration in this codebase names its type, so
+# the rule only ever produced suggestions to make files less consistent. It was a suggestion while
+# its neighbours were errors, which is why nothing ever acted on it.
 csharp_style_var_for_built_in_types = false:error
-csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_when_type_is_apparent = false:error
 csharp_style_var_elsewhere = false:error
 
 # --- Block bodies, not expression bodies (trivial property accessors exempt) ---
@@ -42,7 +47,19 @@ csharp_style_deconstructed_variable_declaration = false:error
 csharp_style_namespace_declarations = file_scoped:error
 csharp_style_prefer_switch_expression = false:suggestion
 
-# --- Naming: _camelCase private fields, s_camelCase private statics, standard elsewhere ---
+# --- Naming: PascalCase constants, _camelCase private fields, s_camelCase private statics ---
+#
+# Constants come FIRST because the first matching rule wins, and a const IS a field: without this
+# the private-fields rule below demanded `_minimumNameCharacters`, against every one of the 27
+# private consts in this codebase and against the .NET convention that a constant is PascalCase.
+dotnet_naming_rule.constants_rule.symbols = constants
+dotnet_naming_rule.constants_rule.style = pascal_case
+dotnet_naming_rule.constants_rule.severity = error
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.applicable_accessibilities = *
+dotnet_naming_symbols.constants.required_modifiers = const
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
 dotnet_naming_rule.private_static_fields_rule.symbols = private_static_fields
 dotnet_naming_rule.private_static_fields_rule.style = s_camel_case
 dotnet_naming_rule.private_static_fields_rule.severity = error

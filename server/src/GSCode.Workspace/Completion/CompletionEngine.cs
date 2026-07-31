@@ -169,7 +169,7 @@ public sealed class CompletionEngine
     /// Whether to insert the quotes too. False when the cursor already sits inside a string —
     /// otherwise accepting a suggestion produces <c>""model""</c>.
     /// </param>
-    private ImmutableArray<CompletionEntry> AssetTypeCompletions(ScriptLanguage language, bool quoted = true)
+    private static ImmutableArray<CompletionEntry> AssetTypeCompletions(ScriptLanguage language, bool quoted = true)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         foreach ( string name in PrecacheAssetTypes.NamesFor(language).OrderBy(static n => n, StringComparer.Ordinal) )

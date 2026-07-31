@@ -203,6 +203,19 @@ public sealed partial class Parser
     /// BEFORE any advance (a statement keyword like 'return' must survive recovery);
     /// callers have always consumed at least one token first, so progress holds.
     /// </summary>
+    /// <remarks>
+    /// WHEN TO PANIC, since getting this wrong silently deletes working code from the tree. Skipping
+    /// is for a failure whose EXTENT IS UNKNOWN — the parser is looking at a token that can begin
+    /// nothing, so how much of what follows is garbage cannot be known and syncing forward is the
+    /// only option. It is wrong where the extent is known exactly: a missing ';' after an expression
+    /// that parsed cleanly means one token is absent and the next statement is fine, and skipping
+    /// there cost CoD4's `stairs_down.gsc` a whole `assert(...)` line, its references and its
+    /// outline entry (see <see cref="ParseExpressionStatement"/>).
+    ///
+    /// Every other recovery site was audited against that rule and each is the legitimate kind —
+    /// `RecoverToDeclaration`, `RecoverInsideBraces`, `RecoverToDeclarationOrDevClose` and
+    /// `RecoverToCaseLabel` all follow an `Expected…` error raised on a token that starts nothing.
+    /// </remarks>
     private void RecoverToStatement()
     {
         while ( Kind != TokenKind.EndOfFile )

@@ -70,35 +70,6 @@ What closing it needs, in order:
 Everything needed to feed it already exists: `ParameterHint` builds the string, and
 `CompletionEntry` already carries `FilterText`/`ResolveName`.
 
-### Variadic builtins are not modelled — and that is what blocks 5023's upper bound
-
-`BuiltinOverload` carries `CalledOn`, `Parameters`, `ReturnTypeText`, `ReturnsVoid` and no notion of
-a variadic. So `array( a, b, c )` (data: one parameter) and `Record3DText` (data: one parameter, six
-real) look like fixed-arity functions, and checking an upper bound against them reported **634 errors
-across 134 shipped BO3 scripts** — every one the library's fault, not the code's. That is why
-`ArgumentCountLint` checks only the lower bound on builtins.
-
-The signal already exists and is thrown away: the CoD4 documentation pages declare it in the H1
-signature line — `GetAIArray( <team>, <team>, ... )`, `BadPlace_Cylinder( …, <team>, <team>... )` —
-and `ParseCod4Page` reads only the name before the `(`. Carrying it through
-`JSON → ApiLoader → BuiltinOverload → ArgumentCountLint` would fix those functions at the source
-rather than by override, restore the upper bound, and improve signature help and hover, which today
-present a variadic as though it took one argument.
-
-A second, cheaper signal from the same line: a page whose signature is `Foo()` with empty parens has
-no mandatory parameters whatever its "Required Args" section claims. `StartPath` contradicts itself
-in exactly that way. Both rules deserve a corpus measurement, since either could reach many more
-functions than the handful found by hand.
-
-### Recovery after a missing semicolon no longer skips — audit the other sync sites
-
-`ParseExpressionStatement` used to call `RecoverToStatement()` after reporting a missing `;`, which
-threw away the statement that followed — a whole `assert( isdefined( endnode ) );` line vanished from
-the tree in CoD4's `stairs_down.gsc`, taking its references and its outline entry with it. It no
-longer does: panic-mode recovery is for a failure whose extent is unknown, and this one's is known
-exactly, so parsing simply continues. The other `RecoverToStatement` callers were not audited for the
-same over-reach and may deserve the same treatment.
-
 ### `5014 BuiltinFunctionNotFound` cannot tell a typo from a missing builtin
 
 An unqualified call that nothing explains is reported as `5014`, and the rule cannot say which of
@@ -122,22 +93,6 @@ you end up with red squiggles on working code.
 
 `CorpusDiagnosticSweepTests.NoNamespaceIsReportedUnimported` asserts the zero, so a regression
 shows up before the promotion does.
-
-### One finding left from the corpus diagnostic sweep
-
-`CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since
-those shipped, anything it reports is either a real defect in Treyarch's code or a false positive in
-ours. One group is still unexplained.
-
-**`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 ERRORS in 5 files.** The highest severity
-anything reports on shipped code: `error` (3x), `debug_spherical_cone`, `Print3d`,
-`printHashIDs`. Worth resolving either way — if genuine, the message is right and stock code has
-a latent bug; if not, an Error-severity false positive is the worst kind. Suspect the callers are
-themselves only reachable from dev code, which the lint does not model.
-
-The `UnusedUsing` hints (2,187 at last sweep) were checked and are real: a text scan for the
-imported file's namespace, with comments stripped, finds an actual `ns::` use in **zero** of them.
-Stock scripts simply carry a lot of stale imports. It is a Hint, so they grey out rather than nag.
 
 ### Cross-file lints for files that are not open
 
@@ -384,6 +339,36 @@ mod-project CI. Cheap to build because the layering already isolates OmniSharp i
 ---
 
 ## Decided — not doing
+
+### Corpus diagnostic sweep — nothing outstanding
+
+`CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since
+those shipped, anything it reports is either a real defect in Treyarch's code or a false positive in
+ours. Both groups it still reports have now been chased to the end, and neither is ours.
+
+**`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 Errors, all GENUINE.** Checked site by site
+against the BO3 corpus; the standing suspicion that the callers were themselves dev-only is wrong,
+and no change to `DevBlockCallLint` is warranted:
+
+- `util::error` (×3, `_globallogic_audio.gsc:225` and `:496`, `_zm_weapons.csc:134`) — declared
+  inside a `/#` at `scripts\zm\_util.gsc:15`, and every call site is an ordinary `else if` branch.
+  There is no non-dev `error` in namespace `util` for GSC to fall back to; the one in
+  `util_shared.csc` is client-side only.
+- `debug_spherical_cone` (`_microwave_turret.gsc:467`) — dev-only in `util_shared`, called from
+  release code in another file.
+- `printHashIDs` (`_zm.gsc:419`) — declared inside a `/#` at `_zm.gsc:7136`. Worth knowing that a
+  naive delimiter count says otherwise: the only `/#` before the call is on line 47, inside
+  `//#using scripts\zm\_zm_hero_weapon;`, where the comment slashes abut the directive's hash. The
+  lexer is right and the eyeball is wrong.
+- `Print3d` (`vehicle_shared.gsc:3929`) — the interesting one. `show_node_debug_info` and
+  `print_debug_info` are plainly MEANT to be dev-guarded: there is a closing `#/` on line 3932. But
+  no `/#` opens it — the nearest one, at 3287, is closed at 3292 — so the guard never begins and the
+  functions really are release code calling a dev-only builtin. A stray delimiter in the stock
+  scripts, surfaced by the lint doing its job.
+
+**`UnusedUsing` (2,187 at last sweep)** — also real: a text scan for the imported file's namespace,
+with comments stripped, finds an actual `ns::` use in **zero** of them. Stock scripts simply carry a
+lot of stale imports. It is a Hint, so they grey out rather than nag.
 
 ### Corpus grammar gaps (1 of the 3 found)
 

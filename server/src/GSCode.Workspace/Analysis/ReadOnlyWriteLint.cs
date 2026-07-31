@@ -82,7 +82,7 @@ public static class ReadOnlyWriteLint
     /// carrying any read-only flag, and weapon is excluded here — so this cannot currently fire.
     /// That is the intended state, not an oversight. The rule is kept because it is correct: it
     /// costs nothing, and flags that can be sourced for an entity kind will light it up with no
-    /// code change. See FOLLOWUPS.md.
+    /// code change.
     /// </summary>
     private static void InspectFieldWrite(
         FieldWrite write,

@@ -11,31 +11,16 @@ worklist; when its last entry goes, so does it.
 
 ---
 
-## Final corpus sweep — triage
-
-Run across all five games after the bug-fix pass. **No crashes, every formatter gate clean, every
-parse budget met.** What follows is everything the sweep still reports, rated by severity and by
-ease of fix, easiest first.
-
-| What | Where | Severity | Ease | Notes |
-|---|---|---|:---:|---|
-| `error`, `add_object`, `warning` reported as unknown builtins | BO3 `scene_shared.csc/.gsc` | Low | **Easy** | Almost certainly real CSC builtins missing from `t7_api_csc.json`. Confirm against the site's library before adding |
-| 7 script misses (`hide_for_target`, `triggerweakpointdamage`, …) | BO3 `_quadtank.gsc` and 3 others | Low | Medium | Calls into files the mod tools do not ship. Same class as `scripts\zm\_bb` below — our diagnostic is correct |
-| `gib.gsc(58)` / `gib.csc(35)` parse failure | BO3 | Low | Medium | Object-like macro invoked as `GET_GIB_BUNDLES()`. Fix is letting `ParsePostfixChain` accept `(`. Deliberately left — the game has shipped |
-| 6 × `5006 DevOnlyFunctionCalledFromRelease` | BO3, 5 files | **High** | Hard | Unchanged and still the only Error on shipped code. See its own section below |
-| WaW 8 / MW2 7 / CoD4 2 / BO1 2 parse failures | all four | None | — | Every one inspected: genuinely malformed files. Listed in `GAME_PROFILES.md` |
-
-CoD4's `animscripts\traverse\stairs_down.gsc` and `stairs_up.gsc` now report MORE than they used to,
-and correctly: both genuinely omit a semicolon, and one of them was hidden entirely because
-`ParseCallChain` looped and absorbed the following statement as a method call on the previous call's
-result. Reporting them is the fix working, not a regression.
-
-Regenerating the API rewrites fifteen files and invalidates every workspace cache through
-`ServerBuildIdentity`, so it is done deliberately rather than casually. The CoD4/WaW/BO1 libraries
-were regenerated once, to carry the curated signature overrides; the remaining BO3 builtin
-candidates above are a handful of names and are still better added by hand than by a run.
-
 ## Backlog
+
+### Three probable CSC builtins are missing from the BO3 library
+
+The corpus sweep reports `error`, `add_object` and `warning` as unknown builtins in BO3's
+`scene_shared.csc`/`.gsc`. Almost certainly real client-script builtins absent from
+`t7_api_csc.json`; confirm against the reference library before adding.
+
+Add them by HAND rather than regenerating: a regeneration rewrites fifteen files and invalidates
+every workspace cache through `ServerBuildIdentity`, which is not worth it for three names.
 
 ### `CompletionItemLabelDetails` — the official home for the inline parameter list
 
@@ -114,42 +99,15 @@ longer does: panic-mode recovery is for a failure whose extent is unknown, and t
 exactly, so parsing simply continues. The other `RecoverToStatement` callers were not audited for the
 same over-reach and may deserve the same treatment.
 
-### Function-not-found: BUILT, and what remains of it
+### `5014 BuiltinFunctionNotFound` cannot tell a typo from a missing builtin
 
-Reported as two codes, since an unresolved call has two possible explanations and only one of
-them is ever the user's mistake:
+An unqualified call that nothing explains is reported as `5014`, and the rule cannot say which of
+the two it is: a misspelling, or a real engine function our library lacks. Frequency is the only
+discriminator, and only `BuiltinHarvestTests` applies it.
 
-- **`5013 ScriptFunctionNotFound`** — the call named a script location explicitly (`ns::foo()`
-  for a namespace the file does not declare, or a path-qualified `maps\mp\_util::foo()`). A
-  builtin cannot be written that way.
-- **`5014 BuiltinFunctionNotFound`** — the call was unqualified, so either domain could have
-  explained it and neither does.
-
-v1 had one code (`FunctionDoesNotExist = 3035`) because its lookup fell back from script
-functions to the API inside a single call and returned one verdict. Splitting them is what makes
-`5014` usable as a DATA SOURCE: swept over a corpus it is the candidate list for builtins a
-library is missing (`BuiltinHarvestTests`).
-
-Both are Errors — an unresolved call fails to LINK, so the script never loads. That is only
-defensible because the lint refuses to guess. It reports nothing unless it can see everything
-that could have explained the call, and each of those conditions was added because it fired
-wrongly without it:
-
-- the builtin half needs a library known complete (`HasCompleteBuiltinLibrary`), which is a
-  different claim from `Verified`;
-- a function declared in the file being edited counts from the parse in hand, not the store,
-  which lags the buffer;
-- private functions count as existing — that is `5003`'s story;
-- class methods reachable unqualified from the file's own classes are excluded;
-- a null-namespace call in a dialect with classes is skipped, since `sys::foo()` and a method
-  call are keyed alike;
-- a path call whose TARGET FILE does not exist reports the missing file once instead of every
-  function called from it.
-
-**What is left.** The unqualified case cannot separate a typo from a builtin we lack; frequency
-is the only discriminator, and only the harvest applies it. If `5014` proves noisy on real mod
-code, the answer is a better library rather than a weaker rule — see the harvest reports under
-`tests/GSCode.Server.Tests/harvest/`.
+If `5014` proves noisy on real mod code, the answer is a better library rather than a weaker rule
+— see the harvest reports under `tests/GSCode.Server.Tests/harvest/`. (The lint's own reasoning,
+and why it is an Error, lives in comments on `FunctionResolutionLint`.)
 
 ### `gscode-5000 NamespaceNotImported` should be an Error, not a Warning
 
@@ -165,19 +123,6 @@ you end up with red squiggles on working code.
 `CorpusDiagnosticSweepTests.NoNamespaceIsReportedUnimported` asserts the zero, so a regression
 shows up before the promotion does.
 
-### The stock scripts import a file the tools do not ship
-
-`gscode-5009 UsingNotFound` reports 15 real cases across the shipped scripts, and 10 of them are
-the same one: `#using scripts\zm\_bb;`, where `_bb.gsc` exists nowhere in the mod tools.
-
-Nothing to fix on our side — the diagnostic is correct and those files really would not link as
-written. Recorded because it looks alarming and is not our bug. It also explains a smaller
-mystery: `NamespaceUsageLint` and `UnusedUsingLint` abandon their pass on an unresolvable import,
-so those 10 zm files had namespace checking quietly disabled with nothing saying why.
-
-Users are not shown this by default: `gscode.diagnostics.scope` is `workspace`, which excludes the
-stock scripts. It fires on their own code, where it is actionable.
-
 ### One finding left from the corpus diagnostic sweep
 
 `CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since
@@ -190,9 +135,9 @@ anything reports on shipped code: `error` (3x), `debug_spherical_cone`, `Print3d
 a latent bug; if not, an Error-severity false positive is the worst kind. Suspect the callers are
 themselves only reachable from dev code, which the lint does not model.
 
-The remaining 2,171 `UnusedUsing` hints were checked and are real: a text scan for the imported
-file's namespace, with comments stripped, finds an actual `ns::` use in **zero** of them. Stock
-scripts simply carry a lot of stale imports. It is a Hint, so they grey out rather than nag.
+The `UnusedUsing` hints (2,187 at last sweep) were checked and are real: a text scan for the
+imported file's namespace, with comments stripped, finds an actual `ns::` use in **zero** of them.
+Stock scripts simply carry a lot of stale imports. It is a Hint, so they grey out rather than nag.
 
 ### Cross-file lints for files that are not open
 
@@ -245,22 +190,6 @@ That is a subsystem, not a bolt-on, so it stays here until it is worth one. What
 an on-disk change now republishes closed files' stored diagnostics (`WatchedFilesHandler` calls
 `WorkspaceDiagnosticsPublisher.Refresh()`), so what closed files do report is at least no longer
 stale after a branch switch.
-
-### Completed-call punctuation is now a setting
-
-`gscode.completion.callPunctuation` (`off` | `parens` | `parensAndSemicolon`, default the last)
-shipped. What is worth knowing if it ever misbehaves:
-
-- The semicolon is added only in STATEMENT position, decided by scanning back to the nearest
-  `;`/`{`/`}`/`:` and accepting only the tokens that may precede a call there — identifiers, `.`,
-  `::`, `thread`. A whitelist, because the failure mode is a semicolon in the middle of an
-  expression.
-- `editor.autoClosingOvertype: "always"` is set for the GSC languages in `configurationDefaults`,
-  so typing `)` over the inserted one moves past it. The default `"auto"` only tracks closers the
-  editor itself inserted, which never covers one from a completion snippet.
-- Typing `;` where one already sits is undone by `DocumentOnTypeFormattingHandler`, which was
-  already registered on `;`. It guards `for ( ;; )` structurally, by walking back over balanced
-  parentheses to see whether the enclosing group belongs to a `for`.
 
 ---
 

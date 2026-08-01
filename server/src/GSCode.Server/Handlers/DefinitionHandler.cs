@@ -67,7 +67,8 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         }
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
-            [.. DefinitionSources(target, hit.Key).Where(static source => source.Entry.Kind == ReferenceKind.Definition)];
+            [.. DefinitionSources(target, hit.Key, hit.ReferenceKind)
+                .Where(static source => source.Entry.Kind == ReferenceKind.Definition)];
 
         sources = ScopeToIncludes(target, hit, sources);
 
@@ -108,9 +109,10 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     /// macro keys (a macro declared in a header is recorded there rather than in either language
     /// store, and without it go-to-definition on an inserted macro finds nothing at all).
     /// </summary>
-    private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(NavigationTarget target, SymbolKey key)
+    private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind)
     {
-        return _support.FindAllReferences(target, key);
+        return _support.FindAllReferences(target, key, referenceKind);
     }
 
     /// <summary>

@@ -46,7 +46,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         // Anchor the item at the function's definition.
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, hit.Key) )
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, hit.Key, hit.ReferenceKind) )
         {
             if ( entry.Kind == ReferenceKind.Definition )
             {

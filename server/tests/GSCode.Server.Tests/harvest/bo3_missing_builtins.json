@@ -1,67 +1,6 @@
 {
   "game": "bo3",
   "scriptsSwept": 980,
-  "distinct": 3,
-  "functions": [
-    {
-      "name": "error",
-      "kind": "builtin",
-      "calls": 19,
-      "fileCount": 2,
-      "observedArgCounts": [
-        2
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Csc",
-        "Gsc"
-      ],
-      "sites": [
-        "scripts\\shared\\scene_shared.csc(150)",
-        "scripts\\shared\\scene_shared.csc(300)",
-        "scripts\\shared\\scene_shared.csc(365)",
-        "scripts\\shared\\scene_shared.csc(393)",
-        "scripts\\shared\\scene_shared.csc(402)"
-      ]
-    },
-    {
-      "name": "add_object",
-      "kind": "builtin",
-      "calls": 3,
-      "fileCount": 2,
-      "observedArgCounts": [
-        1
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Csc",
-        "Gsc"
-      ],
-      "sites": [
-        "scripts\\shared\\scene_shared.csc(614)",
-        "scripts\\shared\\scene_shared.csc(626)",
-        "scripts\\shared\\scene_shared.gsc(1926)"
-      ]
-    },
-    {
-      "name": "warning",
-      "kind": "builtin",
-      "calls": 2,
-      "fileCount": 1,
-      "observedArgCounts": [
-        2
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "scripts\\shared\\scene_shared.gsc(292)",
-        "scripts\\shared\\scene_shared.gsc(3020)"
-      ]
-    }
-  ]
+  "distinct": 0,
+  "functions": []
 }

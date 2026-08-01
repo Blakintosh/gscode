@@ -7,7 +7,14 @@ using GSCode.Core.Symbols;
 namespace GSCode.Workspace.Database;
 
 /// <summary>A resolved function with the record that declares it (for locations/paths).</summary>
-public sealed record ResolvedFunction(FunctionSymbol Function, ScriptRecord Record);
+public sealed record ResolvedFunction(FunctionSymbol Function, ScriptRecord Record)
+{
+    /// <summary>
+    /// The class declaring it, when this is a method. A non-positional init property so the many
+    /// existing <c>new ResolvedFunction(function, record)</c> sites keep compiling unchanged.
+    /// </summary>
+    public ClassSymbol? OwnerClass { get; init; }
+}
 
 /// <summary>A resolved class with its declaring record.</summary>
 public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record);
@@ -565,8 +572,15 @@ public static class DatabaseQueries
         Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // Only the handful of files that declare a class, not every record: this runs per keystroke
+        // behind statement-scope completion.
+        foreach ( string path in store.Classes.AllDeclaringPaths() )
         {
+            if ( !store.TryGet(path, out ScriptRecord record) )
+            {
+                continue;
+            }
+
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
             {
                 continue;
@@ -598,8 +612,15 @@ public static class DatabaseQueries
     {
         ImmutableArray<ResolvedClass>.Builder matches = ImmutableArray.CreateBuilder<ResolvedClass>();
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // Routed through the class graph rather than scanned: this runs once per parent link on
+        // every chain walk, and method resolution walks a chain per call site.
+        foreach ( string path in store.Classes.PathsDeclaring(keyName) )
         {
+            if ( !store.TryGet(path, out ScriptRecord record) )
+            {
+                continue;
+            }
+
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
             {
                 continue;
@@ -621,7 +642,52 @@ public static class DatabaseQueries
             }
         }
 
-        return matches.ToImmutable();
+        return ApplyClassShadowing(matches.ToImmutable());
+    }
+
+    /// <summary>
+    /// Overlay shadowing for classes, the counterpart of <see cref="ApplyShadowing"/> for functions.
+    ///
+    /// Without it a mod that overrides a raw script contributes a SECOND class of the same name, and
+    /// every consumer that takes the first match — the parent-chain walks in
+    /// <see cref="Analysis.ClassCycleLint"/> and in method resolution — picks between them
+    /// arbitrarily. Which copy wins then depends on record enumeration order, so the same edit can
+    /// resolve to the raw base class one moment and the overridden one the next.
+    /// </summary>
+    private static ImmutableArray<ResolvedClass> ApplyClassShadowing(ImmutableArray<ResolvedClass> matches)
+    {
+        if ( matches.Length < 2 )
+        {
+            return matches;
+        }
+
+        HashSet<string> overlayIdentities = new(StringComparer.Ordinal);
+        foreach ( ResolvedClass match in matches )
+        {
+            if ( match.Record.ContextId != "raw" && match.Record.RelativePath.Length > 0 )
+            {
+                overlayIdentities.Add(match.Record.RelativePath + "|" + match.Class.KeyName);
+            }
+        }
+
+        if ( overlayIdentities.Count == 0 )
+        {
+            return matches;
+        }
+
+        ImmutableArray<ResolvedClass>.Builder kept = ImmutableArray.CreateBuilder<ResolvedClass>();
+        foreach ( ResolvedClass match in matches )
+        {
+            bool shadowedOut = match.Record.ContextId == "raw"
+                && overlayIdentities.Contains(match.Record.RelativePath + "|" + match.Class.KeyName);
+
+            if ( !shadowedOut )
+            {
+                kept.Add(match);
+            }
+        }
+
+        return kept.ToImmutable();
     }
 
     /// <summary>All visible files (with exact ranges) referencing a key.</summary>

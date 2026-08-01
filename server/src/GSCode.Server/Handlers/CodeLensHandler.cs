@@ -66,6 +66,21 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             // every class lens read "0 references".
             SymbolKey key = new(null, classSymbol.KeyName, SymbolKind.Class);
             lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target));
+
+            // METHODS. The loop above walks Extraction.Functions, which holds top-level functions
+            // only — a method lives on its class — so a class body carried no lenses at all and the
+            // class's own was the only one in it, which reads as lenses landing on the wrong lines.
+            //
+            // Keyed with the declaring class and no namespace, matching what extraction writes for a
+            // declaration, so the count runs the same query the peek list does.
+            foreach ( FunctionSymbol method in classSymbol.Methods )
+            {
+                SymbolKey methodKey = new(null, method.KeyName, SymbolKind.Function, classSymbol.KeyName);
+                lenses.Add(MakeLens(request.TextDocument.Uri, method.NameRange, methodKey, target));
+            }
+
+            // Constructors and destructors deliberately get none: neither is callable by name, so a
+            // reference count on one could only ever read zero.
         }
 
         // Macros defined in THIS file. Headers are mostly macros, so without this a .gsh carried

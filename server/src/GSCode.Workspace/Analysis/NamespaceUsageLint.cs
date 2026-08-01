@@ -38,7 +38,8 @@ public static class NamespaceUsageLint
         LanguageStore store,
         ScriptLanguage language,
         PathResolver resolver,
-        string askingPath)
+        string askingPath,
+        string askingContextId = "raw")
     {
         // Namespaces callable without an import: the ones the file itself declares into.
         //
@@ -105,7 +106,14 @@ public static class NamespaceUsageLint
             // since both are written `name::name`, so the distinction has to be drawn here where
             // the database knows what a class is. Every one of the 23 times this lint fired on
             // the stock scripts was a class — cScene, cRailTurret, cSecurityMover.
-            if ( classNames.Contains(namespaceName) )
+            //
+            // Checked against the class's actual METHOD SET rather than merely its name. The name
+            // test was right about every stock case and wrong in principle: `cScene::no_such_thing()`
+            // names a real class and no real method, and reporting nothing there gave the mistake
+            // nowhere to surface. The chain walk is what makes the strict form safe — an inherited
+            // method is declared by an ancestor, not by the class the call names.
+            if ( classNames.Contains(namespaceName)
+                && MethodResolution.FindDeclaringClass(store, askingContextId, namespaceName, entry.Key.Name) is not null )
             {
                 continue;
             }
@@ -127,16 +135,8 @@ public static class NamespaceUsageLint
     /// </summary>
     private static HashSet<string> ClassNames(LanguageStore store)
     {
-        HashSet<string> names = new(StringComparer.Ordinal);
-
-        foreach ( ScriptRecord record in store.AllRecords )
-        {
-            foreach ( ClassSymbol classSymbol in record.Classes )
-            {
-                names.Add(classSymbol.KeyName);
-            }
-        }
-
-        return names;
+        // Straight off the class graph. This used to scan every record in the store, and this lint
+        // runs per file, so a workspace-wide pass paid it once per file — a store scan squared.
+        return [.. store.Classes.AllClassNames()];
     }
 }

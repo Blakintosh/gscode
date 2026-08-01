@@ -144,6 +144,22 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     {
         if ( call.Callee is IdentifierNode identifier )
         {
+            // Inside a class body a bare name is a method first — so this has to be asked before the
+            // namespace and builtin lookups below, or an inherited method's hints come out as some
+            // unrelated engine function's parameter names.
+            string? enclosingClass = EnclosingClassAt(target, call.Range.Start);
+            if ( enclosingClass is not null )
+            {
+                ImmutableArray<string> method = MethodParameterNames(
+                    target, new SymbolKey(null, identifier.Token.Text.ToLowerInvariant(), GSCode.Core.Symbols.SymbolKind.Function, enclosingClass),
+                    ReferenceKind.Call);
+
+                if ( !method.IsDefault )
+                {
+                    return method;
+                }
+            }
+
             // A script function in one of the file's namespaces, else a builtin. The declared set,
             // not the spans — a phantom span cost a full store scan here on every hint.
             foreach ( string declared in target.Result.Extraction.DeclaredNamespaces )
@@ -175,9 +191,60 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             {
                 return [.. found[0].Function.Parameters.Select(static p => p.Name)];
             }
+
+            // The qualifier may name a CLASS rather than a namespace — Class::method(). Tried second
+            // so a name that is both, which BO3 ships, keeps meaning the namespace.
+            return MethodParameterNames(
+                target,
+                new SymbolKey(
+                    qualified.NamespaceToken.Text.ToLowerInvariant(),
+                    qualified.NameToken.Text.ToLowerInvariant(),
+                    GSCode.Core.Symbols.SymbolKind.Function),
+                ReferenceKind.Call);
         }
 
         return default;
+    }
+
+    /// <summary>
+    /// Parameter names of the method a key resolves to, or default when it resolves to none. Kept
+    /// separate from the function path because a method is reached through the class chain rather
+    /// than by namespace, and <see cref="DatabaseQueries.LookupFunctions"/> cannot see one at all.
+    /// </summary>
+    private static ImmutableArray<string> MethodParameterNames(
+        NavigationTarget target, SymbolKey written, ReferenceKind referenceKind)
+    {
+        SymbolKey canonical = MethodResolution.Canonicalize(
+            target.Store, target.ContextId, written, referenceKind);
+
+        if ( canonical.OwnerClass is null )
+        {
+            return default;
+        }
+
+        ImmutableArray<ResolvedFunction> methods = MethodResolution.LookupMethods(
+            target.Store, target.ContextId, canonical.OwnerClass, canonical.Name);
+
+        if ( methods.Length == 0 )
+        {
+            return default;
+        }
+
+        return [.. methods[0].Function.Parameters.Select(static p => p.Name)];
+    }
+
+    /// <summary>The class whose body contains this position, over the file's own handful of classes.</summary>
+    private static string? EnclosingClassAt(NavigationTarget target, GSCode.Core.Text.Position position)
+    {
+        foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
+        {
+            if ( classSymbol.FullRange.Contains(position) )
+            {
+                return classSymbol.KeyName;
+            }
+        }
+
+        return null;
     }
 
     private static IEnumerable<CallNode> CollectCalls(AstNode root)

@@ -41,6 +41,22 @@ public static class PrivateAccessLint
                 continue;
             }
 
+            // CLASS METHODS ARE DELIBERATELY EXCLUDED, and this is the line that excludes them —
+            // LookupFunctions below cannot see a method, so routing it through MethodResolution the
+            // way the other rules now do would silently switch this rule on for them.
+            //
+            // 11 methods in the stock BO3 scripts are declared `function private` (note the word
+            // order; `private function` matches none). What `private` SCOPES to on a method is
+            // unevidenced: file, namespace and declaring-class are all plausible, and the three
+            // disagree about a subclass in another file calling an inherited private method. This
+            // rule is an Error, so guessing wrong puts a red squiggle on code that ships and works,
+            // while guessing not to report costs only a missed warning. Lift this once the scoping
+            // is established by measurement, not before.
+            if ( entry.Key.OwnerClass is not null )
+            {
+                continue;
+            }
+
             if ( builtins.Find(entry.Key.Name) is not null )
             {
                 continue;

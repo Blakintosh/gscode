@@ -30,10 +30,19 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 
 - `enum SymbolKind` — what a key identifies: Function/Class/Macro/Field plus the four
   literal kinds (StringLiteral/HashString/LocalizedString/AnimReference).
-- `readonly record struct SymbolKey(Namespace, Name, Kind)` — the cross-file lookup key.
+- `readonly record struct SymbolKey(Namespace, Name, Kind, OwnerClass)` — the cross-file lookup key.
   Namespace/Name are lowercase-canonical interned strings (macros and string literals keep
   exact case); Namespace is null for builtins, macros, fields, and literals. Language is
   NOT in the key — GSC/CSC isolation is structural (separate stores).
+- `OwnerClass` is the class that scopes the name, or null. A class METHOD is a `Function` with a
+  non-null OwnerClass and a null Namespace — the class scopes it instead. Deliberately not its own
+  `SymbolKind`: every handler gating on `Kind == Function` should see a method as a function, and a
+  new kind would have turned each of those gates into a silent omission.
+- OwnerClass is set only where no qualifier was written — a method declaration, a bare call inside a
+  class body, `[[self]]->m()`. A written `A::b()` keys with OwnerClass null even inside a class,
+  because the qualifier is the identity, and because a dialect may declare a namespace and a class
+  with the same name and mean the namespace. The enclosing class of such a call is recovered
+  positionally from `ClassSymbol.FullRange` — it describes the call site, not the callee.
 
 ## Symbols/SymbolModels.cs
 

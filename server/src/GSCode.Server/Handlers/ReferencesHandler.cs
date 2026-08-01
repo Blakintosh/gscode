@@ -52,7 +52,7 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         // declaration this document actually reaches — see NavigationSupport.DeclaringFile — and
         // does it inside the SHARED query, so this list and the CodeLens count stay in step.
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found =
-            _support.FindAllReferences(target, hit.Key);
+            _support.FindAllReferences(target, hit.Key, hit.ReferenceKind);
 
         foreach ( (ScriptRecord record, ReferenceEntry entry) in found )
         {

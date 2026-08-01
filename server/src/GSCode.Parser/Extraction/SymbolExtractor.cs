@@ -34,6 +34,17 @@ public sealed class SymbolExtractor
     // Namespace state while walking (default = the file name stem).
     private string _currentNamespace;
 
+    // The class whose body the walk is inside, lowercase-interned, or null at top level.
+    //
+    // This is the ONLY thing that tells a bare call inside a method from one at file scope, and it
+    // is deliberately a single field rather than a stack: T7 has no nested classes, and a dev block
+    // around a class re-enters WalkDeclarations without nesting one class inside another.
+    //
+    // The AST is not asked for this on purpose. A FunctionNode keeps no back-pointer to its class,
+    // so the containment relationship exists only as tree structure — supplied here during the
+    // walk, and afterwards by ClassSymbol.FullRange for anything that needs it positionally.
+    private string? _currentClass;
+
     // Ranges in THIS file where a macro was invoked. An expansion's AST nodes report the
     // invocation's range, so containment identifies macro-supplied syntax.
     private readonly List<TextRange> _macroInvocations = [];
@@ -185,9 +196,19 @@ public sealed class SymbolExtractor
         return _profile.ResolvesByNamespace ? namespaceName : null;
     }
 
-    private FunctionSymbol ExtractFunction(FunctionNode function, string namespaceName)
+    /// <summary>
+    /// Extracts one function or class method. <paramref name="ownerClass"/> is the declaring class
+    /// for a method and null for a top-level function; a method takes NO namespace in its key,
+    /// because the class scopes it and there is no <c>ns::Class</c> form to reach one through.
+    /// </summary>
+    private FunctionSymbol ExtractFunction(FunctionNode function, string namespaceName, string? ownerClass = null)
     {
-        SymbolKey key = new(FunctionKeyNamespace(namespaceName), _names.InternLower(function.NameToken.Text), SymbolKind.Function);
+        SymbolKey key = new(
+            ownerClass is null ? FunctionKeyNamespace(namespaceName) : null,
+            _names.InternLower(function.NameToken.Text),
+            SymbolKind.Function,
+            ownerClass);
+
         AddReference(key, function.NameToken, ReferenceKind.Definition);
 
         ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
@@ -212,6 +233,7 @@ public sealed class SymbolExtractor
             Name = function.NameToken.Text,
             KeyName = _names.InternLower(function.NameToken.Text),
             Namespace = namespaceName,
+            OwnerClassKeyName = ownerClass,
             IsPrivate = function.IsPrivate,
             IsAutoexec = function.IsAutoexec,
             IsDevOnly = _devBlockDepth > 0,
@@ -233,8 +255,15 @@ public sealed class SymbolExtractor
         // keyed under none — see the parent below, and NewNode in WalkExpression — meant the two
         // could never meet, so go-to-definition on `new Throttle()` found nothing and the CodeLens
         // over `class Throttle` counted no references.
-        SymbolKey classKey = new(null, _names.InternLower(classNode.NameToken.Text), SymbolKind.Class);
+        string classKeyName = _names.InternLower(classNode.NameToken.Text);
+        SymbolKey classKey = new(null, classKeyName, SymbolKind.Class);
         AddReference(classKey, classNode.NameToken, ReferenceKind.Definition);
+
+        // Everything walked from here until the class closes is scoped by it: the methods, their
+        // bodies, and the constructor and destructor bodies. Restored rather than nulled at the end
+        // so this stays correct if classes ever nest.
+        string? enclosingClass = _currentClass;
+        _currentClass = classKeyName;
 
         if ( classNode.ParentToken is not null )
         {
@@ -244,8 +273,8 @@ public sealed class SymbolExtractor
 
         ImmutableArray<MemberSymbol>.Builder members = ImmutableArray.CreateBuilder<MemberSymbol>();
         ImmutableArray<FunctionSymbol>.Builder methods = ImmutableArray.CreateBuilder<FunctionSymbol>();
-        bool hasConstructor = false;
-        bool hasDestructor = false;
+        FunctionSymbol? constructorSymbol = null;
+        FunctionSymbol? destructorSymbol = null;
 
         foreach ( AstNode member in classNode.Members )
         {
@@ -256,29 +285,28 @@ public sealed class SymbolExtractor
                     continue;
                 case FunctionNode method:
                     // Class methods carry no namespace; the class scopes them.
-                    methods.Add(ExtractFunction(method, ""));
+                    methods.Add(ExtractFunction(method, "", classKeyName));
                     continue;
                 case ConstructorNode constructor:
                 {
-                    hasConstructor = true;
                     if ( constructor.Parameters.Length > 0 )
                     {
                         AddDiagnostic(GscDiagnosticCode.ConstructorHasParameters, constructor.KeywordToken.RootRange);
                     }
 
-                    ImmutableArray<AssignmentSymbol>.Builder constructorAssignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
-                    WalkStatement(constructor.Body, constructorAssignments);
+                    constructorSymbol = ExtractSpecialMember(
+                        constructor.KeywordToken, constructor.Range, constructor.Body, classKeyName);
                     continue;
                 }
                 case DestructorNode destructor:
                 {
-                    hasDestructor = true;
                     if ( destructor.Parameters.Length > 0 )
                     {
                         AddDiagnostic(GscDiagnosticCode.DestructorHasParameters, destructor.KeywordToken.RootRange);
                     }
 
-                    WalkStatement(destructor.Body, ImmutableArray.CreateBuilder<AssignmentSymbol>());
+                    destructorSymbol = ExtractSpecialMember(
+                        destructor.KeywordToken, destructor.Range, destructor.Body, classKeyName);
                     continue;
                 }
                 default:
@@ -286,20 +314,52 @@ public sealed class SymbolExtractor
             }
         }
 
+        _currentClass = enclosingClass;
+
         _classes.Add(new ClassSymbol
         {
             Name = classNode.NameToken.Text,
-            KeyName = _names.InternLower(classNode.NameToken.Text),
+            KeyName = classKeyName,
             Namespace = _currentNamespace,
             ParentKeyName = classNode.ParentToken is null ? null : _names.InternLower(classNode.ParentToken.Value.Text),
             Members = members.ToImmutable(),
             Methods = methods.ToImmutable(),
-            HasConstructor = hasConstructor,
-            HasDestructor = hasDestructor,
+            HasConstructor = constructorSymbol is not null,
+            HasDestructor = destructorSymbol is not null,
+            Constructor = constructorSymbol,
+            Destructor = destructorSymbol,
             NameRange = classNode.NameToken.Range,
             FullRange = classNode.Range,
             SourceFile = classNode.NameToken.Provenance.SourceFile ?? "",
         });
+    }
+
+    /// <summary>
+    /// A constructor or destructor as a <see cref="FunctionSymbol"/>. Its body is walked exactly like
+    /// a method's, so the assignments inside it are kept instead of being built and dropped — which
+    /// is what left go-to-definition on a constructor's own locals with nothing to resolve against.
+    ///
+    /// No <see cref="ReferenceKind.Definition"/> reference is emitted: neither is callable by name,
+    /// so a key for one could only ever match itself.
+    /// </summary>
+    private FunctionSymbol ExtractSpecialMember(
+        PToken keywordToken, TextRange fullRange, AstNode body, string ownerClass)
+    {
+        ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
+        WalkStatement(body, assignments);
+
+        return new FunctionSymbol
+        {
+            Name = keywordToken.Text,
+            KeyName = _names.InternLower(keywordToken.Text),
+            Namespace = "",
+            OwnerClassKeyName = ownerClass,
+            IsDevOnly = _devBlockDepth > 0,
+            NameRange = keywordToken.Range,
+            FullRange = fullRange,
+            SourceFile = keywordToken.Provenance.SourceFile ?? "",
+            Assignments = assignments.ToImmutable(),
+        };
     }
 
     /// <summary>
@@ -573,8 +633,17 @@ public sealed class SymbolExtractor
             case ArrowCallNode arrow:
             {
                 WalkExpression(arrow.Object.Pointer, assignments);
-                SymbolKey methodKey = new(null, _names.InternLower(arrow.MethodToken.Text), SymbolKind.Function);
-                AddReference(methodKey, arrow.MethodToken, ReferenceKind.Call);
+
+                // [[self]]->m() inside a class is a call on THIS class, and that is the only
+                // receiver whose class is knowable without typing the locals. Everything else —
+                // [[o_scene]]->play(), 155 of the 159 arrow calls in the stock scripts — keys with
+                // no owner and is resolved by method name at query time.
+                string? receiverClass = IsSelfReceiver(arrow.Object.Pointer) ? _currentClass : null;
+
+                SymbolKey methodKey = new(
+                    null, _names.InternLower(arrow.MethodToken.Text), SymbolKind.Function, receiverClass);
+
+                AddReference(methodKey, arrow.MethodToken, ReferenceKind.MethodCall);
 
                 foreach ( ExprNode argument in arrow.Arguments )
                 {
@@ -663,6 +732,19 @@ public sealed class SymbolExtractor
         {
             case IdentifierNode identifier when identifier.Token.Kind == TokenKind.Identifier:
             {
+                // Unqualified INSIDE A CLASS: keyed to the class, not the file's namespace. Across
+                // the stock BO3 scripts all 525 such calls name a method of the class or one of its
+                // ancestors and none names a namespace function, so the class is the right primary
+                // target; the namespace remains available as a resolution-time fallback.
+                if ( _currentClass is not null )
+                {
+                    SymbolKey methodKey = new(
+                        null, _names.InternLower(identifier.Token.Text), SymbolKind.Function, _currentClass);
+
+                    AddReference(methodKey, identifier.Token, kind);
+                    return;
+                }
+
                 // Unqualified: keyed under the current namespace state (its primary
                 // resolution target; builtin fallback is a query-time concern). Under a merge
                 // dialect there is no namespace, so the key drops it and the call resolves to the
@@ -702,6 +784,16 @@ public sealed class SymbolExtractor
             default:
                 return;
         }
+    }
+
+    /// <summary>
+    /// Whether an arrow call's receiver is the bare word <c>self</c>. Not a keyword in this dialect,
+    /// so it arrives as an ordinary identifier and is matched by text.
+    /// </summary>
+    private static bool IsSelfReceiver(ExprNode receiver)
+    {
+        return receiver is IdentifierNode identifier
+            && string.Equals(identifier.Token.Text, "self", StringComparison.OrdinalIgnoreCase);
     }
 
     private void RecordFieldReference(PToken nameToken)

@@ -51,10 +51,19 @@ public sealed class SignatureEngine
             ? tokens[site.Value.NamespaceIndex].GetText(result.Text).ToString().ToLowerInvariant()
             : null;
 
-        SignatureResult? scriptSignature = TryScriptFunction(result, contextId, namespaceName, calleeName, site.Value.ActiveParameter);
+        ArrowReceiver arrow = ClassifyArrow(tokens, result.Text, site.Value.CalleeIndex);
+
+        SignatureResult? scriptSignature = TryScriptFunction(
+            result, contextId, namespaceName, calleeName, site.Value.ActiveParameter, position, arrow);
         if ( scriptSignature is not null )
         {
             return scriptSignature;
+        }
+
+        // An arrow call cannot reach a builtin — the syntax dispatches on an object.
+        if ( arrow != ArrowReceiver.None )
+        {
+            return null;
         }
 
         // Namespace-less builtins (sys:: aliases them; a plain name reaches them too).
@@ -70,10 +79,49 @@ public sealed class SignatureEngine
         return null;
     }
 
-    private SignatureResult? TryScriptFunction(ParseResult result, string contextId, string? namespaceName, string calleeName, int activeParameter)
+    private SignatureResult? TryScriptFunction(
+        ParseResult result, string contextId, string? namespaceName, string calleeName, int activeParameter,
+        Position position, ArrowReceiver arrow)
     {
         LanguageStore store = _database.StoreFor(result.Language);
         string keyName = calleeName.ToLowerInvariant();
+
+        // A method first, where the call could be one. Signature help is token-driven rather than
+        // reference-driven, so the enclosing class comes from the caret's POSITION — which is also
+        // what makes it work on half-typed code, where the call has no reference entry yet.
+        //
+        // An ARROW call is the exception: `[[o_obj]]->play(` is not a call on the class the caret
+        // happens to sit in, so resolving it through the enclosing class would answer with whichever
+        // class the cursor is inside and show that one's parameter names. Only `[[self]]->` names
+        // the enclosing class; every other receiver is untyped and takes the by-name candidates.
+        string? enclosingClass = EnclosingClassAt(result, position);
+
+        if ( arrow != ArrowReceiver.None )
+        {
+            ImmutableArray<ClassMethod> arrowMethods = MethodsForArrow(
+                store, contextId, arrow == ArrowReceiver.Self ? enclosingClass : null, keyName,
+                result.Extraction.Classes);
+
+            if ( arrowMethods.Length > 0 )
+            {
+                return BuildSignature(arrowMethods[0].Method, arrowMethods[0].OwnerClass, activeParameter);
+            }
+        }
+        else
+        {
+            ImmutableArray<ResolvedFunction> methods = MethodsFor(store, contextId, enclosingClass, namespaceName, keyName);
+            if ( methods.Length > 0 )
+            {
+                return BuildSignature(methods[0].Function, methods[0].OwnerClass, activeParameter);
+            }
+        }
+
+        // An arrow call reaches a method or a field holding a function pointer, never a namespace
+        // function by name, so the by-namespace lookups below would only guess.
+        if ( arrow != ArrowReceiver.None )
+        {
+            return null;
+        }
 
         ImmutableArray<ResolvedFunction> functions = namespaceName is not null
             ? DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: DatabaseQueries.DeclaredNamespaces(result))
@@ -84,7 +132,150 @@ public sealed class SignatureEngine
             return null;
         }
 
-        FunctionSymbol function = functions[0].Function;
+        return BuildSignature(functions[0].Function, functions[0].OwnerClass, activeParameter);
+    }
+
+    /// <summary>Whether the call being helped is an arrow call, and whether its receiver is <c>self</c>.</summary>
+    private enum ArrowReceiver
+    {
+        /// <summary>Not an arrow call.</summary>
+        None,
+
+        /// <summary><c>[[self]]-&gt;m(</c> — the enclosing class.</summary>
+        Self,
+
+        /// <summary><c>[[anything else]]-&gt;m(</c> — a receiver whose class is not knowable here.</summary>
+        Unknown,
+    }
+
+    /// <summary>
+    /// Classifies the token immediately before the callee. <c>]]</c> lexes as TWO CloseBracket
+    /// tokens, so the walk back to the receiver skips however many are there.
+    /// </summary>
+    private static ArrowReceiver ClassifyArrow(ImmutableArray<Token> tokens, SourceText text, int calleeIndex)
+    {
+        int arrowIndex = PreviousSignificant(tokens, calleeIndex);
+        if ( arrowIndex < 0 || tokens[arrowIndex].Kind != TokenKind.Arrow )
+        {
+            return ArrowReceiver.None;
+        }
+
+        int receiver = PreviousSignificant(tokens, arrowIndex);
+        while ( receiver >= 0 && tokens[receiver].Kind == TokenKind.CloseBracket )
+        {
+            receiver = PreviousSignificant(tokens, receiver);
+        }
+
+        bool isSelf = receiver >= 0
+            && tokens[receiver].Kind == TokenKind.Identifier
+            && string.Equals(tokens[receiver].GetText(text).ToString(), "self", StringComparison.OrdinalIgnoreCase);
+
+        return isSelf ? ArrowReceiver.Self : ArrowReceiver.Unknown;
+    }
+
+    /// <summary>
+    /// The declarations an arrow call could reach: the enclosing class's chain for
+    /// <c>[[self]]-&gt;</c>, otherwise every class declaring the name.
+    /// </summary>
+    /// <param name="localClasses">
+    /// The classes of the parse in hand, which win over the store's copy. Signature help fires while
+    /// a class is being written, and the store holds only the last INDEXED version — so without
+    /// these, asking for help on a method of the class you are editing walks a chain starting at a
+    /// class the store has never seen and answers nothing.
+    /// </param>
+    private static ImmutableArray<ClassMethod> MethodsForArrow(
+        LanguageStore store,
+        string contextId,
+        string? receiverClass,
+        string keyName,
+        ImmutableArray<ClassSymbol> localClasses)
+    {
+        if ( receiverClass is not null )
+        {
+            return [.. MethodResolution.MethodsOf(store, contextId, receiverClass, localClasses)
+                .Where(method => string.Equals(method.Method.KeyName, keyName, StringComparison.Ordinal))];
+        }
+
+        // The receiver's class is unknown, so every class declaring the name is a candidate — the
+        // store's and this file's alike.
+        ImmutableArray<ClassMethod>.Builder candidates = ImmutableArray.CreateBuilder<ClassMethod>();
+        HashSet<string> seen = new(StringComparer.Ordinal);
+
+        foreach ( ClassSymbol local in localClasses )
+        {
+            foreach ( FunctionSymbol method in local.Methods )
+            {
+                if ( string.Equals(method.KeyName, keyName, StringComparison.Ordinal) && seen.Add(local.KeyName) )
+                {
+                    candidates.Add(new ClassMethod(method, local, null));
+                }
+            }
+        }
+
+        foreach ( string className in store.Classes.ClassesDeclaringMethod(keyName) )
+        {
+            if ( !seen.Add(className) )
+            {
+                continue;
+            }
+
+            foreach ( ClassMethod method in MethodResolution.MethodsOf(store, contextId, className, localClasses) )
+            {
+                if ( string.Equals(method.Method.KeyName, keyName, StringComparison.Ordinal) )
+                {
+                    candidates.Add(method);
+                    break;
+                }
+            }
+        }
+
+        return candidates.ToImmutable();
+    }
+
+    /// <summary>
+    /// The declarations a method-shaped call at this caret could reach: through the enclosing class's
+    /// chain when unqualified, or through the qualifier when written <c>Class::name(</c>.
+    /// </summary>
+    private static ImmutableArray<ResolvedFunction> MethodsFor(
+        LanguageStore store, string contextId, string? enclosingClass, string? namespaceName, string keyName)
+    {
+        if ( namespaceName is null && enclosingClass is null )
+        {
+            return [];
+        }
+
+        SymbolKey written = namespaceName is null
+            ? new SymbolKey(null, keyName, SymbolKind.Function, enclosingClass)
+            : new SymbolKey(namespaceName, keyName, SymbolKind.Function);
+
+        SymbolKey canonical = MethodResolution.Canonicalize(store, contextId, written, ReferenceKind.Call);
+        if ( canonical.OwnerClass is null )
+        {
+            return [];
+        }
+
+        return MethodResolution.LookupMethods(store, contextId, canonical.OwnerClass, canonical.Name);
+    }
+
+    /// <summary>
+    /// The class whose body contains this offset, by range containment over the file's own classes.
+    /// There are at most a handful per file, so this stays cheaper than any index would be.
+    /// </summary>
+    private static string? EnclosingClassAt(ParseResult result, Position position)
+    {
+        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
+        {
+            if ( classSymbol.FullRange.Contains(position) )
+            {
+                return classSymbol.KeyName;
+            }
+        }
+
+        return null;
+    }
+
+    private SignatureResult BuildSignature(FunctionSymbol function, ClassSymbol? ownerClass, int activeParameter)
+    {
         ImmutableArray<SignatureParameter>.Builder parameters = ImmutableArray.CreateBuilder<SignatureParameter>();
         foreach ( ParameterSymbol parameter in function.Parameters )
         {
@@ -97,7 +288,7 @@ public sealed class SignatureEngine
             parameters.Add(new SignatureParameter(label, ParameterDoc(function, parameter.Name)));
         }
 
-        string signatureLabel = MarkdownDocRenderer.RenderFunction(function);
+        string signatureLabel = MarkdownDocRenderer.RenderFunction(function, ownerClass);
         return new SignatureResult(
             BuildLabel(function.Name, parameters),
             parameters.ToImmutable(),

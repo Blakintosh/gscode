@@ -13,6 +13,19 @@ public sealed class LanguageStore
 {
     private readonly ConcurrentDictionary<string, ScriptRecord> _records = new(StringComparer.Ordinal);
     private readonly ReferenceIndex _referenceIndex = new();
+    private readonly ClassGraph _classGraph = new();
+
+    /// <summary>
+    /// Serialises WRITES so a record swap and the two index diffs that describe it land together.
+    /// Indexing runs <c>Parallel.ForEachAsync</c>, so without this the read-previous and the swap
+    /// below were separate steps: two upserts of the same file could each read the same previous
+    /// record and diff against it, leaving the indexes describing a version neither of them wrote.
+    ///
+    /// Reads do not take this — the record map is concurrent, and each index snapshots under its
+    /// own lock. That is also why the ordering is safe: this gate is only ever taken on the way IN
+    /// to an index, never from one.
+    /// </summary>
+    private readonly Lock _writeGate = new();
 
     /// <summary>Number of files currently held.</summary>
     public int Count
@@ -31,20 +44,28 @@ public sealed class LanguageStore
         return _records.TryGetValue(normalizedPath, out record!);
     }
 
-    /// <summary>Swaps in a new record and diffs its references into the index.</summary>
+    /// <summary>Swaps in a new record and diffs it into the reference index and the class graph.</summary>
     public void Upsert(ScriptRecord record)
     {
-        _records.TryGetValue(record.Path, out ScriptRecord? previous);
-        _records[record.Path] = record;
-        _referenceIndex.Apply(record.Path, previous?.References ?? [], record.References);
+        lock ( _writeGate )
+        {
+            _records.TryGetValue(record.Path, out ScriptRecord? previous);
+            _records[record.Path] = record;
+            _referenceIndex.Apply(record.Path, previous?.References ?? [], record.References);
+            _classGraph.Apply(record.Path, record.Classes);
+        }
     }
 
     /// <summary>Removes a file entirely (deleted from disk).</summary>
     public void Remove(string normalizedPath)
     {
-        if ( _records.TryRemove(normalizedPath, out ScriptRecord? previous) )
+        lock ( _writeGate )
         {
-            _referenceIndex.Apply(normalizedPath, previous.References, []);
+            if ( _records.TryRemove(normalizedPath, out ScriptRecord? previous) )
+            {
+                _referenceIndex.Apply(normalizedPath, previous.References, []);
+                _classGraph.Remove(normalizedPath);
+            }
         }
     }
 
@@ -52,5 +73,11 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesReferencing(SymbolKey key)
     {
         return _referenceIndex.FilesFor(key);
+    }
+
+    /// <summary>Class declarations and inheritance for this language world.</summary>
+    public ClassGraph Classes
+    {
+        get { return _classGraph; }
     }
 }

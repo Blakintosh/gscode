@@ -179,6 +179,18 @@ public sealed class CompletionEngine
             }
         }
 
+        // [[receiver]]-> — offer methods. The arrow is the one syntax that can ONLY be a class
+        // method call, so nothing else belongs in this list.
+        if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Arrow )
+        {
+            return ArrowMethodCompletions(
+                result,
+                contextId,
+                ArrowReceiverClass(result, tokens, triggerIndex, position),
+                CallSnippet(tokens, currentIndex, offset, callPunctuation),
+                parameterHints);
+        }
+
         // owner. — offer fields.
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Dot )
         {
@@ -658,18 +670,150 @@ public sealed class CompletionEngine
         }
     }
 
+    /// <summary>
+    /// What may follow <c>name::</c>. A qualifier can name a namespace, a class, or — in BO3's
+    /// phalanx.gsc and throttle_shared.gsc — BOTH, so this offers the union rather than choosing.
+    /// Both forms are legal to write there, and across the stock scripts no namespace function and
+    /// same-named class method ever collide, so the union is unambiguous in practice.
+    /// </summary>
     private ImmutableArray<CompletionEntry> NamespaceFunctionCompletions(
         ParseResult result, string contextId, string ns, string callSuffix, bool parameterHints)
     {
         LanguageStore store = _database.StoreFor(result.Language);
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
         foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
         {
-            entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+            if ( seen.Add(function.KeyName) )
+            {
+                entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+            }
+        }
+
+        // Typing `cScene::` used to return nothing at all: the qualifier is not a namespace, so the
+        // namespace query found none of its 59 methods.
+        foreach ( ClassMethod method in MethodResolution.MethodsOf(store, contextId, ns, result.Extraction.Classes) )
+        {
+            if ( seen.Add(method.Method.KeyName) )
+            {
+                entries.Add(MethodEntry(method, callSuffix, parameterHints));
+            }
         }
 
         return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// What may follow <c>[[receiver]]-&gt;</c>.
+    ///
+    /// <c>[[self]]-&gt;</c> inside a class offers that class's chain. Every other receiver offers
+    /// every visible class's methods, labelled with the class that declares each — the receiver's
+    /// type is not known, and 155 of the 159 arrow calls in the stock scripts are that shape, so the
+    /// wide list is the one that carries the feature.
+    /// </summary>
+    private ImmutableArray<CompletionEntry> ArrowMethodCompletions(
+        ParseResult result, string contextId, string? receiverClass, string callSuffix, bool parameterHints)
+    {
+        LanguageStore store = _database.StoreFor(result.Language);
+        ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+
+        if ( receiverClass is not null )
+        {
+            foreach ( ClassMethod method in MethodResolution.MethodsOf(
+                store, contextId, receiverClass, result.Extraction.Classes) )
+            {
+                entries.Add(MethodEntry(method, callSuffix, parameterHints));
+            }
+
+            return entries.ToImmutable();
+        }
+
+        // The store's classes plus this file's own, which may not be indexed yet.
+        HashSet<string> classNames = new(store.Classes.AllClassNames(), StringComparer.Ordinal);
+        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
+        {
+            classNames.Add(classSymbol.KeyName);
+        }
+
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        foreach ( string className in classNames )
+        {
+            foreach ( ClassMethod method in MethodResolution.MethodsOf(
+                store, contextId, className, result.Extraction.Classes) )
+            {
+                // Keyed by class AND name: two classes may declare the same method, and both are
+                // genuine candidates when the receiver could be either.
+                if ( seen.Add(className + "::" + method.Method.KeyName) )
+                {
+                    entries.Add(MethodEntry(method, callSuffix, parameterHints));
+                }
+            }
+        }
+
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// The class of an arrow call's receiver, or null when it is not knowable.
+    ///
+    /// Only <c>[[self]]-&gt;</c> inside a class body is: the tokens before the arrow are
+    /// <c>[[ self ]]</c>, and the class comes from the caret's position. Any other receiver is a
+    /// local whose class would need type inference to pin down.
+    /// </summary>
+    private static string? ArrowReceiverClass(
+        ParseResult result, ImmutableArray<Token> tokens, int arrowIndex, Position position)
+    {
+        // Walk back over the deref rather than re-parsing, since this runs mid-keystroke where the
+        // tree may not contain the call at all. `]]` lexes as TWO CloseBracket tokens, not one, so
+        // this skips however many are there instead of assuming a single closing token.
+        int receiver = PreviousSignificant(tokens, arrowIndex);
+        while ( receiver >= 0 && tokens[receiver].Kind == TokenKind.CloseBracket )
+        {
+            receiver = PreviousSignificant(tokens, receiver);
+        }
+
+        if ( receiver < 0 || tokens[receiver].Kind != TokenKind.Identifier )
+        {
+            return null;
+        }
+
+        if ( !string.Equals(tokens[receiver].GetText(result.Text).ToString(), "self", StringComparison.OrdinalIgnoreCase) )
+        {
+            return null;
+        }
+
+        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
+        {
+            if ( classSymbol.FullRange.Contains(position) )
+            {
+                return classSymbol.KeyName;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The class whose body contains this offset, over the file's own handful of classes.</summary>
+    private static string? EnclosingClassAt(ParseResult result, int offset)
+    {
+        Position position = result.Text.GetPosition(offset);
+
+        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
+        {
+            if ( classSymbol.FullRange.Contains(position) )
+            {
+                return classSymbol.KeyName;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A method entry, labelled with the class that declares it rather than a namespace.</summary>
+    private static CompletionEntry MethodEntry(ClassMethod method, string callSuffix, bool parameterHints)
+    {
+        return FunctionEntry(method.Method, callSuffix, parameterHints) with { Detail = method.OwnerClass.Name };
     }
 
     /// <summary>
@@ -1067,6 +1211,23 @@ public sealed class CompletionEngine
         }
 
         LanguageStore store = _database.StoreFor(result.Language);
+
+        // Methods of the class this cursor is inside, own and inherited, FIRST — a bare name written
+        // in a class body means a method: all 525 such calls in the stock BO3 scripts do. They are
+        // added ahead of the namespace functions and builtins so that when the editor's own ordering
+        // is a wash, the thing the call would actually reach is the thing offered.
+        //
+        // From the live extraction's class ranges rather than the store, so a method typed a moment
+        // ago is offered before the record is reindexed.
+        string? enclosingClass = EnclosingClassAt(result, offset);
+        if ( enclosingClass is not null )
+        {
+            foreach ( ClassMethod method in MethodResolution.MethodsOf(
+                store, contextId, enclosingClass, result.Extraction.Classes) )
+            {
+                entries.Add(MethodEntry(method, callSuffix, parameterHints));
+            }
+        }
 
         // Macros defined in this file.
         foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )
@@ -1598,6 +1759,16 @@ public sealed class CompletionEngine
         return EnclosingFunction(result, position) is not null;
     }
 
+    /// <summary>
+    /// The function or class METHOD whose body contains this position.
+    ///
+    /// <c>Extraction.Functions</c> holds top-level functions only — a method lives on its class — so
+    /// asking it alone meant the caret inside any method body was not "inside a function". That
+    /// decides which keyword set completion offers and whether it offers functions, variables and
+    /// builtins at all, so every class method body in the workspace was being completed as though it
+    /// were top-level: `#using`, `class` and `function`, and nothing that can actually be written
+    /// there.
+    /// </summary>
     private static FunctionSymbol? EnclosingFunction(ParseResult result, Position position)
     {
         foreach ( FunctionSymbol function in result.Extraction.Functions )
@@ -1605,6 +1776,34 @@ public sealed class CompletionEngine
             if ( function.FullRange.Contains(position) )
             {
                 return function;
+            }
+        }
+
+        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
+        {
+            if ( !classSymbol.FullRange.Contains(position) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol method in classSymbol.Methods )
+            {
+                if ( method.FullRange.Contains(position) )
+                {
+                    return method;
+                }
+            }
+
+            // A constructor or destructor body is a function body too, for every purpose this
+            // answers — which is why they are carried on the class at all.
+            if ( classSymbol.Constructor is not null && classSymbol.Constructor.FullRange.Contains(position) )
+            {
+                return classSymbol.Constructor;
+            }
+
+            if ( classSymbol.Destructor is not null && classSymbol.Destructor.FullRange.Contains(position) )
+            {
+                return classSymbol.Destructor;
             }
         }
 

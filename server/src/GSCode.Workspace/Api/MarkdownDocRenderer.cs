@@ -12,12 +12,25 @@ namespace GSCode.Workspace.Api;
 /// </summary>
 public static class MarkdownDocRenderer
 {
-    /// <summary>Full-suite markdown for a script function: prototype, summary, region, params, examples.</summary>
-    public static string RenderFunction(FunctionSymbol function)
+    /// <summary>
+    /// Full-suite markdown for a script function: prototype, summary, region, params, examples.
+    ///
+    /// <paramref name="ownerClass"/> names the declaring class when this is a method. Worth showing
+    /// because for an inherited method it is the answer the reader does not have: the call is
+    /// written inside the subclass, and which ancestor it lands on is exactly what is not visible
+    /// from the call site.
+    /// </summary>
+    public static string RenderFunction(FunctionSymbol function, ClassSymbol? ownerClass = null)
     {
         StringBuilder markdown = new();
 
         markdown.Append("```gsc\n");
+
+        if ( ownerClass is not null )
+        {
+            markdown.Append("class ").Append(ownerClass.Name).Append('\n');
+        }
+
         markdown.Append(FunctionSignature(function));
         markdown.Append("\n```");
 

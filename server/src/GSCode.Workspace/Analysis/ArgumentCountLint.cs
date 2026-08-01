@@ -45,12 +45,17 @@ public static class ArgumentCountLint
 
         foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            Walk(element, result, store, contextId, path, builtins, game, askingNamespaces, diagnostics);
+            Walk(element, result, store, contextId, path, builtins, game, askingNamespaces, diagnostics, null);
         }
 
         return diagnostics.ToImmutable();
     }
 
+    /// <summary>
+    /// <paramref name="ownerClass"/> is the class whose body this subtree is inside, mirroring the
+    /// state extraction keeps. It is what tells a bare <c>play( a, b )</c> inside a class from one at
+    /// file scope, and so which declaration's arity the call has to satisfy.
+    /// </summary>
     private static void Walk(
         AstNode node,
         ParseResult result,
@@ -60,16 +65,30 @@ public static class ArgumentCountLint
         BuiltinApi builtins,
         GameProfile game,
         ImmutableArray<string> askingNamespaces,
-        ImmutableArray<Diagnostic>.Builder diagnostics)
+        ImmutableArray<Diagnostic>.Builder diagnostics,
+        string? ownerClass)
     {
+        if ( node is ClassNode classNode )
+        {
+            ownerClass = classNode.NameToken.Text.ToLowerInvariant();
+        }
+
         if ( node is CallNode call )
         {
-            Inspect(call, store, contextId, path, builtins, game, askingNamespaces, diagnostics);
+            Inspect(call, store, contextId, path, builtins, game, askingNamespaces, diagnostics, ownerClass);
+        }
+
+        // An arrow call is a method call by construction, so its arity is judged against the class
+        // that declares the name — [[self]]->m() against this class's chain, any other receiver
+        // against whichever single class declares it.
+        if ( node is ArrowCallNode arrow )
+        {
+            InspectArrow(arrow, store, contextId, diagnostics, ownerClass);
         }
 
         foreach ( AstNode child in AstSearch.ChildrenOf(node) )
         {
-            Walk(child, result, store, contextId, path, builtins, game, askingNamespaces, diagnostics);
+            Walk(child, result, store, contextId, path, builtins, game, askingNamespaces, diagnostics, ownerClass);
         }
     }
 
@@ -81,7 +100,8 @@ public static class ArgumentCountLint
         BuiltinApi builtins,
         GameProfile game,
         ImmutableArray<string> askingNamespaces,
-        ImmutableArray<Diagnostic>.Builder diagnostics)
+        ImmutableArray<Diagnostic>.Builder diagnostics,
+        string? ownerClass)
     {
         if ( !TryGetCalleeName(call, out string name, out string? namespaceName, out Core.Text.TextRange nameRange) )
         {
@@ -96,6 +116,26 @@ public static class ArgumentCountLint
         }
 
         int supplied = call.Arguments.Length;
+
+        // METHODS BEFORE BUILTINS, and only for the shapes that can mean one. Inside a class body a
+        // bare name is a method first — all 525 such calls in the stock scripts are — so consulting
+        // the engine library first would judge `stop( a, b )` against a builtin named `stop` that
+        // the call never reaches.
+        SymbolKey written = namespaceName is null
+            ? new SymbolKey(null, name.ToLowerInvariant(), SymbolKind.Function, ownerClass)
+            : new SymbolKey(namespaceName.ToLowerInvariant(), name.ToLowerInvariant(), SymbolKind.Function);
+
+        if ( ownerClass is not null || namespaceName is not null )
+        {
+            SymbolKey canonical = MethodResolution.Canonicalize(
+                store, contextId, written, ReferenceKind.Call);
+
+            if ( canonical.OwnerClass is not null )
+            {
+                InspectAgainstMethod(store, contextId, canonical, name, supplied, nameRange, diagnostics);
+                return;
+            }
+        }
 
         // A builtin first: the engine owns these names, and a script function shadowing one is a
         // different problem that 5013/5014 speak for.
@@ -139,6 +179,86 @@ public static class ArgumentCountLint
 
         // ONLY the upper bound. Fewer arguments than declared is legal and idiomatic — the missing
         // ones are undefined — so a lower bound here would flag thousands of correct stock calls.
+        if ( supplied > declared.Parameters.Length )
+        {
+            diagnostics.Add(Diagnostic.Create(
+                nameRange,
+                DiagnosticSeverity.Error,
+                GscDiagnosticCode.TooManyArguments,
+                name,
+                declared.Parameters.Length,
+                supplied));
+        }
+    }
+
+    /// <summary>
+    /// The arity of <c>[[receiver]]-&gt;name( ... )</c>. Judged only when exactly one declaration is
+    /// in view: <c>[[self]]-&gt;</c> resolves through the enclosing class's chain, and any other
+    /// receiver only when a single class in the workspace declares the name. Several declarers means
+    /// several signatures, and choosing one to judge against would be a guess.
+    /// </summary>
+    private static void InspectArrow(
+        ArrowCallNode arrow,
+        LanguageStore store,
+        string contextId,
+        ImmutableArray<Diagnostic>.Builder diagnostics,
+        string? ownerClass)
+    {
+        // Text that arrived through a macro is not the author's, and the range would point at the
+        // invocation rather than at the arguments anyone wrote.
+        if ( arrow.MethodToken.Provenance.DefinitionSite is not null )
+        {
+            return;
+        }
+
+        string name = arrow.MethodToken.Text;
+        bool isSelf = arrow.Object.Pointer is IdentifierNode identifier
+            && string.Equals(identifier.Token.Text, "self", StringComparison.OrdinalIgnoreCase);
+
+        SymbolKey written = new(
+            null, name.ToLowerInvariant(), SymbolKind.Function, isSelf ? ownerClass : null);
+
+        SymbolKey canonical = MethodResolution.Canonicalize(
+            store, contextId, written, ReferenceKind.MethodCall);
+
+        if ( canonical.OwnerClass is null )
+        {
+            return;
+        }
+
+        InspectAgainstMethod(
+            store, contextId, canonical, name, arrow.Arguments.Length, arrow.MethodToken.RootRange, diagnostics);
+    }
+
+    /// <summary>
+    /// Compares a call against a resolved method's declared parameters, on the same terms as a
+    /// function: only the upper bound, and never against varargs.
+    /// </summary>
+    private static void InspectAgainstMethod(
+        LanguageStore store,
+        string contextId,
+        SymbolKey canonical,
+        string name,
+        int supplied,
+        Core.Text.TextRange nameRange,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        ImmutableArray<ResolvedFunction> methods = MethodResolution.LookupMethods(
+            store, contextId, canonical.OwnerClass!, canonical.Name);
+
+        // Same rule as for functions: several declarations means several signatures, and picking one
+        // to judge against would be a guess. An overlay shadowing a raw class is the usual cause.
+        if ( methods.Length != 1 )
+        {
+            return;
+        }
+
+        FunctionSymbol declared = methods[0].Function;
+        if ( declared.HasVarargs )
+        {
+            return;
+        }
+
         if ( supplied > declared.Parameters.Length )
         {
             diagnostics.Add(Diagnostic.Create(

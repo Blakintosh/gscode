@@ -1,7 +1,7 @@
 {
   "game": "bo3",
   "scriptsSwept": 980,
-  "distinct": 7,
+  "distinct": 6,
   "functions": [
     {
       "name": "hide_for_target",
@@ -22,23 +22,6 @@
         "scripts\\shared\\vehicles\\_quadtank.gsc(447)",
         "scripts\\shared\\vehicles\\_quadtank.gsc(603)",
         "scripts\\shared\\vehicles\\_quadtank.gsc(668)"
-      ]
-    },
-    {
-      "name": "stop",
-      "kind": "script",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        0
-      ],
-      "calledAsMethod": true,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "scripts\\shared\\ai_shared.gsc(850)"
       ]
     },
     {

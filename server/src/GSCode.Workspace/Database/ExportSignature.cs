@@ -66,6 +66,31 @@ public static class ExportSignature
         {
             rendered.Append("cl:").Append(classSymbol.Namespace).Append("::").Append(classSymbol.KeyName)
                 .Append(':').Append(classSymbol.ParentKeyName ?? "").Append('\n');
+
+            // The METHOD SET, not just the class name and its parent. A derived class inherits every
+            // method its ancestors declare, so adding one to a base class changes what resolves in
+            // every file that subclasses it — and while only the name and parent were hashed, that
+            // edit left those files' signatures identical and their diagnostics never revisited.
+            //
+            // Rendered like a function so it carries everything a caller's lints ask: arity for the
+            // argument count rule, the flags for the privacy and dev-block rules, and the defaults
+            // marker for how few arguments a call may legally pass. Constructors and destructors are
+            // left out — no caller can name one, so no caller's diagnostics can depend on it.
+            foreach ( FunctionSymbol method in classSymbol.Methods )
+            {
+                rendered.Append("me:").Append(classSymbol.KeyName).Append("::").Append(method.KeyName)
+                    .Append('/').Append(method.Parameters.Length)
+                    .Append(method.HasVarargs ? "+" : "")
+                    .Append(method.IsPrivate ? "p" : "")
+                    .Append(method.IsDevOnly ? "d" : "");
+
+                foreach ( ParameterSymbol parameter in method.Parameters )
+                {
+                    rendered.Append(parameter.DefaultValueText.Length > 0 ? "=" : "-");
+                }
+
+                rendered.Append('\n');
+            }
         }
 
         // A header's macros are visible to every file that inserts it.

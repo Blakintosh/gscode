@@ -53,7 +53,7 @@ public sealed class RenameHandler : RenameHandlerBase
 
         Dictionary<DocumentUri, List<TextEdit>> edits = new();
         // The full visible set: a header macro renamed in GSC alone would leave CSC broken.
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, hit.Key) )
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, hit.Key, hit.ReferenceKind) )
         {
             DocumentUri uri = DocumentUri.FromFileSystemPath(record.Path);
             if ( !edits.TryGetValue(uri, out List<TextEdit>? list) )

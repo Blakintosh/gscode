@@ -152,19 +152,25 @@ public static class FunctionResolutionLint
             }
         }
 
-        // Methods callable unqualified from inside this file's classes. A method call written inside
-        // a class body looks exactly like a plain call — it is keyed under the file's namespace, and
-        // no namespace-level function has that name — so without this every method call in a
-        // class-heavy file reads as a missing builtin. (v1 had the same step, checking the current
-        // class hierarchy before falling back to the API.)
+        // Methods declared by this file's own classes and their ancestors. Still a bare-name set,
+        // and still needed even though resolution understands methods now, for the same reason
+        // ownFunctions is: the store holds the last INDEXED copy, so a method being typed right now
+        // resolves to nothing until a reindex catches up.
         HashSet<string> methodNames = ClassMethodNames(result, store, askingContextId, askingPath);
+
+        // The namespace the file declares into, for the one fallback a bare in-class call needs:
+        // when it names no method at all, it may still have meant a namespace function.
+        string fileNamespace = ownNamespaces.Length > 0 ? ownNamespaces[0] : "";
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         diagnostics.AddRange(diagnosticsForMissingFiles);
 
+        Dictionary<SymbolKey, SymbolKey> canonicalCache = [];
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            bool isCall = entry.Kind is ReferenceKind.Call or ReferenceKind.MethodCall;
+            if ( !isCall || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
             }
@@ -177,17 +183,55 @@ public static class FunctionResolutionLint
                 continue;
             }
 
+            // A method this file declares, or inherits from a class it can see. Gated to the call
+            // shapes that could actually mean one, so a name that happens to match a method
+            // somewhere cannot mask a genuinely missing namespace function.
+            if ( (entry.Key.OwnerClass is not null || entry.Kind == ReferenceKind.MethodCall)
+                && methodNames.Contains(entry.Key.Name) )
+            {
+                continue;
+            }
+
+            if ( !canonicalCache.TryGetValue(entry.Key, out SymbolKey canonical) )
+            {
+                canonical = MethodResolution.Canonicalize(
+                    store, askingContextId, entry.Key, entry.Kind, fileNamespace);
+
+                canonicalCache[entry.Key] = canonical;
+            }
+
+            // Resolves to a method — own, inherited, or named through a class qualifier.
+            if ( canonical.OwnerClass is not null )
+            {
+                continue;
+            }
+
             // Resolves to a script function (private included) — nothing to report.
             ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                store, askingContextId, askingPath, entry.Key.Namespace, entry.Key.Name,
+                store, askingContextId, askingPath, canonical.Namespace, canonical.Name,
                 includePrivate: true, askingNamespaces: ownNamespaces);
             if ( found.Length > 0 )
             {
                 continue;
             }
 
-            if ( methodNames.Contains(entry.Key.Name) )
+            // An arrow call is almost always a class method, and no builtin can be written
+            // [[x]]->name(), so reaching here — no class declares it AND no script function has the
+            // name — is the one namespace-less shape that CAN be judged on a dialect with classes.
+            //
+            // "Almost", and the lookup above is what covers the rest: the arrow also dispatches
+            // through a FIELD holding a function pointer. gameobjects_shared.gsc writes
+            // `[[self.classObj]]->onBeginUse( player )`, where onBeginUse is a top-level function
+            // that dom.gsc, koth.gsc and sd.gsc assign to that field with `&onBeginUse`. Because a
+            // method call carries no namespace, the lookup above searches every namespace and finds
+            // it — which is why those two shipping sites are not reported here.
+            if ( entry.Kind == ReferenceKind.MethodCall )
             {
+                diagnostics.Add(Diagnostic.Create(
+                    entry.Range,
+                    DiagnosticSeverity.Error,
+                    GscDiagnosticCode.ScriptFunctionNotFound,
+                    entry.Key.Name));
                 continue;
             }
 
@@ -202,7 +246,7 @@ public static class FunctionResolutionLint
 
             // An explicitly script-targeted call: a path call, or a namespace this file does not
             // declare (so it was written ns::foo, not left unqualified). Neither could be a builtin.
-            if ( isPathCall || (entry.Key.Namespace is not null && !DeclaresNamespace(ownNamespaces, entry.Key.Namespace)) )
+            if ( isPathCall || (canonical.Namespace is not null && !DeclaresNamespace(ownNamespaces, canonical.Namespace)) )
             {
                 diagnostics.Add(Diagnostic.Create(
                     entry.Range,
@@ -215,14 +259,6 @@ public static class FunctionResolutionLint
             // Everything else could have meant a builtin, so it is only reportable where the library
             // is trustworthy — and then only if the library does not have it.
             if ( !canJudgeBuiltins || builtins.Find(entry.Key.Name) is not null )
-            {
-                continue;
-            }
-
-            // A null namespace is ambiguous in a dialect WITH classes: sys::foo() and a class method
-            // call ([[obj]]->method()) are keyed the same way, and reporting the latter would flag
-            // every method call. Only the class-less dialects can safely treat it as a plain call.
-            if ( entry.Key.Namespace is null && game.HasClasses )
             {
                 continue;
             }
@@ -290,8 +326,12 @@ public static class FunctionResolutionLint
                 continue;
             }
 
+            // namespaceName is explicitly null: a class name is global, and there is no ns::Class
+            // form to qualify one with. Passing the asking PATH here — which this did — compares an
+            // absolute file path against ClassSymbol.Namespace, matches nothing, and silently pins
+            // the walk at depth 1, so no ancestor's methods were ever collected.
             foreach ( ResolvedClass parent in DatabaseQueries.LookupClasses(
-                store, askingContextId, askingPath, current.ParentKeyName) )
+                store, askingContextId, namespaceName: null, current.ParentKeyName) )
             {
                 pending.Enqueue(parent.Class);
             }

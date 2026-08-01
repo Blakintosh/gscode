@@ -12,7 +12,14 @@ public static class CacheSchema
     public const int SchemaVersion = 1;
 
     /// <summary>Bumped when the ScriptRecord blob serialization changes.</summary>
-    public const int RecordFormatVersion = 2;
+    /// <remarks>
+    /// 3: SymbolKey gained OwnerClass. A version-2 blob deserializes every method key with a null
+    /// owner, which reads as a plain function rather than as anything obviously wrong — so this had
+    /// to move even though the shape is additive.
+    /// 4: extraction started WRITING OwnerClass, and FunctionSymbol/ClassSymbol gained
+    /// OwnerClassKeyName and Constructor/Destructor. A version-3 blob predates every method key.
+    /// </remarks>
+    public const int RecordFormatVersion = 4;
 
     // meta keys.
     public const string MetaSchemaVersion = "schema_version";

@@ -47,7 +47,7 @@ public sealed class HoverHandler : HoverHandlerBase
         PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
         if ( hit.Kind == HitKind.Reference )
         {
-            string? markdown = RenderHover(target, hit.Key, hit.Range);
+            string? markdown = RenderHover(target, hit.Key, hit.Range, hit.ReferenceKind);
             if ( markdown is null )
             {
                 return Task.FromResult<Hover?>(null);
@@ -85,17 +85,22 @@ public sealed class HoverHandler : HoverHandlerBase
         return Task.FromResult<Hover?>(null);
     }
 
-    private string? RenderHover(NavigationTarget target, SymbolKey key, TextRange hitRange)
+    private string? RenderHover(
+        NavigationTarget target, SymbolKey key, TextRange hitRange, ReferenceKind referenceKind)
     {
         switch ( key.Kind )
         {
             case SymbolKind.Function:
             {
-                ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
-                    target.Store, target.ContextId, target.Path, key.Namespace, key.Name, askingNamespaces: target.Namespaces);
+                // Routed so a class method resolves too — through its own class, an ancestor, or by
+                // name when the receiver's class is unknown. LookupFunctions alone never sees one.
+                ImmutableArray<ResolvedFunction> functions = MethodResolution.ResolveCall(
+                    target.Store, target.ContextId, target.Path, key, referenceKind,
+                    askingNamespaces: target.Namespaces);
+
                 if ( functions.Length > 0 )
                 {
-                    return MarkdownDocRenderer.RenderFunction(functions[0].Function);
+                    return MarkdownDocRenderer.RenderFunction(functions[0].Function, functions[0].OwnerClass);
                 }
 
                 // Fall back to the namespace-less builtin library.

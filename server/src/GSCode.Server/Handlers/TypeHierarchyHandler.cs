@@ -77,20 +77,15 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
             return Task.FromResult<Container<TypeHierarchyItem>?>(new Container<TypeHierarchyItem>());
         }
 
+        // The graph knows who inherits from this class, so the subtype query is a lookup of the
+        // child names followed by a resolve of each — not a scan of every record in the store.
         List<TypeHierarchyItem> items = [];
-        foreach ( ScriptRecord record in target.Store.AllRecords )
+        foreach ( string childName in target.Store.Classes.DirectChildren(self.KeyName) )
         {
-            if ( !ScriptDatabase.CanSee(target.ContextId, record.ContextId) )
+            foreach ( ResolvedClass child in DatabaseQueries.LookupClasses(
+                target.Store, target.ContextId, namespaceName: null, childName) )
             {
-                continue;
-            }
-
-            foreach ( ClassSymbol candidate in record.Classes )
-            {
-                if ( string.Equals(candidate.ParentKeyName, self.KeyName, StringComparison.Ordinal) )
-                {
-                    items.Add(MakeItem(candidate, record, target));
-                }
+                items.Add(MakeItem(child.Class, child.Record, target));
             }
         }
 

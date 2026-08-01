@@ -39,6 +39,15 @@ public sealed record FunctionSymbol
     /// <summary>Lowercase namespace the function belongs to ("" for class methods — the class scopes them).</summary>
     public required string Namespace { get; init; }
 
+    /// <summary>
+    /// Lowercase name of the class declaring this as a method, or null for a top-level function.
+    ///
+    /// The explicit answer to "is this a method", which consumers previously had to infer from
+    /// <see cref="Namespace"/> being empty — a test that is true for a method but says nothing about
+    /// WHICH class, and which quietly also matches anything else that ends up namespace-less.
+    /// </summary>
+    public string? OwnerClassKeyName { get; init; }
+
     public bool IsPrivate { get; init; }
     public bool IsAutoexec { get; init; }
 
@@ -82,6 +91,18 @@ public sealed record ClassSymbol
     public ImmutableArray<FunctionSymbol> Methods { get; init; } = [];
     public bool HasConstructor { get; init; }
     public bool HasDestructor { get; init; }
+
+    /// <summary>
+    /// The constructor and destructor bodies, or null when the class declares none.
+    ///
+    /// Kept OUT of <see cref="Methods"/> deliberately: they are not callable by name, so listing
+    /// them there would offer them in method completion and hash them into the export signature as
+    /// though a caller could depend on them. They are carried at all because their bodies contain
+    /// assignments and calls like any other, and without a symbol to hang those on, go-to-definition
+    /// on a local declared inside a constructor had nothing to resolve against.
+    /// </summary>
+    public FunctionSymbol? Constructor { get; init; }
+    public FunctionSymbol? Destructor { get; init; }
 
     public required TextRange NameRange { get; init; }
     public required TextRange FullRange { get; init; }
@@ -154,6 +175,23 @@ public enum ReferenceKind
 {
     Definition,
     Call,
+
+    /// <summary>
+    /// A call written with the arrow form, <c>[[expr]]-&gt;m()</c>.
+    ///
+    /// Distinct from <see cref="Call"/> because the arrow is the one syntax that GUARANTEES a class
+    /// method, and most of the time the receiver's class is not statically known — 155 of the 159
+    /// arrow calls in the stock BO3 scripts have a plain local as the receiver. Those key with no
+    /// namespace and no owner class, which is the same shape a <c>sys::foo()</c> builtin call and an
+    /// unqualified call take, so without this kind the three are indistinguishable.
+    ///
+    /// That collision is what forced the resolution lint to suppress EVERY unresolved
+    /// namespace-less call on a dialect with classes: flagging them would have reported every method
+    /// call in the workspace. The kind is what lets the untyped arrow calls be told apart, counted
+    /// as references to the method, and left undiagnosed without silencing genuine calls too.
+    /// </summary>
+    MethodCall,
+
     AddressOf,
     ClassUse,
     FieldAccess,

@@ -111,9 +111,38 @@ public sealed class NavigationSupport
     /// document is a header. The single entry point, so the count a CodeLens shows and the list a
     /// peek opens are computed the same way.
     /// </summary>
+    /// <param name="referenceKind">
+    /// How the SITE under the cursor used the name. Load-bearing for the arrow form: a key with no
+    /// namespace and no owner is written the same way by an untyped <c>[[x]]-&gt;m()</c>, a
+    /// <c>sys::m()</c> builtin call and a plain unqualified call, and only the kind separates them.
+    /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
-        NavigationTarget target, SymbolKey key)
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
     {
+        // A method is not reachable under one key the way a function is — inheritance, the
+        // Class::method form and untyped arrow calls each name it differently — so it resolves to
+        // its declaration's key first and then unions the ways a call site can spell it. Done HERE
+        // for the same reason the narrowing below is: the CodeLens count and the peek list run this
+        // one query, so they cannot disagree.
+        // A method is not reachable under one key the way a function is — inheritance, the
+        // Class::method form and untyped arrow calls each name it differently — so it gets its own
+        // query. Done HERE for the same reason the narrowing below is: the CodeLens count and the
+        // peek list run this one method, so they cannot disagree.
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> methodReferences =
+            MethodResolution.FindReferencesForCall(
+                _database, target.Stores, target.Store, target.ContextId, key, referenceKind);
+
+        if ( methodReferences.Length > 0 )
+        {
+            return methodReferences;
+        }
+
+        if ( key.Kind == SymbolKind.Function )
+        {
+            key = MethodResolution.Canonicalize(
+                target.Store, target.ContextId, key, referenceKind, key.Namespace ?? "");
+        }
+
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
             DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key);
 

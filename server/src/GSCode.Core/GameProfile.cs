@@ -324,17 +324,6 @@ public sealed partial record GameProfile
     public bool HasHashStrings { get; init; }
 
     /// <summary>
-    /// Whether <c>DevOnlyBuiltins</c>' curated list has been VALIDATED against this game's scripts.
-    ///
-    /// The list drives an Error, so a wrong entry flags working code, and dev-only-ness is a fact
-    /// about one engine rather than about the language: `println` is called 269 times inside a
-    /// <c>/# #/</c> and twice outside across BO3's scripts, and 220 inside against 438 outside
-    /// across CoD4's. Same name, opposite answer. Off by default, so a game earns the check by
-    /// being measured rather than inheriting another game's conclusions.
-    /// </summary>
-    public bool HasCuratedDevOnlyBuiltins { get; init; }
-
-    /// <summary>
     /// Whether the <c>foreach ( item in collection )</c> loop exists. Introduced in MW2 (2009) on the
     /// Infinity Ward line; the Treyarch line has none until BO3. Derived from the keyword set.
     /// </summary>

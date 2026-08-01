@@ -196,11 +196,14 @@ stamps it, and the lint reads that one property — so this is purely a data-cur
 the API data eventually carries its own `devOnly` field the loader already prefers it
 (`entry.DevOnly ?? DevOnlyBuiltins.Contains(name, game)`) and nothing else changes.
 
-**The list is now PER GAME**, gated on `GameProfile.HasCuratedDevOnlyBuiltins`, and only BO3 sets
-it. So curating this for another game is two steps, not one: count that game's own scripts inside
-versus outside `/# #/`, then set the flag. Skipping the count is not a shortcut but the bug this
-gate exists to prevent — BO3's list applied to CoD4 called `println` dev-only and reported 598
-Errors on shipped code, where the same count comes back 220 inside against 438 outside.
+**The list is now PER GAME** — `DevOnlyBuiltins` is keyed by short name, with entries for `bo3`
+and `cod4`. So curating this for another game is two steps, not one: count that game's own scripts
+inside versus outside `/# #/`, then add its entry. Skipping the count is not a shortcut but the bug
+the keying exists to prevent — BO3's list applied to CoD4 called `println` dev-only and reported 598
+Errors on shipped code, where the same count returns 220 inside against 438 outside. CoD4's entry is
+deliberately EMPTY rather than absent: sixteen of BO3's twenty names are never called there and the
+other four are called outside dev blocks, so "measured, and the answer is none" is recorded as the
+fact it is.
 
 **Why a hand-curated list rather than derived data:** neither available source is accurate.
 

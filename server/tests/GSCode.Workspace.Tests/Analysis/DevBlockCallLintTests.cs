@@ -203,18 +203,31 @@ public class DevBlockCallLintTests
     }
 
     [Fact]
-    public void AGameEarnsTheCheckByBeingMeasured()
+    public void Cod4WasMeasuredAndHasNone()
     {
-        // The gate is opt-in, so a newly added profile inherits no conclusions: it reports nothing
-        // until someone counts its scripts and sets the flag. Silence is the right failure here —
-        // the alternative is an Error on working code.
-        Assert.True(GameProfile.BlackOps3.HasCuratedDevOnlyBuiltins);
+        // Not "unmeasured" but "measured, and the answer is none": sixteen of BO3's twenty names
+        // are never called in CoD4 at all, and the four that are — println, print3d, line, print —
+        // are all called outside dev blocks.
+        Assert.Empty(DevOnlyBuiltins.For(GameProfile.ByName("cod4")!));
 
+        foreach ( string measured in (string[])["println", "print3d", "line", "print"] )
+        {
+            Assert.False(DevOnlyBuiltins.Contains(measured, GameProfile.ByName("cod4")!));
+        }
+    }
+
+    [Fact]
+    public void AGameWithNoEntryInheritsNothing()
+    {
+        // The failure mode being designed out: a name added to one game's list must never leak
+        // into another's. An unmeasured game reports nothing, which beats an Error on working code.
         foreach ( GameProfile game in GameProfile.All )
         {
             if ( game != GameProfile.BlackOps3 )
             {
-                Assert.False(game.HasCuratedDevOnlyBuiltins, $"{game.ShortName} claims a list nobody measured");
+                Assert.False(
+                    DevOnlyBuiltins.Contains("println", game),
+                    $"{game.ShortName} inherited a name nobody counted against its scripts");
             }
         }
     }

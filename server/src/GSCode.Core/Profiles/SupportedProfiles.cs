@@ -123,8 +123,6 @@ public sealed partial record GameProfile
         ArraysPassedByReference = true,
         HasHashStrings = true,
         HasPrecacheDirective = true,
-        // The one game whose dev-only builtin list has been counted against its own scripts.
-        HasCuratedDevOnlyBuiltins = true,
         // BO3 dropped inline path calls: a function is reached by #using + ns::foo, never by path.
         HasInlinePathCalls = false,
         Keywords =

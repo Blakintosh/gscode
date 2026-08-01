@@ -609,7 +609,7 @@ public sealed class Preprocessor
         Token nameToken = frame.Tokens[index];
         string name = _names.Intern(nameToken.GetText(frame.Text));
 
-        if ( TryExpandBuiltin(frame, name, nameToken.Range, sink) )
+        if ( TryExpandBuiltin(frame, name, nameToken.Range, index, sink) )
         {
             index++;
             return true;
@@ -650,10 +650,35 @@ public sealed class Preprocessor
         return true;
     }
 
-    private bool TryExpandBuiltin(FileFrame frame, string name, TextRange range, List<PToken> sink)
+    /// <summary>
+    /// The predefined macros, substituted wherever they are written.
+    ///
+    /// KNOWN LIMIT, shared by all of them: a macro BODY is expanded by <see cref="ExpandBody"/>,
+    /// which never consults this table, so <c>#define TRACE __FUNCTION__</c> leaves the name alone.
+    /// Lifting that means carrying the INVOCATION site through expansion — a body's own position
+    /// lives in another token array and answers the wrong question — and no stock script writes any
+    /// of these inside a macro.
+    /// </summary>
+    private bool TryExpandBuiltin(FileFrame frame, string name, TextRange range, int index, List<PToken> sink)
     {
         switch ( name )
         {
+            case "__FUNCTION__":
+            {
+                // The enclosing function's qualified name, as a string, substituted in place. The
+                // stock scripts use it exactly once — spawner_shared.gsc:517 writes
+                // `assert( ..., __FUNCTION__ + " only supports actors and vehicles." )` — which is
+                // why it expands to a String token rather than getting special-cased downstream:
+                // everything after this (typing, concatenation, literal completion, hover) then
+                // treats it as the string it becomes, with no rule of its own.
+                sink.Add(new PToken(
+                    TokenKind.String,
+                    _names.Intern("\"" + QualifiedFunctionNameAt(frame, index) + "\""),
+                    range,
+                    ProvenanceFor(frame)));
+
+                return true;
+            }
             case "__LINE__":
             {
                 // 1-based, matching how compilers report line numbers to users.
@@ -686,6 +711,68 @@ public sealed class Preprocessor
 
             return new Provenance(currentFrame.SourceFile, currentFrame.RootSite, null);
         }
+    }
+
+    /// <summary>
+    /// <c>namespace::function</c> for the declaration enclosing <paramref name="index"/>.
+    ///
+    /// Read by scanning BACKWARD over the frame's tokens rather than by tracking state forward.
+    /// Both facts are purely lexical — the nearest preceding <c>#namespace</c> and the nearest
+    /// preceding <c>function</c> name — so the scan is exactly the question being asked, and it
+    /// cannot drift the way a running state machine can when a conditional branch is skipped or an
+    /// insert pushes a frame. The cost never matters: this runs only where <c>__FUNCTION__</c> is
+    /// actually written, which across the whole stock corpus is one line.
+    ///
+    /// The namespace defaults to the file stem when the file declares none, matching the dialect's
+    /// own fallback. A CLASS METHOD is reported as <c>namespace::method</c> like any other function:
+    /// no stock script writes <c>__FUNCTION__</c> inside a class, so there is no evidence the
+    /// compiler names the class instead, and inventing one would be a guess.
+    /// </summary>
+    private string QualifiedFunctionNameAt(FileFrame frame, int index)
+    {
+        string? functionName = null;
+        string? namespaceName = null;
+
+        for ( int cursor = index - 1; cursor >= 0; cursor-- )
+        {
+            TokenKind kind = frame.Tokens[cursor].Kind;
+
+            if ( functionName is null && kind == TokenKind.Function )
+            {
+                // `function`, then optional `private`/`autoexec`, then the name.
+                int nameIndex = NextSignificant(frame, cursor + 1);
+                while ( nameIndex >= 0
+                    && frame.Tokens[nameIndex].Kind is TokenKind.Private or TokenKind.Autoexec )
+                {
+                    nameIndex = NextSignificant(frame, nameIndex + 1);
+                }
+
+                if ( nameIndex >= 0 && frame.Tokens[nameIndex].Kind == TokenKind.Identifier )
+                {
+                    functionName = frame.Tokens[nameIndex].GetText(frame.Text).ToString();
+                }
+            }
+
+            if ( namespaceName is null && kind == TokenKind.NamespaceDirective )
+            {
+                int nameIndex = NextSignificant(frame, cursor + 1);
+                if ( nameIndex >= 0 && frame.Tokens[nameIndex].Kind == TokenKind.Identifier )
+                {
+                    namespaceName = frame.Tokens[nameIndex].GetText(frame.Text).ToString();
+                }
+            }
+
+            if ( functionName is not null && namespaceName is not null )
+            {
+                break;
+            }
+        }
+
+        namespaceName ??= Path.GetFileNameWithoutExtension(frame.SourceFile ?? _rootFilePath);
+
+        // Outside any function there is nothing to qualify, so the namespace alone is the whole
+        // truth rather than a trailing "::" that reads like a name went missing.
+        return functionName is null ? namespaceName : namespaceName + "::" + functionName;
     }
 
     /// <summary>

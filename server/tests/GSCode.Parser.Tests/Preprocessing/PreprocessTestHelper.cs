@@ -30,6 +30,9 @@ internal static class PreprocessTestHelper
 {
     public const string RootPath = @"c:\work\scripts\test.gsc";
 
+    /// <summary>The root file's stem — the namespace a file that declares none falls back to.</summary>
+    public const string RootStem = "test";
+
     public static PreprocessResult Run(string source, IInsertProvider? insertProvider = null)
     {
         SourceText text = SourceText.From(source);

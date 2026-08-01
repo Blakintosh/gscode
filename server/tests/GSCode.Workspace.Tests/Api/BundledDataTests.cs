@@ -18,15 +18,11 @@ public class BundledDataTests
     private static readonly string s_apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
 
     /// <summary>
-    /// The stock-script lists for WaW and BO1, which are promised and genuinely absent.
-    ///
-    /// They drive the warning about editing a file the game shipped, so without them that warning
-    /// simply never fires for those two games — it degrades rather than breaks, which is why this is
-    /// recorded as a gap instead of a failure. Generating them means enumerating each game's raw tree,
-    /// as <c>cod4_stock_scripts.txt</c> and <c>t7_stock_scripts.txt</c> were. Delete from here when
-    /// they are.
+    /// Data a profile promises that is knowingly not shipped yet. Empty, and meant to stay that way —
+    /// it briefly held WaW's and BO1's stock-script lists, which <c>StockScriptListTests</c> now
+    /// generates.
     /// </summary>
-    private static readonly string[] s_knownAbsent = ["waw_stock_scripts.txt", "bo1_stock_scripts.txt"];
+    private static readonly string[] s_knownAbsent = [];
 
     public static TheoryData<string> ProfilesWithData
     {
@@ -74,6 +70,26 @@ public class BundledDataTests
                 File.Exists(Path.Combine(s_apiDirectory, fileName)),
                 $"{fileName} now ships — remove it from s_knownAbsent so the invariant covers it");
         }
+    }
+
+    [Theory]
+    [MemberData(nameof(ProfilesWithData))]
+    public void TheStockScriptList_LoadsAndNamesRealScripts(string shortName)
+    {
+        // Existing is not the same as parsing. The format is bare lines with `#` comments, so a file
+        // written with the wrong newline or left as a header would load as zero entries and the save
+        // warning would go quiet again with nothing to show for it.
+        GameProfile profile = GameProfile.ByName(shortName)!;
+        Workspace.Api.StockScripts stock = Workspace.Api.StockScripts.Load(s_apiDirectory, profile);
+
+        Assert.True(stock.Count > 500, $"{shortName} loaded only {stock.Count} stock scripts");
+
+        // Every game in this repo's era ships this one, and it exercises the canonical form too:
+        // the lists store forward slashes and lowercase, while the editor asks with whatever the
+        // platform and the author used.
+        Assert.True(
+            stock.Contains(@"maps\_utility.gsc") || stock.Contains(@"scripts\shared\util_shared.gsc"),
+            $"{shortName} has a stock list that does not contain its own utility script");
     }
 
     [Fact]

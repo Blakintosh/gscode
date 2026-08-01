@@ -225,8 +225,8 @@ game has `.csc`.
 |------|:----------------:|:---------:|-------|
 | cod4 | `cod4` | ✓ | 819 functions (792 documented, 19 reconstructed), 297 radiant keys, 108 fields, 894 stock scripts |
 | bo3  | `t7`   | ✓ | the full T7 set, including `t7_api_csc.json` |
-| waw  | `waw`  | ✗ | 891 functions (781 inherited from CoD4, 110 its own) + 154 derived client functions, 360 radiant keys (11 client-only), 105 fields |
-| bo1  | `bo1`  | ✗ | 751 functions (all inherited from CoD4) + 156 derived client functions, 466 radiant keys (126 client-only), 108 fields |
+| waw  | `waw`  | ✗ | 891 functions (781 inherited from CoD4, 110 its own) + 154 derived client functions, 360 radiant keys (11 client-only), 105 fields, 1,977 stock scripts |
+| bo1  | `bo1`  | ✗ | 751 functions (all inherited from CoD4) + 156 derived client functions, 466 radiant keys (126 client-only), 108 fields, 3,125 stock scripts |
 | mw2 / all cores | *(null)* | — | nothing; a workspace on that game loads no builtin data rather than another game's |
 
 **`HasCompleteBuiltinLibrary` is a separate claim from `Verified`.** Verified is about the DIALECT —
@@ -252,6 +252,21 @@ BO1 need no entries of their own — they inherit CoD4's corrected output.
 Radiant keys carry a side (`both` or `client`). BO3 marks client keys with a `client` prefix inside
 one `keys.txt`; WaW and BO1 instead split them across `keys.txt` and `clientkeys.txt`. Either way,
 completion and hover offer client-side keys to `.csc` only.
+
+### Stock-script lists come from the corpus plus what it references
+
+`<prefix>_stock_scripts.txt` decides whether saving into the raw folder warns, so it has to tell a
+file the game shipped from one the user wrote. `StockScriptListTests` generates it from any corpus
+configured on the machine, using two sources: the extracted script tree, and every path an import or a
+path-qualified call names that resolves to nothing on disk. The second is not a broken reference — the
+game linked it, so the file shipped and this extraction is missing it, which is the same resolver
+failure that drives `gscode-5009`.
+
+That matters unevenly. CoD4 and WaW recover one file each; BO1 recovers 165, because its dump lacks
+the WaW-era animscripts it inherited, several DLC map scripts (Silo, Golf Course, Moon), the frontend
+client scripts and the model aliases. Being generous is the right error here: the list only decides
+whether to warn before overwriting, so a wrong entry costs one warning while a missing one costs
+silence on a stock file being clobbered.
 
 ### The client libraries are derived, except BO3's
 

@@ -22,18 +22,6 @@ The corpus sweep reports `error`, `add_object` and `warning` as unknown builtins
 Add them by HAND rather than regenerating: a regeneration rewrites fifteen files and invalidates
 every workspace cache through `ServerBuildIdentity`, which is not worth it for three names.
 
-### WaW and BO1 ship no stock-script list
-
-`BundledDataFileNames` promises `waw_stock_scripts.txt` and `bo1_stock_scripts.txt` and neither
-exists, so the warning about editing a file the game shipped never fires for those two games. It
-degrades rather than breaks — an absent list reads as "nothing is stock" — which is why it survived
-unnoticed. `BundledDataTests` now pins the "everything promised is shipped" invariant and carries
-these two as the only documented exceptions; the exclusion list is itself asserted to shrink when
-they arrive, so this cannot quietly become permanent.
-
-Generating them means enumerating each game's raw tree, as `cod4_stock_scripts.txt` and
-`t7_stock_scripts.txt` were. Needs `GSCODE_CORPUS_WAW` / `GSCODE_CORPUS_BO1` on the machine doing it.
-
 ### `5014 BuiltinFunctionNotFound` cannot tell a typo from a missing builtin
 
 An unqualified call that nothing explains is reported as `5014`, and the rule cannot say which of

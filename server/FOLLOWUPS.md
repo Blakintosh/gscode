@@ -148,68 +148,6 @@ stale after a branch switch.
 
 ---
 
-## Deferred by request
-
-### Formatter — line wrapping is all that is left
-
-What landed, which is now more than the settings layer:
-
-- `tabSize`/`insertSpaces` are honoured per request, and the GSC languages default to tabs in
-  `client/package.json`'s `configurationDefaults` (247,613 tab-led indented lines across the stock
-  scripts against 886 space-led).
-- `gscode.format.padParens` and `gscode.format.maxBlankLines` exist; `maxBlankLines` defaults to 2,
-  which is what the doc comment always claimed while the code capped at 1.
-- `braceStyle` was deliberately NOT added — 51,048 Allman braces against 37 same-line makes it a
-  convention rather than a preference. Revisit only if that measurement is disputed.
-
-Three of the four things this entry listed as open have since SHIPPED, and the entry said otherwise
-for long enough to be worth naming them:
-
-- **Alignment of consecutive assignments** — `AssignmentAligner` / `ColumnAligner`, exposed as
-  `gscode.format.alignConsecutive`.
-- **On-type formatting** — it did once reformat the whole document on every `;` and `}`, dormant
-  only because `editor.formatOnType` defaults off. Fixed in `1bb536d`: edits are clipped to the
-  alignment GROUP around the cursor (`FormatScope.GroupAround`), covered by
-  `OnTypeBlockScopeTests`, and `editor.formatOnType: true` now ships in `configurationDefaults`
-  for all three languages.
-- **`#insert`ed regions** — a non-question, on inspection. The formatter reads `result.Text.Text`
-  and `result.Lexed.Tokens`, both of which are the ROOT FILE's own text and tokens; inserted
-  content never appears in either, so there is nothing there to reformat or corrupt.
-
-**Line wrapping is the only one left, and the measurement argues against doing it by default.**
-Across the two corpora (390,434 BO3 lines and 335,608 CoD4 lines) the 95th percentile is 82 and 85
-characters, and only 1.3%/1.4% of lines pass 120. The interesting part is not the tail's size but
-what it means: these scripts **never wrap**, which is precisely why the long lines are long. So
-unlike Allman braces or tab indentation, there is no existing convention here to conform to, and
-any wrapping we add would be INVENTED — the same test that kept `braceStyle` out, landing the other
-way.
-
-If it is built anyway, it should default to off, and the decisions to make first are where a break
-is allowed (argument lists, `&&`/`||` chains, `+` concatenations are the three shapes long enough to
-matter), what the continuation indent is, and whether the corruption guard `TokenStreamMatches` still
-holds once a line becomes several.
-
-**Do not gate the semicolon de-duplication on that setting.** It lives client-side in
-`extension.ts` and runs unconditionally, which is the point — it has to work whether or not
-`formatOnType` is on. The tempting alternative, reading `editor.formatOnType` and choosing a
-client- or server-side implementation, trades a harmless outcome (both run; the second finds
-nothing left to do) for a broken one (neither runs), and breaks in the way that is hardest to
-notice. The setting also resolves per-language, per-workspace and per-folder and can change
-mid-session, so each of those is a chance to guess wrong in the silent direction.
-
-Split by RESPONSIBILITY instead, and the two never contend:
-
-| Job | Owner | Why |
-|---|---|---|
-| Semicolon de-duplication | Client, always | Must work regardless of any setting; idempotent, so it costs nothing when there is no duplicate |
-| `}` auto-dedent while typing | Server, gated by `formatOnType` | Genuinely IS format-on-type, and has no client-side equivalent to overlap with |
-
-Querying the CLIENT'S CAPABILITIES at `initialize` is a different matter and remains fine — that
-is a fact about the client. A user preference is not, and switching implementations on one ages
-badly.
-
----
-
 ## Known limitations from the triage pass
 
 Recorded because each was a deliberate stopping point, not an oversight. The triage plan lives
@@ -348,6 +286,27 @@ mod-project CI. Cheap to build because the layering already isolates OmniSharp i
 ---
 
 ## Decided — not doing
+
+### Formatter line wrapping
+
+The formatter does not wrap long lines and will not. Everything else the formatter follow-up once
+listed has shipped — `padParens`, `maxBlankLines`, per-request `tabSize`/`insertSpaces`, consecutive
+alignment (`alignConsecutive`), directive sorting, and on-type formatting scoped to the alignment
+group around the cursor with `editor.formatOnType` on by default.
+
+Measured before deciding, across 390,434 BO3 lines and 335,608 CoD4 lines: the 95th percentile is 82
+and 85 characters, and only 1.3%/1.4% pass 120. The number that decided it is not the tail's size
+but its MEANING — these scripts never wrap, which is exactly why the long lines are long. There is
+no convention here to conform to, so wrapping would be INVENTED rather than discovered, and the
+formatter's whole premise is that it encodes what the corpus already does. This is the same test
+that kept `braceStyle` out (51,048 Allman braces against 37 same-line), reaching the opposite
+verdict for the same reason.
+
+Revisit only if that premise changes — if mod authors turn out to wrap by hand, the measurement will
+say so and this should be re-run. Whoever does will need to settle where a break is allowed
+(argument lists, `&&`/`||` chains and `+` concatenations are the three shapes long enough to
+matter), what the continuation indent is, and whether the `TokenStreamMatches` corruption guard
+still holds once one line becomes several.
 
 ### Corpus diagnostic sweep — nothing outstanding
 

@@ -159,11 +159,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  * memory — so the semicolon needs the same "type over it" behaviour the editor already gives the
  * closing parenthesis through `editor.autoClosingOvertype`.
  *
- * This lives client-side rather than in the server's on-type formatting handler, which is where it
- * belongs conceptually, because VSCode only sends `textDocument/onTypeFormatting` when
- * `editor.formatOnType` is enabled — and that is off by default. Turning it on to reach the
- * handler would also run the whole document formatter on every `}` and `;` as the user types,
- * which is a far larger change than swallowing one character.
+ * This lives client-side rather than in the server's on-type formatting handler, and stays there
+ * UNCONDITIONALLY, because VSCode only sends `textDocument/onTypeFormatting` when
+ * `editor.formatOnType` is enabled. We now ship that as a default for the GSC languages, so the
+ * handler is usually reachable — but a default is not a guarantee: the setting resolves
+ * per-language, per-workspace and per-folder, and can change mid-session.
+ *
+ * Reading the setting to choose between a client- and server-side implementation is the tempting
+ * alternative and is worse in the way that is hardest to notice. Running both costs nothing (this
+ * is idempotent — with no duplicate there is nothing to delete), while guessing wrong in the other
+ * direction means neither runs and the feature silently vanishes. So the two are split by
+ * RESPONSIBILITY and never contend: de-duplication is always the client's, and `}` auto-dedent
+ * while typing is the server's, being genuinely format-on-type with no client-side equivalent.
  */
 function registerSemicolonDeduplication(context: vscode.ExtensionContext): void {
     const languages = new Set(["gsc", "csc", "gsh"]);

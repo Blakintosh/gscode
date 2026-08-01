@@ -150,10 +150,9 @@ stale after a branch switch.
 
 ## Deferred by request
 
-### Formatter — a further pass is planned
+### Formatter — line wrapping is all that is left
 
-Left where it is on purpose: another round of formatter changes is coming, so anything more here
-would be rework. What landed so far is the settings layer, not the style itself:
+What landed, which is now more than the settings layer:
 
 - `tabSize`/`insertSpaces` are honoured per request, and the GSC languages default to tabs in
   `client/package.json`'s `configurationDefaults` (247,613 tab-led indented lines across the stock
@@ -163,22 +162,32 @@ would be rework. What landed so far is the settings layer, not the style itself:
 - `braceStyle` was deliberately NOT added — 51,048 Allman braces against 37 same-line makes it a
   convention rather than a preference. Revisit only if that measurement is disputed.
 
-Still open whenever the pass happens: line wrapping (there is none — long argument lists stay on
-one line), alignment of consecutive assignments, and whether `#insert`ed regions should be
-reformatted at all.
+Three of the four things this entry listed as open have since SHIPPED, and the entry said otherwise
+for long enough to be worth naming them:
 
-**On-type formatting reformats the whole document, and is dormant only by accident.**
-`DocumentOnTypeFormattingHandler` runs `FormatMinimal` over the entire file on every `;` and `}`.
-Nobody has hit it because VSCode only sends `textDocument/onTypeFormatting` when
-`editor.formatOnType` is enabled, and that is off by default — so a user who turns it on today
-finds a single keystroke reformatting their whole file. That is the wrong semantics regardless:
-on-type formatting is specified as a LOCAL fix-up, and LSP hands the handler the position and the
-character precisely so it can be one.
+- **Alignment of consecutive assignments** — `AssignmentAligner` / `ColumnAligner`, exposed as
+  `gscode.format.alignConsecutive`.
+- **On-type formatting** — it did once reformat the whole document on every `;` and `}`, dormant
+  only because `editor.formatOnType` defaults off. Fixed in `1bb536d`: edits are clipped to the
+  alignment GROUP around the cursor (`FormatScope.GroupAround`), covered by
+  `OnTypeBlockScopeTests`, and `editor.formatOnType: true` now ships in `configurationDefaults`
+  for all three languages.
+- **`#insert`ed regions** — a non-question, on inspection. The formatter reads `result.Text.Text`
+  and `result.Lexed.Tokens`, both of which are the ROOT FILE's own text and tokens; inserted
+  content never appears in either, so there is nothing there to reformat or corrupt.
 
-The fix is bounded and does not touch `GscFormatter`: keep the formatter as the source of truth
-for what the indentation should be, then CLIP the resulting edit to the line being typed on and
-drop it if it reaches further. With that done, `editor.formatOnType: true` can join the other
-`configurationDefaults` for the GSC languages, and `}` will dedent as you type.
+**Line wrapping is the only one left, and the measurement argues against doing it by default.**
+Across the two corpora (390,434 BO3 lines and 335,608 CoD4 lines) the 95th percentile is 82 and 85
+characters, and only 1.3%/1.4% of lines pass 120. The interesting part is not the tail's size but
+what it means: these scripts **never wrap**, which is precisely why the long lines are long. So
+unlike Allman braces or tab indentation, there is no existing convention here to conform to, and
+any wrapping we add would be INVENTED — the same test that kept `braceStyle` out, landing the other
+way.
+
+If it is built anyway, it should default to off, and the decisions to make first are where a break
+is allowed (argument lists, `&&`/`||` chains, `+` concatenations are the three shapes long enough to
+matter), what the continuation indent is, and whether the corruption guard `TokenStreamMatches` still
+holds once a line becomes several.
 
 **Do not gate the semicolon de-duplication on that setting.** It lives client-side in
 `extension.ts` and runs unconditionally, which is the point — it has to work whether or not

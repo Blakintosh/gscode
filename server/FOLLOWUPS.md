@@ -32,20 +32,6 @@ If `5014` proves noisy on real mod code, the answer is a better library rather t
 — see the harvest reports under `tests/GSCode.Server.Tests/harvest/`. (The lint's own reasoning,
 and why it is an Error, lives in comments on `FunctionResolutionLint`.)
 
-### `gscode-5000 NamespaceNotImported` should be an Error, not a Warning
-
-Calling into a namespace no `#using` imports fails to LINK at runtime — the script does not load.
-That is a broken build, not a matter of style, and the severity should say so.
-
-Left as a follow-up rather than flipped immediately because the lint has only just stopped
-misfiring: it reported 23 false positives on class-method calls until `NamespaceUsageLint` learned
-to skip class qualifiers, and it now reports zero across the stock corpus. Give it some real-world
-use at Warning first; promoting a rule to Error the same day its false positives were fixed is how
-you end up with red squiggles on working code.
-
-`CorpusDiagnosticSweepTests.NoNamespaceIsReportedUnimported` asserts the zero, so a regression
-shows up before the promotion does.
-
 ### Cross-file lints for files that are not open
 
 `gscode.diagnostics.scope` now publishes problems for indexed files, but a closed file reports

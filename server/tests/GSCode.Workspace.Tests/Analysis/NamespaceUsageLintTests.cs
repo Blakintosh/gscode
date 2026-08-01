@@ -43,7 +43,7 @@ public class NamespaceUsageLintTests
     }
 
     [Fact]
-    public void Warns_WhenQualifiedCallNamespaceIsNotImported()
+    public void Reports_WhenQualifiedCallNamespaceIsNotImported()
     {
         string source = "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n";
 
@@ -54,7 +54,20 @@ public class NamespaceUsageLintTests
     }
 
     [Fact]
-    public void NoWarning_WhenNamespaceIsImported()
+    public void TheReport_IsAnError()
+    {
+        // The script does not LINK without the import, so this is a broken build rather than a
+        // matter of style. It ran as a Warning first on purpose — the rule had only just stopped
+        // misfiring on class-method calls — and was promoted after holding at zero across the stock
+        // corpus. Pinned because a severity is the part of a lint users actually feel, and nothing
+        // asserted it when it changed.
+        string source = "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n";
+
+        Assert.Equal(DiagnosticSeverity.Error, Lint(source)[0].Severity);
+    }
+
+    [Fact]
+    public void NoDiagnostic_WhenNamespaceIsImported()
     {
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::helper();\n}\n";
 
@@ -64,7 +77,7 @@ public class NamespaceUsageLintTests
     }
 
     [Fact]
-    public void NoWarning_ForOwnNamespaceOrUnqualifiedCalls()
+    public void NoDiagnostic_ForOwnNamespaceOrUnqualifiedCalls()
     {
         string source = "#namespace util;\nfunction run()\n{\n    helper();\n    util::helper();\n}\n";
 

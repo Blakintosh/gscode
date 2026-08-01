@@ -199,8 +199,10 @@ surfaces.
 
 - `static NamespaceUsageLint.Analyze(result, store, language, resolver, askingPath)` — a
   cross-file lint: a qualified call `ns::foo()` should have a `#using` that imports a file
-  declaring namespace `ns` (or `ns` be one of the file's own namespaces). Returns Warning
-  diagnostics (`NamespaceNotImported`). Zero false positives by construction: it builds the set
+  declaring namespace `ns` (or `ns` be one of the file's own namespaces). Returns Error
+  diagnostics (`NamespaceNotImported`) — the script does not link without the import, so it is a
+  broken build rather than a style point; it ran as a Warning first while the rule proved itself
+  and was promoted after holding at zero across the stock corpus. Zero false positives by construction: it builds the set
   of available namespaces from the file's own `#namespace` blocks plus every `#using` target
   resolved to an INDEXED record, and if any `#using` can't be resolved to a record it suppresses
   the whole lint (a not-yet-known import might supply the namespace). Unqualified calls key under

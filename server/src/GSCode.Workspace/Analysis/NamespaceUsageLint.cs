@@ -13,12 +13,23 @@ namespace GSCode.Workspace.Analysis;
 /// <summary>
 /// A cross-file lint: a qualified call <c>ns::foo()</c> requires the file to <c>#using</c> a
 /// file that declares namespace <c>ns</c> (or for <c>ns</c> to be one of the file's own
-/// namespaces). This is engine-required even though v2 resolution finds the function anyway,
-/// so it is a Warning, not an error. It pairs with the "add #using" code action.
+/// namespaces). It pairs with the "add #using" code action.
+///
+/// ERROR severity, because the script does not LINK: the engine requires the import even though v2
+/// resolution finds the function anyway, so the build is broken rather than untidy. That the analyser
+/// can resolve it is a fact about the analyser, not about the game.
+///
+/// It was a Warning first, deliberately. The rule had only just stopped misfiring — it reported 23
+/// false positives on class-method calls until this learned to skip class qualifiers below — and
+/// promoting a rule to Error the same day its false positives are fixed is how red squiggles end up
+/// on working code. It has since held at zero across the stock corpus, which
+/// <c>CorpusDiagnosticSweepTests.NoNamespaceIsReportedUnimported</c> asserts, so a regression
+/// surfaces there rather than in someone's editor.
 ///
 /// Zero false positives by construction: if any <c>#using</c> cannot be resolved to an indexed
 /// record, the whole lint is suppressed — a namespace that a not-yet-known import might supply
-/// is never flagged.
+/// is never flagged. That property is what an Error severity rests on, so weakening any of the
+/// bail-outs below now costs more than it used to.
 /// </summary>
 public static class NamespaceUsageLint
 {
@@ -70,7 +81,7 @@ public static class NamespaceUsageLint
             }
         }
 
-        // Warn on any qualified call whose namespace is neither the file's own nor imported.
+        // Report any qualified call whose namespace is neither the file's own nor imported.
         // Unqualified calls are keyed under the current namespace (always own), so they never
         // trip this; sys:: builtin calls have a null namespace and are skipped.
         HashSet<string> classNames = ClassNames(store);
@@ -100,7 +111,7 @@ public static class NamespaceUsageLint
             }
 
             diagnostics.Add(Diagnostic.Create(
-                entry.Range, DiagnosticSeverity.Warning, GscDiagnosticCode.NamespaceNotImported, namespaceName));
+                entry.Range, DiagnosticSeverity.Error, GscDiagnosticCode.NamespaceNotImported, namespaceName));
         }
 
         return diagnostics.ToImmutable();

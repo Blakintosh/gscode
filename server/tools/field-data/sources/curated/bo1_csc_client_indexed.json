@@ -1,0 +1,126 @@
+{
+  "note": "Builtins that take a leading localClientNum on the client VM. Client scripts run one VM per splitscreen client, so a client-side builtin acting on a particular screen takes the client index first: VisionSetNaked( 0, \"vampire_low\" ) against the server form VisionSetNaked( \"vampire_low\" ). The GSC library therefore under-declares these by one parameter when reused for CSC, and this list is what the CSC generation step corrects.",
+  "provenance": "Derived by ClientArityHarvestTests from this game's own shipped client scripts, not hand-written: every .csc call to a name the GSC library knows was measured against the declared overloads, and a name kept when at least 80% of its over-supplied calls lead with a 0-3 literal or an argument spelled like a client index. That rule scores 31/31 with no false positives against BO3, the one game shipping a hand-documented client library to check it on. Regenerate the evidence with the harvest; edit here to record a name the corpus could not settle.",
+  "clientIndexed": [
+    {
+      "name": "GetCurrentWeapon",
+      "confidence": 1,
+      "files": 4,
+      "calls": 9,
+      "serverParameters": 0,
+      "clientArgCounts": [
+        1
+      ]
+    },
+    {
+      "name": "GetEnt",
+      "confidence": 0.942,
+      "files": 17,
+      "calls": 52,
+      "serverParameters": 2,
+      "clientArgCounts": [
+        3
+      ]
+    },
+    {
+      "name": "GetWeaponAmmoClip",
+      "confidence": 1,
+      "files": 2,
+      "calls": 3,
+      "serverParameters": 1,
+      "clientArgCounts": [
+        2
+      ]
+    },
+    {
+      "name": "IsMeleeing",
+      "confidence": 1,
+      "files": 3,
+      "calls": 4,
+      "serverParameters": 0,
+      "clientArgCounts": [
+        1
+      ]
+    },
+    {
+      "name": "IsThrowingGrenade",
+      "confidence": 1,
+      "files": 3,
+      "calls": 4,
+      "serverParameters": 0,
+      "clientArgCounts": [
+        1
+      ]
+    },
+    {
+      "name": "PlayFxOnTag",
+      "confidence": 0.89,
+      "files": 53,
+      "calls": 264,
+      "serverParameters": 3,
+      "clientArgCounts": [
+        4
+      ]
+    },
+    {
+      "name": "PlayRumbleLoopOnEntity",
+      "confidence": 1,
+      "files": 2,
+      "calls": 3,
+      "serverParameters": 1,
+      "clientArgCounts": [
+        2
+      ]
+    },
+    {
+      "name": "PlayRumbleOnEntity",
+      "confidence": 0.846,
+      "files": 19,
+      "calls": 39,
+      "serverParameters": 1,
+      "clientArgCounts": [
+        2
+      ]
+    },
+    {
+      "name": "playsound",
+      "confidence": 1,
+      "files": 4,
+      "calls": 15,
+      "serverParameters": 3,
+      "clientArgCounts": [
+        4
+      ]
+    },
+    {
+      "name": "stoploopsound",
+      "confidence": 1,
+      "files": 6,
+      "calls": 11,
+      "serverParameters": 1,
+      "clientArgCounts": [
+        3
+      ]
+    },
+    {
+      "name": "StopRumble",
+      "confidence": 1,
+      "files": 5,
+      "calls": 7,
+      "serverParameters": 1,
+      "clientArgCounts": [
+        2
+      ]
+    },
+    {
+      "name": "VisionSetNaked",
+      "confidence": 1,
+      "files": 8,
+      "calls": 56,
+      "serverParameters": 2,
+      "clientArgCounts": [
+        3
+      ]
+    }
+  ]
+}

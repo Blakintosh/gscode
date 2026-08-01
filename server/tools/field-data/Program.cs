@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 
@@ -55,6 +56,13 @@ GenerateWordfileGameData(
     docsRoot: null,
     curatedDir,
     enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"));
+
+// The client libraries, for the games that have client scripts but no documentation describing them.
+// Derived from the GSC artifact just written rather than from the wordfile, because the wordfile has
+// no client/server split at all — its /C7 section is one list of script commands. BO3 is absent by
+// design: t7_api_csc.json is hand-documented and real, and is what the derivation was checked against.
+GenerateClientApi("waw", apiDir, curatedDir);
+GenerateClientApi("bo1", apiDir, curatedDir);
 
 Console.WriteLine("Done.");
 return 0;
@@ -903,6 +911,177 @@ static string Ascii(string text)
     }
 
     return builder.ToString();
+}
+
+// Derives a game's CLIENT builtin library from its server one.
+//
+// WaW and BO1 have client scripts and no documentation describing them, so without this a .csc file
+// in those games loads BuiltinApi.Empty — no hover, no signature help, no completion, which is
+// exactly what the absence of waw_api_csc.json looks like from the editor. Most engine functions
+// exist on both VMs under the same name, so the server library is close to the right answer and far
+// better than nothing.
+//
+// Derived from the GSC ARTIFACT rather than from the wordfile, because the wordfile has no
+// client/server split to read: its /C7 section is one undifferentiated list of script commands.
+//
+// Most of the server library is NOT client-side, so it is pruned to the names there is evidence for
+// — either this game's own client scripts call them, or BO3's hand-documented client library lists
+// them. See {prefix}_csc_functions.json for the rule and for the standing caveat that none of it is
+// documentation-verified, which is exactly why BO3 is not put through this: t7_api_csc.json is a real
+// source, and is neither generated nor pruned here.
+//
+// The one systematic correction is the leading localClientNum — see the other curated list.
+static void GenerateClientApi(string prefix, string apiDir, string curatedDir)
+{
+    string serverPath = Path.Combine(apiDir, $"{prefix}_api_gsc.json");
+    if ( !File.Exists(serverPath) )
+    {
+        Console.WriteLine($"  {prefix} client api: no {prefix}_api_gsc.json to derive from; skipped.");
+        return;
+    }
+
+    HashSet<string> clientIndexed = ReadClientIndexedNames(
+        Path.Combine(curatedDir, $"{prefix}_csc_client_indexed.json"));
+    HashSet<string>? keep = ReadKeptClientNames(Path.Combine(curatedDir, $"{prefix}_csc_functions.json"));
+
+    JsonNode? root = JsonNode.Parse(File.ReadAllText(serverPath));
+    JsonArray? api = root?["api"]?.AsArray();
+    if ( api is null )
+    {
+        Console.WriteLine($"  {prefix} client api: {prefix}_api_gsc.json has no api array; skipped.");
+        return;
+    }
+
+    // Right to left: removing from a JsonArray shifts everything after it.
+    int servers = api.Count;
+    if ( keep is not null )
+    {
+        for ( int i = api.Count - 1; i >= 0; i-- )
+        {
+            string? name = (api[i] as JsonObject)?["name"]?.GetValue<string>();
+            if ( name is null || !keep.Contains(name) )
+            {
+                api.RemoveAt(i);
+            }
+        }
+    }
+
+    int adjusted = 0;
+    foreach ( JsonNode? entry in api )
+    {
+        if ( entry is JsonObject function
+            && function["name"]?.GetValue<string>() is string name
+            && clientIndexed.Contains(name) )
+        {
+            PrependClientIndex(function);
+            adjusted++;
+        }
+    }
+
+    WriteJson(Path.Combine(apiDir, $"{prefix}_api_csc.json"), root);
+    Console.WriteLine(
+        $"  {prefix} client api: {api.Count} functions kept of {servers}, {adjusted} given a leading localClientNum");
+
+    // A curated name the server library does not carry corrects nothing and would sit there looking
+    // as though it did, so it is worth a word rather than a silent no-op.
+    if ( adjusted != clientIndexed.Count )
+    {
+        Console.WriteLine(
+            $"  {prefix} client api: WARNING {clientIndexed.Count - adjusted} curated name(s) absent from the server library");
+    }
+}
+
+// Gives one function the client VM's extra leading parameter, on every overload it has.
+static void PrependClientIndex(JsonObject function)
+{
+    JsonObject parameter = new()
+    {
+        ["name"] = "localClientNum",
+        ["description"] = "The splitscreen client this call acts on, 0-3. Client scripts run one script VM per splitscreen client.",
+        ["mandatory"] = true,
+    };
+
+    if ( function["overloads"] is not JsonArray overloads || overloads.Count == 0 )
+    {
+        // No documented signature at all, which is the common case on these two games. The client
+        // index is still the one parameter known to be there, so state it rather than leave it bare.
+        function["overloads"] = new JsonArray(new JsonObject { ["parameters"] = new JsonArray(parameter) });
+        return;
+    }
+
+    foreach ( JsonNode? node in overloads )
+    {
+        if ( node is not JsonObject overload )
+        {
+            continue;
+        }
+
+        // A clone per overload: a JsonNode belongs to one parent, so sharing the instance would
+        // move it out of the previous overload rather than copy it.
+        if ( overload["parameters"] is JsonArray parameters )
+        {
+            parameters.Insert(0, parameter.DeepClone());
+        }
+        else
+        {
+            overload["parameters"] = new JsonArray(parameter.DeepClone());
+        }
+    }
+}
+
+// The curated names to keep in the client library. Null — not empty — when the file is absent, which
+// the caller reads as "no prune list, keep everything": an empty set and a missing file mean opposite
+// things here, and conflating them would silently ship an empty library.
+static HashSet<string>? ReadKeptClientNames(string path)
+{
+    if ( !File.Exists(path) )
+    {
+        return null;
+    }
+
+    HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+    JsonArray? listed = JsonNode.Parse(File.ReadAllText(path))?["functions"]?.AsArray();
+    if ( listed is null )
+    {
+        return null;
+    }
+
+    foreach ( JsonNode? entry in listed )
+    {
+        if ( entry?["name"]?.GetValue<string>() is string name )
+        {
+            names.Add(name);
+        }
+    }
+
+    return names;
+}
+
+// The curated names that take a leading localClientNum. Absent means no corrections, which still
+// produces a usable client library — just one that under-declares the client-indexed names.
+static HashSet<string> ReadClientIndexedNames(string path)
+{
+    HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+    if ( !File.Exists(path) )
+    {
+        return names;
+    }
+
+    JsonArray? listed = JsonNode.Parse(File.ReadAllText(path))?["clientIndexed"]?.AsArray();
+    if ( listed is null )
+    {
+        return names;
+    }
+
+    foreach ( JsonNode? entry in listed )
+    {
+        if ( entry?["name"]?.GetValue<string>() is string name )
+        {
+            names.Add(name);
+        }
+    }
+
+    return names;
 }
 
 internal sealed record FieldEntry(string Name, string Type, bool ReadOnly = false);

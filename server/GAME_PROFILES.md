@@ -225,8 +225,8 @@ game has `.csc`.
 |------|:----------------:|:---------:|-------|
 | cod4 | `cod4` | ✓ | 819 functions (792 documented, 19 reconstructed), 297 radiant keys, 108 fields, 894 stock scripts |
 | bo3  | `t7`   | ✓ | the full T7 set, including `t7_api_csc.json` |
-| waw  | `waw`  | ✗ | 891 functions (781 inherited from CoD4, 110 its own), 360 radiant keys (11 client-only), 105 fields |
-| bo1  | `bo1`  | ✗ | 751 functions (all inherited from CoD4), 466 radiant keys (126 client-only), 108 fields |
+| waw  | `waw`  | ✗ | 891 functions (781 inherited from CoD4, 110 its own) + 154 derived client functions, 360 radiant keys (11 client-only), 105 fields |
+| bo1  | `bo1`  | ✗ | 751 functions (all inherited from CoD4) + 156 derived client functions, 466 radiant keys (126 client-only), 108 fields |
 | mw2 / all cores | *(null)* | — | nothing; a workspace on that game loads no builtin data rather than another game's |
 
 **`HasCompleteBuiltinLibrary` is a separate claim from `Verified`.** Verified is about the DIALECT —
@@ -252,6 +252,38 @@ BO1 need no entries of their own — they inherit CoD4's corrected output.
 Radiant keys carry a side (`both` or `client`). BO3 marks client keys with a `client` prefix inside
 one `keys.txt`; WaW and BO1 instead split them across `keys.txt` and `clientkeys.txt`. Either way,
 completion and hover offer client-side keys to `.csc` only.
+
+### The client libraries are derived, except BO3's
+
+Only `t7_api_csc.json` is a real source: Treyarch documented BO3's client VM, and it carries 513 names
+that do not exist in `t7_api_gsc.json` at all. It is never generated or pruned.
+
+WaW and BO1 have client scripts and no documentation for them, so until recently they shipped no
+client API and every `.csc` file in those games loaded `BuiltinApi.Empty` — no hover, no signature
+help, no completion. Theirs are now derived from their own server libraries by the field-data tool, in
+two steps, both driven by evidence rather than assumption:
+
+**Pruned to what is known to be client-side.** Most of a server library is not. A name is kept when
+this game's own shipped `.csc` scripts call it, or when BO3's hand-documented client library lists it
+— two independent kinds of evidence, and neither subsumes the other (28 names WaW's client scripts
+call are absent from BO3's library; 66 BO3-backed names are never called in WaW's stock scripts). BO3
+measures the cost of the stricter rule: restricted to names certainly client-side, its stock client
+scripts exercise only 71.4% of them, so a corpus-only prune would discard about a third of the real
+ones. WaW keeps 154 of 891, BO1 156 of 751.
+
+**Corrected for the leading `localClientNum`.** Client scripts run one VM per splitscreen client, so a
+client-side builtin acting on a particular screen takes the client index first — `VisionSetNaked( 0,
+"vampire_low" )` against the server's `VisionSetNaked( "vampire_low" )`. `ClientArityHarvestTests`
+finds these by measuring every `.csc` call against the server signature and reading the first argument
+of the ones that overflow. Scored against BO3, where 224 entries already document the parameter, the
+rule is right 31 times out of 31 with no false positives. Twelve names each on WaW and BO1.
+
+**None of this is documentation-verified, and it cannot be.** A name being absent is not proof the
+client VM lacks it, and a kept name is circumstantial. That is why `HasCompleteBuiltinLibrary` and
+`HasReliableBuiltinSignatures` both stay false for these games: nothing derived here is ever allowed
+to tell a user their code is wrong. The curated inputs
+(`tools/field-data/sources/curated/<prefix>_csc_functions.json` and `<prefix>_csc_client_indexed.json`)
+carry the same caveat and the per-name evidence.
 
 ---
 

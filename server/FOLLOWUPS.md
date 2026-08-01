@@ -22,6 +22,18 @@ The corpus sweep reports `error`, `add_object` and `warning` as unknown builtins
 Add them by HAND rather than regenerating: a regeneration rewrites fifteen files and invalidates
 every workspace cache through `ServerBuildIdentity`, which is not worth it for three names.
 
+### WaW and BO1 ship no stock-script list
+
+`BundledDataFileNames` promises `waw_stock_scripts.txt` and `bo1_stock_scripts.txt` and neither
+exists, so the warning about editing a file the game shipped never fires for those two games. It
+degrades rather than breaks — an absent list reads as "nothing is stock" — which is why it survived
+unnoticed. `BundledDataTests` now pins the "everything promised is shipped" invariant and carries
+these two as the only documented exceptions; the exclusion list is itself asserted to shrink when
+they arrive, so this cannot quietly become permanent.
+
+Generating them means enumerating each game's raw tree, as `cod4_stock_scripts.txt` and
+`t7_stock_scripts.txt` were. Needs `GSCODE_CORPUS_WAW` / `GSCODE_CORPUS_BO1` on the machine doing it.
+
 ### `5014 BuiltinFunctionNotFound` cannot tell a typo from a missing builtin
 
 An unqualified call that nothing explains is reported as `5014`, and the rule cannot say which of
@@ -281,6 +293,14 @@ Worth recording how the one real false positive was missed for a while: this ent
 of them. Cause and fix are under `DevOnlyBuiltins` — a BO3-measured table was being applied to every
 game — and the lesson generalises past that one list: a claim about "the corpus" is a claim about
 whichever game was actually looked at.
+
+The same lesson paid out twice. Correcting CoD4 left WaW reporting **972 `5006` Errors across 184
+files** from the identical cause, unnoticed for the same reason — and the trade-off had been named at
+the time the correction was written in CoD4's own data rather than keyed per game. It cost nothing to
+fix: the generator's inheritance copies CoD4's entry verbatim, so regenerating carried `devOnly:
+false` to WaW and BO1 and took both to zero. Counted on WaW's own scripts, `PrintLn` is 479 calls
+inside a dev block against 954 outside, `Line` 104:157, `Print3d` 93:118 — the same inversion of BO3's
+269:2 that made CoD4 wrong. `SetDebugSideSwitch` (1:0) is the one name that stays dev-only there.
 
 **`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 Errors, all GENUINE.** Checked site by site
 against the BO3 corpus; the standing suspicion that the callers were themselves dev-only is wrong,

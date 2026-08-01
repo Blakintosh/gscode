@@ -7917,7 +7917,8 @@
       "module": "Debug",
       "flags": [
         "documented"
-      ]
+      ],
+      "devOnly": false
     },
     {
       "name": "LinkTo",
@@ -10787,7 +10788,8 @@
       "module": "Debug",
       "flags": [
         "documented"
-      ]
+      ],
+      "devOnly": false
     },
     {
       "name": "Print3d",
@@ -10828,7 +10830,8 @@
       "module": "Debug",
       "flags": [
         "documented"
-      ]
+      ],
+      "devOnly": false
     },
     {
       "name": "PrintLn",
@@ -10870,7 +10873,8 @@
       "flags": [
         "documented",
         "corrected"
-      ]
+      ],
+      "devOnly": false
     },
     {
       "name": "PushPlayer",

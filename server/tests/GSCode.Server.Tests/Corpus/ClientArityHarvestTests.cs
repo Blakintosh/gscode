@@ -16,10 +16,11 @@ namespace GSCode.Server.Tests.Corpus;
 /// Measures what a game's SERVER library gets wrong when pointed at its CLIENT scripts, so a CSC
 /// library can be built from the GSC one instead of from nothing.
 ///
-/// WaW and BO1 ship no <c>*_api_csc.json</c> at all, which is why a <c>.csc</c> file in those games
-/// offers no hover, no signature help and no completion — <see cref="ApiLoader"/> returns
-/// <see cref="BuiltinApi.Empty"/> for a file that is not there. Their GSC libraries are close to the
-/// right answer, because most engine functions exist on both VMs under the same name.
+/// WaW and BO1 document no client VM, so until this ran they shipped no <c>*_api_csc.json</c> at all and
+/// a <c>.csc</c> file in those games offered no hover, no signature help and no completion —
+/// <see cref="ApiLoader"/> returns <see cref="BuiltinApi.Empty"/> for a file that is not there. Their
+/// GSC libraries are close to the right answer, because most engine functions exist on both VMs under
+/// the same name, and this is what measures the difference so the field-data tool can correct for it.
 ///
 /// THE ONE SYSTEMATIC DIFFERENCE IS THE LEADING <c>localClientNum</c>. Client scripts run one VM per
 /// splitscreen client, so a client-side builtin that acts on a particular screen takes the client
@@ -86,6 +87,23 @@ public class ClientArityHarvestTests
         public HashSet<string> FirstArgs { get; } = new(StringComparer.OrdinalIgnoreCase);
         public List<string> Sites { get; } = [];
     }
+
+    /// <summary>A server-library name that the shipped client scripts actually call.</summary>
+    private sealed class Observed
+    {
+        public int Calls { get; set; }
+        public HashSet<string> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private sealed record ObservedFunction(string Name, int Calls, int FileCount, bool InControlLibrary);
+
+    private sealed record ObservedReport(
+        string Game,
+        int ClientScriptsSwept,
+        int ServerLibrarySize,
+        int Observed,
+        string Coverage,
+        IReadOnlyList<ObservedFunction> Functions);
 
     private sealed record ArityFinding(
         string Name,
@@ -166,11 +184,19 @@ public class ClientArityHarvestTests
             return;
         }
 
-        // The known answer, where there is one. Only BO3 ships a real client library.
+        // The known answer, where there is one — and a DERIVED client library is not one. WaW's and
+        // BO1's are generated from these very findings, so scoring against them would report a perfect
+        // result no matter what the rule was. A real client library says so structurally rather than
+        // by name: BO3's carries hundreds of functions its server library has never heard of, which is
+        // something pruning and annotating a GSC library cannot produce.
         BuiltinApi client = ApiLoader.Load(apiDirectory, ScriptLanguage.Csc, profile);
-        HashSet<string> knownClientIndexed = KnownLocalClientNum(client);
+        bool isSource = client.All.Any(function => server.Find(function.Name) is null);
+        BuiltinApi control = isSource ? client : BuiltinApi.Empty;
+
+        HashSet<string> knownClientIndexed = KnownLocalClientNum(control);
 
         Dictionary<string, Candidate> candidates = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, Observed> observed = new(StringComparer.OrdinalIgnoreCase);
         int swept = 0;
 
         foreach ( string path in scripts )
@@ -184,11 +210,12 @@ public class ClientArityHarvestTests
             ParseResult result = analyze(path);
             foreach ( AstNode element in result.Tree.Root.Elements )
             {
-                Walk(element, result, server, path, root, candidates);
+                Walk(element, result, server, path, root, candidates, observed);
             }
         }
 
-        WriteReport(profile, swept, candidates, knownClientIndexed, client.Count);
+        WriteReport(profile, swept, candidates, knownClientIndexed, control.Count);
+        WriteObserved(profile, swept, observed, server, control);
     }
 
     private static void Walk(
@@ -197,16 +224,17 @@ public class ClientArityHarvestTests
         BuiltinApi server,
         string path,
         string root,
-        Dictionary<string, Candidate> candidates)
+        Dictionary<string, Candidate> candidates,
+        Dictionary<string, Observed> observed)
     {
         if ( node is CallNode call )
         {
-            Inspect(call, result, server, path, root, candidates);
+            Inspect(call, result, server, path, root, candidates, observed);
         }
 
         foreach ( AstNode child in AstSearch.ChildrenOf(node) )
         {
-            Walk(child, result, server, path, root, candidates);
+            Walk(child, result, server, path, root, candidates, observed);
         }
     }
 
@@ -216,7 +244,8 @@ public class ClientArityHarvestTests
         BuiltinApi server,
         string path,
         string root,
-        Dictionary<string, Candidate> candidates)
+        Dictionary<string, Candidate> candidates,
+        Dictionary<string, Observed> observed)
     {
         // Only a bare name can be a builtin, and only unexpanded text is the author's — the same two
         // guards the production lint applies, for the same reasons.
@@ -226,7 +255,23 @@ public class ClientArityHarvestTests
         }
 
         string name = identifier.Token.Text;
-        if ( server.Find(name) is not BuiltinFunction builtin || builtin.Overloads.Length == 0 )
+        if ( server.Find(name) is not BuiltinFunction builtin )
+        {
+            return;
+        }
+
+        // Every call, before the arity question: a name the client scripts actually call is a name
+        // the client VM actually has, which is the evidence the library gets pruned against.
+        if ( !observed.TryGetValue(name, out Observed? seen) )
+        {
+            seen = new Observed();
+            observed[name] = seen;
+        }
+
+        seen.Calls++;
+        seen.Files.Add(path);
+
+        if ( builtin.Overloads.Length == 0 )
         {
             return;
         }
@@ -445,6 +490,79 @@ public class ClientArityHarvestTests
 
         File.WriteAllText(file, json + "\n", new System.Text.UTF8Encoding(false));
         _output.WriteLine($"Report: {file}");
+    }
+
+    /// <summary>
+    /// Which of the server library's names the shipped client scripts actually call — the evidence for
+    /// pruning an inferred client library down to what is known to exist on the client VM.
+    ///
+    /// BO3 measures the price of doing that. It is the one game where the true client-side answer is
+    /// known, so restricting to names its GSC and CSC libraries share gives a set that is certainly
+    /// client-side, and the share of THOSE that its stock client scripts happen to call is the
+    /// survival rate a corpus-only prune would produce on a game where the answer is not known.
+    /// </summary>
+    private void WriteObserved(
+        GameProfile profile, int swept, Dictionary<string, Observed> observed, BuiltinApi server, BuiltinApi client)
+    {
+        List<ObservedFunction> functions = [];
+        foreach ( KeyValuePair<string, Observed> entry in observed )
+        {
+            functions.Add(new ObservedFunction(
+                entry.Key, entry.Value.Calls, entry.Value.Files.Count, client.Find(entry.Key) is not null));
+        }
+
+        functions.Sort(static (left, right) =>
+        {
+            int byFiles = right.FileCount.CompareTo(left.FileCount);
+            return byFiles != 0 ? byFiles : right.Calls.CompareTo(left.Calls);
+        });
+
+        string coverage;
+        if ( client.Count > 0 )
+        {
+            int knownClientSide = 0;
+            int knownAndCalled = 0;
+            foreach ( BuiltinFunction function in server.All )
+            {
+                if ( client.Find(function.Name) is null )
+                {
+                    continue;
+                }
+
+                knownClientSide++;
+                if ( observed.ContainsKey(function.Name) )
+                {
+                    knownAndCalled++;
+                }
+            }
+
+            double survival = knownClientSide == 0 ? 0 : (double)knownAndCalled / knownClientSide;
+            coverage = $"CONTROL — {knownClientSide} names are in both this game's server and client libraries, "
+                + $"so are certainly client-side; its stock client scripts call {knownAndCalled} of them "
+                + $"({survival:P1}). A corpus-only prune keeps that share and discards the rest.";
+        }
+        else
+        {
+            coverage = $"{observed.Count} of the server library's {server.Count} names appear in client scripts.";
+        }
+
+        _output.WriteLine($"    OBSERVED — {coverage}");
+
+        ObservedReport report = new(profile.ShortName, swept, server.Count, functions.Count, coverage, functions);
+
+        string directory = Path.Combine(FindProjectRoot() ?? AppContext.BaseDirectory, "harvest");
+        Directory.CreateDirectory(directory);
+
+        string json = JsonSerializer.Serialize(report, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            NewLine = "\n",
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        });
+
+        File.WriteAllText(
+            Path.Combine(directory, $"{profile.ShortName}_csc_observed.json"), json + "\n", new System.Text.UTF8Encoding(false));
     }
 
     private static string? FindProjectRoot()

@@ -1207,28 +1207,19 @@ public sealed class CompletionEngine
     {
         string detail = function.Namespace.Length > 0 ? function.Namespace + "::" + function.Name : function.Name;
 
-        if ( !parameterHints )
-        {
-            // No Documentation: rendering a doc block for every function in the workspace on every
-            // keystroke is exactly what completionItem/resolve exists to avoid. The namespace rides
-            // along so resolve can find this function again.
-            return new CompletionEntry(
-                function.Name, CompletionKind.Function, detail, function.Name + callSuffix, Namespace: function.Namespace);
-        }
-
-        // FilterText and ResolveName both hold the bare NAME, and both are load-bearing. The editor
-        // matches what you type against the filter text, so without it the parameter names would be
-        // matched too and typing "team" would surface every function taking one. Resolve looks the
-        // symbol up by name to render its documentation, and would find nothing under a label with
-        // parentheses in it.
+        // No Documentation: rendering a doc block for every function in the workspace on every
+        // keystroke is exactly what completionItem/resolve exists to avoid. The namespace rides
+        // along so resolve can find this function again.
+        //
+        // The parameters go in LabelDetail rather than the label, so the label stays exactly the
+        // name — which is what the editor filters, sorts and resolves on.
         return new CompletionEntry(
-            function.Name + ParameterHint(function.Parameters, function.HasVarargs),
+            function.Name,
             CompletionKind.Function,
             detail,
             function.Name + callSuffix,
-            FilterText: function.Name,
             Namespace: function.Namespace,
-            ResolveName: function.Name);
+            LabelDetail: parameterHints ? ParameterHint(function.Parameters, function.HasVarargs) : "");
     }
 
     /// <summary>
@@ -1261,12 +1252,11 @@ public sealed class CompletionEngine
                 new ParameterSymbol(p.Mandatory ? p.Name : p.Name + "?", false, ""))];
 
         return new CompletionEntry(
-            builtin.Name + ParameterHint(parameters, hasVarargs: false),
+            builtin.Name,
             CompletionKind.Function,
             "builtin",
             builtin.Name + callSuffix,
-            FilterText: builtin.Name,
-            ResolveName: builtin.Name);
+            LabelDetail: ParameterHint(parameters, hasVarargs: false));
     }
 
     private static CompletionEntry ImportedFunctionEntry(
@@ -1274,17 +1264,18 @@ public sealed class CompletionEngine
     {
         string qualified = ns + "::" + function.Name;
 
-        // FilterText stays the QUALIFIED name rather than the bare one: filtering on the qualifier
-        // is the whole reason the label carries it, and a bare filter text would undo that.
-        // ResolveName keeps the function's OWN name, which is what documentation is looked up by.
+        // The label stays the QUALIFIED name and nothing else: filtering on the qualifier is the
+        // whole reason it carries one, and the editor filters on the label. ResolveName keeps the
+        // function's OWN name, which is what documentation is looked up by — that one is needed
+        // whatever the parameter hints do, since `util::get_players` matches no symbol.
         return new CompletionEntry(
-            parameterHints ? qualified + ParameterHint(function.Parameters, function.HasVarargs) : qualified,
+            qualified,
             CompletionKind.Function,
             "function",
             qualified + callSuffix,
-            FilterText: parameterHints ? qualified : "",
             Namespace: ns,
-            ResolveName: function.Name);
+            ResolveName: function.Name,
+            LabelDetail: parameterHints ? ParameterHint(function.Parameters, function.HasVarargs) : "");
     }
 
     /// <summary>

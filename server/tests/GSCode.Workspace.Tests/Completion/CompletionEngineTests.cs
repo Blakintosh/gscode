@@ -408,7 +408,7 @@ public class CompletionEngineTests
         // Labelled with the qualifier, which is what makes the namespace findable: the editor
         // filters on the label, so typing "globallogic" surfaces every one of its functions rather
         // than only those whose own name starts that way.
-        CompletionEntry entry = entries.First(e => e.Label == "globallogic::init()" && e.Kind == CompletionKind.Function);
+        CompletionEntry entry = entries.First(e => e.Label == "globallogic::init" && e.Kind == CompletionKind.Function);
         Assert.Equal("globallogic", entry.Namespace);
 
         // The function's OWN name is kept for resolve, which looks documentation up by name and
@@ -543,7 +543,7 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
         Assert.Contains(entries, e => e.Label == "struct" && e.Kind == CompletionKind.Namespace);
-        Assert.Contains(entries, e => e.Label == "struct::createstruct()");
+        Assert.Contains(entries, e => e.Label == "struct::createstruct");
     }
 
     [Fact]
@@ -570,10 +570,10 @@ public class CompletionEngineTests
             .Select(e => e.Label)
             .Order(StringComparer.Ordinal)];
 
-        Assert.Equal(["util", "util::get_players()", "util::wait_endon()"], matching);
+        Assert.Equal(["util", "util::get_players", "util::wait_endon"], matching);
     }
 
-    // --- Parameter names inline in the label ---
+    // --- Parameter names beside the label ---
     //
     // The names alone frequently do not tell two entries apart — `on_agent_generic_damaged` and
     // `on_agent_player_damaged` differ by their arguments and nothing else. The parameters are
@@ -598,42 +598,41 @@ public class CompletionEngineTests
     }
 
     [Fact]
-    public void ParameterNamesAppearInTheLabel()
+    public void ParameterNamesRideBesideTheLabel()
     {
-        CompletionEntry entry = Assert.Single(
-            WithHints(true), e => e.Label.StartsWith("util::get_players", StringComparison.Ordinal));
+        CompletionEntry entry = Assert.Single(WithHints(true), e => e.Label == "util::get_players");
 
-        Assert.Equal("util::get_players( team, alive )", entry.Label);
+        // Beside it, never in it: the label stays exactly what the editor filters and sorts on.
+        Assert.Equal("( team, alive )", entry.LabelDetail);
     }
 
     [Fact]
     public void ATakesNothingFunctionShowsEmptyParentheses()
     {
-        Assert.Contains(WithHints(true), e => e.Label == "util::now()");
+        Assert.Contains(WithHints(true), e => e.Label == "util::now" && e.LabelDetail == "()");
     }
 
     [Fact]
-    public void FilteringAndInsertionStillUseTheNameAlone()
+    public void TheLabelIsUntouchedSoFilteringNeverSeesParameterNames()
     {
-        // The one real hazard of putting the signature in the label: the editor matches what you
-        // type against the FILTER text, which defaults to the label — so without this, typing
-        // "team" would surface every function that happens to take a parameter of that name.
-        CompletionEntry entry = Assert.Single(
-            WithHints(true), e => e.Label.StartsWith("util::get_players", StringComparison.Ordinal));
+        // The hazard that keeping them out of the label removes outright: the editor matches what
+        // you type against the label, so a folded-in signature would let "team" surface every
+        // function that happens to take a parameter of that name.
+        CompletionEntry entry = Assert.Single(WithHints(true), e => e.Label == "util::get_players");
 
-        Assert.Equal("util::get_players", entry.FilterText);
+        Assert.DoesNotContain("team", entry.Label, StringComparison.Ordinal);
         Assert.StartsWith("util::get_players(", entry.InsertText, StringComparison.Ordinal);
         Assert.DoesNotContain("team", entry.InsertText, StringComparison.Ordinal);
 
-        // And resolve looks documentation up by NAME, which a parenthesised label would never match.
+        // Resolve looks documentation up by the function's OWN name, which the qualifier is not.
         Assert.Equal("get_players", entry.ResolveName);
     }
 
     [Fact]
     public void TheSettingTurnsThemOff()
     {
-        Assert.Contains(WithHints(false), e => e.Label == "util::get_players");
-        Assert.DoesNotContain(WithHints(false), e => e.Label.Contains('(', StringComparison.Ordinal));
+        Assert.Contains(WithHints(false), e => e.Label == "util::get_players" && e.LabelDetail.Length == 0);
+        Assert.DoesNotContain(WithHints(false), e => e.LabelDetail.Length > 0);
     }
 
     [Fact]
@@ -652,10 +651,10 @@ public class CompletionEngineTests
 
         CompletionEntry entry = Assert.Single(
             engine.Complete(result, "raw", new Position(4, 4)),
-            e => e.Label.StartsWith("util::many", StringComparison.Ordinal));
+            e => e.Label == "util::many");
 
-        Assert.EndsWith("… )", entry.Label, StringComparison.Ordinal);
-        Assert.DoesNotContain("vpoint", entry.Label, StringComparison.Ordinal);
+        Assert.EndsWith("… )", entry.LabelDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("vpoint", entry.LabelDetail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -667,12 +666,17 @@ public class CompletionEngineTests
         ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    \n}\n");
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 4));
 
-        CompletionEntry builtin = entries.First(e => e.Detail == "builtin" && e.Label.Contains('('));
+        CompletionEntry builtin = entries.First(e => e.Detail == "builtin" && e.LabelDetail.Length > 0);
 
-        // The label gained the signature; filtering and resolve keep the bare name.
-        Assert.StartsWith(builtin.FilterText, builtin.Label, StringComparison.Ordinal);
-        Assert.Equal(builtin.FilterText, builtin.ResolveName);
-        Assert.DoesNotContain("(", builtin.FilterText, StringComparison.Ordinal);
+        // The signature is beside the label, so the label needs no repair: no parentheses in it,
+        // and nothing to pin filtering or resolve back to.
+        Assert.DoesNotContain("(", builtin.Label, StringComparison.Ordinal);
+        Assert.StartsWith("(", builtin.LabelDetail, StringComparison.Ordinal);
+        Assert.Empty(builtin.FilterText);
+        Assert.Empty(builtin.ResolveName);
+
+        // Optional parameters are marked, matching how signature help renders them.
+        Assert.Contains(entries, e => e.Detail == "builtin" && e.LabelDetail.Contains('?', StringComparison.Ordinal));
     }
 
     private static (CompletionEngine Engine, ScriptDatabase Db, PathResolver Resolver) BuiltinWorld(FakeFileSystem files)

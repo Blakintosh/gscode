@@ -57,8 +57,20 @@ public sealed class CompletionHandler : CompletionHandlerBase
         return string.Equals(value, "all", StringComparison.OrdinalIgnoreCase) ? FieldScope.All : FieldScope.Owner;
     }
 
+    /// <summary>
+    /// Whether the client renders <c>CompletionItem.labelDetails</c> — the dimmed text beside a
+    /// label, which is where a parameter list belongs.
+    ///
+    /// Captured at registration because it decides how every item is built. A client that does not
+    /// advertise it would show nothing at all for a field it ignores, so the parameters are folded
+    /// back into the label there instead: degraded, but not silently missing.
+    /// </summary>
+    private bool _labelDetailsSupported;
+
     protected override CompletionRegistrationOptions CreateRegistrationOptions(CompletionCapability capability, ClientCapabilities clientCapabilities)
     {
+        _labelDetailsSupported = capability.CompletionItem?.LabelDetailsSupport ?? false;
+
         return new CompletionRegistrationOptions
         {
             DocumentSelector = _selector,
@@ -226,23 +238,61 @@ public sealed class CompletionHandler : CompletionHandlerBase
         return kind is CompletionKind.Function or CompletionKind.Class;
     }
 
-    private static CompletionItem ToItem(CompletionEntry entry, DocumentUri uri)
+    /// <summary>How an entry's label is presented, once the client's capabilities are known.</summary>
+    internal readonly record struct LabelParts(string Label, string? Detail, string? FilterText);
+
+    /// <summary>
+    /// Splits an entry into the label and the dimmed text beside it, according to whether the client
+    /// renders <c>labelDetails</c>.
+    ///
+    /// Supported is the good case and needs no compensation: the label stays the plain name, so
+    /// filtering, sorting and resolve all key off it as they should.
+    ///
+    /// Unsupported means the field would simply be dropped, so the same text is folded into the
+    /// label to keep it visible — and THAT is what needs FilterText pinned back to the name. The
+    /// editor matches what you type against the label, so a folded-in signature without it would
+    /// match parameter names, and typing "team" would surface every function taking one. Only when
+    /// the entry has not already set FilterText for its own reasons: a directive filters on its
+    /// name without the '#', and an imported function on its qualifier, and neither wants
+    /// overwriting here.
+    /// </summary>
+    internal static LabelParts SplitLabel(CompletionEntry entry, bool labelDetailsSupported)
+    {
+        string? filterText = entry.FilterText.Length > 0 ? entry.FilterText : null;
+
+        if ( entry.LabelDetail.Length == 0 )
+        {
+            return new LabelParts(entry.Label, null, filterText);
+        }
+
+        if ( labelDetailsSupported )
+        {
+            return new LabelParts(entry.Label, entry.LabelDetail, filterText);
+        }
+
+        return new LabelParts(entry.Label + entry.LabelDetail, null, filterText ?? entry.Label);
+    }
+
+    private CompletionItem ToItem(CompletionEntry entry, DocumentUri uri)
     {
         // Any tab stop, not just $0: directive snippets place the cursor at $1 first and leave
         // $0 for the end, so checking only for $0 would send them as literal text.
         bool isSnippet = HasTabStop(entry.InsertText);
         string insertText = entry.InsertText.Length > 0 ? entry.InsertText : entry.Label;
 
+        LabelParts label = SplitLabel(entry, _labelDetailsSupported);
+
         return new CompletionItem
         {
-            Label = entry.Label,
+            Label = label.Label,
+            LabelDetails = label.Detail is null ? null : new CompletionItemLabelDetails { Detail = label.Detail },
             Kind = MapKind(entry.Kind),
             Detail = entry.Detail.Length > 0 ? entry.Detail : null,
             Documentation = entry.Documentation.Length > 0
                 ? new StringOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = entry.Documentation })
                 : null,
             InsertText = insertText,
-            FilterText = entry.FilterText.Length > 0 ? entry.FilterText : null,
+            FilterText = label.FilterText,
             InsertTextFormat = isSnippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
             Command = entry.RetriggerCompletion ? RetriggerCommand : null,
             Data = IsResolvable(entry.Kind) ? ResolveData(entry, uri) : null,

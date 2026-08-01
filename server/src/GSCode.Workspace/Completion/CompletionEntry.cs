@@ -77,6 +77,15 @@ public enum CompletionKind
 /// that typing the namespace finds it — a name no lookup will ever match. Empty means "the label
 /// is the name", which is true of everything else.
 /// </param>
+/// <param name="LabelDetail">
+/// Secondary text shown DIMMED immediately after the label, never part of it — a function's
+/// parameter list, <c>( team, alive )</c>.
+///
+/// Kept out of the label on purpose. The editor filters and sorts on the label, so folding this in
+/// would mean matching what the user types against parameter NAMES, and the handler would have to
+/// undo that with FilterText. Delivered as <c>CompletionItem.labelDetails</c> where the client
+/// supports it, and appended to the label only as a fallback where it does not.
+/// </param>
 public sealed record CompletionEntry(
     string Label,
     CompletionKind Kind,
@@ -86,4 +95,5 @@ public sealed record CompletionEntry(
     string FilterText = "",
     string Namespace = "",
     bool RetriggerCompletion = false,
-    string ResolveName = "");
+    string ResolveName = "",
+    string LabelDetail = "");

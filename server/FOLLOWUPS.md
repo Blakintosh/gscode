@@ -194,7 +194,13 @@ future-facing, for when the library improves between extension releases.
 builtins. **The plumbing is done** — `BuiltinFunction.IsDevOnly` carries the flag, `ApiLoader`
 stamps it, and the lint reads that one property — so this is purely a data-curation task. When
 the API data eventually carries its own `devOnly` field the loader already prefers it
-(`entry.DevOnly ?? DevOnlyBuiltins.Contains(name)`) and nothing else changes.
+(`entry.DevOnly ?? DevOnlyBuiltins.Contains(name, game)`) and nothing else changes.
+
+**The list is now PER GAME**, gated on `GameProfile.HasCuratedDevOnlyBuiltins`, and only BO3 sets
+it. So curating this for another game is two steps, not one: count that game's own scripts inside
+versus outside `/# #/`, then set the flag. Skipping the count is not a shortcut but the bug this
+gate exists to prevent — BO3's list applied to CoD4 called `println` dev-only and reported 598
+Errors on shipped code, where the same count comes back 220 inside against 438 outside.
 
 **Why a hand-curated list rather than derived data:** neither available source is accurate.
 
@@ -265,6 +271,13 @@ still holds once one line becomes several.
 `CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since
 those shipped, anything it reports is either a real defect in Treyarch's code or a false positive in
 ours. Both groups it still reports have now been chased to the end, and neither is ours.
+
+Worth recording how the one real false positive was missed for a while: this entry originally read
+"nothing outstanding" on the strength of the BO3 numbers alone, while the SAME code reported 598
+`5006` Errors across 107 CoD4 files. The sweep prints per game and the conclusion was drawn from one
+of them. Cause and fix are under `DevOnlyBuiltins` — a BO3-measured table was being applied to every
+game — and the lesson generalises past that one list: a claim about "the corpus" is a claim about
+whichever game was actually looked at.
 
 **`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 Errors, all GENUINE.** Checked site by site
 against the BO3 corpus; the standing suspicion that the callers were themselves dev-only is wrong,

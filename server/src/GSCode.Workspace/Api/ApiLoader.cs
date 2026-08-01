@@ -29,7 +29,8 @@ public static class ApiLoader
     /// </summary>
     public static BuiltinApi Load(string apiDirectory, ScriptLanguage language, GameProfile? profile = null)
     {
-        string? fileName = (profile ?? GameProfile.Active).ApiFileName(language);
+        GameProfile game = profile ?? GameProfile.Active;
+        string? fileName = game.ApiFileName(language);
         if ( fileName is null )
         {
             return BuiltinApi.Empty;
@@ -65,13 +66,13 @@ public static class ApiLoader
                 continue;
             }
 
-            functions[entry.Name] = Convert(entry);
+            functions[entry.Name] = Convert(entry, game);
         }
 
         return new BuiltinApi(functions.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase));
     }
 
-    private static BuiltinFunction Convert(ApiEntry entry)
+    private static BuiltinFunction Convert(ApiEntry entry, GameProfile game)
     {
         ImmutableArray<BuiltinOverload>.Builder overloads = ImmutableArray.CreateBuilder<BuiltinOverload>();
 
@@ -104,7 +105,7 @@ public static class ApiLoader
         {
             // The data wins when it says anything, so a future `devOnly` field needs no code
             // change here; until then the curated list is the only source that is accurate.
-            IsDevOnly = entry.DevOnly ?? DevOnlyBuiltins.Contains(name),
+            IsDevOnly = entry.DevOnly ?? DevOnlyBuiltins.Contains(name, game),
         };
     }
 

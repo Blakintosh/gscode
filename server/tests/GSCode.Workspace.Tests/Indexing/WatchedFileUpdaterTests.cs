@@ -67,4 +67,57 @@ public class WatchedFileUpdaterTests
 
         Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\uses_it.gsc"), touched);
     }
+
+    // --- A file the editor has open ---
+    //
+    // The buffer is the source of truth there, and the text-sync handler already analyses it on
+    // open, change and save. Reading disk behind that buffer is either the same file parsed twice
+    // or, with unsaved edits, the editor's record replaced by older content — so every other file's
+    // resolution describes text the user is not looking at until the next keystroke puts it back.
+
+    [Fact]
+    public void AnOpenFileIsNotReindexedFromDisk()
+    {
+        (ScriptDatabase database, WatchedFileUpdater updater, FakeFileSystem files) = Build();
+        string path = @$"{Raw}\scripts\uses_it.gsc";
+
+        // Disk moves on while the editor holds a different buffer.
+        files.AddFile(path, "function renamed()\n{\n}\n");
+        IReadOnlyList<string> touched = updater.Apply(path, WatchedFileChange.Changed, ownedByEditor: true);
+
+        Assert.Empty(touched);
+
+        // Still the record the editor committed, not the one on disk.
+        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", "", null, "f"));
+        Assert.Empty(DatabaseQueries.LookupFunctions(database.Gsc, "raw", "", null, "renamed"));
+    }
+
+    [Fact]
+    public void AnOpenFileDeletedOnDiskKeepsItsRecord()
+    {
+        // The buffer outlives the file. Dropping the record would break every lookup into a
+        // document the user can still see and save back; closing it is what retires the record.
+        (ScriptDatabase database, WatchedFileUpdater updater, _) = Build();
+        string path = @$"{Raw}\scripts\uses_it.gsc";
+
+        updater.Apply(path, WatchedFileChange.Deleted, ownedByEditor: true);
+
+        Assert.True(database.Gsc.TryGet(PathUtil.NormalizeAbsolute(path), out _));
+        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", "", null, "f"));
+    }
+
+    [Fact]
+    public void AnOpenHeaderStillInvalidatesAndReindexesItsDependents()
+    {
+        // The exception that makes the skip safe. A header's side effects are facts about OTHER
+        // files, and those are not open just because the header is — so skipping them would leave
+        // every inserting file compiled against a header the editor has already replaced.
+        (_, WatchedFileUpdater updater, FakeFileSystem files) = Build();
+        string gshPath = @$"{Raw}\scripts\shared\shared.gsh";
+
+        files.AddFile(gshPath, "#define CAP 9\n");
+        IReadOnlyList<string> touched = updater.Apply(gshPath, WatchedFileChange.Changed, ownedByEditor: true);
+
+        Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\uses_it.gsc"), touched);
+    }
 }

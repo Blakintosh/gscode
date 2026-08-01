@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using GSCode.Core;
 
 namespace GSCode.Workspace.Api;
 
@@ -29,6 +30,15 @@ namespace GSCode.Workspace.Api;
 /// instruments were REJECTED because stock code calls them outside dev blocks and never inside
 /// — <c>PixMarker</c> (0:2) and <c>InfoVolumeDebugInit</c> (0:1) — and <c>GetDebugEye</c> was
 /// left out as an ambiguous getter with no usages either way.
+///
+/// Those ~980 scripts are BLACK OPS 3's, and the conclusions are not transferable — which is why
+/// the list is now gated on <c>GameProfile.HasCuratedDevOnlyBuiltins</c>. Dev-only-ness is a fact
+/// about one engine, not about the language: run the same count over CoD4 and <c>println</c> comes
+/// back 220 inside against 438 outside, the exact inverse of BO3's 269:2. Applying this table
+/// there reported 598 Errors across 107 shipped files, every one of them wrong.
+///
+/// To extend it to another game, count that game's scripts the same way and set the flag on its
+/// profile. A name that is dev-only everywhere still has to be measured everywhere.
 /// </summary>
 public static class DevOnlyBuiltins
 {
@@ -67,9 +77,15 @@ public static class DevOnlyBuiltins
     /// <summary>How many builtins are currently known to be dev-only.</summary>
     public static int Count => s_names.Count;
 
-    /// <summary>True when the builtin exists only in a development build.</summary>
-    public static bool Contains(string name)
+    /// <summary>
+    /// True when the builtin exists only in a development build ON THIS GAME.
+    ///
+    /// A game with no validated list answers false for every name: the check then simply does not
+    /// fire there, which is the right failure. The alternative — inheriting BO3's answers — is not
+    /// a lesser version of the check but a wrong one, and at Error severity.
+    /// </summary>
+    public static bool Contains(string name, GameProfile? profile = null)
     {
-        return s_names.Contains(name);
+        return (profile ?? GameProfile.Active).HasCuratedDevOnlyBuiltins && s_names.Contains(name);
     }
 }

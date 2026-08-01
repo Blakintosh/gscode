@@ -1,4 +1,5 @@
 using GSCode.Workspace.Database;
+using GSCode.Workspace.Documents;
 using GSCode.Workspace.Indexing;
 using MediatR;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -17,17 +18,20 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
 {
     private readonly WatchedFileUpdater _updater;
     private readonly ScriptDatabase _database;
+    private readonly DocumentStore _documents;
     private readonly DependentDiagnosticsRefresher _dependents;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
 
     public WatchedFilesHandler(
         WatchedFileUpdater updater,
         ScriptDatabase database,
+        DocumentStore documents,
         DependentDiagnosticsRefresher dependents,
         WorkspaceDiagnosticsPublisher workspaceDiagnostics)
     {
         _updater = updater;
         _database = database;
+        _documents = documents;
         _dependents = dependents;
         _workspaceDiagnostics = workspaceDiagnostics;
     }
@@ -71,8 +75,13 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
                 // Whether this change is one an OPEN file's diagnostics could notice. Read either
                 // side of the update, the same test the edit path uses — a branch switch that
                 // rewrites a hundred bodies moves no signature and needs no re-linting.
+                // The editor's buffer wins for an open file: the text-sync handler analyses it on
+                // open, change and save, so re-reading disk here would either duplicate that work
+                // or, with unsaved edits, quietly replace the buffer's record with older content.
+                bool ownedByEditor = _documents.TryGet(path, out OpenDocument _);
+
                 ulong before = SignatureOf(path);
-                _updater.Apply(path, kind);
+                _updater.Apply(path, kind, ownedByEditor);
                 exportsMoved |= SignatureOf(path) != before;
                 applied = true;
             }

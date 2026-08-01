@@ -14,6 +14,7 @@ string curatedDir = Path.Combine(root, "sources", "curated");
 string originalsDir = Path.Combine(root, "sources", "originals");
 string apiDir = Path.Combine(root, "..", "..", "src", "GSCode.Workspace", "Api");
 apiDir = Path.GetFullPath(apiDir);
+string harvestDir = Path.Combine(root, "..", "..", "tests", "GSCode.Server.Tests", "harvest");
 
 Console.WriteLine($"Curated:   {curatedDir}");
 Console.WriteLine($"Originals: {originalsDir}");
@@ -43,7 +44,8 @@ GenerateWordfileGameData(
     apiDir,
     docsRoot: null,
     curatedDir,
-    enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"));
+    enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"),
+    empiricalPath: Path.Combine(harvestDir, "bo1_missing_builtins.json"));
 
 // WaW sits between the two in the same lineage and ships the same shaped wordfile and the same
 // split radiant keys.
@@ -55,14 +57,21 @@ GenerateWordfileGameData(
     apiDir,
     docsRoot: null,
     curatedDir,
-    enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"));
+    enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"),
+    empiricalPath: Path.Combine(harvestDir, "waw_missing_builtins.json"));
 
 // The client libraries, for the games that have client scripts but no documentation describing them.
 // Derived from the GSC artifact just written rather than from the wordfile, because the wordfile has
 // no client/server split at all — its /C7 section is one list of script commands. BO3 is absent by
 // design: t7_api_csc.json is hand-documented and real, and is what the derivation was checked against.
-GenerateClientApi("waw", apiDir, curatedDir);
-GenerateClientApi("bo1", apiDir, curatedDir);
+GenerateClientApi("waw", apiDir, curatedDir, Path.Combine(harvestDir, "waw_missing_builtins.json"));
+GenerateClientApi("bo1", apiDir, curatedDir, Path.Combine(harvestDir, "bo1_missing_builtins.json"));
+
+// Keep the empirical answer independent of the next harvest. Once these entries are in the API,
+// rerunning BuiltinHarvestTests quite correctly reports zero misses; without a durable curated copy,
+// the next field-data regeneration would then forget what the previous harvest proved.
+EnsureEmpiricalSources("waw", harvestDir, apiDir, curatedDir);
+EnsureEmpiricalSources("bo1", harvestDir, apiDir, curatedDir);
 
 Console.WriteLine("Done.");
 return 0;
@@ -226,7 +235,7 @@ static string CorrectSide(string name, string parsedSide)
 // entity properties is the mod-tools syntax-highlighting wordfile. This reads the CODSCRIPT block's
 // sections into the same runtime artifacts BO3 ships. Names only — the wordfile carries no types,
 // signatures or docs; those are a later enrichment pass. BO1's wordfile has the same shape.
-static void GenerateWordfileGameData(string prefix, string wordfilePath, string keysPath, string? clientKeysPath, string apiDir, string? docsRoot, string curatedDir, string? enrichFrom = null)
+static void GenerateWordfileGameData(string prefix, string wordfilePath, string keysPath, string? clientKeysPath, string apiDir, string? docsRoot, string curatedDir, string? enrichFrom = null, string? empiricalPath = null)
 {
     if ( !File.Exists(wordfilePath) )
     {
@@ -253,6 +262,7 @@ static void GenerateWordfileGameData(string prefix, string wordfilePath, string 
         Path.Combine(curatedDir, $"{prefix}_ai_builtins.json"),
         Path.Combine(curatedDir, $"{prefix}_api_overrides.json"),
         enrichFrom,
+        empiricalPath,
         Path.Combine(apiDir, $"{prefix}_api_gsc.json"));
 
     // Radiant keys come from the game's own keys.txt (the same file Radiant loads), not the
@@ -427,6 +437,7 @@ static void GenerateWordfileApi(
     string curatedPath,
     string overridesPath,
     string? enrichFromPath,
+    string? empiricalPath,
     string outputPath)
 {
     Dictionary<string, object> byName = new(StringComparer.OrdinalIgnoreCase);
@@ -533,11 +544,45 @@ static void GenerateWordfileApi(
         byName[name] = new Cod4Entry(name, null, [], null, null, null, null);
     }
 
+    // The wordfile is a syntax-highlighting list, not a complete engine contract. BO1 and WaW
+    // ship functions their carried-forward wordfiles never learned, and their own full script trees
+    // are the empirical proof that those names exist. Prefer a documented entry from either
+    // lineage when one exists; otherwise keep a deliberately sparse, aiGenerated entry so the
+    // resolver knows the name without inventing a signature. The report is committed test output,
+    // making this merge reproducible while keeping the generated API itself an artifact.
+    int empirical = 0;
+    int empiricalInherited = 0;
+    Dictionary<string, JsonElement> t7 = LoadApiEntries(Path.Combine(Path.GetDirectoryName(outputPath) ?? "", "t7_api_gsc.json"));
+    foreach ( EmpiricalBuiltinEvidence evidence in ReadEmpiricalBuiltins(empiricalPath) )
+    {
+        if ( !evidence.Languages.Contains("Gsc", StringComparer.OrdinalIgnoreCase)
+            || byName.ContainsKey(evidence.Name) )
+        {
+            continue;
+        }
+
+        if ( sibling.TryGetValue(evidence.Name, out JsonElement cod4Entry) )
+        {
+            byName[evidence.Name] = cod4Entry;
+            empiricalInherited++;
+        }
+        else if ( t7.TryGetValue(evidence.Name, out JsonElement t7Entry) )
+        {
+            byName[evidence.Name] = t7Entry;
+            empiricalInherited++;
+        }
+        else
+        {
+            byName[evidence.Name] = SparseEmpiricalEntry(prefix, evidence);
+            empirical++;
+        }
+    }
+
     int corrected = ApplyOverrides(prefix, overridesPath, byName);
 
     List<object> all = [.. byName.OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(static pair => pair.Value)];
     WriteJson(outputPath, new Cod4ApiFile(all), camelCase: true);
-    Console.WriteLine($"  {prefix} api functions: {all.Count} ({documented} documented, {curated} reconstructed, {inherited} inherited, {all.Count - documented - curated - inherited} name-only, {corrected} corrected)");
+    Console.WriteLine($"  {prefix} api functions: {all.Count} ({documented} documented, {curated} reconstructed, {inherited} inherited, {empiricalInherited} empirical inherited, {empirical} empirical name-only, {all.Count - documented - curated - inherited - empiricalInherited - empirical} name-only, {corrected} corrected)");
 }
 
 // How many entries in an existing artifact came from a documentation page. Read straight off the
@@ -578,6 +623,265 @@ static int CountDocumented(string outputPath)
         // An unreadable artifact is not something to protect.
         return 0;
     }
+}
+
+// Loads the API entries from a sibling artifact without converting them through the generator's
+// narrower records. Keeping the JsonElement preserves descriptions, overloads and provenance from
+// the documented CoD4/BO3 source exactly as written.
+static Dictionary<string, JsonElement> LoadApiEntries(string path)
+{
+    Dictionary<string, JsonElement> entries = new(StringComparer.OrdinalIgnoreCase);
+    if ( !File.Exists(path) )
+    {
+        return entries;
+    }
+
+    try
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+        if ( !document.RootElement.TryGetProperty("api", out JsonElement api)
+            || api.ValueKind != JsonValueKind.Array )
+        {
+            return entries;
+        }
+
+        foreach ( JsonElement entry in api.EnumerateArray() )
+        {
+            if ( entry.TryGetProperty("name", out JsonElement name)
+                && name.ValueKind == JsonValueKind.String
+                && name.GetString() is string value )
+            {
+                entries[value] = entry.Clone();
+            }
+        }
+    }
+    catch ( JsonException )
+    {
+        // A missing/invalid sibling is equivalent to having no enrichment source.
+    }
+
+    return entries;
+}
+
+static Dictionary<string, JsonElement> LoadArrayEntries(string path)
+{
+    Dictionary<string, JsonElement> entries = new(StringComparer.OrdinalIgnoreCase);
+    if ( !File.Exists(path) )
+    {
+        return entries;
+    }
+
+    try
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+        if ( document.RootElement.ValueKind != JsonValueKind.Array )
+        {
+            return entries;
+        }
+
+        foreach ( JsonElement entry in document.RootElement.EnumerateArray() )
+        {
+            if ( entry.TryGetProperty("name", out JsonElement name)
+                && name.ValueKind == JsonValueKind.String
+                && name.GetString() is string value )
+            {
+                entries[value] = entry.Clone();
+            }
+        }
+    }
+    catch ( JsonException )
+    {
+        // A malformed curated source is treated as absent; the report fallback can still run.
+    }
+
+    return entries;
+}
+
+// Materializes the first successful harvest into the editable curated layer. The guard is
+// intentional: these files are the durable evidence once written, so a later zero-miss harvest
+// must not erase them.
+static void EnsureEmpiricalSources(string prefix, string harvestDir, string apiDir, string curatedDir)
+{
+    string reportPath = Path.Combine(harvestDir, $"{prefix}_missing_builtins.json");
+    string serverSourcePath = Path.Combine(curatedDir, $"{prefix}_ai_builtins.json");
+    string clientSourcePath = Path.Combine(curatedDir, $"{prefix}_csc_empirical.json");
+
+    if ( !File.Exists(reportPath) )
+    {
+        Console.WriteLine($"  {prefix} empirical sources: harvest not found, leaving curated sources unchanged.");
+        return;
+    }
+
+    using JsonDocument report = JsonDocument.Parse(File.ReadAllText(reportPath));
+    if ( !report.RootElement.TryGetProperty("functions", out JsonElement functions)
+        || functions.ValueKind != JsonValueKind.Array )
+    {
+        return;
+    }
+
+    Dictionary<string, JsonElement> server = LoadApiEntries(Path.Combine(apiDir, $"{prefix}_api_gsc.json"));
+    Dictionary<string, JsonElement> client = LoadApiEntries(Path.Combine(apiDir, $"{prefix}_api_csc.json"));
+    List<JsonElement> serverEntries = [];
+    List<JsonElement> clientEntries = [];
+    foreach ( JsonElement finding in functions.EnumerateArray() )
+    {
+        if ( !finding.TryGetProperty("name", out JsonElement nameElement)
+            || nameElement.ValueKind != JsonValueKind.String
+            || nameElement.GetString() is not string name
+            || !finding.TryGetProperty("languages", out JsonElement languages)
+            || languages.ValueKind != JsonValueKind.Array )
+        {
+            continue;
+        }
+
+        bool gsc = languages.EnumerateArray().Any(static language =>
+            language.ValueKind == JsonValueKind.String
+            && string.Equals(language.GetString(), "Gsc", StringComparison.OrdinalIgnoreCase));
+        bool csc = languages.EnumerateArray().Any(static language =>
+            language.ValueKind == JsonValueKind.String
+            && string.Equals(language.GetString(), "Csc", StringComparison.OrdinalIgnoreCase));
+
+        if ( gsc && server.TryGetValue(name, out JsonElement serverEntry) )
+        {
+            serverEntries.Add(serverEntry);
+        }
+
+        if ( csc && client.TryGetValue(name, out JsonElement clientEntry) )
+        {
+            clientEntries.Add(clientEntry);
+        }
+    }
+
+    if ( !File.Exists(serverSourcePath) )
+    {
+        WriteJson(serverSourcePath, serverEntries);
+        Console.WriteLine($"  {prefix} empirical GSC source: {serverEntries.Count} entries");
+    }
+
+    if ( !File.Exists(clientSourcePath) )
+    {
+        WriteJson(clientSourcePath, clientEntries);
+        Console.WriteLine($"  {prefix} empirical CSC source: {clientEntries.Count} entries");
+    }
+}
+
+// The harvest is intentionally a small, stable evidence format. Only the fields needed to make a
+// provenance-bearing sparse API entry are read; new report fields can be added without changing the
+// generator.
+static List<EmpiricalBuiltinEvidence> ReadEmpiricalBuiltins(string? path)
+{
+    List<EmpiricalBuiltinEvidence> findings = [];
+    if ( path is null || !File.Exists(path) )
+    {
+        return findings;
+    }
+
+    try
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+        if ( !document.RootElement.TryGetProperty("game", out JsonElement gameElement)
+            || gameElement.ValueKind != JsonValueKind.String
+            || gameElement.GetString() is not string game
+            || !document.RootElement.TryGetProperty("functions", out JsonElement functions)
+            || functions.ValueKind != JsonValueKind.Array )
+        {
+            return findings;
+        }
+
+        foreach ( JsonElement function in functions.EnumerateArray() )
+        {
+            if ( !function.TryGetProperty("name", out JsonElement nameElement)
+                || nameElement.ValueKind != JsonValueKind.String
+                || nameElement.GetString() is not string name )
+            {
+                continue;
+            }
+
+            int calls = function.TryGetProperty("calls", out JsonElement callsElement)
+                && callsElement.TryGetInt32(out int callCount) ? callCount : 0;
+            int files = function.TryGetProperty("fileCount", out JsonElement filesElement)
+                && filesElement.TryGetInt32(out int fileCount) ? fileCount : 0;
+            List<int> argumentCounts = [];
+            if ( function.TryGetProperty("observedArgCounts", out JsonElement counts)
+                && counts.ValueKind == JsonValueKind.Array )
+            {
+                foreach ( JsonElement count in counts.EnumerateArray() )
+                {
+                    if ( count.TryGetInt32(out int value) )
+                    {
+                        argumentCounts.Add(value);
+                    }
+                }
+            }
+
+            bool calledAsMethod = function.TryGetProperty("calledAsMethod", out JsonElement methodElement)
+                && methodElement.ValueKind == JsonValueKind.True;
+            string access = function.TryGetProperty("access", out JsonElement accessElement)
+                && accessElement.ValueKind == JsonValueKind.String
+                ? accessElement.GetString() ?? "unknown"
+                : "unknown";
+            List<string> languages = [];
+            if ( function.TryGetProperty("languages", out JsonElement languageArray)
+                && languageArray.ValueKind == JsonValueKind.Array )
+            {
+                foreach ( JsonElement language in languageArray.EnumerateArray() )
+                {
+                    if ( language.ValueKind == JsonValueKind.String && language.GetString() is string value )
+                    {
+                        languages.Add(value);
+                    }
+                }
+            }
+
+            List<string> sites = [];
+            if ( function.TryGetProperty("sites", out JsonElement siteArray)
+                && siteArray.ValueKind == JsonValueKind.Array )
+            {
+                foreach ( JsonElement site in siteArray.EnumerateArray() )
+                {
+                    if ( site.ValueKind == JsonValueKind.String && site.GetString() is string value )
+                    {
+                        sites.Add(value);
+                    }
+                }
+            }
+
+            findings.Add(new EmpiricalBuiltinEvidence(
+                game, name, calls, files, argumentCounts, calledAsMethod, access, languages, sites));
+        }
+    }
+    catch ( JsonException )
+    {
+        // A malformed report cannot safely add names to an API; leave the artifact unchanged by
+        // this layer and let the caller's normal wordfile/sibling generation proceed.
+    }
+
+    return findings;
+}
+
+// A sparse entry is deliberate. The corpus proves that the name exists, but observed arity alone
+// does not prove a complete signature (variadic calls and overloads are common). An empty overload
+// list enables resolution/completion without turning an observed maximum into a false upper bound.
+static Dictionary<string, object> SparseEmpiricalEntry(string game, EmpiricalBuiltinEvidence evidence)
+{
+    string arities = evidence.ArgumentCounts.Count == 0
+        ? "none recorded"
+        : string.Join(", ", evidence.ArgumentCounts);
+    string sites = evidence.Sites.Count == 0
+        ? ""
+        : $" First sites: {string.Join(", ", evidence.Sites)}.";
+
+    return new Dictionary<string, object>
+    {
+        ["name"] = evidence.Name,
+        ["description"] = $"Observed in the {game} shipped script corpus ({evidence.Calls} calls across {evidence.Files} files; argument counts {arities}; access {evidence.Access}{(evidence.CalledAsMethod ? "; called as a method" : "")}); no documented CoD4 or Black Ops III signature was available.",
+        ["overloads"] = Array.Empty<object>(),
+        ["flags"] = new[] { "aiGenerated" },
+        ["remarks"] = new[]
+        {
+            $"Empirical builtin: {evidence.Calls} call(s) across {evidence.Files} {game} script file(s), observed argument counts {arities}, access {evidence.Access}.{(evidence.CalledAsMethod ? " It is called on a target." : "")}{sites} The name is known to exist; its signature remains undocumented."
+        },
+    };
 }
 
 // Corrects signatures the documentation gets WRONG, as the last word over every other layer.
@@ -931,7 +1235,7 @@ static string Ascii(string text)
 // source, and is neither generated nor pruned here.
 //
 // The one systematic correction is the leading localClientNum — see the other curated list.
-static void GenerateClientApi(string prefix, string apiDir, string curatedDir)
+static void GenerateClientApi(string prefix, string apiDir, string curatedDir, string? empiricalPath = null)
 {
     string serverPath = Path.Combine(apiDir, $"{prefix}_api_gsc.json");
     if ( !File.Exists(serverPath) )
@@ -952,8 +1256,68 @@ static void GenerateClientApi(string prefix, string apiDir, string curatedDir)
         return;
     }
 
-    // Right to left: removing from a JsonArray shifts everything after it.
     int servers = api.Count;
+
+    // A client corpus can call a real VM function that the server wordfile never listed. Keep
+    // those names in the client artifact as sparse entries; if BO3 documents one, reuse its full
+    // signature, otherwise preserve the same evidence-only shape as the server merge above.
+    List<EmpiricalBuiltinEvidence> empirical = ReadEmpiricalBuiltins(empiricalPath);
+    Dictionary<string, JsonElement> empiricalSource = LoadArrayEntries(
+        Path.Combine(curatedDir, $"{prefix}_csc_empirical.json"));
+    Dictionary<string, JsonElement> t7 = LoadApiEntries(Path.Combine(apiDir, "t7_api_csc.json"));
+    int empiricalAdded = 0;
+    foreach ( JsonElement sourceEntry in empiricalSource.Values )
+    {
+        string name = sourceEntry.GetProperty("name").GetString()!;
+        if ( api.Any(node => string.Equals(
+                (node as JsonObject)?["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase)) )
+        {
+            continue;
+        }
+
+        api.Add(JsonNode.Parse(sourceEntry.GetRawText()));
+        empiricalAdded++;
+    }
+
+    foreach ( EmpiricalBuiltinEvidence evidence in empirical.Where(static e => e.Languages.Contains("Csc", StringComparer.OrdinalIgnoreCase)) )
+    {
+        bool exists = api.Any(node => string.Equals(
+            (node as JsonObject)?["name"]?.GetValue<string>(), evidence.Name, StringComparison.OrdinalIgnoreCase));
+        if ( exists )
+        {
+            continue;
+        }
+
+        if ( t7.TryGetValue(evidence.Name, out JsonElement documented) )
+        {
+            api.Add(JsonNode.Parse(documented.GetRawText()));
+        }
+        else
+        {
+            api.Add(JsonNode.Parse(JsonSerializer.Serialize(SparseEmpiricalEntry(prefix, evidence), new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            })));
+        }
+
+        empiricalAdded++;
+    }
+
+    if ( keep is not null )
+    {
+        foreach ( string name in empiricalSource.Keys )
+        {
+            keep.Add(name);
+        }
+
+        foreach ( EmpiricalBuiltinEvidence evidence in empirical.Where(static e => e.Languages.Contains("Csc", StringComparer.OrdinalIgnoreCase)) )
+        {
+            keep.Add(evidence.Name);
+        }
+    }
+
+    // Right to left: removing from a JsonArray shifts everything after it.
     if ( keep is not null )
     {
         for ( int i = api.Count - 1; i >= 0; i-- )
@@ -980,7 +1344,7 @@ static void GenerateClientApi(string prefix, string apiDir, string curatedDir)
 
     WriteJson(Path.Combine(apiDir, $"{prefix}_api_csc.json"), root);
     Console.WriteLine(
-        $"  {prefix} client api: {api.Count} functions kept of {servers}, {adjusted} given a leading localClientNum");
+        $"  {prefix} client api: {api.Count} functions kept of {servers}, {empiricalAdded} empirical-only added, {adjusted} given a leading localClientNum");
 
     // A curated name the server library does not carry corrects nothing and would sit there looking
     // as though it did, so it is worth a word rather than a silent no-op.
@@ -999,6 +1363,11 @@ static void PrependClientIndex(JsonObject function)
         ["name"] = "localClientNum",
         ["description"] = "The splitscreen client this call acts on, 0-3. Client scripts run one script VM per splitscreen client.",
         ["mandatory"] = true,
+        ["type"] = new JsonObject
+        {
+            ["dataType"] = "int",
+            ["isArray"] = false,
+        },
     };
 
     if ( function["overloads"] is not JsonArray overloads || overloads.Count == 0 )
@@ -1111,3 +1480,13 @@ internal sealed record Cod4Overload(Cod4CalledOn? CalledOn, List<Cod4Parameter> 
 internal sealed record Cod4CalledOn(string Name, string? Description);
 internal sealed record Cod4Parameter(string Name, string? Description, bool Mandatory, Cod4Type? Type);
 internal sealed record Cod4Type(string DataType);
+internal sealed record EmpiricalBuiltinEvidence(
+    string Game,
+    string Name,
+    int Calls,
+    int Files,
+    IReadOnlyList<int> ArgumentCounts,
+    bool CalledAsMethod,
+    string Access,
+    IReadOnlyList<string> Languages,
+    IReadOnlyList<string> Sites);

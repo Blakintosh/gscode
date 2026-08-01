@@ -1,0 +1,4108 @@
+[
+  {
+    "name": "GetPlayers",
+    "description": "Returns an array of the currently connected players.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "team",
+            "description": "If specified, returns a list of players on a specific team. Valid values: `allies`, `axis`, `neutral`, and `all`.",
+            "mandatory": false,
+            "type": {
+              "dataType": "string"
+            }
+          }
+        ],
+        "returns": {
+          "name": "players",
+          "description": "A list of connected players.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": "player",
+            "subType": "player",
+            "isArray": true
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "players = GetPlayers()",
+    "verifiedInRevision": 2,
+    "remarks": [
+      "When used without the team parameter, this function is analogous to the variable `level._players` and can be used interchangeably."
+    ]
+  },
+  {
+    "name": "NumRemoteClients",
+    "description": "Returns the number of remote clients connected to the game.  Very useful for scaling content for coop play, and network balancing.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "num_remote_clients = NumRemoteClients()",
+    "confidence": "high"
+  },
+  {
+    "name": "AngleClamp180",
+    "description": "Returns angle value clamped between [-180,180].",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "angles",
+            "description": "Angle to be clamped.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "deltaAngle = AngleClamp180( currentAngle )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetDifficulty",
+    "description": "Returns the current difficulty setting.",
+    "overloads": [
+      {
+        "parameters": [],
+        "returns": {
+          "type": {
+            "dataType": "string"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. Called with no arguments; a two-argument form also appears, so this signature may be incomplete."
+    ]
+  },
+  {
+    "name": "SpawnCollision",
+    "description": "Spawns a script mover thats used only for collision.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "modelname",
+            "description": "The name of the model to spawn (constant string).",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "targetname",
+            "description": "target name (constant string).",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "origin",
+            "description": "The position of the collision (vector).",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "angles",
+            "description": "The angle to spawn the collision at (vector).",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "entity",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "Min",
+    "description": "Returns whichever of <a> or <b> is smallest.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "a",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          },
+          {
+            "name": "b",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "float"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "setstatlbbyname",
+    "description": "Observed in the waw shipped script corpus (45 calls across 10 files; argument counts 2, 3, 4; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 45 call(s) across 10 waw script file(s), observed argument counts 2, 3, 4, access mp. It is called on a target. First sites: maps\\mp\\gametypes\\ctf.gsc(680), maps\\mp\\gametypes\\ctf.gsc(701), maps\\mp\\gametypes\\ctf.gsc(795), maps\\mp\\gametypes\\dom.gsc(655), maps\\mp\\gametypes\\koth.gsc(497). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "NewDebugHudElem",
+    "description": null,
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "low"
+  },
+  {
+    "name": "Max",
+    "description": "Returns whichever of <a> or <b> is larger.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "a",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          },
+          {
+            "name": "b",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "float"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "SetBlur",
+    "description": "Blur the screen over a period of time.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "target_blur",
+            "description": "The final blur. The value is pixels for Gaussian blur at 640x480. Must be a floating point value greater than 0.",
+            "mandatory": true
+          },
+          {
+            "name": "time",
+            "description": "Time in seconds",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "example": "SetBlur( 10.3, 3.0 );",
+    "module": "Effects",
+    "spmp": "SP",
+    "flags": [
+      "documented"
+    ]
+  },
+  {
+    "name": "AbsAngleClamp180",
+    "description": "Returns abs angle value clamped between [0,180].",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "angles",
+            "description": "Angle to be clamped.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "deltaAngle = AbsAngleClamp180( currentAngle )",
+    "confidence": "high"
+  },
+  {
+    "name": "badplacesenable",
+    "description": "Observed in the waw shipped script corpus (13 calls across 8 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 13 call(s) across 8 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\pel1.gsc(3784), maps\\pel1.gsc(4879), maps\\pel1a.gsc(130), maps\\pel2.gsc(1855), maps\\pel2.gsc(2830). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "StopSound",
+    "description": "Stops the given sound on an entity. Remark: Wait between StopSound() and delete() or the sound will not stop.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": "The entity to stop the sound on.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false
+          }
+        },
+        "parameters": [
+          {
+            "name": "aliasName",
+            "description": "The sound to stop on the entity.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": null,
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "beatBox StopSound(\"alias\");"
+  },
+  {
+    "name": "GetVehicleOccupied",
+    "description": "Returns the vehicle entity that the player occupies.  If player isn't in a vehicle then this causes an error.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "entity",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self GetVehicleOccupied()",
+    "confidence": "high"
+  },
+  {
+    "name": "transmittargetname",
+    "description": "Observed in the waw shipped script corpus (10 calls across 6 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 10 call(s) across 6 waw script file(s), observed argument counts 0, access unknown. It is called on a target. First sites: maps\\ber2_event1.gsc(3318), maps\\ber2_event2.gsc(111), maps\\ber3b_event_roof.gsc(1834), maps\\ber3b_event_roof.gsc(1857), maps\\pel2_airfield.gsc(489). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetWaterDrops",
+    "description": "Sets water drops equal to the count.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "count",
+            "description": "Number of water drops (should be >= 0).",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self SetWaterDrops( 3 )",
+    "confidence": "high"
+  },
+  {
+    "name": "getplayersquadid",
+    "description": "Observed in the waw shipped script corpus (10 calls across 6 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 10 call(s) across 6 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\gametypes\\ctf.gsc(706), maps\\mp\\gametypes\\dom.gsc(605), maps\\mp\\gametypes\\dom.gsc(628), maps\\mp\\gametypes\\koth.gsc(468), maps\\mp\\gametypes\\sab.gsc(533). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setaimanimweights",
+    "description": "Observed in the waw shipped script corpus (7 calls across 6 files; argument counts 2; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 7 call(s) across 6 waw script file(s), observed argument counts 2, access mp. It is called on a target. First sites: maps\\mp\\animscripts\\dog_combat.gsc(10), maps\\mp\\animscripts\\dog_death.gsc(7), maps\\mp\\animscripts\\dog_move.gsc(38), maps\\mp\\animscripts\\dog_pain.gsc(9), maps\\mp\\animscripts\\dog_stop.gsc(10). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetAILimit",
+    "description": "Allows you to specify a max number of active AI - which over-rides the MAX_AI functionality in the engine, when it comes time to spawn in new AI.  Setting the value higher will not give you more AI than the system supports.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetAILimit( 10 )",
+    "confidence": "high"
+  },
+  {
+    "name": "addsphereinfluencer",
+    "description": "Observed in the waw shipped script corpus (16 calls across 5 files; argument counts 6, 7, 8; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 16 call(s) across 5 waw script file(s), observed argument counts 6, 7, 8, access mp. First sites: maps\\mp\\gametypes\\ctf.gsc(1081), maps\\mp\\gametypes\\ctf.gsc(1088), maps\\mp\\gametypes\\dom.gsc(1097), maps\\mp\\gametypes\\dom.gsc(1104), maps\\mp\\gametypes\\dom.gsc(1111). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "iscoopepd",
+    "description": "Observed in the waw shipped script corpus (6 calls across 5 files; argument counts 0; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 6 call(s) across 5 waw script file(s), observed argument counts 0, access unknown. First sites: maps\\ber2.gsc(14), maps\\_arcademode.gsc(1229), maps\\_challenges_coop.gsc(55), maps\\_challenges_coop.gsc(68), maps\\_collectibles.gsc(224). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetOccupantSeat",
+    "description": "Get the seat index occupied by the given player.  -1 if player isn't in vehicle.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "player",
+            "description": "The player to get the seat index for.",
+            "mandatory": true
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "isDriver = 0 == vehicle GetOccupantSeat( player )",
+    "confidence": "medium"
+  },
+  {
+    "name": "setwetness",
+    "description": "Observed in the waw shipped script corpus (8 calls across 4 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 8 call(s) across 4 waw script file(s), observed argument counts 2, access unknown. It is called on a target. First sites: maps\\ber2_util.gsc(877), maps\\ber2_util.gsc(900), maps\\ber2_util.gsc(910), maps\\oki2.gsc(261), maps\\oki2.gsc(296). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "CreateDynEntAndLaunch",
+    "description": "Creates and launches a dynent.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "pos",
+            "description": "position to spawn at.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "angles",
+            "description": "angles to spawn at.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "hitpos",
+            "description": "the hit position.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "force",
+            "description": "The force of the launch.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "fx",
+            "description": "particle effects to play on this dynent.",
+            "mandatory": false,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "CreateDynEntAndLaunch( spawn_models[i], origin, angles, origin, velocity, anim._effect[\"animscript_gibtrail_fx\"] )",
+    "confidence": "medium"
+  },
+  {
+    "name": "SetInvisibleToPlayer",
+    "description": "Make the entity invisible to the player.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "player",
+            "description": "The player to set the entity invisible to.",
+            "mandatory": true
+          },
+          {
+            "name": "setInvisible",
+            "description": "True if entity has to be invisible to player. False otherwise.",
+            "mandatory": false,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "hackable._trigger SetInvisibleToPlayer( player, false )",
+    "confidence": "medium"
+  },
+  {
+    "name": "setwatersheeting",
+    "description": "Observed in the waw shipped script corpus (5 calls across 4 files; argument counts 1, 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 5 call(s) across 4 waw script file(s), observed argument counts 1, 2, access unknown. It is called on a target. First sites: maps\\oki2_util.gsc(39), maps\\pby_fly.gsc(7133), maps\\pby_fly.gsc(7503), maps\\pel1.gsc(7828), maps\\sniper_event1.gsc(191). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetGuid",
+    "description": "Gets the unique identifier (GUID) of the player.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": "The player."
+        },
+        "parameters": [],
+        "returns": {
+          "type": {
+            "dataType": "int"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "build_destructible",
+    "description": "Observed in the waw shipped script corpus (13 calls across 3 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 13 call(s) across 3 waw script file(s), observed argument counts 2, access unknown. First sites: maps\\_80s_hatch1.gsc(9), maps\\_80s_hatch1.gsc(10), maps\\_80s_hatch1.gsc(11), maps\\_80s_hatch1.gsc(12), maps\\_80s_hatch1.gsc(13). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "EnableInfluencer",
+    "description": "Enables or disables the given influencer.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "influencerId",
+            "description": "The influencer to enable/disable.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "enable",
+            "description": "True to enable. False to disable.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "EnableInfluencer( influencer_id, true )",
+    "confidence": "high"
+  },
+  {
+    "name": "TableLookupIString",
+    "description": "look up a row in a table and pull out a particular column from that row.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "filename",
+            "description": "The table to look up.",
+            "mandatory": true
+          },
+          {
+            "name": "searchColumnNum",
+            "description": "The column number of the stats table to search through.",
+            "mandatory": true
+          },
+          {
+            "name": "searchValue",
+            "description": "The value to use when searching the <search column num>.",
+            "mandatory": true
+          },
+          {
+            "name": "returnValueColumnNum",
+            "description": "The column number value to return after we find the correct row.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "playeranimscriptevent",
+    "description": "Observed in the waw shipped script corpus (9 calls across 3 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 9 call(s) across 3 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\mak.gsc(4376), maps\\mak.gsc(7964), maps\\mak.gsc(7968), maps\\pel1.gsc(1847), maps\\pel1.gsc(1852). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getplayersquad",
+    "description": "Observed in the waw shipped script corpus (7 calls across 3 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 7 call(s) across 3 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\gametypes\\_globallogic.gsc(2316), maps\\mp\\gametypes\\_globallogic.gsc(2326), maps\\mp\\gametypes\\_globallogic.gsc(2342), maps\\mp\\gametypes\\_spawnlogic.gsc(860), maps\\mp\\gametypes\\_spawnlogic.gsc(883). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "RemoveInfluencer",
+    "description": "Removes the given influencer.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "influencerId",
+            "description": "The influencer to remove.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "RemoveInfluencer( influencer_id )",
+    "confidence": "high"
+  },
+  {
+    "name": "Floor",
+    "description": "Returns the floor of floating point value <a>. This effectively rounds down Floor(2.7) == 2, Floor(3.9) == 3.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "a",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "float"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "LaunchRagdoll",
+    "description": "Launch this ragdoll.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "force",
+            "description": "launch force.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "bonename",
+            "description": "bone name to apply the force to.",
+            "mandatory": false
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self LaunchRagdoll( (0,0,100) )",
+    "confidence": "medium"
+  },
+  {
+    "name": "issquadleader",
+    "description": "Observed in the waw shipped script corpus (4 calls across 3 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 4 call(s) across 3 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\gametypes\\_spawning.gsc(435), maps\\mp\\gametypes\\_spawnlogic.gsc(885), maps\\mp\\gametypes\\_squad.gsc(67), maps\\mp\\gametypes\\_squad.gsc(218). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "achievement_notify",
+    "description": "Observed in the waw shipped script corpus (4 calls across 3 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 4 call(s) across 3 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\nazi_zombie_factory.gsc(1530), maps\\nazi_zombie_factory_teleporter.gsc(637), maps\\nazi_zombie_factory_teleporter.gsc(722), maps\\_zombiemode_cymbal_monkey.gsc(73). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "DisableGrenadeSuicide",
+    "description": "Stops cooked grenades from killing the player.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "SetElectrified",
+    "description": "Electrify the entity for the given time.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "time",
+            "description": "Time to get electrified for ( greater than 0 ).",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self SetElectrified( 3.0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "destructible_state",
+    "description": "Observed in the waw shipped script corpus (510 calls across 2 files; argument counts 1, 2, 3, 4, 5, 6, 7; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 510 call(s) across 2 waw script file(s), observed argument counts 1, 2, 3, 4, 5, 6, 7, access mp. First sites: maps\\mp\\_destructible_types.gsc(153), maps\\mp\\_destructible_types.gsc(155), maps\\mp\\_destructible_types.gsc(160), maps\\mp\\_destructible_types.gsc(162), maps\\mp\\_destructible_types.gsc(167). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_part",
+    "description": "Observed in the waw shipped script corpus (435 calls across 2 files; argument counts 2, 3, 4, 6, 7, 8, 9; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 435 call(s) across 2 waw script file(s), observed argument counts 2, 3, 4, 6, 7, 8, 9, access mp. First sites: maps\\mp\\_destructible_types.gsc(171), maps\\mp\\_destructible_types.gsc(175), maps\\mp\\_destructible_types.gsc(184), maps\\mp\\_destructible_types.gsc(187), maps\\mp\\_destructible_types.gsc(191). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_sound",
+    "description": "Observed in the waw shipped script corpus (314 calls across 2 files; argument counts 1, 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 314 call(s) across 2 waw script file(s), observed argument counts 1, 2, access mp. First sites: maps\\mp\\_destructible_types.gsc(157), maps\\mp\\_destructible_types.gsc(164), maps\\mp\\_destructible_types.gsc(200), maps\\mp\\_destructible_types.gsc(207), maps\\mp\\_destructible_types.gsc(214). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_fx",
+    "description": "Observed in the waw shipped script corpus (254 calls across 2 files; argument counts 2, 3; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 254 call(s) across 2 waw script file(s), observed argument counts 2, 3, access mp. First sites: maps\\mp\\_destructible_types.gsc(163), maps\\mp\\_destructible_types.gsc(199), maps\\mp\\_destructible_types.gsc(206), maps\\mp\\_destructible_types.gsc(213), maps\\mp\\_destructible_types.gsc(220). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_loopfx",
+    "description": "Observed in the waw shipped script corpus (60 calls across 2 files; argument counts 3; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 60 call(s) across 2 waw script file(s), observed argument counts 3, access mp. First sites: maps\\mp\\_destructible_types.gsc(152), maps\\mp\\_destructible_types.gsc(154), maps\\mp\\_destructible_types.gsc(156), maps\\mp\\_destructible_types.gsc(391), maps\\mp\\_destructible_types.gsc(393). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_loopsound",
+    "description": "Observed in the waw shipped script corpus (40 calls across 2 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 40 call(s) across 2 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\_destructible_types.gsc(158), maps\\mp\\_destructible_types.gsc(161), maps\\mp\\_destructible_types.gsc(397), maps\\mp\\_destructible_types.gsc(400), maps\\mp\\_destructible_types.gsc(533). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_physics",
+    "description": "Observed in the waw shipped script corpus (40 calls across 2 files; argument counts 0; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 40 call(s) across 2 waw script file(s), observed argument counts 0, access mp. First sites: maps\\mp\\_destructible_types.gsc(266), maps\\mp\\_destructible_types.gsc(268), maps\\mp\\_destructible_types.gsc(516), maps\\mp\\_destructible_types.gsc(518), maps\\mp\\_destructible_types.gsc(636). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_create",
+    "description": "Observed in the waw shipped script corpus (38 calls across 2 files; argument counts 1, 5; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 38 call(s) across 2 waw script file(s), observed argument counts 1, 5, access mp. First sites: maps\\mp\\_destructible_types.gsc(151), maps\\mp\\_destructible_types.gsc(390), maps\\mp\\_destructible_types.gsc(526), maps\\mp\\_destructible_types.gsc(646), maps\\mp\\_destructible_types.gsc(766). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_explode",
+    "description": "Observed in the waw shipped script corpus (37 calls across 2 files; argument counts 5; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 37 call(s) across 2 waw script file(s), observed argument counts 5, access mp. First sites: maps\\mp\\_destructible_types.gsc(165), maps\\mp\\_destructible_types.gsc(404), maps\\mp\\_destructible_types.gsc(540), maps\\mp\\_destructible_types.gsc(660), maps\\mp\\_destructible_types.gsc(780). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "destructible_healthdrain",
+    "description": "Observed in the waw shipped script corpus (20 calls across 2 files; argument counts 2, 4; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 20 call(s) across 2 waw script file(s), observed argument counts 2, 4, access mp. First sites: maps\\mp\\_destructible_types.gsc(159), maps\\mp\\_destructible_types.gsc(398), maps\\mp\\_destructible_types.gsc(534), maps\\mp\\_destructible_types.gsc(654), maps\\mp\\_destructible_types.gsc(774). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getscoremultiplier",
+    "description": "Observed in the waw shipped script corpus (14 calls across 2 files; argument counts 0, 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 14 call(s) across 2 waw script file(s), observed argument counts 0, 2, access unknown. It is called on a target. First sites: maps\\_arcademode.gsc(95), maps\\_arcademode.gsc(672), maps\\_arcademode.gsc(695), maps\\_arcademode.gsc(747), maps\\_arcademode.gsc(761). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "create_and_play_dialog",
+    "description": "Observed in the waw shipped script corpus (13 calls across 2 files; argument counts 3, 4; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 13 call(s) across 2 waw script file(s), observed argument counts 3, 4, access unknown. It is called on a target. First sites: maps\\nazi_zombie_factory.gsc(1418), maps\\nazi_zombie_factory.gsc(1460), maps\\nazi_zombie_factory.gsc(1803), maps\\nazi_zombie_factory.gsc(1844), maps\\nazi_zombie_factory.gsc(1848). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "RecordPlayerStats",
+    "description": "Records player statistics.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "args",
+            "description": "The arguments.",
+            "mandatory": false,
+            "type": {
+              "dataType": "vararg",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "firegunnerweapon",
+    "description": "Observed in the waw shipped script corpus (10 calls across 2 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 10 call(s) across 2 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\pby_fly.gsc(8223), maps\\pby_fly.gsc(10884), maps\\pby_fly.gsc(10934), maps\\pby_fly.gsc(12288), maps\\pby_fly.gsc(12289). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetInfluencerTeamMask",
+    "description": "Sets the team mask for the given influencer.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "influencerId",
+            "description": "The influencer id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "teamMask",
+            "description": "The team mask to apply.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetInfluencerTeamMask( influencer_id, team_mask )",
+    "confidence": "high"
+  },
+  {
+    "name": "getvisionsetnaked",
+    "description": "Observed in the waw shipped script corpus (8 calls across 2 files; argument counts 0, 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 8 call(s) across 2 waw script file(s), observed argument counts 0, 1, access unknown. It is called on a target. First sites: clientscripts\\nazi_zombie_factory_teleporter.csc(41), clientscripts\\nazi_zombie_factory_teleporter.csc(96), clientscripts\\nazi_zombie_factory_teleporter.csc(105), clientscripts\\nazi_zombie_factory_teleporter.csc(114), clientscripts\\nazi_zombie_factory_teleporter.csc(129). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "startcurve",
+    "description": "Observed in the waw shipped script corpus (7 calls across 2 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 7 call(s) across 2 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\living_battlefield.gsc(382), maps\\living_battlefield.gsc(431), maps\\living_battlefield.gsc(493), maps\\living_battlefield.gsc(503), maps\\living_battlefield.gsc(561). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "FinishVehicleRadiusDamage",
+    "description": "Does damage to an vehicle - usually as part of the damage callback.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "Inflictor",
+            "description": "The entity that causes the damage.(e.g. a turret).",
+            "mandatory": true,
+            "type": {
+              "dataType": "entity",
+              "isArray": false
+            }
+          },
+          {
+            "name": "Attacker",
+            "description": "The entity that is attacking.",
+            "mandatory": true,
+            "type": {
+              "dataType": "entity",
+              "isArray": false
+            }
+          },
+          {
+            "name": "Damage",
+            "description": "Integer specifying the amount of damage done.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "innerDamage",
+            "description": "Integer specifying the amount of inner damage done.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "outerDamage",
+            "description": "Integer specifying the amount of outer damage done.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "damageFlags",
+            "description": "Integer specifying flags that are to be applied to the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "meansOfDeath",
+            "description": "Integer specifying the method of death.",
+            "mandatory": true
+          },
+          {
+            "name": "Weapon",
+            "description": "The weapon number of the weapon used to inflict the damage.",
+            "mandatory": true
+          },
+          {
+            "name": "Point",
+            "description": "(vector) The Point of the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "Radius",
+            "description": "(float) The radius of the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "ConeRadius",
+            "description": "(float) The radius of the cone damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "ConeDirection",
+            "description": "(vector) The direction of the cone damage.",
+            "mandatory": false,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "offsetTime",
+            "description": "The time offset for the damage.",
+            "mandatory": false,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self FinishVehicleRadiusDamage( eInflictor, eAttacker, iDamage, iDFlags, sMeansOfDeath, sWeapon, vPoint, fRadius, fConeRadius, fConeDir, psOffsetTime )",
+    "confidence": "medium"
+  },
+  {
+    "name": "getpersistentprofilevar",
+    "description": "Observed in the waw shipped script corpus (7 calls across 2 files; argument counts 1, 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 7 call(s) across 2 waw script file(s), observed argument counts 1, 2, access unknown. First sites: animscripts\\banzai.gsc(1403), clientscripts\\_russian_diary.csc(121), clientscripts\\_russian_diary.csc(123), clientscripts\\_russian_diary.csc(125), clientscripts\\_russian_diary.csc(147). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "NeedsRevive",
+    "description": "Used for mini maps to display compass icon.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "bool",
+            "description": "does player need to be reived.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self NeedsRevive( true )",
+    "confidence": "high"
+  },
+  {
+    "name": "coopinfo",
+    "description": "Observed in the waw shipped script corpus (5 calls across 2 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 5 call(s) across 2 waw script file(s), observed argument counts 2, access unknown. First sites: maps\\_arcademode.gsc(854), maps\\_arcademode.gsc(888), maps\\_arcademode.gsc(1041), maps\\_arcademode.gsc(1046), maps\\_collectibles.gsc(360). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsInVehicle",
+    "description": "Returns whether or not this player is currently occupying a vehicle.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self IsInVehicle()",
+    "confidence": "high"
+  },
+  {
+    "name": "stopburning",
+    "description": "Observed in the waw shipped script corpus (4 calls across 2 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 4 call(s) across 2 waw script file(s), observed argument counts 0, access mp. It is called on a target. First sites: maps\\mp\\gametypes\\_globallogic.gsc(725), maps\\mp\\_burnplayer.gsc(238), maps\\mp\\_burnplayer.gsc(260), maps\\mp\\_burnplayer.gsc(281). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "NewScoreHudElem",
+    "description": "Create a new score hud element for a particular client.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "client",
+            "description": "The client for whom the hud element is created.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self.hud_rankscroreupdate = NewScoreHudElem(self)",
+    "confidence": "medium"
+  },
+  {
+    "name": "SetVisibleToAll",
+    "description": "Make the entity visible to all players.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "trigger SetVisibleToAll()",
+    "confidence": "high"
+  },
+  {
+    "name": "BbPrint",
+    "description": "Debugger instrument.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "args",
+            "description": "The arguments it takes.",
+            "mandatory": false,
+            "type": {
+              "dataType": "vararg",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": null,
+    "verifiedInRevision": null,
+    "remarks": null
+  },
+  {
+    "name": "setpersistentprofilevar",
+    "description": "Observed in the waw shipped script corpus (3 calls across 2 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 2 waw script file(s), observed argument counts 2, access unknown. First sites: animscripts\\banzai.gsc(1410), clientscripts\\_russian_diary.csc(93), clientscripts\\_russian_diary.csc(102). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "Sqrt",
+    "description": "Returns the square-root of floating point value <a>.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "a",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "float"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "StartFadingBlur",
+    "description": "Blurs the screen, then fades out the blur to 0, over a period of time.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "blur_amount",
+            "description": "The initial blur amount. The value is pixels for Gaussian blur at 640x480. Must be a floating point value greater than 0.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "time",
+            "description": "Time in seconds, how long the fade out will take.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player StartFadingBlur( 3, 2 )",
+    "confidence": "high"
+  },
+  {
+    "name": "modelhasphyspreset",
+    "description": "Observed in the waw shipped script corpus (3 calls across 2 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 2 waw script file(s), observed argument counts 1, access unknown. First sites: animscripts\\death.gsc(147), animscripts\\death.gsc(539), maps\\oki3_util.gsc(2263). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetSpawnPointsBaseWeight",
+    "description": "If the spawn point is facing the objective position then it will have an additional score applied.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "teamMask",
+            "description": "teams that this command will affect.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "objectivePosition",
+            "description": "Position of the objective that will be used in the facing calculations.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "angle",
+            "description": "max angle that will be accepted.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "score",
+            "description": "additional score that will be applied.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetSpawnPointsBaseWeight( team_mask, point, 30, 100 )",
+    "confidence": "high"
+  },
+  {
+    "name": "setdoublevision",
+    "description": "Observed in the waw shipped script corpus (3 calls across 2 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 2 waw script file(s), observed argument counts 2, access unknown. It is called on a target. First sites: maps\\see1_opening.gsc(178), maps\\see1_opening.gsc(334), maps\\_utility.gsc(9495). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "stopusingturret",
+    "description": "Observed in the waw shipped script corpus (2 calls across 2 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 2 waw script file(s), observed argument counts 0, access unknown. It is called on a target. First sites: maps\\oki2.gsc(2212), maps\\_utility.gsc(10186). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsNoTarget",
+    "description": "returns if the sentient is marked no target.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "sentient",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( self IsNoTarget() )",
+    "confidence": "high"
+  },
+  {
+    "name": "EndParty",
+    "description": "Ends the current party session.",
+    "overloads": [
+      {
+        "parameters": [],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. Named and shaped after EndLobby, which Black Ops III documents."
+    ]
+  },
+  {
+    "name": "ResetAILimit",
+    "description": "Clears any previous restrictions on the max number of AI.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "GetReflectionOrigin",
+    "description": "Given a position, returns the position of the reflection probe in use there.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "probe_pos = GetReflectionOrigin( camera_pos )",
+    "confidence": "high"
+  },
+  {
+    "name": "destructible_anim",
+    "description": "Observed in the waw shipped script corpus (45 calls across 1 files; argument counts 3; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 45 call(s) across 1 waw script file(s), observed argument counts 3, access unknown. First sites: maps\\_destructible_types.gsc(273), maps\\_destructible_types.gsc(285), maps\\_destructible_types.gsc(288), maps\\_destructible_types.gsc(291), maps\\_destructible_types.gsc(294). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "include_achievement",
+    "description": "Observed in the waw shipped script corpus (10 calls across 1 files; argument counts 1, 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 10 call(s) across 1 waw script file(s), observed argument counts 1, 2, access unknown. First sites: maps\\nazi_zombie_factory.gsc(171), maps\\nazi_zombie_factory.gsc(172), maps\\nazi_zombie_factory.gsc(173), maps\\nazi_zombie_factory.gsc(174), maps\\nazi_zombie_factory.gsc(175). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "DisableGunnerFiring",
+    "description": "Enable or disable gunner firing.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "gunnerIndex",
+            "description": "The gunner to disable/enable.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "onoff",
+            "description": "true to disable, false otherwise.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "tank DisableGunnerFiring( 1, true )",
+    "confidence": "high"
+  },
+  {
+    "name": "FinishVehicleDamage",
+    "description": "Does damage to an vehicle - usually as part of the damage callback.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "Inflictor",
+            "description": "The entity that causes the damage.(e.g. a turret).",
+            "mandatory": true,
+            "type": {
+              "dataType": "entity",
+              "isArray": false
+            }
+          },
+          {
+            "name": "Attacker",
+            "description": "The entity that is attacking.",
+            "mandatory": true,
+            "type": {
+              "dataType": "entity",
+              "isArray": false
+            }
+          },
+          {
+            "name": "Damage",
+            "description": "Integer specifying the amount of damage done.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "damageFlags",
+            "description": "Integer specifying flags that are to be applied to the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "meansOfDeath",
+            "description": "Integer specifying the method of death.",
+            "mandatory": true
+          },
+          {
+            "name": "Weapon",
+            "description": "The weapon number of the weapon used to inflict the damage.",
+            "mandatory": true
+          },
+          {
+            "name": "Point",
+            "description": "Point of damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "Direction",
+            "description": "(vector) The direction of the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "hitLoc",
+            "description": "The location of the hit.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "offsetTime",
+            "description": "The time offset for the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "DamageFromUnderneath",
+            "description": "If the hit is underneath the vehicle.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "modelIndex",
+            "description": "which model in the dobj was hit.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "partIndex",
+            "description": "which bone was hit.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "damageteammates",
+            "description": "Whether to damage teammates or not.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "string",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self FinishVehicleDamage( eInflictor, eAttacker, iDamage, iDFlags, sMeansOfDeath, sWeapon, vPoint, vDir, sHitLoc, psOffsetTime, damageUnderneathVehicle, modelindex, partname, damageteammates )",
+    "confidence": "medium"
+  },
+  {
+    "name": "visionsetberserker",
+    "description": "Observed in the waw shipped script corpus (5 calls across 1 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 5 call(s) across 1 waw script file(s), observed argument counts 2, access unknown. It is called on a target. First sites: maps\\_collectibles_game.gsc(174), maps\\_collectibles_game.gsc(305), maps\\_collectibles_game.gsc(307), maps\\_collectibles_game.gsc(331), maps\\_collectibles_game.gsc(333). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetXuid",
+    "description": "Gets the unique online identifier (XUID) of the given player.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": "The player to get the XUID of."
+        },
+        "parameters": [
+          {
+            "name": "formatToDecimal",
+            "description": "When set to `true`, the XUID is returned in decimal format. Otherwise, it is returned in hexadecimal format.",
+            "mandatory": false,
+            "type": {
+              "dataType": "bool"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "string"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "addcylinderinfluencer",
+    "description": "Observed in the waw shipped script corpus (4 calls across 1 files; argument counts 9, 11; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 4 call(s) across 1 waw script file(s), observed argument counts 9, 11, access mp. First sites: maps\\mp\\gametypes\\_spawning.gsc(397), maps\\mp\\gametypes\\_spawning.gsc(423), maps\\mp\\gametypes\\_spawning.gsc(667), maps\\mp\\gametypes\\_spawning.gsc(751). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetDamageStage",
+    "description": "Sets the damage stage of the vehicle.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "stage",
+            "description": "the damage stage to set.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int"
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "gettreadhealth",
+    "description": "Observed in the waw shipped script corpus (3 calls across 1 files; argument counts 1; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 1 waw script file(s), observed argument counts 1, access mp. It is called on a target. First sites: maps\\mp\\_vehicles.gsc(926), maps\\mp\\_vehicles.gsc(927), maps\\mp\\_vehicles.gsc(1002). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "disableberserker",
+    "description": "Observed in the waw shipped script corpus (3 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 1 waw script file(s), observed argument counts 0, access unknown. It is called on a target. First sites: maps\\_collectibles_game.gsc(184), maps\\_collectibles_game.gsc(231), maps\\_collectibles_game.gsc(484). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "settransported",
+    "description": "Observed in the waw shipped script corpus (3 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\nazi_zombie_factory_teleporter.gsc(475), maps\\nazi_zombie_factory_teleporter.gsc(479), maps\\nazi_zombie_factory_teleporter.gsc(516). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "PredictAnim",
+    "description": "Predicts the outcome of an animation for an actor.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "actor",
+          "description": "The actor to predict for."
+        },
+        "parameters": [
+          {
+            "name": "animation",
+            "description": "The animation to predict.",
+            "mandatory": true,
+            "type": {
+              "dataType": "anim"
+            }
+          }
+        ],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. Only call sites are in animscripts/predict.gsc."
+    ]
+  },
+  {
+    "name": "IsGunnerFiring",
+    "description": "Checks if this gun is currently firing.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "gunnerIndex",
+            "description": "The gunner to check.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if( tank IsGunnerFiring( 1 ) )",
+    "confidence": "high"
+  },
+  {
+    "name": "FinishActorDamage",
+    "description": "Does damage to an actor, usually as part of a damage callback.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "actor",
+          "description": "The actor the damage is happening on.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": "actor",
+            "subType": "actor",
+            "isArray": false
+          }
+        },
+        "parameters": [
+          {
+            "name": "inflictor",
+            "description": "The entity that causes the damage, such as a turret.",
+            "mandatory": true,
+            "type": {
+              "dataType": "entity",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "attacker",
+            "description": "The entity that is attacking.",
+            "mandatory": true,
+            "type": {
+              "dataType": "entity",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "damage",
+            "description": "The amount of damage done.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "damageFlags",
+            "description": "The flags to apply to the damage, where `0` is no flags.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "meansOfDeath",
+            "description": "The means of death associated with the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "enum",
+              "instanceType": "MeansOfDeath",
+              "subType": "MeansOfDeath",
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "weapon",
+            "description": "The weapon that inflicted the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "entity",
+              "instanceType": "weapon",
+              "subType": "weapon",
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "point",
+            "description": "The point that the damage occurred at.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "direction",
+            "description": "The direction of the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "hitLoc",
+            "description": "The location of the hit.",
+            "mandatory": true,
+            "type": {
+              "dataType": "enum",
+              "instanceType": "HitLoc",
+              "subType": "HitLoc",
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "damageOrigin",
+            "description": "The position of the originator of the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "offsetTime",
+            "description": "The time offset for the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "float",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "boneIndex",
+            "description": "The index of the nearest bone.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "surfaceType",
+            "description": "The surface type of the hit location.",
+            "mandatory": false,
+            "type": {
+              "dataType": "string",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "surfaceNormal",
+            "description": "The surface normal at the hit location.",
+            "mandatory": false,
+            "type": {
+              "dataType": "vector",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": null,
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "self FinishActorDamage( eInflictor, eAttacker, iDamage, iDFlags, sMeansOfDeath, sWeapon, vPoint, vDir, sHitLoc, vDamageOrigin, psOffsetTime, iBoneIndex, iSurfaceType, vSurfaceNormal )"
+  },
+  {
+    "name": "hasusedweapon",
+    "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 waw script file(s), observed argument counts 2, access unknown. It is called on a target. First sites: maps\\_endmission.gsc(162), maps\\_endmission.gsc(173). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetWarGameData",
+    "description": "Creates a WAR specific HUD progress element.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "hud_element",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "momentumProgress",
+            "description": ", <momentumMultiplier>, <momentumBlitzkriegTime>.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "hudelement SetWarGameData( 0, 1, 30 )",
+    "confidence": "medium"
+  },
+  {
+    "name": "IsVehicleImmuneToDamage",
+    "description": "This checks the vehicle GDT settings related to bulletdamage, grenadedamage, etc.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "damageFlags",
+            "description": "Integer specifying flags that are to be applied to the damage.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "meansOfDeath",
+            "description": "Integer specifying the method of death.",
+            "mandatory": true
+          },
+          {
+            "name": "Weapon",
+            "description": "The weapon number of the weapon used to inflict the damage.",
+            "mandatory": true
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( vehicle IsVehicleImmuneToDamage( flags, mod, weapon ) )",
+    "confidence": "medium"
+  },
+  {
+    "name": "Ghost",
+    "description": "Used when the entity should be sent over the network to clients but not be drawn.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "model Ghost()",
+    "confidence": "high"
+  },
+  {
+    "name": "SetReviveHintString",
+    "description": "Set the revive hint string to show to all or to a team.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "hintString",
+            "description": "The hint string that will be displayed to the player that has the perk.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "team",
+            "description": "The team to show the hint to.",
+            "mandatory": false,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self.revivetrigger setReviveHintString( &\"GAME_BUTTON_TO_REVIVE_PLAYER\", self.team )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetCorpseAnim",
+    "description": "Get the animation that the corpse will play.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": ""
+        },
+        "parameters": [],
+        "returns": {
+          "type": {
+            "dataType": "string"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "VisionSetLerpRatio",
+    "description": "Determines if you can see an item.  Checks distance and view cone before the trace to increase efficency.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "float",
+            "description": "ratio between 0 and 1.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self VisionSetLerpRatio ( currentDistance / maxDistance )",
+    "confidence": "high"
+  },
+  {
+    "name": "ArtilleryIconLocation",
+    "description": "Set the artillery icon location.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "position",
+            "description": "Position of icon.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "teamNum",
+            "description": "Team number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "isActive",
+            "description": "Whether the icon is active or not.",
+            "mandatory": false,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "isMortar",
+            "description": "Whether the artillery is a mortar.",
+            "mandatory": false,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "clientNum",
+            "description": "The client number.",
+            "mandatory": false,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "ArtilleryIconLocation( self.origin, 1, true )",
+    "confidence": "high"
+  },
+  {
+    "name": "ClearEntityOwner",
+    "description": "Clears an AI's entity owner.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "actor",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self ClearEntityOwner()",
+    "confidence": "high"
+  },
+  {
+    "name": "setscoremultiplier",
+    "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\_arcademode.gsc(1030), maps\\_arcademode.gsc(1094). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "PlayerSightTrace",
+    "description": "Determines if you can see an item.  Checks distance and view cone before the trace to increase efficency.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "position",
+            "description": "place that check if you can see if being performed.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "maxDistance",
+            "description": "if the position is further than this -1 will be returned.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "hitNum",
+            "description": "if you run this more than once make sure to populate this with the return of the last as it will increase efficiency.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if (0 == (self Playersighttrace(positionOfFlare, 200, lastHit))",
+    "confidence": "high"
+  },
+  {
+    "name": "VisionSetLastStand",
+    "description": "Sets players' laststand vision.  Optionally give a transition time from the current vision.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "visionName",
+            "description": "Vision to transition to.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "transitionTime",
+            "description": "How long, in seconds, to take transitioning to the new vision set if a transition is possible.  Default is one second.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "VisionSetLastStand( \"armada\", 1.5 )",
+    "confidence": "high"
+  },
+  {
+    "name": "enableberserker",
+    "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 waw script file(s), observed argument counts 0, access unknown. It is called on a target. First sites: maps\\_collectibles_game.gsc(220), maps\\_collectibles_game.gsc(480). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "FindPath",
+    "description": "Check if a path can be found between these positions.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "start",
+            "description": ".",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "end",
+            "description": ".",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "allowPartial",
+            "description": "Whether to allow partial paths.",
+            "mandatory": false
+          },
+          {
+            "name": "checkDrop",
+            "description": "Whether to check for drops.",
+            "mandatory": false
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( self FindPath( self.origin, potentialpos ) )",
+    "confidence": "medium"
+  },
+  {
+    "name": "setexploderid",
+    "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\_load.gsc(1156), maps\\_load.gsc(1179). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "DepthOfPlayerInWater",
+    "description": "Returns the depth (in inches) that the player is in water.  Returns depth in inches, or 0 if the entity isn't in water.  Will work for all water types.  More effecient than depthinwater but will only work for players.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "depth = get_players()[0] DepthOfPlayerInWater()",
+    "confidence": "high"
+  },
+  {
+    "name": "clear_objective_squad",
+    "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\gametypes\\_squad.gsc(362), maps\\mp\\gametypes\\_squad.gsc(438). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "unsetcollectible",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\_collectibles_game.gsc(247). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "sethealthpercent",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\see2.gsc(1367). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "forcelevelend",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 0; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 0, access unknown. First sites: maps\\_cooplogic.gsc(28). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "create_zombie_point_of_interest",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 3; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 3, access unknown. It is called on a target. First sites: maps\\_zombiemode_cymbal_monkey.gsc(62). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "weaponmountable",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: animscripts\\death.gsc(1342). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "ResetMissileDetonationTime",
+    "description": "Resets the timer for a grenade or missile to its max fuse time.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "time",
+            "description": "Override the reset timer from the weapon and specify the time left.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "grenadeEnt ResetMissileDetonationTime()",
+    "confidence": "high"
+  },
+  {
+    "name": "check_point_in_active_zone",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\_zombiemode_cymbal_monkey.gsc(84). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "check_point_in_playable_area",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\_zombiemode_cymbal_monkey.gsc(88). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "reportclientdisconnected",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\_introscreen.gsc(572). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsSwitchingWeapons",
+    "description": "Returns true if the player is currently switching weapons.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player IsSwitchingWeapons()",
+    "confidence": "high"
+  },
+  {
+    "name": "getcurrentarcadehighscore",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\_arcademode.gsc(1406). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SnapshotAcknowledged",
+    "description": "Returns 1 if all clients have acknowledged the snapshot or the timeout has expired. Otherwise returns undefined.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "array",
+            "description": "The array returned by GetSnapshotIndexArray.",
+            "mandatory": true,
+            "type": {
+              "dataType": "any",
+              "isArray": true
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "acked = SnapshotAcknowledged( snapindices )",
+    "confidence": "high"
+  },
+  {
+    "name": "ok_to_possess",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\_ai_supplements.gsc(554). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "ai_supplement_tracker",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 2, access unknown. It is called on a target. First sites: maps\\_ai_supplements.gsc(556). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "score_spawner",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 3; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 3, access unknown. First sites: maps\\_ai_supplements.gsc(593). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "spawn_ai_supplement",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: maps\\_ai_supplements.gsc(605). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "StartRevive",
+    "description": "Starts the revive sequence on a player. <reviver> is the one administering aid to the player this is called on.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "reviver",
+            "description": "the player reviving the player this is called on.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "playerInLastStand StartRevive( rescuer )",
+    "confidence": "medium"
+  },
+  {
+    "name": "StopRevive",
+    "description": "Stops the revive behavior on a player when the revive did not complete. <reviver> is the one administering aid to the player this is called on.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "reviver",
+            "description": "the player reviving the player this is called on.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "playerInLastStand StopRevive( rescuer )",
+    "confidence": "medium"
+  },
+  {
+    "name": "getnumrestarts",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 0; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 0, access unknown. First sites: maps\\_endmission.gsc(182). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setstatbit",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 3; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 3, access unknown. It is called on a target. First sites: maps\\_challenges_coop.gsc(545). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "DeactivateClientExploder",
+    "description": "Deactivates a client side exploder.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "exploderId",
+            "description": "id of exploder to deactivate.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "DeactivateClientExploder( 101 )",
+    "confidence": "high"
+  },
+  {
+    "name": "ActivateClientExploder",
+    "description": "Activates a client-side exploder.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "exploderId",
+            "description": "ID of exploder to activate.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "ActivateClientExploder( 101 )",
+    "verifiedInRevision": 3,
+    "remarks": [
+      "This is sent as a reliable command and will not work with killcam or demos."
+    ]
+  },
+  {
+    "name": "playnotetrack",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\_notetrack.gsc(21). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "need_more_enemies",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 0; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 0, access unknown. First sites: maps\\_ai_supplements.gsc(540). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "ClearSpawnPointsBaseWeight",
+    "description": "Clears the objective base weights set in the spawn points.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "teamMask",
+            "description": "teams that this command will affect.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "ClearSpawnPointsBaseWeight( team_mask )",
+    "confidence": "high"
+  },
+  {
+    "name": "SpawnHelicopter",
+    "description": "Spawns a helicopter.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "owner",
+            "description": "the owner entity.",
+            "mandatory": true
+          },
+          {
+            "name": "origin",
+            "description": "the location.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector"
+            }
+          },
+          {
+            "name": "angles",
+            "description": "the angles.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector"
+            }
+          },
+          {
+            "name": "vehicleName",
+            "description": "the vehicle name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string"
+            }
+          },
+          {
+            "name": "modelName",
+            "description": "the model name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "entity"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "GetEyeApprox",
+    "description": "Get the eye position of the entity with some added offset.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "approx_eye_pos = self GetEyeGetEyeApprox()",
+    "confidence": "high"
+  },
+  {
+    "name": "SetSpawnPointRandomVariation",
+    "description": "Random value will be added into the spawn point weighting calculation.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "variation",
+            "description": "random range will be [0, variation].",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetSpawnPointRandomVariation( 10 )",
+    "confidence": "high"
+  },
+  {
+    "name": "ClearSpawnPoints",
+    "description": "Clears all spawnpoints out of the system.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "list",
+            "description": "which list of spawnpoints to clear.",
+            "mandatory": false
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "ClearSpawnPoints()",
+    "confidence": "medium"
+  },
+  {
+    "name": "iscollectors",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\gametypes\\_rank.gsc(462). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsPoisoned",
+    "description": "Check is a player is under the influence of gas.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( player IsPoisoned() )",
+    "confidence": "high"
+  },
+  {
+    "name": "create_zombie_point_of_interest_attractor_positions",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 2, access unknown. It is called on a target. First sites: maps\\_zombiemode_cymbal_monkey.gsc(93). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "LaunchBomb",
+    "description": "Launches a bomb from the entity.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "weapon",
+            "description": "The weapon type.",
+            "mandatory": true
+          },
+          {
+            "name": "origin",
+            "description": "The origin position.",
+            "mandatory": true
+          },
+          {
+            "name": "velocity",
+            "description": "The launch velocity.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "medium"
+  },
+  {
+    "name": "getsortedspawnpoints",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 3; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 3, access mp. First sites: maps\\mp\\gametypes\\_spawning.gsc(1180). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SpawnPlane",
+    "description": "Spawns a plane at the origin.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "player",
+            "description": "the owner.",
+            "mandatory": true
+          },
+          {
+            "name": "classname",
+            "description": "class of entity.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "description": "location to spawn at.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector"
+            }
+          },
+          {
+            "name": "spawnflags",
+            "description": "optional spawn flags.",
+            "mandatory": false,
+            "type": {
+              "dataType": "int"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "entity"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "Ceil",
+    "description": "Returns the ceiling of floating point value <a>. This effectively rounds up Ceil(2.7) == 3, Ceil(3.9) == 4.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "a",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "float"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "unlocksquad",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\gametypes\\_globallogic.gsc(2355). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "locksquad",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\gametypes\\_globallogic.gsc(2350). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "leavesquad",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access mp. First sites: maps\\mp\\gametypes\\_globallogic.gsc(2328). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setcurvebspline",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: maps\\living_battlefield.gsc(246). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetDebugSideSwitch",
+    "description": "Sets the debug side switch value.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "value",
+            "description": "The side switch value.",
+            "mandatory": true
+          }
+        ],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetDebugSideSwitch( 1 );",
+    "confidence": "low"
+  },
+  {
+    "name": "EndLobby",
+    "description": "Ends the current lobby session.",
+    "overloads": [
+      {
+        "parameters": [],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "ShootVolley",
+    "description": "Fires a volley from the vehicle or turret.",
+    "overloads": [
+      {
+        "parameters": [],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. A single call site, so the signature is weak evidence."
+    ]
+  },
+  {
+    "name": "IsSpawnPointVisible",
+    "description": "Returns true or false if a point is visible to the given team.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "point",
+            "description": "Spawnpoint origin that needs to be checked.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "angles",
+            "description": "Spawnpoint angles that needs to be checked.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "team",
+            "description": "Team that we need to check against the point.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "ignorePlayer",
+            "description": "The player that we are spawning in.",
+            "mandatory": true
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( IsSpawnPointVisible( point_position, point_angles, \"axis\", player ) )",
+    "confidence": "medium"
+  },
+  {
+    "name": "StopPoisoning",
+    "description": "Stop poisoning player.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {}
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player StopPoisoning()",
+    "confidence": "medium"
+  },
+  {
+    "name": "weaponcliptype",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: animscripts\\utility.gsc(2277). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "LaunchVehicle",
+    "description": "Launch this physics vehicle.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": "The vehicle to launch.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": "vehicle",
+            "subType": "vehicle",
+            "isArray": false
+          }
+        },
+        "parameters": [
+          {
+            "name": "force",
+            "description": "The force of the launch.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "targetPos",
+            "description": "The target position.",
+            "mandatory": false,
+            "type": {
+              "dataType": "vector",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "immediate",
+            "description": "Whether to launch immediately.",
+            "mandatory": false,
+            "type": {
+              "dataType": "bool",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "detach",
+            "description": "Whether to detach the vehicle.",
+            "mandatory": false,
+            "type": {
+              "dataType": "bool",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "unknown",
+            "description": "Unknown. *",
+            "mandatory": false,
+            "type": {
+              "dataType": "bool",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": null,
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "panzer LaunchVehicle( (0,0,100) )"
+  },
+  {
+    "name": "GetMaxVehicles",
+    "description": "Return the maximum number of vehicles that can be instantiated simultaneously.  This is platform-specific.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "vehicleSlotsFree = GetMaxVehicles() - level.vehicles_list.size",
+    "confidence": "high"
+  },
+  {
+    "name": "ReviveObituary",
+    "description": "Create an revive obituary for a character.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "victim",
+            "description": "The victim entity.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "Obituary( self )",
+    "confidence": "medium"
+  },
+  {
+    "name": "PlayBattleChatterToTeam",
+    "description": "Play the sound alias as if coming from the entity, so that only one team can hear it.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "aliasname1",
+            "description": "The first sound alias to play.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "aliasname2",
+            "description": "The second sound alias to play.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "teamname",
+            "description": "The team that will be able to hear the sound. Must be either 'axis' or 'allies' or 'team3'.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "ignoreplayer",
+            "description": "If present, this player will not hear the sound.",
+            "mandatory": false
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self PlaySoundToTeam( \"frag_out\", \"axis\", self )",
+    "confidence": "medium"
+  },
+  {
+    "name": "LineList",
+    "description": "Draws a list of debug lines.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "param1",
+            "description": "The first parameter.",
+            "mandatory": true
+          },
+          {
+            "name": "param2",
+            "description": "The second parameter.",
+            "mandatory": false
+          },
+          {
+            "name": "param3",
+            "description": "The third parameter.",
+            "mandatory": false
+          },
+          {
+            "name": "param4",
+            "description": "The fourth parameter.",
+            "mandatory": false
+          },
+          {
+            "name": "param5",
+            "description": "The fifth parameter.",
+            "mandatory": false
+          }
+        ],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "LineList( data );",
+    "confidence": "low"
+  },
+  {
+    "name": "CollisionTestPointsInCylinder",
+    "description": null,
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "any",
+            "isArray": true
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "low"
+  },
+  {
+    "name": "StartPoisoning",
+    "description": "Start poisoning player.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {}
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player StartPoisoning()",
+    "confidence": "medium"
+  },
+  {
+    "name": "CollisionTestPointsInSphere",
+    "description": "Returns an array of collision result structures.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "any",
+            "isArray": true
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "SetEntityOwner",
+    "description": "Set an entity as the AI's owner. The owner will never be targeted.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "actor",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "entity",
+            "description": "An entity for owner.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self SetEntityOwner( vehicle_entity )",
+    "confidence": "medium"
+  },
+  {
+    "name": "SetEnemyModel",
+    "description": "Sets the model of the actor that actors enemies will see to the given model name.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "actor",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "modelName",
+            "description": "The name of the model to set this actor to.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "dog SetEnemyModel( \"german_shepard_black\" )",
+    "confidence": "high"
+  },
+  {
+    "name": "ShootUp",
+    "description": "Gives an entity vertical movement.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "float",
+            "description": "upwards velocity.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "betty ShootUp( 350 )",
+    "confidence": "high"
+  },
+  {
+    "name": "MakeGrenadeDud",
+    "description": "Turns a grenade into a dud.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "grenade",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "grenade MakeGrenadeDud()",
+    "confidence": "high"
+  },
+  {
+    "name": "Matrix4x4TransformPoints",
+    "description": null,
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "any",
+            "isArray": true
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "low"
+  },
+  {
+    "name": "IsFlared",
+    "description": "Check is a player is under the influence of a flare.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( player IsFlared() )",
+    "confidence": "high"
+  }
+]

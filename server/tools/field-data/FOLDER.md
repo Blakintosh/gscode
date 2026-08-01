@@ -67,6 +67,9 @@ extensible beyond stock data. Field entry shape: `{ "name", "type", "readonly"? 
   provenance: thirteen carried over from the Black Ops III library, where the same function
   is documented, and six inferred from call sites alone. Kept here so a regeneration cannot
   drop them, and flagged so a reconstruction is never mistaken for documentation.
+- `bo1_ai_builtins.json` and `waw_ai_builtins.json` — durable snapshots of the same empirical
+  merge for those games. `bo1_csc_empirical.json` and `waw_csc_empirical.json` preserve client-only
+  candidates that cannot be derived from a server wordfile entry.
 - `cod4_api_overrides.json` — corrections to signatures the documentation states incorrectly,
   applied over every other layer. Entry shape: `{ "name", "optionalFrom", "reason" }`. See
   [How an API entry is chosen](#how-an-api-entry-is-chosen).
@@ -90,6 +93,12 @@ with `dotnet run` from this folder after editing the curated sources.
   key found only there is recorded as client-side.
 - Generates each pre-BO3 game's `<prefix>_api_gsc.json` and `<prefix>_object_fields.json`
   from its wordfile.
+- Enriches WaW and BO1's server libraries from durable `sources/curated/<prefix>_ai_builtins.json`
+  files, materialized on the first run from the committed `*_missing_builtins.json` corpus harvests.
+  A candidate that exists in the documented CoD4 or BO3 API reuses that full entry; a candidate
+  found only empirically is emitted as a sparse `aiGenerated` entry with provenance and no guessed
+  signature. The matching `<prefix>_csc_empirical.json` files preserve client-only names, so a later
+  zero-miss harvest cannot erase the evidence that justified them.
 - The `import` step (xlsx → curated) is manual; the curated JSON is the source of truth.
 
 ### How an API entry is chosen

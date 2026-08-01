@@ -29,8 +29,7 @@ public static class ApiLoader
     /// </summary>
     public static BuiltinApi Load(string apiDirectory, ScriptLanguage language, GameProfile? profile = null)
     {
-        GameProfile game = profile ?? GameProfile.Active;
-        string? fileName = game.ApiFileName(language);
+        string? fileName = (profile ?? GameProfile.Active).ApiFileName(language);
         if ( fileName is null )
         {
             return BuiltinApi.Empty;
@@ -66,13 +65,13 @@ public static class ApiLoader
                 continue;
             }
 
-            functions[entry.Name] = Convert(entry, game);
+            functions[entry.Name] = Convert(entry);
         }
 
         return new BuiltinApi(functions.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase));
     }
 
-    private static BuiltinFunction Convert(ApiEntry entry, GameProfile game)
+    private static BuiltinFunction Convert(ApiEntry entry)
     {
         ImmutableArray<BuiltinOverload>.Builder overloads = ImmutableArray.CreateBuilder<BuiltinOverload>();
 
@@ -103,9 +102,11 @@ public static class ApiLoader
             overloads.ToImmutable(),
             entry.Example ?? "")
         {
-            // The data wins when it says anything, so a future `devOnly` field needs no code
-            // change here; until then the curated list is the only source that is accurate.
-            IsDevOnly = entry.DevOnly ?? DevOnlyBuiltins.Contains(name, game),
+            // The data wins when it says anything, and that ordering is what makes this per GAME:
+            // the curated list is Black Ops 3's, so a game whose own library states the answer
+            // overrides it and only a silent one falls back. CoD4's four affected names carry
+            // `"devOnly": false` for exactly that reason — see DevOnlyBuiltins.
+            IsDevOnly = entry.DevOnly ?? DevOnlyBuiltins.Contains(name),
         };
     }
 

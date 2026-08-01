@@ -689,7 +689,12 @@ static int ApplyOverrides(string prefix, string overridesPath, Dictionary<string
             flags.Add("corrected");
         }
 
-        byName[name] = entry with { Overloads = overloads, Flags = flags };
+        // Whether the engine ships this function only in a development build, which is a fact about
+        // THIS game and cannot be inherited from another's. Stated here so the answer travels with
+        // the function's own data; absent, the loader falls back to its curated list.
+        bool? devOnly = element.TryGetProperty("devOnly", out JsonElement dev) ? dev.GetBoolean() : null;
+
+        byName[name] = entry with { Overloads = overloads, Flags = flags, DevOnly = devOnly };
         corrected++;
     }
 
@@ -918,7 +923,11 @@ internal sealed record Cod4Entry(
     string? Example,
     string? Module,
     string? Spmp,
-    List<string>? Flags);
+    List<string>? Flags,
+    // Whether the engine ships this function only in a development build. Nullable and omitted when
+    // unset, so it appears only where an override states it and the loader falls back to its own
+    // curated list everywhere else.
+    bool? DevOnly = null);
 internal sealed record Cod4Overload(Cod4CalledOn? CalledOn, List<Cod4Parameter> Parameters);
 internal sealed record Cod4CalledOn(string Name, string? Description);
 internal sealed record Cod4Parameter(string Name, string? Description, bool Mandatory, Cod4Type? Type);

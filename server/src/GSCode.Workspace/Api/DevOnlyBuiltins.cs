@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using GSCode.Core;
 
 namespace GSCode.Workspace.Api;
 
@@ -31,26 +30,25 @@ namespace GSCode.Workspace.Api;
 /// — <c>PixMarker</c> (0:2) and <c>InfoVolumeDebugInit</c> (0:1) — and <c>GetDebugEye</c> was
 /// left out as an ambiguous getter with no usages either way.
 ///
-/// Those ~980 scripts are BLACK OPS 3's, and the conclusions are NOT transferable — which is why
-/// the table is keyed by game. Dev-only-ness is a fact about one engine, not about the language,
-/// and CoD4 is the proof: the same count there returns <c>println</c> 220 inside against 438
-/// outside, the exact inverse of BO3's 269:2. Lending BO3's list to CoD4 reported 598 Errors
-/// across 107 shipped files, every one of them wrong.
+/// THOSE ~980 SCRIPTS ARE BLACK OPS 3'S, and the answers do not carry to another engine. This is a
+/// fallback, not a universal truth: <see cref="ApiLoader"/> reads <c>entry.DevOnly ??
+/// DevOnlyBuiltins.Contains(name)</c>, so a game whose API data states the answer wins, and only a
+/// game that states nothing lands here.
 ///
-/// Keyed by game rather than gated by a flag so that a name added to one game's list can never
-/// leak into another's. That is the failure mode worth designing out: the bug was not a missing
-/// switch but an assumption that a debug function is debug everywhere.
+/// CoD4 is why that ordering matters. Counted the same way over its 894 scripts, <c>println</c>
+/// comes back 438 calls OUTSIDE a dev block against 220 inside — the inverse of BO3's 269:2 — and
+/// this table applied to it reported 598 Errors across 107 shipped files. Its four affected names
+/// (<c>PrintLn</c>, <c>Print3d</c>, <c>Line</c>, <c>Print</c>: the only four of these twenty that
+/// its library even has) now carry <c>"devOnly": false</c> from
+/// <c>sources/curated/cod4_api_overrides.json</c>, each with its count as the reason.
 ///
-/// To add a game, count its own scripts the same way and give it an entry. A game with no entry
-/// reports nothing, which is the right answer for one nobody has measured.
+/// So a game is corrected in ITS OWN DATA rather than by weakening this list. Before adding a name
+/// here, remember it will apply to every game that does not say otherwise, and check whether the
+/// name belongs to the shared debug vocabulary or only to T7's.
 /// </summary>
 public static class DevOnlyBuiltins
 {
-    /// <summary>
-    /// Black Ops 3, counted across its ~980 stock scripts. Every name here is one those scripts
-    /// call only from inside a <c>/# #/</c>.
-    /// </summary>
-    private static readonly FrozenSet<string> s_blackOps3 =
+    private static readonly FrozenSet<string> s_names =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             // Console writers.
@@ -82,58 +80,12 @@ public static class DevOnlyBuiltins
             "SetDebugSideSwitch",
         }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Call of Duty 4, counted the same way across its 894 stock scripts: EMPTY, and measured
-    /// rather than assumed.
-    ///
-    /// Of BO3's twenty names, sixteen are never called in CoD4 at all — no evidence either way,
-    /// so no claim — and the four that are called are all called OUTSIDE a dev block, which
-    /// settles them the other way:
-    ///
-    /// <code>
-    ///   name       inside  outside
-    ///   PrintLn       220      438
-    ///   Print3d        48       83
-    ///   Line           40      110
-    ///   Print           7        3
-    /// </code>
-    ///
-    /// Recorded as an explicit empty entry rather than an absent one, because "measured, and the
-    /// answer is none" is a different fact from "nobody has looked" — and this is the game that
-    /// proves the table has to be per-game at all.
-    /// </summary>
-    private static readonly FrozenSet<string> s_cod4 = FrozenSet<string>.Empty;
+    /// <summary>How many builtins are currently known to be dev-only.</summary>
+    public static int Count => s_names.Count;
 
-    private static readonly FrozenDictionary<string, FrozenSet<string>> s_byGame =
-        new Dictionary<string, FrozenSet<string>>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["bo3"] = s_blackOps3,
-            ["cod4"] = s_cod4,
-        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>The names known dev-only on one game; empty for a game nobody has counted.</summary>
-    public static FrozenSet<string> For(GameProfile? profile = null)
+    /// <summary>True when the builtin exists only in a development build.</summary>
+    public static bool Contains(string name)
     {
-        return s_byGame.TryGetValue((profile ?? GameProfile.Active).ShortName, out FrozenSet<string>? names)
-            ? names
-            : FrozenSet<string>.Empty;
-    }
-
-    /// <summary>How many builtins are known dev-only on one game.</summary>
-    public static int CountFor(GameProfile? profile = null)
-    {
-        return For(profile).Count;
-    }
-
-    /// <summary>
-    /// True when the builtin exists only in a development build ON THIS GAME.
-    ///
-    /// A game with no measured list answers false for every name, so the check simply does not fire
-    /// there. That is the right failure: the alternative — inheriting another game's answers — is
-    /// not a weaker version of the check but a wrong one, at Error severity, on working code.
-    /// </summary>
-    public static bool Contains(string name, GameProfile? profile = null)
-    {
-        return For(profile).Contains(name);
+        return s_names.Contains(name);
     }
 }

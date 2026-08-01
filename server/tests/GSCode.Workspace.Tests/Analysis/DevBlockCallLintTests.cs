@@ -187,49 +187,42 @@ public class DevBlockCallLintTests
         // Both descriptions call these debug instruments, but stock scripts call them OUTSIDE
         // dev blocks and never inside, so listing them would flag shipped code. Pinned so the
         // corpus-validated decision is not undone by someone reading the description.
-        Assert.False(DevOnlyBuiltins.Contains("PixMarker", GameProfile.BlackOps3));
-        Assert.False(DevOnlyBuiltins.Contains("InfoVolumeDebugInit", GameProfile.BlackOps3));
+        Assert.False(DevOnlyBuiltins.Contains("PixMarker"));
+        Assert.False(DevOnlyBuiltins.Contains("InfoVolumeDebugInit"));
     }
 
     [Fact]
-    public void TheListIsScopedToTheGameItWasMeasuredOn()
+    public void Cod4SaysSoInItsOwnData_AndOverridesTheSharedList()
     {
-        // Dev-only-ness is a fact about one ENGINE, not about the language. `println` sits inside
-        // a dev block 269 times against 2 outside across BO3's scripts, and 220 against 438 across
-        // CoD4's — the same name, the opposite answer. Lending BO3's list to CoD4 reported 598
-        // Errors across 107 shipped files, every one of them wrong.
-        Assert.True(DevOnlyBuiltins.Contains("println", GameProfile.BlackOps3));
-        Assert.False(DevOnlyBuiltins.Contains("println", GameProfile.ByName("cod4")!));
-    }
+        // The curated list is BO3's, and CoD4 contradicts it: `println` is called 438 times outside
+        // a /# #/ dev block there against 220 inside, the inverse of BO3's 2:269. Applying BO3's
+        // answer reported 598 Errors across 107 shipped files.
+        //
+        // The correction lives in CoD4's OWN library rather than by weakening the shared list, and
+        // this asserts the loader honours that ordering — entry.DevOnly wins over the fallback.
+        BuiltinApi cod4 = ApiLoader.Load(
+            Path.Combine(AppContext.BaseDirectory, "Api"), ScriptLanguage.Gsc, GameProfile.ByName("cod4")!);
 
-    [Fact]
-    public void Cod4WasMeasuredAndHasNone()
-    {
-        // Not "unmeasured" but "measured, and the answer is none": sixteen of BO3's twenty names
-        // are never called in CoD4 at all, and the four that are — println, print3d, line, print —
-        // are all called outside dev blocks.
-        Assert.Empty(DevOnlyBuiltins.For(GameProfile.ByName("cod4")!));
-
-        foreach ( string measured in (string[])["println", "print3d", "line", "print"] )
+        foreach ( string name in (string[])["println", "print3d", "line", "print"] )
         {
-            Assert.False(DevOnlyBuiltins.Contains(measured, GameProfile.ByName("cod4")!));
+            BuiltinFunction? function = cod4.Find(name);
+            Assert.NotNull(function);
+            Assert.False(function!.IsDevOnly, $"{name} is not dev-only in CoD4; its data says so");
+
+            // The shared list still claims it, which is what makes the override load-bearing.
+            Assert.True(DevOnlyBuiltins.Contains(name));
         }
     }
 
     [Fact]
-    public void AGameWithNoEntryInheritsNothing()
+    public void BlackOps3StillTakesTheSharedList()
     {
-        // The failure mode being designed out: a name added to one game's list must never leak
-        // into another's. An unmeasured game reports nothing, which beats an Error on working code.
-        foreach ( GameProfile game in GameProfile.All )
-        {
-            if ( game != GameProfile.BlackOps3 )
-            {
-                Assert.False(
-                    DevOnlyBuiltins.Contains("println", game),
-                    $"{game.ShortName} inherited a name nobody counted against its scripts");
-            }
-        }
+        // The fallback is the whole point for a game whose data states nothing, so correcting CoD4
+        // must not have cost BO3 the check.
+        BuiltinApi bo3 = ApiLoader.Load(
+            Path.Combine(AppContext.BaseDirectory, "Api"), ScriptLanguage.Gsc, GameProfile.BlackOps3);
+
+        Assert.True(bo3.Find("println")!.IsDevOnly);
     }
 
     [Fact]

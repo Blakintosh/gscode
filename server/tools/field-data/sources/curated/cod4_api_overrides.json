@@ -224,7 +224,8 @@
             "text7",
             "text8"
         ],
-        "reason": "The pages list 1 parameter(s); 84 call(s) in the shipped scripts pass up to 8, so the list is short rather than the calls wrong."
+        "devOnly": false,
+        "reason": "Two corrections. PARAMETERS: the pages list 1; 84 call(s) in the shipped scripts pass up to 8, so the list is short rather than the calls wrong. DEV-ONLY: false, despite the page saying 'Development only'. The shipped scripts call it 438 times outside a /# #/ dev block against 220 inside, so the diagnostic's claim - that the name will not exist in a release build - is contradicted by the game that shipped: were it removed, those 438 calls would not link. The page is best read as 'only useful in development' rather than 'absent in release'. Stated here because the loader's fallback list is Black Ops 3's, where the same count is 2 outside against 269 inside."
     },
     {
         "name": "SetAnimRestart",
@@ -361,5 +362,20 @@
         "name": "CanShoot",
         "optionalFrom": 2,
         "reason": "The offset from the gun is optional. Three shipped calls pass only the position."
+    },
+    {
+        "name": "Print3d",
+        "devOnly": false,
+        "reason": "Same reading as PrintLn: 83 calls outside a /# #/ dev block against 48 inside, across the shipped scripts."
+    },
+    {
+        "name": "Line",
+        "devOnly": false,
+        "reason": "Same reading as PrintLn: 110 calls outside a /# #/ dev block against 40 inside. The debug-draw primitives are reachable from release code in this engine."
+    },
+    {
+        "name": "Print",
+        "devOnly": false,
+        "reason": "Same reading as PrintLn, on a thinner margin: 3 calls outside a /# #/ dev block against 7 inside. The direction is what matters - a single outside call in shipped code is enough to make an Error wrong."
     }
 ]

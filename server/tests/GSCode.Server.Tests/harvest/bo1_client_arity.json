@@ -1,0 +1,539 @@
+{
+  "game": "bo1",
+  "clientScriptsSwept": 450,
+  "distinct": 20,
+  "predictedLocalClientNum": 12,
+  "scoring": null,
+  "functions": [
+    {
+      "name": "PlayFxOnTag",
+      "declaredMax": 3,
+      "observedArgCounts": [
+        4
+      ],
+      "calls": 264,
+      "fileCount": 53,
+      "numericFirstArgCalls": 12,
+      "namedFirstArgCalls": 223,
+      "clientIndexConfidence": 0.89,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0",
+        "client",
+        "clientnum",
+        "client_num",
+        "GetLocalClientNumber()",
+        "i",
+        "index",
+        "int_local_player_num",
+        "localClientNum",
+        "local_client_num",
+        "x"
+      ],
+      "sites": [
+        "clientscripts\\mp\\mp_cosmodrome.csc(32)",
+        "clientscripts\\mp\\mp_cracked.csc(40)",
+        "clientscripts\\mp\\mp_cracked.csc(41)",
+        "clientscripts\\mp\\mp_duga.csc(88)",
+        "clientscripts\\mp\\mp_duga.csc(89)"
+      ]
+    },
+    {
+      "name": "PlayLoopSound",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2,
+        3,
+        4
+      ],
+      "calls": 148,
+      "fileCount": 49,
+      "numericFirstArgCalls": 22,
+      "namedFirstArgCalls": 6,
+      "clientIndexConfidence": 0.189,
+      "predictedLocalClientNum": false,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "\"amb_num_13_d\"",
+        "\"amb_rain_heavy_uw_2d\"",
+        "\"amb_rain_light_uw_2d\"",
+        "\"evt_bulletcam_vox\"",
+        "\"evt_bulletcam_whiz\"",
+        "\"evt_s01_heli_amb_waterspray1\"",
+        "\"evt_s01_heli_amb_waterspray2\"",
+        "\"evt_s01_helo_underwater_loop\"",
+        "\"evt_s01_helo_water_loop\"",
+        "\"veh_sampan_run_loop\"",
+        "alias",
+        "self.script_sound"
+      ],
+      "sites": [
+        "clientscripts\\creek_1_amb.csc(340)",
+        "clientscripts\\creek_1_amb.csc(341)",
+        "clientscripts\\creek_1_amb.csc(342)",
+        "clientscripts\\creek_1_amb.csc(354)",
+        "clientscripts\\creek_1_amb.csc(406)"
+      ]
+    },
+    {
+      "name": "GetEntArray",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 153,
+      "fileCount": 48,
+      "numericFirstArgCalls": 38,
+      "namedFirstArgCalls": 82,
+      "clientIndexConfidence": 0.784,
+      "predictedLocalClientNum": false,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0",
+        "clientNum",
+        "client_num",
+        "cNum",
+        "i",
+        "int_local_player_num",
+        "localclient",
+        "localClientNum",
+        "local_client",
+        "p",
+        "x"
+      ],
+      "sites": [
+        "clientscripts\\creek_1_amb.csc(783)",
+        "clientscripts\\creek_1_amb.csc(802)",
+        "clientscripts\\creek_1_amb.csc(803)",
+        "clientscripts\\hue_city.csc(37)",
+        "clientscripts\\hue_city_amb.csc(291)"
+      ]
+    },
+    {
+      "name": "PlayRumbleOnEntity",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 39,
+      "fileCount": 19,
+      "numericFirstArgCalls": 3,
+      "namedFirstArgCalls": 30,
+      "clientIndexConfidence": 0.846,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0",
+        "driver_local_client",
+        "GetLocalClientNumber()",
+        "i",
+        "int_client_num",
+        "localClientNum",
+        "local_client_num"
+      ],
+      "sites": [
+        "clientscripts\\creek_1_amb.csc(307)",
+        "clientscripts\\mp\\_explosive_bolt.csc(74)",
+        "clientscripts\\mp\\_helicopter_player.csc(579)",
+        "clientscripts\\mp\\_rcbomb.csc(526)",
+        "clientscripts\\mp\\_rcbomb.csc(530)"
+      ]
+    },
+    {
+      "name": "GetEnt",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 52,
+      "fileCount": 17,
+      "numericFirstArgCalls": 31,
+      "namedFirstArgCalls": 18,
+      "clientIndexConfidence": 0.942,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0",
+        "clientNum",
+        "i",
+        "localclient",
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\creek_1_amb.csc(617)",
+        "clientscripts\\creek_1_amb.csc(618)",
+        "clientscripts\\creek_1_amb.csc(619)",
+        "clientscripts\\creek_1_amb.csc(620)",
+        "clientscripts\\creek_1_amb.csc(745)"
+      ]
+    },
+    {
+      "name": "SpawnFx",
+      "declaredMax": 4,
+      "observedArgCounts": [
+        5,
+        6
+      ],
+      "calls": 27,
+      "fileCount": 12,
+      "numericFirstArgCalls": 2,
+      "namedFirstArgCalls": 4,
+      "clientIndexConfidence": 0.222,
+      "predictedLocalClientNum": false,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0",
+        "clientNum",
+        "client_num",
+        "i",
+        "p"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_fx.csc(270)",
+        "clientscripts\\zombietron_fx.csc(175)",
+        "clientscripts\\zombietron_fx.csc(180)",
+        "clientscripts\\zombie_cod5_asylum_fx.csc(84)",
+        "clientscripts\\zombie_cod5_asylum_fx.csc(218)"
+      ]
+    },
+    {
+      "name": "VisionSetNaked",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 56,
+      "fileCount": 8,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 56,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "ClientNum",
+        "GetLocalClientNumber()",
+        "int_clientnum",
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\creek_1.csc(67)",
+        "clientscripts\\creek_1.csc(76)",
+        "clientscripts\\creek_1.csc(85)",
+        "clientscripts\\creek_1.csc(94)",
+        "clientscripts\\creek_1.csc(102)"
+      ]
+    },
+    {
+      "name": "PlayFx",
+      "declaredMax": 4,
+      "observedArgCounts": [
+        5,
+        6
+      ],
+      "calls": 19,
+      "fileCount": 8,
+      "numericFirstArgCalls": 5,
+      "namedFirstArgCalls": 9,
+      "clientIndexConfidence": 0.737,
+      "predictedLocalClientNum": false,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0",
+        "clientNum",
+        "client_num",
+        "i",
+        "player",
+        "self.client_num"
+      ],
+      "sites": [
+        "clientscripts\\flashpoint.csc(110)",
+        "clientscripts\\flashpoint.csc(116)",
+        "clientscripts\\flashpoint.csc(139)",
+        "clientscripts\\flashpoint.csc(145)",
+        "clientscripts\\mp\\_ambient.csc(60)"
+      ]
+    },
+    {
+      "name": "stoploopsound",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 11,
+      "fileCount": 6,
+      "numericFirstArgCalls": 11,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0"
+      ],
+      "sites": [
+        "clientscripts\\hue_city_amb.csc(233)",
+        "clientscripts\\mp\\_ambientpackage.csc(812)",
+        "clientscripts\\mp\\_music.csc(256)",
+        "clientscripts\\wmd_amb.csc(597)",
+        "clientscripts\\wmd_amb.csc(598)"
+      ]
+    },
+    {
+      "name": "StopRumble",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 7,
+      "fileCount": 5,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 7,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "int_client_num",
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_vehicle.csc(91)",
+        "clientscripts\\zombie_cosmodrome.csc(2143)",
+        "clientscripts\\zombie_cosmodrome.csc(2158)",
+        "clientscripts\\zombie_temple.csc(1632)",
+        "clientscripts\\zombie_temple_geyser.csc(42)"
+      ]
+    },
+    {
+      "name": "playsound",
+      "declaredMax": 3,
+      "observedArgCounts": [
+        4
+      ],
+      "calls": 15,
+      "fileCount": 4,
+      "numericFirstArgCalls": 9,
+      "namedFirstArgCalls": 6,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0",
+        "client_num"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_audio.csc(405)",
+        "clientscripts\\mp\\_audio.csc(421)",
+        "clientscripts\\mp\\_audio.csc(479)",
+        "clientscripts\\mp\\_audio.csc(484)",
+        "clientscripts\\mp\\_audio.csc(489)"
+      ]
+    },
+    {
+      "name": "GetCurrentWeapon",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 9,
+      "fileCount": 4,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 9,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\_flamethrower_plight.csc(24)",
+        "clientscripts\\_zombiemode_weap_humangun.csc(73)",
+        "clientscripts\\_zombiemode_weap_humangun.csc(129)",
+        "clientscripts\\_zombiemode_weap_tesla.csc(64)",
+        "clientscripts\\_zombiemode_weap_tesla.csc(105)"
+      ]
+    },
+    {
+      "name": "PlayRumbleOnPosition",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 5,
+      "fileCount": 4,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 0.4,
+      "predictedLocalClientNum": false,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "i",
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_airstrike.csc(78)",
+        "clientscripts\\mp\\_airstrike.csc(248)",
+        "clientscripts\\zombie_cosmodrome.csc(2259)",
+        "clientscripts\\_vehicle.csc(731)",
+        "clientscripts\\_zombiemode_ai_director.csc(38)"
+      ]
+    },
+    {
+      "name": "IsThrowingGrenade",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 4,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 4,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "clientscripts\\_zombiemode_weap_humangun.csc(74)",
+        "clientscripts\\_zombiemode_weap_tesla.csc(70)",
+        "clientscripts\\_zombiemode_weap_tesla.csc(111)",
+        "clientscripts\\_zombiemode_weap_thundergun.csc(74)"
+      ]
+    },
+    {
+      "name": "IsMeleeing",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 4,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 4,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "clientscripts\\_zombiemode_weap_humangun.csc(74)",
+        "clientscripts\\_zombiemode_weap_tesla.csc(70)",
+        "clientscripts\\_zombiemode_weap_tesla.csc(111)",
+        "clientscripts\\_zombiemode_weap_thundergun.csc(74)"
+      ]
+    },
+    {
+      "name": "RandomFloat",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 10,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "0.3",
+        "10"
+      ],
+      "sites": [
+        "clientscripts\\zombie_coast_fx.csc(147)",
+        "clientscripts\\zombie_coast_fx.csc(151)",
+        "clientscripts\\_zombiemode.csc(198)",
+        "clientscripts\\_zombiemode.csc(230)",
+        "clientscripts\\_zombiemode.csc(251)"
+      ]
+    },
+    {
+      "name": "PlayRumbleLoopOnEntity",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 3,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 3,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_vehicle.csc(77)",
+        "clientscripts\\mp\\_vehicle.csc(81)",
+        "clientscripts\\_vehicle.csc(72)"
+      ]
+    },
+    {
+      "name": "GetWeaponAmmoClip",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 3,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 3,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "clientscripts\\_zombiemode_weap_tesla.csc(75)",
+        "clientscripts\\_zombiemode_weap_tesla.csc(116)",
+        "clientscripts\\_zombiemode_weap_thundergun.csc(85)"
+      ]
+    },
+    {
+      "name": "Line",
+      "declaredMax": 5,
+      "observedArgCounts": [
+        6
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "from"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_utility.csc(706)",
+        "clientscripts\\_airsupport.csc(412)"
+      ]
+    },
+    {
+      "name": "UseAnimTree",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 3,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": null,
+      "firstArgSamples": [
+        "#animtree"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_helicopter_player.csc(210)",
+        "clientscripts\\mp\\_helicopter_player.csc(444)",
+        "clientscripts\\mp\\_helicopter_player.csc(611)"
+      ]
+    }
+  ]
+}

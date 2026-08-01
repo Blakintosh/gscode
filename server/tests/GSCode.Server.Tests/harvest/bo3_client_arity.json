@@ -1,0 +1,1199 @@
+{
+  "game": "bo3",
+  "clientScriptsSwept": 316,
+  "distinct": 52,
+  "predictedLocalClientNum": 31,
+  "scoring": "predicted 31: 31 correct, 0 wrong (precision 100.0%); 2 known localClientNum names not predicted.",
+  "functions": [
+    {
+      "name": "PlaySound",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2,
+        3,
+        4
+      ],
+      "calls": 190,
+      "fileCount": 61,
+      "numericFirstArgCalls": 108,
+      "namedFirstArgCalls": 80,
+      "clientIndexConfidence": 0.989,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0",
+        "clientNum",
+        "client_num",
+        "localClientNum",
+        "local_client_num",
+        "undefined"
+      ],
+      "sites": [
+        "scripts\\mp\\gametypes\\_globallogic.csc(153)",
+        "scripts\\mp\\killstreaks\\_airsupport.csc(17)",
+        "scripts\\mp\\killstreaks\\_airsupport.csc(19)",
+        "scripts\\mp\\killstreaks\\_ai_tank.csc(158)",
+        "scripts\\mp\\killstreaks\\_dogs.csc(267)"
+      ]
+    },
+    {
+      "name": "PlayRumbleOnEntity",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 37,
+      "fileCount": 16,
+      "numericFirstArgCalls": 3,
+      "namedFirstArgCalls": 34,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0",
+        "driver_local_client",
+        "localClientNum",
+        "n_local_client"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_qrdrone.csc(337)",
+        "scripts\\mp\\killstreaks\\_qrdrone.csc(341)",
+        "scripts\\mp\\killstreaks\\_qrdrone.csc(361)",
+        "scripts\\mp\\killstreaks\\_rcbomb.csc(271)",
+        "scripts\\mp\\killstreaks\\_rcbomb.csc(294)"
+      ]
+    },
+    {
+      "name": "array",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2,
+        3,
+        4,
+        5,
+        10,
+        11,
+        21
+      ],
+      "calls": 77,
+      "fileCount": 14,
+      "numericFirstArgCalls": 2,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0.026,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "\"ai_face_male_aim_idle_1\"",
+        "\"ai_face_male_generic_idle_1\"",
+        "\"j_elbow_le\"+boneModifier",
+        "\"J_Hip_LE\"",
+        "\"J_Hip_RI\"",
+        "\"j_knee_le\"",
+        "\"J_Neck\"",
+        "\"J_Shoulder_LE\"",
+        "\"j_shoulder_le\"+boneModifier",
+        "\"J_Shoulder_RI\"",
+        "\"j_spine4\"",
+        "\"J_SpineUpper\""
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(134)",
+        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(138)",
+        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(142)",
+        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(146)",
+        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(154)"
+      ]
+    },
+    {
+      "name": "HasPerk",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 15,
+      "fileCount": 7,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 15,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum",
+        "local_client_num"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_killstreak_detect.csc(58)",
+        "scripts\\mp\\killstreaks\\_killstreak_detect.csc(137)",
+        "scripts\\mp\\killstreaks\\_killstreak_detect.csc(179)",
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(41)",
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(87)"
+      ]
+    },
+    {
+      "name": "CloseLUIMenu",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 10,
+      "fileCount": 5,
+      "numericFirstArgCalls": 1,
+      "namedFirstArgCalls": 8,
+      "clientIndexConfidence": 0.9,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0",
+        "i",
+        "localClientNum",
+        "self.localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\callbacks_shared.csc(868)",
+        "scripts\\shared\\debug_menu_shared.csc(35)",
+        "scripts\\shared\\enemy_highlight.csc(63)",
+        "scripts\\shared\\enemy_highlight.csc(192)",
+        "scripts\\shared\\enemy_highlight.csc(210)"
+      ]
+    },
+    {
+      "name": "playfx",
+      "declaredMax": 5,
+      "observedArgCounts": [
+        6,
+        8
+      ],
+      "calls": 8,
+      "fileCount": 5,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 5,
+      "clientIndexConfidence": 0.625,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "clientNum",
+        "i",
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\exploder_shared.csc(642)",
+        "scripts\\shared\\exploder_shared.csc(649)",
+        "scripts\\shared\\fx_shared.csc(252)",
+        "scripts\\shared\\fx_shared.csc(267)",
+        "scripts\\shared\\fx_shared.csc(275)"
+      ]
+    },
+    {
+      "name": "PlayRumbleOnPosition",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 5,
+      "fileCount": 5,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 4,
+      "clientIndexConfidence": 0.8,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "i",
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_raps.csc(120)",
+        "scripts\\mp\\_destructible.csc(20)",
+        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(302)",
+        "scripts\\shared\\vehicle_shared.csc(364)",
+        "scripts\\zm\\_destructible.csc(20)"
+      ]
+    },
+    {
+      "name": "visionsetnaked",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 19,
+      "fileCount": 4,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 19,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "int_clientnum",
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\abilities\\gadgets\\_gadget_armor.csc(178)",
+        "scripts\\shared\\abilities\\gadgets\\_gadget_armor.csc(184)",
+        "scripts\\shared\\visionset_mgr_shared.csc(616)",
+        "scripts\\shared\\visionset_mgr_shared.csc(1007)",
+        "scripts\\zm\\zm_giant_teleporter.csc(53)"
+      ]
+    },
+    {
+      "name": "CreateDynEntAndLaunch",
+      "declaredMax": 6,
+      "observedArgCounts": [
+        7,
+        8
+      ],
+      "calls": 6,
+      "fileCount": 4,
+      "numericFirstArgCalls": 1,
+      "namedFirstArgCalls": 5,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0",
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\systems\\gib.csc(487)",
+        "scripts\\shared\\end_game_taunts.csc(1215)",
+        "scripts\\shared\\vehicle_shared.csc(1325)",
+        "scripts\\shared\\vehicle_shared.csc(1329)",
+        "scripts\\shared\\vehicle_shared.csc(1399)"
+      ]
+    },
+    {
+      "name": "SetAnimTime",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 4,
+      "fileCount": 4,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "%o_riot_stand_deploy",
+        "%o_turret_emp_core_deploy",
+        "%o_turret_guardian_close",
+        "%o_turret_sentry_close"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_emp.csc(110)",
+        "scripts\\mp\\killstreaks\\_microwave_turret.csc(135)",
+        "scripts\\mp\\killstreaks\\_turret.csc(33)",
+        "scripts\\shared\\weapons\\_riotshield.csc(65)"
+      ]
+    },
+    {
+      "name": "stoploopsound",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 4,
+      "fileCount": 4,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "burnSound",
+        "self.hsnd",
+        "self.sndPlayerConsumedID",
+        "self.sndWidowsWine"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\archetype_thrasher.csc(382)",
+        "scripts\\shared\\audio_shared.csc(1425)",
+        "scripts\\shared\\_burnplayer.csc(203)",
+        "scripts\\zm\\_zm_perk_widows_wine.csc(93)"
+      ]
+    },
+    {
+      "name": "SetLuiMenuData",
+      "declaredMax": 3,
+      "observedArgCounts": [
+        4
+      ],
+      "calls": 28,
+      "fileCount": 3,
+      "numericFirstArgCalls": 5,
+      "namedFirstArgCalls": 23,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0",
+        "localClientNum",
+        "self.localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\enemy_highlight.csc(164)",
+        "scripts\\shared\\enemy_highlight.csc(165)",
+        "scripts\\shared\\enemy_highlight.csc(166)",
+        "scripts\\shared\\enemy_highlight.csc(170)",
+        "scripts\\shared\\enemy_highlight.csc(171)"
+      ]
+    },
+    {
+      "name": "SetHighDetail",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 8,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "true"
+      ],
+      "sites": [
+        "scripts\\shared\\custom_class.csc(331)",
+        "scripts\\shared\\end_game_taunts.csc(857)",
+        "scripts\\shared\\end_game_taunts.csc(889)",
+        "scripts\\shared\\end_game_taunts.csc(1045)",
+        "scripts\\shared\\_character_customization.csc(144)"
+      ]
+    },
+    {
+      "name": "SetBodyRenderOptions",
+      "declaredMax": 3,
+      "observedArgCounts": [
+        4
+      ],
+      "calls": 6,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "data_struct.mode_render_options",
+        "modeRenderOptions",
+        "self.modeRenderOptions",
+        "tempModel.modeRenderOptions"
+      ],
+      "sites": [
+        "scripts\\mp\\_end_game_flow.csc(99)",
+        "scripts\\shared\\end_game_taunts.csc(220)",
+        "scripts\\shared\\end_game_taunts.csc(1236)",
+        "scripts\\shared\\end_game_taunts.csc(1280)",
+        "scripts\\shared\\_character_customization.csc(296)"
+      ]
+    },
+    {
+      "name": "GetCurrentWeapon",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 6,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 6,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_missile_drone.csc(97)",
+        "scripts\\mp\\killstreaks\\_missile_drone.csc(139)",
+        "scripts\\zm\\_zm_audio.csc(223)",
+        "scripts\\zm\\_zm_weap_tesla.csc(81)",
+        "scripts\\zm\\_zm_weap_tesla.csc(123)"
+      ]
+    },
+    {
+      "name": "SetWorldFogActiveBank",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 6,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 6,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_dart.csc(50)",
+        "scripts\\mp\\killstreaks\\_dart.csc(54)",
+        "scripts\\zm\\zm_giant_fx.csc(170)",
+        "scripts\\zm\\zm_giant_fx.csc(178)",
+        "scripts\\zm\\_zm_ai_wasp.csc(49)"
+      ]
+    },
+    {
+      "name": "IsAnimLooping",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 5,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 5,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\archetype_secondary_animations.csc(119)",
+        "scripts\\shared\\ai\\archetype_secondary_animations.csc(141)",
+        "scripts\\shared\\ai\\archetype_secondary_animations.csc(281)",
+        "scripts\\shared\\clientfaceanim_shared.csc(123)",
+        "scripts\\shared\\scene_shared.csc(39)"
+      ]
+    },
+    {
+      "name": "GetWeaponAmmoClip",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 4,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 4,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_missile_drone.csc(111)",
+        "scripts\\zm\\_zm_weap_tesla.csc(92)",
+        "scripts\\zm\\_zm_weap_tesla.csc(134)",
+        "scripts\\zm\\_zm_weap_thundergun.csc(71)"
+      ]
+    },
+    {
+      "name": "StopRumble",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 3,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 3,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\_vehicle.csc(101)",
+        "scripts\\shared\\vehicle_shared.csc(164)",
+        "scripts\\shared\\weapons\\_hive_gun.csc(110)"
+      ]
+    },
+    {
+      "name": "PlayRumbleLoopOnEntity",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 3,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 3,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\_vehicle.csc(93)",
+        "scripts\\shared\\vehicle_shared.csc(149)",
+        "scripts\\shared\\weapons\\_hive_gun.csc(94)"
+      ]
+    },
+    {
+      "name": "GetCharacterBodyRenderOptions",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        5
+      ],
+      "calls": 4,
+      "fileCount": 2,
+      "numericFirstArgCalls": 1,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0.25,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "0",
+        "characterIndex",
+        "data_struct.characterIndex"
+      ],
+      "sites": [
+        "scripts\\shared\\end_game_taunts.csc(217)",
+        "scripts\\shared\\_character_customization.csc(125)",
+        "scripts\\shared\\_character_customization.csc(334)",
+        "scripts\\shared\\_character_customization.csc(350)"
+      ]
+    },
+    {
+      "name": "IsThrowingGrenade",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 3,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 3,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_missile_drone.csc(105)",
+        "scripts\\zm\\_zm_weap_tesla.csc(87)",
+        "scripts\\zm\\_zm_weap_tesla.csc(129)"
+      ]
+    },
+    {
+      "name": "IsMeleeing",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 3,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 3,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_missile_drone.csc(105)",
+        "scripts\\zm\\_zm_weap_tesla.csc(87)",
+        "scripts\\zm\\_zm_weap_tesla.csc(129)"
+      ]
+    },
+    {
+      "name": "PhysicsExplosionSphere",
+      "declaredMax": 6,
+      "observedArgCounts": [
+        7
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\_destructible.csc(44)",
+        "scripts\\zm\\_destructible.csc(44)"
+      ]
+    },
+    {
+      "name": "RegisterClientField",
+      "declaredMax": 7,
+      "observedArgCounts": [
+        8
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "\"toplayer\"",
+        "str_pool_name"
+      ],
+      "sites": [
+        "scripts\\shared\\clientfield_shared.csc(22)",
+        "scripts\\zm\\craftables\\_zm_craftables.csc(90)"
+      ]
+    },
+    {
+      "name": "line",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        3,
+        6
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "from",
+        "self.start"
+      ],
+      "sites": [
+        "scripts\\shared\\audio_shared.csc(863)",
+        "scripts\\shared\\util_shared.csc(1488)"
+      ]
+    },
+    {
+      "name": "GetCharacterHelmetModel",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "characterIndex"
+      ],
+      "sites": [
+        "scripts\\shared\\end_game_taunts.csc(210)",
+        "scripts\\shared\\_character_customization.csc(366)"
+      ]
+    },
+    {
+      "name": "GetCharacterBodyModel",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "characterIndex"
+      ],
+      "sites": [
+        "scripts\\shared\\end_game_taunts.csc(209)",
+        "scripts\\shared\\_character_customization.csc(322)"
+      ]
+    },
+    {
+      "name": "GetEntByNum",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 0.5,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "i",
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\mpdialog.csc(119)",
+        "scripts\\zm\\_zm_equipment.csc(82)"
+      ]
+    },
+    {
+      "name": "Objective_OnEntity",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        6
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(35)",
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(82)"
+      ]
+    },
+    {
+      "name": "SetElectrified",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\visionset_mgr_shared.csc(737)",
+        "scripts\\shared\\visionset_mgr_shared.csc(798)"
+      ]
+    },
+    {
+      "name": "SetBurn",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\visionset_mgr_shared.csc(740)",
+        "scripts\\shared\\visionset_mgr_shared.csc(804)"
+      ]
+    },
+    {
+      "name": "objective_state",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(40)",
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(86)"
+      ]
+    },
+    {
+      "name": "GetLuiMenu",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\enemy_highlight.csc(32)",
+        "scripts\\shared\\enemy_highlight.csc(89)"
+      ]
+    },
+    {
+      "name": "objective_delete",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(54)",
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(104)"
+      ]
+    },
+    {
+      "name": "Sphere",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        7
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "origin",
+        "trace[ \"position\" ]"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_microwave_turret.csc(179)",
+        "scripts\\mp\\killstreaks\\_microwave_turret.csc(377)"
+      ]
+    },
+    {
+      "name": "objective_add",
+      "declaredMax": 5,
+      "observedArgCounts": [
+        6
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(34)",
+        "scripts\\mp\\killstreaks\\_remotemissile.csc(81)"
+      ]
+    },
+    {
+      "name": "associativearray",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        4
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "\"helmet\""
+      ],
+      "sites": [
+        "scripts\\shared\\_character_customization.csc(58)"
+      ]
+    },
+    {
+      "name": "GetCharacterHeadModel",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "headIndex"
+      ],
+      "sites": [
+        "scripts\\shared\\_character_customization.csc(357)"
+      ]
+    },
+    {
+      "name": "SetAnimTimebyName",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "anim_name"
+      ],
+      "sites": [
+        "scripts\\shared\\scene_shared.csc(43)"
+      ]
+    },
+    {
+      "name": "ASMGetCurrentState",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\archetype_secondary_animations.csc(231)"
+      ]
+    },
+    {
+      "name": "kill",
+      "declaredMax": 4,
+      "observedArgCounts": [
+        5
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "ent_1"
+      ],
+      "sites": [
+        "scripts\\shared\\beam_shared.csc(57)"
+      ]
+    },
+    {
+      "name": "launch",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        5
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "ent_1"
+      ],
+      "sites": [
+        "scripts\\shared\\beam_shared.csc(28)"
+      ]
+    },
+    {
+      "name": "getanglefrombits",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "yaw_bits"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\systems\\gib.csc(265)"
+      ]
+    },
+    {
+      "name": "ASMIsAimLayerActive",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\archetype_secondary_animations.csc(257)"
+      ]
+    },
+    {
+      "name": "ASMIsShootLayerActive",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\archetype_secondary_animations.csc(253)"
+      ]
+    },
+    {
+      "name": "ASMIsTerminating",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\archetype_secondary_animations.csc(237)"
+      ]
+    },
+    {
+      "name": "CalcWeaponOptions",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        8
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\_character_customization.csc(437)"
+      ]
+    },
+    {
+      "name": "ASMGetStatus",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\shared\\ai\\archetype_secondary_animations.csc(178)"
+      ]
+    },
+    {
+      "name": "IsInVehicle",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "scripts\\mp\\killstreaks\\_ai_tank.csc(180)"
+      ]
+    },
+    {
+      "name": "Box",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        7
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "model.origin"
+      ],
+      "sites": [
+        "scripts\\shared\\end_game_taunts.csc(198)"
+      ]
+    },
+    {
+      "name": "SetWeaponRenderOptions",
+      "declaredMax": 5,
+      "observedArgCounts": [
+        9
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "int( weapon_options[0] )"
+      ],
+      "sites": [
+        "scripts\\shared\\_weapon_customization_icon.csc(137)"
+      ]
+    }
+  ]
+}

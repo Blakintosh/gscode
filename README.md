@@ -41,16 +41,84 @@ scripts live, so that includes and path calls resolve against them:
 Both are derived from the game install where possible, and BO3 is the one game whose raw scripts sit
 a level down (`share\raw`); every earlier game uses `raw` directly.
 
-## Reporting issues
+## Support and issue reporting
 
 GSCode is an independent implementation of a GSC parser, so it may not have exact parity with the
 game's compiler. The goal is to catch everything the compiler catches at build time, plus a range of
 mistakes that otherwise only surface at runtime.
 
+Before opening an issue, try **Developer: Reload Window**, wait for indexing to finish, and check
+the active game plus `gscode.rawPath`, `gscode.modsPath`, and `gscode.raw.enabled`. If results still
+look stale, run **GSCode: Clear Cache and Reindex**. For server or indexing problems, set
+`gscode.serverLogLevel` to `info` or `verbose` and copy the relevant part of the **GSCode Server**
+output. The [client README](client/README.md) has the full troubleshooting and cache-reset guide.
+
+### Bug reports
+
 If the compiler (Linker) reports an error that GSCode does not — or GSCode reports one on code that
 compiles — that is a bug. Please file it on the
-[issue tracker](https://github.com/Blakintosh/gscode/issues) with the expected result **and a script
-that reproduces it**. Reports without a reproducing snippet will not be investigated.
+[issue tracker](https://github.com/Blakintosh/gscode/issues) with:
+
+- a short title describing one problem;
+- the smallest `.gsc`, `.csc`, or `.gsh` script that reproduces it;
+- the expected result and the actual GSCode result, including the diagnostic code when available;
+- the selected game, GSCode version or commit, VS Code version, .NET Runtime version, and OS;
+- relevant `gscode.*` settings and whether the script is from the workspace, a mod, or raw files;
+- reproduction steps and the relevant server log excerpt, with private paths or project names redacted.
+
+Reports without a reproducing snippet will not be investigated. Do not attach proprietary game
+files, unreleased assets, credentials, or an entire raw/mod installation; reduce the case to a
+small text fixture instead. Search the existing issues first and add details to an existing report
+when it describes the same behavior.
+
+#### Copy/paste template
+
+````markdown
+### Summary
+
+<!-- One sentence describing the problem. -->
+
+### Game and file
+
+- Game: `bo3`
+- File type: `.gsc`
+
+### Expected result
+
+<!-- What the compiler, Linker, or GSCode should do. -->
+
+### Actual result
+
+<!-- What GSCode does instead, including the diagnostic code if available. -->
+
+### Reproduction
+
+<!-- Steps, followed by the smallest script that shows the problem. -->
+
+```gsc
+// minimal reproduction
+```
+````
+
+### Questions and feature requests
+
+Use the same [issue tracker](https://github.com/Blakintosh/gscode/issues) for questions and feature
+requests when the answer is not covered by the [extension guide](client/README.md). For a question,
+describe what you are trying to do, the script shape involved, and what you expected GSCode to show
+or resolve. For a feature request, explain the problem it would solve, give a small example of the
+desired workflow, and note which game or dialects it affects. Keep each issue focused on one topic.
+
+### Contributing
+
+Pull requests should include focused changes, tests for parser/server behavior where practical, and
+README or release-note updates when user-visible behavior changes. Before submitting, run the
+server build/tests and client compilation from [Building](#building). Corpus tests require local
+game or mod-tools paths and are intentionally excluded from the normal command unless the relevant
+`GSCODE_CORPUS_*` variables are set. Never commit game installations, generated corpus dumps, or
+proprietary script data.
+
+For security-sensitive reports, do not publish credentials, private source, or an exploitable
+reproduction in a public issue; contact the repository owner privately through GitHub instead.
 
 ## Requirements
 

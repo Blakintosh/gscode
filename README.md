@@ -6,8 +6,8 @@ This repository holds two halves: the GSCode **language server** (C#), which spe
 [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), and the GSCode
 **VSCode extension** (TypeScript), the client that runs it.
 
-For release notes and the user-facing feature list, see the
-[client README](https://github.com/Blakintosh/gscode/blob/main/client/README.md).
+For the extension user guide — including setup, settings, commands, formatting, and in-source
+pragmas — see the [client README](client/README.md). Release notes live there as well.
 
 ## Supported games
 

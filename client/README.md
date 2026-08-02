@@ -10,6 +10,148 @@ Black Ops III is the verified target. Call of Duty 4, World at War, Modern Warfa
 
 GSCode's language server requires the .NET 10 Runtime, available at [Download .NET 10.0](https://dotnet.microsoft.com/download/dotnet/10.0). **You do not need the SDK.**
 
+## Using GSCode
+
+Open a folder containing your scripts in VS Code. GSCode activates automatically for `.gsc`, `.csc`, and `.gsh` files:
+
+- `.gsc` is a server-world script.
+- `.csc` is a client-world script.
+- `.gsh` is a shared header inserted into either world.
+
+The extension defaults to the Black Ops III dialect (`gscode.game: "bo3"`). Select `cod4`, `waw`,
+`mw2`, `bo1`, or `bo3` in Settings when working on another game. The active game is shown in the
+status bar. Changing the game or raw/mod paths prompts you to reload the VS Code window; restarting
+only the language server does not re-read those startup settings.
+
+### Game files, raw scripts, and mods
+
+GSCode can analyze only the open workspace, or resolve it against the game's own scripts and mods.
+These settings control that behavior:
+
+| Setting | Purpose |
+| --- | --- |
+| `gscode.raw.enabled` | Master switch for reading game raw files; defaults to `true`. |
+| `gscode.rawPath` | Absolute path to the game's raw script folder. Leave empty for automatic discovery. |
+| `gscode.modsPath` | Absolute path to the folder containing one subfolder per mod. |
+| `gscode.rawFileWarningMode` | Warn when saving protected raw files: `off`, `stock` (default), or `all`. |
+
+When a workspace is a mod or loose script folder, set `gscode.rawPath` so includes and path calls
+resolve against the stock scripts. A mod overlays the raw folder: its copy wins for that mod, while
+the raw copy is used as the fallback. Black Ops III normally uses `share/raw`; earlier supported
+games use `raw` directly. GSCode does not modify stock files for you, and raw-file warnings are
+there to help avoid editing the wrong copy.
+
+### Indexing and analysis
+
+The default `gscode.workspaceIndexingMode: "partial"` indexes signatures for workspace-wide
+navigation, references, and completion. Use `"full"` for diagnostics across the whole index, or
+`"off"` when only open files should be analyzed. `gscode.diagnostics.scope` controls which indexed
+files publish diagnostics: `open`, `workspace` (default, your workspace/mod files), or `all`
+(including stock raw files).
+
+`gscode.enableWorkspaceCache` is enabled by default and stores analyzed scripts per workspace so
+unchanged files can be restored quickly. If the cache becomes stale, run **GSCode: Clear Cache and
+Reindex** from the Command Palette.
+
+#### Cache location and manual reset
+
+On Windows, the persistent cache is stored outside the repository at:
+
+```text
+%APPDATA%\gscode\cache\<hash>.db
+```
+
+This normally expands to `C:\Users\<you>\AppData\Roaming\gscode\cache`. SQLite may also create
+`<hash>.db-wal` and `<hash>.db-shm` beside the database. The filename is an opaque 16-character
+hash of the workspace folders and resolved raw/mod roots, so it does not contain the project name.
+The cache contains analyzed records only; deleting it cannot delete your scripts.
+
+On macOS and Linux, use the equivalent OS-specific ApplicationData directory; the final
+`gscode/cache` layout and hashed database naming are the same.
+
+The safest reset is **GSCode: Clear Cache and Reindex**, which closes this workspace's database,
+removes its database and SQLite sidecars, and reloads VS Code. If you need to remove it manually:
+
+1. Close VS Code windows using the workspace so the GSCode server releases the database.
+2. Open `%APPDATA%\gscode\cache` in Explorer, or run `explorer "$env:APPDATA\gscode\cache"`.
+3. Delete only this workspace's `<hash>.db`, `<hash>.db-wal`, and `<hash>.db-shm` files.
+4. Reopen the workspace and wait for the cold index to finish.
+
+Do not delete the entire cache directory unless you intentionally want to rebuild every workspace's
+index. If you cannot identify the right hash, removing all `*.db`, `*.db-wal`, and `*.db-shm` files
+in this directory after closing VS Code is safe for source files, but it resets all workspaces.
+
+Cache records are restored only when the on-disk file content still matches. Changes to the server
+build, bundled API data, or selected game invalidate old records automatically; no manual cleanup is
+normally needed after an extension update. Set `gscode.enableWorkspaceCache` to `false` to disable
+persistent caching entirely.
+
+### In-source pragmas
+
+Pragmas are GSCode directives carried inside comments. They suppress GSCode output; they do not
+change what the game's compiler or Linker accepts. The syntax deliberately follows C#'s warning
+pragma form:
+
+```gsc
+// #pragma warning disable 5014
+foo_that_exists_only_in_a_custom_engine_build();
+// #pragma warning restore 5014
+```
+
+Use the numeric diagnostic code shown in the Problems panel. Both `5014` and `gscode-5014` are
+accepted. A `disable` applies from its comment onward until the matching `restore`; an unmatched
+disable continues to the end of the file. The directives can be in line, block, or documentation
+comments.
+
+To suppress every diagnostic in a region:
+
+```gsc
+// #pragma warning disable all
+legacy_or_generated_code();
+// #pragma warning restore all
+```
+
+To leave a hand-formatted region untouched while keeping diagnostics enabled, use the separate
+`format` target:
+
+```gsc
+// #pragma warning disable format
+        hand_formatted_code();
+// #pragma warning restore format
+```
+
+`format` affects GSCode formatting only; it does not suppress diagnostics. Prefer a specific code
+over `all` so new diagnostics are not hidden accidentally.
+
+### Commands and useful editor features
+
+- **GSCode: Show Server Output** opens the language-server log.
+- **GSCode: Restart Language Server** restarts a wedged server or picks up a rebuilt server binary.
+- **GSCode: Clear Cache and Reindex** deletes this workspace's cache and reloads the window.
+- **GSCode: Open Documentation for Symbol** opens the matching API page on [gscode.net](https://www.gscode.net/). It is also bound to `Shift+F1` in GSC, CSC, and GSH files.
+
+GSCode provides diagnostics, hover, completion, signature help, go-to-definition, references,
+rename, document/workspace symbols, semantic tokens, folding, code lens, call/type hierarchy,
+inlay hints, document links, formatting, and code actions. Formatting is whitespace-only and
+refuses files with syntax errors; it verifies its output before applying edits.
+
+For troubleshooting, set `gscode.serverLogLevel` to `info` or `verbose` and inspect the **GSCode
+Server** output channel. `gscode.trace.server` can trace the LSP messages exchanged with VS Code.
+
+### Troubleshooting checklist
+
+| Symptom | What to check |
+| --- | --- |
+| `#using`, `#include`, or path calls cannot be resolved | Confirm `gscode.game`, `gscode.raw.enabled`, `gscode.rawPath`, and `gscode.modsPath`; reload the window after changing any of them. |
+| Completions or references stop at the open file | Make sure `gscode.workspaceIndexingMode` is not `off`, then wait for the status bar to finish indexing. |
+| Diagnostics appear only in some files | Check `gscode.diagnostics.scope`; `open` intentionally excludes closed files, while `all` includes stock raw scripts. |
+| Results look stale after changing paths or game | Use **Developer: Reload Window**. If the index is still wrong, run **GSCode: Clear Cache and Reindex**. |
+| The server appears stuck or silent | Open **GSCode: Show Server Output**, set `gscode.serverLogLevel` to `info` or `verbose`, and restart the language server. |
+| The extension prompts for .NET | Install the .NET 10 Runtime, not just a VS Code extension or the .NET SDK. |
+
+For the formatter's exact whitespace rules and options, see the repository's [formatting
+guideline](../server/FORMATTING.md).
+
 ## Release Notes
 
 ### 2.0.0 (latest)

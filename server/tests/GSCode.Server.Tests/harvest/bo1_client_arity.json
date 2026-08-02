@@ -1,9 +1,9 @@
 {
   "game": "bo1",
   "clientScriptsSwept": 450,
-  "distinct": 20,
-  "predictedLocalClientNum": 12,
-  "scoring": null,
+  "distinct": 26,
+  "predictedLocalClientNum": 15,
+  "scoring": "predicted 15: 12 correct, 3 wrong (precision 80.0%); 0 known localClientNum names not predicted.",
   "functions": [
     {
       "name": "PlayFxOnTag",
@@ -17,7 +17,7 @@
       "namedFirstArgCalls": 223,
       "clientIndexConfidence": 0.89,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "0",
         "client",
@@ -53,7 +53,7 @@
       "namedFirstArgCalls": 6,
       "clientIndexConfidence": 0.189,
       "predictedLocalClientNum": false,
-      "controlAnswer": null,
+      "controlAnswer": "no",
       "firstArgSamples": [
         "\"amb_num_13_d\"",
         "\"amb_rain_heavy_uw_2d\"",
@@ -88,7 +88,7 @@
       "namedFirstArgCalls": 82,
       "clientIndexConfidence": 0.784,
       "predictedLocalClientNum": false,
-      "controlAnswer": null,
+      "controlAnswer": "no",
       "firstArgSamples": [
         "0",
         "clientNum",
@@ -122,7 +122,7 @@
       "namedFirstArgCalls": 30,
       "clientIndexConfidence": 0.846,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "0",
         "driver_local_client",
@@ -152,7 +152,7 @@
       "namedFirstArgCalls": 18,
       "clientIndexConfidence": 0.942,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "0",
         "clientNum",
@@ -181,7 +181,7 @@
       "namedFirstArgCalls": 4,
       "clientIndexConfidence": 0.222,
       "predictedLocalClientNum": false,
-      "controlAnswer": null,
+      "controlAnswer": "no",
       "firstArgSamples": [
         "0",
         "clientNum",
@@ -209,7 +209,7 @@
       "namedFirstArgCalls": 56,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "ClientNum",
         "GetLocalClientNumber()",
@@ -237,7 +237,7 @@
       "namedFirstArgCalls": 9,
       "clientIndexConfidence": 0.737,
       "predictedLocalClientNum": false,
-      "controlAnswer": null,
+      "controlAnswer": "no",
       "firstArgSamples": [
         "0",
         "clientNum",
@@ -255,6 +255,30 @@
       ]
     },
     {
+      "name": "setVolFog",
+      "declaredMax": 8,
+      "observedArgCounts": [
+        18
+      ],
+      "calls": 18,
+      "fileCount": 6,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "start_dist"
+      ],
+      "sites": [
+        "clientscripts\\zombie_cod5_factory_fx.csc(374)",
+        "clientscripts\\zombie_cod5_factory_fx.csc(410)",
+        "clientscripts\\zombie_cod5_factory_fx.csc(437)",
+        "clientscripts\\zombie_cod5_sumpf_fx.csc(296)",
+        "clientscripts\\zombie_cod5_sumpf_fx.csc(331)"
+      ]
+    },
+    {
       "name": "stoploopsound",
       "declaredMax": 1,
       "observedArgCounts": [
@@ -266,7 +290,7 @@
       "namedFirstArgCalls": 0,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "0"
       ],
@@ -290,7 +314,7 @@
       "namedFirstArgCalls": 7,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "int_client_num",
         "localClientNum"
@@ -315,7 +339,7 @@
       "namedFirstArgCalls": 6,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "0",
         "client_num"
@@ -340,7 +364,7 @@
       "namedFirstArgCalls": 9,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "localClientNum"
       ],
@@ -364,7 +388,7 @@
       "namedFirstArgCalls": 2,
       "clientIndexConfidence": 0.4,
       "predictedLocalClientNum": false,
-      "controlAnswer": null,
+      "controlAnswer": "no",
       "firstArgSamples": [
         "i",
         "localClientNum"
@@ -375,6 +399,29 @@
         "clientscripts\\zombie_cosmodrome.csc(2259)",
         "clientscripts\\_vehicle.csc(731)",
         "clientscripts\\_zombiemode_ai_director.csc(38)"
+      ]
+    },
+    {
+      "name": "spawnPlane",
+      "declaredMax": 4,
+      "observedArgCounts": [
+        6
+      ],
+      "calls": 4,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 4,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_airstrike.csc(160)",
+        "clientscripts\\mp\\_plane.csc(80)",
+        "clientscripts\\_napalm.csc(95)",
+        "clientscripts\\_napalm.csc(145)"
       ]
     },
     {
@@ -389,7 +436,7 @@
       "namedFirstArgCalls": 4,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "localclientnum"
       ],
@@ -412,7 +459,7 @@
       "namedFirstArgCalls": 4,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "localclientnum"
       ],
@@ -421,6 +468,30 @@
         "clientscripts\\_zombiemode_weap_tesla.csc(70)",
         "clientscripts\\_zombiemode_weap_tesla.csc(111)",
         "clientscripts\\_zombiemode_weap_thundergun.csc(74)"
+      ]
+    },
+    {
+      "name": "CreateDynEntAndLaunch",
+      "declaredMax": 6,
+      "observedArgCounts": [
+        7,
+        8
+      ],
+      "calls": 4,
+      "fileCount": 3,
+      "numericFirstArgCalls": 4,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "0"
+      ],
+      "sites": [
+        "clientscripts\\_zombiemode.csc(754)",
+        "clientscripts\\_zombiemode_weap_freezegun.csc(306)",
+        "clientscripts\\_zombietron.csc(236)",
+        "clientscripts\\_zombietron.csc(1044)"
       ]
     },
     {
@@ -435,7 +506,7 @@
       "namedFirstArgCalls": 0,
       "clientIndexConfidence": 0,
       "predictedLocalClientNum": false,
-      "controlAnswer": null,
+      "controlAnswer": "no",
       "firstArgSamples": [
         "0.3",
         "10"
@@ -460,7 +531,7 @@
       "namedFirstArgCalls": 3,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "localClientNum"
       ],
@@ -482,7 +553,7 @@
       "namedFirstArgCalls": 3,
       "clientIndexConfidence": 1,
       "predictedLocalClientNum": true,
-      "controlAnswer": null,
+      "controlAnswer": "localClientNum",
       "firstArgSamples": [
         "localclientnum"
       ],
@@ -504,13 +575,36 @@
       "namedFirstArgCalls": 0,
       "clientIndexConfidence": 0,
       "predictedLocalClientNum": false,
-      "controlAnswer": null,
+      "controlAnswer": "no",
       "firstArgSamples": [
         "from"
       ],
       "sites": [
         "clientscripts\\mp\\_utility.csc(706)",
         "clientscripts\\_airsupport.csc(412)"
+      ]
+    },
+    {
+      "name": "IsInVehicle",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 4,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 4,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_helicopter_player.csc(107)",
+        "clientscripts\\mp\\_helicopter_player.csc(118)",
+        "clientscripts\\mp\\_helicopter_player.csc(186)",
+        "clientscripts\\mp\\_helicopter_player.csc(221)"
       ]
     },
     {
@@ -525,7 +619,7 @@
       "namedFirstArgCalls": 0,
       "clientIndexConfidence": 0,
       "predictedLocalClientNum": false,
-      "controlAnswer": null,
+      "controlAnswer": "no",
       "firstArgSamples": [
         "#animtree"
       ],
@@ -533,6 +627,48 @@
         "clientscripts\\mp\\_helicopter_player.csc(210)",
         "clientscripts\\mp\\_helicopter_player.csc(444)",
         "clientscripts\\mp\\_helicopter_player.csc(611)"
+      ]
+    },
+    {
+      "name": "setCameraSpikeActive",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 0.5,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "i",
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_cameraspike.csc(22)",
+        "clientscripts\\mp\\_cameraspike.csc(175)"
+      ]
+    },
+    {
+      "name": "Box",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        5
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "selected_struct.origin"
+      ],
+      "sites": [
+        "clientscripts\\_radiant_live_update.csc(33)"
       ]
     }
   ]

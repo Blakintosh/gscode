@@ -9,10 +9,11 @@ The VSCode extension sources. Four small files; the heavy lifting lives in the s
   language client via `createLanguageClient`, registers commands, wires the indexing
   status bar, and starts the client. Commands: `gscode.showOutput` (opens the server
   channel), `gscode.restartServer` (restarts the language client),
-  `gscode.clearCacheAndReindex` (stops the server, deletes the cache directory, and reloads
-  the window for a fresh cold index — behind a modal confirm), `gscode.openApiLibrary` (opens
-  the gscode.net library for the active editor's language; bound to `shift+f1` in gsc/csc
-  files), and the `gscode.showReferences` bridge for code-lens clicks.
+  `gscode.clearCacheAndReindex` (stops the server, removes only this workspace's hashed SQLite
+  database and its `-wal`/`-shm` sidecars, then reloads the window for a fresh cold index — behind
+  a modal confirm), `gscode.openApiLibrary` (opens the gscode.net library for the active editor's
+  language; bound to `shift+f1` in gsc/csc/gsh files), and the `gscode.showReferences` bridge for
+  code-lens clicks.
 - `registerIndexingStatusBar(context, client)` — the live indexing counter: a spinner whose
   number races upward on `gscode/indexingStarted|Progress|Complete` notifications.
 - `deactivate()` — stops the language client.

@@ -284,6 +284,9 @@ that chose it. These are the pieces that implement it:
 - `DirectiveSorter` — groups and sorts the directive block at the top of a file. The formatter's one
   operation that MOVES code rather than whitespace, so it runs as a post-pass on already-reflowed
   text, after the token-stream equality gate.
+- `LineFacts` — shared line-level predicates for comment tokens, leading whitespace, code-only
+  tokens, and comment-only lines. Keeping these premises in one place prevents the aligners and
+  formatter scope logic from disagreeing.
 
 ## Handlers/ — the remainder
 
@@ -291,6 +294,8 @@ that chose it. These are the pieces that implement it:
   no symbol knowledge of its own and cannot tell a builtin from a script function.
 - `ClearCacheHandler` — drains the cache and deletes only THIS workspace's database, server-side
   where the paths are known.
+- `DependentDiagnosticsRefresher` — debounced re-linting of other open documents when an edited
+  file's exported cross-file signature changes, reusing their cached parse instead of reparsing.
 - `PrepareRenameHandler` — validates a rename before the UI opens: the symbol's range for anything
   the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
   the editor says "cannot rename here" instead of prompting and then failing. Shares

@@ -18,6 +18,15 @@ LSP types anywhere.
 - `sealed record ExtractionResult(Namespaces, Functions, Classes, References, Diagnostics)`
   — the extracted symbol surface the Workspace layer builds ScriptRecords from.
 
+## Extraction/PragmaDirectives.cs
+
+- `PragmaTarget` / `PragmaDirective` — the parsed target and source line of an in-comment
+  `#pragma warning disable|restore` directive.
+- `static PragmaDirectives` — scans line, block, and documentation comments; accepts one
+  diagnostic code, `gscode-<code>`, `all`, or `format`; and answers whether a diagnostic or the
+  formatter is suppressed at a given line. State is source-ordered, so a later directive replaces
+  the earlier state.
+
 ## Extraction/SymbolExtractor.cs
 
 - `sealed class SymbolExtractor.Extract(...)` — one AST walk producing: namespace spans

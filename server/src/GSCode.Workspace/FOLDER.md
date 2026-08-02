@@ -19,6 +19,18 @@ surfaces.
   classes, macros, dependencies, references, diagnostics, IsDirty (unsaved editor
   state, never persisted). Closed files keep ONLY this record.
 
+## Database/ClassGraph.cs
+
+- `ClassGraph` — the per-language reverse index of class declarations, parent links, and method
+  names. Replaces repeated workspace-wide scans with path-valued buckets that can be updated or
+  removed exactly when one file changes.
+
+## Database/ExportSignature.cs
+
+- `static ExportSignature` — hashes only the cross-file surface a record exposes: namespaces,
+  functions, classes, methods, parameters, and visibility/dev-only flags. Body edits therefore do
+  not fan out diagnostics, while changes another file can observe invalidate dependents.
+
 ## Database/LanguageStore.cs
 
 - `sealed class LanguageStore` — ONE language world: path-keyed record map + its
@@ -73,6 +85,12 @@ surfaces.
   (function/class/macro/field/literal) or #using/#insert dependency path at a position,
   working from either a stored ScriptRecord or an open document's live ParseResult.
 
+## Database/LocalDefinition.cs
+
+- `static LocalDefinition` — resolves a local variable or parameter to its introducing declaration
+  within the enclosing function. Locals stay outside the shared reference index, so this AST-based
+  lookup prevents same-named variables in unrelated functions from colliding.
+
 ## Database/DatabaseQueries.cs
 
 - `ResolvedFunction`/`ResolvedClass` + `static DatabaseQueries` — context-filtered
@@ -85,6 +103,12 @@ surfaces.
   visibility. `FindGshReferences` is the deliberate language-guard exception: a `.gsh` serves
   both languages, so macros declared in headers live in the shared GSH store and are
   unreachable from either LanguageStore.
+
+## Database/MethodResolution.cs
+
+- `ClassMethod` / `static MethodResolution` — canonicalizes class-method call keys across bare,
+  qualified, inherited, and unknown-receiver arrow calls. It supplies the shared method surface
+  for completion/signature help/hover and the reference union used by definitions and code lenses.
 
 ## Indexing/WorkspaceIndexer.cs
 
@@ -376,3 +400,9 @@ Bundled game data (copied to the build output) plus the loaders and doc renderer
 - `ObjectFields.cs` — `ObjectField`/`RadiantKey` model + `ObjectFields.Load(apiDir)`;
   `FindField(name)` returns every entity kind declaring that field (owner type isn't
   inferred until FlowTyper), `FindRadiantKey(name)` returns the map key. Source-gen JSON.
+- `DevOnlyBuiltins.cs` — the conservative fallback set for development-only engine functions;
+  API entries can override it when the data carries an explicit `devOnly` value.
+- `MacroExpansionPreview.cs` — renders a readable, length-limited macro body for hover and
+  substitutes call-site arguments token-by-token rather than by unsafe text replacement.
+- `StockScripts.cs` — loads the profile's raw-relative stock-script list and canonicalizes slash
+  style and casing for the raw-file warning setting.

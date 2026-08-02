@@ -37,7 +37,7 @@ Build rules (in `Directory.Build.props`): nullable enabled, warnings-as-errors,
 House style is enforced by `server/.editorconfig`; `GSCode.Server/.editorconfig`
 opts that one project out of CA2007 (ConfigureAwait) per the async rules.
 
-## Runtime shape (target design)
+## Runtime shape (current implementation)
 
 Per-file analysis: `SourceText → Lexer (Token[]) → Preprocessor (PToken + provenance)
 → Parser (AST records) → Extraction (ScriptRecord)`. Records land in the
@@ -76,7 +76,8 @@ GSC/CSC/GSH language registrations, TextMate grammar, semantic-token scope mappi
 quick-suggestion defaults. Two log channels: "GSCode" (`LogOutputChannel`, extension-host
 lifecycle) and "GSCode Server" (the server's stderr/Serilog). A status-bar item shows the live
 indexing counter driven by `gscode/indexingStarted|Progress|Complete` notifications. Commands:
-`gscode.showOutput`, `gscode.restartServer`, `gscode.openApiLibrary` (`shift+f1`), and the
+`gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`,
+`gscode.openApiLibrary` (`shift+f1` in GSC, CSC, and GSH files), and the
 `gscode.showReferences` bridge for code-lens clicks. Settings flow to the server via
 `initializationOptions.gscode` and `workspace/didChangeConfiguration`.
 
@@ -95,16 +96,18 @@ section per source file named by its path within the project (`## Database/Scrip
 The plan said "every folder"; per-project was chosen because these projects' subfolders are
 small and a reader following a type across `Database/` → `Resolution/` → `Analysis/` would
 otherwise be opening four files to follow one thought. The full-dump requirement is unchanged:
-every file gets a section listing its types and what they actually do. Partial classes and
-tightly-paired handlers may share one heading (`Parser.cs (+ .Declarations / .Statements /
-.Expressions partials)`, `RenameHandler.cs + PrepareRenameHandler.cs`).
+every file gets either its own section or an explicit entry in a small aggregate section listing
+its types and what they actually do. Partial classes and tightly-paired handlers may share one
+heading (`Parser.cs (+ .Declarations / .Statements / .Expressions partials)`,
+`RenameHandler.cs + PrepareRenameHandler.cs`).
 
-`tests/FOLDER.md` is the exception to the full-dump rule: 127 test classes listed one per
-section would be unreadable, so it groups them by area with a keyword-bearing sentence each —
+`tests/FOLDER.md` is the exception to the full-dump rule: test classes listed one per section would
+be unreadable, so it groups them by area with a keyword-bearing sentence each —
 the point being to find the right class by searching for the construct. It also carries the
 canonical list of ENVIRONMENT VARIABLES (`GSCODE_CORPUS_<GAME>`,
-`GSCODE_COD4_DOCS`, `GSCODE_INSTRUMENTATION`), since most of them exist to point tests at game
-data and were otherwise discoverable only by reading fixture source.
+`GSCODE_COD4_DOCS`, `GSCODE_INSTRUMENTATION`, `GSCODE_PERF_REPORT`, and `GSCODE_SWEEP_REPORT`),
+since most of them exist to point tests at game data or reports and were otherwise discoverable
+only by reading fixture source.
 
 ## Known gaps
 

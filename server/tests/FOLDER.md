@@ -20,6 +20,8 @@ output before trusting a green run.
 | `GSCODE_CORPUS_BO3` | `CorpusFixture` | BO3's raw script root, e.g. `…\Call of Duty Black Ops III\share\raw` |
 | `GSCODE_COD4_DOCS` | `tools/field-data` (not tests) | The CoD4 documentation pages. See `tools/field-data/FOLDER.md`. |
 | `GSCODE_INSTRUMENTATION` | Compile-time constant, not an env var | Gates `PerfTracker.Report`; see `PERF.md`. |
+| `GSCODE_PERF_REPORT` | `Perf` tests | Overrides the directory for generated performance reports. |
+| `GSCODE_SWEEP_REPORT` | corpus sweep tests | Overrides the directory for generated diagnostic-sweep reports. |
 
 Every corpus variable names the game's raw folder **directly**. BO3 was once the exception, found
 through `%TA_TOOLS_PATH%` with `share\raw` appended by the fixture; it now follows the same rule as
@@ -39,7 +41,7 @@ both — `--filter "Category!=Corpus&Category!=Perf"`, which is what CI uses:
 
 | filter | what it runs |
 |---|---|
-| `Category!=Corpus&Category!=Perf` | the ~1,400 unit tests. Seconds, no game install needed |
+| `Category!=Corpus&Category!=Perf` | the ordinary unit-test suite. Seconds, no game install needed |
 | `Category=Corpus` | the diagnostic/formatter sweep over five games. Minutes |
 | `Category=Perf` | per-file timing and the phase breakdown. Writes `temp/gscode-perf-<game>.html` |
 
@@ -72,7 +74,8 @@ anim references, dev blocks holding whole functions, keywords as field names ·
 terminates, under a timeout so a regression fails the suite instead of eating all available memory
 on half-typed text.
 
-**Extraction.** `ExtractionTests` symbols and references · `DuplicateFunctionTests` ·
+**Extraction.** `ExtractionTests` symbols and references · `ClassExtractionTests` class members,
+methods, and constructors · `DuplicateFunctionTests` ·
 `LoopVariableTests` induction variables · `MacroDefaultParameterTests`, `MacroExpansionReferenceTests`
 macro provenance · `SemanticTokenBuilderTests`, which pins what is deliberately NOT emitted (comments, keywords,
 strings and numbers all belong to the grammar) · `TripleSlashScriptDocTests` ScriptDoc on the pre-BO3
@@ -94,13 +97,16 @@ Needs a database. Fixtures use `FakeFileSystem`, so no game install is involved.
 including which dev-only builtin candidates the stock corpus contradicts · `AmbiguousFunctionLintTests`
 5007 · `UnusedLocalLintTests` 5008 · `CaseLabelLintTests` 5010/5011 ·
 `FunctionResolutionLintTests` 5013/5014, the split between a script miss and a builtin miss and every
-condition that makes an Error defensible · `PathCallResolutionTests` a path call into a file the
+condition that makes an Error defensible · `ClassMethodLintTests` inherited and class-method
+resolution diagnostics · `PathCallResolutionTests` a path call into a file the
 distribution does not ship, reported once for the file rather than once per call ·
 `UnreachableCodeLintTests` 5015 · `UnassignedVariableLintTests` 5016, and the ten shapes that are
 NOT mistakes — each appeared in code that ships and works · `PragmaDirectiveTests` in-comment
-suppression · `GameShapeDetectorTests` inferring a workspace's game.
+suppression · `GameShapeDetectorTests` inferring a workspace's game · `WorkspaceDiagnosticBatchTests`
+the batching and stored-diagnostic path used for indexed files.
 
-**Api.** `ApiLoaderTests` the builtin library · `ObjectFieldsTests` engine fields, and that only
+**Api.** `ApiLoaderTests` the builtin library · `ClientApiTests` client-library derivation ·
+`ObjectFieldsTests` engine fields, and that only
 weapon fields are read-only · `RadiantKeyVisibilityTests` client-side keys — hidden from GSC, offered
 to CSC — covering both how BO3 marks them (a `client` prefix) and how WaW/BO1 do (a second
 `clientkeys.txt`) · `Cod4DataTests` CoD4's bundled data · `MacroExpansionPreviewTests`,
@@ -108,10 +114,14 @@ to CSC — covering both how BO3 marks them (a `client` prefix) and how WaW/BO1 
 
 **Completion.** `CompletionEngineTests` the surface at large · `SignatureEngineTests` signature help ·
 `RealisticKeystrokeTests` completion mid-typing rather than at tidy boundaries ·
-`DialectCompletionTests` that a dialect is offered only its own keywords and global objects.
+`ClassMethodCompletionTests` inherited and overriding methods · `ArrowSignatureTests` signatures
+for unknown-receiver method calls · `DialectCompletionTests` that a dialect is offered only its
+own keywords and global objects.
 
 **Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order ·
 `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·
+`ClassGraphTests` incremental class-index updates · `MethodResolutionTests` inherited and
+qualified method lookup · `MethodReferenceTests` class-method reference unions ·
 `MacroNavigationTests`, `GshMacroLookupTests` macros across the three language worlds ·
 `DialectDependencyTests`, `DialectIncludeScopeTests` the `#include` merge graph ·
 `LocalDefinitionTests` go-to-definition on a local, which the shared reference index deliberately
@@ -136,6 +146,8 @@ each profile's `ShortName`.
   format, and neither loses nor invents a line when sorting directives or aligning.
 - `GameCorpusTests` — the same three properties per game, and the evidence behind
   `GameProfile.Verified`.
+- `ClassResolutionCorpusTests` — class inheritance and method calls across the shipped corpus,
+  including cases where a receiver's concrete class is unknown.
 - `BuiltinHarvestTests` — sweeps for calls resolving to neither a script function nor a known engine
   function and writes `harvest/<game>_missing_builtins.json` and `_missing_script_functions.json`.
   This is the curation input for the builtin libraries, ranked by how many files want a name.
@@ -153,7 +165,8 @@ each profile's `ShortName`.
 `FormatOptionsTests` the settings layer · `FormatPragmaTests` `#pragma warning disable format` ·
 `GuidelineExampleTests` the examples in `FORMATTING.md`.
 
-**Handlers.** `CodeActionHandlerTests` quick fixes · `CodeLensArgumentTests` the lens command payload,
+**Handlers.** `CodeActionHandlerTests` quick fixes · `DependentDiagnosticsTests` debounced
+cross-file refreshes for other open documents · `CodeLensArgumentTests` the lens command payload,
 which must be primitives so no serializer can case-mangle it · `CompletionResolveDataTests` ·
 `DiagnosticsScopeTests` `gscode.diagnostics.scope` · `BuiltinAtTests` the builtin-under-cursor
 request · `OnTypeBlockScopeTests` · `UntitledDocumentTests` documents with no path ·

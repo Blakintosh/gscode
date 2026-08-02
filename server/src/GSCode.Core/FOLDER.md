@@ -144,6 +144,12 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   global object names, bundled data-file names) flows through this profile so a future
   GSC-dialect port is data, not code changes. `GameProfile.BlackOps3` is the T7 profile.
 
+## Profiles/SupportedProfiles.cs
+
+- `partial record GameProfile` — the registry of named profiles. Keeps supported profiles,
+  future core identities, keyword dialects, capability flags, and lookup/enumeration helpers
+  together so profile promotion changes one central catalog rather than scattered switches.
+
 ## Instrumentation/PerfTracker.cs
 
 - `static class PerfTracker` — timing-scope aggregator. Every public method is

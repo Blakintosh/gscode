@@ -24,8 +24,8 @@ A complete ground-up rewrite of the language server and VS Code extension.
 - Corruption-proof whitespace-only formatter (refuses syntax errors; re-checks its own output).
 - Code actions: remove-duplicate-`#using` and add-missing-`#using`, backed by a namespace-usage
   lint.
-- Commands: `gscode.showOutput`, `gscode.restartServer`, and `gscode.openApiLibrary`
-  (`shift+f1` in gsc/csc files).
+- Commands: `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, and
+  `gscode.openApiLibrary` (`shift+f1` in gsc/csc/gsh files).
 
 ### Changed
 - Requires the .NET 10 runtime.

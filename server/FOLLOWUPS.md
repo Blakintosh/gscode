@@ -88,9 +88,8 @@ stale after a branch switch.
 
 ## Known limitations from the triage pass
 
-Recorded because each was a deliberate stopping point, not an oversight. The triage plan lives
-at `~/.claude/plans/i-m-looking-into-recreating-linear-raccoon.md`; P0, P1 and the hover/doc
-half of P2 are done.
+Recorded because each was a deliberate stopping point, not an oversight. P0, P1 and the
+hover/doc half of P2 are done; the remaining items below are the decisions still worth making.
 
 ### Type hover across branches reports the last arm, not the join
 
@@ -135,11 +134,11 @@ which. Worth a look only if a real file shows a missing hover.
 
 ## Open — optional, nothing depends on them
 
-### 1. `apiUpdate.ts` — opt-in online refresh of the builtin API
+### 1. `apiUpdate.ts` — proposed opt-in online refresh of the builtin API
 
 Fetch a newer builtin-function library from gscode.net instead of waiting for an extension
-release. Gated by `gscode.apiUpdate.enabled` (default off); the bundled JSON is always the
-fallback.
+release. This is not implemented yet: `gscode.apiUpdate.enabled` is a proposed setting, not a
+currently supported configuration key. The bundled JSON remains the fallback.
 
 **Not blocked — the contract already exists.** `site/src/routes/api/getLibrary/+server.ts` was
 written for exactly this:
@@ -179,17 +178,13 @@ future-facing, for when the library improves between extension releases.
 `Api/DevOnlyBuiltins.cs` drives the `DevOnlyFunctionCalledFromRelease` diagnostic for engine
 builtins. **The plumbing is done** — `BuiltinFunction.IsDevOnly` carries the flag, `ApiLoader`
 stamps it, and the lint reads that one property — so this is purely a data-curation task. When
-the API data eventually carries its own `devOnly` field the loader already prefers it
-(`entry.DevOnly ?? DevOnlyBuiltins.Contains(name, game)`) and nothing else changes.
+the API data carries its own `devOnly` field the loader prefers it; otherwise it falls back to
+`DevOnlyBuiltins.Contains(name)` and nothing else changes.
 
-**The list is now PER GAME** — `DevOnlyBuiltins` is keyed by short name, with entries for `bo3`
-and `cod4`. So curating this for another game is two steps, not one: count that game's own scripts
-inside versus outside `/# #/`, then add its entry. Skipping the count is not a shortcut but the bug
-the keying exists to prevent — BO3's list applied to CoD4 called `println` dev-only and reported 598
-Errors on shipped code, where the same count returns 220 inside against 438 outside. CoD4's entry is
-deliberately EMPTY rather than absent: sixteen of BO3's twenty names are never called there and the
-other four are called outside dev blocks, so "measured, and the answer is none" is recorded as the
-fact it is.
+**The fallback list is intentionally global** — `DevOnlyBuiltins` is keyed by short name because
+the generated API data is the place for game-specific corrections. A game whose API data states
+the answer wins; only a game that states nothing lands on this fallback. That keeps the curated
+table small while making the precedence explicit.
 
 **Why a hand-curated list rather than derived data:** neither available source is accurate.
 

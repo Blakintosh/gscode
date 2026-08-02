@@ -3,6 +3,9 @@
 Budgets, methodology, and how to reproduce the perf pass. Numbers are gathered on a real
 `share\raw` corpus (thousands of stock scripts) via a `GscodeInstrumentation` build; the results
 table below is filled from a run on the local BO3-tools machine, since the corpus is not committed.
+The measured tables are point-in-time snapshots, not release guarantees: rerun the perf category
+after changing the analysis pipeline, cache identity, or indexing parallelism before comparing a
+new result with these numbers.
 
 ## Budgets (targets)
 

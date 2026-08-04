@@ -49,4 +49,40 @@ public class KeywordDocsTests
     {
         Assert.Null(KeywordDocs.Find("not_a_keyword_at_all"));
     }
+
+    [Theory]
+    [InlineData("assert")]
+    [InlineData("assertmsg")]
+    public void AKeywordTheEngineDocumentsIsAbsentHereOnPurpose(string word)
+    {
+        // These are keywords AND engine functions, and this file deliberately leaves them to the
+        // builtin API. That was only safe once HoverHandler actually CONSULTED the API for a keyword
+        // it has no entry for — before that the two halves pointed at each other and hovering
+        // `assert` produced nothing. If a doc is ever added here it will simply win; the point of
+        // this test is that the absence stays deliberate rather than becoming a second bug.
+        Assert.Null(KeywordDocs.Find(word));
+        Assert.True(Keywords.TryMatchKeyword(word, out TokenKind kind));
+        Assert.True(TokenFacts.IsKeyword(kind));
+    }
+
+    [Fact]
+    public void TheProfilerPairIsKeyedUnderOneSpellingOfTwo()
+    {
+        // prof_begin/prof_end are the Infinity Ward-line spelling and lex to the same token kinds as
+        // profilestart/profilestop, but only the BO3 spelling is a key here. A lookup by TEXT
+        // therefore missed the pair on the four games that actually write it that way, which is why
+        // HoverHandler resolves the name through the token KIND instead.
+        Assert.NotNull(KeywordDocs.Find("profilestart"));
+        Assert.NotNull(KeywordDocs.Find("profilestop"));
+        Assert.Null(KeywordDocs.Find("prof_begin"));
+        Assert.Null(KeywordDocs.Find("prof_end"));
+
+        Assert.True(Keywords.TryMatchKeyword("prof_begin", out TokenKind begin));
+        Assert.True(Keywords.TryMatchKeyword("profilestart", out TokenKind start));
+        Assert.Equal(start, begin);
+
+        Assert.True(Keywords.TryMatchKeyword("prof_end", out TokenKind end));
+        Assert.True(Keywords.TryMatchKeyword("profilestop", out TokenKind stop));
+        Assert.Equal(stop, end);
+    }
 }

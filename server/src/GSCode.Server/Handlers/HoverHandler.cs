@@ -61,7 +61,7 @@ public sealed class HoverHandler : HoverHandlerBase
         }
 
         // A documented keyword or directive (isdefined, notify, #using, …).
-        if ( TryKeywordDocHover(target.Result, request.Position.ToCore(), out string keywordMarkdown, out TextRange keywordRange) )
+        if ( TryKeywordDocHover(target, request.Position.ToCore(), out string keywordMarkdown, out TextRange keywordRange) )
         {
             return Task.FromResult<Hover?>(new Hover
             {
@@ -208,14 +208,24 @@ public sealed class HoverHandler : HoverHandlerBase
     }
 
     /// <summary>
-    /// Renders a keyword/directive doc when the cursor is on a documented keyword or directive
-    /// token (isdefined, notify, #using, …). Returns false for undocumented tokens and non-keywords.
+    /// Renders a doc when the cursor is on a keyword or directive token (isdefined, notify, #using,
+    /// …). Returns false for non-keywords and for keywords nothing documents.
+    ///
+    /// Falls back to the BUILTIN LIBRARY when KeywordDocs has no entry, which is what makes
+    /// <c>assert</c> and <c>assertmsg</c> hover at all. Those two are keywords AND engine functions:
+    /// KeywordDocs deliberately omits them, saying they are "documented by the builtin API", while
+    /// the only path that reads that API is the REFERENCE hover — and a reference is never recorded
+    /// for them, because they lex as their own token kinds and
+    /// <c>SymbolExtractor.RecordCalleeReference</c> matches identifier callees on
+    /// <c>TokenKind.Identifier</c>. Each side assumed the other had it and neither did, so hovering
+    /// assert produced nothing.
     /// </summary>
-    private static bool TryKeywordDocHover(ParseResult result, Position position, out string markdown, out TextRange range)
+    private bool TryKeywordDocHover(NavigationTarget target, Position position, out string markdown, out TextRange range)
     {
         markdown = "";
         range = TextRange.Empty;
 
+        ParseResult result = target.Result;
         int offset = result.Text.GetOffset(position);
         foreach ( Token token in result.Lexed.Tokens )
         {
@@ -229,18 +239,50 @@ public sealed class HoverHandler : HoverHandlerBase
                 return false;
             }
 
-            string? doc = KeywordDocs.Find(token.GetText(result.Text).ToString());
-            if ( doc is null )
+            string name = CanonicalKeywordName(token, result);
+
+            string? doc = KeywordDocs.Find(name);
+            if ( doc is not null )
             {
-                return false;
+                markdown = doc;
+                range = token.Range;
+                return true;
             }
 
-            markdown = doc;
-            range = token.Range;
-            return true;
+            BuiltinFunction? builtin = _builtins.For(target.Language).Find(name);
+            if ( builtin is not null )
+            {
+                markdown = MarkdownDocRenderer.RenderBuiltin(builtin);
+                range = token.Range;
+                return true;
+            }
+
+            return false;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The name a keyword is documented under, which is not always how it was spelled.
+    ///
+    /// <c>prof_begin</c>/<c>prof_end</c> are the Infinity Ward-line spelling of
+    /// <c>profilestart</c>/<c>profilestop</c> and lex to the same token kinds, but the lookup is by
+    /// TEXT — so on CoD4, WaW, MW2 and BO1, where those are the spellings people actually write, the
+    /// profiler pair hovered blank while BO3's spelling worked. Resolving through the kind is what
+    /// keeps one doc serving both spellings.
+    /// </summary>
+    private static string CanonicalKeywordName(Token token, ParseResult result)
+    {
+        switch ( token.Kind )
+        {
+            case TokenKind.ProfileStart:
+                return "profilestart";
+            case TokenKind.ProfileStop:
+                return "profilestop";
+            default:
+                return token.GetText(result.Text).ToString();
+        }
     }
 
     private static bool IsDirective(TokenKind kind)

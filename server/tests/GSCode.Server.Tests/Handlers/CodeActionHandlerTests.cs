@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -482,5 +482,93 @@ public class CodeActionHandlerTests
         CodeAction fix = Assert.Single(CallFixes(source, 3, 4, 10));
 
         Assert.StartsWith("Create", fix.Title, StringComparison.Ordinal);
+    }
+
+    // --- Missing #include (5026) ---
+    //
+    // The merge dialects' counterpart. The function EXISTS here, so the only honest offer is the
+    // import; a "create it here" fix would talk the user into a second copy of it.
+
+    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+
+    private const string Cod4AskingPath = @"C:\cod4\raw\maps\mp\gametypes\_menus.gsc";
+
+    private static ScriptDatabase DatabaseWithCod4Utility()
+    {
+        ScriptDatabase database = new();
+        ParseResult utility = ScriptAnalysis.Analyze(
+            @"C:\cod4\raw\common_scripts\utility.gsc", ScriptLanguage.Gsc,
+            SourceText.From("scriptPrintln( channel, msg )\n{\n}\n"),
+            NullInsertProvider.Instance, new NameTable(), Cod4);
+
+        database.Commit(utility, ResolutionContext.RawContext, false, @"common_scripts\utility.gsc");
+        return database;
+    }
+
+    /// <summary>
+    /// The fixes for the 5026 reported over the <c>scriptPrintln</c> call in <paramref name="source"/>.
+    /// The range is located from the text rather than passed in: every case here reports the same
+    /// call, so hand-written coordinates would be three sets of magic numbers coupled to the sources
+    /// they index into.
+    /// </summary>
+    private static List<CodeAction> IncludeFixes(string source, ScriptDatabase? database = null)
+    {
+        ParseResult result = ScriptAnalysis.Analyze(
+            Cod4AskingPath, ScriptLanguage.Gsc, SourceText.From(source),
+            NullInsertProvider.Instance, new NameTable(), Cod4);
+
+        const string called = "scriptPrintln";
+        string[] lines = source.Split('\n');
+        int line = Array.FindIndex(lines, text => text.Contains(called + "()", StringComparison.Ordinal));
+        int start = lines[line].IndexOf(called, StringComparison.Ordinal);
+
+        return CodeActionHandler.MissingIncludeFixes(
+            DocumentUri.FromFileSystemPath(Cod4AskingPath),
+            result,
+            database?.Gsc,
+            "raw",
+            Cod4AskingPath,
+            Reported(GscDiagnosticCode.FunctionNotIncluded, line, start, start + called.Length),
+            Cod4);
+    }
+
+    [Fact]
+    public void AnUnincludedCall_OffersTheIncludeThatBringsItIntoScope()
+    {
+        string source = "#include maps\\mp\\_load;\ninit()\n{\n\tscriptPrintln();\n}\n";
+
+        CodeAction fix = Assert.Single(IncludeFixes(source, DatabaseWithCod4Utility()));
+
+        Assert.Equal(@"Add #include common_scripts\utility", fix.Title);
+
+        // One candidate, so Auto Fix may take it.
+        Assert.True(fix.IsPreferred);
+        Assert.Equal(
+            (int)GscDiagnosticCode.FunctionNotIncluded, Assert.Single(fix.Diagnostics!).Code!.Value.Long);
+
+        TextEdit edit = SingleEditOf(fix);
+
+        // Inserted after the last existing #include, not at line 0.
+        Assert.Equal("#include common_scripts\\utility;\n", edit.NewText);
+        Assert.Equal(1, edit.Range.Start.Line);
+        Assert.Equal(edit.Range.Start, edit.Range.End);
+    }
+
+    [Fact]
+    public void AnUnincludedCall_OffersNothingWhenTheFileIsAlreadyIncluded()
+    {
+        // A stale diagnostic against an edited buffer. Offering the import the file already has
+        // would insert a duplicate and leave the error standing.
+        string source = "#include common_scripts\\utility;\ninit()\n{\n\tscriptPrintln();\n}\n";
+
+        Assert.Empty(IncludeFixes(source, DatabaseWithCod4Utility()));
+    }
+
+    [Fact]
+    public void AnUnincludedCall_OffersNothingWithoutAWorkspace()
+    {
+        string source = "#include maps\\mp\\_load;\ninit()\n{\n\tscriptPrintln();\n}\n";
+
+        Assert.Empty(IncludeFixes(source));
     }
 }

@@ -1,4 +1,4 @@
-using GSCode.Core;
+﻿using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -74,7 +74,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
         if ( target is not null )
         {
-            Position insertAt = UsingInsertionPoint(result);
+            Position insertAt = ImportInsertionPoint<UsingNode>(result);
             List<MissingUsing> missing = FindMissingUsingSites(result, target.Store, target.ContextId, target.Path, selection);
 
             // How many imports could serve each call site. One means the fix is unambiguous and can
@@ -155,6 +155,19 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 case GscDiagnosticCode.ScriptFunctionNotFound:
                 case GscDiagnosticCode.BuiltinFunctionNotFound:
                     foreach ( CodeAction fix in UnresolvedCallFixes(
+                        uri, result, target?.Store, target?.ContextId ?? "", target?.Path ?? "", diagnostic) )
+                    {
+                        actions.Add(new CommandOrCodeAction(fix));
+                    }
+
+                    continue;
+
+                // The merge dialects' missing-import case (5026). Separate from the two above
+                // because the situation is the opposite one: the function is KNOWN, and the only
+                // sensible offer is the import that brings it into scope. Creating a second copy of
+                // a function that already exists is exactly what a user must not be nudged into.
+                case GscDiagnosticCode.FunctionNotIncluded:
+                    foreach ( CodeAction fix in MissingIncludeFixes(
                         uri, result, target?.Store, target?.ContextId ?? "", target?.Path ?? "", diagnostic) )
                     {
                         actions.Add(new CommandOrCodeAction(fix));
@@ -329,7 +342,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             return;
         }
 
-        Position insertAt = UsingInsertionPoint(result, range.Start.Line);
+        Position insertAt = ImportInsertionPoint<UsingNode>(result, range.Start.Line);
         if ( insertAt.Line >= range.Start.Line )
         {
             // Nowhere earlier to move it to; leave the diagnostic without a fix.
@@ -421,7 +434,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        Position insertAt = UsingInsertionPoint(result);
+        Position insertAt = ImportInsertionPoint<UsingNode>(result);
         HashSet<string> offered = new(StringComparer.Ordinal);
 
         // Gathered before any action is built, because IsPreferred is init-only and whether ONE of
@@ -472,6 +485,97 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 // without asking, and choosing between several namespaces on the user's behalf is a
                 // guess dressed up as an answer.
                 reachable.Count == 1));
+        }
+
+        return fixes;
+    }
+
+    /// <summary>
+    /// The offers for a call that resolves to a function nothing merges into scope (5026): one
+    /// <c>#include</c> per file that declares the name.
+    ///
+    /// No "create it here" offer, unlike <see cref="UnresolvedCallFixes"/>. There the name matched
+    /// nothing and writing a declaration was one of two honest answers; here the function
+    /// demonstrably exists, and a second copy of it is a bug rather than a fix.
+    ///
+    /// The candidate list is rebuilt from the store rather than read off the diagnostic. The message
+    /// names ONE file — the first alphabetically — and the others ride along as related information,
+    /// which the client is free not to send back; deriving the list again is what keeps the fix
+    /// offering every file the lint considered.
+    /// </summary>
+    /// <param name="profile">
+    /// The dialect to answer for, defaulting to the active one. Passed explicitly by the tests so
+    /// they need not mutate the global selection, which every other test in the assembly reads.
+    /// </param>
+    internal static List<CodeAction> MissingIncludeFixes(
+        DocumentUri uri,
+        ParseResult result,
+        LanguageStore? store,
+        string contextId,
+        string askingPath,
+        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic,
+        GameProfile? profile = null)
+    {
+        List<CodeAction> fixes = [];
+        if ( store is null || (profile ?? GameProfile.Active).ResolvesByNamespace )
+        {
+            return fixes;
+        }
+
+        TextRange range = diagnostic.Range.ToCore();
+        string name = TextAt(result, range);
+        if ( name.Length == 0 || !IsIdentifier(name) )
+        {
+            return fixes;
+        }
+
+        // The same normalized form the lint and the resolver use, rather than a second rule for
+        // include paths that would have to stay in step with theirs.
+        ImmutableArray<string> existingIncludes = DatabaseQueries.IncludedScriptPaths(result);
+
+        // Sorted and deduplicated by construction. Alphabetical matters: it is the order the lint
+        // names them in, and two lists of the same files in two orders read as two different
+        // answers.
+        SortedSet<string> candidates = new(StringComparer.OrdinalIgnoreCase);
+
+        // Namespace left null: a merge dialect keys every function without one, so this is the same
+        // lookup the lint made.
+        foreach ( ResolvedFunction resolved in DatabaseQueries.LookupFunctions(
+            store, contextId, askingPath, null, name.ToLowerInvariant()) )
+        {
+            if ( resolved.Record.RelativePath.Length == 0 )
+            {
+                continue;
+            }
+
+            string includePath = StripExtension(NormalizePath(resolved.Record.RelativePath));
+            if ( !existingIncludes.Contains(includePath) )
+            {
+                candidates.Add(includePath);
+            }
+        }
+
+        Position insertAt = ImportInsertionPoint<IncludeNode>(result);
+        foreach ( string candidate in candidates )
+        {
+            TextEdit edit = new()
+            {
+                Range = new TextRange(insertAt, insertAt).ToLsp(),
+                NewText = "#include " + candidate + ";\n",
+            };
+
+            fixes.Add(new CodeAction
+            {
+                Title = "Add #include " + candidate,
+                Kind = CodeActionKind.QuickFix,
+                Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
+
+                // Preferred only when one file can supply the name. Several same-named functions is
+                // the normal state of a merge dialect, and picking one for Auto Fix would change
+                // which function the call means without saying so.
+                IsPreferred = candidates.Count == 1,
+                Edit = SingleEdit(uri, edit),
+            });
         }
 
         return fixes;
@@ -789,20 +893,26 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return missing;
     }
 
-    /// <summary>Where a new #using should be inserted: after the last one, else the file top.</summary>
     /// <summary>
-    /// Where a new #using belongs: just after the last one. <paramref name="beforeLine"/> caps
-    /// which directives count, so moving a misplaced #using does not target a point below
-    /// itself — the directive being moved is the very thing that must not anchor the insertion.
+    /// Where a new import belongs: just after the last one of its kind, else the top of the file.
+    /// <paramref name="beforeLine"/> caps which directives count, so moving a misplaced <c>#using</c>
+    /// does not target a point below itself — the directive being moved is the very thing that must
+    /// not anchor the insertion.
     /// </summary>
-    private static Position UsingInsertionPoint(ParseResult result, int beforeLine = int.MaxValue)
+    /// <typeparam name="TNode">
+    /// <c>UsingNode</c> or <c>IncludeNode</c>. Written once for both rather than per directive: this
+    /// file learned the same lesson at <see cref="FindRemovableDuplicates"/>, where a
+    /// <c>#using</c>-only helper left the four merge games with a lint and no fix behind it.
+    /// </typeparam>
+    private static Position ImportInsertionPoint<TNode>(ParseResult result, int beforeLine = int.MaxValue)
+        where TNode : AstNode
     {
         int line = 0;
         foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            if ( element is UsingNode usingNode && usingNode.Range.Start.Line < beforeLine )
+            if ( element is TNode && element.Range.Start.Line < beforeLine )
             {
-                line = usingNode.Range.Start.Line + 1;
+                line = element.Range.Start.Line + 1;
             }
         }
 

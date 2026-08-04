@@ -12,6 +12,11 @@
 // Bodies are copied from the shape the stock scripts use rather than invented - the brace and
 // spacing style matches the formatter's defaults.
 //
+// A snippet must also not take a name the LANGUAGE already owns. `assert` was here and shadowed
+// the real keyword: the snippet won the completion list, so the keyword's own documentation - and
+// the hover that reads from it - lost to a one-line body. Where a construct is a keyword, the
+// server already offers it with its docs attached; a snippet of the same name only competes.
+//
 // #precache lives in precache-server.json and precache-client.json instead, because its asset
 // types differ by world. See PrecacheAssetTypes.IsAvailableIn.
 {
@@ -85,11 +90,6 @@
 		"prefix": "wait",
 		"body": ["wait ${1:0.05};"],
 		"description": "Wait for a number of seconds"
-	},
-	"assert": {
-		"prefix": "assert",
-		"body": ["assert( isdefined( ${1:value} ) );"],
-		"description": "Assert a condition holds - development builds only"
 	},
 	"dev block": {
 		"prefix": "devblock",

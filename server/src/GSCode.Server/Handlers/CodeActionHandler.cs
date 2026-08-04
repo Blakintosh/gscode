@@ -16,9 +16,11 @@ using Position = GSCode.Core.Text.Position;
 namespace GSCode.Server.Handlers;
 
 /// <summary>
-/// Quick fixes over the open document: "Remove duplicate #using" for a redundant import, and
+/// Quick fixes over the open document: "Remove duplicate #using" for a redundant import,
 /// "Add #using ..." for a qualified call whose defining file the document does not yet import
-/// (the natural fix for the NamespaceNotImported lint).
+/// (the natural fix for the NamespaceNotImported lint), and for a call that resolved to nothing
+/// (5013/5014) either declaring the function here or importing and qualifying it from wherever it
+/// does exist.
 /// </summary>
 public sealed class CodeActionHandler : CodeActionHandlerBase
 {
@@ -76,7 +78,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        AddDiagnosticFixes(request, result, actions);
+        AddDiagnosticFixes(request, result, actions, target);
 
         return Task.FromResult<CommandOrCodeActionContainer?>(new CommandOrCodeActionContainer(actions));
     }
@@ -86,7 +88,16 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// request's context rather than re-derived, because the workspace lints run in
     /// TextSyncHandler and are not recomputable from the ParseResult alone.
     /// </summary>
-    internal static void AddDiagnosticFixes(CodeActionParams request, ParseResult result, List<CommandOrCodeAction> actions)
+    /// <param name="target">
+    /// The workspace view, when there is one. Only the unresolved-call fixes need it — everything
+    /// else here is answerable from the document alone — so it is optional rather than a
+    /// precondition, and those fixes simply go unoffered on a document with no indexed context.
+    /// </param>
+    internal static void AddDiagnosticFixes(
+        CodeActionParams request,
+        ParseResult result,
+        List<CommandOrCodeAction> actions,
+        NavigationTarget? target = null)
     {
         DocumentUri uri = request.TextDocument.Uri;
         List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unusedUsings = [];
@@ -104,6 +115,19 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                     continue;
                 case GscDiagnosticCode.UsingAfterDeclaration:
                     AddMoveUsingFix(uri, result, diagnostic, actions);
+                    continue;
+
+                // Both halves of an unresolved call get the same two offers, because from the fix's
+                // point of view they are one situation: a name with no definition behind it. Which
+                // code fired says where we LOOKED, not what the user should do about it.
+                case GscDiagnosticCode.ScriptFunctionNotFound:
+                case GscDiagnosticCode.BuiltinFunctionNotFound:
+                    foreach ( CodeAction fix in UnresolvedCallFixes(
+                        uri, result, target?.Store, target?.ContextId ?? "", target?.Path ?? "", diagnostic) )
+                    {
+                        actions.Add(new CommandOrCodeAction(fix));
+                    }
+
                     continue;
                 default:
                     continue;
@@ -265,6 +289,256 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
             Edit = new WorkspaceEdit { Changes = changes },
         }));
+    }
+
+    /// <summary>
+    /// The offers for a call that resolved to nothing (5013/5014): declare the function here, and —
+    /// where the name DOES exist somewhere the file cannot currently see — import that file and
+    /// qualify the call so it reaches it.
+    ///
+    /// The diagnostic's range covers the NAME TOKEN only, never the <c>ns::</c> in front of it (see
+    /// <c>SymbolExtractor.RecordCalleeReference</c>, which records the reference against
+    /// <c>NameToken</c>). That is what makes both edits simple: qualifying is an insert at the range
+    /// start, and re-qualifying replaces the qualifier found by scanning back from it.
+    /// </summary>
+    internal static List<CodeAction> UnresolvedCallFixes(
+        DocumentUri uri,
+        ParseResult result,
+        LanguageStore? store,
+        string contextId,
+        string askingPath,
+        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
+    {
+        List<CodeAction> fixes = [];
+        TextRange range = diagnostic.Range.ToCore();
+        string name = TextAt(result, range);
+        if ( name.Length == 0 || !IsIdentifier(name) )
+        {
+            return fixes;
+        }
+
+        TextRange? qualifier = QualifierRange(result, range);
+
+        // Declaring it HERE only answers a call that named no other location. `other::foo()` says
+        // where it expects to find the function, and writing foo into this file would not put it
+        // there — that fix would have to edit the other file, which is a different operation and a
+        // different set of ways to be wrong.
+        if ( qualifier is null )
+        {
+            fixes.Add(BuildCreateFunctionAction(uri, result, name));
+        }
+
+        if ( store is null )
+        {
+            return fixes;
+        }
+
+        // Under a merge dialect an unqualified call already resolves by NAME across everything the
+        // include graph pulled in, so a call that reached this diagnostic is not one an import would
+        // fix. Only a namespace dialect can have the function present but out of reach.
+        if ( !GameProfile.Active.ResolvesByNamespace )
+        {
+            return fixes;
+        }
+
+        HashSet<string> ownNamespaces = new(StringComparer.Ordinal);
+        foreach ( string declared in result.Extraction.DeclaredNamespaces )
+        {
+            ownNamespaces.Add(declared);
+        }
+
+        HashSet<string> existingUsings = new(StringComparer.Ordinal);
+        foreach ( AstNode element in result.Tree.Root.Elements )
+        {
+            if ( element is UsingNode usingNode )
+            {
+                existingUsings.Add(StripExtension(NormalizePath(usingNode.Path)));
+            }
+        }
+
+        Position insertAt = UsingInsertionPoint(result);
+        HashSet<string> offered = new(StringComparer.Ordinal);
+
+        // Namespace left null: every namespace is searched, which is the whole point — the caller
+        // already knows the one that was written does not have it.
+        foreach ( ResolvedFunction resolved in DatabaseQueries.LookupFunctions(
+            store, contextId, askingPath, null, name.ToLowerInvariant()) )
+        {
+            string? namespaceName = resolved.Function.Namespace;
+            if ( namespaceName is null || ownNamespaces.Contains(namespaceName) )
+            {
+                continue;
+            }
+
+            if ( resolved.Record.RelativePath.Length == 0 )
+            {
+                continue;
+            }
+
+            string usingPath = StripExtension(NormalizePath(resolved.Record.RelativePath));
+
+            // One offer per namespace+file pair. The same namespace spread over several files is
+            // normal, and each file is a genuinely different import.
+            if ( !offered.Add(namespaceName + "|" + usingPath) )
+            {
+                continue;
+            }
+
+            fixes.Add(BuildImportAndQualifyAction(
+                uri, namespaceName, usingPath, existingUsings.Contains(usingPath), insertAt, range, qualifier));
+        }
+
+        return fixes;
+    }
+
+    /// <summary>
+    /// Declares the missing function at the end of the file, opened the way the dialect declares
+    /// one — BO3 writes `function foo()`, the merge games the bare name.
+    ///
+    /// No parameter list, deliberately: the call site's argument count is not on the diagnostic, and
+    /// a guessed list that disagreed with the call would be worse than an empty one the user fills
+    /// in with the caret already inside it.
+    /// </summary>
+    private static CodeAction BuildCreateFunctionAction(DocumentUri uri, ParseResult result, string name)
+    {
+        string opening = GameProfile.Active.HasFunctionKeyword ? "function " : "";
+
+        // A file that does not end in a newline would otherwise get the declaration welded onto its
+        // last line.
+        string separator = result.Text.Length > 0 && result.Text.Text[^1] != '\n' ? "\n\n" : "\n";
+        Position end = result.Text.GetPosition(result.Text.Length);
+        TextEdit edit = new()
+        {
+            Range = new TextRange(end, end).ToLsp(),
+            NewText = separator + opening + name + "()\n{\n}\n",
+        };
+
+        return new CodeAction
+        {
+            Title = "Create function '" + name + "'",
+            Kind = CodeActionKind.QuickFix,
+            Edit = SingleEdit(uri, edit),
+        };
+    }
+
+    /// <summary>
+    /// Imports the file that declares the function and points the call at it. Up to two edits, as
+    /// one operation: the `#using`, when it is not already there, and the qualifier — inserted when
+    /// the call was written bare, replaced when it named a namespace that does not have the name.
+    /// </summary>
+    private static CodeAction BuildImportAndQualifyAction(
+        DocumentUri uri,
+        string namespaceName,
+        string usingPath,
+        bool alreadyImported,
+        Position insertAt,
+        TextRange nameRange,
+        TextRange? qualifier)
+    {
+        List<TextEdit> edits = [];
+        if ( !alreadyImported )
+        {
+            edits.Add(new TextEdit
+            {
+                Range = new TextRange(insertAt, insertAt).ToLsp(),
+                NewText = "#using " + usingPath + ";\n",
+            });
+        }
+
+        TextRange qualifierRange = qualifier ?? new TextRange(nameRange.Start, nameRange.Start);
+        edits.Add(new TextEdit { Range = qualifierRange.ToLsp(), NewText = namespaceName + "::" });
+
+        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
+
+        string title = alreadyImported
+            ? "Qualify with '" + namespaceName + "::'"
+            : "Add #using " + usingPath + " and qualify with '" + namespaceName + "::'";
+
+        return new CodeAction
+        {
+            Title = title,
+            Kind = CodeActionKind.QuickFix,
+            Edit = new WorkspaceEdit { Changes = changes },
+        };
+    }
+
+    /// <summary>
+    /// The `ns::` written immediately before a call's name, as a range covering the namespace and
+    /// the colons, or null when the call was written bare. Whitespace between the parts is allowed
+    /// for, since nothing forbids `util :: foo()` even though nobody writes it.
+    /// </summary>
+    private static TextRange? QualifierRange(ParseResult result, TextRange nameRange)
+    {
+        string text = result.Text.Text;
+        int index = result.Text.GetOffset(nameRange.Start);
+
+        int afterColons = SkipWhitespaceBack(text, index);
+        if ( afterColons < 2 || text[afterColons - 1] != ':' || text[afterColons - 2] != ':' )
+        {
+            return null;
+        }
+
+        int end = afterColons;
+        int cursor = SkipWhitespaceBack(text, afterColons - 2);
+        int start = cursor;
+        while ( start > 0 && (char.IsLetterOrDigit(text[start - 1]) || text[start - 1] == '_') )
+        {
+            start--;
+        }
+
+        if ( start == cursor )
+        {
+            // Colons with no name in front of them; not a qualifier this can rewrite.
+            return null;
+        }
+
+        return new TextRange(result.Text.GetPosition(start), result.Text.GetPosition(end));
+    }
+
+    private static int SkipWhitespaceBack(string text, int index)
+    {
+        while ( index > 0 && char.IsWhiteSpace(text[index - 1]) )
+        {
+            index--;
+        }
+
+        return index;
+    }
+
+    /// <summary>The source covered by a range, trimmed.</summary>
+    private static string TextAt(ParseResult result, TextRange range)
+    {
+        int start = result.Text.GetOffset(range.Start);
+        int end = result.Text.GetOffset(range.End);
+        if ( start >= end || end > result.Text.Length )
+        {
+            return "";
+        }
+
+        return result.Text.Text[start..end].Trim();
+    }
+
+    /// <summary>
+    /// Whether the text is a bare identifier. Guards the create-function fix against ever writing a
+    /// declaration out of something that is not a name — a stale diagnostic range against an edited
+    /// buffer is the way that happens.
+    /// </summary>
+    private static bool IsIdentifier(string text)
+    {
+        if ( char.IsDigit(text[0]) )
+        {
+            return false;
+        }
+
+        foreach ( char character in text )
+        {
+            if ( !char.IsLetterOrDigit(character) && character != '_' )
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

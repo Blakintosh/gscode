@@ -86,11 +86,14 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
         [GscDiagnosticCode.UnusedUsing] = "'{0}' is imported but nothing from it is used.",
         [GscDiagnosticCode.UnusedInclude] = "'{0}' is included but nothing from it is used.",
-        // Keeps v1's wording for the script case (its FunctionDoesNotExist = 3035), since it says
-        // exactly the right thing; the builtin case names the two places that were searched, because
-        // "could not be resolved" reads as a tooling failure when the name may simply be an engine
-        // function we do not have data for.
-        [GscDiagnosticCode.ScriptFunctionNotFound] = "The function '{0}' could not be resolved.",
+        // Each names WHERE it looked, which is the only thing separating the two codes. v1's wording
+        // for the script case ("The function '{0}' could not be resolved.", its FunctionDoesNotExist
+        // = 3035) was kept for a long time because it says the right thing in isolation — but beside
+        // the builtin message it was not distinguishable, and a reader who cannot tell which code
+        // fired cannot tell whether a typo or a gap in our engine data is the likelier explanation.
+        // The builtin case still avoids "could not be resolved", which reads as a tooling failure
+        // when the name may simply be an engine function we have no data for.
+        [GscDiagnosticCode.ScriptFunctionNotFound] = "The script function '{0}' could not be resolved; this call names a script location, so no engine function could have matched.",
         [GscDiagnosticCode.BuiltinFunctionNotFound] = "'{0}' matches no script function or known engine function.",
         // {0} is the noun -- "Parameter" or "Field" -- since the same rule covers a builtin's
         // declared-bool argument and an engine field the data types bool.

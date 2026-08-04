@@ -258,4 +258,132 @@ public class CodeActionHandlerTests
 
         Assert.Empty(FixesFor(source, Reported(GscDiagnosticCode.ExpectedToken, 0, 0, 5)));
     }
+
+    // --- Unresolved calls (5013/5014) ---
+    //
+    // The diagnostic's range covers the NAME TOKEN only, never the `ns::` before it, which is what
+    // lets qualifying be an insert at the range start and re-qualifying a replace of the scanned-back
+    // qualifier.
+
+    private const string AskingPath = @"C:\bo3\share\raw\scripts\main.gsc";
+
+    private static List<CodeAction> CallFixes(string source, int line, int start, int end, ScriptDatabase? database = null)
+    {
+        ParseResult result = AnalyzeAt(source, AskingPath);
+
+        return CodeActionHandler.UnresolvedCallFixes(
+            DocumentUri.FromFileSystemPath(AskingPath),
+            result,
+            database?.Gsc,
+            "raw",
+            AskingPath,
+            Reported(GscDiagnosticCode.BuiltinFunctionNotFound, line, start, end));
+    }
+
+    [Fact]
+    public void AnUnqualifiedUnresolvedCall_OffersToCreateTheFunction()
+    {
+        string source = "#namespace game;\nfunction run()\n{\n    missing();\n}\n";
+
+        CodeAction fix = Assert.Single(CallFixes(source, 3, 4, 11), f => f.Title!.StartsWith("Create", StringComparison.Ordinal));
+
+        Assert.Equal("Create function 'missing'", fix.Title);
+
+        TextEdit edit = SingleEditOf(fix);
+
+        // Appended at the end of the file, and opened the way BO3 declares a function.
+        Assert.Contains("function missing()", edit.NewText, StringComparison.Ordinal);
+        Assert.Equal(5, edit.Range.Start.Line);
+        Assert.Equal(edit.Range.Start, edit.Range.End);
+    }
+
+    [Fact]
+    public void AQualifiedUnresolvedCall_DoesNotOfferToCreateItHere()
+    {
+        // `other::missing()` says where it expects the function to be, and writing it into THIS file
+        // would not put it there.
+        string source = "#namespace game;\nfunction run()\n{\n    other::missing();\n}\n";
+
+        Assert.DoesNotContain(
+            CallFixes(source, 3, 11, 18), f => f.Title!.StartsWith("Create", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnUnqualifiedCallMatchingAnotherNamespace_OffersTheImportAndTheQualifier()
+    {
+        string source = "#namespace game;\nfunction run()\n{\n    helper();\n}\n";
+
+        CodeAction fix = Assert.Single(
+            CallFixes(source, 3, 4, 10, DatabaseWithUtil()),
+            f => f.Title!.StartsWith("Add #using", StringComparison.Ordinal));
+
+        Assert.Equal("Add #using scripts\\util and qualify with 'util::'", fix.Title);
+
+        List<TextEdit> edits = [.. Assert.Single(fix.Edit!.Changes!).Value];
+        Assert.Equal(2, edits.Count);
+
+        // The import goes to the top; the qualifier is an INSERT at the name, so the call becomes
+        // util::helper() without the name itself being rewritten.
+        Assert.Contains(edits, e => e.NewText == "#using scripts\\util;\n" && e.Range.Start.Line == 0);
+
+        TextEdit qualify = Assert.Single(edits, e => e.NewText == "util::");
+        Assert.Equal(3, qualify.Range.Start.Line);
+        Assert.Equal(4, qualify.Range.Start.Character);
+        Assert.Equal(qualify.Range.Start, qualify.Range.End);
+    }
+
+    [Fact]
+    public void AWronglyQualifiedCall_ReplacesTheQualifierRatherThanAddingOne()
+    {
+        // The namespace that WAS written is scanned back from the name and overwritten, so this ends
+        // up as util::helper() rather than game::util::helper().
+        string source = "#namespace game;\nfunction run()\n{\n    nope::helper();\n}\n";
+
+        CodeAction fix = Assert.Single(
+            CallFixes(source, 3, 10, 16, DatabaseWithUtil()),
+            f => f.Title!.StartsWith("Add #using", StringComparison.Ordinal));
+
+        TextEdit qualify = Assert.Single([.. Assert.Single(fix.Edit!.Changes!).Value], e => e.NewText == "util::");
+
+        Assert.Equal(4, qualify.Range.Start.Character);
+        Assert.Equal(10, qualify.Range.End.Character);
+    }
+
+    [Fact]
+    public void AnAlreadyImportedNamespace_OffersOnlyTheQualifier()
+    {
+        string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    helper();\n}\n";
+
+        CodeAction fix = Assert.Single(
+            CallFixes(source, 4, 4, 10, DatabaseWithUtil()),
+            f => f.Title!.StartsWith("Qualify", StringComparison.Ordinal));
+
+        Assert.Equal("Qualify with 'util::'", fix.Title);
+        Assert.Equal("util::", SingleEditOf(fix).NewText);
+    }
+
+    [Fact]
+    public void AnOwnNamespaceMatch_IsNotOffered()
+    {
+        // Already reachable unqualified, so an import would be noise and a qualifier a no-op.
+        ScriptDatabase database = new();
+        ParseResult util = AnalyzeAt(
+            "#namespace game;\nfunction helper()\n{\n}\n", @"C:\bo3\share\raw\scripts\other.gsc");
+        database.Commit(util, ResolutionContext.RawContext, false, "scripts\\other.gsc");
+
+        string source = "#namespace game;\nfunction run()\n{\n    helper();\n}\n";
+
+        Assert.DoesNotContain(
+            CallFixes(source, 3, 4, 10, database), f => f.Title!.Contains("::", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void WithNoWorkspace_OnlyTheCreateFixIsOffered()
+    {
+        string source = "#namespace game;\nfunction run()\n{\n    helper();\n}\n";
+
+        CodeAction fix = Assert.Single(CallFixes(source, 3, 4, 10));
+
+        Assert.StartsWith("Create", fix.Title, StringComparison.Ordinal);
+    }
 }

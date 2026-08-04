@@ -202,6 +202,18 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   namespace the file doesn't import (own-namespace calls and already-imported files skipped) →
   an "Add #using ..." QuickFix inserting the directive after the last existing #using (or at the
   file top). This is the natural fix for the NamespaceNotImported lint. Resolve is a passthrough.
+- `UnresolvedCallFixes(uri, result, store, contextId, askingPath, diagnostic)` — the offers for
+  5013/5014. Both codes get the same two, because from the fix's side they are one situation: a
+  name with nothing behind it. Which code fired says where the lint LOOKED, not what to do.
+  - **Create function 'name'** appends a declaration at the end of the file, opened the way the
+    dialect declares one. Offered only for a call written BARE: `other::foo()` names where it
+    expects the function, and declaring foo here would not put it there.
+  - **Add #using X and qualify with 'ns::'** when the name exists in a namespace this file cannot
+    reach. Namespace dialects only — under a merge dialect an unqualified call already resolves by
+    name across the include graph, so one that reached the diagnostic is not one an import fixes.
+  - Both edits hang off the fact that a call reference's range covers the NAME TOKEN alone (see
+    `SymbolExtractor.RecordCalleeReference`). Qualifying is therefore an insert at the range start,
+    and a wrong qualifier is replaced over the range scanned back from it.
 
 ## Formatting/GscFormatter.cs
 

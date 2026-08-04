@@ -119,7 +119,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         NavigationTarget? target = null)
     {
         DocumentUri uri = request.TextDocument.Uri;
+
+        // Tracked per directive. No dialect has both — #include is gated by import style — but the
+        // bulk action names the directive in its title, and one shared list would let a CoD4 user
+        // be offered "Remove all 3 unused #using directives".
         List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unusedUsings = [];
+        List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unusedIncludes = [];
 
         foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in request.Context.Diagnostics )
         {
@@ -127,6 +132,14 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             {
                 case GscDiagnosticCode.UnusedUsing:
                     unusedUsings.Add(diagnostic);
+                    actions.Add(new CommandOrCodeAction(BuildDeleteLineAction(uri, result, diagnostic)));
+                    continue;
+
+                // The merge dialects' counterpart, reported by UnusedIncludeLint. It had no fix at
+                // all: the switch knew only about #using, so on CoD4, WaW, MW2 and BO1 an unused
+                // import was greyed out with nothing offered to remove it.
+                case GscDiagnosticCode.UnusedInclude:
+                    unusedIncludes.Add(diagnostic);
                     actions.Add(new CommandOrCodeAction(BuildDeleteLineAction(uri, result, diagnostic)));
                     continue;
                 case GscDiagnosticCode.PreferBooleanLiteral:
@@ -154,9 +167,19 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         }
 
         // One click for the common cleanup, rather than N separate fixes.
-        if ( unusedUsings.Count > 1 )
+        AddRemoveAllUnusedAction(uri, unusedUsings, "#using", actions);
+        AddRemoveAllUnusedAction(uri, unusedIncludes, "#include", actions);
+    }
+
+    private static void AddRemoveAllUnusedAction(
+        DocumentUri uri,
+        List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unused,
+        string directive,
+        List<CommandOrCodeAction> actions)
+    {
+        if ( unused.Count > 1 )
         {
-            actions.Add(new CommandOrCodeAction(BuildRemoveAllUnusedAction(uri, unusedUsings)));
+            actions.Add(new CommandOrCodeAction(BuildRemoveAllUnusedAction(uri, unused, directive)));
         }
     }
 
@@ -204,16 +227,35 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             Title = "Remove unused " + LineTextOf(result, range.Start.Line),
             Kind = CodeActionKind.QuickFix,
             Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
+
+            // The answer for the import under the cursor, and there is only one — so this is what
+            // Auto Fix should take, not the bulk sweep sitting next to it.
+            IsPreferred = true,
             Edit = SingleEdit(uri, edit),
         };
     }
 
-    private static CodeAction BuildRemoveAllUnusedAction(DocumentUri uri, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unusedUsings)
+    /// <summary>
+    /// One edit removing every unused import of a kind, bound to ALL of the diagnostics it clears.
+    ///
+    /// Binding it to all of them is what makes it reachable: an action carrying no diagnostics only
+    /// appears in the general lightbulb, so the bulk cleanup was invisible from the very squiggles
+    /// it exists to clear. It therefore shows on each of those lines beside that line's own single
+    /// removal, which is the same pair TypeScript offers for an unused declaration.
+    ///
+    /// Never preferred, though. Auto Fix runs preferred actions on the diagnostic under the cursor,
+    /// and the answer there is to remove THAT import — deleting the other six as a side effect of
+    /// fixing one is not what was asked for. The single-line removal carries the preference.
+    /// </summary>
+    private static CodeAction BuildRemoveAllUnusedAction(
+        DocumentUri uri,
+        List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unused,
+        string directive)
     {
         // Whole-line deletions on distinct lines never overlap, so order does not matter.
         HashSet<int> lines = [];
         List<TextEdit> edits = [];
-        foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in unusedUsings )
+        foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in unused )
         {
             TextRange range = diagnostic.Range.ToCore();
             if ( lines.Add(range.Start.Line) )
@@ -226,8 +268,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         return new CodeAction
         {
-            Title = "Remove all " + edits.Count + " unused #using directives",
+            Title = "Remove all " + edits.Count + " unused " + directive + " directives",
             Kind = CodeActionKind.QuickFix,
+            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(unused),
             Edit = new WorkspaceEdit { Changes = changes },
         };
     }

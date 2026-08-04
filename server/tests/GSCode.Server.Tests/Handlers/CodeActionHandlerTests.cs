@@ -222,6 +222,56 @@ public class CodeActionHandlerTests
         Assert.Equal(3, fixes.Count);
         CodeAction bulk = fixes.First(f => f.Title.StartsWith("Remove all", StringComparison.Ordinal));
         Assert.Equal(2, Assert.Single(bulk.Edit!.Changes!).Value.Count());
+
+        // Bound to EVERY diagnostic it clears, so it is reachable from any of those squiggles
+        // rather than only from the general lightbulb.
+        Assert.Equal(2, bulk.Diagnostics!.Count());
+
+        // Auto Fix on one import must remove that import, not all of them.
+        Assert.False(bulk.IsPreferred);
+        Assert.All(
+            fixes.Where(f => f.Title.StartsWith("Remove unused", StringComparison.Ordinal)),
+            f => Assert.True(f.IsPreferred));
+    }
+
+    [Fact]
+    public void UnusedInclude_IsRemovableToo()
+    {
+        // The merge dialects' import had no fix at all: the switch knew only about #using, so on
+        // CoD4/WaW/MW2/BO1 an unused import was greyed out with nothing offered against it.
+        string source = "#include maps\\a;\n#include maps\\b;\nmain(){}\n";
+
+        List<CodeAction> fixes = FixesFor(
+            source,
+            Reported(GscDiagnosticCode.UnusedInclude, 0, 0, 16),
+            Reported(GscDiagnosticCode.UnusedInclude, 1, 0, 16));
+
+        Assert.Equal(3, fixes.Count);
+
+        // The bulk title follows the DIRECTIVE, so a CoD4 user is not told about #using.
+        CodeAction bulk = fixes.First(f => f.Title.StartsWith("Remove all", StringComparison.Ordinal));
+        Assert.Equal("Remove all 2 unused #include directives", bulk.Title);
+        Assert.Equal(2, bulk.Diagnostics!.Count());
+    }
+
+    [Fact]
+    public void UnusedUsingsAndIncludes_DoNotShareABulkFix()
+    {
+        // No dialect has both forms, so this cannot arise in a real file — but one shared list
+        // would have produced a single action whose title named the wrong directive.
+        string source = "#using scripts\\a;\n#using scripts\\b;\n#include maps\\c;\n#include maps\\d;\nmain(){}\n";
+
+        List<CodeAction> bulk = [.. FixesFor(
+            source,
+            Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17),
+            Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 17),
+            Reported(GscDiagnosticCode.UnusedInclude, 2, 0, 16),
+            Reported(GscDiagnosticCode.UnusedInclude, 3, 0, 16))
+            .Where(f => f.Title.StartsWith("Remove all", StringComparison.Ordinal))];
+
+        Assert.Equal(2, bulk.Count);
+        Assert.Contains(bulk, f => f.Title.Contains("#using", StringComparison.Ordinal));
+        Assert.Contains(bulk, f => f.Title.Contains("#include", StringComparison.Ordinal));
     }
 
     [Fact]

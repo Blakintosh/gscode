@@ -73,6 +73,30 @@ Three reasons this is a follow-up rather than a second branch:
 Not urgent: every one of these shapes already stops the user. The gap is the explanation, not the
 detection.
 
+### The TextMate grammar colours every dialect's keywords in every dialect
+
+`gsc.tmGrammar.json`'s `control` rule is the UNION of all five games' keywords, because a grammar
+runs before the server is asked and cannot know which game is selected. So `foreach`, `class`,
+`new`, `childthread` and `call` render as keywords while editing CoD4, which has none of them.
+
+The union is the right default — under-highlighting is worse, and picking one game's set would
+leave `#include` and the profiler pair plain in the four Infinity Ward games. But the comment on
+that rule used to justify the cost by saying the server owned the accurate verdict "through
+semantic tokens and gscode-1004", and neither half is true: `1004` is `UnknownDirective` and covers
+directives only, and `SemanticTokensHandler` stopped emitting Keyword tokens (its legend keeps the
+slot). The comment now says what actually holds — `5025` names the game a keyword belongs to once
+the word is USED, which is a diagnostic, not a colour.
+
+Colour cannot be fixed from the server at all: semantic tokens can add or override a scope, never
+withdraw one, so there is no token that un-highlights a word TextMate already matched. The only
+real fix is per-dialect grammars — five `gsc.<game>.tmGrammar.json` files differing in one regex,
+selected by, at best, a language id per game, since `contributes.grammars` cannot be switched on a
+setting either.
+
+That is a lot of duplication for a colour, and it would fragment the language id that `.gsc` files
+resolve to, which every other contribution point keys off. Not worth doing until someone actually
+reports being misled by it — the diagnostic now tells them, which is the half that matters.
+
 ### Cross-file lints for files that are not open
 
 `gscode.diagnostics.scope` now publishes problems for indexed files, but a closed file reports

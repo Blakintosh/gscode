@@ -127,6 +127,95 @@ public class DialectCompletionTests
         Assert.DoesNotContain(entries, e => e.Detail == "global");
     }
 
+    // --- Dialect-gated snippets ---
+    //
+    // These used to be contributed by the extension, which registers a snippet per LANGUAGE ID and
+    // so could not ask which of the five games was active. CoD4 was offered a foreach loop it
+    // cannot run, and taking it produced a call the server then reported as unresolved.
+
+    [Fact]
+    public void Cod4IsNotOfferedTheForeachSnippet()
+    {
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("", Cod4);
+
+        Assert.DoesNotContain(entries, e => e.Label == "foreach" && e.Kind == CompletionKind.Snippet);
+        Assert.DoesNotContain(entries, e => e.Label == "foreachkv");
+
+        // Nor the bare keyword, which is the same claim by the other route.
+        Assert.DoesNotContain(entries, e => e.Label == "foreach");
+    }
+
+    [Fact]
+    public void BlackOps3IsOfferedTheForeachSnippet()
+    {
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("", Bo3);
+
+        CompletionEntry snippet = Assert.Single(entries, e => e.Label == "foreach");
+
+        Assert.Equal(CompletionKind.Snippet, snippet.Kind);
+        Assert.Contains("${1:value}", snippet.InsertText, StringComparison.Ordinal);
+
+        // Exactly one item labelled `foreach`: the snippet REPLACES the bare keyword rather than
+        // sitting beside it.
+        Assert.Contains(entries, e => e.Label == "foreachkv");
+    }
+
+    [Theory]
+    [InlineData("class")]
+    [InlineData("new")]
+    [InlineData("funcauto")]
+    [InlineData("funcpriv")]
+    [InlineData("using")]
+    [InlineData("insert")]
+    [InlineData("namespace")]
+    public void Cod4IsNotOfferedBlackOps3Snippets(string label)
+    {
+        Assert.DoesNotContain(CompleteInCode("", Cod4), e => e.Label == label);
+        Assert.DoesNotContain(TopLevelCompletions(Cod4), e => e.Label == label);
+        Assert.True(
+            CompleteInCode("", Bo3).Any(e => e.Label == label)
+                || TopLevelCompletions(Bo3).Any(e => e.Label == label),
+            label + " should still be offered somewhere in BO3");
+    }
+
+    [Fact]
+    public void TheImportSnippetFollowsTheDialect()
+    {
+        // CoD4 merges with #include and BO3 imports with #using; neither has the other's.
+        Assert.Contains(TopLevelCompletions(Cod4), e => e.Label == "include");
+        Assert.DoesNotContain(TopLevelCompletions(Cod4), e => e.Label == "using");
+
+        Assert.Contains(TopLevelCompletions(Bo3), e => e.Label == "using");
+        Assert.DoesNotContain(TopLevelCompletions(Bo3), e => e.Label == "include");
+    }
+
+    [Fact]
+    public void TheScriptDocSnippetFollowsTheDialect()
+    {
+        // Every dialect has SOME ScriptDoc form, so this one is chosen rather than filtered: both
+        // games offer `doc`, and the body is the one their own scripts use.
+        CompletionEntry cod4 = Assert.Single(TopLevelCompletions(Cod4), e => e.Label == "doc");
+        CompletionEntry bo3 = Assert.Single(TopLevelCompletions(Bo3), e => e.Label == "doc");
+
+        Assert.StartsWith("/*", cod4.InsertText, StringComparison.Ordinal);
+        Assert.StartsWith("/@", bo3.InsertText, StringComparison.Ordinal);
+    }
+
+    /// <summary>Completes at the top of a file, outside any function body, for one dialect.</summary>
+    private static ImmutableArray<CompletionEntry> TopLevelCompletions(GameProfile profile)
+    {
+        CompletionEngine engine = BuildEngine();
+        ParseResult result = ScriptAnalysis.Analyze(
+            @$"{Raw}\maps\mp\test.gsc",
+            ScriptLanguage.Gsc,
+            SourceText.From("\n"),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
+            new NameTable(),
+            profile);
+
+        return engine.Complete(result, "raw", new Position(0, 0), profile: profile);
+    }
+
     // --- Path completion for INLINE path calls ---
     //
     // The Infinity Ward line reaches another file by naming its path in the middle of an

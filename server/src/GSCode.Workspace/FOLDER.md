@@ -69,8 +69,22 @@ surfaces.
   reference index (gated by `includeLiterals` = the completion.literals setting; disabled →
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
-  (+ `.size`), and statement/top-level scope (keywords, file macros, namespace functions, visible
-  classes, namespace-less builtins as call snippets).
+  (+ `.size`), and statement/top-level scope (keywords, the dialect's global objects and snippets,
+  file macros, namespace functions, visible classes, namespace-less builtins as call snippets).
+
+## Completion/GscSnippets.cs
+
+- The snippets whose construct only SOME dialects have — `foreach`, `class`, `new`, the BO3
+  function modifiers, every import directive, and the two ScriptDoc forms. They cannot be
+  contributed by the extension: a contributed snippet is registered per language id, one id covers
+  five games, and VS Code merges them in unconditionally with no way to withdraw one. That is how
+  CoD4 came to be offered a `foreach` loop it cannot run.
+- Each entry is gated on a keyword or directive passed to `GscKeywords.IsAvailable`, so a snippet
+  and the word it writes cannot disagree about which games have it. The ScriptDoc pair is the
+  exception, gated on `ScriptDocStyle` because neither form is a word.
+- The UNIVERSAL snippets stay in `client/snippets/common.json`, where they cost nothing and work
+  before the server has started. The function declaration is neither: `FunctionDeclarationSnippet`
+  builds it per dialect, since the merge games declare with a bare name.
 
 ## Completion/SignatureEngine.cs
 

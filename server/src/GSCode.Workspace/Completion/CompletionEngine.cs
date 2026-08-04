@@ -1206,6 +1206,23 @@ public sealed class CompletionEngine
             }
         }
 
+        // Snippets whose construct only some dialects have. They cannot be contributed by the
+        // extension, because a contributed snippet is registered per LANGUAGE ID and one id covers
+        // five games — which is how CoD4 came to be offered a foreach loop it cannot run. See
+        // GscSnippets.
+        ImmutableArray<GscSnippets.Entry> snippets = GscSnippets.For(game, insideFunction);
+        HashSet<string> snippetLabels = new(StringComparer.Ordinal);
+        foreach ( GscSnippets.Entry snippet in snippets )
+        {
+            snippetLabels.Add(snippet.Label);
+            entries.Add(new CompletionEntry(
+                snippet.Label,
+                CompletionKind.Snippet,
+                "snippet",
+                snippet.Body,
+                snippet.Documentation));
+        }
+
         foreach ( string keyword in words )
         {
             if ( !GscKeywords.IsAvailable(keyword, game) )
@@ -1213,10 +1230,19 @@ public sealed class CompletionEngine
                 continue;
             }
 
-            // The snippet above IS the `function` entry at top level, so the bare keyword is not
-            // offered beside it. Two items with the same label and different behaviour is a choice
-            // nobody wants to make, and the snippet is the bare word plus the punctuation that
-            // follows it every time — there is nothing the plain keyword does that it does not.
+            // A keyword a snippet already covers is not offered beside it. Two items with the same
+            // label and different behaviour is a choice nobody wants to make, and in each of these
+            // cases the snippet is the bare word plus the punctuation that follows it every time —
+            // there is nothing the plain keyword does that it does not.
+            //
+            // `function` at top level is the same rule, spelled separately because its snippet is
+            // FunctionDeclarationSnippet above: that one is built per dialect rather than listed,
+            // since the merge games declare with a bare name and have no `function` keyword to hide.
+            if ( snippetLabels.Contains(keyword) )
+            {
+                continue;
+            }
+
             if ( !insideFunction && string.Equals(keyword, "function", StringComparison.Ordinal) )
             {
                 continue;

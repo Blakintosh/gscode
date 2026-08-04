@@ -202,6 +202,16 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   namespace the file doesn't import (own-namespace calls and already-imported files skipped) →
   an "Add #using ..." QuickFix inserting the directive after the last existing #using (or at the
   file top). This is the natural fix for the NamespaceNotImported lint. Resolve is a passthrough.
+- **Every fix carries the diagnostic it answers.** An action with no `diagnostics` is a general
+  lightbulb entry: it is never presented as the fix FOR the error, Auto Fix skips it (that runs
+  preferred actions only) and Fix All cannot see it. The add-#using action was produced correctly
+  for a long time and still did nothing when asked for, purely because of this. `FindMissingUsingSites`
+  exists to carry the call's range back out so the action can be matched to the reported 5000 —
+  both come from the same `ReferenceEntry`, which is what makes the match exact rather than
+  positional guesswork.
+- `IsPreferred` is set only where one fix is the answer. Several possible imports means the user
+  picks; an empty created declaration is never preferred, since it silences the error without the
+  function doing anything.
 - `UnresolvedCallFixes(uri, result, store, contextId, askingPath, diagnostic)` — the offers for
   5013/5014. Both codes get the same two, because from the fix's side they are one situation: a
   name with nothing behind it. Which code fired says where the lint LOOKED, not what to do.

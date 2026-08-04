@@ -378,6 +378,27 @@ public class CodeActionHandlerTests
     }
 
     [Fact]
+    public void BothUnresolvedCallFixesAreAttachedToTheDiagnostic()
+    {
+        // An action with no diagnostic on it is a general lightbulb entry: never the fix FOR the
+        // error, skipped by Auto Fix, and invisible to Fix All. That is the whole failure the 5000
+        // import fix had.
+        string source = "#namespace game;\nfunction run()\n{\n    helper();\n}\n";
+
+        List<CodeAction> fixes = CallFixes(source, 3, 4, 10, DatabaseWithUtil());
+
+        Assert.Equal(2, fixes.Count);
+        Assert.All(fixes, f => Assert.Equal(
+            (int)GscDiagnosticCode.BuiltinFunctionNotFound, Assert.Single(f.Diagnostics!).Code!.Value.Long));
+
+        // The import is the actionable one and there is only one candidate, so Auto Fix may take it.
+        // Creating an empty declaration makes the error vanish without the function doing anything,
+        // so it is offered but never preferred.
+        Assert.True(Assert.Single(fixes, f => f.Title!.StartsWith("Add #using", StringComparison.Ordinal)).IsPreferred);
+        Assert.False(Assert.Single(fixes, f => f.Title!.StartsWith("Create", StringComparison.Ordinal)).IsPreferred);
+    }
+
+    [Fact]
     public void WithNoWorkspace_OnlyTheCreateFixIsOffered()
     {
         string source = "#namespace game;\nfunction run()\n{\n    helper();\n}\n";

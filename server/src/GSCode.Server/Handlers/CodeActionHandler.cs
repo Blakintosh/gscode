@@ -72,9 +72,25 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         if ( target is not null )
         {
             Position insertAt = UsingInsertionPoint(result);
-            foreach ( string usingPath in FindMissingUsings(result, target.Store, target.ContextId, target.Path, selection) )
+            List<MissingUsing> missing = FindMissingUsingSites(result, target.Store, target.ContextId, target.Path, selection);
+
+            // How many imports could serve each call site. One means the fix is unambiguous and can
+            // be marked preferred, which is what Auto Fix runs; several means the user has to pick,
+            // and preferring an arbitrary one of them would be a guess dressed up as an answer.
+            Dictionary<TextRange, int> candidates = [];
+            foreach ( MissingUsing site in missing )
             {
-                actions.Add(new CommandOrCodeAction(BuildAddUsingAction(request.TextDocument.Uri, usingPath, insertAt)));
+                candidates[site.Range] = candidates.GetValueOrDefault(site.Range) + 1;
+            }
+
+            foreach ( MissingUsing site in missing )
+            {
+                actions.Add(new CommandOrCodeAction(BuildAddUsingAction(
+                    request.TextDocument.Uri,
+                    site.Path,
+                    insertAt,
+                    ReportedAt(request, GscDiagnosticCode.NamespaceNotImported, site.Range),
+                    candidates[site.Range] == 1)));
             }
         }
 
@@ -287,6 +303,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             Title = "Move " + directive + " above the first declaration",
             Kind = CodeActionKind.QuickFix,
             Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
+
+            // There is one way to fix a misplaced directive, so Auto Fix can take it.
+            IsPreferred = true,
             Edit = new WorkspaceEdit { Changes = changes },
         }));
     }
@@ -325,7 +344,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         // different set of ways to be wrong.
         if ( qualifier is null )
         {
-            fixes.Add(BuildCreateFunctionAction(uri, result, name));
+            fixes.Add(BuildCreateFunctionAction(uri, result, name, diagnostic));
         }
 
         if ( store is null )
@@ -359,6 +378,10 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         Position insertAt = UsingInsertionPoint(result);
         HashSet<string> offered = new(StringComparer.Ordinal);
 
+        // Gathered before any action is built, because IsPreferred is init-only and whether ONE of
+        // these is preferred depends on how many there turn out to be.
+        List<(string Namespace, string Path)> reachable = [];
+
         // Namespace left null: every namespace is searched, which is the whole point — the caller
         // already knows the one that was written does not have it.
         foreach ( ResolvedFunction resolved in DatabaseQueries.LookupFunctions(
@@ -384,8 +407,25 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
+            reachable.Add((namespaceName, usingPath));
+        }
+
+        foreach ( (string Namespace, string Path) candidate in reachable )
+        {
             fixes.Add(BuildImportAndQualifyAction(
-                uri, namespaceName, usingPath, existingUsings.Contains(usingPath), insertAt, range, qualifier));
+                uri,
+                candidate.Namespace,
+                candidate.Path,
+                existingUsings.Contains(candidate.Path),
+                insertAt,
+                range,
+                qualifier,
+                diagnostic,
+
+                // Preferred only when one place can supply the name. Auto Fix runs preferred actions
+                // without asking, and choosing between several namespaces on the user's behalf is a
+                // guess dressed up as an answer.
+                reachable.Count == 1));
         }
 
         return fixes;
@@ -399,7 +439,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// a guessed list that disagreed with the call would be worse than an empty one the user fills
     /// in with the caret already inside it.
     /// </summary>
-    private static CodeAction BuildCreateFunctionAction(DocumentUri uri, ParseResult result, string name)
+    private static CodeAction BuildCreateFunctionAction(
+        DocumentUri uri,
+        ParseResult result,
+        string name,
+        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
     {
         string opening = GameProfile.Active.HasFunctionKeyword ? "function " : "";
 
@@ -417,6 +461,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         {
             Title = "Create function '" + name + "'",
             Kind = CodeActionKind.QuickFix,
+            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
+
+            // Never preferred: writing an empty declaration is a reasonable thing to OFFER and a
+            // poor thing for Auto Fix to do silently, since it makes the error disappear without
+            // the function doing anything.
             Edit = SingleEdit(uri, edit),
         };
     }
@@ -433,7 +482,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         bool alreadyImported,
         Position insertAt,
         TextRange nameRange,
-        TextRange? qualifier)
+        TextRange? qualifier,
+        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic,
+        bool unambiguous)
     {
         List<TextEdit> edits = [];
         if ( !alreadyImported )
@@ -458,6 +509,8 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         {
             Title = title,
             Kind = CodeActionKind.QuickFix,
+            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
+            IsPreferred = unambiguous,
             Edit = new WorkspaceEdit { Changes = changes },
         };
     }
@@ -583,6 +636,27 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     internal static List<string> FindMissingUsings(
         ParseResult result, LanguageStore store, string contextId, string askingPath, TextRange selection)
     {
+        List<string> paths = [];
+        foreach ( MissingUsing site in FindMissingUsingSites(result, store, contextId, askingPath, selection) )
+        {
+            paths.Add(site.Path);
+        }
+
+        return paths;
+    }
+
+    /// <summary>An import that would make one call site resolvable, and the site it belongs to.</summary>
+    /// <param name="Range">
+    /// The call's NAME range, which is also the range the NamespaceNotImported lint reports over —
+    /// both come from the same <c>ReferenceEntry</c>. That shared origin is what lets the action be
+    /// matched back to the diagnostic it fixes.
+    /// </param>
+    internal sealed record MissingUsing(string Path, TextRange Range);
+
+    /// <inheritdoc cref="FindMissingUsings"/>
+    internal static List<MissingUsing> FindMissingUsingSites(
+        ParseResult result, LanguageStore store, string contextId, string askingPath, TextRange selection)
+    {
         // The DECLARED set rather than the namespace spans: the spans include a leading region named
         // after the file whenever its imports sit above its #namespace line, and a phantom in here
         // read as "already own that namespace" and silently withheld the add-#using fix.
@@ -601,7 +675,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        List<string> missing = [];
+        List<MissingUsing> missing = [];
         HashSet<string> offered = new(StringComparer.Ordinal);
 
         foreach ( GSCode.Core.Symbols.ReferenceEntry entry in result.Extraction.References )
@@ -638,7 +712,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                     continue;
                 }
 
-                missing.Add(usingPath);
+                missing.Add(new MissingUsing(usingPath, entry.Range));
             }
         }
 
@@ -680,7 +754,20 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         };
     }
 
-    private static CodeAction BuildAddUsingAction(DocumentUri uri, string usingPath, Position insertAt)
+    /// <summary>
+    /// The import itself, BOUND to the diagnostic it answers when one was reported.
+    ///
+    /// The binding is the whole difference between an action a user can find and one they cannot.
+    /// Without it this is a general lightbulb entry: it never appears as the fix FOR the error, Auto
+    /// Fix skips it (that runs preferred actions only), and Fix All does not see it. The action was
+    /// produced correctly the whole time and asking for the fix still did nothing.
+    /// </summary>
+    private static CodeAction BuildAddUsingAction(
+        DocumentUri uri,
+        string usingPath,
+        Position insertAt,
+        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic? reported,
+        bool unambiguous)
     {
         TextRange insertRange = new(insertAt, insertAt);
         TextEdit edit = new() { Range = insertRange.ToLsp(), NewText = "#using " + usingPath + ";\n" };
@@ -689,8 +776,33 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         {
             Title = "Add #using " + usingPath,
             Kind = CodeActionKind.QuickFix,
+            Diagnostics = reported is null
+                ? null
+                : new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(reported),
+
+            // Only when one import can serve the call. Preferring one of several would make Auto Fix
+            // pick a file for the user without saying so.
+            IsPreferred = reported is not null && unambiguous,
             Edit = SingleEdit(uri, edit),
         };
+    }
+
+    /// <summary>
+    /// The diagnostic of a given code that the client reported over a range, or null when it did
+    /// not report one — the action is still offered then, just not bound to anything.
+    /// </summary>
+    private static OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic? ReportedAt(
+        CodeActionParams request, GscDiagnosticCode code, TextRange range)
+    {
+        foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in request.Context.Diagnostics )
+        {
+            if ( CodeOf(diagnostic) == code && Overlaps(diagnostic.Range.ToCore(), range) )
+            {
+                return diagnostic;
+            }
+        }
+
+        return null;
     }
 
     private static WorkspaceEdit SingleEdit(DocumentUri uri, TextEdit edit)

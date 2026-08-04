@@ -28,6 +28,17 @@ public static class PathUtil
         return NameTable.Shared.InternLower(cleaned);
     }
 
+    /// <summary>
+    /// A script path without its extension — the form <c>#using</c> and <c>#include</c> name a file
+    /// in. Unlike the two normalizers above this leaves case and separators alone, because its
+    /// output is read by people: it feeds diagnostic messages and the directives a quick fix writes
+    /// into the source, not the comparison keys.
+    /// </summary>
+    public static string WithoutExtension(string scriptPath)
+    {
+        return Path.ChangeExtension(scriptPath, null) ?? scriptPath;
+    }
+
     /// <summary>True when <paramref name="path"/> sits underneath <paramref name="directory"/> (both already normalized).</summary>
     public static bool IsUnder(string path, string directory)
     {

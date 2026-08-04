@@ -92,7 +92,8 @@ public static class FunctionResolutionLint
         bool canJudgeBuiltins = (game.HasCompleteBuiltinLibrary || judgeUnverifiedBuiltins)
             && game.DataFilePrefix is not null
             && builtins.Count > 0
-            && !HasUnresolvedImports(result);
+            && !ImportGate.AnyUnresolved(
+                result, GscDiagnosticCode.InsertNotFound, GscDiagnosticCode.UsingNotFound);
 
         List<Diagnostic> diagnosticsForMissingFiles = [];
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
@@ -299,23 +300,6 @@ public static class FunctionResolutionLint
         }
 
         return diagnostics.ToImmutable();
-    }
-
-    /// <summary>
-    /// Whether any <c>#insert</c> or <c>#using</c> in this file failed to resolve, which makes the
-    /// set of names legally available here unknowable and so makes "this matches nothing" unsound.
-    /// </summary>
-    private static bool HasUnresolvedImports(ParseResult result)
-    {
-        foreach ( Diagnostic diagnostic in result.AllDiagnostics )
-        {
-            if ( diagnostic.Code is GscDiagnosticCode.InsertNotFound or GscDiagnosticCode.UsingNotFound )
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

@@ -1,5 +1,34 @@
 [
     {
+        "name": "Abs",
+        "description": "Returns the absolute value of <a>.",
+        "overloads": [
+            {
+                "parameters": [
+                    {
+                        "name": "a",
+                        "description": "A float or integer value.",
+                        "mandatory": true,
+                        "type": {
+                            "dataType": "number"
+                        }
+                    }
+                ],
+                "returns": {
+                    "type": {
+                        "dataType": "number"
+                    }
+                }
+            }
+        ],
+        "flags": [
+            "aiGenerated"
+        ],
+        "remarks": [
+            "Established from the shipped scripts rather than documentation: animscripts call abs() 83 times with no declaration reachable through their includes, and the one script definition in the corpus (maps\\mp\\gametypes\\_copter.gsc) is not reachable from any of them. common_scripts\\utility.gsc implements sign() but not abs(), which is the engine covering the latter."
+        ]
+    },
+    {
         "name": "Ceil",
         "description": "Returns the ceiling of floating point value <a>. This effectively rounds up Ceil(2.7) == 3, Ceil(3.9) == 4.",
         "overloads": [

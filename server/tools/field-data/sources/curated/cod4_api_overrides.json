@@ -57,10 +57,9 @@
     {
         "name": "Assert",
         "parameters": [
-            "value",
-            "message"
+            "value"
         ],
-        "reason": "The pages list 1 parameter(s); 5 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+        "reason": "Pinned to the documented single parameter. This entry used to widen it to ['value','message'] because 6 shipped calls pass a message, and that inference is wrong here: CoD4's Assert takes the condition only, AssertEx is the form that takes a message, and the engine ignores the extra argument rather than rejecting it - so those calls are a bug Infinity Ward shipped and never noticed, not evidence of a short page. Kept rather than deleted so a later pass does not re-derive the widening. What separates this from IsSubStr or ToLower is that the page is COMPLETE - description, example, and one Required Arg - where theirs list no parameters at all."
     },
     {
         "name": "BadPlace_Arc",

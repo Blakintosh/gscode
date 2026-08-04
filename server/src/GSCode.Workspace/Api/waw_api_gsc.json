@@ -1029,9 +1029,6 @@
               "name": "value",
               "description": "statement that is asserted to be correct",
               "mandatory": true
-            },
-            {
-              "name": "message"
             }
           ]
         }
@@ -10232,7 +10229,8 @@
       "example": "Line( self.origin, self.origin + forwardFar, (0.9, 0.7, 0.6), false );",
       "module": "Debug",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ],
       "devOnly": false
     },
@@ -13552,7 +13550,8 @@
       "example": "Print( \"Stuff and things!\" );",
       "module": "Debug",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ],
       "devOnly": false
     },
@@ -13594,7 +13593,8 @@
       "example": "Print3d( start, \"START\", (1.0, 0.8, 0.5), 1, 3 );",
       "module": "Debug",
       "flags": [
-        "documented"
+        "documented",
+        "corrected"
       ],
       "devOnly": false
     },

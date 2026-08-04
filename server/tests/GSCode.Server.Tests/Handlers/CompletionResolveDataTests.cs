@@ -29,6 +29,20 @@ public class CompletionResolveDataTests
         Assert.Equal("give_weapon", data.Value<string>("name"));
         Assert.Equal("util", data.Value<string>("ns"));
         Assert.Contains("util.gsc", data.Value<string>("uri")!, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("false", data.Value<string>("builtin"));
+    }
+
+    [Fact]
+    public void ABuiltinRowSaysSo()
+    {
+        // Without this, resolve re-derives which symbol the row meant from its NAME, and a name that
+        // is both an engine function and a script one resolves to the script every time — so BO3's
+        // builtin `SpawnSpectator` row rendered `globallogic_spawn::spawnSpectator` under a header
+        // reading "builtin". Both rows are offered; only one of them is the engine's.
+        CompletionEntry entry = new(
+            "SpawnSpectator", CompletionKind.Function, "builtin", "SpawnSpectator($0)", IsBuiltin: true);
+
+        Assert.Equal("true", CompletionHandler.ResolveData(entry, Uri).Value<string>("builtin"));
     }
 
     [Fact]

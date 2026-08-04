@@ -1452,7 +1452,8 @@ public sealed class CompletionEngine
     {
         if ( !parameterHints )
         {
-            return new CompletionEntry(builtin.Name, CompletionKind.Function, "builtin", builtin.Name + callSuffix);
+            return new CompletionEntry(
+                builtin.Name, CompletionKind.Function, "builtin", builtin.Name + callSuffix, IsBuiltin: true);
         }
 
         BuiltinOverload? overload = builtin.Overloads.FirstOrDefault();
@@ -1466,7 +1467,8 @@ public sealed class CompletionEngine
             CompletionKind.Function,
             "builtin",
             builtin.Name + callSuffix,
-            LabelDetail: ParameterHint(parameters, hasVarargs: false));
+            LabelDetail: ParameterHint(parameters, hasVarargs: false),
+            IsBuiltin: true);
     }
 
     private static CompletionEntry ImportedFunctionEntry(

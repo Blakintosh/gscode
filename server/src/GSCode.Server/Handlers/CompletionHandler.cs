@@ -137,7 +137,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
             target,
             data.Value<string>("kind") ?? "",
             data.Value<string>("name") ?? "",
-            data.Value<string>("ns") ?? "");
+            data.Value<string>("ns") ?? "",
+            string.Equals(data.Value<string>("builtin"), "true", StringComparison.Ordinal));
 
         if ( markdown is null )
         {
@@ -170,9 +171,16 @@ public sealed class CompletionHandler : CompletionHandlerBase
 
     /// <summary>
     /// The same renderer that feeds hover, so the two surfaces can never describe a symbol
-    /// differently. Script functions win over builtins on a name clash, matching resolution.
+    /// differently. Script functions win over builtins on a name clash, matching resolution — EXCEPT
+    /// where the row says outright that it is the builtin.
+    ///
+    /// That exception is the whole point of <paramref name="isBuiltin"/>. Resolution's tie-break is
+    /// the right answer to "what does this name mean here", and the wrong answer to "what is this row
+    /// in the list", because both rows are offered and only one of them is the engine's. BO3 ships an
+    /// engine <c>SpawnSpectator</c> and three scripts declaring one, so the builtin row rendered
+    /// <c>globallogic_spawn::spawnSpectator</c> beneath a header reading "builtin".
     /// </summary>
-    private string? RenderDocumentation(NavigationTarget target, string kind, string name, string ns)
+    private string? RenderDocumentation(NavigationTarget target, string kind, string name, string ns, bool isBuiltin)
     {
         if ( name.Length == 0 )
         {
@@ -183,6 +191,12 @@ public sealed class CompletionHandler : CompletionHandlerBase
         {
             case nameof(CompletionKind.Function):
             {
+                if ( isBuiltin )
+                {
+                    BuiltinFunction? engine = _builtins.For(target.Language).Find(name);
+                    return engine is not null ? MarkdownDocRenderer.RenderBuiltin(engine) : null;
+                }
+
                 ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
                     target.Store,
                     target.ContextId,
@@ -329,6 +343,14 @@ public sealed class CompletionHandler : CompletionHandlerBase
             // labelled `ns::name` so the namespace is filterable, and looking THAT up finds nothing.
             ["name"] = entry.ResolveName.Length > 0 ? entry.ResolveName : entry.Label,
             ["ns"] = entry.Namespace,
+
+            // Which of two same-named rows this is. A name can be an engine function AND a script
+            // one, and without this the resolve step re-derives it from the name alone and gets the
+            // wrong answer for one of the two rows every time.
+            //
+            // A STRING, like everything else here: Data round-trips through the client untouched, so
+            // a bool would be one more thing with a serializer opinion about shape.
+            ["builtin"] = entry.IsBuiltin ? "true" : "false",
         };
     }
 

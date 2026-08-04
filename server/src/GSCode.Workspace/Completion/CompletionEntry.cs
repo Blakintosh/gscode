@@ -96,4 +96,12 @@ public sealed record CompletionEntry(
     string Namespace = "",
     bool RetriggerCompletion = false,
     string ResolveName = "",
-    string LabelDetail = "");
+    string LabelDetail = "",
+
+    // IsBuiltin: whether this row IS the engine function, as opposed to a script one. Carried
+    // explicitly because a name can be BOTH — BO3 has an engine SpawnSpectator and three scripts
+    // declaring one — and the two are separate rows in the list. Documentation is fetched later, by
+    // a second request that has only the row's Data to go on, so a row that does not say which of
+    // the two it is gets whichever the NAME resolves to: the builtin row rendered
+    // globallogic_spawn::spawnSpectator under a header reading "builtin".
+    bool IsBuiltin = false);

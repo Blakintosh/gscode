@@ -1158,10 +1158,11 @@ public sealed class CompletionEngine
             return DirectiveCompletions(game);
         }
 
-        // Statement scope adds the dialect's global objects (self, level, …); both scopes are
-        // filtered to what the active game actually has, so e.g. CoD4 is not offered class/#using.
+        // Both scopes are filtered to what the active game actually has, so e.g. CoD4 is not
+        // offered class/#using. The dialect's global objects are NOT folded in here — see the
+        // separate loop below for why.
         IEnumerable<string> words = insideFunction
-            ? GscKeywords.StatementKeywords.Concat(game.GlobalObjectNames)
+            ? GscKeywords.StatementKeywords
             : GscKeywords.TopLevelKeywords;
 
         if ( !insideFunction )
@@ -1181,6 +1182,28 @@ public sealed class CompletionEngine
                 "array",
                 "vararg",
                 KeywordDocs.Find("vararg") ?? ""));
+        }
+
+        // The dialect's engine globals (self, level, world, …). Emitted in their own loop rather
+        // than concatenated onto the keyword list, because the loop below gates every word through
+        // GscKeywords.IsAvailable — which ends at the profile's KEYWORD set. No global object is a
+        // keyword in any dialect, so every one of them failed that gate and none was ever offered,
+        // in any game. The profile still decides the set, so BO3 gets world/classes and CoD4 does
+        // not.
+        //
+        // Variables rather than Keywords for the reason vararg is: at a use site that is what they
+        // read as — something to send a call on and index fields off, not a word with syntax.
+        if ( insideFunction )
+        {
+            foreach ( string global in game.GlobalObjectNames )
+            {
+                entries.Add(new CompletionEntry(
+                    global,
+                    CompletionKind.Variable,
+                    "global",
+                    global,
+                    KeywordDocs.Find(global) ?? ""));
+            }
         }
 
         foreach ( string keyword in words )

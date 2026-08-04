@@ -81,6 +81,52 @@ public class DialectCompletionTests
         Assert.DoesNotContain("classes", Cod4.GlobalObjectNames);
     }
 
+    [Fact]
+    public void GlobalObjectsAreOfferedInAFunctionBody()
+    {
+        // Goes through the ENGINE, not the profile. The test above passed for a long time while
+        // the list was empty: the globals were concatenated onto the keyword list and then run
+        // through GscKeywords.IsAvailable, which ends at the profile's keyword set — and no global
+        // object is a keyword in any dialect, so every one of them was dropped in every game.
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("", Cod4);
+
+        Assert.Contains(entries, e => e.Label == "self" && e.Kind == CompletionKind.Variable);
+        Assert.Contains(entries, e => e.Label == "level" && e.Kind == CompletionKind.Variable);
+        Assert.Contains(entries, e => e.Label == "game" && e.Kind == CompletionKind.Variable);
+        Assert.Contains(entries, e => e.Label == "anim" && e.Kind == CompletionKind.Variable);
+    }
+
+    [Fact]
+    public void TheGlobalObjectsOfferedAreTheDialectsOwn()
+    {
+        // Matched on the "global" detail rather than the label alone, so an unrelated field or
+        // function that happens to be named `world` cannot make this pass or fail by accident.
+        Assert.Contains(CompleteInCode("", Bo3), e => e.Label == "world" && e.Detail == "global");
+        Assert.DoesNotContain(CompleteInCode("", Cod4), e => e.Label == "world" && e.Detail == "global");
+
+        Assert.Contains(CompleteInCode("", Bo3), e => e.Label == "classes" && e.Detail == "global");
+        Assert.DoesNotContain(CompleteInCode("", Cod4), e => e.Label == "classes" && e.Detail == "global");
+    }
+
+    [Fact]
+    public void GlobalObjectsAreNotOfferedAtTopLevel()
+    {
+        // Outside a function body only declarations and directives are legal, and `self` there is
+        // not a thing anyone can write.
+        CompletionEngine engine = BuildEngine();
+        ParseResult result = ScriptAnalysis.Analyze(
+            @$"{Raw}\maps\mp\test.gsc",
+            ScriptLanguage.Gsc,
+            SourceText.From("\nmain()\n{\n}\n"),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
+            new NameTable(),
+            Cod4);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(0, 0), profile: Cod4);
+
+        Assert.DoesNotContain(entries, e => e.Detail == "global");
+    }
+
     // --- Path completion for INLINE path calls ---
     //
     // The Infinity Ward line reaches another file by naming its path in the middle of an
@@ -110,12 +156,20 @@ public class DialectCompletionTests
         return new CompletionEngine(database, BuiltinApiSet.Load(api), ObjectFields.Load(api));
     }
 
-    /// <summary>Completes at the end of `line`, placed inside a function body, for one dialect.</summary>
+    /// <summary>
+    /// Completes at the end of `line`, placed inside a function body, for one dialect.
+    ///
+    /// The declaration opens the way the dialect does: BO3 needs the `function` keyword, and a bare
+    /// `main()` there is not a declaration at all — so the cursor landed at TOP LEVEL and every BO3
+    /// case here was asserting against the top-level list without saying so. The keyword only
+    /// lengthens line 0, so the completion position below is unaffected.
+    /// </summary>
     private static ImmutableArray<CompletionEntry> CompleteInCode(string line, GameProfile profile)
     {
         CompletionEngine engine = BuildEngine();
 
-        string text = "main()\n{\n    " + line + "\n}\n";
+        string opening = profile.HasFunctionKeyword ? "function " : "";
+        string text = opening + "main()\n{\n    " + line + "\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
             @$"{Raw}\maps\mp\test.gsc",
             ScriptLanguage.Gsc,

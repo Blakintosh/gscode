@@ -131,6 +131,39 @@ public sealed partial record GameProfile
     /// </summary>
     public string? DataFilePrefix { get; init; }
 
+    /// <summary>
+    /// The game whose builtin NAME LIST may stand in for this one's when this profile ships no
+    /// library of its own. Names only — never signatures, documentation or arity, which are this
+    /// game's own or nothing at all.
+    ///
+    /// The distinction is what makes borrowing safe. A rule that must ask "could this name be an
+    /// engine function?" fails closed without an answer, and on a game with no library it therefore
+    /// never runs. A close sibling's list answers that question well enough to EXCLUDE names, and
+    /// being wrong costs silence rather than a false report: a name the sibling has and this game
+    /// does not is simply not judged.
+    ///
+    /// Set for MW2, which ships no data and sits one game after CoD4 in the same engine line. Left
+    /// null for WaW and BO1: both have libraries of their own that are merely incomplete, and a
+    /// second incomplete list does not add up to a trustworthy one.
+    /// </summary>
+    public string? EngineNameFallbackPrefix { get; init; }
+
+    /// <summary>The builtin-API filename of <see cref="EngineNameFallbackPrefix"/>, or null.</summary>
+    public string? EngineNameFallbackFileName(ScriptLanguage language)
+    {
+        return ApiFileNameFor(EngineNameFallbackPrefix, language);
+    }
+
+    /// <summary>
+    /// Whether a rule may say a name is NOT an engine function: this game's library is complete, or
+    /// it ships none and borrows a sibling's list.
+    ///
+    /// One predicate rather than the condition spelled out at each reader. It was written three ways
+    /// across two assemblies for a while — the profile flags here, the loader's own-versus-borrowed
+    /// decision, and the lint re-deriving both — and two of the three could disagree.
+    /// </summary>
+    public bool HasTrustedEngineNames => HasCompleteBuiltinLibrary || EngineNameFallbackPrefix is not null;
+
     // --- Capabilities: which language features and worlds exist in this dialect. Cores leave
     //     these at the conservative base defaults below until a contributor confirms them. ---
 
@@ -364,7 +397,18 @@ public sealed partial record GameProfile
     /// </summary>
     public string? ApiFileName(ScriptLanguage language)
     {
-        return DataFilePrefix is null ? null : $"{DataFilePrefix}_api_{ExtensionFor(language).TrimStart('.')}.json";
+        return ApiFileNameFor(DataFilePrefix, language);
+    }
+
+    /// <summary>
+    /// The API filename a prefix would produce, or null for no prefix. Shared by
+    /// <see cref="ApiFileName"/> and <see cref="EngineNameFallbackFileName"/> so the naming
+    /// convention has one spelling — the same reason <see cref="BundledDataFileNames"/> is computed
+    /// rather than listed.
+    /// </summary>
+    private string? ApiFileNameFor(string? prefix, ScriptLanguage language)
+    {
+        return prefix is null ? null : $"{prefix}_api_{ExtensionFor(language).TrimStart('.')}.json";
     }
 
     /// <summary>The object-fields data filename (<c>t7_object_fields.json</c>), or null when none.</summary>

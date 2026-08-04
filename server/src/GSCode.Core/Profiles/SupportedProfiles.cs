@@ -70,6 +70,13 @@ public sealed partial record GameProfile
         Verified = true,
         HasInlinePathCalls = true,
         HasFileScopeConstants = true,
+
+        // No library of its own, so the rules that must tell an engine name from a script one read
+        // CoD4's list — one game earlier in the same engine line. Names only; MW2 still has no
+        // signatures, documentation or arity of its own. Measured before it was set: over MW2's
+        // 1,479 shipped scripts the include rule's only unexplained name was 'abs', which CoD4's
+        // library now carries.
+        EngineNameFallbackPrefix = "cod4",
         Keywords = [.. BaseKeywords, "foreach", "in", "childthread", "call", "prof_begin", "prof_end"],
     };
 

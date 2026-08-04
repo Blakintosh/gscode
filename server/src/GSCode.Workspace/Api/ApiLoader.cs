@@ -35,7 +35,16 @@ public static class ApiLoader
             return BuiltinApi.Empty;
         }
 
-        string path = Path.Combine(apiDirectory, fileName);
+        return LoadFile(Path.Combine(apiDirectory, fileName));
+    }
+
+    /// <summary>
+    /// Loads one API file by full path. Split out of <see cref="Load"/> so a caller that has already
+    /// decided WHICH file it wants — the engine-name fallback, which reads a sibling game's — is not
+    /// forced to go back through profile-based naming to ask for it.
+    /// </summary>
+    public static BuiltinApi LoadFile(string path)
+    {
         if ( !File.Exists(path) )
         {
             return BuiltinApi.Empty;

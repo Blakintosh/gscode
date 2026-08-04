@@ -275,10 +275,13 @@ Each is a `static Analyze(...)` returning diagnostics, run per open document and
 server's `TextSyncHandler`. Severity is chosen by MEASUREMENT over the corpus, not by taste: a rule
 reported as an Error must never land on code that ships and works.
 
-- `FunctionResolutionLint` (5013/5014) — a call resolving to no script function and no builtin.
+- `FunctionResolutionLint` (5013/5014/5025) — a call resolving to no script function and no builtin.
   Splits script from builtin so a corpus sweep of 5014 yields the candidate list for curating the
   builtin library. Stands down on a game with no builtin data, and where the library is known
-  incomplete.
+  incomplete. 5025 is 5014's last branch rather than a rule of its own: a name that is a KEYWORD in
+  a later game of the lineage (`foreach` under CoD4) arrives here as a call, because the lexer gates
+  keywords per profile and leaves the word an identifier. It sits behind the same builtin gate, so
+  it changes what a reported call is CALLED and never where the lint speaks.
 - `AmbiguousFunctionLint` (5007) — one name reachable as several distinct declarations.
 - `ArgumentCountLint` (5022/5023) — the rule is NOT symmetric. A **script function** is only wrong
   with too MANY arguments: passing fewer is legal and idiomatic, the rest being `undefined`. A

@@ -32,6 +32,47 @@ If `5014` proves noisy on real mod code, the answer is a better library rather t
 — see the harvest reports under `tests/GSCode.Server.Tests/harvest/`. (The lint's own reasoning,
 and why it is an Error, lives in comments on `FunctionResolutionLint`.)
 
+### `5025 KeywordNotInDialect` only reaches the call-shaped half
+
+`5025` explains a word that a later game has as a keyword but this dialect does not — `foreach` under
+CoD4 being the case it was written for. It is raised as the last branch of `FunctionResolutionLint`,
+which means it only ever sees words that reached the lint AS A CALL: the lexer left the word an
+identifier, the parser read identifier-then-`(` as a call, and the lint found nothing of that name.
+
+That covers `foreach`, and the BO3 intrinsics written call-shaped (`waitrealtime`, `vectorscale`,
+`profilestart`, `profilestop`). It does not cover the keywords that open a STATEMENT or a
+DECLARATION, because those never form a call and so never arrive:
+
+| shape | absent in | what the user gets today |
+|---|---|---|
+| `do { … } while ( x );` | everything before BO3 | a parse error on the block |
+| `class Foo { }`, `function foo()`, `const X = 4;` | everything before BO3 | a parse error |
+| `new Foo()` | everything before BO3 | a parse error |
+| `childthread foo();`, `call [[ ptr ]]()` | CoD4/WaW/BO1/BO3 | a parse error |
+| `in`, as the `foreach` separator | before MW2 / BO3 | swallowed into the failing arg list |
+
+The parse error is not wrong — the text genuinely is not grammatical there — it just never says the
+one thing worth saying, which is that the construct belongs to a different game.
+
+Three reasons this is a follow-up rather than a second branch:
+
+1. **The parser already speaks first.** A statement that fails to parse reports a 3xxx, and adding
+   `5025` beside it puts two diagnostics on one range for one mistake. The rule has to REPLACE the
+   parse error, which means the decision belongs inside the parser's statement dispatch — where an
+   identifier in statement position could be checked against `GameProfile.EarliestWithKeyword`
+   before the generic "unexpected token" is raised.
+2. **A bare token scan is not enough.** Without syntactic position, `call` and `vararg` false-positive
+   immediately: BO3's own stock scripts use `call` as an ordinary variable ~69 times, which is the
+   very reason the keyword set gates it. Whatever does this has to know it is looking at a statement
+   opener, not any occurrence of the word.
+3. **The band is wrong for a parser rule.** `5025` sits in the 5xxx workspace band because that is
+   where it is raised from now. A parser-raised version wants 3xxx by the convention in
+   `add-diagnostic`. Decide whether the code moves, whether one code is legitimately raised from two
+   layers, or whether the parser gets its own — before writing either.
+
+Not urgent: every one of these shapes already stops the user. The gap is the explanation, not the
+detection.
+
 ### Cross-file lints for files that are not open
 
 `gscode.diagnostics.scope` now publishes problems for indexed files, but a closed file reports

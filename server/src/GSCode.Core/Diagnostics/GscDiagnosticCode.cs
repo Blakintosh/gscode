@@ -143,4 +143,21 @@ public enum GscDiagnosticCode
     /// that knows what the name IS can say so.
     /// </summary>
     VarargOutsideVarargFunction = 5024,
+
+    /// <summary>
+    /// A word that IS a keyword in some other game of the lineage, written call-shaped in a dialect
+    /// that does not have it — <c>foreach ( x in a )</c> in CoD4 being the case that prompted this.
+    ///
+    /// Reported instead of <see cref="BuiltinFunctionNotFound"/>, which is where such a call lands
+    /// otherwise and which describes it wrongly. The lexer gates keywords per profile, so a word the
+    /// dialect lacks stays an ordinary identifier; the parser then sees identifier-then-'(' and
+    /// builds a call; the resolution lint finds no function and no builtin of that name and says so.
+    /// Every step is correct and the verdict — "matches no script function or known engine function"
+    /// — sends the reader looking for a missing definition instead of telling them the loop does not
+    /// exist in the game they are targeting.
+    ///
+    /// The message names the earliest game that HAS the word, because "not in this dialect" without
+    /// it leaves the obvious next question unanswered.
+    /// </summary>
+    KeywordNotInDialect = 5025,
 }

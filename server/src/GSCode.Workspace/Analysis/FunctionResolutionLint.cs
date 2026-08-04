@@ -263,6 +263,34 @@ public static class FunctionResolutionLint
                 continue;
             }
 
+            // A word another game of the lineage has as a KEYWORD, written in a dialect that does
+            // not. `foreach ( x in a )` against CoD4 is the case: the lexer gates keywords per
+            // profile, so `foreach` stayed an identifier, the parser read identifier-then-'(' as a
+            // call, and by here it is a call to a function nobody declares. All true, and useless
+            // to the person who wrote it — 5014 sends them looking for a definition instead of
+            // telling them the loop is not in the game they picked.
+            //
+            // Asked AFTER the builtin gate above, deliberately. That keeps this a better MESSAGE
+            // for a case already reported rather than a new claim in new places: the games whose
+            // library we do not trust stay silent, as they must, since there an unresolved name is
+            // far more likely to be an engine function we lack than a misplaced keyword.
+            //
+            // The dialect's own keywords cannot reach here — they lex as keywords, never as calls —
+            // but the check is explicit anyway, because a message naming the current game as the
+            // game that introduces the word would be nonsense and this is the only place to stop it.
+            GameProfile? introducedBy = GameProfile.EarliestWithKeyword(entry.Key.Name);
+            if ( introducedBy is not null && !game.IsKeyword(entry.Key.Name) )
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    entry.Range,
+                    DiagnosticSeverity.Error,
+                    GscDiagnosticCode.KeywordNotInDialect,
+                    entry.Key.Name,
+                    game.DisplayName,
+                    introducedBy.DisplayName));
+                continue;
+            }
+
             diagnostics.Add(Diagnostic.Create(
                 entry.Range,
                 DiagnosticSeverity.Error,

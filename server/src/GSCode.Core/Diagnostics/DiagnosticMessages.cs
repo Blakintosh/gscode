@@ -102,6 +102,9 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.UnreachableCode] = "Unreachable: the preceding '{0}' always leaves this block.",
         [GscDiagnosticCode.VariableNeverAssigned] = "'{0}' is read but never assigned in this function.",
         [GscDiagnosticCode.VarargOutsideVarargFunction] = "'{0}' is only bound in a function declaring '...'; add it to the parameter list to use the pack here.",
+        // Names the game that DOES have the word, because the reader's next question is always
+        // "since when?" -- and without an answer this reads as the tool not knowing a keyword.
+        [GscDiagnosticCode.KeywordNotInDialect] = "'{0}' is not part of the {1} dialect; it arrives in {2}. Here it reads as an ordinary function name.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

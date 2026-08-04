@@ -190,4 +190,84 @@ public class FunctionResolutionLintTests
 
         Assert.Empty(diagnostics);
     }
+
+    // --- A keyword the dialect does not have (5025) ---
+    //
+    // CoD4 gets no foreach. The lexer gates keywords per profile, so the word stays an ordinary
+    // identifier, the parser reads identifier-then-'(' as a call, and this lint finds no function
+    // and no builtin of that name. Every step is right and 5014's verdict is still the wrong thing
+    // to tell someone whose real mistake was targeting the wrong game.
+
+    private const string Cod4Raw = @"C:\cod4\raw";
+
+    private static ImmutableArray<Diagnostic> LintAsCod4(string source)
+    {
+        GameProfile cod4 = GameProfile.Cod4;
+        string askingPath = @$"{Cod4Raw}\maps\mp\test.gsc";
+
+        FakeFileSystem files = new FakeFileSystem().AddFile(askingPath, source);
+        RootConfig config = RootConfig.Create(true, Cod4Raw, @"C:\cod4\mods", [], files);
+        PathResolver resolver = new(config, files);
+        ScriptDatabase database = new();
+        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
+        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        ParseResult result = ScriptAnalysis.Analyze(
+            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), cod4);
+
+        // The library must be CoD4's. Loading the active profile's would judge CoD4 code against
+        // BO3's engine functions, which is its own bug and would hide this one.
+        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory, cod4);
+        return FunctionResolutionLint.Analyze(
+            result, database.Gsc, "raw", askingPath, builtins.For(ScriptLanguage.Gsc), cod4);
+    }
+
+    [Fact]
+    public void AKeywordFromALaterDialect_NamesTheDialectRatherThanAMissingBuiltin()
+    {
+        string source = "main()\n{\n    foreach( a );\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(LintAsCod4(source));
+
+        Assert.Equal(GscDiagnosticCode.KeywordNotInDialect, diagnostic.Code);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("foreach", diagnostic.Message, StringComparison.Ordinal);
+
+        // Both games are named: the one being targeted, and the earliest one that has the word.
+        // Without the second the message reads as the tool not knowing a keyword.
+        Assert.Contains("Call of Duty 4", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("Modern Warfare 2", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLoopAsActuallyWritten_IsNotABuiltinMiss()
+    {
+        // The shape from the report. Nothing makes it a loop in CoD4, but the word still arrives
+        // here as a call, and this is the point where what the user is told has to be right.
+        string source = "main()\n{\n    foreach ( player in level.players )\n    {\n    }\n}\n";
+
+        ImmutableArray<Diagnostic> diagnostics = LintAsCod4(source);
+
+        Assert.Contains(diagnostics, static d => d.Code == GscDiagnosticCode.KeywordNotInDialect);
+        Assert.DoesNotContain(diagnostics, static d => d.Code == GscDiagnosticCode.BuiltinFunctionNotFound);
+    }
+
+    [Fact]
+    public void AnOrdinaryUnknownName_IsStillABuiltinMiss()
+    {
+        // The new branch must not swallow the case 5014 exists for.
+        Diagnostic diagnostic = Assert.Single(LintAsCod4("main()\n{\n    not_a_thing_anywhere();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.BuiltinFunctionNotFound, diagnostic.Code);
+    }
+
+    [Fact]
+    public void ADialectThatHasTheKeyword_ReportsNothing()
+    {
+        // BO3 has foreach, so it lexes as a keyword and never reaches this lint at all.
+        string source = "#namespace vibing3;\nfunction main()\n{\n    foreach ( p in level.players )\n    {\n    }\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
 }

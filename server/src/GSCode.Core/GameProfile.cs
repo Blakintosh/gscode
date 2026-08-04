@@ -536,6 +536,28 @@ public sealed partial record GameProfile
         return [.. profiles];
     }
 
+    /// <summary>
+    /// The earliest SUPPORTED game whose dialect has this word as a keyword, or null when none
+    /// does. <see cref="All"/> is sorted by release year, so the first match is the earliest.
+    ///
+    /// Answers "which game does this word belong to", which is what a reader needs when a keyword
+    /// they know does nothing in the dialect they picked. Restricted to the supported games because
+    /// a core carries <see cref="BaseKeywords"/> and nothing else — naming one as the game that
+    /// introduced <c>foreach</c> would be a claim about a dialect nobody has filled in.
+    /// </summary>
+    public static GameProfile? EarliestWithKeyword(string word)
+    {
+        foreach ( GameProfile profile in All )
+        {
+            if ( profile.Supported && profile.IsKeyword(word) )
+            {
+                return profile;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The profile whose short name or id matches (case-insensitive), or null.</summary>
     public static GameProfile? ByName(string name)
     {

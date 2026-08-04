@@ -96,8 +96,9 @@ Needs a database. Fixtures use `FakeFileSystem`, so no game install is involved.
 `PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests` 5004/5005 · `DevBlockCallLintTests` 5006,
 including which dev-only builtin candidates the stock corpus contradicts · `AmbiguousFunctionLintTests`
 5007 · `UnusedLocalLintTests` 5008 · `CaseLabelLintTests` 5010/5011 ·
-`FunctionResolutionLintTests` 5013/5014, the split between a script miss and a builtin miss and every
-condition that makes an Error defensible · `ClassMethodLintTests` inherited and class-method
+`FunctionResolutionLintTests` 5013/5014/5025, the split between a script miss and a builtin miss,
+every condition that makes an Error defensible, and the keyword-from-a-later-dialect case that used
+to be reported as a missing builtin · `ClassMethodLintTests` inherited and class-method
 resolution diagnostics · `PathCallResolutionTests` a path call into a file the
 distribution does not ship, reported once for the file rather than once per call ·
 `UnreachableCodeLintTests` 5015 · `UnassignedVariableLintTests` 5016, and the ten shapes that are

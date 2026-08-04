@@ -130,6 +130,19 @@ public static class WorkspaceLints
         {
             lints.AddRange(FunctionResolutionLint.Analyze(
                 result, store, contextId, path, languageBuiltins, resolver: resolver));
+
+            // Same precondition, one step further along: this one asserts a name is not merged into
+            // scope, and before indexing finishes no file's includes have contributed anything, so
+            // every cross-file call would read as missing an import.
+            //
+            // Handed the ENGINE NAME list rather than the game's own library, which is the only
+            // reason the rule exists on MW2 at all: MW2 ships no library, and all this rule asks of
+            // one is whether a name could be an engine function — a question CoD4's list answers for
+            // it. Everything else here keeps reading languageBuiltins, since a signature or an
+            // argument count borrowed from another game would be a confident lie.
+            lints.AddRange(IncludeUsageLint.Analyze(
+                result, store, language, resolver, path, builtins.EngineNamesFor(language), contextId));
+
         }
         lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));
         lints.AddRange(DevBlockCallLint.Analyze(

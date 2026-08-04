@@ -108,6 +108,9 @@ public static class DiagnosticMessages
         // Names the game that DOES have the word, because the reader's next question is always
         // "since when?" -- and without an answer this reads as the tool not knowing a keyword.
         [GscDiagnosticCode.KeywordNotInDialect] = "'{0}' is not part of the {1} dialect; it arrives in {2}. Here it reads as an ordinary function name.",
+        // Names the file that HAS it, which is the whole difference between this and 5014: the
+        // reader's fix is one '#include' line, and the message carries the argument for it.
+        [GscDiagnosticCode.FunctionNotIncluded] = "'{0}' is declared in '{1}', but this file has no '#include' bringing it into scope.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

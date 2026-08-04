@@ -160,4 +160,19 @@ public enum GscDiagnosticCode
     /// it leaves the obvious next question unanswered.
     /// </summary>
     KeywordNotInDialect = 5025,
+
+    /// <summary>
+    /// The Infinity Ward counterpart to <see cref="NamespaceNotImported"/>: an unqualified call to a
+    /// function that EXISTS in the workspace but is not merged into this file's scope, because
+    /// neither this file nor any file it <c>#include</c>s declares it.
+    ///
+    /// Distinct from <see cref="BuiltinFunctionNotFound"/>, which is the "no such name anywhere"
+    /// verdict. Here the name is known and the fix is an import, so a message telling the reader the
+    /// function does not exist would send them to write one that is already there.
+    ///
+    /// Only meaningful on an <c>#include</c> dialect. Under <c>#using</c> the same mistake is a
+    /// qualified call into an unimported namespace, which <see cref="NamespaceNotImported"/> already
+    /// reports.
+    /// </summary>
+    FunctionNotIncluded = 5026,
 }

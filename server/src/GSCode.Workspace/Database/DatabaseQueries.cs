@@ -20,6 +20,14 @@ public sealed record ResolvedFunction(FunctionSymbol Function, ScriptRecord Reco
 public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record);
 
 /// <summary>
+/// The files an <c>#include</c> chain reaches, and whether the walk saw all of them.
+/// <see cref="Complete"/> is false when a hop did not resolve or was not indexed — the difference
+/// between "these are the files" and "these are the files we could see", which is the difference
+/// between a rule that may assert a name is out of scope and one that must stay quiet.
+/// </summary>
+public readonly record struct IncludeClosure(ImmutableArray<ScriptRecord> Records, bool Complete);
+
+/// <summary>
 /// Shared query logic over one LanguageStore. Namespace lookup MERGES across every
 /// visible record contributing to the namespace; overlay shadowing dedups by
 /// script-relative identity with the asking context's priority. Language never appears
@@ -338,6 +346,113 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// Every file an <c>#include</c> chain reaches from the asking file, transitively, with whether
+    /// the walk was COMPLETE — false when a hop did not resolve or was not indexed, so the set is
+    /// known to be short.
+    ///
+    /// Transitivity is a fact about the dialect, not a policy of whichever rule asks: the compiler
+    /// flattens the chain, which the corpus settles. <c>maps\_createpath.gsc</c> includes
+    /// <c>maps\_utility</c> and nothing else, calls <c>flag_init</c>, and <c>flag_init</c> lives in
+    /// <c>common_scripts\utility</c> — which <c>maps\_utility</c> includes on its first line. The file
+    /// ships and works.
+    ///
+    /// It lives here rather than inside the one lint that needed it first, so the codebase has a
+    /// single place that answers the transitivity question. The direct-only helpers below
+    /// (<see cref="IncludedScriptPaths"/> and its consumers) are deliberately left as they are: for
+    /// completion and definition, offering or preferring too LITTLE is harmless, and widening them is
+    /// a behaviour change that deserves its own measurement rather than riding along with this one.
+    ///
+    /// The direct includes come from the parse in hand so a directive typed a moment ago counts;
+    /// every hop after that is read from the store's dependency edges. Each hop resolves against ITS
+    /// OWN file's context — a mod's copy of a script includes what the mod can see, and probing those
+    /// paths from the raw root would reach a different file or none at all — and resolutions are
+    /// memoized, since a diamond in the graph (everything reaches <c>common_scripts\utility</c>)
+    /// otherwise costs one filesystem probe per parent rather than per file.
+    /// </summary>
+    public static IncludeClosure IncludeClosure(
+        LanguageStore store,
+        Resolution.PathResolver resolver,
+        GSCode.Parser.ParseResult result,
+        string askingPath,
+        string extension)
+    {
+        Dictionary<(Resolution.ResolutionContext Context, string Path), string?> resolved = [];
+        Queue<string> pending = new();
+        Resolution.ResolutionContext askingContext = resolver.GetContext(askingPath);
+
+        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+        {
+            if ( element is not GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
+            {
+                continue;
+            }
+
+            if ( Probe(resolver, resolved, askingContext, includeNode.Path, extension) is not string hit )
+            {
+                return new IncludeClosure([], Complete: false);
+            }
+
+            pending.Enqueue(hit);
+        }
+
+        ImmutableArray<ScriptRecord>.Builder reached = ImmutableArray.CreateBuilder<ScriptRecord>();
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+
+        while ( pending.Count > 0 )
+        {
+            string includedPath = pending.Dequeue();
+            if ( !visited.Add(includedPath) )
+            {
+                continue;
+            }
+
+            if ( !store.TryGet(includedPath, out ScriptRecord record) )
+            {
+                return new IncludeClosure([], Complete: false);
+            }
+
+            reached.Add(record);
+            Resolution.ResolutionContext hop = resolver.GetContext(record.Path);
+
+            foreach ( DependencyEdge edge in record.Dependencies )
+            {
+                if ( edge.IsInsert )
+                {
+                    continue;
+                }
+
+                if ( Probe(resolver, resolved, hop, edge.RawPath, extension) is not string hit )
+                {
+                    return new IncludeClosure([], Complete: false);
+                }
+
+                pending.Enqueue(hit);
+            }
+        }
+
+        return new IncludeClosure(reached.ToImmutable(), Complete: true);
+    }
+
+    private static string? Probe(
+        Resolution.PathResolver resolver,
+        Dictionary<(Resolution.ResolutionContext, string), string?> memo,
+        Resolution.ResolutionContext context,
+        string rawPath,
+        string extension)
+    {
+        if ( memo.TryGetValue((context, rawPath), out string? cached) )
+        {
+            return cached;
+        }
+
+        string? hit = resolver.Resolve(context, rawPath + extension);
+        string? normalized = hit is null ? null : PathUtil.NormalizeAbsolute(hit);
+
+        memo[(context, rawPath)] = normalized;
+        return normalized;
+    }
+
+    /// <summary>
     /// Whether a record is in an asking file's <c>#include</c> merge scope: the file itself, or one
     /// of its included files. Paths compare in normalized script-relative form.
     /// </summary>
@@ -509,10 +624,17 @@ public static class DatabaseQueries
 
     /// <summary>
     /// Every function reachable UNQUALIFIED under an <c>#include</c> dialect (for completion): this
-    /// file's own, plus those in files it <c>#include</c>s — the two ways a merge dialect brings a
-    /// function into local scope, both callable by bare name. Deduplicated by name, mirroring
-    /// <see cref="AllVisibleClasses"/>, since there is no namespace to qualify with in the first
-    /// place.
+    /// file's own, plus those in files it <c>#include</c>s DIRECTLY, all callable by bare name.
+    /// Deduplicated by name, mirroring <see cref="AllVisibleClasses"/>, since there is no namespace
+    /// to qualify with in the first place.
+    ///
+    /// Direct hops only, and deliberately narrower than the truth: the compiler flattens the chain
+    /// (see <see cref="IncludeClosure"/>), so a name reached through an included file's own includes
+    /// is legal here and goes unoffered. Completion errs toward offering too little — a name it
+    /// misses is still typable — whereas widening it would offer, from a single <c>#include</c> of
+    /// <c>maps\_utility</c>, everything CoD4's utility chain transitively reaches. The rule that must
+    /// be exactly right about scope is the one that reports an Error, and that one asks
+    /// <see cref="IncludeClosure"/>.
     /// </summary>
     public static ImmutableArray<FunctionSymbol> FunctionsInIncludeScope(
         LanguageStore store,

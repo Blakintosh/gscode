@@ -296,6 +296,18 @@ reported as an Error must never land on code that ships and works.
   a later game of the lineage (`foreach` under CoD4) arrives here as a call, because the lexer gates
   keywords per profile and leaves the word an identifier. It sits behind the same builtin gate, so
   it changes what a reported call is CALLED and never where the lint speaks.
+- `IncludeUsageLint` (5026) — the `#include` counterpart to `NamespaceUsageLint`: an unqualified call
+  to a function that EXISTS but that nothing merges into scope. Resolution finds it anyway — a merge
+  dialect keys functions `(null, name)` and `LookupFunctions` searches every visible record, so
+  hover and go-to-definition keep working while the import is missing — which is exactly why 5013/5014
+  stay silent here and this rule is needed. Scope comes from `DatabaseQueries.IncludeClosure`, which
+  follows the graph TRANSITIVELY because the compiler flattens the chain; the corpus settled it, since
+  direct-hops-only reported 36 stock calls, `maps\_createpath.gsc` reaching `flag_init` through
+  `maps\_utility` among them. Gated on `GameProfile.HasTrustedEngineNames`, since a name that is an
+  undocumented engine function AND a script function elsewhere would otherwise be blamed on the user.
+  Measurement drew that line: CoD4 qualifies on its own library (the sweep found one gap, `abs`, now
+  curated in), MW2 ships no library and borrows CoD4's NAMES, and WaW and BO1 qualify for neither —
+  with the gate lifted they report 204 and 387, mostly engine functions their own libraries lack.
 - `AmbiguousFunctionLint` (5007) — one name reachable as several distinct declarations.
 - `ArgumentCountLint` (5022/5023) — the rule is NOT symmetric. A **script function** is only wrong
   with too MANY arguments: passing fewer is legal and idiomatic, the rest being `undefined`. A

@@ -44,7 +44,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\util;\n#using scripts\\shared\\util;\nfunction f(){}\n";
 
-        List<UsingNode> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
 
         Assert.Single(duplicates);
         // The SECOND occurrence (line 1) is the redundant one.
@@ -56,7 +56,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\Util;\n#using scripts\\shared\\util;\nfunction f(){}\n";
 
-        List<UsingNode> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
 
         Assert.Single(duplicates);
     }
@@ -66,7 +66,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\util;\n#using scripts\\shared\\array;\nfunction f(){}\n";
 
-        List<UsingNode> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
 
         Assert.Empty(duplicates);
     }
@@ -78,9 +78,35 @@ public class CodeActionHandlerTests
 
         // A selection covering only line 0 (the first, non-redundant occurrence).
         TextRange lineZero = TextRange.FromCoordinates(0, 0, 0, 5);
-        List<UsingNode> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), lineZero);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), lineZero);
 
         Assert.Empty(duplicates);
+    }
+
+    [Fact]
+    public void FindsDuplicateInclude_TheMergeDialectsImport()
+    {
+        // #include was skipped entirely, which left the four merge games reporting a duplicate
+        // import (5018) with no fix behind it at all.
+        //
+        // Analysed as CoD4 on purpose: #include is gated by import style, so under BO3 it is not a
+        // directive and no IncludeNode is produced at all. There is no dialect in which both forms
+        // exist, which is why the two are tracked separately rather than compared with each other.
+        string source = "#include maps\\_utility;\n#include maps\\_utility;\nmain(){}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\maps\t.gsc",
+            ScriptLanguage.Gsc,
+            SourceText.From(source),
+            NullInsertProvider.Instance,
+            new NameTable(),
+            GameProfile.Cod4);
+
+        CodeActionHandler.RedundantImport duplicate =
+            Assert.Single(CodeActionHandler.FindRemovableDuplicates(result, WholeFile));
+
+        Assert.Equal(1, duplicate.Range.Start.Line);
+        Assert.Equal("#include", duplicate.Directive);
+        Assert.Equal("maps\\_utility", duplicate.Path);
     }
 
     [Fact]

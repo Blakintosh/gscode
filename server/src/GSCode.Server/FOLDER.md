@@ -195,8 +195,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/CodeActionHandler.cs
 
 - Quick fixes over the open document. `FindRemovableDuplicates(result, selection)` returns the
-  #using directives whose (case-insensitive) path was already imported earlier and whose line
-  overlaps the selection → a "Remove duplicate #using" QuickFix deleting the line.
+  import directives — `#using` AND `#include` — whose (case-insensitive) path was already imported
+  earlier and whose line overlaps the selection → a "Remove duplicate ..." QuickFix deleting the
+  line, bound to the 5018 reported over it. Each directive keeps its own set, mirroring
+  `DuplicateImportLint`; no dialect has both forms, so they never meet.
   `FindMissingUsings(result, store, contextId, askingPath, selection)` returns the distinct
   script-relative paths (extension stripped) of visible files defining a qualified call whose
   namespace the file doesn't import (own-namespace calls and already-imported files skipped) →

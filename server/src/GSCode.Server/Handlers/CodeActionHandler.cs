@@ -63,9 +63,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         TextRange selection = request.Range.ToCore();
         List<CommandOrCodeAction> actions = [];
 
-        foreach ( UsingNode duplicate in FindRemovableDuplicates(result, selection) )
+        foreach ( RedundantImport duplicate in FindRemovableDuplicates(result, selection) )
         {
-            actions.Add(new CommandOrCodeAction(BuildRemoveAction(request.TextDocument.Uri, duplicate)));
+            actions.Add(new CommandOrCodeAction(BuildRemoveAction(
+                request.TextDocument.Uri,
+                duplicate,
+                ReportedAt(request, GscDiagnosticCode.DuplicateImport, duplicate.Range))));
         }
 
         NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
@@ -594,33 +597,57 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return true;
     }
 
+    /// <summary>An import already made earlier in the file, and so removable.</summary>
+    internal sealed record RedundantImport(string Path, string Directive, TextRange Range);
+
     /// <summary>
-    /// The #using directives whose path was already imported earlier in the file AND whose
-    /// line overlaps the selection — i.e. the redundant ones offered for removal.
+    /// The import directives whose path was already imported earlier in the file AND whose line
+    /// overlaps the selection — i.e. the redundant ones offered for removal.
+    ///
+    /// Covers <c>#include</c> as well as <c>#using</c>. It did not, which left the four merge games
+    /// reporting a duplicate import (5018) with no fix behind it at all — the lint is dialect-neutral
+    /// and this was not.
+    ///
+    /// Each directive keeps its own set, mirroring <c>DuplicateImportLint</c>, so the fix and the
+    /// diagnostic cannot disagree about what counts as a duplicate.
     /// </summary>
-    internal static List<UsingNode> FindRemovableDuplicates(ParseResult result, TextRange selection)
+    internal static List<RedundantImport> FindRemovableDuplicates(ParseResult result, TextRange selection)
     {
-        List<UsingNode> duplicates = [];
-        HashSet<string> seenPaths = new(StringComparer.Ordinal);
+        List<RedundantImport> duplicates = [];
+        HashSet<string> seenUsings = new(StringComparer.Ordinal);
+        HashSet<string> seenIncludes = new(StringComparer.Ordinal);
 
         foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            if ( element is not UsingNode usingNode )
-            {
-                continue;
-            }
+            string path;
+            string directive;
+            HashSet<string> seen;
 
-            string normalized = NormalizePath(usingNode.Path);
+            switch ( element )
+            {
+                case UsingNode usingNode:
+                    path = usingNode.Path;
+                    directive = "#using";
+                    seen = seenUsings;
+                    break;
+                case IncludeNode includeNode:
+                    path = includeNode.Path;
+                    directive = "#include";
+                    seen = seenIncludes;
+                    break;
+                default:
+                    continue;
+            }
 
             // Only the second-and-later occurrences of a path are redundant.
-            if ( seenPaths.Add(normalized) )
+            if ( seen.Add(NormalizePath(path)) )
             {
                 continue;
             }
 
-            if ( Overlaps(usingNode.Range, selection) )
+            if ( Overlaps(element.Range, selection) )
             {
-                duplicates.Add(usingNode);
+                duplicates.Add(new RedundantImport(path, directive, element.Range));
             }
         }
 
@@ -739,17 +766,27 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return new Position(line, 0);
     }
 
-    private static CodeAction BuildRemoveAction(DocumentUri uri, UsingNode usingNode)
+    private static CodeAction BuildRemoveAction(
+        DocumentUri uri,
+        RedundantImport duplicate,
+        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic? reported)
     {
         // Delete the whole line the directive sits on, including its trailing newline.
-        int line = usingNode.Range.Start.Line;
+        int line = duplicate.Range.Start.Line;
         TextRange lineRange = new(new Position(line, 0), new Position(line + 1, 0));
         TextEdit edit = new() { Range = lineRange.ToLsp(), NewText = "" };
 
         return new CodeAction
         {
-            Title = "Remove duplicate #using " + usingNode.Path,
+            Title = "Remove duplicate " + duplicate.Directive + " " + duplicate.Path,
             Kind = CodeActionKind.QuickFix,
+            Diagnostics = reported is null
+                ? null
+                : new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(reported),
+
+            // One way to remove a redundant import, and the line is provably dead — the same file is
+            // imported above. Safe for Auto Fix to take.
+            IsPreferred = reported is not null,
             Edit = SingleEdit(uri, edit),
         };
     }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
@@ -155,6 +156,43 @@ public class NamespaceImportFixTests
         Assert.Equal(2, imports.Count);
         Assert.All(imports, f => Assert.NotNull(f.Diagnostics));
         Assert.All(imports, f => Assert.False(f.IsPreferred));
+    }
+
+    [Fact]
+    public async Task TheDuplicateImportFixIsAttachedToItsDiagnostic()
+    {
+        // 5018 is reported over the duplicate's PATH range, which sits inside the directive's own
+        // range — so the action matches the diagnostic without either having to know about the
+        // other's bounds.
+        CodeActionHandler handler = BuildHandlerWith(
+            new ScriptDatabase(),
+            "#using scripts\\util;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n");
+
+        CodeActionParams request = new()
+        {
+            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(AskingPath) },
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(1, 0, 1, 20),
+            Context = new CodeActionContext
+            {
+                Diagnostics = new Container<LspDiagnostic>(new LspDiagnostic
+                {
+                    Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(1, 7, 1, 19),
+                    Code = new DiagnosticCode((int)GscDiagnosticCode.DuplicateImport),
+                    Message = "reported",
+                }),
+            },
+        };
+
+        CommandOrCodeActionContainer? container = await handler.Handle(request, CancellationToken.None);
+        CodeAction fix = Assert.Single(
+            [.. (container ?? []).Where(a => a.IsCodeAction).Select(a => a.CodeAction!)],
+            f => f.Title!.StartsWith("Remove duplicate", StringComparison.Ordinal));
+
+        Assert.Equal(
+            (int)GscDiagnosticCode.DuplicateImport, Assert.Single(fix.Diagnostics!).Code!.Value.Long);
+
+        // The line is provably dead — the same file is imported above — so Auto Fix may take it.
+        Assert.True(fix.IsPreferred);
     }
 
     [Fact]

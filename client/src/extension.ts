@@ -417,19 +417,22 @@ function registerIndexingStatusBar(
 
     languageClient.onNotification(
         "gscode/gameMismatch",
-        async (params: { selectedGame: string; selectedDisplayName: string; fileLooksLikeBlackOps3: boolean }) => {
-            // The games the extension can target, in release order, with their display names.
-            const games: { id: string; label: string }[] = [
-                { id: "cod4", label: "Call of Duty 4: Modern Warfare (2007)" },
-                { id: "waw", label: "Call of Duty: World at War (2008)" },
-                { id: "mw2", label: "Call of Duty: Modern Warfare 2 (2009)" },
-                { id: "bo1", label: "Call of Duty: Black Ops (2010)" },
-                { id: "mw3", label: "Call of Duty: Modern Warfare 3 (2011)" },
-                { id: "bo2", label: "Call of Duty: Black Ops II (2012)" },
-                { id: "ghosts", label: "Call of Duty: Ghosts (2013)" },
-                { id: "aw", label: "Call of Duty: Advanced Warfare (2014)" },
-                { id: "bo3", label: "Call of Duty: Black Ops III (2015)" },
-            ];
+        async (params: {
+            selectedGame: string;
+            selectedDisplayName: string;
+            fileLooksLikeBlackOps3: boolean;
+            supportedGames: { id: string; label: string }[];
+        }) => {
+            // The roster comes from the server, which is the only side that knows which profiles
+            // are actually implemented. This list used to be hardcoded here and had drifted to
+            // nine games, four of them cores with no dialect filled in — so picking Ghosts wrote
+            // gscode.game = "ghosts", which the setting's own enum rejects and the server then
+            // silently resolved back to Black Ops III.
+            const games = params.supportedGames ?? [];
+            if (games.length === 0) {
+                log.warn("Game mismatch reported without a supported-game list; not offering a switch.");
+                return;
+            }
 
             const looksLike = params.fileLooksLikeBlackOps3
                 ? "Black Ops III"

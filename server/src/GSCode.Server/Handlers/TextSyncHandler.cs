@@ -24,8 +24,22 @@ namespace GSCode.Server.Handlers;
 /// <summary>Payload for gscode/rawFolderWriteWarning.</summary>
 public sealed record RawFolderWriteWarningParams(string Path, string RelativePath, bool IsStockScript);
 
-/// <summary>Payload for gscode/gameMismatch: the selected game does not match what the file looks like.</summary>
-public sealed record GameMismatchParams(string SelectedGame, string SelectedDisplayName, bool FileLooksLikeBlackOps3);
+/// <summary>One game the extension can be switched to, as offered in the mismatch picker.</summary>
+public sealed record SupportedGame(string Id, string Label);
+
+/// <summary>
+/// Payload for gscode/gameMismatch: the selected game does not match what the file looks like.
+///
+/// Carries the roster rather than letting the client keep its own. Only the server knows which
+/// profiles are <see cref="GameProfile.Supported"/>, and the client's hardcoded list had drifted to
+/// nine games — four of them cores with no dialect filled in, so picking one wrote a value the
+/// gscode.game enum does not accept and the server then resolved back to BO3.
+/// </summary>
+public sealed record GameMismatchParams(
+    string SelectedGame,
+    string SelectedDisplayName,
+    bool FileLooksLikeBlackOps3,
+    IReadOnlyList<SupportedGame> SupportedGames);
 
 /// <summary>
 /// Document lifecycle: incremental text sync, ~250 ms debounced re-analysis on typing,
@@ -133,7 +147,33 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
         _server.SendNotification(
             "gscode/gameMismatch",
-            new GameMismatchParams(active.ShortName, active.DisplayName, shape == GameShape.BlackOps3));
+            new GameMismatchParams(
+                active.ShortName,
+                active.DisplayName,
+                shape == GameShape.BlackOps3,
+                SupportedGames()));
+    }
+
+    /// <summary>
+    /// The games the picker may offer, in release order. Exactly the supported profiles, which is
+    /// also exactly what the gscode.game enum accepts — the two lists are the same list now, so a
+    /// pick can no longer write a setting the schema rejects.
+    ///
+    /// Labelled with the release year, since the display names alone do not separate the two Modern
+    /// Warfare 2s or the two Modern Warfare 3s once the cores are ever promoted.
+    /// </summary>
+    private static List<SupportedGame> SupportedGames()
+    {
+        List<SupportedGame> games = [];
+        foreach ( GameProfile profile in GameProfile.All )
+        {
+            if ( profile.Supported )
+            {
+                games.Add(new SupportedGame(profile.ShortName, profile.DisplayName + " (" + profile.ReleaseYear + ")"));
+            }
+        }
+
+        return games;
     }
 
     public override Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken cancellationToken)

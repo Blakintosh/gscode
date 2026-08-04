@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -17,6 +17,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// absent (CI, and any machine without the mod tools) — each test reports which branch it took.
 /// </summary>
 [Trait("Category", "Corpus")]
+[Collection(GameProfileCollection.Name)]
 public class CorpusTests
 {
     private readonly ITestOutputHelper _output;

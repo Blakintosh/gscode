@@ -1,7 +1,8 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
+using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
@@ -26,6 +27,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// assert the cases already investigated and fixed, so they cannot come back.
 /// </summary>
 [Trait("Category", "Corpus")]
+[Collection(GameProfileCollection.Name)]
 public class CorpusDiagnosticSweepTests
 {
     private readonly ITestOutputHelper _output;
@@ -147,28 +149,36 @@ public class CorpusDiagnosticSweepTests
 
         foreach ( Target target in targets )
         {
-            // The active profile has to MOVE with the sweep. Several lints take an optional profile
-            // and fall back to GameProfile.Active, and the indexer enumerates through
-            // Active.ScriptGlobs — so sweeping CoD4 while BO3 is active measures BO3's rules against
-            // CoD4's scripts and reports the difference as defects.
-            //
-            // Global state, so it is restored afterwards and this class must not run beside anything
-            // that reads Active. Every corpus test carries Category=Corpus and is run as its own
-            // pass for exactly this kind of reason.
-            GameProfile previous = GameProfile.Active;
-            List<Finding> findings;
-            try
-            {
-                GameProfile.Select(target.Profile.ShortName);
-                findings = await SweepAsync(target);
-            }
-            finally
-            {
-                GameProfile.Select(previous.ShortName);
-            }
+            List<Finding> findings = await AsGameAsync(target.Profile, () => SweepAsync(target));
 
             WriteReport(target, findings);
             ReportToConsole(target, findings);
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="body"/> with a game selected, and puts the previous one back.
+    ///
+    /// The active profile has to MOVE with a sweep. Several lints take an optional profile and fall
+    /// back to <c>GameProfile.Active</c>, and the indexer enumerates through
+    /// <c>Active.ScriptGlobs</c> — so sweeping CoD4 while BO3 is active measures BO3's rules against
+    /// CoD4's scripts and reports the difference as defects.
+    ///
+    /// Global state, hence the restore — and hence this class must not run beside anything that reads
+    /// <c>Active</c>, which <see cref="GameProfileCollection"/> is what actually guarantees. It used
+    /// to be guaranteed by nothing at all.
+    /// </summary>
+    private static async Task<T> AsGameAsync<T>(GameProfile game, Func<Task<T>> body)
+    {
+        GameProfile previous = GameProfile.Active;
+        try
+        {
+            GameProfile.Select(game.ShortName);
+            return await body();
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
         }
     }
 
@@ -218,6 +228,191 @@ public class CorpusDiagnosticSweepTests
         Assert.Empty(findings
             .Where(f => f.Code == GscDiagnosticCode.NamespaceNotImported)
             .Select(f => $"{Path.GetFileName(f.Path)}: {f.Message}"));
+    }
+
+    [Fact]
+    public async Task NoStockCallIsReportedMissingAnInclude()
+    {
+        // The #include counterpart to NoNamespaceIsReportedUnimported, over every include game whose
+        // engine names 5026 will actually judge: CoD4 by its own verified library, MW2 by CoD4's
+        // standing in for the one it does not ship. WaW and BO1 are gated off and swept by
+        // MeasureIncludeRuleWithoutABuiltinLibrary instead, which counts rather than asserts.
+        //
+        // The stock scripts compile, so every hit is a false positive in ours until proven
+        // otherwise. Reported by name so a failure says WHICH function rather than a count.
+        // Off the shared factory, so this selection cannot drift from how the other sweeps are built.
+        // BO3 falls out on ImportStyle alone.
+        List<Target> judged =
+        [
+            .. Targets().Where(target =>
+                target.Profile.ImportStyle == ImportStyle.Include
+                && target.Profile.HasTrustedEngineNames),
+        ];
+
+        if ( judged.Count == 0 )
+        {
+            _output.WriteLine("SKIPPED: no include-dialect corpus configured (see GSCODE_CORPUS_<GAME>).");
+            return;
+        }
+
+        List<Finding> reported = [];
+
+        foreach ( Target target in judged )
+        {
+            List<Finding> findings = await AsGameAsync(target.Profile, () => SweepAsync(target));
+
+            _output.WriteLine($"{target.Profile.ShortName}: {target.Scripts().Count} scripts swept");
+            reported.AddRange(findings.Where(f => f.Code == GscDiagnosticCode.FunctionNotIncluded));
+        }
+
+        // Grouped by message before the assertion, because the useful question on a failure is
+        // never "how many" but "which NAME" — a shape shared by the top few is a language fact the
+        // rule has not learned, rather than a defect rate in scripts that shipped.
+        foreach ( IGrouping<string, Finding> group in reported
+            .GroupBy(f => f.Message)
+            .OrderByDescending(g => g.Count())
+            .Take(15) )
+        {
+            _output.WriteLine($"{group.Count(),6}x  {group.Key}  e.g. {Path.GetFileName(group.First().Path)}");
+        }
+
+        Assert.Empty(reported.Select(f => $"{Path.GetFileName(f.Path)}:{f.Line + 1}: {f.Message}"));
+    }
+
+    /// <summary>
+    /// The case 5026 was written for, against real scripts: a call into a file the caller does not
+    /// include, on MW2 — the game with no builtin library of its own.
+    ///
+    /// Both halves matter. The rule must FIRE here, which the corpus sweep cannot show (the sweep
+    /// asserts silence on files that are already correct), and it must fire on MW2 specifically,
+    /// which it did not until the engine-name fallback let it judge names there at all.
+    /// </summary>
+    [Fact]
+    public async Task ACallIntoAnUnincludedFileIsReportedOnMw2()
+    {
+        GameCorpus? mw2 = GameCorpusFixture.For(GameProfile.ByName("mw2")!);
+        if ( mw2 is null )
+        {
+            _output.WriteLine("SKIPPED: %GSCODE_CORPUS_MW2% not found.");
+            return;
+        }
+
+        // maps\mp\_utility.gsc includes common_scripts\utility and maps\mp\gametypes\_hud_util, and
+        // nothing that reaches maps\mp\_loot.gsc, where initLootDisplay is declared.
+        string path = Path.Combine(mw2.RawRoot, "maps", "mp", "_utility.gsc");
+        if ( !File.Exists(path) )
+        {
+            _output.WriteLine($"SKIPPED: {path} not in this corpus copy.");
+            return;
+        }
+
+        Diagnostic reported = await AsGameAsync(mw2.Profile, async () =>
+        {
+            PathResolver resolver = GameCorpusFixture.Resolver(mw2);
+            NameTable names = new();
+            ScriptDatabase database = new();
+            WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+
+            // The file as it ships, plus one call — which is exactly the edit that was reported as
+            // going unreported.
+            string edited = File.ReadAllText(path) + "\n\ncorpus_probe()\n{\n\tinitLootDisplay();\n}\n";
+            ParseResult result = GameCorpusFixture.Analyze(mw2, path, resolver, names, edited);
+
+            ImmutableArray<Diagnostic> lints = WorkspaceLints.LintsOnly(
+                result, ScriptLanguage.Gsc, path, database, resolver,
+                BuiltinApiSet.Load(ApiDirectory), ObjectFields.Load(ApiDirectory));
+
+            return Assert.Single(lints.Where(d => d.Code == GscDiagnosticCode.FunctionNotIncluded));
+        });
+
+        Assert.Equal(DiagnosticSeverity.Error, reported.Severity);
+        Assert.Contains("initLootDisplay", reported.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(@"maps\mp\_loot", reported.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// What 5026 would report on the include games whose engine names it does NOT trust, if it did.
+    /// Measurement rather than assertion: the gate exists because a name that is an undocumented
+    /// engine function AND a script function elsewhere gets blamed on the user, and counting is the
+    /// only way to know the price of lifting it for a game.
+    ///
+    /// It is what settled the current line. WaW reports 204 and BO1 387 — <c>lookatentity</c>,
+    /// <c>setteam</c>, <c>getthreat</c>, engine functions their own libraries lack — while MW2
+    /// reported 215, every one of them <c>abs</c>, which is why MW2 alone was given a fallback.
+    ///
+    /// The gate is lifted by asking about a PROFILE that claims a complete library, not by a mode
+    /// parameter on the rule: the production signature should not carry an argument that exists for
+    /// one test.
+    /// </summary>
+    [Fact]
+    public async Task MeasureIncludeRuleOnGamesItDoesNotJudge()
+    {
+        foreach ( GameCorpus corpus in GameCorpusFixture.Available() )
+        {
+            if ( corpus.Profile.ImportStyle != ImportStyle.Include || corpus.Profile.HasTrustedEngineNames )
+            {
+                continue;
+            }
+
+            await AsGameAsync(corpus.Profile, () => MeasureAsync(corpus));
+        }
+    }
+
+    private async Task<bool> MeasureAsync(GameCorpus corpus)
+    {
+        PathResolver resolver = GameCorpusFixture.Resolver(corpus);
+        NameTable names = new();
+        ScriptDatabase database = new();
+
+        WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+        await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+
+        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory, corpus.Profile);
+        IReadOnlyList<string> scripts = GameCorpusFixture.Scripts(corpus);
+
+        // The profile as it is, except that its own (incomplete) library is taken at its word — which
+        // is exactly the assumption under measurement.
+        GameProfile asIfTrusted = corpus.Profile with { HasCompleteBuiltinLibrary = true };
+
+        Dictionary<string, int> byName = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach ( string path in scripts )
+        {
+            ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
+            if ( language != ScriptLanguage.Gsc && language != ScriptLanguage.Csc )
+            {
+                continue;
+            }
+
+            try
+            {
+                ParseResult result = GameCorpusFixture.Analyze(corpus, path, resolver, names);
+                string contextId = ScriptDatabase.ContextIdOf(resolver.GetContext(path));
+
+                foreach ( Diagnostic diagnostic in IncludeUsageLint.Analyze(
+                    result, database.StoreFor(language), language, resolver, path,
+                    builtins.EngineNamesFor(language), contextId, asIfTrusted) )
+                {
+                    string name = diagnostic.Message.Split('\'')[1];
+                    byName[name] = byName.GetValueOrDefault(name) + 1;
+                }
+            }
+            catch ( Exception )
+            {
+                // Crashes are the lex/parse gate's business.
+            }
+        }
+
+        _output.WriteLine("");
+        _output.WriteLine($"########## {corpus.Profile.ShortName}: {byName.Values.Sum()} would-be 5026 across {scripts.Count} scripts, {byName.Count} distinct names");
+
+        foreach ( KeyValuePair<string, int> entry in byName.OrderByDescending(e => e.Value).Take(30) )
+        {
+            _output.WriteLine($"{entry.Value,6}x  {entry.Key}");
+        }
+
+        return true;
     }
 
     [Fact]

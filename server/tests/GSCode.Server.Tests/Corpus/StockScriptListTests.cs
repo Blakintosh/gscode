@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -38,6 +38,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// entirely for anyone without the game files.
 /// </summary>
 [Trait("Category", "Corpus")]
+[Collection(GameProfileCollection.Name)]
 public class StockScriptListTests
 {
     private readonly ITestOutputHelper _output;

@@ -102,8 +102,15 @@ internal static class GameCorpusFixture
     /// </summary>
     public static InsertCache Inserts { get; } = new();
 
-    /// <summary>Analyses one file with THIS game's profile — the whole point of the per-game sweep.</summary>
-    public static ParseResult Analyze(GameCorpus corpus, string path, PathResolver resolver, NameTable names)
+    /// <summary>
+    /// Analyses one file with THIS game's profile — the whole point of the per-game sweep.
+    /// <paramref name="source"/> stands in for the file's contents when given, which is how a test
+    /// asks what the editor would say about an EDIT to a shipped script rather than the script as
+    /// it is. Everything else — the insert provider, the shared header cache, the profile — has to
+    /// match the sweep, or the answer is about a different pipeline.
+    /// </summary>
+    public static ParseResult Analyze(
+        GameCorpus corpus, string path, PathResolver resolver, NameTable names, string? source = null)
     {
         PhysicalFileSystem fileSystem = new();
         ResolverInsertProvider inserts = new(resolver, resolver.GetContext(path), fileSystem, Inserts);
@@ -111,7 +118,7 @@ internal static class GameCorpusFixture
         return ScriptAnalysis.Analyze(
             path,
             corpus.Profile.LanguageFromPath(path),
-            SourceText.From(File.ReadAllText(path)),
+            SourceText.From(source ?? File.ReadAllText(path)),
             inserts,
             names,
             corpus.Profile,

@@ -1,4 +1,4 @@
-using GSCode.Core;
+﻿using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Resolution;
@@ -19,6 +19,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// the assertion has to survive a different one. Anything near zero means association broke again.
 /// </summary>
 [Trait("Category", "Corpus")]
+[Collection(GameProfileCollection.Name)]
 public class ScriptDocCorpusTests
 {
     private readonly ITestOutputHelper _output;

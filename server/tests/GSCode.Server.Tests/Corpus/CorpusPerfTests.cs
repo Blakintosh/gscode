@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Text;
@@ -27,6 +27,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// to be READ.
 /// </summary>
 [Trait("Category", "Perf")]
+[Collection(GameProfileCollection.Name)]
 public class CorpusPerfTests
 {
     private readonly ITestOutputHelper _output;

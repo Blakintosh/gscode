@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Core;
@@ -29,6 +29,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// hard number would be brittle. The gate is that the sweep RUNS and the script-side stays clean.
 /// </summary>
 [Trait("Category", "Corpus")]
+[Collection(GameProfileCollection.Name)]
 public class BuiltinHarvestTests
 {
     private readonly ITestOutputHelper _output;

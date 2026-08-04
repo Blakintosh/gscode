@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -21,6 +21,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// test reports which branch it took.
 /// </summary>
 [Trait("Category", "Corpus")]
+[Collection(GameProfileCollection.Name)]
 public class GameCorpusTests
 {
     private readonly ITestOutputHelper _output;

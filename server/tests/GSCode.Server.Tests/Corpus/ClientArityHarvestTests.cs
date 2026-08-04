@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -51,6 +51,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// about the DATA, and reporting it to a user as their mistake is what that decision ruled out.
 /// </summary>
 [Trait("Category", "Corpus")]
+[Collection(GameProfileCollection.Name)]
 public class ClientArityHarvestTests
 {
     private readonly ITestOutputHelper _output;

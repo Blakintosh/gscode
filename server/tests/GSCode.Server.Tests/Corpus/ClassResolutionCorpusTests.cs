@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -21,6 +21,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// methods and was the file that made the gap obvious.
 /// </summary>
 [Trait("Category", "Corpus")]
+[Collection(GameProfileCollection.Name)]
 public class ClassResolutionCorpusTests
 {
     private readonly ITestOutputHelper _output;

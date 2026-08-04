@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -40,15 +40,72 @@ public static class ArgumentCountLint
     {
         GameProfile game = profile ?? GameProfile.Active;
         ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        HashSet<string> ownNamespace = OwnNamespaceFunctions(result, store, contextId, path, askingNamespaces);
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
         foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            Walk(element, result, store, contextId, path, builtins, game, askingNamespaces, diagnostics, null);
+            Walk(element, result, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, diagnostics, null);
         }
 
         return diagnostics.ToImmutable();
+    }
+
+    /// <summary>
+    /// The function names an unqualified call in this file can reach without a qualifier, AS THEY ARE
+    /// SPELLED: the file's own declarations, plus everything else declared into the namespaces it
+    /// declares into. Used for one decision only — whether a script function shadows the builtin of
+    /// the same name.
+    ///
+    /// ORDINAL, and the corpus is why. Two shipped BO3 files settle it in opposite directions:
+    ///
+    /// * <c>scripts\shared\exploder_shared.gsc</c> declares <c>function earthquake()</c> taking
+    ///   nothing, and 9 lines later calls <c>Earthquake( magnitude, duration, origin, radius )</c> —
+    ///   the ENGINE function, four arguments;
+    /// * <c>scripts\zm\_zm.gsc</c> declares <c>function spawnSpectator()</c> and later calls
+    ///   <c>spawnSpectator()</c> — its OWN function, though BO3 also has an engine
+    ///   <c>SpawnSpectator( origin, angles )</c>.
+    ///
+    /// Both files ship and work, and no case-insensitive rule explains both: it would either break
+    /// the first (4 arguments to a 0-parameter function) or the second (0 arguments where 2 are
+    /// mandatory). The spelling is what tells the two apart, and the authors clearly wrote it that
+    /// way on purpose. Scoped deliberately to THIS tie-break — general script-to-script resolution
+    /// stays case-insensitive, as the rest of the codebase has it.
+    ///
+    /// Gathered once per file rather than asked per call, and that is the whole reason it is a set.
+    /// The builtin check it guards runs on nearly every call in a script, so a store lookup there
+    /// would put a scan of every record on the hot path once per engine call; this pays one pass per
+    /// namespace instead.
+    ///
+    /// The file's own declarations come from the parse in hand, so a function being typed right now
+    /// already shadows the builtin of the same name — the store holds the last INDEXED copy and lags
+    /// the buffer.
+    /// </summary>
+    private static HashSet<string> OwnNamespaceFunctions(
+        ParseResult result,
+        LanguageStore store,
+        string contextId,
+        string path,
+        ImmutableArray<string> askingNamespaces)
+    {
+        HashSet<string> names = new(StringComparer.Ordinal);
+
+        foreach ( FunctionSymbol function in result.Extraction.Functions )
+        {
+            names.Add(function.Name);
+        }
+
+        foreach ( string declared in askingNamespaces )
+        {
+            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(
+                store, contextId, path, declared, askingNamespaces) )
+            {
+                names.Add(function.Name);
+            }
+        }
+
+        return names;
     }
 
     /// <summary>
@@ -65,6 +122,7 @@ public static class ArgumentCountLint
         BuiltinApi builtins,
         GameProfile game,
         ImmutableArray<string> askingNamespaces,
+        HashSet<string> ownNamespace,
         ImmutableArray<Diagnostic>.Builder diagnostics,
         string? ownerClass)
     {
@@ -75,7 +133,7 @@ public static class ArgumentCountLint
 
         if ( node is CallNode call )
         {
-            Inspect(call, store, contextId, path, builtins, game, askingNamespaces, diagnostics, ownerClass);
+            Inspect(call, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, diagnostics, ownerClass);
         }
 
         // An arrow call is a method call by construction, so its arity is judged against the class
@@ -88,7 +146,7 @@ public static class ArgumentCountLint
 
         foreach ( AstNode child in AstSearch.ChildrenOf(node) )
         {
-            Walk(child, result, store, contextId, path, builtins, game, askingNamespaces, diagnostics, ownerClass);
+            Walk(child, result, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, diagnostics, ownerClass);
         }
     }
 
@@ -100,6 +158,7 @@ public static class ArgumentCountLint
         BuiltinApi builtins,
         GameProfile game,
         ImmutableArray<string> askingNamespaces,
+        HashSet<string> ownNamespace,
         ImmutableArray<Diagnostic>.Builder diagnostics,
         string? ownerClass)
     {
@@ -137,9 +196,16 @@ public static class ArgumentCountLint
             }
         }
 
-        // A builtin first: the engine owns these names, and a script function shadowing one is a
-        // different problem that 5013/5014 speak for.
-        if ( namespaceName is null && builtins.Find(name) is BuiltinFunction builtin )
+        // A builtin only when the CURRENT NAMESPACE does not declare the name, which is the engine's
+        // own order: builtins are the fallback after the current namespace, and `sys::` exists as an
+        // explicit alias precisely because a script function otherwise wins (see BuiltinFunction).
+        //
+        // This read the other way round, and judged an unqualified call against the engine library
+        // whatever the script said. `scripts\zm\_zm.gsc` declares `function spawnSpectator()` taking
+        // nothing and calls `self thread spawnSpectator()` 2,138 lines later; BO3's library has a
+        // SpawnSpectator( origin, angles ) with both parameters mandatory, so the call the file makes
+        // to its OWN function was reported as missing two arguments.
+        if ( namespaceName is null && !ownNamespace.Contains(name) && builtins.Find(name) is BuiltinFunction builtin )
         {
             // Only where the SIGNATURES can be trusted, which is a different claim from the name
             // list being complete — see HasReliableBuiltinSignatures. On the reconstructed libraries
@@ -158,7 +224,12 @@ public static class ArgumentCountLint
             contextId,
             path,
             game.KeyNamespace(namespaceName ?? ""),
-            name,
+
+            // LOWERCASED, because the store keys functions by FunctionSymbol.KeyName and matches it
+            // ordinally. Passing the source spelling meant this lookup found nothing for any call not
+            // written in lower case, so the script half of the rule — 5022 — silently never fired on
+            // a camelCase name, which in GSC is most of them.
+            name.ToLowerInvariant(),
             includePrivate: true,
             askingNamespaces: askingNamespaces);
 

@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.IO.Hashing;
 using System.Text;
@@ -290,10 +291,53 @@ public sealed class ScriptDatabase
     public static ulong ComputeContentHash(string text)
     {
         PerfTracker.Begin("commit.hash");
-        ulong hash = XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(text));
+
+        // Hashed in CHUNKS through a pooled buffer rather than by materialising the whole file as
+        // UTF-8 first. The old form allocated a byte array the size of the file for every file
+        // indexed, and anything over ~85 KB goes straight to the large-object heap — which is not
+        // compacted by default, so each one leaves a hole. On BO1 that is thousands of them, and the
+        // fragmented figure after an index dwarfs the live one.
+        //
+        // An Encoder, not repeated GetBytes calls: a chunk boundary can fall between the two halves
+        // of a surrogate pair, and only the stateful encoder carries the leading half across. The
+        // byte SEQUENCE is therefore identical to encoding the whole string at once, which is what
+        // keeps every hash already written to a cache valid.
+        XxHash64 hasher = new();
+        Encoder encoder = Encoding.UTF8.GetEncoder();
+
+        char[] chars = ArrayPool<char>.Shared.Rent(ChunkChars);
+        byte[] bytes = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(ChunkChars));
+
+        try
+        {
+            for ( int offset = 0; offset < text.Length; offset += ChunkChars )
+            {
+                int count = Math.Min(ChunkChars, text.Length - offset);
+                text.CopyTo(offset, chars, 0, count);
+
+                bool last = offset + count >= text.Length;
+                encoder.Convert(
+                    chars.AsSpan(0, count), bytes, flush: last, out _, out int written, out _);
+
+                hasher.Append(bytes.AsSpan(0, written));
+            }
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(chars);
+            ArrayPool<byte>.Shared.Return(bytes);
+        }
+
+        ulong hash = hasher.GetCurrentHashAsUInt64();
         PerfTracker.End();
         return hash;
     }
+
+    /// <summary>
+    /// Characters hashed per chunk. Sized so both pooled buffers stay well under the 85 KB
+    /// large-object threshold — the entire point of chunking.
+    /// </summary>
+    private const int ChunkChars = 8 * 1024;
 
     /// <summary>The stable string form of a context ("raw", "mod:name", "workspace:folder").</summary>
     public static string ContextIdOf(ResolutionContext context)

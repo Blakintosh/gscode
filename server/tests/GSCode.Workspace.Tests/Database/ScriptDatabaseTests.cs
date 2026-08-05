@@ -1,4 +1,6 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
+using System.IO.Hashing;
+using System.Text;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
@@ -217,5 +219,32 @@ public class ScriptDatabaseTests
 
         // A caller supplying no namespaces falls back to same-file visibility only.
         Assert.Empty(DatabaseQueries.LookupFunctions(database.Gsc, "raw", elsewhere, null, "hidden"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("main(){}")]
+    [InlineData("// a comment with unicode: éèê")]
+    public void ComputeContentHash_MatchesWholeStringUtf8(string text)
+    {
+        // Chunked hashing must produce the byte sequence encoding the WHOLE string would, or every
+        // hash already written to a workspace cache silently stops matching and every file
+        // re-analyses on the next start — with no error to notice.
+        ulong expected = XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(text));
+
+        Assert.Equal(expected, ScriptDatabase.ComputeContentHash(text));
+    }
+
+    [Fact]
+    public void ComputeContentHash_HandlesASurrogatePairSpanningAChunkBoundary()
+    {
+        // The case that makes a stateful Encoder necessary rather than repeated GetBytes calls: a
+        // chunk boundary landing between the two halves of a surrogate pair. Padded so the pair
+        // straddles the 8192-character chunk edge exactly.
+        string padded = new string('a', 8191) + "😀" + new string('b', 32);
+
+        Assert.Equal(
+            XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(padded)),
+            ScriptDatabase.ComputeContentHash(padded));
     }
 }

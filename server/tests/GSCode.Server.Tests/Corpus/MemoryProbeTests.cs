@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Symbols;
+using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
@@ -40,6 +41,106 @@ public class MemoryProbeTests
     public MemoryProbeTests(ITestOutputHelper output)
     {
         _output = output;
+    }
+
+    /// <summary>
+    /// The same watch, but with the SQLite cache ATTACHED — which is the configuration a real server
+    /// runs and the one the probe above cannot see.
+    ///
+    /// Reported symptom: memory falls after the post-index compaction and then climbs again. The
+    /// compaction happens before the cache writer has finished, and that writer is a single thread
+    /// that serializes and gzips every record it drains — <c>RecordSerializer.Serialize</c> makes
+    /// three full copies of each (JSON bytes, the gzip buffer, then <c>ToArray</c>), and a record
+    /// carrying a whole file's references and diagnostics is large enough for those to land on the
+    /// large-object heap.
+    ///
+    /// So the climb would be the drain, not a leak, and it would be invisible to any measurement
+    /// taken without a cache. This exists to prove or disprove that.
+    /// </summary>
+    [Fact]
+    public async Task EachGame_IndexWithCache_ThenWatchTheDrain()
+    {
+        if ( !GameCorpusFixture.Available().Any() && !CorpusFixture.Available )
+        {
+            _output.WriteLine("SKIPPED: no %GSCODE_CORPUS_<GAME>% found.");
+            return;
+        }
+
+        foreach ( GameCorpus corpus in GameCorpusFixture.Available() )
+        {
+            GameCorpus captured = corpus;
+            await ProbeWithCacheAsync(captured.Profile, () => GameCorpusFixture.Resolver(captured));
+        }
+    }
+
+    private async Task ProbeWithCacheAsync(GameProfile profile, Func<PathResolver> resolverFactory)
+    {
+        GameProfile previous = GameProfile.Active;
+        string databasePath = Path.Combine(Path.GetTempPath(), $"gscode-probe-{Guid.NewGuid():N}.db");
+
+        try
+        {
+            GameProfile.Select(profile.ShortName);
+
+            PathResolver resolver = resolverFactory();
+            NameTable names = new();
+            ScriptDatabase database = new();
+            WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+
+            await using SqliteCache cache = SqliteCache.Open(databasePath, "probe-identity");
+            indexer.UseCache(cache, cache.LoadAll());
+
+            Stopwatch watch = Stopwatch.StartNew();
+            IndexOutcome outcome = await indexer.IndexAsync(
+                IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+            watch.Stop();
+
+            _output.WriteLine("");
+            _output.WriteLine(
+                $"########## {profile.ShortName} WITH CACHE: {outcome.Total} files in {watch.Elapsed.TotalMilliseconds:F0} ms");
+            _output.WriteLine("        t   live MB   heap MB   frag MB   workset MB   gen2");
+
+            // Sampled straight after IndexAsync returns, which is exactly where the server compacts —
+            // and the writer is still draining behind it.
+            // UNFORCED, unlike every other sample in this file, and that is the entire point. The
+            // reported symptom is working set climbing after the post-index compaction, and a probe
+            // that forces a blocking collection every second erases the thing it is looking for.
+            // This watches what the OS would report — which is what a user sees.
+            for ( int second = 0; second <= WatchSeconds; second++ )
+            {
+                GCMemoryInfo live = GC.GetGCMemoryInfo();
+                _output.WriteLine(
+                    $"     {second,4}s {Mb(GC.GetTotalMemory(forceFullCollection: false)),9} "
+                    + $"{Mb(live.HeapSizeBytes),9} {Mb(live.FragmentedBytes),9} "
+                    + $"{Mb(Environment.WorkingSet),12} {GC.CollectionCount(2),6}");
+
+                if ( second < WatchSeconds )
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(1));
+                }
+            }
+
+            // Then once WITH a collection, so the two are side by side: whatever the gap is between
+            // the last unforced row and this one is garbage and holes, not retention.
+            (long Live, long Heap, long Fragmented, long WorkingSet, int Gen2) settled = Sample();
+            _output.WriteLine(
+                $"     forced   {Mb(settled.Live),9} {Mb(settled.Heap),9} {Mb(settled.Fragmented),9} "
+                + $"{Mb(settled.WorkingSet),12} {settled.Gen2,6}");
+
+            _output.WriteLine($"     dropped writes: {cache.DroppedWrites}");
+            GC.KeepAlive(indexer);
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
+            try
+            {
+                File.Delete(databasePath);
+            }
+            catch ( IOException )
+            {
+            }
+        }
     }
 
     [Fact]

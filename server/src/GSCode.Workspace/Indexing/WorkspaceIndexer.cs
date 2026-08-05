@@ -298,6 +298,21 @@ public sealed class WorkspaceIndexer
             headerCache: _headerCache);
         PerfTracker.End();
 
+        // A header is an index target in its own right (it matches *.gsh) AND an insert source, and
+        // those two paths each read and lexed it independently — the analysis above has already
+        // produced exactly what LoadInsert would go on to build from scratch. Seed it here instead.
+        //
+        // GetOrAdd rather than an assignment because the race is real and unordered: a .gsc that
+        // inserts this header may be processed first and populate the entry itself. Whoever arrives
+        // first wins, and the two would produce identical content anyway — same file, same lexer,
+        // same profile. So this halves the header work rather than eliminating it.
+        if ( result.Language == ScriptLanguage.Gsh )
+        {
+            _gshCache.GetOrAdd(
+                normalized,
+                new Lazy<InsertedFile?>(new InsertedFile(normalized, result.Text, result.Lexed.Tokens)));
+        }
+
         string relativePath = Resolver.GetScriptRelativePath(normalized, context);
 
         PerfTracker.Begin("index.commit");

@@ -137,7 +137,7 @@ public sealed class PathResolver
     public IEnumerable<string> EnumerateIndexTargets()
     {
         HashSet<string> seen = new(StringComparer.Ordinal);
-        ImmutableArray<string> patterns = GameProfile.Active.ScriptGlobs;
+        ImmutableArray<string> extensions = GameProfile.Active.ScriptExtensions;
 
         List<string> rootFolders = [];
         if ( _config.RawRoot is not null )
@@ -155,20 +155,63 @@ public sealed class PathResolver
             rootFolders.Add(folder);
         }
 
-        foreach ( string rootFolder in rootFolders )
+        foreach ( string rootFolder in OutermostRoots(rootFolders) )
         {
-            foreach ( string pattern in patterns )
+            // One walk per root for ALL extensions, rather than one per extension: the tree is
+            // large (160,382 files in a Black Ops 1 install) and walking it once per script
+            // extension re-read every directory three times to find the same 2,960 files.
+            foreach ( string file in _fileSystem.EnumerateFilesWithExtensions(rootFolder, extensions) )
             {
-                foreach ( string file in _fileSystem.EnumerateFiles(rootFolder, pattern) )
+                string normalized = PathUtil.NormalizeAbsolute(file);
+                if ( seen.Add(normalized) )
                 {
-                    string normalized = PathUtil.NormalizeAbsolute(file);
-                    if ( seen.Add(normalized) )
-                    {
-                        yield return normalized;
-                    }
+                    yield return normalized;
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// The given roots with any that sit inside another dropped.
+    ///
+    /// Nothing stopped them overlapping, and they routinely do: opening the tools install as a
+    /// workspace folder while rawPath points inside it walked the raw tree twice, and the caller's
+    /// <c>seen</c> set only deduplicated the RESULTS — the second walk still happened in full. A
+    /// contained root can contribute no file its container does not, so dropping it is free.
+    /// </summary>
+    private static List<string> OutermostRoots(List<string> rootFolders)
+    {
+        List<string> normalized = [];
+        foreach ( string folder in rootFolders )
+        {
+            normalized.Add(PathUtil.NormalizeAbsolute(folder));
+        }
+
+        List<string> outermost = [];
+        for ( int index = 0; index < rootFolders.Count; index++ )
+        {
+            bool covered = false;
+            for ( int other = 0; other < normalized.Count && !covered; other++ )
+            {
+                if ( other == index )
+                {
+                    continue;
+                }
+
+                // An exact duplicate is covered by whichever copy comes first, so that one survives
+                // and later copies do not — IsUnder is false for equal paths, hence the tie-break.
+                bool duplicate = string.Equals(normalized[index], normalized[other], StringComparison.Ordinal);
+                covered = PathUtil.IsUnder(normalized[index], normalized[other])
+                    || (duplicate && other < index);
+            }
+
+            if ( !covered )
+            {
+                outermost.Add(rootFolders[index]);
+            }
+        }
+
+        return outermost;
     }
 
     private List<string> RootsFor(ResolutionContext context)

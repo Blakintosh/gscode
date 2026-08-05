@@ -25,7 +25,7 @@ public class PathResolverTests
             .AddFile(@$"{Mods}\mod_b\scripts\b_only.gsc");
     }
 
-    private static PathResolver StandardResolver(FakeFileSystem fileSystem, params string[] workspaceFolders)
+    private static PathResolver StandardResolver(IFileSystem fileSystem, params string[] workspaceFolders)
     {
         RootConfig config = RootConfig.Create(
             rawEnabled: true, rawPath: Raw, modsPath: Mods, workspaceFolders: workspaceFolders, fileSystem: fileSystem);
@@ -231,5 +231,95 @@ public class PathResolverTests
         Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Mods}\mod_b\scripts\b_only.gsc"), targets);
         Assert.Contains(PathUtil.NormalizeAbsolute(@"C:\work\scripts\main.csc"), targets);
         Assert.Equal(targets.Count, new HashSet<string>(targets, StringComparer.Ordinal).Count);
+    }
+
+    /// <summary>
+    /// A workspace folder that CONTAINS the raw root must not make the raw tree be walked twice.
+    ///
+    /// The result was always correct — a `seen` set deduplicated the paths — but the second walk
+    /// still happened in full, and on a real install that tree is 160,382 files. So the assertion
+    /// worth making is about the WALK, not the output: the file system is asked once.
+    /// </summary>
+    [Fact]
+    public void EnumerateIndexTargets_WalksAContainedRootOnlyOnce()
+    {
+        CountingFileSystem fileSystem = new(StandardTree());
+
+        // The workspace folder is the install root, which raw lives inside.
+        PathResolver resolver = StandardResolver(fileSystem, InstallRoot, InstallRoot);
+
+        List<string> targets = [.. resolver.EnumerateIndexTargets()];
+
+        Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\util_shared.gsc"), targets);
+        Assert.Equal(targets.Count, new HashSet<string>(targets, StringComparer.Ordinal).Count);
+        Assert.Equal(1, fileSystem.EnumerationCount);
+    }
+
+    /// <summary>
+    /// Every script extension comes back from ONE walk, not one walk per extension.
+    ///
+    /// The distinction is invisible in the results and is the entire point of the change: three
+    /// extensions used to mean three full traversals of the same tree.
+    /// </summary>
+    [Fact]
+    public void EnumerateIndexTargets_FindsEveryExtensionInOneWalkPerRoot()
+    {
+        CountingFileSystem fileSystem = new(StandardTree().AddFile(@$"{Raw}\scripts\shared\client.csc"));
+        PathResolver resolver = StandardResolver(fileSystem);
+
+        List<string> targets = [.. resolver.EnumerateIndexTargets()];
+
+        Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\util_shared.gsc"), targets);
+        Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\client.csc"), targets);
+        Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\shared.gsh"), targets);
+
+        // Raw and mods are two roots, so two walks — never two per extension.
+        Assert.Equal(2, fileSystem.EnumerationCount);
+    }
+
+    /// <summary>Counts tree walks, so a test can assert on work done rather than on results.</summary>
+    private sealed class CountingFileSystem : IFileSystem
+    {
+        private readonly FakeFileSystem _inner;
+
+        public CountingFileSystem(FakeFileSystem inner)
+        {
+            _inner = inner;
+        }
+
+        public int EnumerationCount { get; private set; }
+
+        public bool FileExists(string absolutePath)
+        {
+            return _inner.FileExists(absolutePath);
+        }
+
+        public bool DirectoryExists(string absolutePath)
+        {
+            return _inner.DirectoryExists(absolutePath);
+        }
+
+        public string ReadAllText(string absolutePath)
+        {
+            return _inner.ReadAllText(absolutePath);
+        }
+
+        public DateTime GetLastWriteTimeUtc(string absolutePath)
+        {
+            return _inner.GetLastWriteTimeUtc(absolutePath);
+        }
+
+        public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
+        {
+            EnumerationCount++;
+            return _inner.EnumerateFiles(directory, searchPattern);
+        }
+
+        public IEnumerable<string> EnumerateFilesWithExtensions(
+            string directory, System.Collections.Immutable.ImmutableArray<string> extensions)
+        {
+            EnumerationCount++;
+            return _inner.EnumerateFilesWithExtensions(directory, extensions);
+        }
     }
 }

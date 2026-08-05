@@ -121,17 +121,25 @@ public class CorpusPerfTests
             measured = true;
         }
 
-        GameCorpus? cod4 = GameCorpusFixture.For(GameProfile.Cod4);
-        if ( cod4 is not null )
+        // CoD4 for the #include dialect, and BO1 because enumeration cost is not a function of
+        // script count: its raw folder holds 160,382 files to CoD4's few thousand, so it is the
+        // only corpus where the tree walk is a visible share of a cold index.
+        foreach ( GameProfile profile in new[] { GameProfile.Cod4, GameProfile.BlackOps } )
         {
-            GameCorpus captured = cod4;
+            GameCorpus? corpus = GameCorpusFixture.For(profile);
+            if ( corpus is null )
+            {
+                continue;
+            }
+
+            GameCorpus captured = corpus;
             await MeasureColdIndexAsync(captured.Profile, () => GameCorpusFixture.Resolver(captured));
             measured = true;
         }
 
         if ( !measured )
         {
-            _output.WriteLine("SKIPPED: neither %GSCODE_CORPUS_BO3% nor %GSCODE_CORPUS_COD4% found.");
+            _output.WriteLine("SKIPPED: no %GSCODE_CORPUS_BO3%, %GSCODE_CORPUS_COD4% or %GSCODE_CORPUS_BO1% found.");
         }
     }
 

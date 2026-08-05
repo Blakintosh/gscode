@@ -49,14 +49,30 @@ public sealed class FakeFileSystem : IFileSystem
 
     public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
     {
+        return EnumerateFilesWithExtensions(directory, [searchPattern.TrimStart('*')]);
+    }
+
+    public IEnumerable<string> EnumerateFilesWithExtensions(
+        string directory, System.Collections.Immutable.ImmutableArray<string> extensions)
+    {
         string normalizedDirectory = PathUtil.NormalizeAbsolute(directory);
-        string extension = searchPattern.TrimStart('*');
 
         foreach ( string file in _files.Keys )
         {
-            if ( PathUtil.IsUnder(file, normalizedDirectory) && file.EndsWith(extension, StringComparison.Ordinal) )
+            if ( !PathUtil.IsUnder(file, normalizedDirectory) )
             {
-                yield return file;
+                continue;
+            }
+
+            foreach ( string extension in extensions )
+            {
+                // Ordinal, matching the real one's OrdinalIgnoreCase in effect: keys here are
+                // already normalized to lower case by AddFile.
+                if ( file.EndsWith(extension, StringComparison.Ordinal) )
+                {
+                    yield return file;
+                    break;
+                }
             }
         }
     }

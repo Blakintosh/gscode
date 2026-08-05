@@ -376,6 +376,7 @@ public class CorpusDiagnosticSweepTests
         GameProfile asIfTrusted = corpus.Profile with { HasCompleteBuiltinLibrary = true };
 
         Dictionary<string, int> byName = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, List<string>> sitesByName = new(StringComparer.OrdinalIgnoreCase);
 
         foreach ( string path in scripts )
         {
@@ -396,6 +397,18 @@ public class CorpusDiagnosticSweepTests
                 {
                     string name = diagnostic.Message.Split('\'')[1];
                     byName[name] = byName.GetValueOrDefault(name) + 1;
+
+                    // The SITES, not merely a tally. These findings exist nowhere else: the sweep
+                    // reports run the real pipeline, where this rule is gated off for these games, so
+                    // their HTML carries no 5026 section at all. A count with no file to open is a
+                    // number nobody can act on, and acting on them is the entire point of measuring.
+                    if ( !sitesByName.TryGetValue(name, out List<string>? sites) )
+                    {
+                        sites = [];
+                        sitesByName[name] = sites;
+                    }
+
+                    sites.Add($"{Path.GetRelativePath(corpus.RawRoot, path)}:{diagnostic.Range.Start.Line + 1}");
                 }
             }
             catch ( Exception )
@@ -410,6 +423,13 @@ public class CorpusDiagnosticSweepTests
         foreach ( KeyValuePair<string, int> entry in byName.OrderByDescending(e => e.Value).Take(30) )
         {
             _output.WriteLine($"{entry.Value,6}x  {entry.Key}");
+
+            // Capped: a name with hundreds of sites is a language fact the rule has not learned yet,
+            // and the first handful show that as clearly as the whole list would.
+            foreach ( string site in sitesByName[entry.Key].Take(12) )
+            {
+                _output.WriteLine($"           {site}");
+            }
         }
 
         return true;

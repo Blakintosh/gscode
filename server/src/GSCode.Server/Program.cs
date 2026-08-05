@@ -601,10 +601,39 @@ static void LogMemoryReport(string phase, IndexOutcome outcome)
     report.AppendLine($"    managed live    {managedLive,8:F1} MB   (retained objects)");
     report.AppendLine($"    heap size       {heapSize,8:F1} MB");
     report.AppendLine($"    committed       {committed,8:F1} MB");
-    report.AppendLine($"    fragmented      {fragmented,8:F1} MB   (mostly large-object heap)");
+    report.AppendLine($"    fragmented      {fragmented,8:F1} MB");
+
+    // WHERE the fragmentation is, which the total cannot say. This line used to read "(mostly
+    // large-object heap)" — a guess that nothing had ever measured, and the two are treated very
+    // differently by the collector: gen2 holes are compacted by an ordinary blocking collection,
+    // LOH holes are not compacted at all unless LargeObjectHeapCompactionMode asks for it.
+    // Knowing which one holds the bulk decides whether the fix is fewer big arrays or fewer
+    // long-lived small ones.
+    AppendGenerations(report, info);
+
     report.Append($"    collections     gen0 {GC.CollectionCount(0):N0} · gen1 {GC.CollectionCount(1):N0} · gen2 {GC.CollectionCount(2):N0}");
 
     Log.Verbose("{MemoryReport}", report.ToString());
+}
+
+// Per-generation size and fragmentation, as of each generation's last collection.
+//
+// The runtime reports five entries in a fixed order — gen0, gen1, gen2, the large-object heap and
+// the pinned-object heap — but the count is not contractually five, so the names are indexed
+// defensively rather than assumed.
+static void AppendGenerations(System.Text.StringBuilder report, GCMemoryInfo info)
+{
+    string[] names = ["gen0", "gen1", "gen2", "LOH", "POH"];
+
+    ReadOnlySpan<GCGenerationInfo> generations = info.GenerationInfo;
+    for ( int index = 0; index < generations.Length; index++ )
+    {
+        string name = index < names.Length ? names[index] : $"gen{index}";
+        double size = generations[index].SizeAfterBytes / (1024.0 * 1024.0);
+        double holes = generations[index].FragmentationAfterBytes / (1024.0 * 1024.0);
+
+        report.AppendLine($"      {name,-4}          {holes,8:F1} MB free of {size,8:F1} MB");
+    }
 }
 
 

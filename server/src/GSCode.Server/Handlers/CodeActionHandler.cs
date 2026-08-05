@@ -120,6 +120,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     {
         DocumentUri uri = request.TextDocument.Uri;
 
+        // One per request, so the two call fixes below answer the questions that do not vary within
+        // it exactly once between them however many diagnostics the selection carries.
+        CallFixContext context = new(
+            result, target?.Store, target?.ContextId ?? "", target?.Path ?? "");
+
         // Tracked per directive. No dialect has both — #include is gated by import style — but the
         // bulk action names the directive in its title, and one shared list would let a CoD4 user
         // be offered "Remove all 3 unused #using directives".
@@ -154,8 +159,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 // code fired says where we LOOKED, not what the user should do about it.
                 case GscDiagnosticCode.ScriptFunctionNotFound:
                 case GscDiagnosticCode.BuiltinFunctionNotFound:
-                    foreach ( CodeAction fix in UnresolvedCallFixes(
-                        uri, result, target?.Store, target?.ContextId ?? "", target?.Path ?? "", diagnostic) )
+                    foreach ( CodeAction fix in UnresolvedCallFixes(uri, context, diagnostic) )
                     {
                         actions.Add(new CommandOrCodeAction(fix));
                     }
@@ -167,8 +171,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 // sensible offer is the import that brings it into scope. Creating a second copy of
                 // a function that already exists is exactly what a user must not be nudged into.
                 case GscDiagnosticCode.FunctionNotIncluded:
-                    foreach ( CodeAction fix in MissingIncludeFixes(
-                        uri, result, target?.Store, target?.ContextId ?? "", target?.Path ?? "", diagnostic) )
+                    foreach ( CodeAction fix in MissingIncludeFixes(uri, context, diagnostic) )
                     {
                         actions.Add(new CommandOrCodeAction(fix));
                     }
@@ -182,6 +185,109 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         // One click for the common cleanup, rather than N separate fixes.
         AddRemoveAllUnusedAction(uri, unusedUsings, "#using", actions);
         AddRemoveAllUnusedAction(uri, unusedIncludes, "#include", actions);
+    }
+
+    /// <summary>
+    /// The work the two call fixes need that does not vary WITHIN one code-action request, computed
+    /// at most once and reused by every diagnostic in it.
+    ///
+    /// A request carries every diagnostic overlapping the selection, so twenty unresolved calls on a
+    /// multi-line selection meant twenty scans of <c>store.AllRecords</c> — thousands of records,
+    /// tens of thousands of function symbols — and forty walks of the directive list, to answer
+    /// questions whose answers were identical every time.
+    ///
+    /// The name lookup is cached even when it finds NOTHING, which is the common case here: these
+    /// fixes exist for names that did not resolve, and repeating a fruitless full scan is the most
+    /// expensive way to learn the same thing twice.
+    ///
+    /// Deliberately not a cache with a lifetime. It is built per request and dropped with it, so it
+    /// cannot go stale against an edited buffer — the failure mode a longer-lived one would invite.
+    /// </summary>
+    internal sealed class CallFixContext
+    {
+        private readonly Dictionary<string, ImmutableArray<ResolvedFunction>> _declaring =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        private ImmutableArray<string>? _includedPaths;
+        private HashSet<string>? _existingUsings;
+        private Position? _usingInsertAt;
+        private Position? _includeInsertAt;
+
+        public CallFixContext(
+            ParseResult result,
+            LanguageStore? store,
+            string contextId,
+            string askingPath,
+            GameProfile? profile = null)
+        {
+            Result = result;
+            Store = store;
+            ContextId = contextId;
+            AskingPath = askingPath;
+            Profile = profile ?? GameProfile.Active;
+        }
+
+        public ParseResult Result { get; }
+        public LanguageStore? Store { get; }
+        public string ContextId { get; }
+        public string AskingPath { get; }
+        public GameProfile Profile { get; }
+
+        /// <summary>
+        /// Every visible declaration of a name, searched across all namespaces — which is the point
+        /// for both callers, since each already knows the location that was written does not have it.
+        /// </summary>
+        public ImmutableArray<ResolvedFunction> Declaring(string name)
+        {
+            if ( Store is null )
+            {
+                return [];
+            }
+
+            if ( !_declaring.TryGetValue(name, out ImmutableArray<ResolvedFunction> found) )
+            {
+                found = DatabaseQueries.LookupFunctions(
+                    Store, ContextId, AskingPath, null, name.ToLowerInvariant());
+
+                _declaring[name] = found;
+            }
+
+            return found;
+        }
+
+        public ImmutableArray<string> IncludedPaths
+        {
+            get { return _includedPaths ??= DatabaseQueries.IncludedScriptPaths(Result); }
+        }
+
+        public HashSet<string> ExistingUsings
+        {
+            get { return _existingUsings ??= GatherUsings(Result); }
+        }
+
+        public Position UsingInsertAt
+        {
+            get { return _usingInsertAt ??= ImportInsertionPoint<UsingNode>(Result); }
+        }
+
+        public Position IncludeInsertAt
+        {
+            get { return _includeInsertAt ??= ImportInsertionPoint<IncludeNode>(Result); }
+        }
+
+        private static HashSet<string> GatherUsings(ParseResult result)
+        {
+            HashSet<string> paths = new(StringComparer.Ordinal);
+            foreach ( AstNode element in result.Tree.Root.Elements )
+            {
+                if ( element is UsingNode usingNode )
+                {
+                    paths.Add(StripExtension(NormalizePath(usingNode.Path)));
+                }
+            }
+
+            return paths;
+        }
     }
 
     private static void AddRemoveAllUnusedAction(
@@ -381,12 +487,10 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// </summary>
     internal static List<CodeAction> UnresolvedCallFixes(
         DocumentUri uri,
-        ParseResult result,
-        LanguageStore? store,
-        string contextId,
-        string askingPath,
+        CallFixContext context,
         OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
     {
+        ParseResult result = context.Result;
         List<CodeAction> fixes = [];
         TextRange range = diagnostic.Range.ToCore();
         string name = TextAt(result, range);
@@ -406,7 +510,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             fixes.Add(BuildCreateFunctionAction(uri, result, name, diagnostic));
         }
 
-        if ( store is null )
+        if ( context.Store is null )
         {
             return fixes;
         }
@@ -414,7 +518,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         // Under a merge dialect an unqualified call already resolves by NAME across everything the
         // include graph pulled in, so a call that reached this diagnostic is not one an import would
         // fix. Only a namespace dialect can have the function present but out of reach.
-        if ( !GameProfile.Active.ResolvesByNamespace )
+        if ( !context.Profile.ResolvesByNamespace )
         {
             return fixes;
         }
@@ -425,16 +529,8 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             ownNamespaces.Add(declared);
         }
 
-        HashSet<string> existingUsings = new(StringComparer.Ordinal);
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            if ( element is UsingNode usingNode )
-            {
-                existingUsings.Add(StripExtension(NormalizePath(usingNode.Path)));
-            }
-        }
-
-        Position insertAt = ImportInsertionPoint<UsingNode>(result);
+        HashSet<string> existingUsings = context.ExistingUsings;
+        Position insertAt = context.UsingInsertAt;
         HashSet<string> offered = new(StringComparer.Ordinal);
 
         // Gathered before any action is built, because IsPreferred is init-only and whether ONE of
@@ -443,8 +539,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         // Namespace left null: every namespace is searched, which is the whole point — the caller
         // already knows the one that was written does not have it.
-        foreach ( ResolvedFunction resolved in DatabaseQueries.LookupFunctions(
-            store, contextId, askingPath, null, name.ToLowerInvariant()) )
+        foreach ( ResolvedFunction resolved in context.Declaring(name) )
         {
             string? namespaceName = resolved.Function.Namespace;
             if ( namespaceName is null || ownNamespaces.Contains(namespaceName) )
@@ -503,25 +598,23 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// which the client is free not to send back; deriving the list again is what keeps the fix
     /// offering every file the lint considered.
     /// </summary>
-    /// <param name="profile">
-    /// The dialect to answer for, defaulting to the active one. Passed explicitly by the tests so
-    /// they need not mutate the global selection, which every other test in the assembly reads.
+    /// <param name="context">
+    /// The per-request state, which also carries the dialect to answer for. The tests set that
+    /// explicitly so they need not mutate the global profile selection, which every other test in
+    /// the assembly reads.
     /// </param>
     internal static List<CodeAction> MissingIncludeFixes(
         DocumentUri uri,
-        ParseResult result,
-        LanguageStore? store,
-        string contextId,
-        string askingPath,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic,
-        GameProfile? profile = null)
+        CallFixContext context,
+        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
     {
         List<CodeAction> fixes = [];
-        if ( store is null || (profile ?? GameProfile.Active).ResolvesByNamespace )
+        if ( context.Store is null || context.Profile.ResolvesByNamespace )
         {
             return fixes;
         }
 
+        ParseResult result = context.Result;
         TextRange range = diagnostic.Range.ToCore();
         string name = TextAt(result, range);
         if ( name.Length == 0 || !IsIdentifier(name) )
@@ -531,7 +624,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         // The same normalized form the lint and the resolver use, rather than a second rule for
         // include paths that would have to stay in step with theirs.
-        ImmutableArray<string> existingIncludes = DatabaseQueries.IncludedScriptPaths(result);
+        ImmutableArray<string> existingIncludes = context.IncludedPaths;
 
         // Sorted and deduplicated by construction. Alphabetical matters: it is the order the lint
         // names them in, and two lists of the same files in two orders read as two different
@@ -540,8 +633,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         // Namespace left null: a merge dialect keys every function without one, so this is the same
         // lookup the lint made.
-        foreach ( ResolvedFunction resolved in DatabaseQueries.LookupFunctions(
-            store, contextId, askingPath, null, name.ToLowerInvariant()) )
+        foreach ( ResolvedFunction resolved in context.Declaring(name) )
         {
             if ( resolved.Record.RelativePath.Length == 0 )
             {
@@ -555,7 +647,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        Position insertAt = ImportInsertionPoint<IncludeNode>(result);
+        Position insertAt = context.IncludeInsertAt;
         foreach ( string candidate in candidates )
         {
             TextEdit edit = new()

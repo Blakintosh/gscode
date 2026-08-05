@@ -347,12 +347,11 @@ public class CodeActionHandlerTests
     {
         ParseResult result = AnalyzeAt(source, AskingPath);
 
+        CodeActionHandler.CallFixContext context = new(result, database?.Gsc, "raw", AskingPath);
+
         return CodeActionHandler.UnresolvedCallFixes(
             DocumentUri.FromFileSystemPath(AskingPath),
-            result,
-            database?.Gsc,
-            "raw",
-            AskingPath,
+            context,
             Reported(GscDiagnosticCode.BuiltinFunctionNotFound, line, start, end));
     }
 
@@ -522,14 +521,13 @@ public class CodeActionHandlerTests
         int line = Array.FindIndex(lines, text => text.Contains(called + "()", StringComparison.Ordinal));
         int start = lines[line].IndexOf(called, StringComparison.Ordinal);
 
+        CodeActionHandler.CallFixContext context = new(
+            result, database?.Gsc, "raw", Cod4AskingPath, Cod4);
+
         return CodeActionHandler.MissingIncludeFixes(
             DocumentUri.FromFileSystemPath(Cod4AskingPath),
-            result,
-            database?.Gsc,
-            "raw",
-            Cod4AskingPath,
-            Reported(GscDiagnosticCode.FunctionNotIncluded, line, start, start + called.Length),
-            Cod4);
+            context,
+            Reported(GscDiagnosticCode.FunctionNotIncluded, line, start, start + called.Length));
     }
 
     [Fact]

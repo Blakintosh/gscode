@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -36,6 +36,7 @@ public static class DevBlockCallLint
         BuiltinApi builtins)
     {
         ImmutableArray<TextRange> devRegions = DevRegions(result);
+        FunctionLookupCache lookups = new(store, askingContextId, askingPath, askingNamespaces);
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
@@ -52,9 +53,7 @@ public static class DevBlockCallLint
                 continue;
             }
 
-            ImmutableArray<ResolvedFunction> resolved = DatabaseQueries.LookupFunctions(
-                store, askingContextId, askingPath, entry.Key.Namespace, entry.Key.Name,
-                askingNamespaces: askingNamespaces);
+            ImmutableArray<ResolvedFunction> resolved = lookups.Lookup(entry.Key.Namespace, entry.Key.Name);
 
             if ( resolved.Length == 0 )
             {

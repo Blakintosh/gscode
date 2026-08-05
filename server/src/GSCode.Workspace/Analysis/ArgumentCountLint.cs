@@ -41,12 +41,13 @@ public static class ArgumentCountLint
         GameProfile game = profile ?? GameProfile.Active;
         ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
         HashSet<string> ownNamespace = OwnNamespaceFunctions(result, store, contextId, path, askingNamespaces);
+        FunctionLookupCache lookups = new(store, contextId, path, askingNamespaces);
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
         foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            Walk(element, result, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, diagnostics, null);
+            Walk(element, result, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, lookups, diagnostics, null);
         }
 
         return diagnostics.ToImmutable();
@@ -123,6 +124,7 @@ public static class ArgumentCountLint
         GameProfile game,
         ImmutableArray<string> askingNamespaces,
         HashSet<string> ownNamespace,
+        FunctionLookupCache lookups,
         ImmutableArray<Diagnostic>.Builder diagnostics,
         string? ownerClass)
     {
@@ -133,7 +135,7 @@ public static class ArgumentCountLint
 
         if ( node is CallNode call )
         {
-            Inspect(call, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, diagnostics, ownerClass);
+            Inspect(call, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, lookups, diagnostics, ownerClass);
         }
 
         // An arrow call is a method call by construction, so its arity is judged against the class
@@ -146,7 +148,7 @@ public static class ArgumentCountLint
 
         foreach ( AstNode child in AstSearch.ChildrenOf(node) )
         {
-            Walk(child, result, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, diagnostics, ownerClass);
+            Walk(child, result, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, lookups, diagnostics, ownerClass);
         }
     }
 
@@ -159,6 +161,7 @@ public static class ArgumentCountLint
         GameProfile game,
         ImmutableArray<string> askingNamespaces,
         HashSet<string> ownNamespace,
+        FunctionLookupCache lookups,
         ImmutableArray<Diagnostic>.Builder diagnostics,
         string? ownerClass)
     {
@@ -219,19 +222,12 @@ public static class ArgumentCountLint
             return;
         }
 
-        ImmutableArray<ResolvedFunction> candidates = DatabaseQueries.LookupFunctions(
-            store,
-            contextId,
-            path,
-            game.KeyNamespace(namespaceName ?? ""),
-
-            // LOWERCASED, because the store keys functions by FunctionSymbol.KeyName and matches it
-            // ordinally. Passing the source spelling meant this lookup found nothing for any call not
-            // written in lower case, so the script half of the rule — 5022 — silently never fired on
-            // a camelCase name, which in GSC is most of them.
-            name.ToLowerInvariant(),
-            includePrivate: true,
-            askingNamespaces: askingNamespaces);
+        // LOWERCASED, because the store keys functions by FunctionSymbol.KeyName and matches it
+        // ordinally. Passing the source spelling meant this lookup found nothing for any call not
+        // written in lower case, so the script half of the rule — 5022 — silently never fired on a
+        // camelCase name, which in GSC is most of them.
+        ImmutableArray<ResolvedFunction> candidates = lookups.Lookup(
+            game.KeyNamespace(namespaceName ?? ""), name.ToLowerInvariant(), includePrivate: true);
 
         // Nothing found, or several possibilities: 5013/5014 report the first and 5007 the second,
         // and picking one of several signatures to judge against would be a guess.

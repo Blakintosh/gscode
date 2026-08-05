@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -167,6 +167,7 @@ public static class FunctionResolutionLint
         diagnostics.AddRange(diagnosticsForMissingFiles);
 
         Dictionary<SymbolKey, SymbolKey> canonicalCache = [];
+        FunctionLookupCache lookups = new(store, askingContextId, askingPath, ownNamespaces);
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -208,9 +209,8 @@ public static class FunctionResolutionLint
             }
 
             // Resolves to a script function (private included) — nothing to report.
-            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                store, askingContextId, askingPath, canonical.Namespace, canonical.Name,
-                includePrivate: true, askingNamespaces: ownNamespaces);
+            ImmutableArray<ResolvedFunction> found =
+                lookups.Lookup(canonical.Namespace, canonical.Name, includePrivate: true);
             if ( found.Length > 0 )
             {
                 continue;

@@ -57,8 +57,20 @@ public static class DatabaseQueries
         // An empty asking path means "no asking file", which sees no private functions at all.
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // The files declaring this NAME, not every file. Asked of the declaration index, which keys
+        // on the same lowercase-canonical FunctionSymbol.KeyName this method compares ordinally, so
+        // the candidate set is exactly what the old scan of store.AllRecords produced — and every
+        // filter below it is unchanged. The index narrows where to look and decides nothing.
+        //
+        // It is here because this method is called once per CALL SITE by four separate lints, and
+        // walking thirty thousand symbols each time made those four 97% of the cross-file lint cost.
+        foreach ( string declaringPath in store.FilesDeclaring(keyName) )
         {
+            if ( !store.TryGet(declaringPath, out ScriptRecord record) )
+            {
+                continue;
+            }
+
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
             {
                 continue;

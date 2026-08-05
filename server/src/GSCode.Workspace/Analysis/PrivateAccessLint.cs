@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -34,6 +34,13 @@ public static class PrivateAccessLint
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 
+        // Two caches, because the two questions below differ in more than includePrivate: the second
+        // deliberately passes NO asking namespaces, so that it sees private functions this file
+        // cannot reach — which is the whole point of asking it. One memo keyed only on the arguments
+        // that vary would conflate them.
+        FunctionLookupCache visibleLookups = new(store, askingContextId, askingPath, askingNamespaces);
+        FunctionLookupCache anyLookups = new(store, askingContextId, askingPath);
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
             if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
@@ -62,16 +69,14 @@ public static class PrivateAccessLint
                 continue;
             }
 
-            ImmutableArray<ResolvedFunction> visible = DatabaseQueries.LookupFunctions(
-                store, askingContextId, askingPath, entry.Key.Namespace, entry.Key.Name,
-                askingNamespaces: askingNamespaces);
+            ImmutableArray<ResolvedFunction> visible = visibleLookups.Lookup(entry.Key.Namespace, entry.Key.Name);
             if ( visible.Length > 0 )
             {
                 continue;
             }
 
-            ImmutableArray<ResolvedFunction> includingPrivate = DatabaseQueries.LookupFunctions(
-                store, askingContextId, askingPath, entry.Key.Namespace, entry.Key.Name, includePrivate: true);
+            ImmutableArray<ResolvedFunction> includingPrivate =
+                anyLookups.Lookup(entry.Key.Namespace, entry.Key.Name, includePrivate: true);
 
             foreach ( ResolvedFunction candidate in includingPrivate )
             {

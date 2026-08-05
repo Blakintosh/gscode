@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 
@@ -13,6 +13,7 @@ public sealed class LanguageStore
 {
     private readonly ConcurrentDictionary<string, ScriptRecord> _records = new(StringComparer.Ordinal);
     private readonly ReferenceIndex _referenceIndex = new();
+    private readonly DeclarationIndex _declarationIndex = new();
     private readonly ClassGraph _classGraph = new();
 
     /// <summary>
@@ -52,6 +53,7 @@ public sealed class LanguageStore
             _records.TryGetValue(record.Path, out ScriptRecord? previous);
             _records[record.Path] = record;
             _referenceIndex.Apply(record.Path, previous?.References ?? [], record.References);
+            _declarationIndex.Apply(record.Path, previous?.Functions ?? [], record.Functions);
             _classGraph.Apply(record.Path, record.Classes);
         }
     }
@@ -64,9 +66,16 @@ public sealed class LanguageStore
             if ( _records.TryRemove(normalizedPath, out ScriptRecord? previous) )
             {
                 _referenceIndex.Apply(normalizedPath, previous.References, []);
+                _declarationIndex.Apply(normalizedPath, previous.Functions, []);
                 _classGraph.Remove(normalizedPath);
             }
         }
+    }
+
+    /// <summary>Paths of the files DECLARING a function key name — see <see cref="DeclarationIndex"/>.</summary>
+    public ImmutableArray<string> FilesDeclaring(string keyName)
+    {
+        return _declarationIndex.FilesDeclaring(keyName);
     }
 
     /// <summary>Paths of every file that mentions the key (definition sites included).</summary>

@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
@@ -140,7 +140,13 @@ public sealed class WorkspaceIndexer
         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
         PerfTracker.Begin("index.total");
 
+        // Enumeration is fully serial and blocks every worker, so it gets its own scope: on a cold
+        // run it is pure I/O with no CPU in flight, and it was previously folded into index.total
+        // where it could not be told apart from the analysis it precedes.
+        PerfTracker.Begin("index.enumerate");
         List<string> targets = [.. Resolver.EnumerateIndexTargets()];
+        PerfTracker.End();
+
         progress.Started(targets.Count);
 
         int completed = 0;
@@ -228,19 +234,28 @@ public sealed class WorkspaceIndexer
     {
         string normalized = PathUtil.NormalizeAbsolute(path);
 
+        // The scopes below split the per-file cost the way the cold path actually spends it: read is
+        // blocking I/O inside the parallel body, analyse is the four-phase pipeline, commit is where
+        // the store's single write gate is waited on, and enqueue hands off to the cache writer.
+        // Every one is [Conditional] and absent from an ordinary build.
         string content;
+        PerfTracker.Begin("index.read");
         try
         {
             content = _fileSystem.ReadAllText(normalized);
         }
         catch ( IOException )
         {
+            PerfTracker.End();
             return new FileOutcome(Restored: false, Record: null);
         }
         catch ( UnauthorizedAccessException )
         {
+            PerfTracker.End();
             return new FileOutcome(Restored: false, Record: null);
         }
+
+        PerfTracker.End();
 
         if ( content.Length > MaxAnalysedCharacters )
         {
@@ -255,14 +270,24 @@ public sealed class WorkspaceIndexer
         // Restore from cache when the on-disk content matches what was analysed before.
         if ( allowRestore && _restored.TryGetValue(normalized, out ScriptRecord? cached) )
         {
-            if ( cached.ContentHash == ScriptDatabase.ComputeContentHash(content) )
+            PerfTracker.Begin("index.restore");
+            bool matches = cached.ContentHash == ScriptDatabase.ComputeContentHash(content);
+            if ( matches )
             {
                 _database.CommitRecord(cached);
+            }
+
+            PerfTracker.End();
+
+            if ( matches )
+            {
                 return new FileOutcome(Restored: true, Record: cached);
             }
         }
 
         ResolutionContext context = Resolver.GetContext(normalized);
+
+        PerfTracker.Begin("index.analyse");
         ParseResult result = ScriptAnalysis.Analyze(
             normalized,
             ScriptAnalysis.LanguageFromPath(normalized),
@@ -271,10 +296,18 @@ public sealed class WorkspaceIndexer
             _names,
             profile: null,
             headerCache: _headerCache);
+        PerfTracker.End();
 
         string relativePath = Resolver.GetScriptRelativePath(normalized, context);
+
+        PerfTracker.Begin("index.commit");
         ScriptRecord record = _database.Commit(result, context, isDirty: false, relativePath);
+        PerfTracker.End();
+
+        PerfTracker.Begin("index.enqueue");
         _cache?.Enqueue(record);
+        PerfTracker.End();
+
         return new FileOutcome(Restored: false, Record: record);
     }
 

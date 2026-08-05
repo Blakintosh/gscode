@@ -95,6 +95,53 @@ Read the shares rather than the absolute milliseconds: the per-lint breakdown ne
 `-p:GscodeInstrumentation=true`, which costs something itself, and this sweep is sequential where
 the corpus one is parallel.
 
+## Measured: COLD INDEXING, the first-run path
+
+`CorpusPerfTests.ColdIndex_WhereTheTimeGoes` times `IndexAsync` with **no cache attached**, so every
+file is read and analysed and none is restored. Until 2026-08-04 nothing timed indexing at all — the
+5.5 s figure further down was read by hand off the server's own log line, and every `IndexAsync` in
+the test suite was setup, outside any stopwatch.
+
+Three runs, uninstrumented:
+
+| | files | wall-clock |
+|---|---:|---|
+| bo3 | 1,085 | 2,065 / 2,101 / 2,104 ms |
+| cod4 | 904 | 898 / 855 / 807 ms |
+
+**Stable to about 2%**, unlike the lint sweep next door — a cold index is thousands of files, so the
+per-file noise that swamps a sub-millisecond median averages out. Comparisons here can be made on
+one run; the lint numbers cannot.
+
+The stage breakdown needs `-p:GscodeInstrumentation=true`. Per-file scopes are summed ACROSS
+`ProcessorCount - 1` threads, so they are shares of thread-time, not of wall-clock; `index.enumerate`
+is serial and is reported against wall-clock instead. `extract.*` are nested inside `index.analyse`
+and are listed but never added to the total.
+
+| stage | bo3 (of thread-time) | cod4 (of thread-time) |
+|---|---|---|
+| `index.analyse` | 86–90% | 70–78% |
+| `index.commit` | 7.6–11.4% | **18.9–25.9%** |
+| `index.read` | 2.2–2.8% | 3.1–4.9% |
+| `index.enqueue` | ~0% | ~0% |
+| `index.enumerate` | 121–130 ms, **5.8% of WALL** | 30 ms, **3.5% of WALL** |
+
+Achieved parallelism is 20.6–21.0x against a ceiling of 23. Three things this settles:
+
+- **Enumeration is not the bottleneck.** The `roots × globs` duplicate walk in
+  `PathResolver.EnumerateIndexTargets` costs 121–130 ms on BO3 and 30 ms on CoD4. Removing the
+  duplication entirely would save perhaps 85 ms of a 2,100 ms run.
+- **`index.commit` is the one worth attention**, and much more so on CoD4 — a fifth to a quarter of
+  thread-time against BO3's tenth. That is `BuildRecord` plus `LanguageStore.Upsert`, which takes one
+  process-wide write gate and holds it across per-file hashing in three index diffs. A global lock is
+  exactly what inflates thread-time at 21x parallelism.
+- **`index.enqueue` is free** — but this measurement attaches no cache, so it says nothing about the
+  SQLite writer. Measuring that needs a run with `UseCache`.
+
+Memory after a cold index differs sharply between the two: CoD4 reports 163–231 MB fragmented
+against 57 MB live, BO3 essentially none. Not yet explained, and worth a look before trusting either
+number.
+
 ### How much to trust a single run
 
 Three runs of identical code and methodology, cod4:

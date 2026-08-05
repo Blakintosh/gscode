@@ -90,6 +90,129 @@ public class CorpusPerfTests
     }
 
     /// <summary>
+    /// Where a COLD index spends its time — the path that runs before any cache exists, and the one
+    /// the &lt; 60 s budget in PERF.md is about.
+    ///
+    /// Nothing timed it until now. The only recorded cold figure was read by hand off the server's
+    /// own log line, and the sweeps in this class build an index solely as a precondition, outside
+    /// every stopwatch. So a change to enumeration, reading, the analysis pipeline or the commit path
+    /// could not be attributed to anything.
+    ///
+    /// Cold means NO CACHE: `UseCache` is never called, so every file is read and analysed and none
+    /// is restored. That is deliberate — a warm run measures the restore path instead, which is a
+    /// different question with a different answer.
+    ///
+    /// The scope breakdown (enumerate / read / analyse / commit / enqueue) needs
+    /// `-p:GscodeInstrumentation=true`; without it the totals still stand and the table says so.
+    /// Enumeration is the one to watch: it is fully serial and blocks every worker, so it shows up
+    /// as wall-clock with no parallelism behind it.
+    ///
+    /// Reporting, not asserting, like the rest of this class — and one run does not support a point.
+    /// Totals here swing by tens of percent; take three and compare ranges.
+    /// </summary>
+    [Fact]
+    public async Task ColdIndex_WhereTheTimeGoes()
+    {
+        bool measured = false;
+
+        if ( CorpusFixture.Available )
+        {
+            await MeasureColdIndexAsync(GameProfile.BlackOps3, CorpusFixture.Resolver);
+            measured = true;
+        }
+
+        GameCorpus? cod4 = GameCorpusFixture.For(GameProfile.Cod4);
+        if ( cod4 is not null )
+        {
+            GameCorpus captured = cod4;
+            await MeasureColdIndexAsync(captured.Profile, () => GameCorpusFixture.Resolver(captured));
+            measured = true;
+        }
+
+        if ( !measured )
+        {
+            _output.WriteLine("SKIPPED: neither %GSCODE_CORPUS_BO3% nor %GSCODE_CORPUS_COD4% found.");
+        }
+    }
+
+    private async Task MeasureColdIndexAsync(GameProfile profile, Func<PathResolver> resolverFactory)
+    {
+        GameProfile previous = GameProfile.Active;
+        try
+        {
+            GameProfile.Select(profile.ShortName);
+
+            // Everything per-run: a fresh resolver, NameTable and database, so no interning or
+            // record from a previous game or a previous run is doing any of the work.
+            PathResolver resolver = resolverFactory();
+            NameTable names = new();
+            ScriptDatabase database = new();
+            WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+
+            PerfTracker.Reset();
+
+            Stopwatch watch = Stopwatch.StartNew();
+            IndexOutcome outcome = await indexer.IndexAsync(
+                IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+            watch.Stop();
+
+            Dictionary<string, (double Milliseconds, long Count)> scopes = [];
+            PerfTracker.Snapshot(scopes);
+
+            _output.WriteLine("");
+            _output.WriteLine(
+                $"########## {profile.ShortName} cold index: {outcome.Total} files in {watch.Elapsed.TotalMilliseconds:F0} ms "
+                + $"({outcome.Restored} restored, {outcome.SkippedOversized} oversized)");
+
+            if ( scopes.Count == 0 )
+            {
+                _output.WriteLine("     scopes: not instrumented (rebuild with -p:GscodeInstrumentation=true)");
+                return;
+            }
+
+            // Two denominators, because the scopes are not on one clock. Per-file scopes are summed
+            // across ProcessorCount - 1 threads, so dividing them by wall-clock produces percentages
+            // over 100 and means nothing; they are shares of the THREAD-TIME total. index.enumerate
+            // is serial and holds wall-clock on its own, so it is reported against that instead.
+            //
+            // index.read/analyse/commit/enqueue are the top-level per-file stages. Anything else
+            // (extract.*) is a sub-scope nested INSIDE analyse, so it is listed but not summed —
+            // adding it to the total would count the same microseconds twice.
+            string[] topLevel = ["index.read", "index.analyse", "index.commit", "index.enqueue", "index.restore"];
+            double threadTime = scopes.Where(s => topLevel.Contains(s.Key)).Sum(s => s.Value.Milliseconds);
+
+            foreach ( KeyValuePair<string, (double Milliseconds, long Count)> scope in scopes
+                .Where(s => s.Key != "index.total")
+                .OrderByDescending(s => s.Value.Milliseconds) )
+            {
+                bool nested = !topLevel.Contains(scope.Key) && scope.Key != "index.enumerate";
+                string share = scope.Key == "index.enumerate"
+                    ? $"{scope.Value.Milliseconds / watch.Elapsed.TotalMilliseconds * 100,5:F1}% of WALL (serial)"
+                    : $"{scope.Value.Milliseconds / threadTime * 100,5:F1}% of thread-time{(nested ? " (nested in analyse)" : "")}";
+
+                _output.WriteLine(
+                    $"     {scope.Key,-20} {scope.Value.Milliseconds,8:F0} ms  {scope.Value.Count,7:N0} calls  {share}");
+            }
+
+            // The ratio of thread-time to wall-clock is the parallel speedup actually achieved. A
+            // serial stage shows up by holding wall-clock while contributing nothing to it.
+            _output.WriteLine(
+                $"     thread-time {threadTime:F0} ms over wall-clock {watch.Elapsed.TotalMilliseconds:F0} ms "
+                + $"= {(threadTime <= 0 ? 0 : threadTime / watch.Elapsed.TotalMilliseconds):F1}x parallel "
+                + $"(ceiling {Math.Max(1, Environment.ProcessorCount - 1)}x)");
+
+            PerfReport.Memory memory = PerfReport.Sample();
+            _output.WriteLine(
+                $"     memory: live {memory.ManagedLive / 1048576.0:F0} MB | heap {memory.HeapSize / 1048576.0:F0} MB | "
+                + $"fragmented {memory.Fragmented / 1048576.0:F0} MB | working set {memory.WorkingSet / 1048576.0:F0} MB");
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
+        }
+    }
+
+    /// <summary>
     /// Where the CROSS-FILE LINT time goes — the layer the two sweeps above do not touch at all.
     ///
     /// They time <c>ScriptAnalysis.Analyze</c>, whose four phases are lex, preprocess, parse and

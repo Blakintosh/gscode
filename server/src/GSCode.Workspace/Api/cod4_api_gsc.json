@@ -26,7 +26,7 @@
         "aiGenerated"
       ],
       "remarks": [
-        "Established from the shipped scripts rather than documentation: animscripts call abs() 83 times with no declaration reachable through their includes, and the one script definition in the corpus (maps\\mp\\gametypes\\_copter.gsc) is not reachable from any of them. common_scripts\\utility.gsc implements sign() but not abs(), which is the engine covering the latter."
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation. Established as an engine function by the shipped scripts: animscripts call abs() 83 times with no declaration reachable through their includes, and the one script definition in the corpus (maps\\mp\\gametypes\\_copter.gsc) is not reachable from any of them. common_scripts\\utility.gsc implements sign() but not abs(), which is the engine covering the latter."
       ]
     },
     {

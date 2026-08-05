@@ -1,9 +1,9 @@
 {
   "game": "bo1",
   "clientScriptsSwept": 450,
-  "serverLibrarySize": 1371,
-  "observed": 150,
-  "coverage": "CONTROL — 182 names are in both this game's server and client libraries, so are certainly client-side; its stock client scripts call 149 of them (81.9%). A corpus-only prune keeps that share and discards the rest.",
+  "serverLibrarySize": 1378,
+  "observed": 151,
+  "coverage": "CONTROL — 183 names are in both this game's server and client libraries, so are certainly client-side; its stock client scripts call 150 of them (82.0%). A corpus-only prune keeps that share and discards the rest.",
   "functions": [
     {
       "name": "isDefined",
@@ -270,6 +270,12 @@
       "inControlLibrary": true
     },
     {
+      "name": "abs",
+      "calls": 20,
+      "fileCount": 10,
+      "inControlLibrary": true
+    },
+    {
       "name": "SetClientDvar",
       "calls": 22,
       "fileCount": 9,
@@ -384,13 +390,13 @@
       "inControlLibrary": true
     },
     {
-      "name": "PreCacheRumble",
+      "name": "StopRumble",
       "calls": 7,
       "fileCount": 5,
       "inControlLibrary": true
     },
     {
-      "name": "StopRumble",
+      "name": "PreCacheRumble",
       "calls": 7,
       "fileCount": 5,
       "inControlLibrary": true
@@ -486,13 +492,13 @@
       "inControlLibrary": true
     },
     {
-      "name": "GetOrigin",
+      "name": "GetEye",
       "calls": 4,
       "fileCount": 4,
       "inControlLibrary": true
     },
     {
-      "name": "GetEye",
+      "name": "GetOrigin",
       "calls": 4,
       "fileCount": 4,
       "inControlLibrary": true
@@ -522,25 +528,7 @@
       "inControlLibrary": true
     },
     {
-      "name": "CreateDynEntAndLaunch",
-      "calls": 4,
-      "fileCount": 3,
-      "inControlLibrary": true
-    },
-    {
-      "name": "IsThrowingGrenade",
-      "calls": 4,
-      "fileCount": 3,
-      "inControlLibrary": true
-    },
-    {
       "name": "isAlive",
-      "calls": 4,
-      "fileCount": 3,
-      "inControlLibrary": true
-    },
-    {
-      "name": "spawnPlane",
       "calls": 4,
       "fileCount": 3,
       "inControlLibrary": true
@@ -552,7 +540,13 @@
       "inControlLibrary": true
     },
     {
-      "name": "ResetSunlight",
+      "name": "IsThrowingGrenade",
+      "calls": 4,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "CreateDynEntAndLaunch",
       "calls": 4,
       "fileCount": 3,
       "inControlLibrary": true
@@ -564,7 +558,19 @@
       "inControlLibrary": true
     },
     {
-      "name": "istouching",
+      "name": "ResetSunlight",
+      "calls": 4,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "spawnPlane",
+      "calls": 4,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetPlayerAngles",
       "calls": 3,
       "fileCount": 3,
       "inControlLibrary": true
@@ -576,25 +582,25 @@
       "inControlLibrary": true
     },
     {
+      "name": "istouching",
+      "calls": 3,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
       "name": "haseyes",
       "calls": 3,
       "fileCount": 3,
       "inControlLibrary": true
     },
     {
-      "name": "GetPlayerAngles",
-      "calls": 3,
-      "fileCount": 3,
-      "inControlLibrary": true
-    },
-    {
-      "name": "GetVisionSetNaked",
+      "name": "LerpFloat",
       "calls": 10,
       "fileCount": 2,
       "inControlLibrary": true
     },
     {
-      "name": "LerpFloat",
+      "name": "GetVisionSetNaked",
       "calls": 10,
       "fileCount": 2,
       "inControlLibrary": true
@@ -606,13 +612,13 @@
       "inControlLibrary": true
     },
     {
-      "name": "SetLightFovRange",
+      "name": "SetLightIntensity",
       "calls": 6,
       "fileCount": 2,
       "inControlLibrary": true
     },
     {
-      "name": "SetLightIntensity",
+      "name": "SetLightFovRange",
       "calls": 6,
       "fileCount": 2,
       "inControlLibrary": true
@@ -624,19 +630,13 @@
       "inControlLibrary": true
     },
     {
-      "name": "launchragdoll",
-      "calls": 4,
-      "fileCount": 2,
-      "inControlLibrary": true
-    },
-    {
-      "name": "SetLightColor",
-      "calls": 4,
-      "fileCount": 2,
-      "inControlLibrary": true
-    },
-    {
       "name": "SetLightRadius",
+      "calls": 4,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "launchragdoll",
       "calls": 4,
       "fileCount": 2,
       "inControlLibrary": true
@@ -648,14 +648,8 @@
       "inControlLibrary": true
     },
     {
-      "name": "getthrottle",
-      "calls": 3,
-      "fileCount": 2,
-      "inControlLibrary": true
-    },
-    {
-      "name": "SetAnimRestart",
-      "calls": 3,
+      "name": "SetLightColor",
+      "calls": 4,
       "fileCount": 2,
       "inControlLibrary": true
     },
@@ -672,7 +666,43 @@
       "inControlLibrary": true
     },
     {
+      "name": "SetAnimRestart",
+      "calls": 3,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getthrottle",
+      "calls": 3,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "UpdateGamerProfile",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "debugstar",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "strtok",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
       "name": "GetLightExponent",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "deactivateReverb",
       "calls": 2,
       "fileCount": 2,
       "inControlLibrary": true
@@ -690,13 +720,19 @@
       "inControlLibrary": true
     },
     {
-      "name": "deactivateReverb",
+      "name": "LerpVector",
       "calls": 2,
       "fileCount": 2,
       "inControlLibrary": true
     },
     {
-      "name": "UpdateGamerProfile",
+      "name": "float",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "Min",
       "calls": 2,
       "fileCount": 2,
       "inControlLibrary": true
@@ -708,7 +744,19 @@
       "inControlLibrary": true
     },
     {
-      "name": "Min",
+      "name": "GetLightIntensity",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetLightRadius",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetLightFovInner",
       "calls": 2,
       "fileCount": 2,
       "inControlLibrary": true
@@ -726,45 +774,15 @@
       "inControlLibrary": true
     },
     {
-      "name": "debugstar",
-      "calls": 2,
-      "fileCount": 2,
+      "name": "IsInVehicle",
+      "calls": 4,
+      "fileCount": 1,
       "inControlLibrary": true
     },
     {
-      "name": "LerpVector",
-      "calls": 2,
-      "fileCount": 2,
-      "inControlLibrary": true
-    },
-    {
-      "name": "GetLightFovInner",
-      "calls": 2,
-      "fileCount": 2,
-      "inControlLibrary": true
-    },
-    {
-      "name": "GetLightRadius",
-      "calls": 2,
-      "fileCount": 2,
-      "inControlLibrary": true
-    },
-    {
-      "name": "strtok",
-      "calls": 2,
-      "fileCount": 2,
-      "inControlLibrary": true
-    },
-    {
-      "name": "GetLightIntensity",
-      "calls": 2,
-      "fileCount": 2,
-      "inControlLibrary": true
-    },
-    {
-      "name": "float",
-      "calls": 2,
-      "fileCount": 2,
+      "name": "getentnum",
+      "calls": 4,
+      "fileCount": 1,
       "inControlLibrary": true
     },
     {
@@ -780,31 +798,13 @@
       "inControlLibrary": true
     },
     {
-      "name": "getentnum",
-      "calls": 4,
-      "fileCount": 1,
-      "inControlLibrary": true
-    },
-    {
-      "name": "IsInVehicle",
-      "calls": 4,
-      "fileCount": 1,
-      "inControlLibrary": true
-    },
-    {
       "name": "SetCollectible",
       "calls": 3,
       "fileCount": 1,
       "inControlLibrary": true
     },
     {
-      "name": "MoveZ",
-      "calls": 2,
-      "fileCount": 1,
-      "inControlLibrary": true
-    },
-    {
-      "name": "Print",
+      "name": "pointOnSegmentNearestToPoint",
       "calls": 2,
       "fileCount": 1,
       "inControlLibrary": true
@@ -816,7 +816,7 @@
       "inControlLibrary": false
     },
     {
-      "name": "pointOnSegmentNearestToPoint",
+      "name": "MoveZ",
       "calls": 2,
       "fileCount": 1,
       "inControlLibrary": true
@@ -828,43 +828,13 @@
       "inControlLibrary": true
     },
     {
-      "name": "GetLinkedEnt",
-      "calls": 1,
-      "fileCount": 1,
-      "inControlLibrary": true
-    },
-    {
-      "name": "sqrt",
-      "calls": 1,
+      "name": "Print",
+      "calls": 2,
       "fileCount": 1,
       "inControlLibrary": true
     },
     {
       "name": "VectorCross",
-      "calls": 1,
-      "fileCount": 1,
-      "inControlLibrary": true
-    },
-    {
-      "name": "Box",
-      "calls": 1,
-      "fileCount": 1,
-      "inControlLibrary": true
-    },
-    {
-      "name": "moveGravity",
-      "calls": 1,
-      "fileCount": 1,
-      "inControlLibrary": true
-    },
-    {
-      "name": "bulletTracer",
-      "calls": 1,
-      "fileCount": 1,
-      "inControlLibrary": true
-    },
-    {
-      "name": "SetFlaggedAnimKnobRestart",
       "calls": 1,
       "fileCount": 1,
       "inControlLibrary": true
@@ -876,7 +846,31 @@
       "inControlLibrary": true
     },
     {
+      "name": "moveGravity",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "Box",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
       "name": "MoveY",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetNormalizedMovement",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetLinkedEnt",
       "calls": 1,
       "fileCount": 1,
       "inControlLibrary": true
@@ -888,13 +882,25 @@
       "inControlLibrary": true
     },
     {
+      "name": "bulletTracer",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "sqrt",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
       "name": "SetFlaggedAnimKnob",
       "calls": 1,
       "fileCount": 1,
       "inControlLibrary": true
     },
     {
-      "name": "GetNormalizedMovement",
+      "name": "SetFlaggedAnimKnobRestart",
       "calls": 1,
       "fileCount": 1,
       "inControlLibrary": true

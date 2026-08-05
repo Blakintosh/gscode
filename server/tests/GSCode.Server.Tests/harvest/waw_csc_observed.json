@@ -1,7 +1,7 @@
 {
   "game": "waw",
   "clientScriptsSwept": 226,
-  "serverLibrarySize": 1058,
+  "serverLibrarySize": 1060,
   "observed": 92,
   "coverage": "CONTROL — 158 names are in both this game's server and client libraries, so are certainly client-side; its stock client scripts call 92 of them (58.2%). A corpus-only prune keeps that share and discards the rest.",
   "functions": [

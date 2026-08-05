@@ -1,4 +1,4 @@
-using System.Collections.Frozen;
+﻿using System.Collections.Frozen;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
@@ -63,7 +63,8 @@ public static class IncludeUsageLint
         string askingPath,
         FrozenSet<string> engineNames,
         string askingContextId = "raw",
-        GameProfile? profile = null)
+        GameProfile? profile = null,
+        FileImports? imports = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
 
@@ -111,10 +112,24 @@ public static class IncludeUsageLint
 
         // The transitive walk itself belongs to the database, not to this rule — see
         // DatabaseQueries.IncludeClosure for why the chain flattens and what an incomplete walk
-        // means. An incomplete one suppresses the whole pass: a file we could not read might be the
-        // one that declares the name.
+        // means. An incomplete one suppresses the whole pass either way: a file we could not read
+        // might be the one that declares the name.
+        //
+        // Its direct hops come from the shared resolution when the pipeline has one, so the same
+        // #include list is not probed twice in a single analysis.
+        ImmutableArray<ScriptRecord> direct = default;
+        if ( imports is not null )
+        {
+            if ( !imports.Complete )
+            {
+                return [];
+            }
+
+            direct = [.. imports.Includes.Select(static imported => imported.Record)];
+        }
+
         IncludeClosure closure = DatabaseQueries.IncludeClosure(
-            store, resolver, result, askingPath, game.ExtensionFor(language));
+            store, resolver, result, askingPath, game.ExtensionFor(language), direct);
 
         if ( !closure.Complete )
         {

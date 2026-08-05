@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -96,13 +96,20 @@ public static class WorkspaceLints
 
         ImmutableArray<Diagnostic>.Builder lints = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        // The file's imports, resolved ONCE for the four lints that each used to resolve them
+        // again. Every resolve is a filesystem probe per configured root, and this runs on every
+        // keystroke — on a BO3 file the same #using list was being walked three times over.
+        FileImports imports = FileImports.Resolve(result, store, language, resolver, path);
+
         // First: the other #using lints abandon their pass when an import will not resolve, so
-        // without this a typo silences them and says nothing about why.
+        // without this a typo silences them and says nothing about why. It deliberately does NOT
+        // share the resolution above: it asks whether the target exists on DISK, which is what
+        // decides whether the script links, rather than whether the index has reached it yet.
         lints.AddRange(UsingNotFoundLint.Analyze(result, language, resolver, path));
-        lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path, contextId));
-        lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path));
-        lints.AddRange(UnusedIncludeLint.Analyze(result, store, language, resolver, path));
-        lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path));
+        lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path, contextId, imports));
+        lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path, imports));
+        lints.AddRange(UnusedIncludeLint.Analyze(result, store, language, resolver, path, imports));
+        lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path, imports));
         lints.AddRange(UnusedLocalLint.Analyze(result));
         lints.AddRange(CaseLabelLint.Analyze(result));
         lints.AddRange(UnreachableCodeLint.Analyze(result));
@@ -141,7 +148,8 @@ public static class WorkspaceLints
             // it. Everything else here keeps reading languageBuiltins, since a signature or an
             // argument count borrowed from another game would be a confident lie.
             lints.AddRange(IncludeUsageLint.Analyze(
-                result, store, language, resolver, path, builtins.EngineNamesFor(language), contextId));
+                result, store, language, resolver, path, builtins.EngineNamesFor(language), contextId,
+                imports: imports));
 
         }
         lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));

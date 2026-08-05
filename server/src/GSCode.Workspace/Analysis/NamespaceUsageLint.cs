@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
@@ -39,7 +39,8 @@ public static class NamespaceUsageLint
         ScriptLanguage language,
         PathResolver resolver,
         string askingPath,
-        string askingContextId = "raw")
+        string askingContextId = "raw",
+        FileImports? imports = null)
     {
         // Namespaces callable without an import: the ones the file itself declares into.
         //
@@ -55,28 +56,18 @@ public static class NamespaceUsageLint
 
         // Add every namespace contributed by a #using target. Bail out (suppress the lint) the
         // moment a using can't be resolved to an indexed record — we can't know its namespaces.
-        ResolutionContext context = resolver.GetContext(askingPath);
-        string extension = language == ScriptLanguage.Csc ? GameProfile.Active.ClientScriptExtension : GameProfile.Active.ServerScriptExtension;
-        foreach ( AstNode element in result.Tree.Root.Elements )
+        //
+        // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
+        // back to resolving here keeps this callable on its own, which the tests rely on.
+        FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
+        if ( !resolvedImports.Complete )
         {
-            if ( element is not UsingNode usingNode )
-            {
-                continue;
-            }
+            return [];
+        }
 
-            string? resolved = resolver.Resolve(context, usingNode.Path + extension);
-            if ( resolved is null )
-            {
-                return [];
-            }
-
-            string normalized = PathUtil.NormalizeAbsolute(resolved);
-            if ( !store.TryGet(normalized, out ScriptRecord record) )
-            {
-                return [];
-            }
-
-            foreach ( string declared in record.DeclaredNamespaces )
+        foreach ( ImportedFile imported in resolvedImports.Usings )
+        {
+            foreach ( string declared in imported.Record.DeclaredNamespaces )
             {
                 available.Add(declared);
             }

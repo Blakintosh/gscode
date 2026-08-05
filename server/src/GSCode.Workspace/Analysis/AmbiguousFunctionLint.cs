@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
@@ -42,43 +42,33 @@ public static class AmbiguousFunctionLint
         LanguageStore store,
         ScriptLanguage language,
         PathResolver resolver,
-        string askingPath)
+        string askingPath,
+        FileImports? imports = null)
     {
-        ResolutionContext context = resolver.GetContext(askingPath);
-        string extension = language == ScriptLanguage.Csc ? GameProfile.Active.ClientScriptExtension : GameProfile.Active.ServerScriptExtension;
         string askingNormalized = PathUtil.NormalizeAbsolute(askingPath);
+
+        // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
+        // back to resolving here keeps this callable on its own, which the tests rely on.
+        FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
+        if ( !resolvedImports.Complete )
+        {
+            return [];
+        }
 
         // namespace::name -> the files reachable from here that declare it.
         Dictionary<string, List<ScriptRecord>> providers = new(StringComparer.Ordinal);
         HashSet<string> seenPaths = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach ( AstNode element in result.Tree.Root.Elements )
+        foreach ( ImportedFile imported in resolvedImports.Usings )
         {
-            if ( element is not UsingNode usingNode )
-            {
-                continue;
-            }
-
-            string? resolved = resolver.Resolve(context, usingNode.Path + extension);
-            if ( resolved is null )
-            {
-                return [];
-            }
-
-            string normalized = PathUtil.NormalizeAbsolute(resolved);
-            if ( !store.TryGet(normalized, out ScriptRecord record) )
-            {
-                return [];
-            }
-
             // A file importing itself, or importing the same path twice, contributes once.
-            if ( string.Equals(normalized, askingNormalized, StringComparison.OrdinalIgnoreCase)
-                || !seenPaths.Add(normalized) )
+            if ( string.Equals(imported.Record.Path, askingNormalized, StringComparison.OrdinalIgnoreCase)
+                || !seenPaths.Add(imported.Record.Path) )
             {
                 continue;
             }
 
-            Collect(record, providers);
+            Collect(imported.Record, providers);
         }
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();

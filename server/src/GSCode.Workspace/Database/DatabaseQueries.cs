@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Parser.Extraction;
@@ -369,30 +369,48 @@ public static class DatabaseQueries
     /// memoized, since a diamond in the graph (everything reaches <c>common_scripts\utility</c>)
     /// otherwise costs one filesystem probe per parent rather than per file.
     /// </summary>
+    /// <param name="directIncludes">
+    /// The file's own <c>#include</c> targets when the caller has already resolved them, which the
+    /// lint pass has: resolving the same list twice in one pass is a filesystem probe per root for
+    /// no new information. Default (uninitialized) means resolve them here, which keeps this usable
+    /// on its own.
+    /// </param>
     public static IncludeClosure IncludeClosure(
         LanguageStore store,
         Resolution.PathResolver resolver,
         GSCode.Parser.ParseResult result,
         string askingPath,
-        string extension)
+        string extension,
+        ImmutableArray<ScriptRecord> directIncludes = default)
     {
         Dictionary<(Resolution.ResolutionContext Context, string Path), string?> resolved = [];
         Queue<string> pending = new();
-        Resolution.ResolutionContext askingContext = resolver.GetContext(askingPath);
 
-        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+        if ( directIncludes.IsDefault )
         {
-            if ( element is not GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
-            {
-                continue;
-            }
+            Resolution.ResolutionContext askingContext = resolver.GetContext(askingPath);
 
-            if ( Probe(resolver, resolved, askingContext, includeNode.Path, extension) is not string hit )
+            foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
             {
-                return new IncludeClosure([], Complete: false);
-            }
+                if ( element is not GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
+                {
+                    continue;
+                }
 
-            pending.Enqueue(hit);
+                if ( Probe(resolver, resolved, askingContext, includeNode.Path, extension) is not string hit )
+                {
+                    return new IncludeClosure([], Complete: false);
+                }
+
+                pending.Enqueue(hit);
+            }
+        }
+        else
+        {
+            foreach ( ScriptRecord record in directIncludes )
+            {
+                pending.Enqueue(record.Path);
+            }
         }
 
         ImmutableArray<ScriptRecord>.Builder reached = ImmutableArray.CreateBuilder<ScriptRecord>();

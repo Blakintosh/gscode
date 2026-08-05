@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
@@ -29,18 +29,14 @@ public static class UnusedUsingLint
         LanguageStore store,
         ScriptLanguage language,
         PathResolver resolver,
-        string askingPath)
+        string askingPath,
+        FileImports? imports = null)
     {
-        List<UsingNode> usings = new();
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            if ( element is UsingNode usingNode )
-            {
-                usings.Add(usingNode);
-            }
-        }
+        // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
+        // back to resolving here keeps this callable on its own, which the tests rely on.
+        FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
 
-        if ( usings.Count == 0 )
+        if ( resolvedImports.Usings.Length == 0 || !resolvedImports.Complete )
         {
             return [];
         }
@@ -51,31 +47,16 @@ public static class UnusedUsingLint
         HashSet<string> referencedClasses = new(StringComparer.Ordinal);
         CollectReferences(result, referencedNamespaces, referencedFunctions, referencedClasses);
 
-        ResolutionContext context = resolver.GetContext(askingPath);
-        string extension = language == ScriptLanguage.Csc ? GameProfile.Active.ClientScriptExtension : GameProfile.Active.ServerScriptExtension;
-
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        foreach ( UsingNode usingNode in usings )
+        foreach ( ImportedFile imported in resolvedImports.Usings )
         {
-            string? resolved = resolver.Resolve(context, usingNode.Path + extension);
-            if ( resolved is null )
-            {
-                return [];
-            }
-
-            string normalized = PathUtil.NormalizeAbsolute(resolved);
-            if ( !store.TryGet(normalized, out ScriptRecord record) )
-            {
-                return [];
-            }
-
-            if ( IsUsed(record, referencedNamespaces, referencedFunctions, referencedClasses) )
+            if ( IsUsed(imported.Record, referencedNamespaces, referencedFunctions, referencedClasses) )
             {
                 continue;
             }
 
             Diagnostic unused = Diagnostic.Create(
-                usingNode.Range, DiagnosticSeverity.Hint, GscDiagnosticCode.UnusedUsing, usingNode.Path);
+                imported.DirectiveRange, DiagnosticSeverity.Hint, GscDiagnosticCode.UnusedUsing, imported.RawPath);
 
             diagnostics.Add(unused with { Tags = [DiagnosticTag.Unnecessary] });
         }

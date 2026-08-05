@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
@@ -28,18 +28,14 @@ public static class UnusedIncludeLint
         LanguageStore store,
         ScriptLanguage language,
         PathResolver resolver,
-        string askingPath)
+        string askingPath,
+        FileImports? imports = null)
     {
-        List<IncludeNode> includes = new();
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            if ( element is IncludeNode includeNode )
-            {
-                includes.Add(includeNode);
-            }
-        }
+        // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
+        // back to resolving here keeps this callable on its own, which the tests rely on.
+        FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
 
-        if ( includes.Count == 0 )
+        if ( resolvedImports.Includes.Length == 0 || !resolvedImports.Complete )
         {
             return [];
         }
@@ -55,30 +51,16 @@ public static class UnusedIncludeLint
             }
         }
 
-        ResolutionContext context = resolver.GetContext(askingPath);
-        string extension = language == ScriptLanguage.Csc ? GameProfile.Active.ClientScriptExtension : GameProfile.Active.ServerScriptExtension;
-
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        foreach ( IncludeNode includeNode in includes )
+        foreach ( ImportedFile imported in resolvedImports.Includes )
         {
-            string? resolved = resolver.Resolve(context, includeNode.Path + extension);
-            if ( resolved is null )
-            {
-                return [];
-            }
-
-            if ( !store.TryGet(PathUtil.NormalizeAbsolute(resolved), out ScriptRecord record) )
-            {
-                return [];
-            }
-
-            if ( IsUsed(record, calledFunctions) )
+            if ( IsUsed(imported.Record, calledFunctions) )
             {
                 continue;
             }
 
             Diagnostic unused = Diagnostic.Create(
-                includeNode.Range, DiagnosticSeverity.Hint, GscDiagnosticCode.UnusedInclude, includeNode.Path);
+                imported.DirectiveRange, DiagnosticSeverity.Hint, GscDiagnosticCode.UnusedInclude, imported.RawPath);
 
             diagnostics.Add(unused with { Tags = [DiagnosticTag.Unnecessary] });
         }

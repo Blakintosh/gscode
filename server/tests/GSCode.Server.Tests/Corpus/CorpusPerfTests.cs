@@ -8,6 +8,10 @@ using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
+using GSCode.Workspace.Analysis;
+using GSCode.Workspace.Api;
+using GSCode.Workspace.Database;
+using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
 using Xunit;
 using Xunit.Abstractions;
@@ -82,6 +86,125 @@ public class CorpusPerfTests
             }
 
             Report(corpus.Profile.ShortName, timings, corpus.RawRoot, GameCorpusFixture.Inserts.Count);
+        }
+    }
+
+    /// <summary>
+    /// Where the CROSS-FILE LINT time goes — the layer the two sweeps above do not touch at all.
+    ///
+    /// They time <c>ScriptAnalysis.Analyze</c>, whose four phases are lex, preprocess, parse and
+    /// extract. Everything the editor runs ON TOP of that parse — the include-closure walk, the
+    /// store lookups, the arity and resolution rules — was unmeasured, and it is the half that grew:
+    /// a keystroke now pays a transitive graph walk and several name lookups that a parse-only
+    /// measurement reports as free.
+    ///
+    /// The parse is done BEFORE the stopwatch and reused, so this is lint cost and nothing else, and
+    /// the lints run once to warm before the timed pass for the same reason the parse sweep does.
+    ///
+    /// Needs a finished index, unlike the sweeps above: two of the heaviest rules stand down without
+    /// one, so measuring against a partial index would report the cheap half and call it the total.
+    ///
+    /// CoD4 and BO3 only. They are the two dialect families — CoD4 the <c>#include</c> shape with no
+    /// headers, BO3 the <c>#using</c> shape with <c>#insert</c> — and the other three add runtime
+    /// without adding a shape. That is also what keeps this affordable beside the parse sweeps, since
+    /// each game here pays a full index first.
+    ///
+    /// Reporting, not asserting, like the rest of this class.
+    /// </summary>
+    [Fact]
+    public async Task WorkspaceLints_WhereTheTimeGoes()
+    {
+        bool measured = false;
+
+        if ( CorpusFixture.Available )
+        {
+            await MeasureLintsAsync(
+                GameProfile.BlackOps3,
+                CorpusFixture.RawRoot!,
+                CorpusFixture.Resolver,
+                CorpusFixture.Scripts,
+                (path, resolver, names) => CorpusFixture.Analyze(path, resolver, names));
+
+            measured = true;
+        }
+
+        GameCorpus? cod4 = GameCorpusFixture.For(GameProfile.Cod4);
+        if ( cod4 is not null )
+        {
+            GameCorpus captured = cod4;
+            await MeasureLintsAsync(
+                captured.Profile,
+                captured.RawRoot,
+                () => GameCorpusFixture.Resolver(captured),
+                () => GameCorpusFixture.Scripts(captured),
+                (path, resolver, names) => GameCorpusFixture.Analyze(captured, path, resolver, names));
+
+            measured = true;
+        }
+
+        if ( !measured )
+        {
+            _output.WriteLine("SKIPPED: neither %GSCODE_CORPUS_BO3% nor %GSCODE_CORPUS_COD4% found.");
+        }
+    }
+
+    private async Task MeasureLintsAsync(
+        GameProfile profile,
+        string rawRoot,
+        Func<PathResolver> resolverFactory,
+        Func<IReadOnlyList<string>> scriptsFactory,
+        Func<string, PathResolver, NameTable, ParseResult> analyse)
+    {
+        // The active profile has to move with the measurement, for the same reason the diagnostic
+        // sweeps move it: the indexer enumerates through Active.ScriptGlobs and several lints fall
+        // back to it. GameProfileCollection is what stops this racing another class.
+        GameProfile previous = GameProfile.Active;
+        try
+        {
+            GameProfile.Select(profile.ShortName);
+
+            PathResolver resolver = resolverFactory();
+            NameTable names = new();
+            ScriptDatabase database = new();
+
+            WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+
+            string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
+            BuiltinApiSet builtins = BuiltinApiSet.Load(apiDirectory);
+            ObjectFields objectFields = ObjectFields.Load(apiDirectory);
+
+            List<PerfReport.Item> timings = [];
+
+            foreach ( string path in scriptsFactory() )
+            {
+                ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
+
+                try
+                {
+                    ParseResult parsed = analyse(path, resolver, names);
+
+                    // Warm, then measure. Crashes are the lex/parse gate's business, not this one's,
+                    // so a file that throws is dropped rather than counted as fast.
+                    WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
+
+                    Stopwatch watch = Stopwatch.StartNew();
+                    WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
+                    watch.Stop();
+
+                    timings.Add(new PerfReport.Item(path, watch.Elapsed.TotalMilliseconds, new FileInfo(path).Length));
+                }
+                catch ( Exception )
+                {
+                    continue;
+                }
+            }
+
+            Report(profile.ShortName + "-lints", timings, rawRoot, cachedHeaders: 0);
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
         }
     }
 

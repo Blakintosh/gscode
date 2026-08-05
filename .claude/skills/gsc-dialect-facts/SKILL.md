@@ -75,6 +75,39 @@ It is absent from the API library, so a rule consulting the library about it fin
 other call-shaped keywords are the same: `notify`, `endon`, `waittill`, `assert`, `vectorscale`,
 `prof_begin`/`prof_end`.
 
+## A script function shadows a builtin only when SPELLED the same
+
+Builtins are the fallback after the current namespace — `sys::` exists as an explicit alias
+precisely because a script function otherwise wins. But whether a declaration shadows an engine
+function of the same name is decided by the SPELLING, not case-insensitively, and two shipped BO3
+files settle it in opposite directions:
+
+```gsc
+// scripts\shared\exploder_shared.gsc
+function earthquake()                                       // declared here, takes nothing
+...
+Earthquake( eq["magnitude"], eq["duration"], self.v["origin"], eq["radius"] );   // the ENGINE one
+```
+
+```gsc
+// scripts\zm\_zm.gsc
+function spawnSpectator()                                   // declared here, takes nothing
+...
+self thread spawnSpectator();                               // its OWN, though BO3 also has
+                                                            // SpawnSpectator( origin, angles )
+```
+
+Both files ship and work, and no case-insensitive rule explains both — it either breaks the first
+(four arguments to a nought-parameter function) or the second (nought arguments where two are
+mandatory). The authors clearly wrote the distinction on purpose.
+
+Scope it to THIS tie-break. General script-to-script resolution stays case-insensitive, as the rest
+of the codebase has it (`FunctionSymbol.KeyName` is lowercase-canonical and matched ordinally).
+
+A case-insensitive first attempt at the arity rule reported that `Earthquake` call as passing four
+arguments to a nought-parameter function — an Error on a file that ships. The corpus caught it; a
+reviewer would not have.
+
 ## ScriptDoc has two spellings
 
 BO3 uses `/@ … @/` with its own token kind. Every earlier game fences a block inside an ordinary

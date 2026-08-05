@@ -350,6 +350,16 @@ LanguageServer server = await LanguageServer.From(options =>
                         // indexing left behind rather than anything steady-state traffic did.
                         LogMemoryReport("indexing", outcome);
 
+                        // Let the cache writer finish FIRST. It is handed a record per file and
+                        // serializes and gzips each one, so it is still allocating well after
+                        // IndexAsync returns — compacting before it drains measures a heap that is
+                        // about to be dirtied again, which is precisely the "drops, then climbs
+                        // back" the memory report kept showing.
+                        if ( cacheHolder.Current is SqliteCache draining )
+                        {
+                            await draining.WaitForIdleAsync(CancellationToken.None);
+                        }
+
                         if ( CompactIfFragmented() )
                         {
                             LogMemoryReport("compaction", outcome);

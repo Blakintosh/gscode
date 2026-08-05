@@ -213,10 +213,39 @@ public sealed class SqliteCache : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Completes once the writer has nothing left to do.
+    ///
+    /// The caller that wants this is the post-index settle step. Indexing hands thousands of records
+    /// to a single writer that serializes and gzips each one, so the writer is still going long after
+    /// IndexAsync returns — and compacting the heap while it works measures a moment that is about to
+    /// be undone, which is exactly the "memory drops then climbs again" the server used to report.
+    ///
+    /// Polling rather than a signal, deliberately: the alternative is a counter mutated by every
+    /// producer thread on the indexing hot path, and this is called once per index by one caller
+    /// that is already waiting.
+    /// </summary>
+    public async Task WaitForIdleAsync(CancellationToken cancellationToken)
+    {
+        while ( !cancellationToken.IsCancellationRequested )
+        {
+            if ( _writes.Reader.Count == 0 && Volatile.Read(ref _writing) == 0 )
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private int _writing;
+
     private async Task ProcessWritesAsync()
     {
         await foreach ( WriteCommand first in _writes.Reader.ReadAllAsync().ConfigureAwait(false) )
         {
+            Interlocked.Exchange(ref _writing, 1);
+
             // Coalesce whatever else is queued into one transaction for throughput.
             List<WriteCommand> batch = [first];
             while ( _writes.Reader.TryRead(out WriteCommand? next) )
@@ -236,6 +265,10 @@ public sealed class SqliteCache : IAsyncDisposable
             {
                 // A failed cache write must never take the server down; the file will
                 // simply be re-analysed next cold start.
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _writing, 0);
             }
         }
     }

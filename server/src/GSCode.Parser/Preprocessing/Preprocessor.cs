@@ -23,7 +23,14 @@ public sealed class Preprocessor
     private readonly GameProfile _profile;
 
     private readonly MacroTable _macros = new();
-    private readonly List<PToken> _output = [];
+
+    /// <summary>
+    /// The parse stream. Sized from the lexed token count by <see cref="OutputTokensPerLexedToken"/>
+    /// rather than left to grow from empty: a PToken is 80 bytes, so this array crosses the
+    /// large-object-heap threshold at about 1,060 entries — nearly every real script — and each
+    /// array a doubling chain abandons on the way there is a hole in a heap that is never compacted.
+    /// </summary>
+    private readonly List<PToken> _output;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
     private readonly ImmutableArray<InsertEdge>.Builder _inserts = ImmutableArray.CreateBuilder<InsertEdge>();
     private readonly ImmutableArray<MacroInvocation>.Builder _invocations = ImmutableArray.CreateBuilder<MacroInvocation>();
@@ -44,17 +51,53 @@ public sealed class Preprocessor
     private readonly HashSet<string> _expansionStack = new(StringComparer.Ordinal);
 
     /// <summary>One file being walked: its tokens, its text, and how it anchors to the root file.</summary>
-    private sealed record FileFrame(ImmutableArray<Token> Tokens, SourceText Text, string? SourceFile, TextRange? RootSite, int Depth);
+    private sealed record FileFrame(ImmutableArray<Token> Tokens, SourceText Text, string? SourceFile, TextRange? RootSite, int Depth)
+    {
+        private Provenance? _provenance;
+
+        /// <summary>
+        /// The provenance every token from this frame carries, built once.
+        ///
+        /// It is a function of SourceFile and RootSite, both fixed for the frame's lifetime, so
+        /// building it per token would allocate thousands of identical objects for one inserted
+        /// header. The root frame does not even allocate that: it shares the singleton.
+        /// </summary>
+        public Provenance Provenance
+        {
+            get
+            {
+                _provenance ??= SourceFile is null
+                    ? Preprocessing.Provenance.Root
+                    : new Provenance(SourceFile, RootSite, DefinitionSite: null);
+
+                return _provenance;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Output tokens per lexed token, as a fraction, used to size <see cref="_output"/>.
+    ///
+    /// Below one because the preprocessor DROPS more than it adds: whitespace and comments are
+    /// tokens to the lexer and are gone from the parse stream, which outweighs macro expansion on
+    /// ordinary code. Measured over the shipped scripts the ratio is 0.56 to 0.59 (cod4 0.59,
+    /// waw 0.59, mw2 0.56, bo1 0.59); two thirds sits just above it, so a typical file allocates
+    /// once and a macro-heavy one pays a single doubling.
+    /// </summary>
+    private const int OutputTokensPerLexedToken = 2;
+    private const int LexedTokensPerOutputToken = 3;
 
     private Preprocessor(
         string rootFilePath, IInsertProvider insertProvider, NameTable names, GameProfile profile,
-        IHeaderMacroCache? headerCache = null)
+        int lexedTokenCount, IHeaderMacroCache? headerCache = null)
     {
         _rootFilePath = rootFilePath;
         _insertProvider = insertProvider;
         _names = names;
         _profile = profile;
         _headerCache = headerCache;
+        _output = new List<PToken>(
+            1 + (lexedTokenCount * OutputTokensPerLexedToken / LexedTokensPerOutputToken));
     }
 
     /// <summary>Preprocesses a lexed file into the parse stream + macro/insert knowledge.</summary>
@@ -67,7 +110,8 @@ public sealed class Preprocessor
         GameProfile? profile = null,
         IHeaderMacroCache? headerCache = null)
     {
-        Preprocessor preprocessor = new(rootFilePath, insertProvider, names, profile ?? GameProfile.Active, headerCache);
+        Preprocessor preprocessor = new(
+            rootFilePath, insertProvider, names, profile ?? GameProfile.Active, tokens.Length, headerCache);
 
         FileFrame rootFrame = new(tokens, text, SourceFile: null, RootSite: null, Depth: 0);
         preprocessor.ProcessRange(rootFrame, 0, tokens.Length, preprocessor._output);
@@ -675,7 +719,7 @@ public sealed class Preprocessor
                     TokenKind.String,
                     _names.Intern("\"" + QualifiedFunctionNameAt(frame, index) + "\""),
                     range,
-                    ProvenanceFor(frame)));
+                    frame.Provenance));
 
                 return true;
             }
@@ -683,33 +727,23 @@ public sealed class Preprocessor
             {
                 // 1-based, matching how compilers report line numbers to users.
                 string line = (range.Start.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                sink.Add(new PToken(TokenKind.Integer, _names.Intern(line), range, ProvenanceFor(frame)));
+                sink.Add(new PToken(TokenKind.Integer, _names.Intern(line), range, frame.Provenance));
                 return true;
             }
             case "__FILE__":
             {
                 string path = frame.SourceFile ?? _rootFilePath;
-                sink.Add(new PToken(TokenKind.String, _names.Intern("\"" + path + "\""), range, ProvenanceFor(frame)));
+                sink.Add(new PToken(TokenKind.String, _names.Intern("\"" + path + "\""), range, frame.Provenance));
                 return true;
             }
             case "FASTFILE":
             {
                 // The fastfile name only exists at link time; a placeholder keeps parsing sane.
-                sink.Add(new PToken(TokenKind.Identifier, "__fastfile__", range, ProvenanceFor(frame)));
+                sink.Add(new PToken(TokenKind.Identifier, "__fastfile__", range, frame.Provenance));
                 return true;
             }
             default:
                 return false;
-        }
-
-        Provenance ProvenanceFor(FileFrame currentFrame)
-        {
-            if ( currentFrame.SourceFile is null )
-            {
-                return Provenance.Root;
-            }
-
-            return new Provenance(currentFrame.SourceFile, currentFrame.RootSite, null);
         }
     }
 
@@ -999,17 +1033,7 @@ public sealed class Preprocessor
     {
         string text = TokenFacts.GetStaticText(token.Kind) ?? _names.Intern(token.GetText(frame.Text));
 
-        Provenance provenance;
-        if ( frame.SourceFile is null )
-        {
-            provenance = Provenance.Root;
-        }
-        else
-        {
-            provenance = new Provenance(frame.SourceFile, frame.RootSite, null);
-        }
-
-        return new PToken(token.Kind, text, token.Range, provenance);
+        return new PToken(token.Kind, text, token.Range, frame.Provenance);
     }
 
     private void AddDiagnostic(FileFrame frame, TextRange range, GscDiagnosticCode code, params object[] arguments)

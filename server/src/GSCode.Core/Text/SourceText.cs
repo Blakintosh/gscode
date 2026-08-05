@@ -35,7 +35,12 @@ public sealed class SourceText
     /// <summary>Builds a snapshot from raw text, scanning once for line breaks (\r\n, \n, or lone \r).</summary>
     public static SourceText From(string text)
     {
-        ImmutableArray<int>.Builder lineStarts = ImmutableArray.CreateBuilder<int>();
+        // Sized for a 24-character line so the builder does not double its way up from empty. Only
+        // a rough guide — being wrong costs one growth, being unset costs a chain of them.
+        const int typicalLineLength = 24;
+
+        ImmutableArray<int>.Builder lineStarts =
+            ImmutableArray.CreateBuilder<int>(1 + (text.Length / typicalLineLength));
         lineStarts.Add(0);
 
         for ( int index = 0; index < text.Length; index++ )

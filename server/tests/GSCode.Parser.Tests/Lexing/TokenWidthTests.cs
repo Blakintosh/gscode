@@ -18,7 +18,7 @@ namespace GSCode.Parser.Tests.Lexing;
 /// rounding error. If a field genuinely has to be added, change the number here deliberately and
 /// re-run the memory probe — do not adjust it to make a build go green.
 ///
-/// The numbers below are what the layout costs TODAY, recorded before any attempt to shrink it.
+/// The numbers below are what the layout costs today.
 /// </summary>
 public class TokenWidthTests
 {
@@ -33,25 +33,27 @@ public class TokenWidthTests
     }
 
     /// <summary>
-    /// The preprocessed token, the larger of the two and the one that dominates: at this width its
-    /// array reaches the LOH at roughly 1,060 tokens, which is nearly every real script.
+    /// The preprocessed token, the larger of the two and the one that dominates. It was 80 bytes
+    /// while Provenance was inlined, reaching the LOH at ~1,060 tokens; at 40 it reaches it at
+    /// ~2,120, so twice as much of a workspace stays off that heap.
     /// </summary>
     [Fact]
-    public void PToken_IsEightyBytes()
+    public void PToken_IsFortyBytes()
     {
-        Assert.Equal(80, Unsafe.SizeOf<PToken>());
+        Assert.Equal(40, Unsafe.SizeOf<PToken>());
     }
 
     /// <summary>
-    /// Provenance is 48 of those 80 bytes — more than the rest of the token put together — because
-    /// two nullable TextRanges cost 20 bytes each (16 plus a flag, padded).
+    /// Provenance used to be 48 of those 80 bytes — more than the rest of the token put together —
+    /// because two nullable TextRanges cost 20 bytes each (16 plus a flag, padded).
     ///
     /// It answers "where did this token come from", which is a property of an EXPANSION SITE, of
-    /// which a file has a handful. Every token in a file that expands nothing carries three nulls.
+    /// which a file has a handful, so it is now held by reference and every token written in the
+    /// root file shares one instance. Inside a PToken it costs a pointer.
     /// </summary>
     [Fact]
-    public void Provenance_IsFortyEightBytes()
+    public void Provenance_IsOnePointerInsideAToken()
     {
-        Assert.Equal(48, Unsafe.SizeOf<Provenance>());
+        Assert.Equal(IntPtr.Size, Unsafe.SizeOf<Provenance>());
     }
 }

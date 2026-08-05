@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
@@ -75,7 +75,7 @@ public class MemoryProbeTests
 
             // Baseline BEFORE anything is built, so each game's figures are its own rather than the
             // previous game's leftovers. The database from the last probe is unreachable by now.
-            PerfReport.Memory before = PerfReport.Sample();
+            (long Live, long Heap, long Fragmented, long WorkingSet, int Gen2) before = Sample();
 
             PathResolver resolver = resolverFactory();
             NameTable names = new();
@@ -91,14 +91,14 @@ public class MemoryProbeTests
             _output.WriteLine(
                 $"########## {profile.ShortName}: {outcome.Total} files ({outcome.Analysed} analysed) "
                 + $"in {watch.Elapsed.TotalMilliseconds:F0} ms");
-            _output.WriteLine($"     baseline before index: live {Mb(before.ManagedLive)} MB");
+            _output.WriteLine($"     baseline before index: live {Mb(before.Live)} MB");
             _output.WriteLine("        t   live MB   heap MB   frag MB   workset MB   gen2");
 
             for ( int second = 0; second <= WatchSeconds; second++ )
             {
-                PerfReport.Memory sample = PerfReport.Sample();
+                (long Live, long Heap, long Fragmented, long WorkingSet, int Gen2) sample = Sample();
                 _output.WriteLine(
-                    $"     {second,4}s {Mb(sample.ManagedLive),9} {Mb(sample.HeapSize),9} "
+                    $"     {second,4}s {Mb(sample.Live),9} {Mb(sample.Heap),9} "
                     + $"{Mb(sample.Fragmented),9} {Mb(sample.WorkingSet),12} {sample.Gen2,6}");
 
                 if ( second < WatchSeconds )
@@ -119,6 +119,29 @@ public class MemoryProbeTests
         {
             GameProfile.Select(previous.ShortName);
         }
+    }
+
+    /// <summary>
+    /// A memory sample, taken AFTER a forced blocking collection so it reports what is RETAINED
+    /// rather than what happens to be uncollected.
+    ///
+    /// Deliberately not <c>PerfReport.Sample</c>, though it does the same thing: this probe has to
+    /// compile on commits predating that helper, and a bisect is worthless if the instrument only
+    /// builds on one side of it.
+    /// </summary>
+    private static (long Live, long Heap, long Fragmented, long WorkingSet, int Gen2) Sample()
+    {
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+
+        GCMemoryInfo info = GC.GetGCMemoryInfo();
+        return (
+            GC.GetTotalMemory(forceFullCollection: false),
+            info.HeapSizeBytes,
+            info.FragmentedBytes,
+            Environment.WorkingSet,
+            GC.CollectionCount(2));
     }
 
     private static string Mb(long bytes)

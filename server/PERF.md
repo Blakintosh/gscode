@@ -67,19 +67,29 @@ two hundred calls scanned the whole store two hundred times.
 |---|---:|---:|
 | before | 21,939 ms | 24,534 ms |
 | + `DeclarationIndex` (name → declaring files) | 1,640 ms | 1,527 ms |
-| + `FunctionLookupCache` (per-file memo) | **1,612 ms** | **1,277 ms** |
+| + `FunctionLookupCache` (per-file memo) | 1,612 ms | 1,277 ms |
+| after, three further runs | **1,398 – 2,098 ms** | **1,162 – 1,381 ms** |
 
-13.6x and 19.2x. The distribution is the part that mattered, because `TextSyncHandler` debounces at
-~250 ms and the tail was over it:
+Roughly 13x and 19x. **Only the first row and the last are separated by more than noise.** Three
+runs of the finished code put BO3 anywhere in a 700 ms band, so the 1,640 → 1,612 step is not
+evidence of anything, and CoD4's 1,527 → 1,277 sits at the edge of its own 220 ms band — suggestive
+rather than established. The index is what did this; the cache's separate contribution is unproven
+at this scale and would need per-file repetition to measure, which the sweep deliberately does not
+do.
+
+The distribution is both the stable half and the part that mattered, because `TextSyncHandler`
+debounces at ~250 ms and the tail was over it. Across those three runs BO3's median held at
+0.50–0.53 ms and CoD4's p99 at 10.6–12.3 ms, against totals swinging 50% and 19%:
 
 | | before | after |
 |---|---|---|
 | BO3 median / p90 / p99 / max | 4.03 / 64 / 197 / 470 ms | 0.48 / 3.7 / 21 / 57 ms |
 | CoD4 median / p90 / p99 / max | 3.45 / 68 / 343 / 611 ms | 0.56 / 3.6 / 11 / 45 ms |
 
-CoD4's worst file, `scoutsniper.gsc`, fell from 611 ms to 45. The corpus sweep dropped from 5.9
-minutes to 2.8 as a side effect, and every game's per-code finding counts stayed byte-identical —
-the index narrows WHERE to look and decides nothing.
+CoD4's worst file, `scoutsniper.gsc`, fell from 611 ms to 45 — and its whole-corpus `max` now ranges
+13–20 ms, so even the worst file is inside the debounce. The corpus sweep dropped from 5.9 minutes
+to 2.8 as a side effect, and every game's per-code finding counts stayed byte-identical — the index
+narrows WHERE to look and decides nothing.
 
 Read the shares rather than the absolute milliseconds: the per-lint breakdown needs
 `-p:GscodeInstrumentation=true`, which costs something itself, and this sweep is sequential where

@@ -73,6 +73,48 @@ Three reasons this is a follow-up rather than a second branch:
 Not urgent: every one of these shapes already stops the user. The gap is the explanation, not the
 detection.
 
+### `LookupFunctions` scans the whole store, once per call site
+
+The cross-file lints cost roughly twenty times the parse they run on top of, and four rules are
+97% of it. Measured with `CorpusPerfTests.WorkspaceLints_WhereTheTimeGoes`, built with
+`-p:GscodeInstrumentation=true` so the per-lint scopes in `WorkspaceLints` record:
+
+| | BO3, 980 files | CoD4, 894 files |
+|---|---|---|
+| `FunctionResolutionLint` | 6.6 s | 6.8 s |
+| `ArgumentCountLint` | 6.3 s | 4.2 s |
+| `DevBlockCallLint` | 5.7 s | 7.9 s |
+| `PrivateAccessLint` | 2.7 s | 4.8 s |
+| everything else combined | ~0.6 s | ~0.8 s |
+| **total** | **21.9 s** | **24.5 s** |
+
+Read the shares, not the absolute milliseconds: instrumentation costs something itself, and this is
+the sequential lint sweep rather than the parallel corpus one.
+
+What the four share is `DatabaseQueries.LookupFunctions`, which walks `store.AllRecords` and every
+function in each — around thirty thousand symbols on BO3 — and is called once per CALL SITE. A file
+with two hundred calls scans the whole store two hundred times. Only `IncludeUsageLint` caches by
+name; the four expensive ones do not.
+
+Two fixes, and they are not alternatives:
+
+1. **A name-to-declarations index on the store**, built once at index time, so a lookup is a
+   dictionary hit rather than a thirty-thousand-symbol walk. Surgical inside `LookupFunctions` —
+   the shadowing and privacy filtering apply unchanged afterwards and no caller moves — and it
+   speeds up hover, completion, definition and references too, not only the lints.
+2. **A per-file cache by name** in the four rules, which is what `IncludeUsageLint` already does.
+   Cheaper to write and helps a file that calls the same name repeatedly, but it does nothing for a
+   file whose calls are all distinct. Worth having anyway; not a substitute for (1).
+
+Why this matters beyond a sweep: `TextSyncHandler` debounces at 250 ms, and the tail is worse than
+the medians suggest — p90 64 ms and p99 197 ms on BO3, p90 68 ms and p99 343 ms on CoD4, with
+`scoutsniper.gsc` at 611 ms. The slowest files cannot keep up with typing.
+
+Two things this is NOT. It is not a regression from the 5026 work: `IncludeUsageLint` is 0.12 s on
+CoD4 and unmeasurable on BO3, and `FileImports.Resolve` is 59 ms / 29 ms. And there is no before
+figure for the layer at all, because nothing measured it until now — so treat these as the baseline
+rather than as evidence of anything having got worse.
+
 ### The TextMate grammar colours every dialect's keywords in every dialect
 
 `gsc.tmGrammar.json`'s `control` rule is the UNION of all five games' keywords, because a grammar

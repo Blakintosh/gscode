@@ -10,7 +10,16 @@ namespace GSCode.Workspace.Database;
 /// </summary>
 public sealed class ReferenceIndex
 {
-    private readonly Dictionary<SymbolKey, HashSet<string>> _filesByKey = [];
+    /// <summary>
+    /// key → the file that mentions it, as a bare <c>string</c> while exactly one does and a
+    /// <c>HashSet&lt;string&gt;</c> only once a second appears.
+    ///
+    /// The same shape <see cref="DeclarationIndex"/> uses, and for the same reason: most symbol keys
+    /// are mentioned in a single file, and a HashSet holding one string reference costs on the order
+    /// of 150 bytes to carry 8. This index is far larger than the declaration one — BO1 interns over
+    /// a million references — so the saving is correspondingly bigger.
+    /// </summary>
+    private readonly Dictionary<SymbolKey, object> _filesByKey = [];
     private readonly Lock _gate = new();
 
     /// <summary>
@@ -39,25 +48,44 @@ public sealed class ReferenceIndex
         {
             foreach ( SymbolKey key in oldKeys )
             {
-                if ( !newKeys.Contains(key) && _filesByKey.TryGetValue(key, out HashSet<string>? files) )
+                if ( newKeys.Contains(key) || !_filesByKey.TryGetValue(key, out object? existing) )
                 {
-                    files.Remove(path);
-                    if ( files.Count == 0 )
+                    continue;
+                }
+
+                if ( existing is HashSet<string> many )
+                {
+                    many.Remove(path);
+                    if ( many.Count == 0 )
                     {
                         _filesByKey.Remove(key);
                     }
+                }
+                else if ( string.Equals((string)existing, path, StringComparison.Ordinal) )
+                {
+                    _filesByKey.Remove(key);
                 }
             }
 
             foreach ( SymbolKey key in newKeys )
             {
-                if ( !_filesByKey.TryGetValue(key, out HashSet<string>? files) )
+                if ( !_filesByKey.TryGetValue(key, out object? existing) )
                 {
-                    files = new HashSet<string>(StringComparer.Ordinal);
-                    _filesByKey[key] = files;
+                    _filesByKey[key] = path;
+                    continue;
                 }
 
-                files.Add(path);
+                if ( existing is HashSet<string> many )
+                {
+                    many.Add(path);
+                    continue;
+                }
+
+                string only = (string)existing;
+                if ( !string.Equals(only, path, StringComparison.Ordinal) )
+                {
+                    _filesByKey[key] = new HashSet<string>(StringComparer.Ordinal) { only, path };
+                }
             }
         }
     }
@@ -67,12 +95,12 @@ public sealed class ReferenceIndex
     {
         lock ( _gate )
         {
-            if ( !_filesByKey.TryGetValue(key, out HashSet<string>? files) )
+            if ( !_filesByKey.TryGetValue(key, out object? existing) )
             {
                 return [];
             }
 
-            return [.. files];
+            return existing is HashSet<string> many ? [.. many] : [(string)existing];
         }
     }
 }

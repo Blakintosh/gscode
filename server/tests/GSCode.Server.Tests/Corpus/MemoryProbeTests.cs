@@ -213,6 +213,8 @@ public class MemoryProbeTests
             _output.WriteLine(
                 $"     retained: {database.Gsc.Count} gsc + {database.Csc.Count} csc records still live");
 
+            ReportComposition(database);
+
             GC.KeepAlive(indexer);
             GC.KeepAlive(names);
         }
@@ -220,6 +222,53 @@ public class MemoryProbeTests
         {
             GameProfile.Select(previous.ShortName);
         }
+    }
+
+    /// <summary>
+    /// WHAT the records hold, not just how much they cost.
+    ///
+    /// A per-game total says BO1 is expensive; it does not say which part of a record is. These
+    /// counts do, and they are the thing to compare ACROSS games — a category that is
+    /// disproportionate per file is the one worth attacking, and one that merely scales with file
+    /// count is not a defect.
+    ///
+    /// Diagnostic messages are counted separately in characters because they are the one category
+    /// that carries a freshly formatted STRING per entry, rather than references into text that
+    /// already exists.
+    /// </summary>
+    private void ReportComposition(ScriptDatabase database)
+    {
+        long records = 0, references = 0, diagnostics = 0, messageChars = 0;
+        long functions = 0, classes = 0, macros = 0, dependencies = 0, pathCalls = 0;
+
+        foreach ( ScriptRecord record in database.AllRecords )
+        {
+            records++;
+            references += record.References.Length;
+            diagnostics += record.Diagnostics.Length;
+            functions += record.Functions.Length;
+            classes += record.Classes.Length;
+            macros += record.Macros.Length;
+            dependencies += record.Dependencies.Length;
+            pathCalls += record.PathCallTargets.Length;
+
+            foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in record.Diagnostics )
+            {
+                messageChars += diagnostic.Message?.Length ?? 0;
+            }
+        }
+
+        double perFile = records == 0 ? 0 : 1.0 / records;
+        _output.WriteLine(
+            $"     composition over {records:N0} records (per file in brackets):");
+        _output.WriteLine(
+            $"       references  {references,9:N0} ({references * perFile,7:F1})   "
+            + $"diagnostics {diagnostics,7:N0} ({diagnostics * perFile,6:F2})   "
+            + $"msg chars {messageChars,9:N0}");
+        _output.WriteLine(
+            $"       functions   {functions,9:N0} ({functions * perFile,7:F1})   "
+            + $"macros      {macros,7:N0}   classes {classes,6:N0}   "
+            + $"deps {dependencies,6:N0}   pathcalls {pathCalls,7:N0}");
     }
 
     /// <summary>

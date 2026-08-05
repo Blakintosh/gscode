@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Database;
@@ -26,21 +26,24 @@ public sealed class DeclarationIndex
     private readonly Dictionary<string, HashSet<string>> _filesByName = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
 
-    /// <summary>Replaces one file's contribution: removes names it no longer declares, adds the rest.</summary>
-    public void Apply(string path, ImmutableArray<FunctionSymbol> oldFunctions, ImmutableArray<FunctionSymbol> newFunctions)
+    /// <summary>
+    /// The distinct key names a function list declares. Built outside the caller's write gate for
+    /// the same reason as <see cref="ReferenceIndex.KeysOf"/>.
+    /// </summary>
+    public static HashSet<string> NamesOf(ImmutableArray<FunctionSymbol> functions)
     {
-        HashSet<string> oldNames = new(StringComparer.Ordinal);
-        foreach ( FunctionSymbol function in oldFunctions )
+        HashSet<string> names = new(StringComparer.Ordinal);
+        foreach ( FunctionSymbol function in functions )
         {
-            oldNames.Add(function.KeyName);
+            names.Add(function.KeyName);
         }
 
-        HashSet<string> newNames = new(StringComparer.Ordinal);
-        foreach ( FunctionSymbol function in newFunctions )
-        {
-            newNames.Add(function.KeyName);
-        }
+        return names;
+    }
 
+    /// <summary>Replaces one file's contribution: removes names it no longer declares, adds the rest.</summary>
+    public void Apply(string path, HashSet<string> oldNames, HashSet<string> newNames)
+    {
         lock ( _gate )
         {
             foreach ( string name in oldNames )

@@ -48,12 +48,24 @@ public sealed class LanguageStore
     /// <summary>Swaps in a new record and diffs it into the reference index and the class graph.</summary>
     public void Upsert(ScriptRecord record)
     {
+        // Built BEFORE the gate. Both are O(symbols in the file) — thousands of references for a
+        // large script — and they depend only on the INCOMING record, so nothing about them needs
+        // to be serialised. Doing them inside meant every indexing thread waited on every other
+        // thread's hashing, which made this stage 22% of CoD4's cold-index thread-time at 21x
+        // parallelism. The gate now covers only the swap and the dictionary mutations it orders.
+        HashSet<SymbolKey> newKeys = ReferenceIndex.KeysOf(record.References);
+        HashSet<string> newNames = DeclarationIndex.NamesOf(record.Functions);
+
         lock ( _writeGate )
         {
             _records.TryGetValue(record.Path, out ScriptRecord? previous);
             _records[record.Path] = record;
-            _referenceIndex.Apply(record.Path, previous?.References ?? [], record.References);
-            _declarationIndex.Apply(record.Path, previous?.Functions ?? [], record.Functions);
+
+            // The OLD sets still have to be built here: `previous` is only knowable under the gate,
+            // and reading it outside would let two upserts of one file diff against the same
+            // version. On a cold index it is always null and these are empty.
+            _referenceIndex.Apply(record.Path, ReferenceIndex.KeysOf(previous?.References ?? []), newKeys);
+            _declarationIndex.Apply(record.Path, DeclarationIndex.NamesOf(previous?.Functions ?? []), newNames);
             _classGraph.Apply(record.Path, record.Classes);
         }
     }
@@ -65,8 +77,8 @@ public sealed class LanguageStore
         {
             if ( _records.TryRemove(normalizedPath, out ScriptRecord? previous) )
             {
-                _referenceIndex.Apply(normalizedPath, previous.References, []);
-                _declarationIndex.Apply(normalizedPath, previous.Functions, []);
+                _referenceIndex.Apply(normalizedPath, ReferenceIndex.KeysOf(previous.References), []);
+                _declarationIndex.Apply(normalizedPath, DeclarationIndex.NamesOf(previous.Functions), []);
                 _classGraph.Remove(normalizedPath);
             }
         }

@@ -176,8 +176,8 @@ public class CorpusPerfTests
             // is serial and holds wall-clock on its own, so it is reported against that instead.
             //
             // index.read/analyse/commit/enqueue are the top-level per-file stages. Anything else
-            // (extract.*) is a sub-scope nested INSIDE analyse, so it is listed but not summed —
-            // adding it to the total would count the same microseconds twice.
+            // (extract.* inside analyse, commit.* inside commit) is a sub-scope, so it is listed but
+            // not summed — adding it to the total would count the same microseconds twice.
             string[] topLevel = ["index.read", "index.analyse", "index.commit", "index.enqueue", "index.restore"];
             double threadTime = scopes.Where(s => topLevel.Contains(s.Key)).Sum(s => s.Value.Milliseconds);
 
@@ -188,7 +188,7 @@ public class CorpusPerfTests
                 bool nested = !topLevel.Contains(scope.Key) && scope.Key != "index.enumerate";
                 string share = scope.Key == "index.enumerate"
                     ? $"{scope.Value.Milliseconds / watch.Elapsed.TotalMilliseconds * 100,5:F1}% of WALL (serial)"
-                    : $"{scope.Value.Milliseconds / threadTime * 100,5:F1}% of thread-time{(nested ? " (nested in analyse)" : "")}";
+                    : $"{scope.Value.Milliseconds / threadTime * 100,5:F1}% of thread-time{(nested ? " (nested)" : "")}";
 
                 _output.WriteLine(
                     $"     {scope.Key,-20} {scope.Value.Milliseconds,8:F0} ms  {scope.Value.Count,7:N0} calls  {share}");

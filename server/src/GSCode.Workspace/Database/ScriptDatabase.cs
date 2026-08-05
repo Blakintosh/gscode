@@ -1,7 +1,8 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.IO.Hashing;
 using System.Text;
+using GSCode.Core.Instrumentation;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -171,8 +172,13 @@ public sealed class ScriptDatabase
     /// <summary>Stores a completed analysis as the file's current record.</summary>
     public ScriptRecord Commit(ParseResult result, ResolutionContext context, bool isDirty, string relativePath = "")
     {
+        // Split, because index.commit covers both halves and they have completely different cures:
+        // build is per-file allocation and hashing, upsert is contention on the store's write gate.
+        PerfTracker.Begin("commit.build");
         ScriptRecord record = BuildRecord(result, context, isDirty, relativePath);
+        PerfTracker.End();
 
+        PerfTracker.Begin("commit.upsert");
         if ( record.Language == ScriptLanguage.Gsh )
         {
             UpsertGsh(record);
@@ -181,6 +187,8 @@ public sealed class ScriptDatabase
         {
             StoreFor(record.Language).Upsert(record);
         }
+
+        PerfTracker.End();
 
         return record;
     }
@@ -281,7 +289,10 @@ public sealed class ScriptDatabase
     /// <summary>The content-hash function used for cache invalidation (xxHash64 of the UTF-8 text).</summary>
     public static ulong ComputeContentHash(string text)
     {
-        return XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(text));
+        PerfTracker.Begin("commit.hash");
+        ulong hash = XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(text));
+        PerfTracker.End();
+        return hash;
     }
 
     /// <summary>The stable string form of a context ("raw", "mod:name", "workspace:folder").</summary>

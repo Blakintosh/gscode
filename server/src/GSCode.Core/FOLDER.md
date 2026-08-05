@@ -17,6 +17,9 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 - `static class PathUtil` — THE path normalizer; nothing else calls Path.GetFullPath.
   - `NormalizeAbsolute(path)` — full path, no trailing separator, lowercase, interned.
     This is the ScriptDatabase key format.
+  - `WithoutExtension(path)` — the `#using`/`#include` spelling. Unlike the two normalizers it
+    leaves case and separators alone: its output is READ by people, in diagnostic messages and in
+    the directives a quick fix writes, rather than used as a comparison key.
   - `NormalizeScriptPath(path)` — game-relative form: backslash separators, trimmed,
     lowercase, interned.
   - `IsUnder(path, directory)` — prefix containment with a separator-boundary check
@@ -143,6 +146,13 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 - `record GameProfile` — the portability seam: all game-specific knowledge (extensions,
   global object names, bundled data-file names) flows through this profile so a future
   GSC-dialect port is data, not code changes. `GameProfile.BlackOps3` is the T7 profile.
+- `EngineNameFallbackPrefix` — the game whose builtin NAMES may stand in when this profile ships no
+  library of its own (MW2 borrowing CoD4's). Names only; signatures, documentation and arity stay
+  this game's or nothing, which `BuiltinApiSet.EngineNamesFor` enforces by returning a set rather
+  than a library.
+- `HasTrustedEngineNames` — the one predicate for "may a rule say a name is NOT an engine function":
+  this game's library is complete, or it ships none and borrows. It exists because that condition
+  was once spelled three ways across two assemblies, two of which could disagree.
 
 ## Profiles/SupportedProfiles.cs
 

@@ -34,13 +34,33 @@ surfaces.
 ## Database/LanguageStore.cs
 
 - `sealed class LanguageStore` — ONE language world: path-keyed record map + its
-  ReferenceIndex. Upsert swaps records atomically and diffs the index; GSC/CSC
-  isolation is two instances of this class, never a filter.
+  ReferenceIndex, DeclarationIndex and ClassGraph. Upsert swaps records atomically and diffs all
+  three under one write gate; GSC/CSC isolation is two instances of this class, never a filter.
 
 ## Database/ReferenceIndex.cs
 
 - `sealed class ReferenceIndex` — the inverted key→files index. One lock, held per
   file-diff; exact ranges come from scanning the named files' reference lists.
+
+## Database/DeclarationIndex.cs
+
+- `sealed class DeclarationIndex` — the name→declaring-files index, the counterpart to
+  `ReferenceIndex`. Maintained by the same Apply-on-upsert diff under the store's write gate, and
+  holds PATHS rather than records for the same reason: a record is swapped wholesale on every edit,
+  so holding one would pin a stale version. Keyed on `FunctionSymbol.KeyName` and compared ordinally
+  — exactly the comparison `LookupFunctions` performs, so the candidate set is identical.
+- It exists because `LookupFunctions` used to walk every record and every function in each (~30,000
+  symbols on BO3) once per CALL SITE, which made four lints 97% of the cross-file lint cost. It
+  narrows WHERE to look and decides nothing: visibility, namespace, privacy and overlay shadowing
+  all still apply after it. See `PERF.md`.
+
+## Database/FunctionLookupCache.cs
+
+- `sealed class FunctionLookupCache` — a memo over `LookupFunctions` for the span of ONE file's
+  analysis. Scripts call the same handful of names repeatedly, so the same question was asked dozens
+  of times per file. Per file and discarded with it, deliberately: a longer-lived cache would need
+  invalidating on every edit anywhere in the workspace, since an unqualified call under a merge
+  dialect resolves by name across everything indexed — a subscription problem, not a dictionary.
 
 ## Database/ScriptDatabase.cs
 
@@ -117,6 +137,12 @@ surfaces.
   visibility. `FindGshReferences` is the deliberate language-guard exception: a `.gsh` serves
   both languages, so macros declared in headers live in the shared GSH store and are
   unreachable from either LanguageStore.
+- `LookupFunctions` asks `DeclarationIndex` for its candidate files rather than scanning every
+  record; everything it does with them is unchanged. `IncludeClosure` walks the `#include` graph
+  TRANSITIVELY — the compiler flattens the chain, which the corpus settled — and reports whether the
+  walk saw everything, since a rule may only assert a name is out of scope against a complete one.
+  The direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
+  completion offering too little is harmless where an Error is not.
 
 ## Database/MethodResolution.cs
 
@@ -309,6 +335,16 @@ reported as an Error must never land on code that ships and works.
   curated in), MW2 ships no library and borrows CoD4's NAMES, and WaW and BO1 qualify for neither —
   with the gate lifted they report 204 and 387, mostly engine functions their own libraries lack.
 - `AmbiguousFunctionLint` (5007) — one name reachable as several distinct declarations.
+- `FileImports` — a file's import directives resolved ONCE, shared by the four lints that each used
+  to walk the directives, resolve every path, normalize and `store.TryGet` again. On a BO3 file that
+  was the same `#using` list resolved three times per keystroke. `Complete` carries the bail-out all
+  four share; `Usings` and `Includes` stay APART because no dialect has both and one list would let
+  the include rule judge a `#using`. `UsingNotFoundLint` deliberately does NOT share it — it asks
+  whether the target exists on DISK, which is what decides linking, while this also requires the
+  index to have reached it.
+- `ImportGate` — the precondition several lints share: an unresolved `#insert` or `#using` makes the
+  set of legal names unknowable, so a rule about to say "this matches nothing" stands down. The
+  caller names which codes matter.
 - `ArgumentCountLint` (5022/5023) — the rule is NOT symmetric. A **script function** is only wrong
   with too MANY arguments: passing fewer is legal and idiomatic, the rest being `undefined`. A
   **builtin** is engine-validated, so its mandatory count is a real lower bound — but only where
@@ -329,7 +365,13 @@ reported as an Error must never land on code that ships and works.
 - `UnusedBindingLint` (5020) — a parameter or `waittill` output nothing reads. A **Hint**, so it
   never reaches the Problems panel and the fade is the entire output: at any panel-visible severity
   it would report 5,277 findings on BO3's own scripts, most of them engine-fixed callback signatures.
-- `UnusedIncludeLint` (5012) / `UnusedUsingLint` — an import contributing nothing.
+- `UnusedIncludeLint` (5012) / `UnusedUsingLint` — an import contributing nothing. 5012's test is
+  MARGINAL, not direct, and that is what stops a Hint manufacturing an Error: a file may include a
+  hub purely as a conduit, and judging the directive by what its TARGET declares called that unused,
+  offered "Remove", and the removal made 5026 fire. It is measured against what is CERTAINLY kept
+  rather than against the other candidates — otherwise two conduits each cover the other and both
+  are declared removable, which the bulk "remove all" action would then act on. 46 stock directives
+  across CoD4, MW2 and WaW were in that state.
 - `UnusedLocalLint` (5008) — a local assigned and never read.
 - `UsingNotFoundLint` (5009) — an import naming no file.
 - `VoidResultLint` (5019) — keeping the result of a builtin that returns nothing. Only builtins:

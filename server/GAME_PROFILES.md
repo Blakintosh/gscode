@@ -229,6 +229,26 @@ game has `.csc`.
 | bo1  | `bo1`  | ✗ | 751 functions (all inherited from CoD4) + 156 derived client functions, 466 radiant keys (126 client-only), 108 fields, 3,125 stock scripts |
 | mw2 / all cores | *(null)* | — | nothing; a workspace on that game loads no builtin data rather than another game's |
 
+**A game with no library of its own may borrow a sibling's NAMES** —
+`EngineNameFallbackPrefix`, set only for MW2, which points at CoD4 one game earlier in the same
+engine line. Names only, and the type enforces it: `BuiltinApiSet.EngineNamesFor` returns a
+`FrozenSet<string>`, so a caller cannot render a borrowed signature by accident. `For()` still
+returns this game's OWN library, empty when it ships none, because presenting a sibling's parameter
+list as this game's would be a confident lie.
+
+The distinction that makes borrowing safe is membership versus detail. A rule that must ask "could
+this name be an engine function?" fails closed without an answer and therefore never runs at all on
+MW2; a close sibling answers that question well enough, and being wrong costs silence — a name the
+sibling has and this game does not is simply left unjudged.
+
+Measured before it was set. With the gate lifted, MW2's 1,479 shipped scripts produce findings under
+exactly one name; WaW and BO1 produce 204 and 387 under names their own libraries lack. So MW2
+borrows and the other two stay gated: a second incomplete list does not add up to a trustworthy one.
+
+`HasTrustedEngineNames` is the single predicate for "may a rule say a name is NOT an engine
+function" — this game's library is complete, or it ships none and borrows. It exists because the
+condition was once spelled three ways across two assemblies, and two of the three could disagree.
+
 **`HasCompleteBuiltinLibrary` is a separate claim from `Verified`.** Verified is about the DIALECT —
 proven against the game's own scripts. Completeness is about the FUNCTION LIST, and WaW's and BO1's
 come from a mod-tools wordfile that is demonstrably partial: sweeping BO1's own scripts against it
@@ -243,6 +263,19 @@ WaW's and BO1's largely *inherit* CoD4's, making them a plausible signature for 
 rather than a verified one for theirs. Measured rather than assumed: checking a call against the
 mandatory count reported 4 findings across BO3's shipped scripts and 141 / 280 / 157 across CoD4's,
 WaW's and BO1's, so only BO3 sets it and `WrongBuiltinArgumentCount` is gated on it.
+
+**A missing name is added on the inherited-sibling layer, cited both ways.** CoD4 lacked `Abs`;
+WaW and BO1 lacked that plus `AddSpawnPoints`, `LookAtEntity`, `SetTeam`, `SetInvisibleToAll`,
+`GetPerks` and `ClearSpawnPoints`. Each is documented by BO3, so the signature is carried from there
+the way `Ceil` and `Floor` already were — and each remark also records the shipped-script evidence
+that it is an engine function at all, since a carried signature says what it looks like, not that it
+exists. `maps\mp\gametypes\_spawning.gsc` calls `AddSpawnPoints` while including only
+`maps\mp\_utility` and `maps\mp\_geometry`, neither of which reaches a declaration, and the file
+ships. That took WaW's unexplained names from 204 to 62 and BO1's from 387 to 6.
+
+Add them BY HAND to both the curated source and the generated file. Regenerating without
+`GSCODE_COD4_DOCS` set drops every documented signature CoD4 has, and a wholesale rewrite of the
+curated file for a handful of entries destroys the reviewability of a build input.
 
 Where the documentation is simply *wrong*, the correction goes in a curated override
 (`tools/field-data/sources/curated/<prefix>_api_overrides.json`) that applies over every other layer,

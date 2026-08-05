@@ -112,6 +112,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/CompletionHandler.cs
 
+- `ResolveData` carries `builtin` alongside the name and namespace, because a name can be BOTH an
+  engine function and a script one and they are separate rows. Documentation is fetched by a second
+  request holding only that blob, so a row that did not say which it was got whichever the NAME
+  resolved to — BO3's builtin `SpawnSpectator` row rendered `globallogic_spawn::spawnSpectator`
+  under a header reading "builtin". Every value there is a STRING, a contract the tests pin after a
+  serializer-casing bug broke the code-lens click.
 - Maps `CompletionEngine` entries to LSP items (kind, snippet insert text). Registers the
   trigger characters `. : # & % \ / "` so completion re-fires where it matters (the `"` fires
   literal completion inside a string). Passes the completion.literals setting through to the engine.
@@ -194,6 +200,20 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/CodeActionHandler.cs
 
+- `CallFixContext` — the per-REQUEST state both call fixes share: the name→declarations lookup
+  (cached even when it finds NOTHING, which is the common case here), the existing `#using` set, the
+  included-path list and both insertion points. A request carries every diagnostic overlapping the
+  selection, so each of those was being recomputed per diagnostic — twenty unresolved calls meant
+  twenty full store scans and forty directive walks for identical answers. Built per request and
+  dropped with it, so it cannot go stale against an edited buffer.
+- `MissingIncludeFixes` answers 5026 with one "Add #include" per file that declares the name. No
+  "create it here" offer, unlike the 5013/5014 fixes: there the name matched nothing and a
+  declaration was an honest answer; here the function demonstrably exists and a second copy is a bug.
+  Preferred only when a single file can supply it, since several same-named functions is the normal
+  state of a merge dialect.
+- `ImportInsertionPoint<TNode>` serves `#using` and `#include` alike. The `#include` version was a
+  verbatim copy with the node type swapped — the same lesson `FindRemovableDuplicates` already
+  learned, where a `#using`-only helper left the four merge games with a lint and no fix.
 - Quick fixes over the open document. `FindRemovableDuplicates(result, selection)` returns the
   import directives — `#using` AND `#include` — whose (case-insensitive) path was already imported
   earlier and whose line overlaps the selection → a "Remove duplicate ..." QuickFix deleting the

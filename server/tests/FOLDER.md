@@ -45,6 +45,16 @@ both — `--filter "Category!=Corpus&Category!=Perf"`, which is what CI uses:
 | `Category=Corpus` | the diagnostic/formatter sweep over five games. Minutes |
 | `Category=Perf` | per-file timing and the phase breakdown. Writes `temp/gscode-perf-<game>.html` |
 
+`CorpusPerfTests` holds both halves. The two parse sweeps time `ScriptAnalysis.Analyze` and split it
+into lex/preprocess/parse/extract; `WorkspaceLints_WhereTheTimeGoes` times the CROSS-FILE LINTS,
+which the parse sweeps do not touch at all and which cost roughly twenty times as much. It parses
+outside the stopwatch so it measures lint cost only, and indexes fully first because two of the
+heaviest rules stand down without a finished index — timing them against a partial one reports the
+cheap half as the total. CoD4 and BO3 only, since each game measured pays a full index.
+
+Add `-p:GscodeInstrumentation=true` for the per-lint breakdown; the `PerfTracker` scopes in
+`WorkspaceLints` are `[Conditional]` and absent from an ordinary build.
+
 `GSCODE_PERF_REPORT` overrides where the perf pages are written, matching `GSCODE_SWEEP_REPORT`. They
 are deliberately different filenames, so a perf run never overwrites a diagnostic report.
 
@@ -91,7 +101,10 @@ and Verified, keyword sets, and every capability flag · `NameTableTests` intern
 
 Needs a database. Fixtures use `FakeFileSystem`, so no game install is involved.
 
-**Analysis (the lints).** `UsingNotFoundLintTests` 5009 · `NamespaceUsageLintTests` 5000 ·
+**Analysis (the lints).** `IncludeUsageLintTests` 5026, the reported case plus every gate the Error
+rests on and the transitive chain the corpus proved is required · `ArgumentCountLintTests` 5022/5023,
+which declaration a call is judged against when a script function and a builtin share a name —
+including the differently-SPELLED case that must not shadow · `UsingNotFoundLintTests` 5009 · `NamespaceUsageLintTests` 5000 ·
 `UnusedUsingLintTests` 5001 · `UnusedIncludeLintTests` 5012 · `PreferBooleanLiteralLintTests` 5002 ·
 `PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests` 5004/5005 · `DevBlockCallLintTests` 5006,
 including which dev-only builtin candidates the stock corpus contradicts · `AmbiguousFunctionLintTests`
@@ -142,6 +155,19 @@ The LSP layer, the formatter, and the real-corpus sweeps.
 **Corpus** (all `Category=Corpus`, all no-op without their game). `CorpusFixture` locates BO3 via
 `GSCODE_CORPUS_BO3`; `GameCorpusFixture` locates the others via `GSCODE_CORPUS_<GAME>`, built from
 each profile's `ShortName`.
+
+Every class here joins `GameProfileCollection`, which is what stops them running in parallel.
+`GameProfile.Active` is process-global, so two games swept at once means one analysed under the
+other's dialect — that once reported 861 of BO3's 980 scripts as unparseable. The rule had been
+written in a comment long before anything enforced it. Within a game the per-file loop DOES run in
+parallel, mirroring `WorkspaceIndexer`, and sweeps are memoized per game since four tests want the
+same one.
+
+The sweep also lifts every library gate and folds those findings into the same report marked
+`[NOT SHOWN — rule gated off for this game]`. A gate exists so the EDITOR does not blame a user for
+a hole in our data; the sweep is offline, so the same caution there only hides the holes from the
+people who curate them. Findings the real pipeline already produced are not repeated, so a marked
+line means "suppressed on this game" rather than "run twice".
 - `CorpusTests` — BO3: nothing throws, lex/parse errors stay within budget, and the formatter
   preserves the token stream, is idempotent, produces line edits that reproduce the whole-document
   format, and neither loses nor invents a line when sorting directives or aligning.

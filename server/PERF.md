@@ -50,6 +50,41 @@ median is dominated by whichever GC pause lands inside it. Deriving the total fr
 them agree by construction, but it also means anything `ScriptAnalysis.Analyze` does AROUND the four
 phases is no longer measured.
 
+## Measured: the CROSS-FILE LINTS, which cost more than the parse
+
+The table above times `ScriptAnalysis.Analyze` only. Everything the editor runs ON TOP of that
+parse — the cross-file lints — went unmeasured until 2026-08-04, and turned out to be roughly
+twenty times larger. `CorpusPerfTests.WorkspaceLints_WhereTheTimeGoes` times `WorkspaceLints.LintsOnly`
+per file with the parse done outside the stopwatch, so it is lint cost and nothing else. It needs a
+FINISHED index, unlike the parse sweep: two of the heaviest rules stand down without one, and timing
+them against a partial index reports the cheap half as the total.
+
+Four rules were 97% of it, and all four shared one cause — `DatabaseQueries.LookupFunctions` walked
+every record and every function in each (~30,000 symbols on BO3) once per CALL SITE, so a file with
+two hundred calls scanned the whole store two hundred times.
+
+| | BO3, 980 files | CoD4, 894 files |
+|---|---:|---:|
+| before | 21,939 ms | 24,534 ms |
+| + `DeclarationIndex` (name → declaring files) | 1,640 ms | 1,527 ms |
+| + `FunctionLookupCache` (per-file memo) | **1,612 ms** | **1,277 ms** |
+
+13.6x and 19.2x. The distribution is the part that mattered, because `TextSyncHandler` debounces at
+~250 ms and the tail was over it:
+
+| | before | after |
+|---|---|---|
+| BO3 median / p90 / p99 / max | 4.03 / 64 / 197 / 470 ms | 0.48 / 3.7 / 21 / 57 ms |
+| CoD4 median / p90 / p99 / max | 3.45 / 68 / 343 / 611 ms | 0.56 / 3.6 / 11 / 45 ms |
+
+CoD4's worst file, `scoutsniper.gsc`, fell from 611 ms to 45. The corpus sweep dropped from 5.9
+minutes to 2.8 as a side effect, and every game's per-code finding counts stayed byte-identical —
+the index narrows WHERE to look and decides nothing.
+
+Read the shares rather than the absolute milliseconds: the per-lint breakdown needs
+`-p:GscodeInstrumentation=true`, which costs something itself, and this sweep is sequential where
+the corpus one is parallel.
+
 ### How much to trust a single run
 
 Three runs of identical code and methodology, cod4:
@@ -253,6 +288,19 @@ memory breakdown. Both the scopes and the dump are `[Conditional]`, so a normal 
 nothing for either.
 
 ## Corpus tests
+
+Every class under `GSCode.Server.Tests/Corpus` shares ONE xUnit collection
+(`GameProfileCollection`), which is what stops them running in parallel. `GameProfile.Active` is
+process-global — the indexer enumerates through its script globs, the lexer gates keywords on it —
+so two games swept at once means one analysed under the other's dialect. That is not hypothetical:
+it once reported 861 of BO3's 980 scripts as unparseable, complaining that `function` and `#using`
+were unknown. The constraint had been written in a comment for a long time and enforced by nothing.
+
+The same global is why the games CANNOT be parallelised against each other. Within a game the
+per-file loop does run in parallel, at `ProcessorCount - 1`, mirroring what `WorkspaceIndexer`
+already does with the same pipeline; sweeps are also memoized per game, since four tests wanted the
+same one. Those two took the sweep from 13 minutes to 5.9, and the lint indexing above took it to
+2.8.
 
 `GSCode.Server.Tests/Corpus` runs the real BO3 raw tree named by `GSCODE_CORPUS_BO3`, tagged
 `Category=Corpus` and excluded on CI (which has no mod-tools install; the tests also no-op on

@@ -335,7 +335,28 @@ allocation-shape changes, so a live set that moves means something else changed.
    its test project so the probe measures what ships. This is what takes fragmentation to
    *zero*: heap size now equals live. It costs bo1 about 9% on the cold index (2336 → 2547 ms)
    and nothing measurable on cod4 or bo3 — still faster than before the work started.
-   `CompactIfFragmented` consequently never fires now; it stays as a safety net.
+
+### The compaction is unconditional, and the fragmentation gate was wrong
+
+`CompactIfFragmented` used to skip the post-index compaction below 32 MB of measured
+fragmentation. Once (3) took fragmentation to roughly zero, that gate meant the compaction
+**never ran** — and that turned out to cost 446 MB.
+
+Measured on bo1, cache attached, immediately after indexing:
+
+| | working set | fragmented | LOH size |
+|---|---:|---:|---:|
+| after a forced blocking gen2 | 668.8 MB | 0.8 MB | 56.7 MB |
+| after a **compacting** gen2 | **222.5 MB** | 0.0 MB | 56.2 MB |
+
+cod4 shows the same shape, 253.9 → 124.0 MB. Nothing extra was freed — live is 146.2 MB in both
+bo1 rows — so this is purely pages being returned to the OS.
+
+**"Nothing is fragmented" and "nothing is being held" are not the same statement.** An ordinary
+collection reclaims large-object memory without moving anything or decommitting it;
+`LargeObjectHeapCompactionMode.CompactOnce` is the only thing that gives the pages back. Gating
+on fragmentation measured the wrong quantity — what a user sees is the working set. It now runs
+once per index, unconditionally, on a thread nobody is waiting on.
 
 **Rejected, with evidence** — do not retry these without new information:
 

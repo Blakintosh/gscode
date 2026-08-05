@@ -120,6 +120,21 @@ public class MemoryProbeTests
             // the last unforced row and this one is garbage and holes, not retention.
             _output.WriteLine(Row("fcd", Sample()));
 
+            // And once more COMPACTING, which is what the server does at the end of an index.
+            //
+            // The gap between this row and the one above it is the whole argument for doing that
+            // unconditionally. A forced blocking gen2 leaves BO1 reporting under a megabyte of
+            // fragmentation and a 669 MB working set; compacting the large-object heap takes the
+            // working set to 222 without freeing a single additional object. Ordinary collections
+            // reclaim large-object memory without returning the pages, so "nothing is fragmented"
+            // and "nothing is being held" are not the same statement.
+            System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            _output.WriteLine(Row("cmp", Read()));
+
             _output.WriteLine($"     dropped writes: {cache.DroppedWrites}");
             GC.KeepAlive(indexer);
         }

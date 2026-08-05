@@ -360,10 +360,8 @@ LanguageServer server = await LanguageServer.From(options =>
                             await draining.WaitForIdleAsync(CancellationToken.None);
                         }
 
-                        if ( CompactIfFragmented() )
-                        {
-                            LogMemoryReport("compaction", outcome);
-                        }
+                        Compact();
+                        LogMemoryReport("compaction", outcome);
 
                         // Compiles to nothing without -p:GscodeInstrumentation=true, so a normal
                         // build pays neither the timing scopes nor this dump.
@@ -530,22 +528,26 @@ static string RootSource(string configured, string? resolved)
 //
 // Gated on measured fragmentation so a warm start, which restores records and fragments
 // almost nothing, skips the pause entirely.
-static bool CompactIfFragmented()
+// One compacting collection at the indexing -> serving transition.
+//
+// UNCONDITIONAL, and it used to be gated on 32 MB of measured fragmentation. The gate made sense
+// while fragmentation was the whole problem — a warm start had none and skipped the pause. It
+// stopped making sense once System.GC.ConserveMemory took fragmentation to roughly zero: the gate
+// then read "nothing to do" while the large-object heap was still holding tens of megabytes of
+// committed, unfragmented, unreturned space that no ordinary collection gives back.
+//
+// Fragmentation was never the thing worth measuring. What the user sees is committed memory, and
+// CompactOnce is the only thing that returns large-object pages to the OS. It runs once per index,
+// so its cost is a one-off pause on a thread nobody is waiting on.
+static void Compact()
 {
-    const long fragmentationThresholdBytes = 32L * 1024 * 1024;
-
-    long fragmented = GC.GetGCMemoryInfo().FragmentedBytes;
-    if ( fragmented < fragmentationThresholdBytes )
-    {
-        return false;
-    }
-
     System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
     GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
     GC.WaitForPendingFinalizers();
-    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
 
-    return true;
+    // The second pass collects what the finalizers just released; the LOH mode is one-shot and has
+    // already been consumed, so this one is an ordinary compacting gen2.
+    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
 }
 
 // A one-shot memory breakdown, logged at the indexing -> serving transition.

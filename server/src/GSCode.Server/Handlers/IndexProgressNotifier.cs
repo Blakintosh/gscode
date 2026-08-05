@@ -49,9 +49,29 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
     private readonly ILanguageServerFacade _server;
     private readonly Stopwatch _sinceLastSend = Stopwatch.StartNew();
 
+    /// <summary>
+    /// Completes when the connection's output pump has settled enough for a notification to
+    /// survive. Sending inside the initialize/initialized window drops them.
+    ///
+    /// Indexing used to wait on this before it began, which spent the settling time doing nothing.
+    /// It is the NOTIFICATIONS that cannot go early, not the work, so the wait now lives here and
+    /// the indexer starts immediately.
+    /// </summary>
+    private Task _settled = Task.CompletedTask;
+
+    private readonly Lock _startGate = new();
+    private int _startedTotal = -1;
+    private bool _startedSent;
+
     public IndexProgressNotifier(ILanguageServerFacade server)
     {
         _server = server;
+    }
+
+    /// <summary>Holds every notification until <paramref name="settled"/> completes.</summary>
+    public void SendNothingBefore(Task settled)
+    {
+        _settled = settled;
     }
 
     public void Started(int totalFiles)
@@ -62,7 +82,47 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
         // opened the channel to diagnose.
         Log.Information("Indexing {Count} script file(s)…", totalFiles);
 
-        _server.SendNotification("gscode/indexingStarted", new IndexingStartedParams(totalFiles));
+        // Remembered rather than sent, because indexing now starts before the pipe is ready.
+        // Whichever of Progressed or Completed first finds the window open sends it, so the client
+        // still receives it in order and still receives it exactly once.
+        Volatile.Write(ref _startedTotal, totalFiles);
+        FlushStartedIfReady();
+    }
+
+    /// <summary>
+    /// Sends the remembered "started" if the window is open and it has not gone out yet. True once
+    /// the client has it, which is the caller's permission to send anything that assumes it.
+    ///
+    /// Locked rather than claimed with an Interlocked flag, and the difference matters: a thread
+    /// that merely LOSES the claim would carry on and send its progress notification while the
+    /// winner was still inside SendNotification, so the client could see a position report before
+    /// it had been told the total. Holding the lock makes the loser wait for the send it skipped.
+    /// Uncontended after the first one, and progress is throttled to 40 ms besides.
+    /// </summary>
+    private bool FlushStartedIfReady()
+    {
+        if ( !_settled.IsCompleted )
+        {
+            return false;
+        }
+
+        int totalFiles = Volatile.Read(ref _startedTotal);
+        if ( totalFiles < 0 )
+        {
+            return false;
+        }
+
+        lock ( _startGate )
+        {
+            if ( _startedSent )
+            {
+                return true;
+            }
+
+            _server.SendNotification("gscode/indexingStarted", new IndexingStartedParams(totalFiles));
+            _startedSent = true;
+            return true;
+        }
     }
 
     /// <summary>
@@ -94,6 +154,20 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
 
     public void Progressed(int filesIndexed, int totalFiles)
     {
+        // Dropped outright while the window is closed — which is what happened to them before, the
+        // difference being that the indexer was idle then and is working now. Progress is a
+        // position report, so losing the early ones costs nothing; the next one carries the truth.
+        if ( !_settled.IsCompleted )
+        {
+            return;
+        }
+
+        // No progress before the total it is a fraction of.
+        if ( !FlushStartedIfReady() )
+        {
+            return;
+        }
+
         bool isFinal = filesIndexed == totalFiles;
         if ( !isFinal && _sinceLastSend.ElapsedMilliseconds < ThrottleMilliseconds )
         {
@@ -110,6 +184,28 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
             "Indexing finished: {Count} file(s) in {Seconds:F1}s",
             filesIndexed,
             elapsed.TotalSeconds);
+
+        // The one notification that may NOT be dropped: it is terminal, and a client that misses it
+        // shows a progress bar forever. A workspace small enough to index inside the settling window
+        // arrives here before the pipe is ready, so the send is deferred onto the window rather than
+        // waited for — this runs on the indexing path and must not block it.
+        if ( !_settled.IsCompleted )
+        {
+            _ = _settled.ContinueWith(
+                _ => SendCompleted(filesIndexed, totalFiles, elapsed),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            return;
+        }
+
+        SendCompleted(filesIndexed, totalFiles, elapsed);
+    }
+
+    private void SendCompleted(int filesIndexed, int totalFiles, TimeSpan elapsed)
+    {
+        FlushStartedIfReady();
 
         _server.SendNotification(
             "gscode/indexingComplete",

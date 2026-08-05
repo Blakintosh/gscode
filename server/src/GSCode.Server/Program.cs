@@ -303,10 +303,13 @@ LanguageServer server = await LanguageServer.From(options =>
                 {
                     try
                     {
-                        // Let the connection's output pump settle before the first progress
-                        // notification; sending in the initialize/initialized window can drop
-                        // notifications on a workspace small enough to index in a few ms.
-                        await Task.Delay(500, CancellationToken.None);
+                        // The connection's output pump needs a moment before a notification will
+                        // survive — sending inside the initialize/initialized window drops them.
+                        // The WORK does not need that moment, and used to wait for it anyway: half
+                        // a second of an idle process on every single start. The wait now gates the
+                        // notifier instead, so indexing runs through it.
+                        notifier.SendNothingBefore(Task.Delay(500, CancellationToken.None));
+
                         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
                         IndexOutcome outcome = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
                         stopwatch.Stop();

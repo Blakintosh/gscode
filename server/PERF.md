@@ -298,10 +298,62 @@ skips the pause. The report is logged again afterwards as "Memory after compacti
 run shows its own before/after. v1 reached the same conclusion in `cfccd26`, "Force aggressive
 GC after workspace indexing completes".
 
+### Measured again (2026-08-05, the LOH attack)
+
+The paragraph above was right about the mechanism and understated the size. Measured per
+generation for the first time (`GenerationInfo`, which nothing had ever read), **100% of the
+fragmentation is the large-object heap** on every game — gen2 holds none worth reporting:
+
+| | fragmented | gen2 free | LOH free / size |
+|---|---:|---:|---:|
+| bo1 (2,963 files) | 486.5 MB | 0.0 MB | 486.5 / 542.7 MB |
+| cod4 (904) | 189.4 MB | 0.0 MB | 189.4 / 205.8 MB |
+| bo3 (1,085) | 104.6 MB | 0.0 MB | 104.6 / 114.4 MB |
+
+Three changes, medians of three cold indexes per game:
+
+| | LOH holes | LOH size | working set | cold index |
+|---|---|---|---|---|
+| bo1 | 611 → 379 → **0.1** MB | 667 → 435 → **56** MB | 949 → 740 → **581** MB | 2732 → 2336 → **2547** ms |
+| cod4 | 199 → 124 → **0.0** MB | 215 → 140 → **16** MB | 377 → 274 → **263** MB | 915 → 824 → **824** ms |
+| bo3 | 91 → 77 → **0.0** MB | 101 → 86 → **10** MB | 304 → 338 → **292** MB | 2078 → 2103 → **2063** ms |
+
+Columns are: before, after the token-width work, after `System.GC.ConserveMemory`.
+
+**Retained memory did not move** at any step — bo1 146.0 MB, cod4 51.4, bo3 50.4, identical to
+the tenth of a megabyte. That was the constraint, and it is the number to watch: these were
+allocation-shape changes, so a live set that moves means something else changed.
+
+1. **`Provenance` is a class** (`PToken.cs`). It describes an expansion *site*, of which a file
+   has a handful, but was copied into every token at 48 bytes inside an 80-byte `PToken` — for
+   most tokens, three nulls. `PToken` is now 40 bytes and its array crosses the LOH threshold at
+   ~2,120 tokens instead of ~1,060. Pinned by `TokenWidthTests`.
+2. **Two collections pre-sized** — the preprocessor's output (measured 0.56–0.59 output tokens
+   per lexed token; below one because dropping trivia outweighs macro expansion) and
+   `SourceText`'s line starts.
+3. **`System.GC.ConserveMemory: 5`** in `runtimeconfig.template.json`, in both the server and
+   its test project so the probe measures what ships. This is what takes fragmentation to
+   *zero*: heap size now equals live. It costs bo1 about 9% on the cold index (2336 → 2547 ms)
+   and nothing measurable on cod4 or bo3 — still faster than before the work started.
+   `CompactIfFragmented` consequently never fires now; it stays as a safety net.
+
+**Rejected, with evidence** — do not retry these without new information:
+
+- **Pre-sizing the *lexer's* token builder** by the same characters-per-token ratio made bo1
+  *worse*, 486 → 596 MB of holes. One ratio cannot fit every file (bo1 spans 2.86 characters per
+  token at p10 to 5.87 at p90), so sparse files over-allocated by nearly double and borderline
+  arrays that had been *under* the threshold were pushed over it.
+- **Renting the lexer's buffer from `ArrayPool<Token>.Shared`** fixed the fragmentation but
+  **doubled retained memory** (bo1 146 → 279, cod4 51 → 126). The shared pool holds buffers per
+  thread and per core across 23 indexing threads and does not release them under a forced gen2.
+  It converts holes into live buffers, which is the wrong trade for a long-running server.
+
 Two things this measurement also settled:
 
 - **Do not switch to Server GC.** Per-core heaps would multiply the fragmentation, and
-  Workstation GC is the right choice for a language server.
+  Workstation GC is the right choice for a language server. The 2026-08-05 `ArrayPool` result
+  is the same lesson from another angle: anything that keeps per-core state across the indexing
+  threads trades holes for retention.
 - **Cache restore is not skipping `NameTable` interning.** That worry predicted a warm start
   carrying duplicate strings, which would show up as a *higher* warm live set. It came in 3.9
   MB *lower*, so the concern is closed.

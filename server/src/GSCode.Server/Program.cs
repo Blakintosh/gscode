@@ -1,4 +1,4 @@
-using CommandLine;
+﻿using CommandLine;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
@@ -315,6 +315,17 @@ LanguageServer server = await LanguageServer.From(options =>
                             outcome.Total,
                             stopwatch.Elapsed.TotalSeconds,
                             outcome.Restored);
+                        // A dropped cache write is not an error the user can act on, but it is the
+                        // difference between the next start being warm and it silently re-analysing
+                        // part of the workspace. It used to be invisible.
+                        if ( cacheHolder.Current is SqliteCache activeCache && activeCache.DroppedWrites > 0 )
+                        {
+                            Log.Warning(
+                                "{Count} record(s) could not be queued for the workspace cache; those files "
+                                + "will be re-analysed on the next start",
+                                activeCache.DroppedWrites);
+                        }
+
                         if ( outcome.SkippedOversized > 0 )
                         {
                             Log.Warning(
@@ -323,7 +334,13 @@ LanguageServer server = await LanguageServer.From(options =>
                                 WorkspaceIndexer.MaxAnalysedCharacters / (1024 * 1024));
                         }
 
-                        LogIndexBreakdown(languageServer.Services.GetRequiredService<ScriptDatabase>());
+                        // Guarded: the breakdown walks every record in both stores plus every GSH,
+                        // accumulating counts and a namespace set, to produce ONE Verbose line. That
+                        // traversal ran whatever the log level was.
+                        if ( Log.IsEnabled(Serilog.Events.LogEventLevel.Verbose) )
+                        {
+                            LogIndexBreakdown(languageServer.Services.GetRequiredService<ScriptDatabase>());
+                        }
 
                         // Only now: the cross-file picture is complete, and a record's stored
                         // diagnostics are meaningless for files still waiting to be analysed.

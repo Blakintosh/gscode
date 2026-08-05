@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
@@ -55,6 +55,35 @@ public class SqliteCacheTests : IDisposable
                 new ReferenceEntry(new SymbolKey("test", "sample", SymbolKind.Function), TextRange.FromCoordinates(0, 9, 0, 15), ReferenceKind.Definition),
             ],
         };
+    }
+
+    [Fact]
+    public async Task NothingIsQueuedSilently_AndDropsAreCounted()
+    {
+        // Enqueue is deliberately non-blocking: it runs on the indexing threads and must not wait on
+        // disk. But its result used to be discarded, and the channel is BOUNDED — TryWrite on a full
+        // one returns false and the record is simply gone. BoundedChannelFullMode.Wait does not
+        // apply to TryWrite, only to WriteAsync, so nothing about the configuration prevented it.
+        //
+        // The failure was invisible: the next start reported a normal warm restore and quietly
+        // re-analysed whatever had been lost. This pins the counter that makes it observable, and the
+        // ordinary case that must never report a drop.
+        await using ( SqliteCache cache = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            for ( int index = 0; index < 64; index++ )
+            {
+                cache.Enqueue(SampleRecord(@$"c:\ws\scripts\sample{index}.gsc", (ulong)index));
+            }
+
+            Assert.Equal(0, cache.DroppedWrites);
+        }
+
+        await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            // Every record queued has to survive the round trip, which is the property the counter
+            // exists to protect: a non-zero count means this assertion would have been wrong.
+            Assert.Equal(64, reopened.LoadAll().Count);
+        }
     }
 
     [Fact]

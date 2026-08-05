@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
@@ -20,6 +20,13 @@ public sealed class SqliteCache : IAsyncDisposable
     private sealed record UpsertCommand(ScriptRecord Record) : WriteCommand;
     private sealed record DeleteCommand(string Path) : WriteCommand;
 
+    /// <summary>
+    /// How many pending writes the queue holds before it starts refusing them. Named because the
+    /// number is a trade — larger costs memory holding records the writer has not reached, smaller
+    /// drops entries sooner under a backlog. See <see cref="Enqueue"/>.
+    /// </summary>
+    private const int WriteQueueCapacity = 4096;
+
     private readonly SqliteConnection _connection;
     private readonly Channel<WriteCommand> _writes;
     private readonly Task _writerLoop;
@@ -27,7 +34,7 @@ public sealed class SqliteCache : IAsyncDisposable
     private SqliteCache(SqliteConnection connection)
     {
         _connection = connection;
-        _writes = Channel.CreateBounded<WriteCommand>(new BoundedChannelOptions(4096)
+        _writes = Channel.CreateBounded<WriteCommand>(new BoundedChannelOptions(WriteQueueCapacity)
         {
             SingleReader = true,
             FullMode = BoundedChannelFullMode.Wait,
@@ -163,16 +170,47 @@ public sealed class SqliteCache : IAsyncDisposable
         return records;
     }
 
-    /// <summary>Queues a record to persist (never blocks the caller for disk).</summary>
+    /// <summary>
+    /// Records the channel refused, which is the difference between a warm start and a warm start
+    /// that quietly re-analyses part of the workspace.
+    /// </summary>
+    public int DroppedWrites
+    {
+        get { return Volatile.Read(ref _dropped); }
+    }
+
+    private int _dropped;
+
+    /// <summary>
+    /// Queues a record to persist (never blocks the caller for disk).
+    ///
+    /// <c>TryWrite</c> is the right call here — this runs on the indexing threads and must not block
+    /// on disk — but its RESULT used to be discarded. The channel is bounded at
+    /// <see cref="WriteQueueCapacity"/>, and <c>BoundedChannelFullMode.Wait</c> only applies to
+    /// <c>WriteAsync</c>: on a full channel <c>TryWrite</c> returns false and the record is simply
+    /// gone. With N analysis threads feeding one writer that also serializes and gzips inline, a
+    /// backlog past the bound is reachable on a large corpus — and the only symptom was a later
+    /// "warm" start silently re-analysing those files.
+    ///
+    /// Counted rather than blocked: dropping a cache entry costs one file's re-analysis next start,
+    /// while blocking an indexing thread on disk costs the whole index. The count is reported when
+    /// indexing finishes, so it can never be silent again.
+    /// </summary>
     public void Enqueue(ScriptRecord record)
     {
-        _writes.Writer.TryWrite(new UpsertCommand(record));
+        if ( !_writes.Writer.TryWrite(new UpsertCommand(record)) )
+        {
+            Interlocked.Increment(ref _dropped);
+        }
     }
 
     /// <summary>Queues a file removal.</summary>
     public void EnqueueDelete(string normalizedPath)
     {
-        _writes.Writer.TryWrite(new DeleteCommand(normalizedPath));
+        if ( !_writes.Writer.TryWrite(new DeleteCommand(normalizedPath)) )
+        {
+            Interlocked.Increment(ref _dropped);
+        }
     }
 
     private async Task ProcessWritesAsync()
@@ -256,37 +294,12 @@ public sealed class SqliteCache : IAsyncDisposable
             upsert.ExecuteNonQuery();
         }
 
-        ReplaceDeps(record, transaction);
-    }
-
-    private void ReplaceDeps(ScriptRecord record, SqliteTransaction transaction)
-    {
-        using ( SqliteCommand clear = _connection.CreateCommand() )
-        {
-            clear.Transaction = transaction;
-            clear.CommandText = "DELETE FROM deps WHERE path = $path;";
-            clear.Parameters.AddWithValue("$path", record.Path);
-            clear.ExecuteNonQuery();
-        }
-
-        foreach ( DependencyEdge edge in record.Dependencies )
-        {
-            if ( edge.ResolvedPath.Length == 0 )
-            {
-                continue;
-            }
-
-            using SqliteCommand insert = _connection.CreateCommand();
-            insert.Transaction = transaction;
-            insert.CommandText = """
-                INSERT OR IGNORE INTO deps (path, dep_path, is_insert)
-                VALUES ($path, $dep, $insert);
-                """;
-            insert.Parameters.AddWithValue("$path", record.Path);
-            insert.Parameters.AddWithValue("$dep", edge.ResolvedPath);
-            insert.Parameters.AddWithValue("$insert", edge.IsInsert ? 1 : 0);
-            insert.ExecuteNonQuery();
-        }
+        // The `deps` table is deliberately NOT written. Nothing reads it: the same dependency edges
+        // travel inside the serialized record (ScriptRecord.Dependencies), and that is what the
+        // indexer's phase two uses to find files whose headers changed. Writing it cost a DELETE
+        // plus one freshly-built SqliteCommand per edge per file — new command object, new parameter
+        // collection, SQL re-parsed each time — plus maintaining ix_deps_dep, for rows no query ever
+        // selected. The table stays in the schema so an existing database still opens.
     }
 
     private void ApplyDelete(string path, SqliteTransaction transaction)

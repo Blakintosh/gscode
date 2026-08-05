@@ -1,5 +1,6 @@
 ﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Extraction;
@@ -99,32 +100,68 @@ public static class WorkspaceLints
         // The file's imports, resolved ONCE for the four lints that each used to resolve them
         // again. Every resolve is a filesystem probe per configured root, and this runs on every
         // keystroke — on a BO3 file the same #using list was being walked three times over.
+        PerfTracker.Begin("lint.FileImports.Resolve");
         FileImports imports = FileImports.Resolve(result, store, language, resolver, path);
+        PerfTracker.End();
 
         // First: the other #using lints abandon their pass when an import will not resolve, so
         // without this a typo silences them and says nothing about why. It deliberately does NOT
         // share the resolution above: it asks whether the target exists on DISK, which is what
         // decides whether the script links, rather than whether the index has reached it yet.
+        PerfTracker.Begin("lint.UsingNotFoundLint");
         lints.AddRange(UsingNotFoundLint.Analyze(result, language, resolver, path));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.NamespaceUsageLint");
         lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path, contextId, imports));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.UnusedUsingLint");
         lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path, imports));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.UnusedIncludeLint");
         lints.AddRange(UnusedIncludeLint.Analyze(result, store, language, resolver, path, imports));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.AmbiguousFunctionLint");
         lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path, imports));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.UnusedLocalLint");
         lints.AddRange(UnusedLocalLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.CaseLabelLint");
         lints.AddRange(CaseLabelLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.UnreachableCodeLint");
         lints.AddRange(UnreachableCodeLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.UnassignedVariableLint");
         lints.AddRange(UnassignedVariableLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.DuplicateImportLint");
         lints.AddRange(DuplicateImportLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.UnusedBindingLint");
         lints.AddRange(UnusedBindingLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.VoidResultLint");
         lints.AddRange(VoidResultLint.Analyze(result, languageBuiltins));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.ClassCycleLint");
         lints.AddRange(ClassCycleLint.Analyze(result, store, contextId));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.ArgumentCountLint");
         lints.AddRange(ArgumentCountLint.Analyze(result, store, contextId, path, languageBuiltins));
+        PerfTracker.End();
         // One typer for both field rules: each of them runs the assignment inference, and the
         // walk is the expensive half.
+        PerfTracker.Begin("lint.FlowTyper.ctor");
         FlowTyper typer = new(languageBuiltins, objectFields);
+        PerfTracker.End();
 
+        PerfTracker.Begin("lint.PreferBooleanLiteralLint");
         lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins, objectFields, typer));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.PrivateAccessLint");
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
+        PerfTracker.End();
         // Only once the workspace has been indexed. Every other lint degrades gracefully on a
         // partial index — a lookup that finds nothing simply offers nothing — but this one reports
         // a name as nonexistent, and before indexing finishes every script function in the
@@ -135,8 +172,10 @@ public static class WorkspaceLints
         // so a private function counts as EXISTING and only 5003 speaks for it.
         if ( database.HasCompletedIndex )
         {
+            PerfTracker.Begin("lint.FunctionResolutionLint");
             lints.AddRange(FunctionResolutionLint.Analyze(
                 result, store, contextId, path, languageBuiltins, resolver: resolver));
+            PerfTracker.End();
 
             // Same precondition, one step further along: this one asserts a name is not merged into
             // scope, and before indexing finishes no file's includes have contributed anything, so
@@ -147,14 +186,20 @@ public static class WorkspaceLints
             // one is whether a name could be an engine function — a question CoD4's list answers for
             // it. Everything else here keeps reading languageBuiltins, since a signature or an
             // argument count borrowed from another game would be a confident lie.
+            PerfTracker.Begin("lint.IncludeUsageLint");
             lints.AddRange(IncludeUsageLint.Analyze(
                 result, store, language, resolver, path, builtins.EngineNamesFor(language), contextId,
                 imports: imports));
+            PerfTracker.End();
 
         }
+        PerfTracker.Begin("lint.ReadOnlyWriteLint");
         lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.DevBlockCallLint");
         lints.AddRange(DevBlockCallLint.Analyze(
             result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));
+        PerfTracker.End();
 
         return lints.ToImmutable();
     }

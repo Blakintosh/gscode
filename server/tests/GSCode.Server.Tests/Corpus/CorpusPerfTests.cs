@@ -188,11 +188,21 @@ public class CorpusPerfTests
                     // so a file that throws is dropped rather than counted as fast.
                     WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
 
+                    // AFTER the warm pass, so the scopes belong to the timed run. Reset-then-snapshot
+                    // turns the global aggregate into a per-file profile, and is only sound because
+                    // this sweep is sequential. Empty unless built with GSCODE_INSTRUMENTATION.
+                    PerfTracker.Reset();
+
                     Stopwatch watch = Stopwatch.StartNew();
                     WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
                     watch.Stop();
 
-                    timings.Add(new PerfReport.Item(path, watch.Elapsed.TotalMilliseconds, new FileInfo(path).Length));
+                    Dictionary<string, (double Milliseconds, long Count)> scopes = [];
+                    PerfTracker.Snapshot(scopes);
+
+                    timings.Add(new PerfReport.Item(
+                        path, watch.Elapsed.TotalMilliseconds, new FileInfo(path).Length,
+                        SubPhases: scopes.Count > 0 ? scopes : null));
                 }
                 catch ( Exception )
                 {

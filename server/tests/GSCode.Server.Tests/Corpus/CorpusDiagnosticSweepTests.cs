@@ -1,4 +1,5 @@
-﻿using System.Collections.Immutable;
+﻿using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -41,6 +42,14 @@ public class CorpusDiagnosticSweepTests
         GscDiagnosticCode Code, DiagnosticSeverity Severity, string Message, string Path, int Line, int Character);
 
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
+
+    /// <summary>
+    /// Marks a finding the editor does NOT show, because the rule that produced it stands down on
+    /// this game. Carried in the message so it cannot be separated from the finding, and so the
+    /// report — which groups by message — labels every site rather than a heading somebody scrolls
+    /// past.
+    /// </summary>
+    private const string UngatedPrefix = "[NOT SHOWN — rule gated off for this game] ";
 
     /// <summary>One game to sweep: its profile, its raw root, and how to enumerate and analyse it.</summary>
     private sealed record Target(GameProfile Profile, string RawRoot, Func<PathResolver> Resolver,
@@ -89,9 +98,24 @@ public class CorpusDiagnosticSweepTests
             CorpusFixture.Analyze);
     }
 
-    /// <summary>Indexes one game's corpus, then lints every file against the finished database.</summary>
+    /// <summary>
+    /// Indexes one game's corpus, then lints every file against the finished database.
+    ///
+    /// MEMOIZED per game. Four tests in this class want the same sweep of the same games, and each
+    /// redid the full index and lint — BO3 three times over, CoD4 and MW2 twice. The work is
+    /// deterministic and read-only, so the second asker can have the first one's answer; that alone
+    /// was about three minutes of a thirteen-minute run. Safe in a static: every corpus class shares
+    /// one collection, so nothing runs concurrently with it, and a sweep never mutates what it reads.
+    /// </summary>
+    private static readonly Dictionary<string, List<Finding>> SweepCache = new(StringComparer.Ordinal);
+
     private static async Task<List<Finding>> SweepAsync(Target target)
     {
+        if ( SweepCache.TryGetValue(target.Profile.ShortName, out List<Finding>? cached) )
+        {
+            return cached;
+        }
+
         PathResolver resolver = target.Resolver();
         PhysicalFileSystem fileSystem = new();
         NameTable names = new();
@@ -103,8 +127,40 @@ public class CorpusDiagnosticSweepTests
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         ObjectFields objectFields = ObjectFields.Load(ApiDirectory);
 
-        List<Finding> findings = [];
-        foreach ( string path in target.Scripts() )
+        // Every gate lifted, and the findings folded into this same report MARKED.
+        //
+        // A gate exists so the EDITOR does not blame a user for a hole in OUR data. The sweep is
+        // offline and reports to us, so the same caution here only hides those holes from the people
+        // who curate them — and a finding kept in a separate artifact is a finding nobody opens.
+        // The marker therefore travels in the message rather than being left implicit; the report
+        // groups by message, so it survives grouping and labels every site.
+        //
+        // This is how a gate gets re-examined. WaW and BO1 stand down because their libraries lack
+        // engine functions, not because their scripts are wrong, and the only way to know when that
+        // has stopped being true is to keep counting. Both flags move together because both describe
+        // the library rather than the scripts.
+        GameProfile asIfTrusted = target.Profile with
+        {
+            HasCompleteBuiltinLibrary = true,
+            HasReliableBuiltinSignatures = true,
+        };
+
+        // Nothing to lift where the gates are already open, and nothing to compare against where the
+        // game ships no library at all. Running the extra pass there costs a second lint of every
+        // file to build a set that would be discarded as duplicates.
+        bool anyGateShut = !target.Profile.HasCompleteBuiltinLibrary
+            || !target.Profile.HasReliableBuiltinSignatures;
+
+        bool liftGates = anyGateShut && builtins.For(ScriptLanguage.Gsc).Count > 0;
+
+        // Per FILE, in parallel, exactly as the indexer analyses them. That the production indexer
+        // already drives this same pipeline through Parallel.ForEachAsync at ProcessorCount - 1 is
+        // what says this is safe: NameTable and InsertCache are ConcurrentDictionary-backed,
+        // PathResolver holds only its config and file system, and an indexed record is immutable.
+        ConcurrentBag<Finding> collected = [];
+        ParallelOptions options = new() { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) };
+
+        await Parallel.ForEachAsync(target.Scripts(), options, (path, token) =>
         {
             ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
 
@@ -116,10 +172,11 @@ public class CorpusDiagnosticSweepTests
                 // diagnostics as well as the cross-file lints. Reporting lints alone hid the
                 // 4000-series entirely -- precache rules, default-parameter rules, duplicate
                 // functions -- which is most of what a user actually sees underlined.
+                List<Finding> forFile = [];
                 foreach ( Diagnostic diagnostic in WorkspaceLints.Analyze(
                     result, language, path, database, resolver, builtins, objectFields) )
                 {
-                    findings.Add(new Finding(
+                    forFile.Add(new Finding(
                         diagnostic.Code,
                         diagnostic.Severity,
                         diagnostic.Message,
@@ -127,14 +184,94 @@ public class CorpusDiagnosticSweepTests
                         diagnostic.Range.Start.Line,
                         diagnostic.Range.Start.Character));
                 }
+
+                if ( liftGates && (language == ScriptLanguage.Gsc || language == ScriptLanguage.Csc) )
+                {
+                    // Anything the real pipeline already reported is not repeated, so a marked
+                    // finding means "suppressed on this game" rather than "run twice".
+                    HashSet<(GscDiagnosticCode Code, int Line, int Character)> alreadyReported =
+                        [.. forFile.Select(f => (f.Code, f.Line, f.Character))];
+
+                    foreach ( Diagnostic diagnostic in Ungated(
+                        result, database, resolver, builtins, path, language, asIfTrusted) )
+                    {
+                        if ( !alreadyReported.Add(
+                            (diagnostic.Code, diagnostic.Range.Start.Line, diagnostic.Range.Start.Character)) )
+                        {
+                            continue;
+                        }
+
+                        forFile.Add(new Finding(
+                            diagnostic.Code,
+                            diagnostic.Severity,
+                            UngatedPrefix + diagnostic.Message,
+                            path,
+                            diagnostic.Range.Start.Line,
+                            diagnostic.Range.Start.Character));
+                    }
+                }
+
+                foreach ( Finding finding in forFile )
+                {
+                    collected.Add(finding);
+                }
             }
             catch ( Exception )
             {
                 // Crashes are the lex/parse gate's business, not this one's.
             }
-        }
 
+            return ValueTask.CompletedTask;
+        });
+
+        // Sorted, because a ConcurrentBag returns them in whatever order threads finished while the
+        // report shows "e.g. <first site>" — an unstable order would make two runs of one corpus
+        // look like different findings.
+        List<Finding> findings =
+        [
+            .. collected.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(f => f.Line)
+                .ThenBy(f => f.Character)
+                .ThenBy(f => (int)f.Code),
+        ];
+
+        SweepCache[target.Profile.ShortName] = findings;
         return findings;
+    }
+
+    /// <summary>
+    /// The rules that stand down on a game whose builtin library we do not trust, run as though we
+    /// did — 5013/5014 with the unverified half lifted, 5023's arity bound, and 5026's scope check.
+    ///
+    /// Each of these is gated for the same reason and reports the same thing when lifted: not that
+    /// the scripts are wrong, but that our data for that game is short. 5014's own documentation
+    /// says a corpus sweep of it IS the candidate list for the builtins the API is missing, ranked
+    /// by how often they are called — and until now nothing swept it, so that list was assembled by
+    /// hand.
+    ///
+    /// A game with no library at all still reports nothing from the two builtin rules, and that is
+    /// correct rather than an oversight: there is no data to compare a name against.
+    /// </summary>
+    private static IEnumerable<Diagnostic> Ungated(
+        ParseResult result,
+        ScriptDatabase database,
+        PathResolver resolver,
+        BuiltinApiSet builtins,
+        string path,
+        ScriptLanguage language,
+        GameProfile asIfTrusted)
+    {
+        LanguageStore store = database.StoreFor(language);
+        BuiltinApi languageBuiltins = builtins.For(language);
+        string contextId = ScriptDatabase.ContextIdOf(resolver.GetContext(path));
+
+        return FunctionResolutionLint.Analyze(
+                result, store, contextId, path, languageBuiltins, asIfTrusted,
+                judgeUnverifiedBuiltins: true, resolver: resolver)
+            .Concat(ArgumentCountLint.Analyze(result, store, contextId, path, languageBuiltins, asIfTrusted))
+            .Concat(IncludeUsageLint.Analyze(
+                result, store, language, resolver, path,
+                builtins.EngineNamesFor(language), contextId, asIfTrusted));
     }
 
     [Fact]
@@ -235,8 +372,9 @@ public class CorpusDiagnosticSweepTests
     {
         // The #include counterpart to NoNamespaceIsReportedUnimported, over every include game whose
         // engine names 5026 will actually judge: CoD4 by its own verified library, MW2 by CoD4's
-        // standing in for the one it does not ship. WaW and BO1 are gated off and swept by
-        // MeasureIncludeRuleWithoutABuiltinLibrary instead, which counts rather than asserts.
+        // standing in for the one it does not ship. WaW and BO1 are gated off, and the sweep reports
+        // what the rule WOULD say there under the [NOT SHOWN] marker — counted, never asserted,
+        // because those games' libraries are the thing at fault rather than their scripts.
         //
         // The stock scripts compile, so every hit is a false positive in ours until proven
         // otherwise. Reported by name so a failure says WHICH function rather than a count.
@@ -329,110 +467,6 @@ public class CorpusDiagnosticSweepTests
         Assert.Equal(DiagnosticSeverity.Error, reported.Severity);
         Assert.Contains("initLootDisplay", reported.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(@"maps\mp\_loot", reported.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// What 5026 would report on the include games whose engine names it does NOT trust, if it did.
-    /// Measurement rather than assertion: the gate exists because a name that is an undocumented
-    /// engine function AND a script function elsewhere gets blamed on the user, and counting is the
-    /// only way to know the price of lifting it for a game.
-    ///
-    /// It is what settled the current line. WaW reports 204 and BO1 387 — <c>lookatentity</c>,
-    /// <c>setteam</c>, <c>getthreat</c>, engine functions their own libraries lack — while MW2
-    /// reported 215, every one of them <c>abs</c>, which is why MW2 alone was given a fallback.
-    ///
-    /// The gate is lifted by asking about a PROFILE that claims a complete library, not by a mode
-    /// parameter on the rule: the production signature should not carry an argument that exists for
-    /// one test.
-    /// </summary>
-    [Fact]
-    public async Task MeasureIncludeRuleOnGamesItDoesNotJudge()
-    {
-        foreach ( GameCorpus corpus in GameCorpusFixture.Available() )
-        {
-            if ( corpus.Profile.ImportStyle != ImportStyle.Include || corpus.Profile.HasTrustedEngineNames )
-            {
-                continue;
-            }
-
-            await AsGameAsync(corpus.Profile, () => MeasureAsync(corpus));
-        }
-    }
-
-    private async Task<bool> MeasureAsync(GameCorpus corpus)
-    {
-        PathResolver resolver = GameCorpusFixture.Resolver(corpus);
-        NameTable names = new();
-        ScriptDatabase database = new();
-
-        WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
-        await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
-
-        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory, corpus.Profile);
-        IReadOnlyList<string> scripts = GameCorpusFixture.Scripts(corpus);
-
-        // The profile as it is, except that its own (incomplete) library is taken at its word — which
-        // is exactly the assumption under measurement.
-        GameProfile asIfTrusted = corpus.Profile with { HasCompleteBuiltinLibrary = true };
-
-        Dictionary<string, int> byName = new(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, List<string>> sitesByName = new(StringComparer.OrdinalIgnoreCase);
-
-        foreach ( string path in scripts )
-        {
-            ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
-            if ( language != ScriptLanguage.Gsc && language != ScriptLanguage.Csc )
-            {
-                continue;
-            }
-
-            try
-            {
-                ParseResult result = GameCorpusFixture.Analyze(corpus, path, resolver, names);
-                string contextId = ScriptDatabase.ContextIdOf(resolver.GetContext(path));
-
-                foreach ( Diagnostic diagnostic in IncludeUsageLint.Analyze(
-                    result, database.StoreFor(language), language, resolver, path,
-                    builtins.EngineNamesFor(language), contextId, asIfTrusted) )
-                {
-                    string name = diagnostic.Message.Split('\'')[1];
-                    byName[name] = byName.GetValueOrDefault(name) + 1;
-
-                    // The SITES, not merely a tally. These findings exist nowhere else: the sweep
-                    // reports run the real pipeline, where this rule is gated off for these games, so
-                    // their HTML carries no 5026 section at all. A count with no file to open is a
-                    // number nobody can act on, and acting on them is the entire point of measuring.
-                    if ( !sitesByName.TryGetValue(name, out List<string>? sites) )
-                    {
-                        sites = [];
-                        sitesByName[name] = sites;
-                    }
-
-                    sites.Add($"{Path.GetRelativePath(corpus.RawRoot, path)}:{diagnostic.Range.Start.Line + 1}");
-                }
-            }
-            catch ( Exception )
-            {
-                // Crashes are the lex/parse gate's business.
-            }
-        }
-
-        _output.WriteLine("");
-        _output.WriteLine($"########## {corpus.Profile.ShortName}: {byName.Values.Sum()} would-be 5026 across {scripts.Count} scripts, {byName.Count} distinct names");
-
-        foreach ( KeyValuePair<string, int> entry in byName.OrderByDescending(e => e.Value).Take(30) )
-        {
-            _output.WriteLine($"{entry.Value,6}x  {entry.Key}");
-
-            // Capped: a name with hundreds of sites is a language fact the rule has not learned yet,
-            // and the first handful show that as clearly as the whole list would.
-            foreach ( string site in sitesByName[entry.Key].Take(12) )
-            {
-                _output.WriteLine($"           {site}");
-            }
-        }
-
-        return true;
     }
 
     [Fact]

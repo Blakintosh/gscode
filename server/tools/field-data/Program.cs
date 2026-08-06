@@ -255,6 +255,7 @@ static void GenerateWordfileGameData(string prefix, string wordfilePath, string 
     // repo HOLDS documented detail, and a regeneration on a machine without the docs would replace
     // every signature with a bare name and then hand the wreckage to WaW and BO1 through enrichFrom.
     List<string> functions = CleanNames(ParseWordfileSection(lines, 7), stripLeadingDot: false, lowercase: false);
+
     GenerateWordfileApi(
         prefix,
         docsRoot,
@@ -425,7 +426,39 @@ static void WriteJson<T>(string path, T value, bool camelCase = false)
         // relaxed encoder is safe here and writes them literally, as the t7 files already are.
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     });
-    File.WriteAllText(path, json + "\n", new System.Text.UTF8Encoding(false));
+
+    File.WriteAllText(path, ToAscii(path, json) + "\n", new System.Text.UTF8Encoding(false));
+}
+
+// The bundled artifacts are ASCII, and this is where that is enforced rather than hoped for.
+//
+// Typographic punctuation is the only thing that ever shows up: a documentation page's smart quotes,
+// or — as happened here — an em dash typed into a generated description, which put 244 of them into
+// mw2_api_gsc.json. They are folded to their ASCII equivalents, since the character carries no
+// meaning the replacement loses. Anything else is reported loudly and left alone, because a silent
+// substitution in a name or a value would be worse than a file somebody has to look at.
+static string ToAscii(string path, string json)
+{
+    // Written as code points so the mapping cannot itself be corrupted by an editor's encoding -
+    // a table of smart quotes is the one place where a re-encoded source file would silently stop
+    // matching the very characters it exists to remove.
+    string folded = json
+        .Replace((char)0x2014, '-')    // em dash
+        .Replace((char)0x2013, '-')    // en dash
+        .Replace((char)0x2018, (char)0x27)   // left single quote
+        .Replace((char)0x2019, (char)0x27)   // right single quote
+        .Replace((char)0x201C, (char)0x22)   // left double quote
+        .Replace((char)0x201D, (char)0x22)   // right double quote
+        .Replace((char)0x00A0, ' ')    // non-breaking space
+        .Replace(((char)0x2026).ToString(), "...");  // ellipsis
+
+    int remaining = folded.Count(static character => character > (char)0x7F);
+    if ( remaining > 0 )
+    {
+        Console.WriteLine($"  WARNING: {Path.GetFileName(path)} still holds {remaining} non-ASCII character(s) after folding.");
+    }
+
+    return folded;
 }
 
 // Converts the per-function documentation pages into the builtin library, merged with the
@@ -752,13 +785,17 @@ static void EnsureEmpiricalSources(string prefix, string harvestDir, string apiD
         }
     }
 
-    if ( !File.Exists(serverSourcePath) )
+    // An EMPTY result is never written. The guard above is "first harvest wins", so a file created
+    // from a run that found nothing would take that slot permanently and silence every later harvest
+    // — and it is not a hypothetical: bringing MW2 up ran the generator before its first sweep, and
+    // the resulting [] would have swallowed all 335 findings on the next run.
+    if ( serverEntries.Count > 0 && !File.Exists(serverSourcePath) )
     {
         WriteJson(serverSourcePath, serverEntries);
         Console.WriteLine($"  {prefix} empirical GSC source: {serverEntries.Count} entries");
     }
 
-    if ( !File.Exists(clientSourcePath) )
+    if ( clientEntries.Count > 0 && !File.Exists(clientSourcePath) )
     {
         WriteJson(clientSourcePath, clientEntries);
         Console.WriteLine($"  {prefix} empirical CSC source: {clientEntries.Count} entries");
@@ -846,8 +883,21 @@ static List<EmpiricalBuiltinEvidence> ReadEmpiricalBuiltins(string? path)
                 }
             }
 
+            List<EmpiricalArgumentShape> shapes = [];
+            if ( function.TryGetProperty("argumentShapes", out JsonElement shapeArray)
+                && shapeArray.ValueKind == JsonValueKind.Array )
+            {
+                foreach ( JsonElement shape in shapeArray.EnumerateArray() )
+                {
+                    int position = shape.TryGetProperty("position", out JsonElement positionElement)
+                        && positionElement.TryGetInt32(out int index) ? index : shapes.Count;
+                    shapes.Add(new EmpiricalArgumentShape(
+                        position, ReadStrings(shape, "names"), ReadStrings(shape, "types")));
+                }
+            }
+
             findings.Add(new EmpiricalBuiltinEvidence(
-                game, name, calls, files, argumentCounts, calledAsMethod, access, languages, sites));
+                game, name, calls, files, argumentCounts, calledAsMethod, access, languages, sites, shapes));
         }
     }
     catch ( JsonException )
@@ -859,9 +909,64 @@ static List<EmpiricalBuiltinEvidence> ReadEmpiricalBuiltins(string? path)
     return findings;
 }
 
-// A sparse entry is deliberate. The corpus proves that the name exists, but observed arity alone
-// does not prove a complete signature (variadic calls and overloads are common). An empty overload
-// list enables resolution/completion without turning an observed maximum into a false upper bound.
+// The string entries of a named array property, in the order the report wrote them (which is
+// most-observed first), skipping anything that is not a string.
+static IReadOnlyList<string> ReadStrings(JsonElement parent, string property)
+{
+    List<string> values = [];
+    if ( !parent.TryGetProperty(property, out JsonElement array) || array.ValueKind != JsonValueKind.Array )
+    {
+        return values;
+    }
+
+    foreach ( JsonElement item in array.EnumerateArray() )
+    {
+        if ( item.ValueKind == JsonValueKind.String && item.GetString() is string value )
+        {
+            values.Add(value);
+        }
+    }
+
+    return values;
+}
+
+// An entry RECONSTRUCTED from call sites, for a name no documented CoD4 or Black Ops III library
+// covers. The corpus proves the name exists; the shape here is the callers' own evidence about it,
+// which is the only evidence there is.
+//
+// What is claimed, and on what basis:
+//   * The parameter COUNT is the widest call seen. Not an upper bound on what the engine accepts —
+//     only on what the shipped scripts asked for.
+//   * MANDATORY stops at the narrowest call seen. Every position past it is written optional
+//     because the corpus demonstrates a call that omits it.
+//   * A parameter NAME is the word the callers used for it, taken verbatim, and null where they
+//     always passed an expression rather than a variable.
+//   * A TYPE only where the spelling IS the type (a string literal, a vector, a number) and every
+//     observation of that position agreed. One dissenting spelling drops it to untyped.
+//
+// The safety of doing this at all rests on HasReliableBuiltinSignatures, which MW2 does NOT set:
+// ArgumentCountLint judges a call against a builtin signature only for games that do, so a
+// reconstruction here can never turn into a diagnostic on someone's code. It reaches hover,
+// completion and signature help — where a named parameter list is worth far more than a bare name —
+// and nothing that reports.
+// The global objects are the one thing callers write that is never a NAME for the argument. A file
+// passing `self` at position two is saying which entity it handed over, not that the parameter is
+// called self — and `stopFxOnTag( effect, self, tag )` reads as though the engine wants a thing
+// called self. Skipped in favour of the next-ranked spelling, and the report keeps the raw evidence.
+static string? PickParameterName(IReadOnlyList<string> names)
+{
+    string[] globals = ["self", "level", "game", "world", "anim"];
+    foreach ( string name in names )
+    {
+        if ( !globals.Contains(name, StringComparer.OrdinalIgnoreCase) )
+        {
+            return name;
+        }
+    }
+
+    return null;
+}
+
 static Dictionary<string, object> SparseEmpiricalEntry(string game, EmpiricalBuiltinEvidence evidence)
 {
     string arities = evidence.ArgumentCounts.Count == 0
@@ -871,15 +976,66 @@ static Dictionary<string, object> SparseEmpiricalEntry(string game, EmpiricalBui
         ? ""
         : $" First sites: {string.Join(", ", evidence.Sites)}.";
 
+    int widest = evidence.ArgumentCounts.Count == 0 ? 0 : evidence.ArgumentCounts.Max();
+    int narrowest = evidence.ArgumentCounts.Count == 0 ? 0 : evidence.ArgumentCounts.Min();
+
+    List<object> parameters = [];
+    for ( int position = 0; position < widest; position++ )
+    {
+        EmpiricalArgumentShape? shape = evidence.ArgumentShapes.FirstOrDefault(s => s.Position == position);
+        string? name = shape is null ? null : PickParameterName(shape.Names);
+        string? type = shape is not null && shape.Types.Count == 1 ? shape.Types[0] : null;
+
+        // Alternatives are worth showing: a position the callers name three different ways is
+        // telling you what it is far better than any one of those words alone.
+        string alternatives = shape is null || shape.Names.Count <= 1
+            ? ""
+            : $" Also written {string.Join(", ", shape.Names.Skip(1))}.";
+
+        Dictionary<string, object?> parameter = new()
+        {
+            ["name"] = name ?? $"arg{position + 1}",
+            ["description"] = name is null
+                ? "Reconstructed from call sites; every observed call passed an expression here, so the callers give it no name."
+                : $"Reconstructed from call sites, where callers name it '{name}'.{alternatives}",
+            ["mandatory"] = position < narrowest,
+        };
+
+        if ( type is not null )
+        {
+            parameter["type"] = new Dictionary<string, object> { ["dataType"] = type };
+        }
+
+        parameters.Add(parameter);
+    }
+
+    List<object> overloads = [];
+    if ( parameters.Count > 0 || evidence.CalledAsMethod )
+    {
+        Dictionary<string, object?> overload = new()
+        {
+            ["calledOn"] = evidence.CalledAsMethod
+                ? new Dictionary<string, object?>
+                {
+                    ["name"] = "entity",
+                    ["description"] = "Reconstructed from call sites: this function is called on a target.",
+                }
+                : null,
+            ["parameters"] = parameters,
+        };
+
+        overloads.Add(overload);
+    }
+
     return new Dictionary<string, object>
     {
         ["name"] = evidence.Name,
         ["description"] = $"Observed in the {game} shipped script corpus ({evidence.Calls} calls across {evidence.Files} files; argument counts {arities}; access {evidence.Access}{(evidence.CalledAsMethod ? "; called as a method" : "")}); no documented CoD4 or Black Ops III signature was available.",
-        ["overloads"] = Array.Empty<object>(),
+        ["overloads"] = overloads,
         ["flags"] = new[] { "aiGenerated" },
         ["remarks"] = new[]
         {
-            $"Empirical builtin: {evidence.Calls} call(s) across {evidence.Files} {game} script file(s), observed argument counts {arities}, access {evidence.Access}.{(evidence.CalledAsMethod ? " It is called on a target." : "")}{sites} The name is known to exist; its signature remains undocumented."
+            $"Empirical builtin: {evidence.Calls} call(s) across {evidence.Files} {game} script file(s), observed argument counts {arities}, access {evidence.Access}.{(evidence.CalledAsMethod ? " It is called on a target." : "")}{sites} The name is known to exist; the signature below is RECONSTRUCTED from how the shipped scripts call it, not documented; parameter names are the callers' own words, and the count is the widest call seen rather than a limit the engine imposes."
         },
     };
 }
@@ -1489,4 +1645,13 @@ internal sealed record EmpiricalBuiltinEvidence(
     bool CalledAsMethod,
     string Access,
     IReadOnlyList<string> Languages,
-    IReadOnlyList<string> Sites);
+    IReadOnlyList<string> Sites,
+    IReadOnlyList<EmpiricalArgumentShape> ArgumentShapes);
+
+// One argument position as the corpus writes it: the callers' own words for it, most common first,
+// and any type its SPELLING proves (a literal, a vector). Empty lists are the normal case for a
+// position always passed a computed expression, and mean "nothing observed" rather than "nothing".
+internal sealed record EmpiricalArgumentShape(
+    int Position,
+    IReadOnlyList<string> Names,
+    IReadOnlyList<string> Types);

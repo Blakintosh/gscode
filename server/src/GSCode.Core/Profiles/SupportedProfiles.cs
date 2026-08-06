@@ -71,11 +71,18 @@ public sealed partial record GameProfile
         HasInlinePathCalls = true,
         HasFileScopeConstants = true,
 
-        // No library of its own, so the rules that must tell an engine name from a script one read
-        // CoD4's list — one game earlier in the same engine line. Names only; MW2 still has no
-        // signatures, documentation or arity of its own. Measured before it was set: over MW2's
-        // 1,479 shipped scripts the include rule's only unexplained name was 'abs', which CoD4's
-        // library now carries.
+        // MW2 shipped no mod tools, so its library is built from the wordfile CoD4, WaW and BO1
+        // share — that list is the pre-BO3 Infinity Ward one, not any single game's — and then
+        // corrected by sweeping MW2's own 1,479 shipped scripts for names it lacks. See the mw2
+        // block in tools/field-data. Not HasCompleteBuiltinLibrary: the shared syntax file predates
+        // MW2 and cannot be assumed to list its era's additions, so the same reservation BO1 carries
+        // applies here.
+        DataFilePrefix = "mw2",
+        // Kept even though the library above is no longer empty, because this is what makes
+        // HasTrustedEngineNames true: the borrowed-names path is the standing claim that CoD4's list
+        // answers "could this be an engine function?" for MW2, and the include rule rests on it.
+        // Measured before it was set: over those 1,479 scripts the include rule's only unexplained
+        // name was 'abs', which CoD4's library carries.
         EngineNameFallbackPrefix = "cod4",
         // thisthread is MW2's alone across the corpora we hold: 5 uses here, 0 in CoD4, WaW, BO1 and
         // BO3. Every one of them READS it (`self.trackLoopThread = thisthread;`), so nothing in the

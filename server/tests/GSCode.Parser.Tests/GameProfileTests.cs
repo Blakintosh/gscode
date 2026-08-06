@@ -27,12 +27,25 @@ public class GameProfileTests
     [Fact]
     public void AGameThatShipsNoData_HasNoDataFileNames()
     {
-        // MW2 has no bundled data (CoD4 does now, from its wordfile).
+        // A CORE, now that all five supported games ship a library — MW2 was the example until its
+        // own was built from CoD4's shared wordfile list plus its corpus sweep.
+        GameProfile mw3 = GameProfile.ByName("mw3")!;
+
+        Assert.Null(mw3.DataFilePrefix);
+        Assert.Null(mw3.ApiFileName(ScriptLanguage.Gsc));
+        Assert.Empty(mw3.BundledDataFileNames);
+    }
+
+    [Fact]
+    public void ModernWarfare2_DeclaresItsDataFiles()
+    {
         GameProfile mw2 = GameProfile.ByName("mw2")!;
 
-        Assert.Null(mw2.DataFilePrefix);
-        Assert.Null(mw2.ApiFileName(ScriptLanguage.Gsc));
-        Assert.Empty(mw2.BundledDataFileNames);
+        Assert.Equal("mw2", mw2.DataFilePrefix);
+        Assert.Equal("mw2_api_gsc.json", mw2.ApiFileName(ScriptLanguage.Gsc));
+        // No client scripts in the Infinity Ward line, so no client library is promised.
+        Assert.DoesNotContain("mw2_api_csc.json", mw2.BundledDataFileNames);
+        Assert.Contains("mw2_radiant_keys.json", mw2.BundledDataFileNames);
     }
 
     [Fact]

@@ -80,5 +80,5 @@ npm run lint             # 26 pre-existing naming warnings, 0 errors is the bar
 npm run bundle-server    # dotnet publish into client/service/
 ```
 
-After `bundle-server`, check `client/service/Api/` holds all 15 data files. A stale bundle there
+After `bundle-server`, check `client/service/Api/` holds all 23 data files. A stale bundle there
 once made CoD4 load BO3's builtins, which presented as every engine call being unknown.

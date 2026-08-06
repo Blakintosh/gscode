@@ -21,16 +21,22 @@ the file, not how any code locates it.
   keys, format `[client] <type> <field> // comment`. The `client` prefix marks
   CSC-only keys; inline comments become hover docs.
 
-### The pre-BO3 games (CoD4, WaW, BO1)
+### The pre-BO3 games (CoD4, WaW, BO1, MW2)
 
-Each ships a mod-tools wordfile with the same `/L11 "CODSCRIPT"` layout, so one reader
-serves all three (`GenerateWordfileGameData`).
+Three of them ship a mod-tools wordfile with the same `/L11 "CODSCRIPT"` layout, so one
+reader serves them all (`GenerateWordfileGameData`). MW2 shipped no mod tools and goes
+through the same reader with CoD4's wordfile for its entity fields and CoD4's generated
+library for its names.
 
 - `cod4_wordfile.txt`, `waw_wordfile.txt`, `bo1_wordfile.txt` — the syntax-highlighting
   wordfile (`bin\wordfile.txt`). `/C7 "Script Commands"` → builtin function names,
   `/C2 "Common Entity Properties"` → entity `.fields`. The tool parses both.
-- `cod4_keys.txt`, `waw_keys.txt`, `bo1_keys.txt` — each game's `raw\radiant\keys.txt`,
-  through the shared radiant-keys parser, so their keys carry types.
+- `cod4_keys.txt`, `waw_keys.txt`, `bo1_keys.txt`, `mw2_keys.txt` — each game's
+  `raw\radiant\keys.txt`, through the shared radiant-keys parser, so their keys carry types.
+  MW2's is the ONLY source it has: no mod tools shipped for it, so there is no wordfile and
+  no documentation, and its function names come from CoD4's generated library through
+  `namesFromApi`. The library rather than the wordfile behind it — the two differ, and taking
+  the smaller one dropped `abs` and produced 215 false include reports on MW2's own scripts.
 - `waw_clientkeys.txt`, `bo1_clientkeys.txt` — `raw\radiant\clientkeys.txt`. The pre-BO3
   Treyarch games say "this key is client-side" by SPLITTING the data across two files,
   where BO3 keeps one and prefixes the line with `client`. Their `keys.txt` carries no
@@ -67,17 +73,23 @@ extensible beyond stock data. Field entry shape: `{ "name", "type", "readonly"? 
   provenance: thirteen carried over from the Black Ops III library, where the same function
   is documented, and six inferred from call sites alone. Kept here so a regeneration cannot
   drop them, and flagged so a reconstruction is never mistaken for documentation.
-- `bo1_ai_builtins.json` and `waw_ai_builtins.json` — durable snapshots of the same empirical
-  merge for those games. `bo1_csc_empirical.json` and `waw_csc_empirical.json` preserve client-only
-  candidates that cannot be derived from a server wordfile entry.
+- `bo1_ai_builtins.json`, `waw_ai_builtins.json` and `mw2_ai_builtins.json` — durable snapshots of
+  the same empirical merge for those games. `bo1_csc_empirical.json` and `waw_csc_empirical.json`
+  preserve client-only candidates that cannot be derived from a server wordfile entry.
+  MW2's is the largest by far, at 335 entries: 91 carried over from the Black Ops III library and
+  244 RECONSTRUCTED from call sites, with parameter names taken from the callers' own words, the
+  count set to the widest call seen and mandatory stopping at the narrowest. The evidence for that
+  reconstruction is `argumentShapes` in the harvest report, which is why the report records how each
+  argument POSITION is spelled and not just how many there are.
 Names carrying no case beyond their first letter are recased from the documented libraries before
 the artifact is written (`RecaseReconstructedNames`). A reconstructed name is taken from a
 diagnostic message, which quotes a case-insensitive call site, so it arrives as `playsoundatpos`
 next to a documented `PlaySound`; CoD4's own pages have the same defect natively, holding `AllowLean`
 beside `Allowleanleft`. The word list is CoD4's and BO3's libraries split on their own case
 boundaries, so nothing is capitalized in a way an engine name does not already capitalize it, and a
-name that cannot be spelled entirely from those words is left exactly as it was, which is why the
-pass reports a count rather than claiming to have finished. Underscore names are never touched: that is a separate convention with no documented examples to learn from.
+name that cannot be spelled entirely from those words is left exactly as it was — 52 of MW2's still
+are, because `average`, `cast`, `sentry` and `ui` appear nowhere in the documented pair. Underscore
+names are never touched: that is a separate convention with no documented examples to learn from.
 Safe because `BuiltinApi.Find` is case-insensitive, so this changes what is DISPLAYED, never what
 resolves.
 

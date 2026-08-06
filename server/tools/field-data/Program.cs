@@ -47,6 +47,31 @@ GenerateWordfileGameData(
     enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"),
     empiricalPath: Path.Combine(harvestDir, "bo1_missing_builtins.json"));
 
+// MW2 shipped no mod tools, so it has a keys.txt (from its radiant folder) but NO wordfile and no
+// documentation. Its names are therefore CoD4's whole LIBRARY, and the justification is a window
+// rather than a lineage hand-wave: CoD4's, WaW's and BO1's wordfiles carry the same CODSCRIPT /C7
+// list, so that list is the shared pre-BO3 Infinity Ward one and not any single game's. MW2 (2009)
+// sits inside that window, and CoD4's is the copy enriched from the documentation pages. The
+// wordfile is still read, for the entity fields its /C2 section carries.
+//
+// It is still an inference, and the harvest is what keeps it honest: MW2's own 1,479 shipped scripts
+// are swept against this library, and every name they call that it lacks comes back through
+// empiricalPath — 335 of them, which is a third again on top of what CoD4 knew. The radiant keys are
+// MW2's own file and carry a better citation than either.
+GenerateWordfileGameData(
+    "mw2",
+    Path.Combine(originalsDir, "cod4_wordfile.txt"),
+    Path.Combine(originalsDir, "mw2_keys.txt"),
+    // No client scripts in the Infinity Ward line, and the radiant folder ships no clientkeys.txt —
+    // the same cross-check CoD4 provides for the split being a Treyarch convention.
+    clientKeysPath: null,
+    apiDir,
+    docsRoot: null,
+    curatedDir,
+    enrichFrom: Path.Combine(apiDir, "cod4_api_gsc.json"),
+    empiricalPath: Path.Combine(harvestDir, "mw2_missing_builtins.json"),
+    namesFromApi: Path.Combine(apiDir, "cod4_api_gsc.json"));
+
 // WaW sits between the two in the same lineage and ships the same shaped wordfile and the same
 // split radiant keys.
 GenerateWordfileGameData(
@@ -72,6 +97,7 @@ GenerateClientApi("bo1", apiDir, curatedDir, Path.Combine(harvestDir, "bo1_missi
 // the next field-data regeneration would then forget what the previous harvest proved.
 EnsureEmpiricalSources("waw", harvestDir, apiDir, curatedDir);
 EnsureEmpiricalSources("bo1", harvestDir, apiDir, curatedDir);
+EnsureEmpiricalSources("mw2", harvestDir, apiDir, curatedDir);
 
 Console.WriteLine("Done.");
 return 0;
@@ -235,7 +261,7 @@ static string CorrectSide(string name, string parsedSide)
 // entity properties is the mod-tools syntax-highlighting wordfile. This reads the CODSCRIPT block's
 // sections into the same runtime artifacts BO3 ships. Names only — the wordfile carries no types,
 // signatures or docs; those are a later enrichment pass. BO1's wordfile has the same shape.
-static void GenerateWordfileGameData(string prefix, string wordfilePath, string keysPath, string? clientKeysPath, string apiDir, string? docsRoot, string curatedDir, string? enrichFrom = null, string? empiricalPath = null)
+static void GenerateWordfileGameData(string prefix, string wordfilePath, string keysPath, string? clientKeysPath, string apiDir, string? docsRoot, string curatedDir, string? enrichFrom = null, string? empiricalPath = null, string? namesFromApi = null)
 {
     if ( !File.Exists(wordfilePath) )
     {
@@ -255,6 +281,25 @@ static void GenerateWordfileGameData(string prefix, string wordfilePath, string 
     // repo HOLDS documented detail, and a regeneration on a machine without the docs would replace
     // every signature with a bare name and then hand the wreckage to WaW and BO1 through enrichFrom.
     List<string> functions = CleanNames(ParseWordfileSection(lines, 7), stripLeadingDot: false, lowercase: false);
+
+    // A game borrowing a sibling's list takes the sibling's LIBRARY, not the wordfile behind it. The
+    // two are not the same set: the wordfile is a 2007 syntax file, while the library is that plus
+    // everything the documentation pages and later sweeps added, and the gap is load-bearing. Taking
+    // the wordfile for MW2 cost it 'abs' — present in CoD4's library, absent from the syntax file —
+    // and the include rule then reported 215 calls in MW2's own shipped scripts as needing an
+    // include for an unrelated script function of the same name.
+    if ( namesFromApi is not null )
+    {
+        Dictionary<string, JsonElement> source = LoadApiEntries(namesFromApi);
+        if ( source.Count == 0 )
+        {
+            Console.WriteLine($"  {prefix} name source {namesFromApi} is empty or missing; skipping {prefix} api.");
+            return;
+        }
+
+        functions = [.. source.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)];
+        Console.WriteLine($"  {prefix} names taken from {Path.GetFileName(namesFromApi)}: {functions.Count}");
+    }
 
     GenerateWordfileApi(
         prefix,

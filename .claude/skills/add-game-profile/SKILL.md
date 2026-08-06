@@ -38,7 +38,14 @@ fallback. BO3 is `share\raw`; every earlier game is `raw`; all use `mods`.
 
 `DataFilePrefix` names the files (`<prefix>_api_gsc.json`, `_object_fields.json`,
 `_radiant_keys.json`, `_stock_scripts.txt`). Null means the game ships none, which is a valid state —
-MW2 is there today.
+every CORE is there today. All five supported games now ship a library.
+
+**A game with no source of its own can still get one.** MW2 shipped no mod tools: no wordfile, no
+documentation, only a `radiant/keys.txt`. Its library is CoD4's — the LIBRARY, not the wordfile
+behind it; the two differ and taking the smaller one produced 215 false include reports — corrected
+by sweeping MW2's own scripts for names it lacked. Setting a `DataFilePrefix` also turns on the
+stock-script list and the `BundledDataTests` invariant that every promised file actually ships, so
+run `StockScriptListTests` in the same pass or that test fails.
 
 **`HasCompleteBuiltinLibrary` is a different claim from `Verified`.** Verified means the DIALECT is
 proven against the game's own scripts. Completeness means the FUNCTION LIST is exhaustive enough to

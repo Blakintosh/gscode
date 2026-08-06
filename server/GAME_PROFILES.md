@@ -244,14 +244,34 @@ game has `.csc`.
 | bo3  | `t7`   | ✓ | the full T7 set, including `t7_api_csc.json` |
 | waw  | `waw`  | ✗ | 891 functions (781 inherited from CoD4, 110 its own) + 154 derived client functions, 360 radiant keys (11 client-only), 105 fields, 1,977 stock scripts |
 | bo1  | `bo1`  | ✗ | 751 functions (all inherited from CoD4) + 156 derived client functions, 466 radiant keys (126 client-only), 108 fields, 3,125 stock scripts |
-| mw2 / all cores | *(null)* | — | nothing; a workspace on that game loads no builtin data rather than another game's |
+| mw2  | `mw2`  | ✗ | 1,112 functions (777 inherited from CoD4, 335 from its own corpus sweep), 367 radiant keys, 108 fields, 1,488 stock scripts |
+| all cores | *(null)* | — | nothing; a workspace on that game loads no builtin data rather than another game's |
+
+**MW2 is the game with no source at all.** No mod tools shipped, so there is no wordfile and no
+documentation — only a `radiant/keys.txt`. Its names are CoD4's whole LIBRARY (not CoD4's wordfile:
+the two differ, and taking the smaller one cost MW2 `abs` and produced 215 false include reports on
+its own shipped scripts). The justification is a window rather than a lineage claim: CoD4's, WaW's
+and BO1's wordfiles carry the same `CODSCRIPT /C7` list, so that list is the shared pre-BO3 Infinity
+Ward one, and MW2 (2009) sits inside it.
+
+That inference is then corrected by measurement. Sweeping MW2's own 1,479 shipped scripts found 335
+engine functions CoD4 never knew; 91 of them are documented in Black Ops III's library and take its
+entry, and the remaining 244 are RECONSTRUCTED from their call sites — parameter names are the
+callers' own words, mandatory stops at the narrowest call seen, and a type is claimed only where the
+spelling is the type. Those carry the `aiGenerated` flag. Reconstruction is safe here precisely
+because MW2 does not set `HasReliableBuiltinSignatures`: `ArgumentCountLint` never judges a call
+against a builtin signature for such a game, so a reconstruction reaches hover, completion and
+signature help and can never become a diagnostic on someone's code.
 
 **A game with no library of its own may borrow a sibling's NAMES** —
 `EngineNameFallbackPrefix`, set only for MW2, which points at CoD4 one game earlier in the same
 engine line. Names only, and the type enforces it: `BuiltinApiSet.EngineNamesFor` returns a
 `FrozenSet<string>`, so a caller cannot render a borrowed signature by accident. `For()` still
 returns this game's OWN library, empty when it ships none, because presenting a sibling's parameter
-list as this game's would be a confident lie.
+list as this game's would be a confident lie. MW2 keeps the setting now that it has a library of its
+own, because that is what makes `HasTrustedEngineNames` true for it — the fallback is inert while
+the library is non-empty, and the standing claim it encodes is still the one the include rule rests
+on.
 
 The distinction that makes borrowing safe is membership versus detail. A rule that must ask "could
 this name be an engine function?" fails closed without an answer and therefore never runs at all on

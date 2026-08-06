@@ -80,6 +80,9 @@ public static class GscKeywords
         "return", "break", "continue", "wait", "waitrealtime", "waittill", "waittillmatch",
         "waittillframeend", "thread", "notify", "endon", "isdefined",
         "true", "false", "undefined", "const", "new",
+        // Reads as a value rather than opening a statement, but a user types it in a body like any
+        // other name. IsAvailable gates it to the dialects whose keyword set lists it — MW2 alone.
+        "thisthread",
     ];
 
     /// <summary>Top-level keywords/directives offered outside a function body.</summary>

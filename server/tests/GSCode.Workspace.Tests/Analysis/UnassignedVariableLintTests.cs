@@ -141,4 +141,26 @@ public class UnassignedVariableLintTests
 
         Assert.Equal(GscDiagnosticCode.VariableNeverAssigned, diagnostic.Code);
     }
+
+    [Theory]
+    [InlineData("f()\n{\n\tself.trackLoopThread = thisthread;\n}\n")]
+    [InlineData("f()\n{\n\t/#\n\tself.trackLoopThread = thisthread;\n\t#/\n}\n")]
+    public void TheRunningThreadIsSuppliedByTheEngine(string source)
+    {
+        // Both shapes are MW2's own: animscripts\shared.gsc, run.gsc, snowmobile.gsc and dog\dog_stop.gsc
+        // all store it, and all four do it inside a dev block. Nobody assigns thisthread, so "read but
+        // never assigned in this function" was the rule's only report over those five uses.
+        Assert.Empty(Lint(source, "mw2"));
+    }
+
+    [Fact]
+    public void OnADialectWithoutItTheNameIsOrdinary()
+    {
+        // CoD4 has no thisthread, so there the word is a name like any other and is still reported.
+        // The suppression keys on the token KIND, which the lexer only produces where the dialect
+        // lists the keyword.
+        Diagnostic diagnostic = Assert.Single(Lint("f()\n{\n\tuse( thisthread );\n}\n", "cod4"));
+
+        Assert.Equal(GscDiagnosticCode.VariableNeverAssigned, diagnostic.Code);
+    }
 }

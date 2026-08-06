@@ -170,6 +170,29 @@ public class DialectExpressionTests
     }
 
     [Fact]
+    public void ThisThreadReadsAsAValue()
+    {
+        // `self.trackLoopThread = thisthread;` — the shape every MW2 use takes. Unlike thread/call it
+        // modifies nothing; it is the right-hand side, so it parses as an identifier node.
+        AssignmentNode assignment = Assert.IsType<AssignmentNode>(
+            FirstExpression("self.trackLoopThread = thisthread;", Mw2));
+
+        IdentifierNode value = Assert.IsType<IdentifierNode>(assignment.Value);
+        Assert.Equal("thisthread", value.Token.Text);
+        Assert.IsType<MemberNode>(assignment.Target);
+    }
+
+    [Fact]
+    public void ThisThreadCanOpenAStatement()
+    {
+        // Being a keyword must not make the word unrecognisable to statement recovery — the failure
+        // `vararg` had. Nothing in the corpus writes this, so only a test will ever show it.
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tthisthread notify( \"done\" );\n}\n", Mw2);
+
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    [Fact]
     public void ADevBlockCanHoldWholeFunctions()
     {
         // The Infinity Ward games wrap debug functions in a top-level dev block, keyword-less. This

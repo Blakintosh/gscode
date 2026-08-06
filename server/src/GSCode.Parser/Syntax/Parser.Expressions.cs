@@ -610,6 +610,13 @@ public sealed partial class Parser
                 PToken pack = Advance();
                 return new IdentifierNode(pack.RootRange, pack);
             }
+            // The running thread reads as a value too — stored on a field, passed on, compared — so it
+            // takes the same shape. It is never a call modifier the way `thread`/`childthread` are.
+            case TokenKind.ThisThread:
+            {
+                PToken running = Advance();
+                return new IdentifierNode(running.RootRange, running);
+            }
             case TokenKind.Identifier:
             {
                 PToken first = Advance();
@@ -713,12 +720,13 @@ public sealed partial class Parser
             return true;
         }
 
-        // Vararg is a keyword but reads as a value, so it can open a statement the same way a name
-        // can — `vararg[ 0 ] = x;`. Leaving it out made a statement starting with the pack
-        // unrecognisable to recovery, which no stock script would have revealed: they only ever read
-        // it mid-expression.
+        // Vararg and ThisThread are keywords but read as values, so either can open a statement the
+        // same way a name can — `vararg[ 0 ] = x;`. Leaving the pack out made a statement starting
+        // with it unrecognisable to recovery, which no stock script would have revealed: they only
+        // ever read it mid-expression.
         return kind is TokenKind.Identifier
             or TokenKind.Vararg
+            or TokenKind.ThisThread
             or TokenKind.Integer
             or TokenKind.Float
             or TokenKind.Hex

@@ -74,7 +74,7 @@ group — they are function modifiers, so a dialect could have them without clas
 |--------|-------------------------------|
 | cod4   | `prof_begin` `prof_end` |
 | waw    | `prof_begin` `prof_end` |
-| mw2    | `foreach` `in` · `childthread` `call` · `prof_begin` `prof_end` |
+| mw2    | `foreach` `in` · `childthread` `call` `thisthread` · `prof_begin` `prof_end` |
 | bo1    | `prof_begin` `prof_end` |
 | bo3    | `foreach` `in` · `.. ClassKeywords` · `do` `function` `autoexec` `private` `const` · `waitrealtime` `vectorscale` `profilestart` `profilestop` |
 | *cores*| *(none — base exactly)* |
@@ -84,6 +84,12 @@ aliases of `thread`: `childthread foo()` parses as a threaded call, `call [[ ptr
 synchronous function-pointer call. They are gated by the set, so in BO3 — whose corpus uses `call`
 as an ordinary variable ~69× — the word stays an identifier, which is exactly what keeps BO3 lexing
 byte-identical.
+
+`thisthread` is MW2's third addition there and a different shape again: it is the running thread as a
+**value**, not a call modifier, so it parses as an identifier node wrapping the keyword token — the
+`vararg` shape below. Grepping the games puts it in MW2 alone (5 uses in MW2, 0 in CoD4/WaW/BO1/BO3),
+and every MW2 use reads it (`self.trackLoopThread = thisthread;`), so no shipped script uses the word
+as a variable name for the keyword to take away.
 
 ---
 
@@ -131,6 +137,7 @@ either side, even there.
 | `const` keyword | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `autoexec` / `private` modifiers | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `childthread` / `call` | ✗ | ✗ | ✓ | ✗ | ✗ |
+| `thisthread`, the running thread as a value | ✗ | ✗ | ✓ | ✗ | ✗ |
 | file-scope constants `CONST = 4;` (`HasFileScopeConstants`) | ✗ | ✗ | ✓ | ✗ | ✗ |
 | `...` parameter pack, read as `vararg` (`HasVarargBinding`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 

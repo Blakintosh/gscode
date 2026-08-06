@@ -56,8 +56,8 @@ public sealed partial record GameProfile
 
     /// <summary>
     /// Call of Duty: Modern Warfare 2 (2009) — Infinity Ward. The IW line's keyword additions over
-    /// the base: <c>foreach</c> (+ its <c>in</c>), <c>childthread</c> and <c>call</c>. Also file-scope
-    /// constants (<c>CONST = 4;</c>).
+    /// the base: <c>foreach</c> (+ its <c>in</c>), <c>childthread</c>, <c>call</c> and
+    /// <c>thisthread</c>. Also file-scope constants (<c>CONST = 4;</c>).
     /// </summary>
     public static GameProfile ModernWarfare2 { get; } = new()
     {
@@ -77,7 +77,10 @@ public sealed partial record GameProfile
         // 1,479 shipped scripts the include rule's only unexplained name was 'abs', which CoD4's
         // library now carries.
         EngineNameFallbackPrefix = "cod4",
-        Keywords = [.. BaseKeywords, "foreach", "in", "childthread", "call", "prof_begin", "prof_end"],
+        // thisthread is MW2's alone across the corpora we hold: 5 uses here, 0 in CoD4, WaW, BO1 and
+        // BO3. Every one of them READS it (`self.trackLoopThread = thisthread;`), so nothing in the
+        // shipped scripts uses the word as an ordinary variable name.
+        Keywords = [.. BaseKeywords, "foreach", "in", "childthread", "call", "thisthread", "prof_begin", "prof_end"],
     };
 
     /// <summary>

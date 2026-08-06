@@ -28,6 +28,9 @@ public static class Keywords
         // stay ordinary identifiers).
         ["childthread"] = TokenKind.ChildThread,
         ["call"] = TokenKind.Call,
+        // thisthread (MW2) is the running thread as a value, so unlike the two above it is read
+        // rather than written before a call. Gated the same way.
+        ["thisthread"] = TokenKind.ThisThread,
         ["if"] = TokenKind.If,
         ["else"] = TokenKind.Else,
         ["do"] = TokenKind.Do,

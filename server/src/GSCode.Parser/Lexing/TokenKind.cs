@@ -47,6 +47,15 @@ public enum TokenKind
     // their own keywords and a dialect that lacks them keeps the word as an identifier.
     ChildThread,
     Call,
+    /// <summary>
+    /// The running thread itself (MW2, Infinity Ward line): <c>self.trackLoopThread = thisthread;</c>.
+    /// A keyword rather than an identifier so it colours as one and cannot be renamed, but like
+    /// <see cref="Vararg"/> it appears in EXPRESSION position, so it parses as an
+    /// <see cref="Syntax.Ast.IdentifierNode"/> wrapping this token. Kept inside the keyword block so
+    /// <c>TokenFacts.IsKeyword</c>'s range check accepts it; gated by the dialect's keyword set, so on
+    /// a game without it the word stays an identifier and a script may still use it as a variable.
+    /// </summary>
+    ThisThread,
     If,
     Else,
     Do,

@@ -150,7 +150,7 @@
         },
         "language-reserved-variables": {
             "name": "variable.language.gsc",
-            "match": "\\b(self|level|game|world|vararg|anim)\\b"
+            "match": "\\b(self|level|game|world|vararg|thisthread|anim)\\b"
         },
 		"storage-types": {
 			"name": "storage.type.gsc",

@@ -15,6 +15,7 @@ public class KeywordDocsTests
 {
     [Theory]
     [InlineData("vararg")]
+    [InlineData("thisthread")]
     [InlineData("isdefined")]
     [InlineData("waittill")]
     [InlineData("size")]

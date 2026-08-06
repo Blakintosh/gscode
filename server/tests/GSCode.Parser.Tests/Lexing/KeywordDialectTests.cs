@@ -74,6 +74,29 @@ public class KeywordDialectTests
     }
 
     [Fact]
+    public void ThisThread_IsMw2Only()
+    {
+        // MW2's running-thread value. Grepping the games puts it in MW2 alone (5 uses there, 0 in
+        // CoD4/WaW/BO1/BO3), so everywhere else the word stays an ordinary name.
+        Assert.Equal(TokenKind.ThisThread, FirstKind("thisthread", Mw2));
+        Assert.Equal(TokenKind.Identifier, FirstKind("thisthread", Bo3));
+        Assert.Equal(TokenKind.Identifier, FirstKind("thisthread", Cod4));
+    }
+
+    [Fact]
+    public void ThisThread_DoesNotSwallowTheThreadKeyword()
+    {
+        // `thread` is a prefix of nothing here, but the reverse matters: `thisthread` must not lex as
+        // an identifier followed by the `thread` keyword. One token, or the parser sees a call.
+        Token[] tokens = [.. Lexer.Lex(SourceText.From("thisthread"), Mw2).Tokens
+            .Where(static token => !token.IsTrivia && token.Kind != TokenKind.EndOfFile)];
+
+        Token only = Assert.Single(tokens);
+        Assert.Equal(TokenKind.ThisThread, only.Kind);
+        Assert.Equal("thisthread".Length, only.Length);
+    }
+
+    [Fact]
     public void Const_IsBlackOps3Only()
     {
         // const is a BO3 addition; the earlier games have no file-scope const keyword, so the word is

@@ -179,6 +179,15 @@ public static class UnassignedVariableLint
                 continue;
             }
 
+            // MW2's running thread. Nobody assigns it — the engine supplies it wherever a function
+            // body reads it — so "never assigned in this function" is simply wrong about it. By kind
+            // again, so the dialect gate comes free: on a game whose keyword set lacks the word it
+            // lexes as a plain identifier and an unassigned `thisthread` is reported as usual.
+            if ( read.Kind == TokenKind.ThisThread )
+            {
+                continue;
+            }
+
             diagnostics.Add(Diagnostic.Create(
                 read.RootRange,
                 DiagnosticSeverity.Warning,

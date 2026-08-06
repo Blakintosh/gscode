@@ -75,7 +75,9 @@ extensible beyond stock data. Field entry shape: `{ "name", "type", "readonly"? 
   drop them, and flagged so a reconstruction is never mistaken for documentation.
 - `bo1_ai_builtins.json`, `waw_ai_builtins.json` and `mw2_ai_builtins.json` — durable snapshots of
   the same empirical merge for those games. `bo1_csc_empirical.json` and `waw_csc_empirical.json`
-  preserve client-only candidates that cannot be derived from a server wordfile entry.
+  preserve client-only candidates that cannot be derived from a server wordfile entry, and
+  REPLACE the derived entry where both exist — they describe this game's client world, where a
+  derived one is a server function reused because the name matched.
   MW2's is the largest by far, at 335 entries: 91 carried over from the Black Ops III library and
   244 RECONSTRUCTED from call sites, with parameter names taken from the callers' own words, the
   count set to the widest call seen and mandatory stopping at the narrowest. The evidence for that

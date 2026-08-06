@@ -3882,7 +3882,7 @@
       "confidence": "high"
     },
     {
-      "name": "getsoundvolume",
+      "name": "GetSoundVolume",
       "description": "Observed in the waw shipped script corpus (7 calls across 7 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4336,7 +4336,7 @@
       "confidence": "high"
     },
     {
-      "name": "updatedvarsfromprofile",
+      "name": "UpdatedVarsFromProfile",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4347,7 +4347,7 @@
       ]
     },
     {
-      "name": "haseyes",
+      "name": "HasEyes",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4403,7 +4403,7 @@
       ]
     },
     {
-      "name": "getvehiclehealth",
+      "name": "GetVehicleHealth",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4434,7 +4434,7 @@
       "confidence": "medium"
     },
     {
-      "name": "getlocalclientmaxhealth",
+      "name": "GetLocalClientMaxHealth",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4445,7 +4445,7 @@
       ]
     },
     {
-      "name": "getlocalclienthealth",
+      "name": "GetLocalClientHealth",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [

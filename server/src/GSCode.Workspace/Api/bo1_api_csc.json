@@ -29,11 +29,10 @@
         }
       ],
       "flags": [
-        "aiGenerated"
+        "processed"
       ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: animscripts call abs() with no declaration reachable through their includes."
-      ]
+      "example": "x = Abs( x )",
+      "confidence": "high"
     },
     {
       "name": "ACos",
@@ -5088,7 +5087,7 @@
       "confidence": "high"
     },
     {
-      "name": "spawnfakeent",
+      "name": "SpawnFakeEnt",
       "description": "Observed in the bo1 shipped script corpus (36 calls across 19 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -5183,7 +5182,7 @@
       "confidence": "medium"
     },
     {
-      "name": "Setshaderconstant",
+      "name": "SetShaderConstant",
       "description": "Set the value of a previously-mapped shader constant.",
       "overloads": [
         {
@@ -5393,7 +5392,7 @@
       ]
     },
     {
-      "name": "showui",
+      "name": "ShowUI",
       "description": "Observed in the bo1 shipped script corpus (13 calls across 10 files; argument counts 3; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -5404,7 +5403,7 @@
       ]
     },
     {
-      "name": "deletefakeent",
+      "name": "DeleteFakeEnt",
       "description": "Observed in the bo1 shipped script corpus (11 calls across 10 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -5981,7 +5980,7 @@
       "confidence": "high"
     },
     {
-      "name": "Getdynent",
+      "name": "GetDynEnt",
       "description": "Get the dynent with the specified targetname.",
       "overloads": [
         {
@@ -6012,7 +6011,7 @@
       "confidence": "medium"
     },
     {
-      "name": "setdvarfloat",
+      "name": "SetDvarFloat",
       "description": "Observed in the bo1 shipped script corpus (27 calls across 4 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -6023,7 +6022,7 @@
       ]
     },
     {
-      "name": "setvolfogforclient",
+      "name": "SetVolFogForClient",
       "description": "Observed in the bo1 shipped script corpus (13 calls across 4 files; argument counts 19; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -6034,7 +6033,7 @@
       ]
     },
     {
-      "name": "isextracam",
+      "name": "IsExtraCam",
       "description": "Observed in the bo1 shipped script corpus (10 calls across 4 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -6045,7 +6044,7 @@
       ]
     },
     {
-      "name": "stopextracam",
+      "name": "StopExtraCam",
       "description": "Observed in the bo1 shipped script corpus (9 calls across 4 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -6119,7 +6118,7 @@
       "confidence": "high"
     },
     {
-      "name": "setextracamfov",
+      "name": "SetExtraCamFov",
       "description": "Observed in the bo1 shipped script corpus (16 calls across 3 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -6235,7 +6234,7 @@
       "confidence": "high"
     },
     {
-      "name": "setwaterfog",
+      "name": "SetWaterFog",
       "description": "Observed in the bo1 shipped script corpus (8 calls across 3 files; argument counts 17; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7374,7 +7373,7 @@
       "confidence": "high"
     },
     {
-      "name": "getlocalclienthealth",
+      "name": "GetLocalClientHealth",
       "description": "Observed in the bo1 shipped script corpus (2 calls across 2 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7543,7 +7542,7 @@
       "confidence": "high"
     },
     {
-      "name": "swimming",
+      "name": "Swimming",
       "description": "Observed in the bo1 shipped script corpus (3 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7588,7 +7587,7 @@
       "confidence": "high"
     },
     {
-      "name": "visionsetunderwater",
+      "name": "VisionSetUnderwater",
       "description": "Observed in the bo1 shipped script corpus (3 calls across 1 files; argument counts 2, 3; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7599,7 +7598,7 @@
       ]
     },
     {
-      "name": "gettagforwardvector",
+      "name": "GetTagForwardVector",
       "description": "Observed in the bo1 shipped script corpus (3 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7638,7 +7637,7 @@
       "confidence": "high"
     },
     {
-      "name": "setextracamstatic",
+      "name": "SetExtraCamStatic",
       "description": "Observed in the bo1 shipped script corpus (3 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7675,7 +7674,7 @@
       ]
     },
     {
-      "name": "entyawoverrideslinkyaw",
+      "name": "EntYawOverridesLinkYaw",
       "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7770,7 +7769,7 @@
       "confidence": "high"
     },
     {
-      "name": "visionsetdamage",
+      "name": "VisionSetDamage",
       "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 4; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7781,7 +7780,7 @@
       ]
     },
     {
-      "name": "setextracamentity",
+      "name": "SetExtraCamEntity",
       "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7924,7 +7923,7 @@
       "confidence": "high"
     },
     {
-      "name": "showscores",
+      "name": "ShowScores",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8174,7 +8173,7 @@
       "confidence": "medium"
     },
     {
-      "name": "setextracamorigin",
+      "name": "SetExtraCamOrigin",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8219,7 +8218,7 @@
       "confidence": "high"
     },
     {
-      "name": "setextracamactive",
+      "name": "SetExtraCamActive",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8275,7 +8274,7 @@
       "confidence": "high"
     },
     {
-      "name": "setextracamangles",
+      "name": "SetExtraCamAngles",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8436,7 +8435,7 @@
       "confidence": "high"
     },
     {
-      "name": "updatedvarsfromprofile",
+      "name": "UpdatedVarsFromProfile",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8526,7 +8525,7 @@
       ]
     },
     {
-      "name": "getlocalclientmaxhealth",
+      "name": "GetLocalClientMaxHealth",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8537,7 +8536,7 @@
       ]
     },
     {
-      "name": "clearphysicsgravity",
+      "name": "ClearPhysicsGravity",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8548,7 +8547,7 @@
       ]
     },
     {
-      "name": "setphysicsgravity",
+      "name": "SetPhysicsGravity",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8585,7 +8584,7 @@
       "confidence": "medium"
     },
     {
-      "name": "Getdynentarray",
+      "name": "GetDynEntArray",
       "description": "Get a dynent array with the specified targetname.",
       "overloads": [
         {
@@ -8607,7 +8606,7 @@
       "confidence": "medium"
     },
     {
-      "name": "getvehiclehealth",
+      "name": "GetVehicleHealth",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8629,7 +8628,7 @@
       ]
     },
     {
-      "name": "hastacticalmaskoverlay",
+      "name": "HasTacticalMaskOverlay",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8640,7 +8639,7 @@
       ]
     },
     {
-      "name": "hidescores",
+      "name": "HideScores",
       "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [

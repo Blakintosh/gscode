@@ -1126,22 +1126,7 @@ static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dict
         //
         // An underscore name (missile_setTargetEnt) is left alone: nothing in the documented
         // libraries uses that convention, so there is no evidence for how to case it.
-        if ( name.Length == 0
-            || name[1..] != name[1..].ToLowerInvariant()
-            || name.Contains('_', StringComparison.Ordinal) )
-        {
-            continue;
-        }
-
-        // A documented library spelling this exact name wins outright over any reconstruction —
-        // unless that spelling is the flat one being corrected, which is the Allowleanleft case:
-        // the entry IS its own would-be source, so falling through to the words is the only way out.
-        string lowered = name.ToLowerInvariant();
-        string? replacement = wholeNames.TryGetValue(lowered, out string? exact) && exact[1..] != exact[1..].ToLowerInvariant()
-            ? exact
-            : SegmentName(lowered, vocabulary);
-
-        if ( replacement is null || replacement == name )
+        if ( RecasedName(name, vocabulary, wholeNames) is not string replacement )
         {
             continue;
         }
@@ -1153,6 +1138,35 @@ static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dict
     }
 
     return recased;
+}
+
+// The engine's spelling for one flat name, or null when it should be left alone.
+//
+// Any name carrying no case information beyond its first letter is a candidate, whatever its
+// provenance. The aiGenerated flag is deliberately NOT the test: reconstructed names arrive fully
+// lower case, but CoD4's documentation pages are themselves inconsistent — the same library holds
+// AllowLean, Allowleanleft and Allowleanright — and a flat documented name is the same defect with
+// a better pedigree. An underscore name (missile_setTargetEnt) is left alone, that being a separate
+// convention with no documented examples to learn from.
+//
+// A documented library spelling this exact name wins outright over any reconstruction — unless that
+// spelling is itself the flat one being corrected, which is the Allowleanleft case: the entry IS its
+// own would-be source, so falling through to the words is the only way out.
+static string? RecasedName(string name, Dictionary<string, string> vocabulary, Dictionary<string, string> wholeNames)
+{
+    if ( name.Length == 0
+        || name[1..] != name[1..].ToLowerInvariant()
+        || name.Contains('_', StringComparison.Ordinal) )
+    {
+        return null;
+    }
+
+    string lowered = name.ToLowerInvariant();
+    string? replacement = wholeNames.TryGetValue(lowered, out string? exact) && exact[1..] != exact[1..].ToLowerInvariant()
+        ? exact
+        : SegmentName(lowered, vocabulary);
+
+    return replacement is null || replacement == name ? null : replacement;
 }
 
 // The words the documented libraries are built from, keyed lower-case, valued with the spelling
@@ -1239,6 +1253,21 @@ static Dictionary<string, string> BuildNameVocabulary(
     }
 
     return vocabulary;
+}
+
+// Where a named entry sits in an api array, or -1. Case-insensitive, matching how every other
+// lookup over these names compares them.
+static int IndexOfEntry(JsonArray api, string name)
+{
+    for ( int index = 0; index < api.Count; index++ )
+    {
+        if ( string.Equals((api[index] as JsonObject)?["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase) )
+        {
+            return index;
+        }
+    }
+
+    return -1;
 }
 
 // Whether this word can be spelled out of OTHER words in the same pool.
@@ -1774,13 +1803,29 @@ static void GenerateClientApi(string prefix, string apiDir, string curatedDir, s
     Dictionary<string, JsonElement> empiricalSource = LoadArrayEntries(
         Path.Combine(curatedDir, $"{prefix}_csc_empirical.json"));
     Dictionary<string, JsonElement> t7 = LoadApiEntries(Path.Combine(apiDir, "t7_api_csc.json"));
+    // A curated CLIENT entry REPLACES the one derived from the server library rather than standing
+    // aside for it. It is the more specific source — written about this game's client world, where
+    // the derived entry is a server function reused because the name matched — and the layer order
+    // everywhere else in this tool already says curated beats inherited.
+    //
+    // It also has to be a replace rather than a skip because "does it already exist" depends on
+    // something unrelated. BO1's client Abs sat behind this branch for as long as Abs was the last
+    // entry in the server artifact: the pruning pass did not claim it, so it fell through to here
+    // and kept its curated form. Sorting Abs into place let the pruning pass claim it, and the
+    // curated entry — the only one carrying `example: "x = Abs( x )"` — was silently dropped for a
+    // provenance remark the loader does not even read. Which entry wins should not turn on where a
+    // name happens to sit in another file.
     int empiricalAdded = 0;
+    int empiricalPreferred = 0;
     foreach ( JsonElement sourceEntry in empiricalSource.Values )
     {
         string name = sourceEntry.GetProperty("name").GetString()!;
-        if ( api.Any(node => string.Equals(
-                (node as JsonObject)?["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase)) )
+        int existing = IndexOfEntry(api, name);
+
+        if ( existing >= 0 )
         {
+            api[existing] = JsonNode.Parse(sourceEntry.GetRawText());
+            empiricalPreferred++;
             continue;
         }
 
@@ -1851,9 +1896,32 @@ static void GenerateClientApi(string prefix, string apiDir, string curatedDir, s
         }
     }
 
-    WriteJson(Path.Combine(apiDir, $"{prefix}_api_csc.json"), root);
+    // Recased HERE as well as in the server merge, and it has to be both. This artifact is not
+    // produced by GenerateWordfileApi, so it never saw that pass, and its curated client entries
+    // carry whatever casing they were written with — which meant taking a curated entry over a
+    // derived one silently undid the rename for GetVisionSetNaked and HasEyes.
+    string clientPath = Path.Combine(apiDir, $"{prefix}_api_csc.json");
+    int clientRecased = 0;
+    Dictionary<string, string> clientVocabulary =
+        BuildNameVocabulary(apiDir, clientPath, out Dictionary<string, string> clientWholeNames);
+
+    if ( clientVocabulary.Count > 0 )
+    {
+        foreach ( JsonNode? entry in api )
+        {
+            if ( entry is JsonObject function
+                && function["name"]?.GetValue<string>() is string current
+                && RecasedName(current, clientVocabulary, clientWholeNames) is string corrected )
+            {
+                function["name"] = corrected;
+                clientRecased++;
+            }
+        }
+    }
+
+    WriteJson(clientPath, root);
     Console.WriteLine(
-        $"  {prefix} client api: {api.Count} functions kept of {servers}, {empiricalAdded} empirical-only added, {adjusted} given a leading localClientNum");
+        $"  {prefix} client api: {api.Count} functions kept of {servers}, {empiricalAdded} empirical-only added, {empiricalPreferred} taken from the curated client entry over the derived one, {clientRecased} recased, {adjusted} given a leading localClientNum");
 
     // A curated name the server library does not carry corrects nothing and would sit there looking
     // as though it did, so it is worth a word rather than a silent no-op.

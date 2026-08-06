@@ -22,6 +22,22 @@
         "scripts\\shared\\vehicles\\_quadtank.gsc(447)",
         "scripts\\shared\\vehicles\\_quadtank.gsc(603)",
         "scripts\\shared\\vehicles\\_quadtank.gsc(668)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "position": 1,
+          "names": [
+            "self"
+          ],
+          "types": []
+        }
       ]
     },
     {
@@ -39,6 +55,22 @@
       ],
       "sites": [
         "scripts\\shared\\vehicles\\_quadtank.gsc(109)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "position": 1,
+          "names": [
+            "self"
+          ],
+          "types": []
+        }
       ]
     },
     {
@@ -56,6 +88,22 @@
       ],
       "sites": [
         "scripts\\shared\\vehicles\\_quadtank.gsc(599)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "position": 1,
+          "names": [
+            "self"
+          ],
+          "types": []
+        }
       ]
     },
     {
@@ -73,6 +121,15 @@
       ],
       "sites": [
         "scripts\\shared\\vehicles\\_quadtank.gsc(1741)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
+        }
       ]
     },
     {
@@ -90,6 +147,15 @@
       ],
       "sites": [
         "scripts\\shared\\vehicles\\_quadtank.gsc(1754)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
+        }
       ]
     },
     {
@@ -107,6 +173,15 @@
       ],
       "sites": [
         "scripts\\shared\\vehicles\\_quadtank.gsc(1761)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
+        }
       ]
     }
   ]

@@ -19,7 +19,8 @@
       "sites": [
         "frontend\\maps\\_load.gsc(546)",
         "maps\\_zombietron_load.gsc(432)"
-      ]
+      ],
+      "argumentShapes": []
     },
     {
       "name": "server_safe_ground_trace_ignore_water",
@@ -37,6 +38,27 @@
       "sites": [
         "maps\\zombie_coast.gsc(1347)",
         "maps\\zombie_temple.gsc(611)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "position": 1,
+          "names": [],
+          "types": [
+            "int"
+          ]
+        },
+        {
+          "position": 2,
+          "names": [],
+          "types": []
+        }
       ]
     },
     {
@@ -54,6 +76,55 @@
       ],
       "sites": [
         "maps\\mp\\gametypes\\twar.gsc(702)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [
+            "outcomeTitle"
+          ],
+          "types": []
+        },
+        {
+          "position": 1,
+          "names": [
+            "outcomeText"
+          ],
+          "types": []
+        },
+        {
+          "position": 2,
+          "names": [
+            "teamIcon"
+          ],
+          "types": []
+        },
+        {
+          "position": 3,
+          "names": [],
+          "types": []
+        },
+        {
+          "position": 4,
+          "names": [
+            "upperMessageText"
+          ],
+          "types": []
+        },
+        {
+          "position": 5,
+          "names": [
+            "lowerMessageText"
+          ],
+          "types": []
+        },
+        {
+          "position": 6,
+          "names": [
+            "matchBonus"
+          ],
+          "types": []
+        }
       ]
     },
     {
@@ -71,7 +142,8 @@
       ],
       "sites": [
         "maps\\zombie_moon.gsc(1452)"
-      ]
+      ],
+      "argumentShapes": []
     },
     {
       "name": "update_perk_hud",
@@ -88,7 +160,8 @@
       ],
       "sites": [
         "maps\\zombie_moon.gsc(2115)"
-      ]
+      ],
+      "argumentShapes": []
     },
     {
       "name": "add_cusom_zombie_spawn_logic",
@@ -105,6 +178,13 @@
       ],
       "sites": [
         "maps\\zombie_moon_sq_ctt.gsc(18)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": []
+        }
       ]
     },
     {
@@ -122,6 +202,15 @@
       ],
       "sites": [
         "maps\\zombie_moon_teleporter.gsc(450)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [
+            "player_survival_time"
+          ],
+          "types": []
+        }
       ]
     },
     {
@@ -139,7 +228,8 @@
       ],
       "sites": [
         "maps\\_zombiemode_hackables_box.gsc(55)"
-      ]
+      ],
+      "argumentShapes": []
     }
   ]
 }

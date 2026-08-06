@@ -21,7 +21,8 @@
         "maps\\mp\\gametypes\\_gamestats.gsc(604)",
         "maps\\mp\\gametypes\\_gamestats.gsc(614)",
         "maps\\mp\\gametypes\\_gamestats.gsc(618)"
-      ]
+      ],
+      "argumentShapes": []
     },
     {
       "name": "delay_rush",
@@ -40,6 +41,15 @@
         "maps\\hol3_retreat.gsc(424)",
         "maps\\hol3_retreat.gsc(447)",
         "maps\\hol3_retreat.gsc(469)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "vector"
+          ]
+        }
       ]
     },
     {
@@ -57,6 +67,15 @@
       ],
       "sites": [
         "maps\\nazi_zombie_factory.gsc(582)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
+        }
       ]
     },
     {
@@ -74,6 +93,15 @@
       ],
       "sites": [
         "maps\\nazi_zombie_factory.gsc(1518)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [
+            "weapon"
+          ],
+          "types": []
+        }
       ]
     },
     {
@@ -91,6 +119,15 @@
       ],
       "sites": [
         "maps\\nazi_zombie_factory_teleporter.gsc(367)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [
+            "origin"
+          ],
+          "types": []
+        }
       ]
     },
     {
@@ -108,6 +145,20 @@
       ],
       "sites": [
         "maps\\nazi_zombie_factory_teleporter.gsc(374)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": []
+        },
+        {
+          "position": 1,
+          "names": [],
+          "types": [
+            "int"
+          ]
+        }
       ]
     },
     {
@@ -125,7 +176,8 @@
       ],
       "sites": [
         "maps\\see2_tiger.gsc(16)"
-      ]
+      ],
+      "argumentShapes": []
     },
     {
       "name": "cleanup_early_tanks",
@@ -142,7 +194,8 @@
       ],
       "sites": [
         "maps\\see2_town.gsc(561)"
-      ]
+      ],
+      "argumentShapes": []
     },
     {
       "name": "change_anim_set",
@@ -159,6 +212,13 @@
       ],
       "sites": [
         "maps\\_zombiemode_dogs.gsc(530)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": []
+        }
       ]
     }
   ]

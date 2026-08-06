@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Core;
@@ -56,6 +57,53 @@ public class BuiltinHarvestTests
         public bool InSingleplayer { get; set; }
         public HashSet<string> Languages { get; } = new(StringComparer.OrdinalIgnoreCase);
         public List<string> Sites { get; } = [];
+
+        /// <summary>
+        /// How each argument POSITION is written across the call sites, indexed by position. A count
+        /// alone says a function takes three arguments; this says the third one is spelled
+        /// <c>duration</c> in eleven files and is always a number — which is the difference between
+        /// an entry that can be completed against and one that only stops a false diagnostic.
+        /// </summary>
+        public List<ArgumentSlot> Slots { get; } = [];
+
+        /// <summary>Records the slot list is long enough to hold <paramref name="count"/> positions.</summary>
+        public void EnsureSlots(int count)
+        {
+            while ( Slots.Count < count )
+            {
+                Slots.Add(new ArgumentSlot());
+            }
+        }
+    }
+
+    /// <summary>One argument position's observed spellings and types, each with how often it won.</summary>
+    private sealed class ArgumentSlot
+    {
+        public Dictionary<string, int> Names { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, int> Types { get; } = new(StringComparer.Ordinal);
+
+        public static void Bump(Dictionary<string, int> counts, string? key)
+        {
+            if ( key is null || key.Length == 0 )
+            {
+                return;
+            }
+
+            counts[key] = counts.TryGetValue(key, out int existing) ? existing + 1 : 1;
+        }
+
+        /// <summary>The most-seen entries first, so the generator can take the winner and stop.</summary>
+        public static IReadOnlyList<string> Ranked(Dictionary<string, int> counts, int take)
+        {
+            return
+            [
+                .. counts
+                    .OrderByDescending(static entry => entry.Value)
+                    .ThenBy(static entry => entry.Key, StringComparer.OrdinalIgnoreCase)
+                    .Take(take)
+                    .Select(static entry => entry.Key)
+            ];
+        }
     }
 
     /// <summary>
@@ -73,7 +121,15 @@ public class BuiltinHarvestTests
         bool CalledAsMethod,
         string Access,
         IReadOnlyList<string> Languages,
-        IReadOnlyList<string> Sites);
+        IReadOnlyList<string> Sites,
+        IReadOnlyList<ArgumentShape> ArgumentShapes);
+
+    /// <summary>
+    /// What one argument position looks like at the call sites, most common first. Names come from
+    /// the variable or field the caller passed; types only from spellings that ARE their type (a
+    /// string literal, a vector, a number), never from a name that merely sounds like one.
+    /// </summary>
+    private sealed record ArgumentShape(int Position, IReadOnlyList<string> Names, IReadOnlyList<string> Types);
 
     private sealed record MissingReport(string Game, int ScriptsSwept, int Distinct, IReadOnlyList<MissingFunction> Functions);
 
@@ -206,9 +262,19 @@ public class BuiltinHarvestTests
                 : c.InSingleplayer ? "sp"
                 : "unknown";
 
+            List<ArgumentShape> shapes = [];
+            for ( int position = 0; position < c.Slots.Count; position++ )
+            {
+                ArgumentSlot slot = c.Slots[position];
+                shapes.Add(new ArgumentShape(
+                    position,
+                    ArgumentSlot.Ranked(slot.Names, 4),
+                    ArgumentSlot.Ranked(slot.Types, 3)));
+            }
+
             yield return new MissingFunction(
                 entry.Key, kind, c.Calls, c.Files.Count, [.. c.ArgCounts], c.CalledAsMethod,
-                access, [.. c.Languages.OrderBy(static l => l, StringComparer.Ordinal)], c.Sites);
+                access, [.. c.Languages.OrderBy(static l => l, StringComparer.Ordinal)], c.Sites, shapes);
         }
     }
 
@@ -288,6 +354,14 @@ public class BuiltinHarvestTests
                         {
                             candidate.CalledAsMethod = true;
                         }
+
+                        candidate.EnsureSlots(call.Arguments.Length);
+                        for ( int position = 0; position < call.Arguments.Length; position++ )
+                        {
+                            ArgumentSlot slot = candidate.Slots[position];
+                            ArgumentSlot.Bump(slot.Names, NameOfArgument(call.Arguments[position]));
+                            ArgumentSlot.Bump(slot.Types, TypeOfArgument(call.Arguments[position]));
+                        }
                     }
                 }
             }
@@ -359,6 +433,68 @@ public class BuiltinHarvestTests
             .Take(60) )
         {
             _output.WriteLine($"  {entry.Value.Files.Count,4} files {entry.Value.Calls,5} calls  {entry.Key}   [{entry.Value.FirstSite}]");
+        }
+    }
+
+    /// <summary>
+    /// What the caller called this argument, when the spelling carries a name at all. A variable or
+    /// a field is the caller's own word for the thing and is the whole point of reading call sites;
+    /// an expression, a call or a literal has no name to take, and returning null there is what keeps
+    /// invented parameter names out of the report.
+    /// </summary>
+    private static string? NameOfArgument(ExprNode argument)
+    {
+        switch ( argument )
+        {
+            case IdentifierNode identifier:
+                // true/false/undefined lex as keywords, so anything reaching here is a real variable.
+                return identifier.Token.Text;
+            case MemberNode member:
+                // self.owner and level.player both describe the argument as "owner"/"player".
+                return member.NameToken.Text;
+            case ParenNode paren:
+                return NameOfArgument(paren.Inner);
+            case IndexNode index:
+                // players[i] is still about players.
+                return NameOfArgument(index.Object);
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// The argument's type, but only where the SPELLING is the type: a literal, a vector, a boolean.
+    /// A variable name is never read as a type — the caller's word for a thing says nothing about
+    /// what the engine wants, and guessing there is how a wrong signature gets written down.
+    /// </summary>
+    private static string? TypeOfArgument(ExprNode argument)
+    {
+        switch ( argument )
+        {
+            case LiteralNode literal:
+                switch ( literal.Token.Kind )
+                {
+                    case TokenKind.String:
+                    case TokenKind.LocalizedString:
+                    case TokenKind.HashString:
+                        return "string";
+                    case TokenKind.Integer:
+                    case TokenKind.Hex:
+                        return "int";
+                    case TokenKind.Float:
+                        return "float";
+                    case TokenKind.True:
+                    case TokenKind.False:
+                        return "bool";
+                    default:
+                        return null;
+                }
+            case VectorNode:
+                return "vector";
+            case ParenNode paren:
+                return TypeOfArgument(paren.Inner);
+            default:
+                return null;
         }
     }
 

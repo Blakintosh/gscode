@@ -13,28 +13,6 @@ worklist; when its last entry goes, so does it.
 
 ## Backlog
 
-### A test-harness trap that fails SILENTLY
-
-Not a bug in shipping code. A place where a wrong call produces an empty result instead of an
-error, so a test written against it passes while proving nothing.
-
-`WorkspaceIndexer` parses with `GameProfile.Active`. A test that builds a fake
-workspace for a NON-active dialect indexes every file under BO3's rules, where a keyword-less
-`is_coop()` is not a declaration at all. The store comes back empty, every "is it offered?"
-assertion passes, and every "is it absent?" assertion passes for the wrong reason.
-`PathCallResolutionTests` documents this in a comment and sidesteps it by building records by hand;
-`MergeDialectScopeTests` had to do the same. Two workarounds for one hazard is the signal.
-
-*Plan.* Give `WorkspaceIndexer` an explicit profile — a constructor parameter defaulting to
-`GameProfile.Active`, matching the convention `ApiLoader`, `BuiltinApiSet` and `CompletionEngine`
-already follow (`profile: null` means Active). It threads to the `ScriptAnalysis.Analyze` call
-inside the indexer. Then add a test helper, `TestWorkspace.Build(profile, files)`, that wires
-resolver + indexer + database with one profile, and move the two hand-rolled loops onto it.
-*Verification:* re-point `MergeDialectScopeTests` at the indexer and confirm it still fails without
-the completion fix — if the store is genuinely populated, the counts stay 2 and 1.
-*Cost:* small. The risk is that some caller wants Active-at-call-time rather than at construction;
-`Program.cs` builds the indexer after the profile is selected, so it does not.
-
 ### Three probable CSC builtins are missing from the BO3 library
 
 The corpus sweep reports `error`, `add_object` and `warning` as unknown builtins in BO3's

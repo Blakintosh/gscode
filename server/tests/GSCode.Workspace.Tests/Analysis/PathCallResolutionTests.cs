@@ -8,7 +8,6 @@ using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
-using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Tests.Resolution;
 using Xunit;
@@ -36,30 +35,16 @@ public class PathCallResolutionTests
     /// <summary>
     /// A workspace holding one real utility file, which declares exactly one function.
     ///
-    /// The record is built directly rather than through <see cref="WorkspaceIndexer"/>, which parses
-    /// with <c>GameProfile.Active</c>: under BO3 a keyword-less <c>shown()</c> is not a declaration
-    /// at all, so the store would come back empty and every assertion here would pass for the wrong
-    /// reason. Doing it explicitly keeps the dialect a parameter instead of global state.
+    /// Indexed under CoD4 explicitly. Left to <c>GameProfile.Active</c> it would be BO3, where a
+    /// keyword-less <c>shown()</c> is not a declaration at all, and the store would come back empty
+    /// with every assertion here passing for the wrong reason.
     /// </summary>
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
-        string utilityPath = @$"{Raw}\maps\mp\_utility.gsc";
-        FakeFileSystem files = new FakeFileSystem().AddFile(utilityPath, "shown()\n{\n}\n");
+        TestWorkspace.Built workspace = TestWorkspace.Build(
+            Cod4, Raw, (@$"{Raw}\maps\mp\_utility.gsc", "shown()\n{\n}\n"));
 
-        RootConfig config = RootConfig.Create(true, Raw, null, [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-
-        ParseResult utility = ScriptAnalysis.Analyze(
-            utilityPath, ScriptLanguage.Gsc, SourceText.From("shown()\n{\n}\n"),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
-
-        ResolutionContext context = resolver.GetContext(utilityPath);
-        ScriptRecord record = ScriptDatabase.BuildRecord(
-            utility, context, isDirty: false, resolver.GetScriptRelativePath(utilityPath, context));
-        database.StoreFor(record.Language).Upsert(record);
-
-        return (database, resolver);
+        return (workspace.Database, workspace.Resolver);
     }
 
     private static ImmutableArray<Diagnostic> Lint(string source)

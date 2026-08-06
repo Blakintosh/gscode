@@ -1,14 +1,11 @@
 using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
@@ -26,10 +23,9 @@ namespace GSCode.Workspace.Tests.Completion;
 /// listed the asking file's own functions TWICE, because the include-scope query already returns
 /// them through its same-file arm and neither query can see the other's results.
 ///
-/// Records are built explicitly rather than through <see cref="Workspace.Indexing.WorkspaceIndexer"/>,
-/// which parses with <c>GameProfile.Active</c>: under BO3 a keyword-less <c>is_coop()</c> is not a
-/// declaration at all, so the store would come back empty and every assertion here would pass for
-/// the wrong reason.
+/// Indexed through <see cref="TestWorkspace"/>, which pins the dialect. Indexing under the wrong one
+/// leaves the store empty rather than failing, and these assertions would then pass without proving
+/// anything.
 /// </summary>
 public class MergeDialectScopeTests
 {
@@ -59,49 +55,27 @@ public class MergeDialectScopeTests
     /// </summary>
     private static ImmutableArray<CompletionEntry> CompleteInMpUtility()
     {
-        // Normalized, because GetScriptRelativePath compares against the normalized root. A raw
-        // spelling silently yields an EMPTY relative path, the include match then never fires, and
-        // the test passes for the wrong reason on the two assertions that expect nothing.
-        string editedPath = PathUtil.NormalizeAbsolute(@$"{Raw}\maps\mp\_utility.gsc");
-        (string Path, string Text)[] world =
-        [
-            (PathUtil.NormalizeAbsolute(@$"{Raw}\maps\_utility.gsc"), SameStemOtherFile),
-            (PathUtil.NormalizeAbsolute(@$"{Raw}\common_scripts\utility.gsc"), IncludedFile),
-            (editedPath, EditedFile),
-        ];
+        string editedPath = @$"{Raw}\maps\mp\_utility.gsc";
 
-        FakeFileSystem files = new();
-        foreach ( (string path, string text) in world )
-        {
-            files.AddFile(path, text);
-        }
-
-        RootConfig config = RootConfig.Create(true, Raw, null, [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        NameTable names = new();
-
-        foreach ( (string path, string text) in world )
-        {
-            ParseResult indexed = Analyze(path, text, names);
-            ResolutionContext context = resolver.GetContext(path);
-            ScriptRecord record = ScriptDatabase.BuildRecord(
-                indexed, context, isDirty: false, resolver.GetScriptRelativePath(path, context));
-            database.StoreFor(record.Language).Upsert(record);
-        }
+        TestWorkspace.Built workspace = TestWorkspace.Build(
+            Mw2,
+            Raw,
+            (@$"{Raw}\maps\_utility.gsc", SameStemOtherFile),
+            (@$"{Raw}\common_scripts\utility.gsc", IncludedFile),
+            (editedPath, EditedFile));
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
-        CompletionEngine engine = new(database, BuiltinApiSet.Load(api, Mw2), ObjectFields.Load(api, Mw2));
+        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, Mw2), ObjectFields.Load(api, Mw2));
 
         // Line 8 is the blank line inside exploder_sound's body.
         return engine.Complete(
-            Analyze(editedPath, EditedFile, names), "raw", new Position(8, 4), profile: Mw2);
+            Analyze(editedPath, EditedFile), "raw", new Position(8, 4), profile: Mw2);
     }
 
-    private static ParseResult Analyze(string path, string text, NameTable names)
+    private static ParseResult Analyze(string path, string text)
     {
         return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(text), NullInsertProvider.Instance, names, Mw2);
+            path, ScriptLanguage.Gsc, SourceText.From(text), NullInsertProvider.Instance, new NameTable(), Mw2);
     }
 
     /// <summary>

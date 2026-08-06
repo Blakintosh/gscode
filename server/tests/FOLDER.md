@@ -101,6 +101,13 @@ and Verified, keyword sets, and every capability flag · `NameTableTests` intern
 
 Needs a database. Fixtures use `FakeFileSystem`, so no game install is involved.
 
+**Build a workspace with `TestWorkspace.Build(profile, rawRoot, files)`.** It indexes through the
+real `WorkspaceIndexer` with the dialect pinned, which is the part that must not be left to chance:
+`GameProfile.Active` is BO3 in a test run, and under BO3 a keyword-less `is_coop()` is not a
+declaration at all — so a workspace indexed for any other game comes back EMPTY rather than wrong,
+and assertions about what it contains pass without proving anything. Two test files worked around
+that by building `ScriptRecord`s by hand before the profile was a parameter.
+
 **Analysis (the lints).** `IncludeUsageLintTests` 5026, the reported case plus every gate the Error
 rests on and the transitive chain the corpus proved is required · `ArgumentCountLintTests` 5022/5023,
 which declaration a call is judged against when a script function and a builtin share a name —

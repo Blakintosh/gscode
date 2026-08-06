@@ -170,7 +170,10 @@ surfaces.
 - `sealed class WorkspaceIndexer` — cold start: enumerate targets → bounded
   `Parallel.ForEachAsync` (cores−1) running the per-file pipeline → Commit records.
   Reads the current resolver via an injected `Func<PathResolver>` so resolver swaps take
-  effect immediately. A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH
+  effect immediately. Takes an optional `GameProfile`, null meaning `GameProfile.Active` at
+  analysis time — which is what the server wants, selecting the game once at startup, and what
+  a caller holding a profile must override: indexing under the wrong dialect does not fail, it
+  parses declarations away and leaves the store EMPTY. A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH
   exactly once no matter how many scripts insert it; `InvalidateGsh` drops one on change.
   `IndexFile` is the single-file path the watcher reuses. `UseCache` enables cold-restore:
   the two-pass `IndexAsync` restores files whose on-disk content hash matches the cached

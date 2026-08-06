@@ -106,15 +106,28 @@ public sealed class WorkspaceIndexer
     /// <summary>Reads the current resolver each call, so resolver swaps take effect immediately.</summary>
     private readonly IHeaderMacroCache? _headerCache;
 
+    /// <summary>
+    /// The dialect every indexed file is parsed as. Null defers to <see cref="GameProfile.Active"/>
+    /// at analysis time, which is what the server wants — it selects the game once, at startup.
+    ///
+    /// It is a parameter at all because reading Active unconditionally made this silently wrong for
+    /// anyone holding a profile in hand. A workspace indexed under the wrong dialect does not fail:
+    /// under BO3 a keyword-less <c>is_coop()</c> is not a declaration, so the store comes back EMPTY
+    /// and every assertion about what it contains passes for the wrong reason. Two test files worked
+    /// around that by building records by hand rather than indexing.
+    /// </summary>
+    private readonly GameProfile? _profile;
+
     public WorkspaceIndexer(
         ScriptDatabase database, Func<PathResolver> resolverProvider, IFileSystem fileSystem, NameTable names,
-        IHeaderMacroCache? headerCache = null)
+        IHeaderMacroCache? headerCache = null, GameProfile? profile = null)
     {
         _database = database;
         _resolverProvider = resolverProvider;
         _fileSystem = fileSystem;
         _names = names;
         _headerCache = headerCache;
+        _profile = profile;
     }
 
     /// <summary>Enables persistent caching: unchanged files restore from <paramref name="restored"/>, fresh analyses are written to <paramref name="cache"/>.</summary>
@@ -294,7 +307,7 @@ public sealed class WorkspaceIndexer
             SourceText.From(content),
             new CachingInsertProvider(this, context),
             _names,
-            profile: null,
+            profile: _profile,
             headerCache: _headerCache);
         PerfTracker.End();
 

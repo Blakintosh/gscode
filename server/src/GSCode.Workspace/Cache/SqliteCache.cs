@@ -273,19 +273,30 @@ public sealed class SqliteCache : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Applies one coalesced batch — up to 512 commands — inside a single transaction.
+    ///
+    /// The two statements are built ONCE per batch and reused, with only their parameter values
+    /// reassigned per record. Building them per record meant a fresh SqliteCommand, a fresh
+    /// parameter collection and seven boxed values every time, for every file of a cold index. That
+    /// is the same cost the <c>deps</c> write was removed for, noted below; it applied per edge
+    /// there and per file here.
+    /// </summary>
     private void ApplyBatch(List<WriteCommand> batch)
     {
         using SqliteTransaction transaction = _connection.BeginTransaction();
+        using SqliteCommand upsert = CreateUpsertCommand(transaction);
+        using SqliteCommand delete = CreateDeleteCommand(transaction);
 
         foreach ( WriteCommand command in batch )
         {
             switch ( command )
             {
-                case UpsertCommand upsert:
-                    ApplyUpsert(upsert.Record, transaction);
+                case UpsertCommand upsertCommand:
+                    ApplyUpsert(upsertCommand.Record, upsert);
                     break;
-                case DeleteCommand delete:
-                    ApplyDelete(delete.Path, transaction);
+                case DeleteCommand deleteCommand:
+                    ApplyDelete(deleteCommand.Path, delete);
                     break;
                 default:
                     break;
@@ -295,7 +306,43 @@ public sealed class SqliteCache : IAsyncDisposable
         transaction.Commit();
     }
 
-    private void ApplyUpsert(ScriptRecord record, SqliteTransaction transaction)
+    private SqliteCommand CreateUpsertCommand(SqliteTransaction transaction)
+    {
+        SqliteCommand upsert = _connection.CreateCommand();
+        upsert.Transaction = transaction;
+        upsert.CommandText = """
+            INSERT INTO files (path, language, context_id, relative, content_hash, analysed_at, record)
+            VALUES ($path, $language, $context, $relative, $hash, $at, $record)
+            ON CONFLICT(path) DO UPDATE SET
+                language = excluded.language,
+                context_id = excluded.context_id,
+                relative = excluded.relative,
+                content_hash = excluded.content_hash,
+                analysed_at = excluded.analysed_at,
+                record = excluded.record;
+            """;
+
+        // Added once with a placeholder; ApplyUpsert assigns Value per record.
+        upsert.Parameters.AddWithValue("$path", "");
+        upsert.Parameters.AddWithValue("$language", 0);
+        upsert.Parameters.AddWithValue("$context", "");
+        upsert.Parameters.AddWithValue("$relative", "");
+        upsert.Parameters.AddWithValue("$hash", "");
+        upsert.Parameters.AddWithValue("$at", 0L);
+        upsert.Parameters.AddWithValue("$record", Array.Empty<byte>());
+        return upsert;
+    }
+
+    private SqliteCommand CreateDeleteCommand(SqliteTransaction transaction)
+    {
+        SqliteCommand command = _connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "DELETE FROM files WHERE path = $path; DELETE FROM deps WHERE path = $path;";
+        command.Parameters.AddWithValue("$path", "");
+        return command;
+    }
+
+    private static void ApplyUpsert(ScriptRecord record, SqliteCommand upsert)
     {
         // Unsaved editor state is never persisted.
         if ( record.IsDirty )
@@ -303,29 +350,14 @@ public sealed class SqliteCache : IAsyncDisposable
             return;
         }
 
-        using ( SqliteCommand upsert = _connection.CreateCommand() )
-        {
-            upsert.Transaction = transaction;
-            upsert.CommandText = """
-                INSERT INTO files (path, language, context_id, relative, content_hash, analysed_at, record)
-                VALUES ($path, $language, $context, $relative, $hash, $at, $record)
-                ON CONFLICT(path) DO UPDATE SET
-                    language = excluded.language,
-                    context_id = excluded.context_id,
-                    relative = excluded.relative,
-                    content_hash = excluded.content_hash,
-                    analysed_at = excluded.analysed_at,
-                    record = excluded.record;
-                """;
-            upsert.Parameters.AddWithValue("$path", record.Path);
-            upsert.Parameters.AddWithValue("$language", (int)record.Language);
-            upsert.Parameters.AddWithValue("$context", record.ContextId);
-            upsert.Parameters.AddWithValue("$relative", record.RelativePath);
-            upsert.Parameters.AddWithValue("$hash", record.ContentHash.ToString());
-            upsert.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            upsert.Parameters.AddWithValue("$record", RecordSerializer.Serialize(record));
-            upsert.ExecuteNonQuery();
-        }
+        upsert.Parameters["$path"].Value = record.Path;
+        upsert.Parameters["$language"].Value = (int)record.Language;
+        upsert.Parameters["$context"].Value = record.ContextId;
+        upsert.Parameters["$relative"].Value = record.RelativePath;
+        upsert.Parameters["$hash"].Value = record.ContentHash.ToString();
+        upsert.Parameters["$at"].Value = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        upsert.Parameters["$record"].Value = RecordSerializer.Serialize(record);
+        upsert.ExecuteNonQuery();
 
         // The `deps` table is deliberately NOT written. Nothing reads it: the same dependency edges
         // travel inside the serialized record (ScriptRecord.Dependencies), and that is what the
@@ -335,12 +367,9 @@ public sealed class SqliteCache : IAsyncDisposable
         // selected. The table stays in the schema so an existing database still opens.
     }
 
-    private void ApplyDelete(string path, SqliteTransaction transaction)
+    private static void ApplyDelete(string path, SqliteCommand command)
     {
-        using SqliteCommand command = _connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = "DELETE FROM files WHERE path = $path; DELETE FROM deps WHERE path = $path;";
-        command.Parameters.AddWithValue("$path", path);
+        command.Parameters["$path"].Value = path;
         command.ExecuteNonQuery();
     }
 

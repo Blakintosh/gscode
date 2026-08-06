@@ -64,7 +64,17 @@ public static class PragmaDirectives
                 continue;
             }
 
-            foreach ( Match match in s_pattern.Matches(token.GetText(text).ToString()) )
+            // The word has to be present before the string and the regex are worth paying for.
+            // This runs over every comment of every file on every analysis, and a doc-commented
+            // script has hundreds; almost none of them contain a pragma. Matching the regex's
+            // IgnoreCase here, so the cheap test never disagrees with the expensive one.
+            ReadOnlySpan<char> comment = token.GetText(text);
+            if ( !comment.Contains("#pragma", StringComparison.OrdinalIgnoreCase) )
+            {
+                continue;
+            }
+
+            foreach ( Match match in s_pattern.Matches(comment.ToString()) )
             {
                 if ( !TryParseTarget(match.Groups["target"].Value, out PragmaTarget target, out int code) )
                 {

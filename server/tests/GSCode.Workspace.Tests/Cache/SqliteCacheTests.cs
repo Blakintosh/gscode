@@ -159,6 +159,43 @@ public class SqliteCacheTests : IDisposable
             Assert.Empty(again.LoadAll());
         }
     }
+
+    [Fact]
+    public async Task AMixedBatch_KeepsEachRecordsOwnValues()
+    {
+        // The upsert and delete statements are built once per BATCH and reused, with only their
+        // parameter values reassigned per record. That makes leakage between records the failure
+        // mode to guard: a value left over from the previous row, or a row skipped for being dirty
+        // taking the next one's place. Every field here is distinct per record, so a leak shows up
+        // as a wrong VALUE rather than merely a wrong count.
+        //
+        // The mix matters as much as the size. One batch carries clean records, a dirty one that
+        // must be skipped, and a delete, which is the arrangement a real edit session produces.
+        await using ( SqliteCache cache = SqliteCache.Open(_dbPath, "id") )
+        {
+            cache.Enqueue(SampleRecord(@"c:\ws\scripts\doomed.gsc", 900));
+
+            for ( int index = 0; index < 8; index++ )
+            {
+                cache.Enqueue(SampleRecord(@$"c:\ws\scripts\keep{index}.gsc", (ulong)(100 + index)));
+            }
+
+            cache.Enqueue(SampleRecord(@"c:\ws\scripts\dirty.gsc", 777) with { IsDirty = true });
+            cache.EnqueueDelete(@"c:\ws\scripts\doomed.gsc");
+        }
+
+        await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "id") )
+        {
+            IReadOnlyDictionary<string, ScriptRecord> restored = reopened.LoadAll();
+
+            Assert.Equal(8, restored.Count);
+            for ( int index = 0; index < 8; index++ )
+            {
+                ScriptRecord loaded = restored[PathUtil.NormalizeAbsolute(@$"c:\ws\scripts\keep{index}.gsc")];
+                Assert.Equal((ulong)(100 + index), loaded.ContentHash);
+            }
+        }
+    }
 }
 
 /// <summary>Cold-restore behavior wired through the indexer against a fake file tree.</summary>

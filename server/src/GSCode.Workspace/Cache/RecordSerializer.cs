@@ -40,18 +40,23 @@ public static class RecordSerializer
         return output.ToArray();
     }
 
-    /// <summary>Decompresses and deserializes a record, or null when the blob is unreadable.</summary>
+    /// <summary>
+    /// Decompresses and deserializes a record, or null when the blob is unreadable.
+    ///
+    /// Reads STRAIGHT out of the decompressor, for the reason <see cref="Serialize"/> writes
+    /// straight into it. This used to copy the whole decompressed document into a MemoryStream
+    /// first, which is the same full uncompressed buffer per record that the write path was
+    /// changed to stop making — and it is paid once per cached file on every warm start, which is
+    /// the moment the server is least able to spare it.
+    /// </summary>
     public static ScriptRecord? Deserialize(byte[] blob)
     {
         try
         {
             using MemoryStream input = new(blob);
             using GZipStream gzip = new(input, CompressionMode.Decompress);
-            using MemoryStream json = new();
-            gzip.CopyTo(json);
-            json.Position = 0;
 
-            return JsonSerializer.Deserialize(json, CacheJsonContext.Default.ScriptRecord);
+            return JsonSerializer.Deserialize(gzip, CacheJsonContext.Default.ScriptRecord);
         }
         catch ( InvalidDataException )
         {

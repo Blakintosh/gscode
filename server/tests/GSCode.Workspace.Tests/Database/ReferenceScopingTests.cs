@@ -9,14 +9,18 @@ using Xunit;
 namespace GSCode.Workspace.Tests.Database;
 
 /// <summary>
-/// Reference scoping on the merge dialects. Under <c>#include</c> a function carries no namespace,
-/// so every same-named function in the workspace shares one key — CoD4's animscripts hold 1,230
-/// <c>main()</c>s. Narrowing has to keep exactly the files that can REACH the declaring one, by all
-/// three routes: being it, importing it, or path-calling it.
+/// Reference scoping. Under <c>#include</c> a function carries no namespace, so every same-named
+/// function in the workspace shares one key — CoD4's animscripts hold 1,230 <c>main()</c>s.
+/// Narrowing has to keep exactly the files that can REACH the declaring one, by all three routes:
+/// being it, importing it, or path-calling it.
 ///
 /// The path-call route is the one worth testing hardest. A first attempt checked imports only, and
 /// a function whose callers all reach it by path went from 1,230 references to zero — a wrong-small
 /// answer that reads as "this function is dead", which is worse than the noise it replaced.
+///
+/// BO3 needs the same narrowing for a smaller reason, covered at the end: the namespace is in the
+/// key but does not pin a FILE, since the MP and ZM copies of a script declare the same
+/// <c>#namespace</c>. It used to be exempted here on the theory that the key already settled it.
 /// </summary>
 public class ReferenceScopingTests
 {
@@ -153,16 +157,75 @@ public class ReferenceScopingTests
         Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(Refs(corner), @"animscripts\combat.gsc", Cod4));
     }
 
-    [Fact]
-    public void BlackOps3IsUntouched()
+    /// <summary>
+    /// A BO3 reference: the key carries a namespace, which is what makes it a namespace-dialect key
+    /// at all. <see cref="Refs"/> builds the merge-dialect form (namespace null) and the two must
+    /// not be mixed — a null-namespace key handed to BO3 describes nothing the dialect can produce.
+    /// </summary>
+    private static ImmutableArray<(ScriptRecord, ReferenceEntry)> Bo3Refs(params ScriptRecord[] records)
     {
-        // #using puts the namespace in the key, so the ambiguity never arises and nothing is dropped.
-        ScriptRecord stranger = Record(@"scripts\shared\unrelated");
+        ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder builder =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
-        ImmutableArray<(ScriptRecord, ReferenceEntry)> kept =
-            DatabaseQueries.ScopeToIncludeGraph(Refs(stranger), @"scripts\shared\other", GameProfile.BlackOps3);
+        foreach ( ScriptRecord record in records )
+        {
+            builder.Add((record, new ReferenceEntry(
+                new SymbolKey("globallogic_utils", "get_time_remaining", SymbolKind.Function),
+                PathCallRange,
+                ReferenceKind.Call)));
+        }
 
-        Assert.Single(kept);
+        return builder.ToImmutable();
+    }
+
+    [Fact]
+    public void BlackOps3NarrowsByUsing_BecauseANamespaceDoesNotPinAFile()
+    {
+        // The namespace is in the key and still does not settle it: the MP and ZM copies of
+        // `_globallogic_utils.gsc` both declare `#namespace globallogic_utils`. What separates them
+        // is the `#using` graph, so a caller that imports the ZM copy counts only against ZM.
+        const string zm = @"scripts\zm\gametypes\_globallogic_utils";
+        const string mp = @"scripts\mp\gametypes\_globallogic_utils";
+
+        ScriptRecord zmCaller = Record(@"scripts\zm\gametypes\_globallogic_spawn", includes: [zm]);
+
+        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Bo3Refs(zmCaller), zm, GameProfile.BlackOps3));
+        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(Bo3Refs(zmCaller), mp, GameProfile.BlackOps3));
+    }
+
+    [Fact]
+    public void BlackOps3KeepsADeclaringFilesOwnReference()
+    {
+        // The file IS the declaring one, so its own reference counts with no import at all.
+        const string zm = @"scripts\zm\gametypes\_globallogic_utils";
+
+        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Bo3Refs(Record(zm)), zm, GameProfile.BlackOps3));
+    }
+
+    [Fact]
+    public void BlackOps3DoesNotClaimASameNamedFunctionInAnotherNamespace()
+    {
+        // The trap in matching on NAME alone. This file declares its own get_time_remaining under a
+        // different namespace AND imports the ZM copy. The "declares it itself, so the reference is
+        // its own" shortcut must not fire, or the ZM copy loses a caller it really has.
+        const string zm = @"scripts\zm\gametypes\_globallogic_utils";
+
+        ScriptRecord caller = Record(
+            @"scripts\zm\gametypes\_globallogic_spawn",
+            includes: [zm],
+            functions:
+            [
+                new FunctionSymbol
+                {
+                    Name = "get_time_remaining",
+                    KeyName = "get_time_remaining",
+                    Namespace = "globallogic_spawn",
+                    NameRange = PathCallRange,
+                    FullRange = PathCallRange,
+                },
+            ]);
+
+        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Bo3Refs(caller), zm, GameProfile.BlackOps3));
     }
 
     [Fact]

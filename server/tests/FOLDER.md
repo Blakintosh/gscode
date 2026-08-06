@@ -137,7 +137,10 @@ own keywords and global objects.
 `ClassGraphTests` incremental class-index updates · `MethodResolutionTests` inherited and
 qualified method lookup · `MethodReferenceTests` class-method reference unions ·
 `MacroNavigationTests`, `GshMacroLookupTests` macros across the three language worlds ·
-`DialectDependencyTests`, `DialectIncludeScopeTests` the `#include` merge graph ·
+`DialectDependencyTests` · `DialectIncludeScopeTests` scope narrowing for BOTH dialects — the
+`#include` merge graph, and the `#using` graph that separates two BO3 files sharing a `#namespace` ·
+`ReferenceScopingTests` the same narrowing for reference COUNTS, including that a file declaring the
+name in another namespace does not claim the reference ·
 `LocalDefinitionTests` go-to-definition on a local, which the shared reference index deliberately
 does not carry · `RootDerivationTests` finding the game when nothing is configured ·
 `ServerBuildIdentityTests` that two games can never share a cache.
@@ -170,7 +173,11 @@ people who curate them. Findings the real pipeline already produced are not repe
 line means "suppressed on this game" rather than "run twice".
 - `CorpusTests` — BO3: nothing throws, lex/parse errors stay within budget, and the formatter
   preserves the token stream, is idempotent, produces line edits that reproduce the whole-document
-  format, and neither loses nor invents a line when sorting directives or aligning.
+  format, and neither loses nor invents a line when sorting directives or aligning. Also the gate on
+  reference narrowing: every one of BO3's ~13,700 declared functions keeps its OWN definition after
+  scoping. That is the failure mode narrowing has already produced once — an imports-only rule sent
+  `combat.gsc`'s `main()` from 1,230 references to zero — and a unit test cannot catch it, because
+  the mistake is always a real rule meeting a corpus shape nobody pictured.
 - `GameCorpusTests` — the same three properties per game, and the evidence behind
   `GameProfile.Verified`.
 - `ClassResolutionCorpusTests` — class inheritance and method calls across the shipped corpus,

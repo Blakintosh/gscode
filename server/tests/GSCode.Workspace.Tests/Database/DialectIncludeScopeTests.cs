@@ -170,4 +170,176 @@ public class DialectIncludeScopeTests
 
         Assert.DoesNotContain(functions, f => f.KeyName == "helper");
     }
+
+    // --- The namespace dialect needs the SAME narrowing, for a different reason ---
+    //
+    // A merge dialect drops the namespace from the key, so same-named functions collapse. BO3
+    // keeps the namespace, but a namespace is not unique to a FILE: the stock scripts declare
+    // `#namespace globallogic_utils` in both `scripts\mp\gametypes\_globallogic_utils.gsc` and
+    // `scripts\zm\gametypes\_globallogic_utils.gsc`. So `globallogic_utils::func` names two
+    // declarations, and only the asking file's `#using` list says which one it means.
+
+    private static readonly GameProfile Bo3 = GameProfile.ByName("bo3")!;
+
+    private static ParseResult AnalyzeBo3(string path, string source)
+    {
+        return ScriptAnalysis.Analyze(
+            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), Bo3);
+    }
+
+    /// <summary>The MP and ZM copies of one namespace, each declaring the same function.</summary>
+    private static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> TwoNamespaceCopies(ScriptDatabase database)
+    {
+        const string source = "#namespace globallogic_utils;\nfunction get_time_remaining()\n{\n}\n";
+
+        database.Commit(
+            AnalyzeBo3(@"c:\raw\mp_utils.gsc", source),
+            ResolutionContext.RawContext, false, @"scripts\mp\gametypes\_globallogic_utils.gsc");
+        database.Commit(
+            AnalyzeBo3(@"c:\raw\zm_utils.gsc", source),
+            ResolutionContext.RawContext, false, @"scripts\zm\gametypes\_globallogic_utils.gsc");
+
+        SymbolKey key = new("globallogic_utils", "get_time_remaining", SymbolKind.Function);
+        return [.. DatabaseQueries.FindReferences(database.Gsc, "raw", key)
+            .Where(reference => reference.Entry.Kind == ReferenceKind.Definition)];
+    }
+
+    [Fact]
+    public void TwoFilesSharingANamespaceBothMatchByKey()
+    {
+        // The premise: the namespace is in the key and STILL does not separate them.
+        ScriptDatabase database = new();
+        Assert.Equal(2, TwoNamespaceCopies(database).Length);
+    }
+
+    [Fact]
+    public void ImportScopePrefersTheUsedNamespaceCopy()
+    {
+        ScriptDatabase database = new();
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> both = TwoNamespaceCopies(database);
+
+        // _globallogic_spawn.gsc uses only the ZM copy, so the MP copy is not reachable from it.
+        ParseResult spawn = AnalyzeBo3(
+            @"c:\raw\spawn.gsc",
+            "#using scripts\\zm\\gametypes\\_globallogic_utils;\n"
+            + "function run()\n{\n    globallogic_utils::get_time_remaining();\n}\n");
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> scoped = DatabaseQueries.PreferIncludeScope(
+            both, @"scripts\zm\gametypes\_globallogic_spawn.gsc", DatabaseQueries.LinkedScriptPaths(spawn, Bo3));
+
+        (ScriptRecord Record, ReferenceEntry Entry) only = Assert.Single(scoped);
+        Assert.Equal(@"scripts\zm\gametypes\_globallogic_utils.gsc", only.Record.RelativePath);
+    }
+
+    [Fact]
+    public void ImportScopeFallsBackToBothWhenNeitherIsUsed()
+    {
+        // A missing `#using` must not make go-to-definition dead-end: offer both while it is fixed.
+        ScriptDatabase database = new();
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> both = TwoNamespaceCopies(database);
+
+        ParseResult spawn = AnalyzeBo3(
+            @"c:\raw\spawn.gsc", "function run()\n{\n    globallogic_utils::get_time_remaining();\n}\n");
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> scoped = DatabaseQueries.PreferIncludeScope(
+            both, @"scripts\zm\gametypes\_globallogic_spawn.gsc", DatabaseQueries.LinkedScriptPaths(spawn, Bo3));
+
+        Assert.Equal(2, scoped.Length);
+    }
+
+    // --- LinkedScriptPaths: the one place the dialect fork lives ---
+
+    [Fact]
+    public void LinkedScriptPathsReadsUsingDirectivesOnANamespaceDialect()
+    {
+        ParseResult spawn = AnalyzeBo3(
+            @"c:\raw\spawn.gsc",
+            "#using scripts\\zm\\gametypes\\_globallogic_utils;\n#using scripts\\shared\\util_shared;\n"
+            + "function run()\n{\n}\n");
+
+        ImmutableArray<string> paths = DatabaseQueries.LinkedScriptPaths(spawn, Bo3);
+
+        Assert.Equal(2, paths.Length);
+        Assert.Contains(@"scripts\zm\gametypes\_globallogic_utils", paths);
+        Assert.Contains(@"scripts\shared\util_shared", paths);
+    }
+
+    [Fact]
+    public void LinkedScriptPathsReadsIncludeDirectivesOnAMergeDialect()
+    {
+        ParseResult main = AnalyzeIw(@"c:\ws\main.gsc", "#include common_scripts\\utility;\nrun()\n{\n}\n");
+
+        ImmutableArray<string> paths = DatabaseQueries.LinkedScriptPaths(main, Cod4);
+
+        Assert.Equal(@"common_scripts\utility", Assert.Single(paths));
+    }
+
+    [Fact]
+    public void LinkedScriptPathsIgnoresTheOtherDialectsDirective()
+    {
+        // The failure this guards: asking for the wrong list returns EMPTY rather than throwing,
+        // and an empty scope silently falls back to the unnarrowed set.
+        ParseResult usingOnly = AnalyzeBo3(
+            @"c:\raw\spawn.gsc", "#using scripts\\shared\\util_shared;\nfunction run()\n{\n}\n");
+
+        Assert.Empty(DatabaseQueries.LinkedScriptPaths(usingOnly, Cod4));
+        Assert.Single(DatabaseQueries.LinkedScriptPaths(usingOnly, Bo3));
+    }
+
+    // --- ScopeToIncludeGraph: the same collision, in the reference COUNT ---
+
+    [Fact]
+    public void ReferenceScopingSeparatesTheTwoNamespaceCopies()
+    {
+        ScriptDatabase database = new();
+        TwoNamespaceCopies(database);
+
+        // A caller that uses only the ZM copy. Its call must count against ZM, not MP.
+        database.Commit(
+            AnalyzeBo3(
+                @"c:\raw\spawn.gsc",
+                "#using scripts\\zm\\gametypes\\_globallogic_utils;\n"
+                + "function run()\n{\n    globallogic_utils::get_time_remaining();\n}\n"),
+            ResolutionContext.RawContext, false, @"scripts\zm\gametypes\_globallogic_spawn.gsc");
+
+        SymbolKey key = new("globallogic_utils", "get_time_remaining", SymbolKind.Function);
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
+            DatabaseQueries.FindReferences(database.Gsc, "raw", key);
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> zm = DatabaseQueries.ScopeToIncludeGraph(
+            all, @"scripts\zm\gametypes\_globallogic_utils.gsc", Bo3);
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> mp = DatabaseQueries.ScopeToIncludeGraph(
+            all, @"scripts\mp\gametypes\_globallogic_utils.gsc", Bo3);
+
+        // ZM keeps its own definition plus the call; MP keeps only its own definition.
+        Assert.Equal(2, zm.Length);
+        Assert.Single(mp);
+        Assert.All(mp, reference => Assert.Equal(ReferenceKind.Definition, reference.Entry.Kind));
+    }
+
+    [Fact]
+    public void ReferenceScopingDoesNotClaimASameNamedFunctionInAnotherNamespace()
+    {
+        // The trap in matching on NAME alone: spawn.gsc declares its own get_time_remaining in a
+        // DIFFERENT namespace. That must not make it the declaring file for globallogic_utils'.
+        ScriptDatabase database = new();
+        TwoNamespaceCopies(database);
+
+        database.Commit(
+            AnalyzeBo3(
+                @"c:\raw\spawn.gsc",
+                "#using scripts\\zm\\gametypes\\_globallogic_utils;\n#namespace globallogic_spawn;\n"
+                + "function get_time_remaining()\n{\n}\n"
+                + "function run()\n{\n    globallogic_utils::get_time_remaining();\n}\n"),
+            ResolutionContext.RawContext, false, @"scripts\zm\gametypes\_globallogic_spawn.gsc");
+
+        SymbolKey key = new("globallogic_utils", "get_time_remaining", SymbolKind.Function);
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> zm = DatabaseQueries.ScopeToIncludeGraph(
+            DatabaseQueries.FindReferences(database.Gsc, "raw", key),
+            @"scripts\zm\gametypes\_globallogic_utils.gsc",
+            Bo3);
+
+        // The qualified call still counts for the ZM copy despite spawn.gsc's own same-named function.
+        Assert.Contains(zm, reference => reference.Entry.Kind == ReferenceKind.Call);
+    }
 }

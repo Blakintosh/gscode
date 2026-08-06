@@ -502,4 +502,143 @@ public class CorpusTests
 
         return true;
     }
+
+    /// <summary>
+    /// The reported bug, on the file that reported it. <c>zm\gametypes\_globallogic_spawn.gsc</c>
+    /// imports the ZM copy of <c>_globallogic_utils</c> and nothing from <c>mp</c>, yet
+    /// go-to-definition on a <c>globallogic_utils::</c> call offered the MP copy too — both files
+    /// declare <c>#namespace globallogic_utils</c>, so one key names two declarations.
+    ///
+    /// Asserted against the stock scripts rather than a synthetic pair because the premise IS a fact
+    /// about the shipped corpus: that two files a mode never links together share a namespace.
+    /// </summary>
+    [Fact]
+    public void AZmScriptResolvesItsOwnNamespaceCopy_NotTheMpOne()
+    {
+        if ( SkipWithoutCorpus() )
+        {
+            return;
+        }
+
+        const string zm = @"scripts\zm\gametypes\_globallogic_utils";
+        const string mp = @"scripts\mp\gametypes\_globallogic_utils";
+
+        string spawn = Path.Combine(CorpusFixture.RawRoot!, @"scripts\zm\gametypes\_globallogic_spawn.gsc");
+        if ( !File.Exists(spawn) )
+        {
+            _output.WriteLine($"SKIPPED: {spawn} is not in this corpus.");
+            return;
+        }
+
+        GameProfile previous = GameProfile.Active;
+        try
+        {
+            GameProfile.Select(GameProfile.BlackOps3.ShortName);
+
+            PathResolver resolver = CorpusFixture.Resolver();
+            ParseResult parsed = CorpusFixture.Analyze(spawn, resolver, new NameTable());
+
+            ImmutableArray<string> linked =
+                GSCode.Workspace.Database.DatabaseQueries.LinkedScriptPaths(parsed, GameProfile.BlackOps3);
+
+            // The premise and the fix, in one pair of assertions: it links the ZM copy, not the MP one.
+            Assert.Contains(zm, linked);
+            Assert.DoesNotContain(mp, linked);
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
+        }
+    }
+
+    /// <summary>
+    /// The gate on reference narrowing: scoping a function's references to the file that DECLARES it
+    /// must never discard that file's own definition.
+    ///
+    /// This is the failure mode narrowing has already produced once. An earlier version checked
+    /// imports only and sent <c>combat.gsc</c>'s <c>main()</c> from 1,230 references to zero, because
+    /// its callers reach it by path rather than by import. A count of zero on a function declared
+    /// right there reads as "this is dead code" — a confident wrong answer, which is worse than the
+    /// over-wide one it replaced. A unit test cannot catch that class of error, because the mistake
+    /// is always a real rule applied to a corpus shape nobody pictured.
+    ///
+    /// Asserted over every function BO3 declares, which is where the risk landed when the namespace
+    /// dialect stopped being exempt from narrowing: <c>#namespace</c> is shared between the MP and ZM
+    /// copies of a script, so the rule now has to separate files it previously never compared.
+    /// </summary>
+    [Fact]
+    public async Task EveryDeclaredFunction_KeepsItsOwnDefinitionAfterScoping()
+    {
+        if ( SkipWithoutCorpus() )
+        {
+            return;
+        }
+
+        GameProfile previous = GameProfile.Active;
+        try
+        {
+            GameProfile.Select(GameProfile.BlackOps3.ShortName);
+
+            PathResolver resolver = CorpusFixture.Resolver();
+            GSCode.Workspace.Database.ScriptDatabase database = new();
+            GSCode.Workspace.Indexing.WorkspaceIndexer indexer = new(
+                database, () => resolver, new PhysicalFileSystem(), new NameTable());
+            await indexer.IndexAsync(
+                GSCode.Workspace.Indexing.IndexingMode.Full,
+                GSCode.Workspace.Indexing.NullIndexProgressListener.Instance,
+                CancellationToken.None);
+
+            List<string> lost = [];
+            int checkedFunctions = 0;
+
+            foreach ( GSCode.Workspace.Database.ScriptRecord record in database.Gsc.AllRecords )
+            {
+                if ( record.RelativePath.Length == 0 )
+                {
+                    continue;
+                }
+
+                foreach ( GSCode.Core.Symbols.FunctionSymbol function in record.Functions )
+                {
+                    // Methods resolve through MethodResolution, not this path; an inserted
+                    // declaration belongs to the header that holds it, not to this record.
+                    if ( function.OwnerClassKeyName is not null || function.SourceFile.Length > 0 )
+                    {
+                        continue;
+                    }
+
+                    GSCode.Core.Symbols.SymbolKey key = new(
+                        GameProfile.BlackOps3.KeyNamespace(function.Namespace),
+                        function.KeyName,
+                        GSCode.Core.Symbols.SymbolKind.Function);
+
+                    ImmutableArray<(GSCode.Workspace.Database.ScriptRecord Record, GSCode.Core.Symbols.ReferenceEntry Entry)> scoped =
+                        GSCode.Workspace.Database.DatabaseQueries.ScopeToIncludeGraph(
+                            GSCode.Workspace.Database.DatabaseQueries.FindReferences(database.Gsc, record.ContextId, key),
+                            record.RelativePath,
+                            GameProfile.BlackOps3);
+
+                    checkedFunctions++;
+
+                    bool keptOwn = scoped.Any(reference =>
+                        reference.Entry.Kind == GSCode.Core.Symbols.ReferenceKind.Definition
+                        && string.Equals(reference.Record.Path, record.Path, StringComparison.OrdinalIgnoreCase));
+
+                    if ( !keptOwn && lost.Count < 20 )
+                    {
+                        lost.Add($"{record.RelativePath}: {function.Namespace}::{function.KeyName}");
+                    }
+                }
+            }
+
+            _output.WriteLine($"Checked {checkedFunctions} declared functions across {database.Gsc.AllRecords.Count()} records.");
+            Assert.True(
+                lost.Count == 0,
+                $"{lost.Count} function(s) lost their own definition to scoping:\n  " + string.Join("\n  ", lost));
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
+        }
+    }
 }

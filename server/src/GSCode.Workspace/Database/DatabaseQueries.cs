@@ -323,16 +323,57 @@ public static class DatabaseQueries
     /// </summary>
     public static ImmutableArray<string> ImportedScriptPaths(GSCode.Parser.ParseResult result)
     {
+        return DirectivePaths(result, ImportStyle.Namespace);
+    }
+
+    /// <summary>
+    /// The script-relative paths a file LINKS AGAINST, in whichever directive its dialect spells
+    /// that with: <c>#using</c> where resolution is namespace-driven, <c>#include</c> where it
+    /// merges. These plus the file itself are the scope a call resolves within.
+    ///
+    /// The one place the two dialect families meet. Every caller that asks "what can this file
+    /// reach" wants this rather than one of the two directive-specific lists below — asking for the
+    /// wrong one silently returns an EMPTY array (a BO3 file has no <c>#include</c> at all), and an
+    /// empty scope reads to <see cref="PreferIncludeScope"/> as "nothing matched", which falls back
+    /// to the unnarrowed set. So the failure of getting this wrong is not an exception, it is a
+    /// feature quietly reverting to its old behaviour, which is exactly how the namespace dialect
+    /// went unnarrowed for as long as it did.
+    ///
+    /// The two specific lists stay public: completion genuinely wants <c>#using</c> only regardless
+    /// of dialect, and the <c>#include</c> lints genuinely want <c>#include</c> only.
+    /// </summary>
+    public static ImmutableArray<string> LinkedScriptPaths(
+        GSCode.Parser.ParseResult result, GameProfile? profile = null)
+    {
+        return DirectivePaths(result, (profile ?? GameProfile.Active).ImportStyle);
+    }
+
+    /// <summary>
+    /// One walk of the file's top-level elements collecting the paths of whichever import directive
+    /// the caller named, deduplicated and in canonical script form. Shared because the two lists
+    /// differ ONLY in which node type they look for, and a second copy of the loop is a second place
+    /// for the normalization to drift.
+    /// </summary>
+    private static ImmutableArray<string> DirectivePaths(
+        GSCode.Parser.ParseResult result, ImportStyle style)
+    {
         ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
 
         foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
         {
-            if ( element is not GSCode.Parser.Syntax.Ast.UsingNode usingNode )
+            string? path = element switch
+            {
+                GSCode.Parser.Syntax.Ast.UsingNode node when style == ImportStyle.Namespace => node.Path,
+                GSCode.Parser.Syntax.Ast.IncludeNode node when style == ImportStyle.Include => node.Path,
+                _ => null,
+            };
+
+            if ( path is null )
             {
                 continue;
             }
 
-            string normalized = NormalizeScriptPath(usingNode.Path);
+            string normalized = NormalizeScriptPath(path);
             if ( normalized.Length > 0 && !paths.Contains(normalized) )
             {
                 paths.Add(normalized);
@@ -358,23 +399,7 @@ public static class DatabaseQueries
     /// </summary>
     public static ImmutableArray<string> IncludedScriptPaths(GSCode.Parser.ParseResult result)
     {
-        ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
-
-        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
-        {
-            if ( element is not GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
-            {
-                continue;
-            }
-
-            string normalized = NormalizeScriptPath(includeNode.Path);
-            if ( normalized.Length > 0 && !paths.Contains(normalized) )
-            {
-                paths.Add(normalized);
-            }
-        }
-
-        return paths.ToImmutable();
+        return DirectivePaths(result, ImportStyle.Include);
     }
 
     /// <summary>
@@ -520,8 +545,13 @@ public static class DatabaseQueries
     /// reaches it by path without importing it. Zero hides callers and reads as "this is dead",
     /// which is worse than the noise it replaced.
     ///
-    /// A no-op where resolution is namespace-driven: there the namespace is already part of the key,
-    /// so the question never arises and BO3 is untouched.
+    /// Namespace-driven resolution needs it too, for a narrower reason. There the namespace IS part
+    /// of the key, but a namespace is not part of a FILE: <c>scripts\mp\gametypes\_globallogic_utils.gsc</c>
+    /// and <c>scripts\zm\gametypes\_globallogic_utils.gsc</c> both declare <c>#namespace
+    /// globallogic_utils</c>, so one key still names two declarations and a count still merges two
+    /// game modes' callers. What separates them is the <c>#using</c> graph, which
+    /// <see cref="CanReach"/> already walks — a <c>#using</c> is a non-insert dependency edge just as
+    /// an <c>#include</c> is, so the reachability rule is literally the same code.
     /// </summary>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludeGraph(
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references,
@@ -529,7 +559,7 @@ public static class DatabaseQueries
         GameProfile? profile = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
-        if ( game.ResolvesByNamespace || declaringRelativePath.Length == 0 )
+        if ( declaringRelativePath.Length == 0 )
         {
             return references;
         }
@@ -541,7 +571,7 @@ public static class DatabaseQueries
 
         foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
         {
-            if ( MeansDeclaringFile(record, entry, declaring) )
+            if ( MeansDeclaringFile(game, record, entry, declaring) )
             {
                 kept.Add((record, entry));
             }
@@ -563,7 +593,8 @@ public static class DatabaseQueries
     ///   * anything else is a bare name, which a merge dialect resolves locally first, so it belongs
     ///     to the referencing file when that file declares it, and otherwise to whatever it imports.
     /// </summary>
-    private static bool MeansDeclaringFile(ScriptRecord record, ReferenceEntry entry, string declaring)
+    private static bool MeansDeclaringFile(
+        GameProfile game, ScriptRecord record, ReferenceEntry entry, string declaring)
     {
         foreach ( PathCallReference pathCall in record.PathCallTargets )
         {
@@ -578,7 +609,7 @@ public static class DatabaseQueries
         bool declaresItself = false;
         foreach ( FunctionSymbol function in record.Functions )
         {
-            if ( string.Equals(function.KeyName, entry.Key.Name, StringComparison.OrdinalIgnoreCase) )
+            if ( DeclaresKey(game, function, entry.Key) )
             {
                 declaresItself = true;
                 break;
@@ -591,6 +622,28 @@ public static class DatabaseQueries
         }
 
         return CanReach(record, declaring);
+    }
+
+    /// <summary>
+    /// Whether a declaration IS the symbol a key names. The name alone settles it on a merge
+    /// dialect, where the key carries no namespace and cannot carry one. Where resolution is
+    /// namespace-driven the namespace is half the identity, and matching on name alone attributes
+    /// <c>globallogic_utils::spawn_player</c> to any file that happens to declare an unrelated
+    /// <c>spawn_player</c> in a namespace of its own — which the stock scripts are full of.
+    ///
+    /// Routed through <see cref="GameProfile.KeyNamespace"/> rather than comparing the declared
+    /// namespace directly, because a merge dialect still HAS a declared namespace (the file stem);
+    /// it is just not part of the key. KeyNamespace returns null there, so the comparison is a
+    /// no-op, and the merge dialects behave exactly as before.
+    /// </summary>
+    private static bool DeclaresKey(GameProfile game, FunctionSymbol function, SymbolKey key)
+    {
+        if ( !string.Equals(function.KeyName, key.Name, StringComparison.OrdinalIgnoreCase) )
+        {
+            return false;
+        }
+
+        return string.Equals(game.KeyNamespace(function.Namespace), key.Namespace, StringComparison.Ordinal);
     }
 
     /// <summary>

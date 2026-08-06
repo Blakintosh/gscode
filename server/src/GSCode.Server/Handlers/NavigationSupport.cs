@@ -163,12 +163,19 @@ public sealed class NavigationSupport
     /// to the file it is already in, while find-references on a call resolves to the declaration
     /// that call actually reaches.
     ///
+    /// A namespace-driven dialect needs the same rule for a smaller reason: the namespace is in the
+    /// key, but it does not pin a FILE. Both <c>scripts\mp\gametypes\_globallogic_utils.gsc</c> and
+    /// <c>scripts\zm\gametypes\_globallogic_utils.gsc</c> declare <c>#namespace globallogic_utils</c>,
+    /// so without this a reference count on either merged both game modes' callers. The reachability
+    /// question is identical — a <c>#using</c> edge is a dependency edge like an <c>#include</c> — so
+    /// the same walk answers it.
+    ///
     /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
     /// recoverable and a confidently wrong narrow one is not.
     /// </summary>
     private string DeclaringFile(NavigationTarget target, SymbolKey key)
     {
-        if ( key.Kind != SymbolKind.Function || GameProfile.Active.ResolvesByNamespace )
+        if ( key.Kind != SymbolKind.Function )
         {
             return "";
         }
@@ -184,9 +191,15 @@ public sealed class NavigationSupport
         // though combat.gsc also path-calls cover_prone and _mgturret, which each declare their own.
         // Without this, any animscript that path-calls another animscript loses all narrowing,
         // which is every one of them.
+        //
+        // Matched on the KEY, namespace included, not on the name: on BO3 a file routinely declares
+        // a name that some other namespace also declares, and claiming those would hand every such
+        // lens its own file's declaration instead of the one it names.
         foreach ( FunctionSymbol declared in asking.Functions )
         {
-            if ( string.Equals(declared.KeyName, key.Name, StringComparison.OrdinalIgnoreCase) )
+            if ( string.Equals(declared.KeyName, key.Name, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(
+                    GameProfile.Active.KeyNamespace(declared.Namespace), key.Namespace, StringComparison.Ordinal) )
             {
                 return asking.RelativePath;
             }

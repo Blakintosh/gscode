@@ -75,6 +75,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - `NavigationTarget` + `NavigationSupport.Resolve(uri)` — shared plumbing turning a
   document URI into its live analysis + the language store and context id to query.
+- `FindAllReferences` is the single query behind both the CodeLens count and the peek list, so the
+  number and the list cannot disagree. It narrows via `DeclaringFile`, which resolves "which file
+  does this key mean, FROM THIS DOCUMENT" — a lens on a declaration answers itself, a call answers
+  what it reaches. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
+  copies of a script, so counts there merged both game modes' callers until it did. Matches on the
+  whole key, namespace included, or a file's own unrelated same-named function would claim the lens.
 
 ## Handlers/HoverHandler.cs
 
@@ -90,6 +96,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - Go-to-definition: functions/classes/macros via their Definition references across the
   visible context; #using/#insert paths jump to the resolved target file.
+- `ScopeToIncludes` narrows the result to what the call actually reaches: a path call names one file
+  and pins to it, anything else prefers the file itself plus `DatabaseQueries.LinkedScriptPaths`.
+  Every dialect, not just the merging ones — two BO3 scripts sharing a `#namespace` (the `mp` and
+  `zm` copies of `_globallogic_utils`) both answered one key, so a ZM caller was offered the MP
+  definition too. A PREFERENCE throughout: with nothing in scope the full set comes back, so a
+  missing import still lands somewhere useful instead of dead-ending.
 
 ## Handlers/ReferencesHandler.cs
 

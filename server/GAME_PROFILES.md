@@ -117,10 +117,20 @@ the directive is spelled `#using` or `#include` — and that is all the lexer, d
 shape detection need. `ResolvesByNamespace` is the deeper question: whether a function's *identity*
 carries its namespace. Under the merge model a file's functions join the caller's scope and are
 reached by bare name, so the key drops the namespace; under the namespace model the call stays
-qualified and two `main`s in different namespaces are two functions. Five rules turn on the second
-one — how a function is keyed, whether references scope to the include graph, whether a definition
-narrows to one file. They coincide for every game today (a test asserts it), and BO3 is the only
-game that is namespace-driven.
+qualified and two `main`s in different namespaces are two functions. What turns on the second one is
+how a function is KEYED (`KeyNamespace`, and the extractor that builds the key), what completion may
+offer bare, and which code actions apply. They coincide for every game today (a test asserts it), and
+BO3 is the only game that is namespace-driven.
+
+**A namespace does not pin a file, and scoping is not conditional on the dialect.** Go-to-definition
+and reference narrowing used to skip BO3 entirely, on the theory that a namespace in the key already
+made the answer unique. It does not: a namespace is shared freely across files, and the stock scripts
+declare the same `#namespace` in an `mp` copy and a `zm` copy of the same script 565 times over (the
+count is `AmbiguousFunctionLint`'s). So `globallogic_utils::get_time_remaining` names two
+declarations, and only the asking file's `#using` list says which. Both dialect families therefore
+narrow by the same rule — the file itself plus what it links against — and the only difference is
+which directive spells "links against". `DatabaseQueries.LinkedScriptPaths` owns that one choice;
+callers do not branch on the profile themselves.
 
 A **class** name is the exception on BO3: it is global, named bare as `new Throttle()` or
 `class Derived : Throttle`, with no `ns::Throttle` form — so a class key never carries a namespace on

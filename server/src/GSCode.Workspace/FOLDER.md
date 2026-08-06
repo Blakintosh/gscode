@@ -143,6 +143,19 @@ surfaces.
   walk saw everything, since a rule may only assert a name is out of scope against a complete one.
   The direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
   completion offering too little is harmless where an Error is not.
+- `LinkedScriptPaths(result, profile)` — the paths a file links against in whichever directive its
+  dialect uses (`#using` where namespace-driven, `#include` where merging), and the ONE place that
+  fork lives. Scoping callers want this rather than `ImportedScriptPaths`/`IncludedScriptPaths`,
+  which stay public for the cases that genuinely mean one directive: asking for the wrong one returns
+  an EMPTY array rather than throwing, and an empty scope reads downstream as "nothing matched" and
+  silently falls back to the unnarrowed set.
+- `PreferIncludeScope` and `ScopeToIncludeGraph` narrow definitions and references to what the asking
+  file can reach, and neither is conditional on the dialect any more. A namespace does not pin a
+  file — the `mp` and `zm` copies of a script share one `#namespace` — so a namespace-driven key
+  still names several declarations and still has to be narrowed by the `#using` graph. `CanReach`
+  answers both families unchanged, a `#using` edge being a non-insert dependency edge exactly as an
+  `#include` is. Attribution matches on the whole KEY via `GameProfile.KeyNamespace`, so the
+  "declares it itself" shortcut cannot claim a same-named function from an unrelated namespace.
 
 ## Database/MethodResolution.cs
 

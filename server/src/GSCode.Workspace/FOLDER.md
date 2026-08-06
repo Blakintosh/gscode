@@ -372,7 +372,10 @@ reported as an Error must never land on code that ships and works.
   rather than against the other candidates — otherwise two conduits each cover the other and both
   are declared removable, which the bulk "remove all" action would then act on. 46 stock directives
   across CoD4, MW2 and WaW were in that state.
-- `UnusedLocalLint` (5008) — a local assigned and never read.
+- `UnusedLocalLint` (5008) — a local assigned and never read. A **Hint** for the same reason 5020 is,
+  arrived at later: as Information it was the one rule of its kind that did reach the Problems panel,
+  and it put 4,711 entries there across the five games — 1,716 on MW2 alone — in code that ships and
+  works. The `Unnecessary` fade was always the useful half, and it is unchanged.
 - `UsingNotFoundLint` (5009) — an import naming no file.
 - `VoidResultLint` (5019) — keeping the result of a builtin that returns nothing. Only builtins:
   GSC declares no return type, so the same claim about a script function would be a guess.

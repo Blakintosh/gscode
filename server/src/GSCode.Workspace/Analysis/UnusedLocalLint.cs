@@ -12,9 +12,15 @@ namespace GSCode.Workspace.Analysis;
 /// <summary>
 /// Reports a local that is assigned and never read — <c>function f() { bar = undefined; }</c>.
 ///
-/// Information severity, deliberately. Dead code is worth knowing about but is not a defect: the
-/// script runs, and half-finished work in progress is the normal reason to have one. Anything
-/// louder would be nagging someone mid-edit.
+/// Hint severity with the Unnecessary tag, deliberately. Dead code is worth knowing about but is
+/// not a defect: the script runs, and half-finished work in progress is the normal reason to have
+/// one. Anything louder would be nagging someone mid-edit.
+///
+/// It was Information, which put every one in the editor's problem list — 1,716 of them over MW2's
+/// scripts alone, and 4,711 across the five games, all in code that ships and works. A list that
+/// long is one nobody reads. The tag is what carries the finding: the editor greys the name either
+/// way, so the signal survives and only the list entry goes. Every other rule of this kind here
+/// (5020, 5012, 5001, 5015, 5002) was already a Hint.
 ///
 /// Reads and writes are told apart structurally rather than by counting occurrences. A name is
 /// READ wherever it appears except as the direct target of a plain <c>=</c>; a compound assignment
@@ -95,7 +101,7 @@ public static class UnusedLocalLint
 
             Diagnostic unused = Diagnostic.Create(
                 write.Value.RootRange,
-                DiagnosticSeverity.Information,
+                DiagnosticSeverity.Hint,
                 GscDiagnosticCode.UnusedLocal,
                 write.Value.Text);
 

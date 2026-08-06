@@ -11,8 +11,10 @@ using Xunit;
 namespace GSCode.Workspace.Tests.Analysis;
 
 /// <summary>
-/// A local assigned and never read. Information severity: dead code is worth knowing about but
-/// the script still runs, and work in progress is the usual reason to have one.
+/// A local assigned and never read. Hint severity: dead code is worth knowing about but the script
+/// still runs, and work in progress is the usual reason to have one. The Unnecessary tag is what
+/// reports it — the editor greys the name — so it does not also fill the problem list, which over
+/// the corpus it did 4,711 times in code that ships and works.
 ///
 /// Reads and writes are told apart structurally, not by counting occurrences — which is the part
 /// worth testing, since every way of reading a name has to be recognised or the lint reports
@@ -44,7 +46,7 @@ public class UnusedLocalLintTests
         Diagnostic unused = Assert.Single(Lint("    bar = undefined;"));
 
         Assert.Equal(GscDiagnosticCode.UnusedLocal, unused.Code);
-        Assert.Equal(DiagnosticSeverity.Information, unused.Severity);
+        Assert.Equal(DiagnosticSeverity.Hint, unused.Severity);
         Assert.Contains("bar", unused.Message, StringComparison.Ordinal);
     }
 

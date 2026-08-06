@@ -88,7 +88,7 @@ public enum GscDiagnosticCode
     /// </summary>
     AmbiguousFunction = 5007,
 
-    /// <summary>A local that is assigned and never read. Information: dead, not broken.</summary>
+    /// <summary>A local that is assigned and never read. Hint + Unnecessary: dead, not broken.</summary>
     UnusedLocal = 5008,
 
     /// <summary>A #using whose target does not exist. The script will not link.</summary>

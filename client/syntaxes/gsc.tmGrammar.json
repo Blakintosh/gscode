@@ -256,8 +256,32 @@
                 "2": { "name": "entity.name.scope-resolution.gsc" }
             }
         },
+        "path-call": {
+            "name": "meta.path-call.gsc",
+            "comment": "match Infinity Ward path-qualified calls like: maps\\mp\\_utility::foo(); Listed BEFORE namespace-call, which starts its match at the LAST path segment and therefore left the maps\\mp\\ prefix uncoloured — the reported symptom. Both forms are covered by one rule because the pointer form is the same text without an argument list. The path is scoped like a namespace on purpose: what it qualifies the name WITH differs (a file rather than a namespace), but what it does for the reader is identical, and giving it a colour of its own would say the two are unrelated. BO3 has no path form, and a grammar cannot see the active game, so this runs everywhere; the spelling itself is the guard, since a backslash before :: is not valid in a namespace dialect.",
+            "match": "\\b((?:(?:[[:alpha:]]|_)\\w*\\\\)+(?:[[:alpha:]]|_)\\w*)(::)((?:[[:alnum:]]|_)\\w*)\\b",
+            "captures": {
+                "1": {
+                    "name": "entity.name.scope-resolution.gsc",
+                    "patterns": [
+                        { "include": "#path-separator" }
+                    ]
+                },
+                "3": {
+                    "name": "entity.name.function.gsc",
+                    "patterns": [
+                        { "include": "#control" }
+                    ]
+                }
+            }
+        },
+        "path-separator": {
+            "name": "punctuation.separator.path.gsc",
+            "match": "\\\\"
+        },
         "function-call": {
             "patterns": [
+                { "include": "#path-call" },
                 { "include": "#namespace-call" },
                 { "include": "#other-function" }
             ]

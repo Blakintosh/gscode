@@ -1589,7 +1589,7 @@
       ]
     },
     {
-      "name": "getvisionsetnaked",
+      "name": "GetVisionSetNaked",
       "description": "Observed in the bo1 shipped script corpus (25 calls across 10 files; argument counts 0, 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -1716,7 +1716,7 @@
       ]
     },
     {
-      "name": "haseyes",
+      "name": "HasEyes",
       "description": "Observed in the bo1 shipped script corpus (7 calls across 5 files; argument counts 0, 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [

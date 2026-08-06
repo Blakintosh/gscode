@@ -502,11 +502,11 @@
       ]
     },
     {
-      "name": "deletefakeent",
+      "name": "DeleteFakeEnt",
       "overloads": []
     },
     {
-      "name": "deletefx",
+      "name": "DeleteFX",
       "overloads": []
     },
     {
@@ -771,7 +771,7 @@
       ]
     },
     {
-      "name": "getanimcurrframecount",
+      "name": "GetAnimCurrFrameCount",
       "overloads": []
     },
     {
@@ -1103,7 +1103,7 @@
       ]
     },
     {
-      "name": "getrope",
+      "name": "GetRope",
       "overloads": []
     },
     {
@@ -1225,7 +1225,7 @@
       ]
     },
     {
-      "name": "getvisionsetnaked",
+      "name": "GetVisionSetNaked",
       "description": "Observed in the waw shipped script corpus (8 calls across 2 files; argument counts 0, 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -1790,7 +1790,7 @@
       ]
     },
     {
-      "name": "loadedfx",
+      "name": "LoadedFX",
       "overloads": []
     },
     {
@@ -2903,7 +2903,7 @@
       ]
     },
     {
-      "name": "setburn",
+      "name": "SetBurn",
       "overloads": []
     },
     {
@@ -3168,7 +3168,7 @@
       ]
     },
     {
-      "name": "setvolfog",
+      "name": "SetVolFog",
       "overloads": []
     },
     {
@@ -3278,7 +3278,7 @@
       ]
     },
     {
-      "name": "spawnfakeent",
+      "name": "SpawnFakeEnt",
       "overloads": []
     },
     {
@@ -3325,7 +3325,7 @@
       ]
     },
     {
-      "name": "splitargs",
+      "name": "SplitArgs",
       "overloads": []
     },
     {
@@ -3476,7 +3476,7 @@
       ]
     },
     {
-      "name": "syncsystemstates",
+      "name": "SyncSystemStates",
       "overloads": []
     },
     {
@@ -3630,7 +3630,7 @@
       ]
     },
     {
-      "name": "vectorcross",
+      "name": "VectorCross",
       "overloads": []
     },
     {

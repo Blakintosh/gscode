@@ -611,11 +611,12 @@ static void GenerateWordfileApi(
         }
     }
 
+    int recased = RecaseReconstructedNames(Path.GetDirectoryName(outputPath) ?? "", outputPath, byName);
     int corrected = ApplyOverrides(prefix, overridesPath, byName);
 
     List<object> all = [.. byName.OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(static pair => pair.Value)];
     WriteJson(outputPath, new Cod4ApiFile(all), camelCase: true);
-    Console.WriteLine($"  {prefix} api functions: {all.Count} ({documented} documented, {curated} reconstructed, {inherited} inherited, {empiricalInherited} empirical inherited, {empirical} empirical name-only, {all.Count - documented - curated - inherited - empiricalInherited - empirical} name-only, {corrected} corrected)");
+    Console.WriteLine($"  {prefix} api functions: {all.Count} ({documented} documented, {curated} reconstructed, {inherited} inherited, {empiricalInherited} empirical inherited, {empirical} empirical name-only, {all.Count - documented - curated - inherited - empiricalInherited - empirical} name-only, {corrected} corrected, {recased} recased)");
 }
 
 // How many entries in an existing artifact came from a documentation page. Read straight off the
@@ -1038,6 +1039,313 @@ static Dictionary<string, object> SparseEmpiricalEntry(string game, EmpiricalBui
             $"Empirical builtin: {evidence.Calls} call(s) across {evidence.Files} {game} script file(s), observed argument counts {arities}, access {evidence.Access}.{(evidence.CalledAsMethod ? " It is called on a target." : "")}{sites} The name is known to exist; the signature below is RECONSTRUCTED from how the shipped scripts call it, not documented; parameter names are the callers' own words, and the count is the widest call seen rather than a limit the engine imposes."
         },
     };
+}
+
+// Restores the engine's CamelCase spelling to names that only ever arrived in lower case.
+//
+// A reconstructed entry is named from a DIAGNOSTIC MESSAGE, which quotes the call site, and GSC is
+// case-insensitive so scripts write `playsoundatpos(...)`. Every documented library spells the same
+// kind of name `PlaySoundAtPos`, so a completion list mixing the two reads as though the lower-case
+// half were a different, lesser kind of thing — which was the report: `playsoundatpos` sitting under
+// `PlaySound`, `PlaySoundAsMaster` and `PlaySoundToPlayer`.
+//
+// Nothing here is invented. The word list comes from the two libraries that ARE documented — CoD4's
+// and BO3's — split on their own case boundaries, so a word is only capitalized the way an engine
+// name already capitalizes it, and a name that cannot be built entirely out of those words is left
+// exactly as the corpus spelled it. That is why the pass reports a count: it is expected to leave
+// some behind.
+//
+// Safe to do at all because BuiltinApi.Find is case-insensitive, so this changes what is DISPLAYED
+// and never what resolves.
+static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dictionary<string, object> byName)
+{
+    Dictionary<string, string> vocabulary = BuildNameVocabulary(apiDirectory, outputPath, out Dictionary<string, string> wholeNames);
+    if ( vocabulary.Count == 0 )
+    {
+        return 0;
+    }
+
+    int recased = 0;
+    foreach ( string key in byName.Keys.ToList() )
+    {
+        object entry = byName[key];
+        string name = NameOf(entry);
+
+        // Any name carrying no case information beyond its first letter, whatever its provenance.
+        //
+        // The flag is deliberately NOT the test. Reconstructed names arrive fully lower case, but
+        // CoD4's documentation pages are themselves inconsistent — the same library holds AllowLean,
+        // Allowleanleft and Allowleanright — and a flat documented name is the same defect with a
+        // better pedigree. It is still only ever recased, never re-described: everything a page
+        // states about the function is untouched.
+        //
+        // An underscore name (missile_setTargetEnt) is left alone: nothing in the documented
+        // libraries uses that convention, so there is no evidence for how to case it.
+        if ( name.Length == 0
+            || name[1..] != name[1..].ToLowerInvariant()
+            || name.Contains('_', StringComparison.Ordinal) )
+        {
+            continue;
+        }
+
+        // A documented library spelling this exact name wins outright over any reconstruction —
+        // unless that spelling is the flat one being corrected, which is the Allowleanleft case:
+        // the entry IS its own would-be source, so falling through to the words is the only way out.
+        string lowered = name.ToLowerInvariant();
+        string? replacement = wholeNames.TryGetValue(lowered, out string? exact) && exact[1..] != exact[1..].ToLowerInvariant()
+            ? exact
+            : SegmentName(lowered, vocabulary);
+
+        if ( replacement is null || replacement == name )
+        {
+            continue;
+        }
+
+        // The dictionary is case-insensitive, so this is the same slot — only the entry's own name
+        // field changes, and no entry can collide with another by being recased.
+        byName[key] = WithName(entry, replacement);
+        recased++;
+    }
+
+    return recased;
+}
+
+// The words the documented libraries are built from, keyed lower-case, valued with the spelling
+// those libraries use most often for that word.
+//
+// TWO REJECTIONS matter, and both came from the source data disagreeing with itself:
+//   * A word under three letters is only trusted when the libraries use it as a word at least three
+//     times. Without this, `spawndrone` — whose "drone" nothing documents — was assembled out of
+//     "dr" and "one" into SpawnDROne. It is now left lower case, which is the honest answer.
+//   * A word that is ITSELF two other words, and is rare, is dropped in favour of its parts. CoD4
+//     and BO3 contain VectortoAngles, UseServerVisionset and SetHideonClientWhenScriptedAnimCompleted,
+//     so "vectorto", "visionset" and "hideon" all look like words and outvoted the correct split —
+//     giving VectortoYaw and HideonClient. Requiring three sightings keeps genuine compounds the
+//     libraries use constantly (offset, 18 sightings) while dropping these one-offs.
+static Dictionary<string, string> BuildNameVocabulary(
+    string apiDirectory, string outputPath, out Dictionary<string, string> wholeNames)
+{
+    wholeNames = new Dictionary<string, string>(StringComparer.Ordinal);
+    Dictionary<string, string> vocabulary = new(StringComparer.Ordinal);
+    if ( apiDirectory.Length == 0 )
+    {
+        return vocabulary;
+    }
+
+    // The documented pair only. A reconstructed library must not be a source of spellings for the
+    // next reconstruction, or one bad split propagates across every game.
+    string[] sources = ["cod4_api_gsc.json", "t7_api_gsc.json", "t7_api_csc.json"];
+
+    Dictionary<string, Dictionary<string, int>> sightings = new(StringComparer.Ordinal);
+    foreach ( string source in sources )
+    {
+        string path = Path.Combine(apiDirectory, source);
+        if ( string.Equals(Path.GetFullPath(path), Path.GetFullPath(outputPath), StringComparison.OrdinalIgnoreCase) )
+        {
+            continue;
+        }
+
+        foreach ( string name in LoadApiEntries(path).Keys )
+        {
+            // An underscore name contributes its WORDS but is never offered as a whole spelling: the
+            // underscore convention is a separate one and nothing says a reconstructed name follows
+            // it. Skipping them outright cost real vocabulary — "Drone" appears only in
+            // Missile_DroneSetVisible, so spawndrone had no correct split available.
+            if ( !name.Contains('_', StringComparison.Ordinal) )
+            {
+                wholeNames.TryAdd(name.ToLowerInvariant(), name);
+            }
+
+            foreach ( string word in name.Split('_').SelectMany(SplitCamelCase) )
+            {
+                string key = word.ToLowerInvariant();
+                if ( !sightings.TryGetValue(key, out Dictionary<string, int>? spellings) )
+                {
+                    spellings = new Dictionary<string, int>(StringComparer.Ordinal);
+                    sightings[key] = spellings;
+                }
+
+                spellings[word] = spellings.TryGetValue(word, out int seen) ? seen + 1 : 1;
+            }
+        }
+    }
+
+    Dictionary<string, int> totals = sightings.ToDictionary(
+        static pair => pair.Key, static pair => pair.Value.Values.Sum(), StringComparer.Ordinal);
+
+    // A SINGLE letter is never a word here. Acronym runs leave "s", "a", "d" and "x" behind looking
+    // like frequent words, and the segmenter then spelled ClearCenterPopups as ClearCenterPopupS and
+    // HasEyes as HasEyeS. Two letters still qualify (on, to, at, AI, FX) but must be earned.
+    HashSet<string> candidates = [.. sightings.Keys.Where(key => key.Length >= 3 || (key.Length == 2 && totals[key] >= 3))];
+
+    foreach ( string key in candidates )
+    {
+        if ( totals[key] < 3 && IsBuiltFrom(key, candidates) )
+        {
+            continue;
+        }
+
+        string winner = sightings[key].OrderByDescending(static pair => pair.Value)
+            .ThenBy(static pair => pair.Key, StringComparer.Ordinal).First().Key;
+
+        // An acronym the libraries write in full caps (FX, AI, HUD) keeps that shape; anything else
+        // is a word and takes an initial capital, since that is what every name here does with it.
+        vocabulary[key] = winner.All(char.IsUpper) ? winner : char.ToUpperInvariant(winner[0]) + winner[1..];
+    }
+
+    return vocabulary;
+}
+
+// Whether this word can be spelled out of OTHER words in the same pool.
+static bool IsBuiltFrom(string word, HashSet<string> pool)
+{
+    bool[] reachable = new bool[word.Length + 1];
+    reachable[0] = true;
+
+    for ( int end = 1; end <= word.Length; end++ )
+    {
+        for ( int start = 0; start < end; start++ )
+        {
+            string part = word[start..end];
+            if ( reachable[start] && part.Length != word.Length && pool.Contains(part) )
+            {
+                reachable[end] = true;
+                break;
+            }
+        }
+    }
+
+    return reachable[word.Length];
+}
+
+// The words in a name, on its own case boundaries. An upper-case RUN that is not the start of a
+// word is one word (the FX of PlayFXOnTag), which is what keeps acronyms whole.
+static List<string> SplitCamelCase(string name)
+{
+    return [.. Regex.Matches(name, "[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+").Select(static match => match.Value)];
+}
+
+// One word's spelling, allowing an English plural of a word the libraries only ever use singular.
+// The libraries have Popup and Eye but no Popups or Eyes, and without this the plural fell to the
+// single-letter split that produced ClearCenterPopupS. The plural adds no capital of its own, so it
+// invents nothing: it reuses the documented spelling and appends the letter already in the name.
+static string? LookUpWord(string word, Dictionary<string, string> vocabulary, out bool isPlural)
+{
+    isPlural = false;
+
+    if ( vocabulary.TryGetValue(word, out string? spelling) )
+    {
+        return spelling;
+    }
+
+    if ( word.Length > 3 && word.EndsWith('s') && vocabulary.TryGetValue(word[..^1], out string? singular) )
+    {
+        isPlural = true;
+        return singular + "s";
+    }
+
+    return null;
+}
+
+// Spells a lower-case name out of the vocabulary, or null when it cannot be spelled entirely.
+// Fewest words wins, and longest-first breaks the tie — a name assembled from many short fragments
+// is the shape a wrong answer takes.
+static string? SegmentName(string name, Dictionary<string, string> vocabulary)
+{
+    int length = name.Length;
+    int[] words = new int[length + 1];
+    long[] penalty = new long[length + 1];
+    string?[] chosen = new string?[length + 1];
+    int[] from = new int[length + 1];
+
+    for ( int index = 1; index <= length; index++ )
+    {
+        words[index] = int.MaxValue;
+    }
+
+    for ( int end = 1; end <= length; end++ )
+    {
+        for ( int start = Math.Max(0, end - 24); start < end; start++ )
+        {
+            if ( words[start] == int.MaxValue )
+            {
+                continue;
+            }
+
+            if ( LookUpWord(name[start..end], vocabulary, out bool isPlural) is not string spelling )
+            {
+                continue;
+            }
+
+            // A documented word beats an inferred plural on a tie, and the tie is not hypothetical:
+            // canplayerplacesentry splits into place+sentry and places+entry at identical cost, and
+            // without this it came out CanPlayerPlacesEntry.
+            int count = words[start] + 1;
+            long score = penalty[start] - ((long)(end - start) * (end - start)) + (isPlural ? 1 : 0);
+            if ( count < words[end] || (count == words[end] && score < penalty[end]) )
+            {
+                words[end] = count;
+                penalty[end] = score;
+                chosen[end] = spelling;
+                from[end] = start;
+            }
+        }
+    }
+
+    if ( words[length] == int.MaxValue )
+    {
+        return null;
+    }
+
+    List<string> parts = [];
+    for ( int at = length; at > 0; at = from[at] )
+    {
+        parts.Add(chosen[at]!);
+    }
+
+    parts.Reverse();
+    return string.Concat(parts);
+}
+
+// The name of an entry, whichever of the three shapes byName is holding.
+static string NameOf(object entry)
+{
+    switch ( entry )
+    {
+        case Cod4Entry typed:
+            return typed.Name;
+        case Dictionary<string, object> map:
+            return map.TryGetValue("name", out object? name) ? name as string ?? "" : "";
+        case JsonElement element when element.ValueKind == JsonValueKind.Object:
+            return element.TryGetProperty("name", out JsonElement value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? ""
+                : "";
+        default:
+            return "";
+    }
+}
+
+// The same entry under a new name, leaving every other field exactly as it was.
+static object WithName(object entry, string name)
+{
+    switch ( entry )
+    {
+        case Cod4Entry typed:
+            return typed with { Name = name };
+        case Dictionary<string, object> map:
+        {
+            Dictionary<string, object> copy = new(map) { ["name"] = name };
+            return copy;
+        }
+        case JsonElement element when element.ValueKind == JsonValueKind.Object:
+        {
+            JsonObject copy = JsonNode.Parse(element.GetRawText())!.AsObject();
+            copy["name"] = name;
+            return copy;
+        }
+        default:
+            return entry;
+    }
 }
 
 // Corrects signatures the documentation gets WRONG, as the last word over every other layer.

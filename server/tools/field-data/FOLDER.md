@@ -70,6 +70,17 @@ extensible beyond stock data. Field entry shape: `{ "name", "type", "readonly"? 
 - `bo1_ai_builtins.json` and `waw_ai_builtins.json` — durable snapshots of the same empirical
   merge for those games. `bo1_csc_empirical.json` and `waw_csc_empirical.json` preserve client-only
   candidates that cannot be derived from a server wordfile entry.
+Names carrying no case beyond their first letter are recased from the documented libraries before
+the artifact is written (`RecaseReconstructedNames`). A reconstructed name is taken from a
+diagnostic message, which quotes a case-insensitive call site, so it arrives as `playsoundatpos`
+next to a documented `PlaySound`; CoD4's own pages have the same defect natively, holding `AllowLean`
+beside `Allowleanleft`. The word list is CoD4's and BO3's libraries split on their own case
+boundaries, so nothing is capitalized in a way an engine name does not already capitalize it, and a
+name that cannot be spelled entirely from those words is left exactly as it was, which is why the
+pass reports a count rather than claiming to have finished. Underscore names are never touched: that is a separate convention with no documented examples to learn from.
+Safe because `BuiltinApi.Find` is case-insensitive, so this changes what is DISPLAYED, never what
+resolves.
+
 - `cod4_api_overrides.json` — corrections to signatures the documentation states incorrectly,
   applied over every other layer. Entry shape: `{ "name", "optionalFrom", "reason" }`. See
   [How an API entry is chosen](#how-an-api-entry-is-chosen).

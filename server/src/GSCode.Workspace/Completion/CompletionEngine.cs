@@ -1287,26 +1287,44 @@ public sealed class CompletionEngine
             }
         }
 
-        // Functions in the file's own namespaces. The declared set rather than the namespace spans,
-        // which carry a leading region named after the file whenever its imports sit above its
-        // #namespace line — a phantom that cost a full store scan per keystroke to return nothing.
+        // The declared set rather than the namespace spans, which carry a leading region named after
+        // the file whenever its imports sit above its #namespace line — a phantom that cost a full
+        // store scan per keystroke to return nothing.
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
-
-        foreach ( string ns in ownNamespaces )
-        {
-            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, ownNamespaces) )
-            {
-                entries.Add(FunctionEntry(function, callSuffix, parameterHints));
-            }
-        }
 
         // Functions reachable through an import, dialect-dependent. A namespace dialect (BO3) still
         // needs the qualifier at the call site even though only the bare name was typed — so these
         // are offered under their bare name (for discovery and filtering) but INSERT the qualified
         // form. A merge dialect (#include) has already folded the function into local scope, so it
         // is offered and inserted exactly like one declared in this file.
+        //
+        // WHICH QUERY ANSWERS "what is in scope here" IS THE WHOLE SPLIT, and it is not the same
+        // question in the two dialects.
+        //
+        // In BO3 a namespace is declared, shared deliberately, and IS the unit of scope, so the
+        // file's own namespaces are asked first and the imported ones after.
+        //
+        // In a merge dialect there is no #namespace at all: SymbolExtractor defaults the namespace
+        // to the FILE NAME STEM, which exists as a resolution fallback and names no scope anybody
+        // wrote. Asking it here was wrong twice over on MW2's own scripts. Editing
+        // maps\mp\_utility.gsc, every function of the unrelated maps\_utility.gsc was offered —
+        // same stem, no #include between them, nothing in scope — and the asking file's own
+        // functions came back from BOTH passes, since FunctionsInIncludeScope already returns them
+        // through its same-file arm. Each query deduplicates internally and neither could see the
+        // other, so `_playLocalSound` was listed twice.
+        //
+        // The include scope alone is the answer for a merge dialect: this file, plus the files it
+        // actually includes.
         if ( game.ResolvesByNamespace )
         {
+            foreach ( string ns in ownNamespaces )
+            {
+                foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, ownNamespaces) )
+                {
+                    entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                }
+            }
+
             ImmutableArray<string> importedPaths = DatabaseQueries.ImportedScriptPaths(result);
             foreach ( string ns in DatabaseQueries.ImportedNamespaces(store, contextId, importedPaths, ownNamespaces) )
             {

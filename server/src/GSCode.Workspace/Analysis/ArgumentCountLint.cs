@@ -279,8 +279,7 @@ public static class ArgumentCountLint
         }
 
         string name = arrow.MethodToken.Text;
-        bool isSelf = arrow.Object.Pointer is IdentifierNode identifier
-            && string.Equals(identifier.Token.Text, "self", StringComparison.OrdinalIgnoreCase);
+        bool isSelf = AstSearch.IsSelfReceiver(arrow.Object.Pointer);
 
         SymbolKey written = new(
             null, name.ToLowerInvariant(), SymbolKind.Function, isSelf ? ownerClass : null);

@@ -14,7 +14,7 @@ public sealed partial class Parser
     {
         ExprNode left = ParseTernary();
 
-        if ( IsAssignmentOperator(Kind) )
+        if ( TokenFacts.IsAssignmentOperator(Kind) )
         {
             TextRange operatorRange = Current.RootRange;
             TokenKind op = Advance().Kind;
@@ -131,21 +131,6 @@ public sealed partial class Parser
             case TokenKind.Percent: return 10;
             default: return 0;
         }
-    }
-
-    private static bool IsAssignmentOperator(TokenKind kind)
-    {
-        return kind is TokenKind.Assign
-            or TokenKind.PlusAssign
-            or TokenKind.MinusAssign
-            or TokenKind.StarAssign
-            or TokenKind.SlashAssign
-            or TokenKind.PercentAssign
-            or TokenKind.AmpersandAssign
-            or TokenKind.PipeAssign
-            or TokenKind.CaretAssign
-            or TokenKind.ShiftLeftAssign
-            or TokenKind.ShiftRightAssign;
     }
 
     // --- Method-notation call level: expr [thread] callee(args) ---

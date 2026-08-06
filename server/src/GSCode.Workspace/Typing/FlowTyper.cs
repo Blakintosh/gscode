@@ -35,14 +35,13 @@ public readonly record struct InferredAssignment(
 public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrType Type);
 
 /// <summary>
-/// One `owner.field = …` write with the owner's inferred type AT THAT POINT. Lets a lint decide
+/// One write to `owner.field`, carrying the owner's inferred type AT THAT POINT. Lets a lint decide
 /// whether a field is read-only without re-deriving types: `SpawnStruct()` gives Struct, `self`
 /// gives Entity, and an owner the flow cannot type gives Unknown.
-/// </summary>
-/// <summary>
-/// One write to `owner.field`. <paramref name="Value"/> is the assigned expression for a plain
-/// `=`, and null for a compound assignment or `++`/`--` — those have no single assigned value, and
-/// a rule about what was assigned must not fire on them.
+///
+/// <paramref name="Value"/> is the assigned expression for a plain `=`, and null for a compound
+/// assignment or `++`/`--` — those have no single assigned value, and a rule about what was
+/// assigned must not fire on them.
 /// </summary>
 public readonly record struct FieldWrite(
     TextRange NameRange, string FieldName, ScrType OwnerType, ExprNode? Value = null);
@@ -57,6 +56,7 @@ public sealed class FlowTyper
 {
     private readonly BuiltinApi _builtins;
     private readonly ObjectFields _objectFields;
+    private readonly GameProfile _game;
 
     /// <summary>
     /// Set only for the hover pass, and null for the hint pass.
@@ -69,10 +69,16 @@ public sealed class FlowTyper
     /// </summary>
     private Position? _cursor;
 
-    public FlowTyper(BuiltinApi builtins, ObjectFields objectFields)
+    /// <summary>
+    /// <paramref name="profile"/> defaults to the active one, matching how every <c>Analyze</c>
+    /// entry point in Analysis, Api and Database takes it — so a test can type a function against a
+    /// dialect other than the one the server happens to be running.
+    /// </summary>
+    public FlowTyper(BuiltinApi builtins, ObjectFields objectFields, GameProfile? profile = null)
     {
         _builtins = builtins;
         _objectFields = objectFields;
+        _game = profile ?? GameProfile.Active;
     }
 
     /// <summary>Whether the hover cursor, if there is one, falls inside this node.</summary>
@@ -291,10 +297,6 @@ public sealed class FlowTyper
     }
 
     /// <summary>
-    /// Walks a loop body as an alternative path: the body may run zero times, so its effects
-    /// are joined with the environment as it stood before the loop.
-    /// </summary>
-    /// <summary>
     /// Walks a dev block's statements as an alternative path.
     ///
     /// Takes the STATEMENTS rather than the node, because handing the node back to
@@ -327,6 +329,10 @@ public sealed class FlowTyper
         MergeAlternatives(environment, environment, blockEnvironment);
     }
 
+    /// <summary>
+    /// Walks a loop body as an alternative path: the body may run zero times, so its effects
+    /// are joined with the environment as it stood before the loop.
+    /// </summary>
     private void MergeLoopBody(
         AstNode body,
         Dictionary<string, ScrType> environment,
@@ -738,7 +744,7 @@ public sealed class FlowTyper
         }
     }
 
-    private static ScrType TypeOfIdentifier(string name, Dictionary<string, ScrType> environment)
+    private ScrType TypeOfIdentifier(string name, Dictionary<string, ScrType> environment)
     {
         if ( environment.TryGetValue(name, out ScrType type) )
         {
@@ -751,7 +757,7 @@ public sealed class FlowTyper
                 return ScrType.Entity;
             // world is a BO3+ global; where the dialect has no world, a bare "world" is an ordinary
             // name (the case falls through to default), so it isn't mistyped as the world struct.
-            case "world" when GameProfile.Active.HasWorldObject:
+            case "world" when _game.HasWorldObject:
             case "level":
             case "anim":
                 return ScrType.Struct;

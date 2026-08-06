@@ -98,14 +98,29 @@ public static class DatabaseQueries
             }
         }
 
-        return ApplyShadowing(matches.ToImmutable());
+        return ApplyShadowing(
+            matches.ToImmutable(),
+            static match => match.Record,
+            static match => match.Function.KeyName);
     }
 
     /// <summary>
     /// Overlay shadowing: when a mod/workspace copy and the raw copy of the SAME
     /// script-relative file both match, the overlay wins and the raw copy drops out.
+    ///
+    /// Applies to functions and to classes alike, hence the selectors — the rule is one rule, and
+    /// the two were previously typed out separately, which meant a change to it had to be made
+    /// twice. For classes it also decides more than tidiness: without it a mod that overrides a raw
+    /// script contributes a SECOND class of the same name, and every consumer that takes the first
+    /// match — the parent-chain walks in <see cref="Analysis.ClassCycleLint"/> and in method
+    /// resolution — picks between them arbitrarily. Which copy wins then depends on record
+    /// enumeration order, so the same edit can resolve to the raw base class one moment and the
+    /// overridden one the next.
     /// </summary>
-    private static ImmutableArray<ResolvedFunction> ApplyShadowing(ImmutableArray<ResolvedFunction> matches)
+    private static ImmutableArray<T> ApplyShadowing<T>(
+        ImmutableArray<T> matches,
+        Func<T, ScriptRecord> recordOf,
+        Func<T, string> keyNameOf)
     {
         if ( matches.Length < 2 )
         {
@@ -113,11 +128,12 @@ public static class DatabaseQueries
         }
 
         HashSet<string> overlayIdentities = new(StringComparer.Ordinal);
-        foreach ( ResolvedFunction match in matches )
+        foreach ( T match in matches )
         {
-            if ( match.Record.ContextId != "raw" && match.Record.RelativePath.Length > 0 )
+            ScriptRecord record = recordOf(match);
+            if ( record.ContextId != "raw" && record.RelativePath.Length > 0 )
             {
-                overlayIdentities.Add(match.Record.RelativePath + "|" + match.Function.KeyName);
+                overlayIdentities.Add(record.RelativePath + "|" + keyNameOf(match));
             }
         }
 
@@ -126,11 +142,12 @@ public static class DatabaseQueries
             return matches;
         }
 
-        ImmutableArray<ResolvedFunction>.Builder kept = ImmutableArray.CreateBuilder<ResolvedFunction>();
-        foreach ( ResolvedFunction match in matches )
+        ImmutableArray<T>.Builder kept = ImmutableArray.CreateBuilder<T>();
+        foreach ( T match in matches )
         {
-            bool shadowedOut = match.Record.ContextId == "raw"
-                && overlayIdentities.Contains(match.Record.RelativePath + "|" + match.Function.KeyName);
+            ScriptRecord record = recordOf(match);
+            bool shadowedOut = record.ContextId == "raw"
+                && overlayIdentities.Contains(record.RelativePath + "|" + keyNameOf(match));
 
             if ( !shadowedOut )
             {
@@ -325,10 +342,13 @@ public static class DatabaseQueries
         return paths.ToImmutable();
     }
 
+    /// <summary>
+    /// The comparison key for a script path written in a directive: canonical script form, minus
+    /// the extension, because <c>#using</c> and <c>#include</c> name a file without one.
+    /// </summary>
     private static string NormalizeScriptPath(string path)
     {
-        string trimmed = path.Trim().Replace('/', '\\');
-        return (System.IO.Path.ChangeExtension(trimmed, null) ?? trimmed).ToLowerInvariant();
+        return PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(path));
     }
 
     /// <summary>
@@ -483,10 +503,6 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// Whether a record is in an asking file's <c>#include</c> merge scope: the file itself, or one
-    /// of its included files. Paths compare in normalized script-relative form.
-    /// </summary>
-    /// <summary>
     /// Narrows references to the files that can actually REACH the declaring file, for the merge
     /// dialects.
     ///
@@ -612,6 +628,10 @@ public static class DatabaseQueries
         return false;
     }
 
+    /// <summary>
+    /// Whether a record is in an asking file's <c>#include</c> merge scope: the file itself, or one
+    /// of its included files. Paths compare in normalized script-relative form.
+    /// </summary>
     public static bool IsInIncludeScope(
         string recordRelativePath,
         string selfRelativePath,
@@ -794,55 +814,12 @@ public static class DatabaseQueries
             }
         }
 
-        return ApplyClassShadowing(matches.ToImmutable());
+        return ApplyShadowing(
+            matches.ToImmutable(),
+            static match => match.Record,
+            static match => match.Class.KeyName);
     }
 
-    /// <summary>
-    /// Overlay shadowing for classes, the counterpart of <see cref="ApplyShadowing"/> for functions.
-    ///
-    /// Without it a mod that overrides a raw script contributes a SECOND class of the same name, and
-    /// every consumer that takes the first match — the parent-chain walks in
-    /// <see cref="Analysis.ClassCycleLint"/> and in method resolution — picks between them
-    /// arbitrarily. Which copy wins then depends on record enumeration order, so the same edit can
-    /// resolve to the raw base class one moment and the overridden one the next.
-    /// </summary>
-    private static ImmutableArray<ResolvedClass> ApplyClassShadowing(ImmutableArray<ResolvedClass> matches)
-    {
-        if ( matches.Length < 2 )
-        {
-            return matches;
-        }
-
-        HashSet<string> overlayIdentities = new(StringComparer.Ordinal);
-        foreach ( ResolvedClass match in matches )
-        {
-            if ( match.Record.ContextId != "raw" && match.Record.RelativePath.Length > 0 )
-            {
-                overlayIdentities.Add(match.Record.RelativePath + "|" + match.Class.KeyName);
-            }
-        }
-
-        if ( overlayIdentities.Count == 0 )
-        {
-            return matches;
-        }
-
-        ImmutableArray<ResolvedClass>.Builder kept = ImmutableArray.CreateBuilder<ResolvedClass>();
-        foreach ( ResolvedClass match in matches )
-        {
-            bool shadowedOut = match.Record.ContextId == "raw"
-                && overlayIdentities.Contains(match.Record.RelativePath + "|" + match.Class.KeyName);
-
-            if ( !shadowedOut )
-            {
-                kept.Add(match);
-            }
-        }
-
-        return kept.ToImmutable();
-    }
-
-    /// <summary>All visible files (with exact ranges) referencing a key.</summary>
     /// <summary>
     /// References to a key inside GSH records. A <c>.gsh</c> serves BOTH languages, so its
     /// records live in the shared GSH store rather than either LanguageStore — this is the

@@ -5,6 +5,7 @@ using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
+using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Analysis;
@@ -36,41 +37,55 @@ public static class UnusedLocalLint
     {
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            CollectFromDeclaration(element, diagnostics);
-        }
+        CollectFromDeclaration(result.Tree.Root, diagnostics);
 
         return diagnostics.ToImmutable();
     }
 
+    /// <summary>
+    /// Finds every body in the file, wherever it is nested — a class member, or a declaration
+    /// inside a top-level <c>/# … #/</c>. Descends through <see cref="AstSearch.ChildrenOf"/>
+    /// rather than naming each container, so a container added later is searched without this rule
+    /// having to learn about it.
+    ///
+    /// A CONSTRUCTOR and a DESTRUCTOR are deliberately not inspected, and this is not an oversight.
+    /// This rule scopes names per body, with no model of a class's <c>var</c> members, and inside a
+    /// class method a bare name may be a member rather than a local. A constructor exists to
+    /// initialise members it never itself reads, so every such write looks exactly like a dead
+    /// store. Inspecting them added 103 findings over BO3's scripts, and the first one sampled —
+    /// <c>id = undefined;</c> in <c>_driving_fx.csc</c>'s <c>GroundFx</c> constructor — is a member
+    /// declared <c>var id;</c> and read by that class's <c>play()</c>. Reaching them needs member
+    /// resolution first, not a wider walk.
+    ///
+    /// <see cref="UnusedBindingLint"/> does inspect all three, which is not a contradiction: it asks
+    /// about PARAMETERS, and a parameter is scoped to its own body whatever the class holds.
+    /// </summary>
     private static void CollectFromDeclaration(AstNode element, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         switch ( element )
         {
             case FunctionNode function:
-                InspectFunction(function, diagnostics);
+                InspectBody(function.Parameters, function.Body, diagnostics);
                 return;
-            case ClassNode classNode:
-                foreach ( AstNode member in classNode.Members )
-                {
-                    CollectFromDeclaration(member, diagnostics);
-                }
 
+            case ConstructorNode:
+            case DestructorNode:
                 return;
-            case DevBlockDeclNode devBlock:
-                foreach ( AstNode declaration in devBlock.Declarations )
-                {
-                    CollectFromDeclaration(declaration, diagnostics);
-                }
 
-                return;
             default:
+                foreach ( AstNode child in AstSearch.ChildrenOf(element) )
+                {
+                    CollectFromDeclaration(child, diagnostics);
+                }
+
                 return;
         }
     }
 
-    private static void InspectFunction(FunctionNode function, ImmutableArray<Diagnostic>.Builder diagnostics)
+    private static void InspectBody(
+        ImmutableArray<ParameterNode> parameters,
+        BlockNode body,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         // First write per name, in source order, and every name ever read.
         Dictionary<string, PToken> firstWrite = new(StringComparer.OrdinalIgnoreCase);
@@ -78,12 +93,12 @@ public static class UnusedLocalLint
 
         // A parameter is not a dead store: the caller supplied it, and an unread one is a
         // different finding with a different rule.
-        foreach ( ParameterNode parameter in function.Parameters )
+        foreach ( ParameterNode parameter in parameters )
         {
             read.Add(parameter.NameToken.Text);
         }
 
-        Walk(function.Body, firstWrite, read);
+        Collect(body, firstWrite, read);
 
         foreach ( KeyValuePair<string, PToken> write in firstWrite )
         {
@@ -109,99 +124,20 @@ public static class UnusedLocalLint
         }
     }
 
-    private static void Walk(AstNode? node, Dictionary<string, PToken> firstWrite, HashSet<string> read)
+    /// <summary>
+    /// Walks a function body, recording the first WRITE of each name and every name READ.
+    ///
+    /// Descends through <see cref="AstSearch.ChildrenOf"/> rather than a switch over every node
+    /// kind, the same way <see cref="UnassignedVariableLint"/> does. The interesting nodes are few
+    /// — assignments, the two binding forms, and the one place an identifier is a function name
+    /// rather than a value — and enumerating children generically means a node type added later is
+    /// traversed without this rule having to learn about it.
+    /// </summary>
+    private static void Collect(AstNode node, Dictionary<string, PToken> firstWrite, HashSet<string> read)
     {
         switch ( node )
         {
-            case null:
-                return;
-            case BlockNode block:
-                foreach ( AstNode statement in block.Statements )
-                {
-                    Walk(statement, firstWrite, read);
-                }
-
-                return;
-            case DevBlockStmtNode devBlock:
-                foreach ( AstNode statement in devBlock.Statements )
-                {
-                    Walk(statement, firstWrite, read);
-                }
-
-                return;
-            case IfNode ifNode:
-                WalkExpression(ifNode.Condition, firstWrite, read);
-                Walk(ifNode.Then, firstWrite, read);
-                Walk(ifNode.Else, firstWrite, read);
-                return;
-            case WhileNode whileNode:
-                WalkExpression(whileNode.Condition, firstWrite, read);
-                Walk(whileNode.Body, firstWrite, read);
-                return;
-            case DoWhileNode doWhile:
-                Walk(doWhile.Body, firstWrite, read);
-                WalkExpression(doWhile.Condition, firstWrite, read);
-                return;
-            case ForNode forNode:
-                Walk(forNode.Initializer, firstWrite, read);
-                WalkExpression(forNode.Condition, firstWrite, read);
-                Walk(forNode.Increment, firstWrite, read);
-                Walk(forNode.Body, firstWrite, read);
-                return;
-            case ForeachNode foreachNode:
-                // A loop variable is bound by the loop, not assigned by the author, and an unused
-                // `key` in `foreach ( key, value in … )` is idiomatic rather than dead.
-                if ( foreachNode.KeyToken is not null )
-                {
-                    read.Add(foreachNode.KeyToken.Value.Text);
-                }
-
-                read.Add(foreachNode.ValueToken.Text);
-                WalkExpression(foreachNode.Collection, firstWrite, read);
-                Walk(foreachNode.Body, firstWrite, read);
-                return;
-            case SwitchNode switchNode:
-                WalkExpression(switchNode.Subject, firstWrite, read);
-                foreach ( CaseGroupNode group in switchNode.Cases )
-                {
-                    foreach ( ExprNode? label in group.Labels )
-                    {
-                        WalkExpression(label, firstWrite, read);
-                    }
-
-                    foreach ( AstNode statement in group.Statements )
-                    {
-                        Walk(statement, firstWrite, read);
-                    }
-                }
-
-                return;
-            case ReturnNode returnNode:
-                WalkExpression(returnNode.Value, firstWrite, read);
-                return;
-            case WaitNode wait:
-                WalkExpression(wait.Duration, firstWrite, read);
-                return;
-            case ConstDeclNode constDecl:
-                RecordWrite(constDecl.NameToken, firstWrite);
-                WalkExpression(constDecl.Value, firstWrite, read);
-                return;
-            case ExprStatementNode expression:
-                WalkExpression(expression.Expression, firstWrite, read);
-                return;
-            default:
-                return;
-        }
-    }
-
-    private static void WalkExpression(ExprNode? expression, Dictionary<string, PToken> firstWrite, HashSet<string> read)
-    {
-        switch ( expression )
-        {
-            case null:
-                return;
             case AssignmentNode assignment:
-            {
                 // `x = value` writes x. `x += value` READS x as well, so it can never be a dead
                 // store on its own.
                 if ( assignment.Target is IdentifierNode target )
@@ -218,82 +154,61 @@ public static class UnusedLocalLint
                 else
                 {
                     // self.foo = … — a field, whose reader may be another script entirely.
-                    WalkExpression(assignment.Target, firstWrite, read);
+                    Collect(assignment.Target, firstWrite, read);
                 }
 
-                WalkExpression(assignment.Value, firstWrite, read);
+                Collect(assignment.Value, firstWrite, read);
                 return;
-            }
+
+            case ForeachNode foreachNode:
+                // A loop variable is bound by the loop, not assigned by the author, and an unused
+                // `key` in `foreach ( key, value in … )` is idiomatic rather than dead.
+                if ( foreachNode.KeyToken is not null )
+                {
+                    read.Add(foreachNode.KeyToken.Value.Text);
+                }
+
+                read.Add(foreachNode.ValueToken.Text);
+                Collect(foreachNode.Collection, firstWrite, read);
+                Collect(foreachNode.Body, firstWrite, read);
+                return;
+
+            case ConstDeclNode constDecl:
+                RecordWrite(constDecl.NameToken, firstWrite);
+                Collect(constDecl.Value, firstWrite, read);
+                return;
+
             case IdentifierNode identifier:
                 read.Add(identifier.Token.Text);
                 return;
-            case PostfixNode postfix:
-                // x++ reads and writes in one step.
-                WalkExpression(postfix.Operand, firstWrite, read);
-                return;
-            case PrefixNode prefix:
-                WalkExpression(prefix.Operand, firstWrite, read);
-                return;
-            case ParenNode paren:
-                WalkExpression(paren.Inner, firstWrite, read);
-                return;
-            case BinaryNode binary:
-                WalkExpression(binary.Left, firstWrite, read);
-                WalkExpression(binary.Right, firstWrite, read);
-                return;
-            case TernaryNode ternary:
-                WalkExpression(ternary.Condition, firstWrite, read);
-                WalkExpression(ternary.WhenTrue, firstWrite, read);
-                WalkExpression(ternary.WhenFalse, firstWrite, read);
-                return;
-            case VectorNode vector:
-                WalkExpression(vector.X, firstWrite, read);
-                WalkExpression(vector.Y, firstWrite, read);
-                WalkExpression(vector.Z, firstWrite, read);
-                return;
-            case MemberNode member:
-                WalkExpression(member.Object, firstWrite, read);
-                return;
-            case IndexNode index:
-                WalkExpression(index.Object, firstWrite, read);
-                WalkExpression(index.Index, firstWrite, read);
-                return;
-            case PointerDerefNode pointer:
-                WalkExpression(pointer.Pointer, firstWrite, read);
-                return;
+
             case CallNode call:
                 // Target is the object a method is called ON — `self` in `self foo()`.
-                WalkExpression(call.Target, firstWrite, read);
+                if ( call.Target is not null )
+                {
+                    Collect(call.Target, firstWrite, read);
+                }
 
                 // The callee of `foo()` names a FUNCTION, so it is not a read of a local called
                 // foo. `[[ handler ]]()` is different: that really does read the local.
                 if ( call.Callee is not (IdentifierNode or QualifiedNode or PathQualifiedNode) )
                 {
-                    WalkExpression(call.Callee, firstWrite, read);
+                    Collect(call.Callee, firstWrite, read);
                 }
 
                 foreach ( ExprNode argument in call.Arguments )
                 {
-                    WalkExpression(argument, firstWrite, read);
+                    Collect(argument, firstWrite, read);
                 }
 
                 return;
-            case ArrowCallNode arrow:
-                WalkExpression(arrow.Object, firstWrite, read);
-                foreach ( ExprNode argument in arrow.Arguments )
-                {
-                    WalkExpression(argument, firstWrite, read);
-                }
 
-                return;
-            case NewNode newNode:
-                foreach ( ExprNode argument in newNode.Arguments )
-                {
-                    WalkExpression(argument, firstWrite, read);
-                }
-
-                return;
             default:
+                foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+                {
+                    Collect(child, firstWrite, read);
+                }
+
                 return;
         }
     }

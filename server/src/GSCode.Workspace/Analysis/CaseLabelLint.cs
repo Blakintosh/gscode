@@ -28,97 +28,48 @@ public static class CaseLabelLint
     {
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            Walk(element, diagnostics);
-        }
+        Walk(result.Tree.Root, diagnostics);
 
         return diagnostics.ToImmutable();
     }
 
-    private static void Walk(AstNode? node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// Finds every switch in the file. Only <see cref="SwitchNode"/> is interesting, so everything
+    /// else descends through <see cref="AstSearch.ChildrenOf"/> rather than being enumerated here —
+    /// a statement form added later is walked without this rule having to learn about it.
+    /// </summary>
+    private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        switch ( node )
+        if ( node is SwitchNode switchNode )
         {
-            case null:
-                return;
-            case SwitchNode switchNode:
+            InspectLabels(switchNode, diagnostics);
+        }
+
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+        {
+            Walk(child, diagnostics);
+        }
+    }
+
+    private static void InspectLabels(SwitchNode switchNode, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        // Per SWITCH, not per group: `case 1:` in one group and `case 1:` in another is the same
+        // collision, and grouping is a formatting choice rather than a scope.
+        HashSet<string> seenLabels = new(StringComparer.Ordinal);
+
+        foreach ( CaseGroupNode group in switchNode.Cases )
+        {
+            foreach ( ExprNode? label in group.Labels )
             {
-                // Per SWITCH, not per group: `case 1:` in one group and `case 1:` in another is the
-                // same collision, and grouping is a formatting choice rather than a scope.
-                HashSet<string> seenLabels = new(StringComparer.Ordinal);
-
-                foreach ( CaseGroupNode group in switchNode.Cases )
+                // A null label is `default:`, which has no value to check.
+                if ( label is null )
                 {
-                    foreach ( ExprNode? label in group.Labels )
-                    {
-                        // A null label is `default:`, which has no value to check.
-                        if ( label is null )
-                        {
-                            continue;
-                        }
-
-                        Inspect(label, diagnostics);
-                        InspectDuplicate(label, seenLabels, diagnostics);
-                    }
-
-                    foreach ( AstNode statement in group.Statements )
-                    {
-                        Walk(statement, diagnostics);
-                    }
+                    continue;
                 }
 
-                return;
+                Inspect(label, diagnostics);
+                InspectDuplicate(label, seenLabels, diagnostics);
             }
-            case FunctionNode function:
-                Walk(function.Body, diagnostics);
-                return;
-            case ClassNode classNode:
-                foreach ( AstNode member in classNode.Members )
-                {
-                    Walk(member, diagnostics);
-                }
-
-                return;
-            case BlockNode block:
-                foreach ( AstNode statement in block.Statements )
-                {
-                    Walk(statement, diagnostics);
-                }
-
-                return;
-            case DevBlockDeclNode devBlockDecl:
-                foreach ( AstNode declaration in devBlockDecl.Declarations )
-                {
-                    Walk(declaration, diagnostics);
-                }
-
-                return;
-            case DevBlockStmtNode devBlock:
-                foreach ( AstNode statement in devBlock.Statements )
-                {
-                    Walk(statement, diagnostics);
-                }
-
-                return;
-            case IfNode ifNode:
-                Walk(ifNode.Then, diagnostics);
-                Walk(ifNode.Else, diagnostics);
-                return;
-            case WhileNode whileNode:
-                Walk(whileNode.Body, diagnostics);
-                return;
-            case DoWhileNode doWhile:
-                Walk(doWhile.Body, diagnostics);
-                return;
-            case ForNode forNode:
-                Walk(forNode.Body, diagnostics);
-                return;
-            case ForeachNode foreachNode:
-                Walk(foreachNode.Body, diagnostics);
-                return;
-            default:
-                return;
         }
     }
 

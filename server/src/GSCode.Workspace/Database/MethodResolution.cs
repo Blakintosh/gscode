@@ -5,6 +5,16 @@ using GSCode.Core.Text;
 namespace GSCode.Workspace.Database;
 
 /// <summary>
+/// One method reachable on a class, with the class that declares it.
+///
+/// <c>Record</c> is null when the declaring class came from the parse in hand rather than from the
+/// store — the file being edited is ahead of the last index, so it genuinely has no indexed record
+/// yet. That is why this is not a <see cref="ResolvedFunction"/>, whose Record is non-nullable and
+/// which callers may dereference for a location.
+/// </summary>
+public sealed record ClassMethod(FunctionSymbol Method, ClassSymbol OwnerClass, ScriptRecord? Record);
+
+/// <summary>
 /// Maps the key a call SITE was written with onto the key its DEFINITION uses.
 ///
 /// Extraction is per-file and cannot see another file's classes, so the key it writes is purely
@@ -23,16 +33,6 @@ namespace GSCode.Workspace.Database;
 /// <c>throttle_shared.gsc</c> is the same. Resolving the class first would break 22 shipping call
 /// sites, so the NAMESPACE is tried first and the class only when no namespace function matches.
 /// </summary>
-/// <summary>
-/// One method reachable on a class, with the class that declares it.
-///
-/// <c>Record</c> is null when the declaring class came from the parse in hand rather than from the
-/// store — the file being edited is ahead of the last index, so it genuinely has no indexed record
-/// yet. That is why this is not a <see cref="ResolvedFunction"/>, whose Record is non-nullable and
-/// which callers may dereference for a location.
-/// </summary>
-public sealed record ClassMethod(FunctionSymbol Method, ClassSymbol OwnerClass, ScriptRecord? Record);
-
 public static class MethodResolution
 {
     /// <summary>

@@ -220,7 +220,7 @@ public static class AssignmentAligner
 
                     break;
                 default:
-                    if ( depth == 0 && operatorIndex < 0 && IsAssignmentOperator(kind) )
+                    if ( depth == 0 && operatorIndex < 0 && TokenFacts.IsAssignmentOperator(kind) )
                     {
                         operatorIndex = i;
                     }
@@ -240,22 +240,5 @@ public static class AssignmentAligner
         string indent = LineFacts.LeadingWhitespace(lineText);
 
         return new LineKind(LineRole.Assignment, indent, left.Length, operatorColumn);
-    }
-
-
-
-    private static bool IsAssignmentOperator(TokenKind kind)
-    {
-        return kind is TokenKind.Assign
-            or TokenKind.PlusAssign
-            or TokenKind.MinusAssign
-            or TokenKind.StarAssign
-            or TokenKind.SlashAssign
-            or TokenKind.PercentAssign
-            or TokenKind.AmpersandAssign
-            or TokenKind.PipeAssign
-            or TokenKind.CaretAssign
-            or TokenKind.ShiftLeftAssign
-            or TokenKind.ShiftRightAssign;
     }
 }

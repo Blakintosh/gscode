@@ -151,7 +151,7 @@ public static class UnusedBindingLint
                 mentioned.Add(identifier.Token.Text);
                 return;
 
-            case CallNode call when IsWaittill(call.Callee):
+            case CallNode call when AstSearch.IsWaittill(call.Callee):
                 // The first argument is the event NAME and is a genuine value; everything after it
                 // is an output the engine fills in.
                 for ( int index = 0; index < call.Arguments.Length; index++ )
@@ -182,14 +182,4 @@ public static class UnusedBindingLint
         }
     }
 
-    /// <summary>
-    /// Whether a callee is the <c>waittill</c> family. A callable keyword parses as an
-    /// <see cref="IdentifierNode"/> wrapping the keyword token, so the TOKEN KIND is what
-    /// distinguishes it from a call to a function that happens to share the name.
-    /// </summary>
-    private static bool IsWaittill(ExprNode callee)
-    {
-        return callee is IdentifierNode identifier
-            && identifier.Token.Kind is TokenKind.WaitTill or TokenKind.WaitTillMatch;
-    }
 }

@@ -226,19 +226,6 @@ public static class UnassignedVariableLint
     }
 
     /// <summary>
-    /// Whether a callee is the <c>waittill</c> family, whose trailing arguments are bound rather
-    /// than read. They are keywords rather than identifiers, so the token kind is what says so.
-    /// </summary>
-    private static bool IsWaittill(ExprNode callee)
-    {
-        // A callable keyword is parsed as an IdentifierNode wrapping the keyword token, so the
-        // TOKEN KIND is what distinguishes it from a call to a function that happens to be named
-        // the same.
-        return callee is IdentifierNode identifier
-            && identifier.Token.Kind is TokenKind.WaitTill or TokenKind.WaitTillMatch;
-    }
-
-    /// <summary>
     /// Walks a function, recording every name WRITTEN and every identifier READ as a value.
     ///
     /// Descends through <see cref="AstSearch.ChildrenOf"/> rather than a switch over every node
@@ -307,7 +294,7 @@ public static class UnassignedVariableLint
                 // what the rule reported across CoD4's shipped scripts.
                 //
                 // The first argument is the event NAME and is a genuine read.
-                bool bindsOutputs = IsWaittill(call.Callee);
+                bool bindsOutputs = AstSearch.IsWaittill(call.Callee);
 
                 for ( int index = 0; index < call.Arguments.Length; index++ )
                 {

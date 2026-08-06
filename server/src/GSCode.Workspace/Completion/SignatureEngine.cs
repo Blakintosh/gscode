@@ -168,7 +168,7 @@ public sealed class SignatureEngine
 
         bool isSelf = receiver >= 0
             && tokens[receiver].Kind == TokenKind.Identifier
-            && string.Equals(tokens[receiver].GetText(text).ToString(), "self", StringComparison.OrdinalIgnoreCase);
+            && TokenFacts.IsSelfName(tokens[receiver].GetText(text));
 
         return isSelf ? ArrowReceiver.Self : ArrowReceiver.Unknown;
     }

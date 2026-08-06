@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser;
+using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Analysis;
@@ -27,97 +28,32 @@ public static class UnreachableCodeLint
     {
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            Walk(element, diagnostics);
-        }
+        Walk(result.Tree.Root, diagnostics);
 
         return diagnostics.ToImmutable();
     }
 
-    private static void Walk(AstNode? node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// Finds every block in the file. Only <see cref="BlockNode"/> is interesting — the run of
+    /// statements after a terminator lives there and nowhere else — so everything else just
+    /// descends through <see cref="AstSearch.ChildrenOf"/> rather than being enumerated here.
+    ///
+    /// Statements NESTED inside a dev block are reached this way and their dead code is still
+    /// reported. What is not reported is the dev block's own run against a terminator before it,
+    /// which is <see cref="ReportAfterTerminator"/>'s business: <c>/# … #/</c> is compiled out of a
+    /// release build, so a debugging aid after a return is something the author put there knowingly
+    /// rather than a leftover.
+    /// </summary>
+    private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        switch ( node )
+        if ( node is BlockNode block )
         {
-            case null:
-                return;
+            ReportAfterTerminator(block, diagnostics);
+        }
 
-            case BlockNode block:
-                ReportAfterTerminator(block, diagnostics);
-                foreach ( AstNode statement in block.Statements )
-                {
-                    Walk(statement, diagnostics);
-                }
-
-                return;
-
-            case FunctionNode function:
-                Walk(function.Body, diagnostics);
-                return;
-
-            case ClassNode classNode:
-                foreach ( AstNode member in classNode.Members )
-                {
-                    Walk(member, diagnostics);
-                }
-
-                return;
-
-            case ConstructorNode constructor:
-                Walk(constructor.Body, diagnostics);
-                return;
-
-            case DestructorNode destructor:
-                Walk(destructor.Body, diagnostics);
-                return;
-
-            case IfNode ifNode:
-                Walk(ifNode.Then, diagnostics);
-                Walk(ifNode.Else, diagnostics);
-                return;
-
-            case WhileNode whileNode:
-                Walk(whileNode.Body, diagnostics);
-                return;
-
-            case DoWhileNode doWhile:
-                Walk(doWhile.Body, diagnostics);
-                return;
-
-            case ForNode forNode:
-                Walk(forNode.Body, diagnostics);
-                return;
-
-            case ForeachNode foreachNode:
-                Walk(foreachNode.Body, diagnostics);
-                return;
-
-            case SwitchNode switchNode:
-                foreach ( CaseGroupNode group in switchNode.Cases )
-                {
-                    foreach ( AstNode statement in group.Statements )
-                    {
-                        Walk(statement, diagnostics);
-                    }
-                }
-
-                return;
-
-            case DevBlockStmtNode devBlock:
-                // Statements NESTED inside the block are walked, so dead code within it is still
-                // reported. The block's own run is not checked against a terminator before it,
-                // which is the point of ReportAfterTerminator skipping dev blocks: `/# … #/` is
-                // compiled out of a release build, so a debugging aid after a return is something
-                // the author put there knowingly rather than a leftover.
-                foreach ( AstNode statement in devBlock.Statements )
-                {
-                    Walk(statement, diagnostics);
-                }
-
-                return;
-
-            default:
-                return;
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+        {
+            Walk(child, diagnostics);
         }
     }
 

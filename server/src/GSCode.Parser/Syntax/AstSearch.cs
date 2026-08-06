@@ -1,4 +1,5 @@
 using GSCode.Core.Text;
+using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Parser.Syntax;
@@ -67,6 +68,28 @@ public static class AstSearch
         identifier = foundIdentifier!;
         function = foundFunction!;
         return foundIdentifier is not null && foundFunction is not null;
+    }
+
+    /// <summary>
+    /// Whether an arrow call's receiver is the bare word <c>self</c> — the shape that makes a method
+    /// call resolvable against the enclosing class rather than against every class declaring the name.
+    /// </summary>
+    public static bool IsSelfReceiver(ExprNode receiver)
+    {
+        return receiver is IdentifierNode identifier && TokenFacts.IsSelfName(identifier.Token.Text);
+    }
+
+    /// <summary>
+    /// Whether a callee is the <c>waittill</c> family, whose trailing arguments are BOUND rather
+    /// than read — the distinction any rule about reads or unused names has to make.
+    ///
+    /// A callable keyword parses as an <see cref="IdentifierNode"/> wrapping the keyword token, so
+    /// the TOKEN KIND is what distinguishes it from a call to a function sharing the name.
+    /// </summary>
+    public static bool IsWaittill(ExprNode callee)
+    {
+        return callee is IdentifierNode identifier
+            && identifier.Token.Kind is TokenKind.WaitTill or TokenKind.WaitTillMatch;
     }
 
     /// <summary>Direct structural children of a node (expression operands included).</summary>

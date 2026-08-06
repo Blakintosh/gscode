@@ -285,22 +285,16 @@ public static class ColumnAligner
 
     private static bool IsStructural(TokenKind kind)
     {
+        if ( TokenFacts.IsAssignmentOperator(kind) )
+        {
+            return true;
+        }
+
         return kind is TokenKind.OpenParen
             or TokenKind.CloseParen
             or TokenKind.OpenBracket
             or TokenKind.CloseBracket
             or TokenKind.Comma
-            or TokenKind.Semicolon
-            or TokenKind.Assign
-            or TokenKind.PlusAssign
-            or TokenKind.MinusAssign
-            or TokenKind.StarAssign
-            or TokenKind.SlashAssign
-            or TokenKind.PercentAssign
-            or TokenKind.AmpersandAssign
-            or TokenKind.PipeAssign
-            or TokenKind.CaretAssign
-            or TokenKind.ShiftLeftAssign
-            or TokenKind.ShiftRightAssign;
+            or TokenKind.Semicolon;
     }
 }

@@ -22,6 +22,43 @@ public static class TokenFacts
         return kind >= TokenKind.Class && kind <= TokenKind.Vararg;
     }
 
+    /// <summary>
+    /// True for the bare word <c>self</c>. Not a keyword in any supported dialect, so it arrives as
+    /// an ordinary identifier and can only be matched by text.
+    ///
+    /// Shared because four call sites across two assemblies ask this — extraction and the argument
+    /// lint off an <see cref="Syntax.Ast.IdentifierNode"/>, completion and signature help off a raw
+    /// token mid-keystroke — and each spelled the literal and the comparison mode itself. Callers
+    /// holding an AST node want <see cref="Syntax.AstSearch.IsSelfReceiver"/>, which routes here.
+    /// </summary>
+    public static bool IsSelfName(ReadOnlySpan<char> text)
+    {
+        return text.Equals("self", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// True for <c>=</c> and every compound assignment.
+    ///
+    /// Shared because four callers — the expression parser, completion, and both formatter
+    /// aligners — each need "does this token assign?", and each had its own copy. The copies had
+    /// already drifted: completion's was missing <c>&lt;&lt;=</c> and <c>&gt;&gt;=</c>, so a shift-assign
+    /// line was not recognised as an assignment there while the parser recognised it fine.
+    /// </summary>
+    public static bool IsAssignmentOperator(TokenKind kind)
+    {
+        return kind is TokenKind.Assign
+            or TokenKind.PlusAssign
+            or TokenKind.MinusAssign
+            or TokenKind.StarAssign
+            or TokenKind.SlashAssign
+            or TokenKind.PercentAssign
+            or TokenKind.AmpersandAssign
+            or TokenKind.PipeAssign
+            or TokenKind.CaretAssign
+            or TokenKind.ShiftLeftAssign
+            or TokenKind.ShiftRightAssign;
+    }
+
     /// <summary>The canonical lexeme for a fixed-text kind, or null when the source must be sliced.</summary>
     public static string? GetStaticText(TokenKind kind)
     {

@@ -134,7 +134,7 @@ public static class FormatScope
                     depth--;
                     break;
                 default:
-                    if ( depth == 0 && i > 0 && IsAssignmentOperator(kind) )
+                    if ( depth == 0 && i > 0 && TokenFacts.IsAssignmentOperator(kind) )
                     {
                         return new LineKind(Role.Assignment, indent, "");
                     }
@@ -178,22 +178,5 @@ public static class FormatScope
         }
 
         return byLine;
-    }
-
-
-
-    private static bool IsAssignmentOperator(TokenKind kind)
-    {
-        return kind is TokenKind.Assign
-            or TokenKind.PlusAssign
-            or TokenKind.MinusAssign
-            or TokenKind.StarAssign
-            or TokenKind.SlashAssign
-            or TokenKind.PercentAssign
-            or TokenKind.AmpersandAssign
-            or TokenKind.PipeAssign
-            or TokenKind.CaretAssign
-            or TokenKind.ShiftLeftAssign
-            or TokenKind.ShiftRightAssign;
     }
 }

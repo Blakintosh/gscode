@@ -104,4 +104,22 @@ public class UnreachableCodeLintTests
 
         Assert.Single(UnreachableCodeLint.Analyze(result));
     }
+
+    [Fact]
+    public void AFunctionInsideATopLevelDevBlockIsWalked()
+    {
+        // A declaration-level `/# … #/` wraps whole functions, and one was previously not descended
+        // into at all — the walker enumerated each container by hand and this one was missing, so
+        // dead code inside it went unreported. Nothing in the shipped corpora happens to hit the
+        // shape, which is exactly why it needs a test rather than a corpus run to hold it.
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc",
+            ScriptLanguage.Gsc,
+            SourceText.From("/#\nfunction dbg()\n{\n\treturn;\n\tx = 1;\n}\n#/\n"),
+            NullInsertProvider.Instance,
+            new NameTable());
+
+        Diagnostic diagnostic = Assert.Single(UnreachableCodeLint.Analyze(result));
+        Assert.Equal(GscDiagnosticCode.UnreachableCode, diagnostic.Code);
+    }
 }

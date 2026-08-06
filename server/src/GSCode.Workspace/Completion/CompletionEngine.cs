@@ -778,7 +778,7 @@ public sealed class CompletionEngine
             return null;
         }
 
-        if ( !string.Equals(tokens[receiver].GetText(result.Text).ToString(), "self", StringComparison.OrdinalIgnoreCase) )
+        if ( !TokenFacts.IsSelfName(tokens[receiver].GetText(result.Text)) )
         {
             return null;
         }
@@ -1433,17 +1433,6 @@ public sealed class CompletionEngine
     }
 
     /// <summary>
-    /// A function reached through a <c>#using</c> import, labelled and inserted FULLY QUALIFIED.
-    ///
-    /// The label carries the qualifier because that is what makes the namespace findable: the
-    /// editor filters on the label, so typing "uti" surfaces every <c>util::</c> function at once
-    /// rather than only the ones whose own name happens to begin that way. Typing the function's
-    /// name still matches it — the qualifier is a prefix, not a replacement — so both routes work.
-    ///
-    /// Inserting the qualifier is not a convenience but a correctness matter: an unqualified call
-    /// into another namespace does not resolve.
-    /// </summary>
-    /// <summary>
     /// An engine builtin. Its parameters come from the FIRST overload — the data models several,
     /// but a completion row has space for one shape, and the doc panel behind it lists them all.
     /// A trailing <c>?</c> marks an optional parameter, matching how signature help renders them.
@@ -1471,6 +1460,17 @@ public sealed class CompletionEngine
             IsBuiltin: true);
     }
 
+    /// <summary>
+    /// A function reached through a <c>#using</c> import, labelled and inserted FULLY QUALIFIED.
+    ///
+    /// The label carries the qualifier because that is what makes the namespace findable: the
+    /// editor filters on the label, so typing "uti" surfaces every <c>util::</c> function at once
+    /// rather than only the ones whose own name happens to begin that way. Typing the function's
+    /// name still matches it — the qualifier is a prefix, not a replacement — so both routes work.
+    ///
+    /// Inserting the qualifier is not a convenience but a correctness matter: an unqualified call
+    /// into another namespace does not resolve.
+    /// </summary>
     private static CompletionEntry ImportedFunctionEntry(
         FunctionSymbol function, string ns, string callSuffix, bool parameterHints)
     {
@@ -1572,7 +1572,7 @@ public sealed class CompletionEngine
             // `x = foo()` and `self.count += tally()` are statements too — the call completes
             // one. Allowed once: a second assignment operator on the way back would mean the
             // first was part of something else, and `a = b = foo()` is not worth the risk.
-            if ( IsAssignmentOperator(kind) )
+            if ( TokenFacts.IsAssignmentOperator(kind) )
             {
                 if ( seenAssignment )
                 {
@@ -1638,13 +1638,6 @@ public sealed class CompletionEngine
                 // Empty means "insert the label", which is what a plain word wants.
                 return "";
         }
-    }
-
-    private static bool IsAssignmentOperator(TokenKind kind)
-    {
-        return kind is TokenKind.Assign or TokenKind.PlusAssign or TokenKind.MinusAssign
-            or TokenKind.StarAssign or TokenKind.SlashAssign or TokenKind.PercentAssign
-            or TokenKind.AmpersandAssign or TokenKind.PipeAssign or TokenKind.CaretAssign;
     }
 
     /// <summary>

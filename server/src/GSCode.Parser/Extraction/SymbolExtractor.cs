@@ -638,7 +638,7 @@ public sealed class SymbolExtractor
                 // receiver whose class is knowable without typing the locals. Everything else —
                 // [[o_scene]]->play(), 155 of the 159 arrow calls in the stock scripts — keys with
                 // no owner and is resolved by method name at query time.
-                string? receiverClass = IsSelfReceiver(arrow.Object.Pointer) ? _currentClass : null;
+                string? receiverClass = AstSearch.IsSelfReceiver(arrow.Object.Pointer) ? _currentClass : null;
 
                 SymbolKey methodKey = new(
                     null, _names.InternLower(arrow.MethodToken.Text), SymbolKind.Function, receiverClass);
@@ -784,16 +784,6 @@ public sealed class SymbolExtractor
             default:
                 return;
         }
-    }
-
-    /// <summary>
-    /// Whether an arrow call's receiver is the bare word <c>self</c>. Not a keyword in this dialect,
-    /// so it arrives as an ordinary identifier and is matched by text.
-    /// </summary>
-    private static bool IsSelfReceiver(ExprNode receiver)
-    {
-        return receiver is IdentifierNode identifier
-            && string.Equals(identifier.Token.Text, "self", StringComparison.OrdinalIgnoreCase);
     }
 
     private void RecordFieldReference(PToken nameToken)

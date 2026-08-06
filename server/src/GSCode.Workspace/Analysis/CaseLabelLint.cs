@@ -37,9 +37,20 @@ public static class CaseLabelLint
     /// Finds every switch in the file. Only <see cref="SwitchNode"/> is interesting, so everything
     /// else descends through <see cref="AstSearch.ChildrenOf"/> rather than being enumerated here —
     /// a statement form added later is walked without this rule having to learn about it.
+    ///
+    /// The walk stops at an expression. A switch is a STATEMENT and cannot appear inside one, and
+    /// the labels are read from the node itself rather than reached by descent, so there is nothing
+    /// below an <see cref="ExprNode"/> for this rule to find. Descending anyway walked every operand
+    /// of every expression in the file, which expressions outnumber statements by enough to make it
+    /// most of the rule's cost.
     /// </summary>
     private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
+        if ( node is ExprNode )
+        {
+            return;
+        }
+
         if ( node is SwitchNode switchNode )
         {
             InspectLabels(switchNode, diagnostics);

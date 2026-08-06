@@ -46,6 +46,14 @@ public static class UnreachableCodeLint
     /// </summary>
     private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
+        // Nothing this rule looks for lives inside an expression: a block is a statement, and GSC
+        // has no construct that puts one inside an operand. Descending anyway walked every operand
+        // of every expression in the file for nothing, which was most of the rule's cost.
+        if ( node is ExprNode )
+        {
+            return;
+        }
+
         if ( node is BlockNode block )
         {
             ReportAfterTerminator(block, diagnostics);

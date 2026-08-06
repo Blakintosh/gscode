@@ -1,6 +1,41 @@
 {
   "api": [
     {
+      "name": "Abs",
+      "description": "Returns the absolute value of a float.",
+      "overloads": [
+        {
+          "calledOn": null,
+          "parameters": [
+            {
+              "name": "value",
+              "description": "A float or integer value.",
+              "mandatory": true,
+              "type": {
+                "dataType": "number",
+                "isArray": false
+              }
+            }
+          ],
+          "returns": {
+            "name": null,
+            "description": null,
+            "type": {
+              "dataType": "float",
+              "isArray": false
+            },
+            "void": false
+          }
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: animscripts call abs() with no declaration reachable through their includes."
+      ]
+    },
+    {
       "name": "ACos",
       "description": "Returns an angle corresponding to a particular cosine value",
       "overloads": [
@@ -5356,40 +5391,6 @@
       "remarks": [
         "Empirical builtin: 60 call(s) across 10 bo1 script file(s), observed argument counts 5, access mp. First sites: clientscripts\\cuba.csc(29), clientscripts\\cuba.csc(30), clientscripts\\cuba.csc(31), clientscripts\\cuba.csc(32), clientscripts\\cuba.csc(33). The name is known to exist; its signature remains undocumented."
       ]
-    },
-    {
-      "name": "Abs",
-      "description": "Returns the absolute value of a float.",
-      "overloads": [
-        {
-          "calledOn": null,
-          "parameters": [
-            {
-              "name": "value",
-              "description": "A float or integer value.",
-              "mandatory": true,
-              "type": {
-                "dataType": "number",
-                "isArray": false
-              }
-            }
-          ],
-          "returns": {
-            "name": null,
-            "description": null,
-            "type": {
-              "dataType": "float",
-              "isArray": false
-            },
-            "void": false
-          }
-        }
-      ],
-      "flags": [
-        "processed"
-      ],
-      "example": "x = Abs( x )",
-      "confidence": "high"
     },
     {
       "name": "showui",

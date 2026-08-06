@@ -1,6 +1,41 @@
 {
   "api": [
     {
+      "name": "Abs",
+      "description": "Returns the absolute value of a float.",
+      "overloads": [
+        {
+          "calledOn": null,
+          "parameters": [
+            {
+              "name": "value",
+              "description": "A float or integer value.",
+              "mandatory": true,
+              "type": {
+                "dataType": "number",
+                "isArray": false
+              }
+            }
+          ],
+          "returns": {
+            "name": null,
+            "description": null,
+            "type": {
+              "dataType": "float",
+              "isArray": false
+            },
+            "void": false
+          }
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: animscripts call abs() with no declaration reachable through their includes."
+      ]
+    },
+    {
       "name": "AbsAngleClamp180",
       "description": "Returns abs angle value clamped between [0,180].",
       "overloads": [
@@ -378,6 +413,65 @@
       ],
       "remarks": [
         "Empirical builtin: 2 call(s) across 1 bo1 script file(s), observed argument counts 3, access unknown. First sites: maps\\_camsys.gsc(57), maps\\_camsys.gsc(61). The name is known to exist; its signature remains undocumented."
+      ]
+    },
+    {
+      "name": "AddSpawnPoints",
+      "description": "Adds spawn points from an array into the spawn system for the given team.",
+      "overloads": [
+        {
+          "calledOn": null,
+          "parameters": [
+            {
+              "name": "team",
+              "description": "The team whose spawn points are being added.",
+              "mandatory": true,
+              "type": {
+                "dataType": "string",
+                "instanceType": null,
+                "subType": null,
+                "isArray": false,
+                "unionOf": null
+              },
+              "variadic": null
+            },
+            {
+              "name": "spawnPoints",
+              "description": "An array of spawn point entities or spawn point definition structs.",
+              "mandatory": true,
+              "type": {
+                "dataType": "any",
+                "instanceType": null,
+                "subType": null,
+                "isArray": true,
+                "unionOf": null
+              },
+              "variadic": null
+            },
+            {
+              "name": "list",
+              "description": "An optional spawn point list index. Defaults to 0.",
+              "mandatory": false,
+              "type": {
+                "dataType": "int",
+                "instanceType": null,
+                "subType": null,
+                "isArray": false,
+                "unionOf": null
+              },
+              "variadic": null
+            }
+          ],
+          "returns": {
+            "void": true
+          }
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: maps\\mp\\gametypes\\_spawning.gsc calls it while including only maps\\mp\\_utility and maps\\mp\\_geometry, neither of which reaches a declaration."
       ]
     },
     {
@@ -3589,6 +3683,28 @@
       ],
       "remarks": [
         "Empirical builtin: 18 call(s) across 4 bo1 script file(s), observed argument counts 0, access mp. It is called on a target. First sites: maps\\mp\\gametypes\\_bot.gsc(1147), maps\\mp\\gametypes\\_bot.gsc(1207), maps\\mp\\gametypes\\_bot.gsc(1279), maps\\mp\\gametypes\\_bot.gsc(1293), maps\\mp\\gametypes\\_bot.gsc(1441). The name is known to exist; its signature remains undocumented."
+      ]
+    },
+    {
+      "name": "ClearSpawnPoints",
+      "description": "Clears all spawnpoints out of the system.",
+      "overloads": [
+        {
+          "calledOn": null,
+          "parameters": [
+            {
+              "name": "list",
+              "description": "which list of spawnpoints to clear.",
+              "mandatory": false
+            }
+          ]
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called where no include reaches a declaration."
       ]
     },
     {
@@ -11036,6 +11152,39 @@
       "confidence": "medium"
     },
     {
+      "name": "GetPerks",
+      "description": "Gets all the player's active perks.",
+      "overloads": [
+        {
+          "calledOn": {
+            "name": "player",
+            "description": "The player to get the perks of.",
+            "type": {
+              "dataType": "entity",
+              "instanceType": "player",
+              "subType": "player",
+              "isArray": false
+            }
+          },
+          "parameters": [],
+          "returns": {
+            "name": "perks",
+            "description": "An array of the `specialty` names of the perks the player currently has. This is empty when the player has no perks.",
+            "type": {
+              "dataType": "string",
+              "isArray": true
+            }
+          }
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called where no include reaches a declaration."
+      ]
+    },
+    {
       "name": "getpersistentprofilevar",
       "description": "Observed in the bo1 shipped script corpus (8 calls across 6 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
@@ -16449,6 +16598,62 @@
       ],
       "remarks": [
         "Inferred from call sites in the Call of Duty 4 scripts; this function is documented neither in the CoD4 pages nor in the Black Ops III library. Called on an entity at all 53 call sites."
+      ]
+    },
+    {
+      "name": "LookAtEntity",
+      "description": "Set this actor to look at the specified entity. Call this function without any entity specified to turn it off.",
+      "overloads": [
+        {
+          "calledOn": {
+            "name": "actor",
+            "description": "The actor.",
+            "type": {
+              "dataType": "entity",
+              "instanceType": "actor",
+              "subType": "actor",
+              "isArray": false
+            }
+          },
+          "parameters": [
+            {
+              "name": "otherEntity",
+              "description": "The other entity to look at. Skip this parameter to stop looking.",
+              "mandatory": false,
+              "type": {
+                "dataType": "entity",
+                "instanceType": null,
+                "subType": null,
+                "isArray": false,
+                "unionOf": null
+              }
+            },
+            {
+              "name": "unknown",
+              "description": null,
+              "mandatory": false,
+              "type": {
+                "dataType": "int",
+                "instanceType": null,
+                "subType": null,
+                "isArray": false,
+                "unionOf": null
+              }
+            }
+          ],
+          "returns": {
+            "name": null,
+            "description": null,
+            "type": null,
+            "void": true
+          }
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called from scripts whose includes reach no declaration of it."
       ]
     },
     {
@@ -25702,6 +25907,25 @@
       "confidence": "high"
     },
     {
+      "name": "SetInvisibleToAll",
+      "description": "Set entity invisible to all players.",
+      "overloads": [
+        {
+          "calledOn": {
+            "name": "entity",
+            "description": null
+          },
+          "parameters": []
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called where no include reaches a declaration."
+      ]
+    },
+    {
       "name": "SetInvisibleToPlayer",
       "description": "Make the entity invisible to the player.",
       "overloads": [
@@ -28391,6 +28615,49 @@
       "module": "Vehicles",
       "flags": [
         "documented"
+      ]
+    },
+    {
+      "name": "SetTeam",
+      "description": "Sets the entity team.",
+      "overloads": [
+        {
+          "calledOn": {
+            "name": "entity",
+            "description": "The entity to assign to a team.",
+            "type": {
+              "dataType": "entity",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false
+            }
+          },
+          "parameters": [
+            {
+              "name": "team",
+              "description": "The team to assign the entity to.",
+              "type": {
+                "dataType": "enum",
+                "instanceType": "Team",
+                "subType": "Team",
+                "isArray": false,
+                "unionOf": null
+              }
+            }
+          ],
+          "returns": {
+            "name": null,
+            "description": null,
+            "type": null,
+            "void": true
+          }
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called where no include reaches a declaration."
       ]
     },
     {
@@ -34431,273 +34698,6 @@
       ],
       "example": "ZeroGravityVolumeOn( \"area_four\" )",
       "confidence": "high"
-    },
-    {
-      "name": "Abs",
-      "description": "Returns the absolute value of a float.",
-      "overloads": [
-        {
-          "calledOn": null,
-          "parameters": [
-            {
-              "name": "value",
-              "description": "A float or integer value.",
-              "mandatory": true,
-              "type": {
-                "dataType": "number",
-                "isArray": false
-              }
-            }
-          ],
-          "returns": {
-            "name": null,
-            "description": null,
-            "type": {
-              "dataType": "float",
-              "isArray": false
-            },
-            "void": false
-          }
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: animscripts call abs() with no declaration reachable through their includes."
-      ]
-    },
-    {
-      "name": "AddSpawnPoints",
-      "description": "Adds spawn points from an array into the spawn system for the given team.",
-      "overloads": [
-        {
-          "calledOn": null,
-          "parameters": [
-            {
-              "name": "team",
-              "description": "The team whose spawn points are being added.",
-              "mandatory": true,
-              "type": {
-                "dataType": "string",
-                "instanceType": null,
-                "subType": null,
-                "isArray": false,
-                "unionOf": null
-              },
-              "variadic": null
-            },
-            {
-              "name": "spawnPoints",
-              "description": "An array of spawn point entities or spawn point definition structs.",
-              "mandatory": true,
-              "type": {
-                "dataType": "any",
-                "instanceType": null,
-                "subType": null,
-                "isArray": true,
-                "unionOf": null
-              },
-              "variadic": null
-            },
-            {
-              "name": "list",
-              "description": "An optional spawn point list index. Defaults to 0.",
-              "mandatory": false,
-              "type": {
-                "dataType": "int",
-                "instanceType": null,
-                "subType": null,
-                "isArray": false,
-                "unionOf": null
-              },
-              "variadic": null
-            }
-          ],
-          "returns": {
-            "void": true
-          }
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: maps\\mp\\gametypes\\_spawning.gsc calls it while including only maps\\mp\\_utility and maps\\mp\\_geometry, neither of which reaches a declaration."
-      ]
-    },
-    {
-      "name": "LookAtEntity",
-      "description": "Set this actor to look at the specified entity. Call this function without any entity specified to turn it off.",
-      "overloads": [
-        {
-          "calledOn": {
-            "name": "actor",
-            "description": "The actor.",
-            "type": {
-              "dataType": "entity",
-              "instanceType": "actor",
-              "subType": "actor",
-              "isArray": false
-            }
-          },
-          "parameters": [
-            {
-              "name": "otherEntity",
-              "description": "The other entity to look at. Skip this parameter to stop looking.",
-              "mandatory": false,
-              "type": {
-                "dataType": "entity",
-                "instanceType": null,
-                "subType": null,
-                "isArray": false,
-                "unionOf": null
-              }
-            },
-            {
-              "name": "unknown",
-              "description": null,
-              "mandatory": false,
-              "type": {
-                "dataType": "int",
-                "instanceType": null,
-                "subType": null,
-                "isArray": false,
-                "unionOf": null
-              }
-            }
-          ],
-          "returns": {
-            "name": null,
-            "description": null,
-            "type": null,
-            "void": true
-          }
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called from scripts whose includes reach no declaration of it."
-      ]
-    },
-    {
-      "name": "SetTeam",
-      "description": "Sets the entity team.",
-      "overloads": [
-        {
-          "calledOn": {
-            "name": "entity",
-            "description": "The entity to assign to a team.",
-            "type": {
-              "dataType": "entity",
-              "instanceType": null,
-              "subType": null,
-              "isArray": false
-            }
-          },
-          "parameters": [
-            {
-              "name": "team",
-              "description": "The team to assign the entity to.",
-              "type": {
-                "dataType": "enum",
-                "instanceType": "Team",
-                "subType": "Team",
-                "isArray": false,
-                "unionOf": null
-              }
-            }
-          ],
-          "returns": {
-            "name": null,
-            "description": null,
-            "type": null,
-            "void": true
-          }
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called where no include reaches a declaration."
-      ]
-    },
-    {
-      "name": "SetInvisibleToAll",
-      "description": "Set entity invisible to all players.",
-      "overloads": [
-        {
-          "calledOn": {
-            "name": "entity",
-            "description": null
-          },
-          "parameters": []
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called where no include reaches a declaration."
-      ]
-    },
-    {
-      "name": "GetPerks",
-      "description": "Gets all the player's active perks.",
-      "overloads": [
-        {
-          "calledOn": {
-            "name": "player",
-            "description": "The player to get the perks of.",
-            "type": {
-              "dataType": "entity",
-              "instanceType": "player",
-              "subType": "player",
-              "isArray": false
-            }
-          },
-          "parameters": [],
-          "returns": {
-            "name": "perks",
-            "description": "An array of the `specialty` names of the perks the player currently has. This is empty when the player has no perks.",
-            "type": {
-              "dataType": "string",
-              "isArray": true
-            }
-          }
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called where no include reaches a declaration."
-      ]
-    },
-    {
-      "name": "ClearSpawnPoints",
-      "description": "Clears all spawnpoints out of the system.",
-      "overloads": [
-        {
-          "calledOn": null,
-          "parameters": [
-            {
-              "name": "list",
-              "description": "which list of spawnpoints to clear.",
-              "mandatory": false
-            }
-          ]
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against BO1 documentation. Established as an engine function by the shipped scripts: called where no include reaches a declaration."
-      ]
     }
   ]
 }

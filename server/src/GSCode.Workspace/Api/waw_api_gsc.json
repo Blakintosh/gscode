@@ -1,6 +1,41 @@
 {
   "api": [
     {
+      "name": "Abs",
+      "description": "Returns the absolute value of a float.",
+      "overloads": [
+        {
+          "calledOn": null,
+          "parameters": [
+            {
+              "name": "value",
+              "description": "A float or integer value.",
+              "mandatory": true,
+              "type": {
+                "dataType": "number",
+                "isArray": false
+              }
+            }
+          ],
+          "returns": {
+            "name": null,
+            "description": null,
+            "type": {
+              "dataType": "float",
+              "isArray": false
+            },
+            "void": false
+          }
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against WAW documentation. Established as an engine function by the shipped scripts: animscripts call abs() with no declaration reachable through their includes."
+      ]
+    },
+    {
       "name": "AbsAngleClamp180",
       "description": "Returns abs angle value clamped between [0,180].",
       "overloads": [
@@ -135,6 +170,65 @@
     {
       "name": "addnodetocurve",
       "overloads": []
+    },
+    {
+      "name": "AddSpawnPoints",
+      "description": "Adds spawn points from an array into the spawn system for the given team.",
+      "overloads": [
+        {
+          "calledOn": null,
+          "parameters": [
+            {
+              "name": "team",
+              "description": "The team whose spawn points are being added.",
+              "mandatory": true,
+              "type": {
+                "dataType": "string",
+                "instanceType": null,
+                "subType": null,
+                "isArray": false,
+                "unionOf": null
+              },
+              "variadic": null
+            },
+            {
+              "name": "spawnPoints",
+              "description": "An array of spawn point entities or spawn point definition structs.",
+              "mandatory": true,
+              "type": {
+                "dataType": "any",
+                "instanceType": null,
+                "subType": null,
+                "isArray": true,
+                "unionOf": null
+              },
+              "variadic": null
+            },
+            {
+              "name": "list",
+              "description": "An optional spawn point list index. Defaults to 0.",
+              "mandatory": false,
+              "type": {
+                "dataType": "int",
+                "instanceType": null,
+                "subType": null,
+                "isArray": false,
+                "unionOf": null
+              },
+              "variadic": null
+            }
+          ],
+          "returns": {
+            "void": true
+          }
+        }
+      ],
+      "flags": [
+        "aiGenerated"
+      ],
+      "remarks": [
+        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against WAW documentation. Established as an engine function by the shipped scripts: maps\\mp\\gametypes\\_spawning.gsc calls it while including only maps\\mp\\_utility and maps\\mp\\_geometry, neither of which reaches a declaration."
+      ]
     },
     {
       "name": "AddSphereInfluencer",
@@ -23689,100 +23783,6 @@
       "spmp": "MP",
       "flags": [
         "documented"
-      ]
-    },
-    {
-      "name": "Abs",
-      "description": "Returns the absolute value of a float.",
-      "overloads": [
-        {
-          "calledOn": null,
-          "parameters": [
-            {
-              "name": "value",
-              "description": "A float or integer value.",
-              "mandatory": true,
-              "type": {
-                "dataType": "number",
-                "isArray": false
-              }
-            }
-          ],
-          "returns": {
-            "name": null,
-            "description": null,
-            "type": {
-              "dataType": "float",
-              "isArray": false
-            },
-            "void": false
-          }
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against WAW documentation. Established as an engine function by the shipped scripts: animscripts call abs() with no declaration reachable through their includes."
-      ]
-    },
-    {
-      "name": "AddSpawnPoints",
-      "description": "Adds spawn points from an array into the spawn system for the given team.",
-      "overloads": [
-        {
-          "calledOn": null,
-          "parameters": [
-            {
-              "name": "team",
-              "description": "The team whose spawn points are being added.",
-              "mandatory": true,
-              "type": {
-                "dataType": "string",
-                "instanceType": null,
-                "subType": null,
-                "isArray": false,
-                "unionOf": null
-              },
-              "variadic": null
-            },
-            {
-              "name": "spawnPoints",
-              "description": "An array of spawn point entities or spawn point definition structs.",
-              "mandatory": true,
-              "type": {
-                "dataType": "any",
-                "instanceType": null,
-                "subType": null,
-                "isArray": true,
-                "unionOf": null
-              },
-              "variadic": null
-            },
-            {
-              "name": "list",
-              "description": "An optional spawn point list index. Defaults to 0.",
-              "mandatory": false,
-              "type": {
-                "dataType": "int",
-                "instanceType": null,
-                "subType": null,
-                "isArray": false,
-                "unionOf": null
-              },
-              "variadic": null
-            }
-          ],
-          "returns": {
-            "void": true
-          }
-        }
-      ],
-      "flags": [
-        "aiGenerated"
-      ],
-      "remarks": [
-        "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against WAW documentation. Established as an engine function by the shipped scripts: maps\\mp\\gametypes\\_spawning.gsc calls it while including only maps\\mp\\_utility and maps\\mp\\_geometry, neither of which reaches a declaration."
       ]
     }
   ]

@@ -35,6 +35,35 @@ public class PathResolverTests
 
     // --- Context classification ---
 
+    [Theory]
+    [InlineData(@"C:\bo3\share\raw\scripts\shared\util_shared.gsc")]
+    [InlineData(@"C:\BO3\Share\Raw\Scripts\Shared\Util_Shared.gsc")]
+    [InlineData(@"C:/bo3/share/raw/scripts/shared/util_shared.gsc")]
+    [InlineData(@"C:\bo3\share\raw\scripts\..\scripts\shared\util_shared.gsc")]
+    public void GetScriptRelativePath_NormalizesWhateverSpellingItIsGiven(string path)
+    {
+        // Every one of these names the same file, and an unnormalized spelling used to return "" --
+        // silently, since the roots are normalized and IsUnder simply failed. That empty string
+        // became ScriptRecord.RelativePath, and every import match downstream compared against it
+        // and never fired, so a workspace behaved as though no file included anything.
+        PathResolver resolver = StandardResolver(StandardTree());
+
+        Assert.Equal(
+            @"scripts\shared\util_shared.gsc",
+            resolver.GetScriptRelativePath(path, resolver.GetContext(path)));
+    }
+
+    [Fact]
+    public void GetScriptRelativePath_AFileOutsideEveryRoot_IsStillEmpty()
+    {
+        // The empty answer stays meaningful for the case it was written for: normalizing the input
+        // must not make an unrelated file look like it sits under a root.
+        PathResolver resolver = StandardResolver(StandardTree());
+        string outside = @"D:\elsewhere\loose.gsc";
+
+        Assert.Equal("", resolver.GetScriptRelativePath(outside, ResolutionContext.RawContext));
+    }
+
     [Fact]
     public void GetContext_RawFile_ClassifiesRaw()
     {

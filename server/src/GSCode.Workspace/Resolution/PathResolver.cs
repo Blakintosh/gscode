@@ -91,9 +91,20 @@ public sealed class PathResolver
     /// <summary>
     /// The script-relative identity of a file under its context's root (the overlay
     /// shadowing key), or "" when it sits outside every root.
+    ///
+    /// NORMALIZES ITS ARGUMENT, and the parameter name is kept as a statement of what the roots are
+    /// compared against rather than as a demand on the caller. It used to be a demand, and the
+    /// failure was silent in the worst way: an unnormalized path fails <see cref="PathUtil.IsUnder"/>
+    /// against a normalized root, "" comes back, that empty string becomes
+    /// <c>ScriptRecord.RelativePath</c>, and every import match downstream compares against it and
+    /// never fires. Nothing throws — the workspace simply behaves as though no file included
+    /// anything. <see cref="GetContext"/> has always normalized on entry; this is the same contract,
+    /// and the cost is one idempotent call on a path already in that form.
     /// </summary>
-    public string GetScriptRelativePath(string normalizedAbsolutePath, ResolutionContext context)
+    public string GetScriptRelativePath(string absolutePath, ResolutionContext context)
     {
+        string normalizedAbsolutePath = PathUtil.NormalizeAbsolute(absolutePath);
+
         switch ( context.Kind )
         {
             case ResolutionContextKind.Raw:

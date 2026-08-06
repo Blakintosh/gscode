@@ -13,13 +13,12 @@ worklist; when its last entry goes, so does it.
 
 ## Backlog
 
-### Two test-harness traps that fail SILENTLY, and both have cost real time
+### A test-harness trap that fails SILENTLY
 
-Neither is a bug in shipping code. Both are places where a wrong call produces an empty result
-instead of an error, so a test written against them passes while proving nothing. They are grouped
-because the fix is the same shape: make the silent-empty path impossible to reach by accident.
+Not a bug in shipping code. A place where a wrong call produces an empty result instead of an
+error, so a test written against it passes while proving nothing.
 
-**Trap 1 — `WorkspaceIndexer` parses with `GameProfile.Active`.** A test that builds a fake
+`WorkspaceIndexer` parses with `GameProfile.Active`. A test that builds a fake
 workspace for a NON-active dialect indexes every file under BO3's rules, where a keyword-less
 `is_coop()` is not a declaration at all. The store comes back empty, every "is it offered?"
 assertion passes, and every "is it absent?" assertion passes for the wrong reason.
@@ -35,23 +34,6 @@ resolver + indexer + database with one profile, and move the two hand-rolled loo
 the completion fix — if the store is genuinely populated, the counts stay 2 and 1.
 *Cost:* small. The risk is that some caller wants Active-at-call-time rather than at construction;
 `Program.cs` builds the indexer after the profile is selected, so it does not.
-
-**Trap 2 — `PathResolver.GetScriptRelativePath` returns `""` for an unnormalized path.** The
-method is documented as taking a `normalizedAbsolutePath`, and it silently returns the empty string
-when `PathUtil.IsUnder` fails — which a raw `C:\IW4\...` spelling does against a normalized root.
-The empty relative path then flows into `ScriptRecord.RelativePath`, and every include/import match
-downstream compares against `""` and never fires. Nothing throws; the workspace just behaves as
-though no file included anything.
-
-*Plan, in preference order.* (a) Normalize defensively inside the method — call
-`PathUtil.NormalizeAbsolute` on entry. It is idempotent, so the correct callers pay one string
-comparison and the incorrect ones stop being incorrect. (b) If that cost is unwanted on the indexing
-hot path, keep it strict but make the failure loud: return `null` instead of `""` so the type forces
-every caller to decide, and let `ScriptDatabase.BuildRecord` reject a null. (a) is the
-recommendation — it removes the trap rather than relocating it, and the same argument applies to
-`GetContext`, which takes the same parameter under the same unstated contract.
-*Verification:* a test that passes a mixed-case absolute path and asserts the relative path comes
-back non-empty; then the corpus run, since it is the only thing that exercises real paths at volume.
 
 ### Three probable CSC builtins are missing from the BO3 library
 

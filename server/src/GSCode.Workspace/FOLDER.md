@@ -266,6 +266,11 @@ surfaces.
   - `GetContext(absolutePath)` — classifies by prefix: mods\<name> → Mod, share\raw →
     Raw, else Workspace (matched folder, or the file's own directory). Mods/raw win over
     a workspace match, so opening the whole tools root needs no special-casing.
+  - `GetScriptRelativePath(absolutePath, context)` — the file's identity under its context's
+    root, the key an overlay shadows on. Both entry points NORMALIZE what they are given.
+    This one used to require it and returned `""` when it did not get it, which nothing
+    noticed: the empty string became `ScriptRecord.RelativePath`, every import match compared
+    against it and never fired, and the workspace behaved as though no file included anything.
   - `Resolve(context, scriptPathWithExtension)` — probes Mod: [mods\m, raw] · Raw: [raw]
     · Workspace: [base, other folders, raw]; first existing file wins. Rooted paths,
     drive letters, and ".." are rejected. Both slash styles accepted.

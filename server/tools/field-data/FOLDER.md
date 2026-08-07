@@ -105,8 +105,8 @@ the only game left holding `Allowleanleft` while every game inheriting from it g
   acronyms no English word list has either (AC130, FOF, EQ, GV, PS3, Dec20Terminal, BSPLine).
   Consulted BEFORE the segmenter and outranking it. A correction landing on a name the library
   already holds is a statement that the two were always one function, so the malformed spelling
-  is dropped and the incumbent kept — BO1's wordfile lists both `spawnapalmgroundflame` and
-  `SpawnNapalmGroundFlame`, and only the second is real.
+  is dropped and the incumbent kept — CoD4 and MW2 carry both `SetLookAtAnimNodes` and a
+  `setlookatnnimnodes` whose own example line calls it by the correct name.
 - `cod4_api_overrides.json` — corrections to signatures the documentation states incorrectly,
   applied over every other layer. Entry shape: `{ "name", "optionalFrom", "reason" }`. See
   [How an API entry is chosen](#how-an-api-entry-is-chosen).

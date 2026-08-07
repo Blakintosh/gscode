@@ -1,45 +1,6 @@
 {
   "game": "bo1",
-  "scriptsSwept": 2960,
-  "distinct": 1,
-  "functions": [
-    {
-      "name": "spawnapalmgroundflame",
-      "kind": "builtin",
-      "calls": 1,
-      "fileCount": 1,
-      "observedArgCounts": [
-        3
-      ],
-      "calledAsMethod": false,
-      "access": "unknown",
-      "languages": [
-        "Gsc"
-      ],
-      "sites": [
-        "maps\\_zombiemode_ability_napalm.gsc(450)"
-      ],
-      "argumentShapes": [
-        {
-          "position": 0,
-          "names": [],
-          "types": []
-        },
-        {
-          "position": 1,
-          "names": [
-            "fxToPlay"
-          ],
-          "types": []
-        },
-        {
-          "position": 2,
-          "names": [
-            "fxAngles"
-          ],
-          "types": []
-        }
-      ]
-    }
-  ]
+  "scriptsSwept": 2959,
+  "distinct": 0,
+  "functions": []
 }

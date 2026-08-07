@@ -369,6 +369,30 @@ public class BuiltinHarvestTests
     }
 
     /// <summary>
+    /// Whether a script is part of the game's build. A distribution ships files nothing links --
+    /// unfinished modes, cut features, copies left behind -- and they are not evidence about the
+    /// engine. Their calls resolve to nothing for the ordinary reason that nobody ever ran them, so
+    /// letting them into this sweep turns an abandoned file's mistakes into engine functions.
+    /// </summary>
+    private static bool IsLinked(string path)
+    {
+        foreach ( string unlinked in s_unlinkedScripts )
+        {
+            if ( path.EndsWith(unlinked, StringComparison.OrdinalIgnoreCase) )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static readonly string[] s_unlinkedScripts =
+    [
+        @"maps\_zombiemode_ability_napalm.gsc",
+    ];
+
+    /// <summary>
     /// The same sweep for the games that keep their scripts outside the tools install. CoD4 is the
     /// one that matters today: its library was just rebuilt from the documentation pages, so this is
     /// what says which engine functions those pages do not cover.
@@ -393,7 +417,7 @@ public class BuiltinHarvestTests
                 _output.WriteLine($"{profile.ShortName}: no builtin library, so only script misses are visible.");
             }
 
-            IReadOnlyList<string> scripts = GameCorpusFixture.Scripts(corpus);
+            IReadOnlyList<string> scripts = [.. GameCorpusFixture.Scripts(corpus).Where(static path => IsLinked(path))];
             PathResolver resolver = GameCorpusFixture.Resolver(corpus);
             NameTable names = new();
 

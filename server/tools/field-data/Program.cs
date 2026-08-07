@@ -1129,8 +1129,9 @@ static int RecaseReconstructedNames(
         // The curated correction outranks anything the words can produce -- that is the whole reason
         // it exists. A correction that lands on a name the library ALREADY holds is not a rename but
         // a statement that the two were always one function, so the malformed spelling is dropped
-        // and the entry already there is kept: bo1's wordfile lists both spawnapalmgroundflame and
-        // SpawnNapalmGroundFlame, and only the second is real (BO3 documents it).
+        // and the entry already there is kept. CoD4 and MW2 carry both SetLookAtAnimNodes and a
+        // `setlookatnnimnodes` whose own example line calls it by the correct name -- one
+        // documentation page imported twice, once with the name mangled.
         if ( curatedCasing.TryGetValue(name, out string? curated) )
         {
             if ( !string.Equals(curated, name, StringComparison.Ordinal) )

@@ -1,7 +1,7 @@
 {
   "game": "bo1",
-  "scriptsSwept": 2960,
-  "distinct": 8,
+  "scriptsSwept": 2959,
+  "distinct": 9,
   "functions": [
     {
       "name": "maindebug",
@@ -58,6 +58,33 @@
           "position": 2,
           "names": [],
           "types": []
+        }
+      ]
+    },
+    {
+      "name": "set_napalm_status",
+      "kind": "script",
+      "calls": 2,
+      "fileCount": 1,
+      "observedArgCounts": [
+        1
+      ],
+      "calledAsMethod": true,
+      "access": "unknown",
+      "languages": [
+        "Gsc"
+      ],
+      "sites": [
+        "maps\\_zombiemode_ability.gsc(276)",
+        "maps\\_zombiemode_ability.gsc(309)"
+      ],
+      "argumentShapes": [
+        {
+          "position": 0,
+          "names": [],
+          "types": [
+            "string"
+          ]
         }
       ]
     },

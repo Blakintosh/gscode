@@ -12613,17 +12613,6 @@
     ]
   },
   {
-    "name": "spawnapalmgroundflame",
-    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 3; access unknown); no documented CoD4 or Black Ops III signature was available.",
-    "overloads": [],
-    "flags": [
-      "aiGenerated"
-    ],
-    "remarks": [
-      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 3, access unknown. First sites: maps\\_zombiemode_ability_napalm.gsc(450). The name is known to exist; its signature remains undocumented."
-    ]
-  },
-  {
     "name": "PlayClientNapalm",
     "description": "Plays the client sided part of the Napalm.",
     "overloads": [

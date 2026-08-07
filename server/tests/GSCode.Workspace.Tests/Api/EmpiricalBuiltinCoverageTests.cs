@@ -15,26 +15,6 @@ public class EmpiricalBuiltinCoverageTests
 {
     private static readonly string s_apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
 
-    /// <summary>
-    /// Harvest candidates that are deliberately NOT in the library, because they are not engine
-    /// functions at all. Each needs the evidence beside it: the rule this test enforces is that a
-    /// name the corpus cannot explain gets curated in, and an exception to it must be argued, not
-    /// assumed.
-    ///
-    /// <c>spawnapalmgroundflame</c> — a typo in one of BO1's own scripts. Both call sites pass the
-    /// same three arguments, and the correctly spelled twin is two directories away:
-    /// <c>maps\mp\_napalm.gsc(479)</c> writes <c>self SpawnNapalmGroundFlame( pos-(0,0,16),
-    /// fxToPlay, fxAngles )</c> while <c>maps\_zombiemode_ability_napalm.gsc(450)</c> is a copy that
-    /// lost the 'n' and the <c>self</c>. Curating it would turn a broken line in a shipped script
-    /// into a documented engine function, which is precisely the mistake
-    /// <c>BuiltinHarvestTests</c> warns about when it says frequency is the only discriminator
-    /// between a typo and a missing builtin — one call in one file being the tell.
-    /// </summary>
-    private static readonly HashSet<string> s_notEngineFunctions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "spawnapalmgroundflame",
-    };
-
     [Theory]
     [InlineData("bo1")]
     [InlineData("waw")]
@@ -54,16 +34,6 @@ public class EmpiricalBuiltinCoverageTests
                 BuiltinApi api = string.Equals(language.GetString(), "Csc", StringComparison.OrdinalIgnoreCase)
                     ? csc
                     : gsc;
-
-                if ( s_notEngineFunctions.Contains(name) )
-                {
-                    // An exclusion that has quietly become wrong is worse than none, so it is
-                    // asserted in both directions: still reported by the harvest, still absent here.
-                    Assert.True(
-                        api.Find(name) is null,
-                        $"{shortName} '{name}' is listed as not an engine function but IS in the library — remove it from one or the other");
-                    continue;
-                }
 
                 Assert.True(
                     api.Find(name) is not null,

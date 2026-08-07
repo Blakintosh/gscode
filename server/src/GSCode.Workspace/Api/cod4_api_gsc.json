@@ -2958,7 +2958,7 @@
       ]
     },
     {
-      "name": "disablegrenadebounce",
+      "name": "DisableGrenadeBounce",
       "description": "Disallow grenades bouncing off of this entity",
       "overloads": [
         {
@@ -3405,7 +3405,7 @@
       ]
     },
     {
-      "name": "enablegrenadebounce",
+      "name": "EnableGrenadeBounce",
       "description": "Allow grenades to bounce off of this entity",
       "overloads": [
         {
@@ -14600,24 +14600,6 @@
       ],
       "example": "eFlak88 SetLookAtEnt( eFlaktarget );",
       "module": "Vehicles",
-      "flags": [
-        "documented"
-      ]
-    },
-    {
-      "name": "setlookatnnimnodes",
-      "description": "Set the animation nodes for this actor for looking at things to the left and right.",
-      "overloads": [
-        {
-          "calledOn": {
-            "name": "self",
-            "description": "An actor"
-          },
-          "parameters": []
-        }
-      ],
-      "example": "self setLookAtAnimNodes(%look_straight, %look_left, %look_right);",
-      "module": "AI",
       "flags": [
         "documented"
       ]

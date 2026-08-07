@@ -38,7 +38,7 @@
   "setdvarifuninitialized": "SetDvarIfUninitialized",
   "seteqbands": "SetEQBands",
   "sethalfresparticles": "SetHalfResParticles",
-  "setlookatnnimnodes": "SetLookAtNnimNodes",
+  "setlookatnnimnodes": "SetLookAtAnimNodes",
   "setmotiontrackervisible": "SetMotionTrackerVisible",
   "setplayerintelfound": "SetPlayerIntelFound",
   "setrearviewrenderenabled": "SetRearViewRenderEnabled",

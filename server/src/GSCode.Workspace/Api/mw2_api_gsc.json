@@ -19993,24 +19993,6 @@
       ]
     },
     {
-      "name": "SetLookAtNnimNodes",
-      "description": "Set the animation nodes for this actor for looking at things to the left and right.",
-      "overloads": [
-        {
-          "calledOn": {
-            "name": "self",
-            "description": "An actor"
-          },
-          "parameters": []
-        }
-      ],
-      "example": "self setLookAtAnimNodes(%look_straight, %look_left, %look_right);",
-      "module": "AI",
-      "flags": [
-        "documented"
-      ]
-    },
-    {
       "name": "SetLookAtText",
       "description": "Set look at text for entity.",
       "overloads": [

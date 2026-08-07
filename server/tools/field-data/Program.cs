@@ -1199,6 +1199,7 @@ static void RecaseArtifactInPlace(string apiDirectory, string outputPath, string
     Dictionary<string, string> curatedCasing = LoadNameCasing(Path.GetDirectoryName(curatedPath) ?? "", prefix, "gsc");
 
     int recased = 0;
+    List<JsonNode?> merged = [];
     foreach ( JsonNode? entry in api )
     {
         if ( entry is not JsonObject function
@@ -1211,11 +1212,31 @@ static void RecaseArtifactInPlace(string apiDirectory, string outputPath, string
             ? curated
             : RecasedName(current, vocabulary, wholeNames, neverCapitalized);
 
-        if ( corrected is not null )
+        if ( corrected is null )
+        {
+            continue;
+        }
+
+        // Same merge rule as the other two paths: a correction onto a name the library already
+        // holds says the two were always one function. CoD4 carries both SetLookAtAnimNodes, fully
+        // documented, and a `setlookatnnimnodes` whose own example calls it by the correct name --
+        // one doc page imported twice, once with the name mangled.
+        int incumbent = IndexOfEntry(api, corrected);
+        if ( incumbent >= 0 && incumbent != api.IndexOf(entry) )
+        {
+            merged.Add(entry);
+        }
+        else
         {
             function["name"] = corrected;
-            recased++;
         }
+
+        recased++;
+    }
+
+    foreach ( JsonNode? entry in merged )
+    {
+        api.Remove(entry);
     }
 
     if ( recased > 0 )
@@ -1223,7 +1244,7 @@ static void RecaseArtifactInPlace(string apiDirectory, string outputPath, string
         WriteJson(outputPath, root);
     }
 
-    Console.WriteLine($"  {prefix} recased in place: {recased}");
+    Console.WriteLine($"  {prefix} recased in place: {recased} ({merged.Count} merged into an entry already present)");
 }
 
 // The hand-corrected spelling for a name the word list cannot reach, keyed lower case.

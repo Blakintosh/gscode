@@ -315,6 +315,18 @@ public class BuiltinHarvestTests
                     : scriptMisses;
 
                 string name = NameFrom(diagnostic);
+
+                // A known misspelling of a real function is not a candidate for anything. Asserted
+                // rather than assumed: if the name it points at is not in the library, the entry is
+                // stale and saying so is better than silently swallowing a finding.
+                if ( diagnostic.Code == GscDiagnosticCode.BuiltinFunctionNotFound
+                    && s_knownMisspellings.TryGetValue(name, out string? intended) )
+                {
+                    Assert.True(
+                        apiSet.For(language).Find(intended) is not null,
+                        $"'{name}' is recorded as a misspelling of '{intended}', which is not in the library");
+                    continue;
+                }
                 // Relative to the corpus root: an absolute path names this machine, and the
                 // report is meant to be read and shared.
                 string site = $"{Path.GetRelativePath(root, path)}({diagnostic.Range.Start.Line + 1})";
@@ -369,28 +381,28 @@ public class BuiltinHarvestTests
     }
 
     /// <summary>
-    /// Whether a script is part of the game's build. A distribution ships files nothing links --
-    /// unfinished modes, cut features, copies left behind -- and they are not evidence about the
-    /// engine. Their calls resolve to nothing for the ordinary reason that nobody ever ran them, so
-    /// letting them into this sweep turns an abandoned file's mistakes into engine functions.
+    /// Names that are a MISSPELLING of a function the library already has, not a function the
+    /// library lacks. Keyed by the broken spelling, valued with the real one.
+    ///
+    /// The sweep cannot tell the two apart on its own -- an unqualified call that resolves to
+    /// nothing looks the same either way -- and getting it wrong is expensive in one direction:
+    /// curating a typo writes it into the library as an engine function, which is how one of these
+    /// got there. Frequency is the usual discriminator, and here there is better evidence still,
+    /// since the correctly spelled call is in the same distribution with the same arguments.
+    ///
+    /// This is deliberately NOT done by dropping the file from the sweep. That file is still
+    /// indexed and still linked against: removing it only moved the problem, since another script
+    /// calls into it and lost its target, turning one wrong builtin finding into a wrong SCRIPT
+    /// finding (set_napalm_status). The name is the defect, so the name is what gets excluded.
+    ///
+    /// The real spelling is asserted to exist, so an entry cannot outlive the function it points at.
     /// </summary>
-    private static bool IsLinked(string path)
+    private static readonly Dictionary<string, string> s_knownMisspellings = new(StringComparer.OrdinalIgnoreCase)
     {
-        foreach ( string unlinked in s_unlinkedScripts )
-        {
-            if ( path.EndsWith(unlinked, StringComparison.OrdinalIgnoreCase) )
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static readonly string[] s_unlinkedScripts =
-    [
-        @"maps\_zombiemode_ability_napalm.gsc",
-    ];
+        // maps\_zombiemode_ability_napalm.gsc(450) is a copy of maps\mp\_napalm.gsc(479) that lost
+        // the 'n' and the `self`; both pass the same three arguments.
+        ["spawnapalmgroundflame"] = "SpawnNapalmGroundFlame",
+    };
 
     /// <summary>
     /// The same sweep for the games that keep their scripts outside the tools install. CoD4 is the
@@ -417,7 +429,7 @@ public class BuiltinHarvestTests
                 _output.WriteLine($"{profile.ShortName}: no builtin library, so only script misses are visible.");
             }
 
-            IReadOnlyList<string> scripts = [.. GameCorpusFixture.Scripts(corpus).Where(static path => IsLinked(path))];
+            IReadOnlyList<string> scripts = GameCorpusFixture.Scripts(corpus);
             PathResolver resolver = GameCorpusFixture.Resolver(corpus);
             NameTable names = new();
 

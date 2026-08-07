@@ -23,6 +23,12 @@ ScriptDoc and no headers; bo3 is `#using`/`#namespace`, `/@ @/` and the only gam
 waw, mw2 and bo1 add roughly 6,400 files and about six minutes to the suite without adding a
 distinct grammar shape, so they are swept only when a change is specific to one of them.
 
+Two facts name **bo1** as well, and for the same reason both times: the quantity they measure scales
+with corpus SIZE rather than with grammar, and bo1 is the only corpus large enough to show it.
+`ColdIndex_WhereTheTimeGoes` wants its 160,382-file raw tree for enumeration cost;
+`Completion_WhereTheTimeGoes` wants its 2,963 scripts because every query on that path reads the
+record store. Adding a game to a sweep needs an argument of that shape — not a wish for more data.
+
 Their corpus roots are read from `GSCODE_CORPUS_<GAME>`. Those variables are usually set at the
 USER level, so a child process inherits every game whether you want it or not — clear the three you
 are not sweeping, or `GameCorpusFixture.Available()` will pick them up.
@@ -94,6 +100,63 @@ narrows WHERE to look and decides nothing.
 Read the shares rather than the absolute milliseconds: the per-lint breakdown needs
 `-p:GscodeInstrumentation=true`, which costs something itself, and this sweep is sequential where
 the corpus one is parallel.
+
+## Measured: COMPLETION, and why it is NOT worth optimising
+
+`CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced
+call sites per file, with a finished index, the parse done outside the stopwatch, and each position
+warmed before the timed run. One row per REQUEST rather than per file, because the question is
+whether one keystroke is answered in time and a per-file sum answers nothing anybody waits for.
+
+It was written expecting to find the lint problem again. `FunctionsInNamespace` walks the whole
+record store once **per namespace**, and on a namespace dialect statement-scope completion calls it
+once per own namespace *plus* once per imported namespace — the same shape as the `LookupFunctions`
+scan above, on a path with no debounce behind it.
+
+The shape is real and it is visible in the numbers. It does not matter.
+
+| | requests | median | p90 | p99 | max |
+|---|---:|---:|---:|---:|---:|
+| bo3 (1,085 files, **namespace** dialect) | 6,381 | 0.42 ms | 2.03 ms | **4.22 ms** | 24.2 ms |
+| cod4 (904 files, merge dialect) | 6,944 | 0.20 ms | 0.34 ms | 1.03 ms | 16.4 ms |
+| bo1 (2,963 files, merge dialect) | 21,157 | 0.44 ms | 0.64 ms | 1.47 ms | 31.4 ms |
+
+**BO1 is the control, and it is the row that settles this.** Its store is 2.7x BO3's, and its p99 is
+a third of BO3's. Store size is not what drives the cost — the per-namespace multiplier is, and BO3
+is the only `ImportStyle.Namespace` profile. So the quadratic is exactly where it was predicted to
+be, and a corpus nearly three times larger is *faster* because it takes the single-walk
+`FunctionsInIncludeScope` arm instead.
+
+The absolute numbers are why nothing was changed. A p99 of 4.22 ms sits some fifty times inside the
+250 ms debounce, and two orders of magnitude inside human typing cadence. The lint fix was worth
+13–19x because the tail was over the debounce; this tail is not close to it. An index here would be
+correct, would measurably reduce a number, and would buy the user nothing.
+
+**What would change the answer**, since this is a snapshot and not a guarantee:
+
+- A namespace dialect with a much larger store. The multiplier is per imported namespace, so it
+  grows with store size *and* with import count together — BO3's stock scripts are the only
+  namespace corpus that exists, and a large mod is not bounded by them.
+- Any new caller putting `FunctionsInNamespace` on a per-reference footing rather than a
+  per-namespace one. That is the difference between this result and the lint one: same walk, an
+  order of magnitude more of them.
+
+If either happens, the fix is already designed — a `NamespaceIndex` on `LanguageStore` keyed on
+`FunctionSymbol.Namespace`, built exactly like `DeclarationIndex`, plus a `RelativePathIndex` for
+the three queries that scan every record to find the ~20 a `#using` list names. Re-run this sweep
+first; the reason it exists is that the same reasoning predicted a problem here and was wrong about
+the size of it.
+
+### Reading the entry-count line
+
+The sweep also reports how many entries came back, and that line is what makes the timings
+admissible rather than decorative. `Complete` has around ten arms and most return almost nothing —
+a path segment list, an asset type list, an empty result where the position was not a completion
+site. Only the statement-scope arm queries the store.
+
+At 66–74% of requests returning over 500 entries (median 847–1,404), the sample is landing on that
+arm. A sweep that quietly hit cheap arms would report fast completions and have measured nothing,
+which is the partial-index failure above arriving by a different route.
 
 ## Measured: COLD INDEXING, the first-run path
 

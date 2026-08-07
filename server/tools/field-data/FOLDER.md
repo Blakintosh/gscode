@@ -100,6 +100,13 @@ documentation this run has no source for; recasing needs neither a documentation
 so CoD4 -- the one library that cannot be rebuilt without `GSCODE_COD4_DOCS` -- would otherwise be
 the only game left holding `Allowleanleft` while every game inheriting from it got AllowLeanLeft.
 
+- `{game}_{gsc,csc}_name_casing.json` — the hand-corrected spelling for a name the word list
+  cannot reach: ordinary English no CoD library spells (average, cast, knife, mount) and engine
+  acronyms no English word list has either (AC130, FOF, EQ, GV, PS3, Dec20Terminal, BSPLine).
+  Consulted BEFORE the segmenter and outranking it. A correction landing on a name the library
+  already holds is a statement that the two were always one function, so the malformed spelling
+  is dropped and the incumbent kept — BO1's wordfile lists both `spawnapalmgroundflame` and
+  `SpawnNapalmGroundFlame`, and only the second is real.
 - `cod4_api_overrides.json` — corrections to signatures the documentation states incorrectly,
   applied over every other layer. Entry shape: `{ "name", "optionalFrom", "reason" }`. See
   [How an API entry is chosen](#how-an-api-entry-is-chosen).

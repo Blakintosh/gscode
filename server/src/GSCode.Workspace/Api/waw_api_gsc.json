@@ -168,7 +168,7 @@
       ]
     },
     {
-      "name": "addnodetocurve",
+      "name": "AddNodeToCurve",
       "overloads": []
     },
     {
@@ -1577,7 +1577,7 @@
       "overloads": []
     },
     {
-      "name": "buildcurve",
+      "name": "BuildCurve",
       "overloads": []
     },
     {
@@ -1747,7 +1747,7 @@
       ]
     },
     {
-      "name": "cameralinktocurve",
+      "name": "CameraLinkToCurve",
       "overloads": []
     },
     {
@@ -3044,7 +3044,7 @@
       ]
     },
     {
-      "name": "coopinfo",
+      "name": "CoopInfo",
       "description": "Observed in the waw shipped script corpus (5 calls across 2 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -3718,7 +3718,7 @@
       ]
     },
     {
-      "name": "disableberserker",
+      "name": "DisableBerserker",
       "description": "Observed in the waw shipped script corpus (3 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4058,7 +4058,7 @@
       ]
     },
     {
-      "name": "drawcurve",
+      "name": "DrawCurve",
       "overloads": []
     },
     {
@@ -4221,7 +4221,7 @@
       ]
     },
     {
-      "name": "enableberserker",
+      "name": "EnableBerserker",
       "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -5602,7 +5602,7 @@
       ]
     },
     {
-      "name": "freecurve",
+      "name": "FreeCurve",
       "overloads": []
     },
     {
@@ -6176,7 +6176,7 @@
       ]
     },
     {
-      "name": "getcurrentarcadehighscore",
+      "name": "GetCurrentArcadeHighScore",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -6241,15 +6241,15 @@
       ]
     },
     {
-      "name": "getcurve",
+      "name": "GetCurve",
       "overloads": []
     },
     {
-      "name": "getcurvecurpos",
+      "name": "GetCurveCurPos",
       "overloads": []
     },
     {
-      "name": "getcurveserverpos",
+      "name": "GetCurveServerPos",
       "overloads": []
     },
     {
@@ -6278,7 +6278,7 @@
       ]
     },
     {
-      "name": "getdate",
+      "name": "GetDate",
       "overloads": []
     },
     {
@@ -7406,7 +7406,7 @@
       ]
     },
     {
-      "name": "getpersistentprofilevar",
+      "name": "GetPersistentProfileVar",
       "description": "Observed in the waw shipped script corpus (7 calls across 2 files; argument counts 1, 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7473,7 +7473,7 @@
       ]
     },
     {
-      "name": "getplayersquad",
+      "name": "GetPlayersQuad",
       "description": "Observed in the waw shipped script corpus (7 calls across 3 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7484,7 +7484,7 @@
       ]
     },
     {
-      "name": "getplayersquadid",
+      "name": "GetPlayersQuadID",
       "description": "Observed in the waw shipped script corpus (10 calls across 6 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -7990,7 +7990,7 @@
       ]
     },
     {
-      "name": "gettreadhealth",
+      "name": "GetTreadHealth",
       "description": "Observed in the waw shipped script corpus (3 calls across 1 files; argument counts 1; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8524,7 +8524,7 @@
       ]
     },
     {
-      "name": "hascollectible",
+      "name": "HasCollectible",
       "overloads": []
     },
     {
@@ -8818,11 +8818,11 @@
       ]
     },
     {
-      "name": "isbeingwatched",
+      "name": "IsBeingWatched",
       "overloads": []
     },
     {
-      "name": "iscollectors",
+      "name": "IsCollectors",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -8833,7 +8833,7 @@
       ]
     },
     {
-      "name": "iscoopepd",
+      "name": "IsCoopEPD",
       "description": "Observed in the waw shipped script corpus (6 calls across 5 files; argument counts 0; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -9482,7 +9482,7 @@
       ]
     },
     {
-      "name": "issquadleader",
+      "name": "IsSquadLeader",
       "description": "Observed in the waw shipped script corpus (4 calls across 3 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -10172,7 +10172,7 @@
       "example": "panzer LaunchVehicle( (0,0,100) )"
     },
     {
-      "name": "leavesquad",
+      "name": "LeaveSquad",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -10474,7 +10474,7 @@
       ]
     },
     {
-      "name": "locksquad",
+      "name": "LockSquad",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -11587,7 +11587,7 @@
       ]
     },
     {
-      "name": "netupdate",
+      "name": "NetUpdate",
       "overloads": []
     },
     {
@@ -11657,7 +11657,7 @@
       "confidence": "medium"
     },
     {
-      "name": "newsquadhudelem",
+      "name": "NewSquadHUDElem",
       "overloads": []
     },
     {
@@ -12153,7 +12153,7 @@
       ]
     },
     {
-      "name": "oktospawn",
+      "name": "OkToSpawn",
       "overloads": []
     },
     {
@@ -14058,7 +14058,7 @@
       "overloads": []
     },
     {
-      "name": "reportclientdisconnected",
+      "name": "ReportClientDisconnected",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -14101,7 +14101,7 @@
       "confidence": "high"
     },
     {
-      "name": "resetcurve",
+      "name": "ResetCurve",
       "overloads": []
     },
     {
@@ -15716,7 +15716,7 @@
       ]
     },
     {
-      "name": "setcollectible",
+      "name": "SetCollectible",
       "overloads": []
     },
     {
@@ -15816,7 +15816,7 @@
       ]
     },
     {
-      "name": "setcurvebspline",
+      "name": "SetCurveBSPLine",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -15827,23 +15827,23 @@
       ]
     },
     {
-      "name": "setcurvecameraent",
+      "name": "SetCurveCameraEnt",
       "overloads": []
     },
     {
-      "name": "setcurvenotifyent",
+      "name": "SetCurveNotifyEnt",
       "overloads": []
     },
     {
-      "name": "setcurverounded",
+      "name": "SetCurveRounded",
       "overloads": []
     },
     {
-      "name": "setcurvesmooth",
+      "name": "SetCurveSmooth",
       "overloads": []
     },
     {
-      "name": "setcurvespeed",
+      "name": "SetCurveSpeed",
       "overloads": []
     },
     {
@@ -16405,7 +16405,7 @@
       ]
     },
     {
-      "name": "setfakeentorg",
+      "name": "SetFakeEntOrg",
       "overloads": []
     },
     {
@@ -17538,7 +17538,7 @@
       ]
     },
     {
-      "name": "setlookatcurve",
+      "name": "SetLookAtCurve",
       "overloads": []
     },
     {
@@ -18005,7 +18005,7 @@
       ]
     },
     {
-      "name": "setpersistentprofilevar",
+      "name": "SetPersistentProfileVar",
       "description": "Observed in the waw shipped script corpus (3 calls across 2 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -18861,7 +18861,7 @@
       ]
     },
     {
-      "name": "setstatlbbyname",
+      "name": "SetStatLBByName",
       "description": "Observed in the waw shipped script corpus (45 calls across 10 files; argument counts 2, 3, 4; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -19415,7 +19415,7 @@
       ]
     },
     {
-      "name": "settransported",
+      "name": "SetTransported",
       "description": "Observed in the waw shipped script corpus (3 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -19840,7 +19840,7 @@
       "overloads": []
     },
     {
-      "name": "setvisibletosquad",
+      "name": "SetVisibleToSquad",
       "overloads": []
     },
     {
@@ -20127,7 +20127,7 @@
       ]
     },
     {
-      "name": "setwetness",
+      "name": "SetWetness",
       "description": "Observed in the waw shipped script corpus (8 calls across 4 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -21097,7 +21097,7 @@
       ]
     },
     {
-      "name": "startcurve",
+      "name": "StartCurve",
       "description": "Observed in the waw shipped script corpus (7 calls across 2 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -21343,7 +21343,7 @@
       ]
     },
     {
-      "name": "starttanning",
+      "name": "StartTanning",
       "overloads": []
     },
     {
@@ -21377,7 +21377,7 @@
       ]
     },
     {
-      "name": "startwatersheetfx",
+      "name": "StartWaterSheetFX",
       "overloads": []
     },
     {
@@ -21410,7 +21410,7 @@
       ]
     },
     {
-      "name": "stopburning",
+      "name": "StopBurning",
       "description": "Observed in the waw shipped script corpus (4 calls across 2 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -21432,7 +21432,7 @@
       ]
     },
     {
-      "name": "stopcurve",
+      "name": "StopCurve",
       "overloads": []
     },
     {
@@ -21767,7 +21767,7 @@
       ]
     },
     {
-      "name": "stopwatersheetfx",
+      "name": "StopWaterSheetFX",
       "overloads": []
     },
     {
@@ -22432,7 +22432,7 @@
       ]
     },
     {
-      "name": "transmittargetname",
+      "name": "TransmitTargetName",
       "description": "Observed in the waw shipped script corpus (10 calls across 6 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -22587,7 +22587,7 @@
       ]
     },
     {
-      "name": "unlocksquad",
+      "name": "UnlocksQuad",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -22598,7 +22598,7 @@
       ]
     },
     {
-      "name": "unsetcollectible",
+      "name": "UnSetCollectible",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -23224,7 +23224,7 @@
       ]
     },
     {
-      "name": "visionsetberserker",
+      "name": "VisionSetBerserker",
       "description": "Observed in the waw shipped script corpus (5 calls across 1 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -23345,11 +23345,11 @@
       ]
     },
     {
-      "name": "waterplop",
+      "name": "WaterPlop",
       "overloads": []
     },
     {
-      "name": "watersimenable",
+      "name": "WaterSimEnable",
       "overloads": []
     },
     {
@@ -23373,7 +23373,7 @@
       ]
     },
     {
-      "name": "weaponbayonetinfo",
+      "name": "WeaponBayonetInfo",
       "overloads": []
     },
     {
@@ -23469,7 +23469,7 @@
       ]
     },
     {
-      "name": "weaponhasbayonet",
+      "name": "WeaponHasBayonet",
       "overloads": []
     },
     {
@@ -23513,7 +23513,7 @@
       ]
     },
     {
-      "name": "weaponisgasweapon",
+      "name": "WeaponIsGasWeapon",
       "overloads": []
     },
     {
@@ -23697,7 +23697,7 @@
       ]
     },
     {
-      "name": "weaponmountable",
+      "name": "WeaponMountable",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [

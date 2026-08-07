@@ -545,7 +545,7 @@ static void GenerateWordfileApi(
             // already here and a word list from the other documented library -- so the one game
             // that can never be regenerated on a fresh clone would otherwise be the one game that
             // keeps `Allowleanleft` forever, while every game inheriting from it gets AllowLeanLeft.
-            RecaseArtifactInPlace(Path.GetDirectoryName(outputPath) ?? "", outputPath, prefix);
+            RecaseArtifactInPlace(Path.GetDirectoryName(outputPath) ?? "", outputPath, prefix, curatedPath);
             return;
         }
     }
@@ -663,7 +663,9 @@ static void GenerateWordfileApi(
         }
     }
 
-    int recased = RecaseReconstructedNames(Path.GetDirectoryName(outputPath) ?? "", outputPath, byName);
+    int recased = RecaseReconstructedNames(
+        Path.GetDirectoryName(outputPath) ?? "", outputPath, byName,
+        LoadNameCasing(Path.GetDirectoryName(curatedPath) ?? "", prefix, "gsc"));
     int corrected = ApplyOverrides(prefix, overridesPath, byName);
 
     List<object> all = [.. byName.OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(static pair => pair.Value)];
@@ -1109,7 +1111,8 @@ static Dictionary<string, object> SparseEmpiricalEntry(string game, EmpiricalBui
 //
 // Safe to do at all because BuiltinApi.Find is case-insensitive, so this changes what is DISPLAYED
 // and never what resolves.
-static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dictionary<string, object> byName)
+static int RecaseReconstructedNames(
+    string apiDirectory, string outputPath, Dictionary<string, object> byName, Dictionary<string, string> curatedCasing)
 {
     Dictionary<string, string> vocabulary = BuildNameVocabulary(apiDirectory, outputPath, out Dictionary<string, string> wholeNames, out HashSet<string> neverCapitalized);
     if ( vocabulary.Count == 0 )
@@ -1122,6 +1125,30 @@ static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dict
     {
         object entry = byName[key];
         string name = NameOf(entry);
+
+        // The curated correction outranks anything the words can produce -- that is the whole reason
+        // it exists. A correction that lands on a name the library ALREADY holds is not a rename but
+        // a statement that the two were always one function, so the malformed spelling is dropped
+        // and the entry already there is kept: bo1's wordfile lists both spawnapalmgroundflame and
+        // SpawnNapalmGroundFlame, and only the second is real (BO3 documents it).
+        if ( curatedCasing.TryGetValue(name, out string? curated) )
+        {
+            if ( !string.Equals(curated, name, StringComparison.Ordinal) )
+            {
+                if ( byName.ContainsKey(curated) && !string.Equals(curated, key, StringComparison.OrdinalIgnoreCase) )
+                {
+                    byName.Remove(key);
+                }
+                else
+                {
+                    byName[key] = WithName(entry, curated);
+                }
+
+                recased++;
+            }
+
+            continue;
+        }
 
         // Any name carrying no case information beyond its first letter, whatever its provenance.
         //
@@ -1150,7 +1177,7 @@ static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dict
 // Recases an artifact where it lies, for a game whose library cannot be rebuilt on this machine.
 // Reads and rewrites nothing but the name fields, so it is safe to run over a file holding
 // documentation this run has no source for.
-static void RecaseArtifactInPlace(string apiDirectory, string outputPath, string prefix)
+static void RecaseArtifactInPlace(string apiDirectory, string outputPath, string prefix, string curatedPath)
 {
     if ( !File.Exists(outputPath) )
     {
@@ -1169,12 +1196,22 @@ static void RecaseArtifactInPlace(string apiDirectory, string outputPath, string
         return;
     }
 
+    Dictionary<string, string> curatedCasing = LoadNameCasing(Path.GetDirectoryName(curatedPath) ?? "", prefix, "gsc");
+
     int recased = 0;
     foreach ( JsonNode? entry in api )
     {
-        if ( entry is JsonObject function
-            && function["name"]?.GetValue<string>() is string current
-            && RecasedName(current, vocabulary, wholeNames, neverCapitalized) is string corrected )
+        if ( entry is not JsonObject function
+            || function["name"]?.GetValue<string>() is not string current )
+        {
+            continue;
+        }
+
+        string? corrected = curatedCasing.TryGetValue(current, out string? curated) && curated != current
+            ? curated
+            : RecasedName(current, vocabulary, wholeNames, neverCapitalized);
+
+        if ( corrected is not null )
         {
             function["name"] = corrected;
             recased++;
@@ -1187,6 +1224,38 @@ static void RecaseArtifactInPlace(string apiDirectory, string outputPath, string
     }
 
     Console.WriteLine($"  {prefix} recased in place: {recased}");
+}
+
+// The hand-corrected spelling for a name the word list cannot reach, keyed lower case.
+//
+// The segmenter can only spell a name out of words the DOCUMENTED libraries contain, and a long
+// tail does not survive that: ordinary English nothing in CoD spells (average, cast, knife, mount),
+// and engine acronyms no English word list has either (AC130, FOF, EQ, GV, PS3, Dec20Terminal).
+// Those are written down here instead, per game and per language.
+//
+// Curated, not generated, and that is the point -- the alternative was shipping a 370,000-word
+// English dictionary to guess at 207 names, which gets the acronyms wrong exactly where a human
+// gets them right. It was used ONCE to draft this, and its output was corrected by hand before it
+// landed; nothing here depends on it now, so regeneration stays offline and reproducible.
+static Dictionary<string, string> LoadNameCasing(string curatedDir, string prefix, string language)
+{
+    string path = Path.Combine(curatedDir, $"{prefix}_{language}_name_casing.json");
+    Dictionary<string, string> casing = new(StringComparer.OrdinalIgnoreCase);
+    if ( !File.Exists(path) )
+    {
+        return casing;
+    }
+
+    using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+    foreach ( JsonProperty entry in document.RootElement.EnumerateObject() )
+    {
+        if ( entry.Value.ValueKind == JsonValueKind.String && entry.Value.GetString() is string corrected )
+        {
+            casing[entry.Name] = corrected;
+        }
+    }
+
+    return casing;
 }
 
 // The engine's spelling for one flat name, or null when it should be left alone.
@@ -1981,17 +2050,45 @@ static void GenerateClientApi(string prefix, string apiDir, string curatedDir, s
     Dictionary<string, string> clientVocabulary =
         BuildNameVocabulary(apiDir, clientPath, out Dictionary<string, string> clientWholeNames, out HashSet<string> clientNeverCapitalized);
 
-    if ( clientVocabulary.Count > 0 )
+    Dictionary<string, string> clientCasing = LoadNameCasing(curatedDir, prefix, "csc");
+    for ( int index = api.Count - 1; index >= 0; index-- )
     {
-        foreach ( JsonNode? entry in api )
+        if ( api[index] is not JsonObject function
+            || function["name"]?.GetValue<string>() is not string current )
         {
-            if ( entry is JsonObject function
-                && function["name"]?.GetValue<string>() is string current
-                && RecasedName(current, clientVocabulary, clientWholeNames, clientNeverCapitalized) is string corrected )
+            continue;
+        }
+
+        // Curated first, then the words -- and a curated correction onto a name already present
+        // drops this entry rather than duplicating it. See RecaseReconstructedNames.
+        if ( clientCasing.TryGetValue(current, out string? curated) )
+        {
+            if ( string.Equals(curated, current, StringComparison.Ordinal) )
             {
-                function["name"] = corrected;
-                clientRecased++;
+                continue;
             }
+
+            // Any OTHER entry, not this one -- the lookup is case-insensitive, so a plain
+            // "does the corrected name exist" finds the very entry being corrected and deletes it.
+            int incumbent = IndexOfEntry(api, curated);
+            if ( incumbent >= 0 && incumbent != index )
+            {
+                api.RemoveAt(index);
+            }
+            else
+            {
+                function["name"] = curated;
+            }
+
+            clientRecased++;
+            continue;
+        }
+
+        if ( clientVocabulary.Count > 0
+            && RecasedName(current, clientVocabulary, clientWholeNames, clientNeverCapitalized) is string corrected )
+        {
+            function["name"] = corrected;
+            clientRecased++;
         }
     }
 

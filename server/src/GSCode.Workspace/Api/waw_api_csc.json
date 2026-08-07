@@ -1074,7 +1074,7 @@
       ]
     },
     {
-      "name": "getpersistentprofilevar",
+      "name": "GetPersistentProfileVar",
       "description": "Observed in the waw shipped script corpus (7 calls across 2 files; argument counts 1, 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -2965,7 +2965,7 @@
       ]
     },
     {
-      "name": "setfakeentorg",
+      "name": "SetFakeEntOrg",
       "overloads": []
     },
     {
@@ -3059,7 +3059,7 @@
       ]
     },
     {
-      "name": "setpersistentprofilevar",
+      "name": "SetPersistentProfileVar",
       "description": "Observed in the waw shipped script corpus (3 calls across 2 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4052,7 +4052,7 @@
       "confidence": "high"
     },
     {
-      "name": "getbusname",
+      "name": "GetBusName",
       "description": "Observed in the waw shipped script corpus (8 calls across 2 files; argument counts 1, 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4063,7 +4063,7 @@
       ]
     },
     {
-      "name": "getbuscount",
+      "name": "GetBusCount",
       "description": "Observed in the waw shipped script corpus (6 calls across 2 files; argument counts 0; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4074,7 +4074,7 @@
       ]
     },
     {
-      "name": "setbusvolume",
+      "name": "SetBusVolume",
       "description": "Observed in the waw shipped script corpus (4 calls across 2 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4085,7 +4085,7 @@
       ]
     },
     {
-      "name": "setbusfadetime",
+      "name": "SetBusFadeTime",
       "description": "Observed in the waw shipped script corpus (4 calls across 2 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4187,7 +4187,7 @@
       "confidence": "medium"
     },
     {
-      "name": "enablewatersheetfx",
+      "name": "EnableWaterSheetFX",
       "description": "Observed in the waw shipped script corpus (3 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4280,7 +4280,7 @@
       "confidence": "high"
     },
     {
-      "name": "getlefttreadhealth",
+      "name": "GetLeftTreadHealth",
       "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4291,7 +4291,7 @@
       ]
     },
     {
-      "name": "getrighttreadhealth",
+      "name": "GetRightTreadHealth",
       "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [
@@ -4392,7 +4392,7 @@
       "confidence": "high"
     },
     {
-      "name": "setdvarbool",
+      "name": "SetDvarBool",
       "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
       "overloads": [],
       "flags": [

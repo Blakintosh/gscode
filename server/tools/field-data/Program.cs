@@ -539,6 +539,13 @@ static void GenerateWordfileApi(
         {
             Console.WriteLine(
                 $"  {prefix} REFUSING to regenerate: {outputPath} holds {existing} documented entries, and this run has neither a documentation root nor a sibling to inherit from. Set the docs environment variable, or delete the file to rebuild it from names alone.");
+
+            // Refusing to REBUILD is not a reason to refuse to CORRECT. Recasing needs no
+            // documentation root and no sibling to inherit from -- it reads the artifact that is
+            // already here and a word list from the other documented library -- so the one game
+            // that can never be regenerated on a fresh clone would otherwise be the one game that
+            // keeps `Allowleanleft` forever, while every game inheriting from it gets AllowLeanLeft.
+            RecaseArtifactInPlace(Path.GetDirectoryName(outputPath) ?? "", outputPath, prefix);
             return;
         }
     }
@@ -1104,7 +1111,7 @@ static Dictionary<string, object> SparseEmpiricalEntry(string game, EmpiricalBui
 // and never what resolves.
 static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dictionary<string, object> byName)
 {
-    Dictionary<string, string> vocabulary = BuildNameVocabulary(apiDirectory, outputPath, out Dictionary<string, string> wholeNames);
+    Dictionary<string, string> vocabulary = BuildNameVocabulary(apiDirectory, outputPath, out Dictionary<string, string> wholeNames, out HashSet<string> neverCapitalized);
     if ( vocabulary.Count == 0 )
     {
         return 0;
@@ -1126,7 +1133,7 @@ static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dict
         //
         // An underscore name (missile_setTargetEnt) is left alone: nothing in the documented
         // libraries uses that convention, so there is no evidence for how to case it.
-        if ( RecasedName(name, vocabulary, wholeNames) is not string replacement )
+        if ( RecasedName(name, vocabulary, wholeNames, neverCapitalized) is not string replacement )
         {
             continue;
         }
@@ -1138,6 +1145,48 @@ static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dict
     }
 
     return recased;
+}
+
+// Recases an artifact where it lies, for a game whose library cannot be rebuilt on this machine.
+// Reads and rewrites nothing but the name fields, so it is safe to run over a file holding
+// documentation this run has no source for.
+static void RecaseArtifactInPlace(string apiDirectory, string outputPath, string prefix)
+{
+    if ( !File.Exists(outputPath) )
+    {
+        return;
+    }
+
+    JsonNode? root = JsonNode.Parse(File.ReadAllText(outputPath));
+    if ( root?["api"]?.AsArray() is not JsonArray api )
+    {
+        return;
+    }
+
+    Dictionary<string, string> vocabulary = BuildNameVocabulary(apiDirectory, outputPath, out Dictionary<string, string> wholeNames, out HashSet<string> neverCapitalized);
+    if ( vocabulary.Count == 0 )
+    {
+        return;
+    }
+
+    int recased = 0;
+    foreach ( JsonNode? entry in api )
+    {
+        if ( entry is JsonObject function
+            && function["name"]?.GetValue<string>() is string current
+            && RecasedName(current, vocabulary, wholeNames, neverCapitalized) is string corrected )
+        {
+            function["name"] = corrected;
+            recased++;
+        }
+    }
+
+    if ( recased > 0 )
+    {
+        WriteJson(outputPath, root);
+    }
+
+    Console.WriteLine($"  {prefix} recased in place: {recased}");
 }
 
 // The engine's spelling for one flat name, or null when it should be left alone.
@@ -1152,7 +1201,8 @@ static int RecaseReconstructedNames(string apiDirectory, string outputPath, Dict
 // A documented library spelling this exact name wins outright over any reconstruction — unless that
 // spelling is itself the flat one being corrected, which is the Allowleanleft case: the entry IS its
 // own would-be source, so falling through to the words is the only way out.
-static string? RecasedName(string name, Dictionary<string, string> vocabulary, Dictionary<string, string> wholeNames)
+static string? RecasedName(
+    string name, Dictionary<string, string> vocabulary, Dictionary<string, string> wholeNames, HashSet<string> neverCapitalized)
 {
     if ( name.Length == 0
         || name[1..] != name[1..].ToLowerInvariant()
@@ -1162,11 +1212,31 @@ static string? RecasedName(string name, Dictionary<string, string> vocabulary, D
     }
 
     string lowered = name.ToLowerInvariant();
-    string? replacement = wholeNames.TryGetValue(lowered, out string? exact) && exact[1..] != exact[1..].ToLowerInvariant()
-        ? exact
-        : SegmentName(lowered, vocabulary);
+    if ( wholeNames.TryGetValue(lowered, out string? exact) && exact[1..] != exact[1..].ToLowerInvariant() )
+    {
+        return exact == name ? null : exact;
+    }
 
-    return replacement is null || replacement == name ? null : replacement;
+    string? replacement = SegmentName(lowered, vocabulary);
+    if ( replacement is null || replacement == name )
+    {
+        return null;
+    }
+
+    // A result of ONE word that differs only by its first letter has learned nothing. It happens
+    // because a flat source name splits into a single token -- itself -- which then looks like a
+    // word nothing can break down, so CoD4's own `disablegrenadebounce` came back as
+    // `Disablegrenadebounce`: not a spelling anybody uses, just the original defect with a capital
+    // on the front. Rejecting only the SINGLE-word case is what keeps DestroyGlass, whose "glass"
+    // is likewise known only from flat names but which still splits into two real words.
+    if ( replacement.Length == lowered.Length
+        && string.Equals(replacement[1..], lowered[1..], StringComparison.Ordinal)
+        && neverCapitalized.Contains(lowered) )
+    {
+        return null;
+    }
+
+    return replacement;
 }
 
 // The words the documented libraries are built from, keyed lower-case, valued with the spelling
@@ -1182,9 +1252,10 @@ static string? RecasedName(string name, Dictionary<string, string> vocabulary, D
 //     giving VectortoYaw and HideonClient. Requiring three sightings keeps genuine compounds the
 //     libraries use constantly (offset, 18 sightings) while dropping these one-offs.
 static Dictionary<string, string> BuildNameVocabulary(
-    string apiDirectory, string outputPath, out Dictionary<string, string> wholeNames)
+    string apiDirectory, string outputPath, out Dictionary<string, string> wholeNames, out HashSet<string> neverCapitalized)
 {
     wholeNames = new Dictionary<string, string>(StringComparer.Ordinal);
+    neverCapitalized = new HashSet<string>(StringComparer.Ordinal);
     Dictionary<string, string> vocabulary = new(StringComparer.Ordinal);
     if ( apiDirectory.Length == 0 )
     {
@@ -1206,10 +1277,6 @@ static Dictionary<string, string> BuildNameVocabulary(
 
         foreach ( string name in LoadApiEntries(path).Keys )
         {
-            // An underscore name contributes its WORDS but is never offered as a whole spelling: the
-            // underscore convention is a separate one and nothing says a reconstructed name follows
-            // it. Skipping them outright cost real vocabulary — "Drone" appears only in
-            // Missile_DroneSetVisible, so spawndrone had no correct split available.
             if ( !name.Contains('_', StringComparison.Ordinal) )
             {
                 wholeNames.TryAdd(name.ToLowerInvariant(), name);
@@ -1250,6 +1317,15 @@ static Dictionary<string, string> BuildNameVocabulary(
         // An acronym the libraries write in full caps (FX, AI, HUD) keeps that shape; anything else
         // is a word and takes an initial capital, since that is what every name here does with it.
         vocabulary[key] = winner.All(char.IsUpper) ? winner : char.ToUpperInvariant(winner[0]) + winner[1..];
+
+        // Whether the libraries ever wrote this word with a capital. A real word appears inside
+        // other names and is capitalized there (Clamp, in AngleClamp180); a whole FLAT name splits
+        // into one token that is only ever seen lower case, and that is the difference the
+        // single-word guard in RecasedName turns on.
+        if ( !sightings[key].Keys.Any(static spelling => char.IsUpper(spelling[0])) )
+        {
+            neverCapitalized.Add(key);
+        }
     }
 
     return vocabulary;
@@ -1903,7 +1979,7 @@ static void GenerateClientApi(string prefix, string apiDir, string curatedDir, s
     string clientPath = Path.Combine(apiDir, $"{prefix}_api_csc.json");
     int clientRecased = 0;
     Dictionary<string, string> clientVocabulary =
-        BuildNameVocabulary(apiDir, clientPath, out Dictionary<string, string> clientWholeNames);
+        BuildNameVocabulary(apiDir, clientPath, out Dictionary<string, string> clientWholeNames, out HashSet<string> clientNeverCapitalized);
 
     if ( clientVocabulary.Count > 0 )
     {
@@ -1911,7 +1987,7 @@ static void GenerateClientApi(string prefix, string apiDir, string curatedDir, s
         {
             if ( entry is JsonObject function
                 && function["name"]?.GetValue<string>() is string current
-                && RecasedName(current, clientVocabulary, clientWholeNames) is string corrected )
+                && RecasedName(current, clientVocabulary, clientWholeNames, clientNeverCapitalized) is string corrected )
             {
                 function["name"] = corrected;
                 clientRecased++;

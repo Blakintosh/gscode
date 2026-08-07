@@ -95,6 +95,11 @@ names are never touched: that is a separate convention with no documented exampl
 Safe because `BuiltinApi.Find` is case-insensitive, so this changes what is DISPLAYED, never what
 resolves.
 
+A game that REFUSES to regenerate is still recased, in place. Refusing to rebuild is about losing
+documentation this run has no source for; recasing needs neither a documentation root nor a sibling,
+so CoD4 -- the one library that cannot be rebuilt without `GSCODE_COD4_DOCS` -- would otherwise be
+the only game left holding `Allowleanleft` while every game inheriting from it got AllowLeanLeft.
+
 - `cod4_api_overrides.json` — corrections to signatures the documentation states incorrectly,
   applied over every other layer. Entry shape: `{ "name", "optionalFrom", "reason" }`. See
   [How an API entry is chosen](#how-an-api-entry-is-chosen).

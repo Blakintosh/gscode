@@ -3746,7 +3746,7 @@
       ]
     },
     {
-      "name": "Disablegrenadebounce",
+      "name": "disablegrenadebounce",
       "description": "Disallow grenades bouncing off of this entity",
       "overloads": [
         {
@@ -4447,7 +4447,7 @@
       ]
     },
     {
-      "name": "Enablegrenadebounce",
+      "name": "enablegrenadebounce",
       "description": "Allow grenades to bounce off of this entity",
       "overloads": [
         {
@@ -19993,7 +19993,7 @@
       ]
     },
     {
-      "name": "Setlookatnnimnodes",
+      "name": "setlookatnnimnodes",
       "description": "Set the animation nodes for this actor for looking at things to the left and right.",
       "overloads": [
         {

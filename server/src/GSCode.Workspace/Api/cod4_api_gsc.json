@@ -308,7 +308,7 @@
       ]
     },
     {
-      "name": "Allowleanleft",
+      "name": "AllowLeanLeft",
       "description": "Sets whether the player can lean left",
       "overloads": [
         {
@@ -326,7 +326,7 @@
       ]
     },
     {
-      "name": "Allowleanright",
+      "name": "AllowLeanRight",
       "description": "Sets whether the player can lean right",
       "overloads": [
         {
@@ -3999,7 +3999,7 @@
       ]
     },
     {
-      "name": "fireturret",
+      "name": "FireTurret",
       "description": "Fire the vehicle's turret",
       "overloads": [
         {
@@ -6558,7 +6558,7 @@
       ]
     },
     {
-      "name": "getweaponclassname",
+      "name": "GetWeaponClassName",
       "description": "Returns the classname for the given weapon",
       "overloads": [],
       "example": "weapon_type = getweaponclassname(\"mosin_nagant_sniper\");",
@@ -6650,7 +6650,7 @@
       ]
     },
     {
-      "name": "getweaponslotammo",
+      "name": "GetWeaponSlotAmmo",
       "description": "Gets the ammo count for the weapon in the given slot.",
       "overloads": [
         {
@@ -6668,7 +6668,7 @@
       ]
     },
     {
-      "name": "getweaponslotclipammo",
+      "name": "GetWeaponSlotClipAmmo",
       "description": "Gets the ammunition in the clip for the weapon in the given weapon slot.",
       "overloads": [
         {
@@ -6686,7 +6686,7 @@
       ]
     },
     {
-      "name": "getweaponslotweapon",
+      "name": "GetWeaponSlotWeapon",
       "description": "Gets the name of the weapon in the given weapon slot.",
       "overloads": [
         {
@@ -9250,7 +9250,7 @@
       ]
     },
     {
-      "name": "nearpoint",
+      "name": "NearPoint",
       "description": "Determine whether this actor is near to a given point.",
       "overloads": [
         {
@@ -14953,7 +14953,7 @@
       ]
     },
     {
-      "name": "setnodeprioritybias",
+      "name": "SetNodePriorityBias",
       "description": "Set the bias that is applied to priority nodes.",
       "overloads": [],
       "example": "setnodeprioritybias(0.3)",
@@ -16904,7 +16904,7 @@
       ]
     },
     {
-      "name": "setweaponclipammo",
+      "name": "SetWeaponClipAmmo",
       "description": "Set the weapon clip ammunition for the given weapon.",
       "overloads": [
         {
@@ -16922,7 +16922,7 @@
       ]
     },
     {
-      "name": "setweaponslotammo",
+      "name": "SetWeaponSlotAmmo",
       "description": "Sets the ammunition for the weapon in the given weapon slot.",
       "overloads": [
         {
@@ -16940,7 +16940,7 @@
       ]
     },
     {
-      "name": "setweaponslotclipammo",
+      "name": "SetWeaponSlotClipAmmo",
       "description": "Sets the clip ammunition for the weapon in the given weapon slot.",
       "overloads": [
         {
@@ -16958,7 +16958,7 @@
       ]
     },
     {
-      "name": "setweaponslotweapon",
+      "name": "SetWeaponSlotWeapon",
       "description": "Sets the the weapon in the given weapon slot.",
       "overloads": [
         {

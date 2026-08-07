@@ -1,7 +1,7 @@
 {
   "game": "bo1",
   "clientScriptsSwept": 450,
-  "serverLibrarySize": 1378,
+  "serverLibrarySize": 1377,
   "observed": 151,
   "coverage": "CONTROL — 183 names are in both this game's server and client libraries, so are certainly client-side; its stock client scripts call 150 of them (82.0%). A corpus-only prune keeps that share and discards the rest.",
   "functions": [

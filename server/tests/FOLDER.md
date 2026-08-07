@@ -45,12 +45,24 @@ both — `--filter "Category!=Corpus&Category!=Perf"`, which is what CI uses:
 | `Category=Corpus` | the diagnostic/formatter sweep over five games. Minutes |
 | `Category=Perf` | per-file timing and the phase breakdown. Writes `temp/gscode-perf-<game>.html` |
 
-`CorpusPerfTests` holds both halves. The two parse sweeps time `ScriptAnalysis.Analyze` and split it
+`CorpusPerfTests` holds every half. The two parse sweeps time `ScriptAnalysis.Analyze` and split it
 into lex/preprocess/parse/extract; `WorkspaceLints_WhereTheTimeGoes` times the CROSS-FILE LINTS,
 which the parse sweeps do not touch at all and which cost roughly twenty times as much. It parses
 outside the stopwatch so it measures lint cost only, and indexes fully first because two of the
 heaviest rules stand down without a finished index — timing them against a partial one reports the
 cheap half as the total. CoD4 and BO3 only, since each game measured pays a full index.
+
+`Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced call sites per
+file — one report row per REQUEST, since the question is whether a keystroke is answered in time and
+a per-file sum answers nothing anybody waits for. It also prints how many ENTRIES came back, and
+that line is what makes the timings admissible: `Complete` has ~10 arms and only the statement-scope
+one queries the store, so a sample that quietly hit the cheap arms would report fast completions and
+have measured nothing. Adds BO1 to the usual CoD4/BO3 pair, because every query on this path reads
+the record store and BO1 is the only corpus large enough to show whether store size drives the cost.
+It does not — see PERF.md, which also records why the quadratic found here was left alone.
+
+`ColdIndex_WhereTheTimeGoes` is the third to name BO1, for the unrelated reason that its raw tree is
+160,382 files and enumeration cost is not a function of script count.
 
 Add `-p:GscodeInstrumentation=true` for the per-lint breakdown; the `PerfTracker` scopes in
 `WorkspaceLints` are `[Conditional]` and absent from an ordinary build.

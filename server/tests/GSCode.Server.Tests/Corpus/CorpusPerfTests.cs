@@ -10,6 +10,7 @@ using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
+using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
@@ -347,6 +348,259 @@ public class CorpusPerfTests
         {
             GameProfile.Select(previous.ShortName);
         }
+    }
+
+    /// <summary>
+    /// How many completion requests to time per file. Ten rather than every call site, because this
+    /// sweep pays a full index per game before it starts and a completion is far more expensive than
+    /// a lint: BO3's 980 files at every call site would be tens of thousands of requests.
+    ///
+    /// They are taken EVENLY SPACED through the file's call sites rather than as the first ten. The
+    /// first ten are all near the top, which on a real script is inside one or two functions, and the
+    /// enclosing function decides which completion arm runs.
+    /// </summary>
+    private const int CompletionSamplesPerFile = 10;
+
+    /// <summary>
+    /// Where COMPLETION time goes — the interactive path with the least headroom and, until now, the
+    /// only one nothing measured.
+    ///
+    /// The three sweeps above cover the parse, the cold index and the cross-file lints. Completion is
+    /// none of those, and it is the one that cannot hide behind a debounce: <c>TextSyncHandler</c>
+    /// holds diagnostics back ~250 ms, but <c>CompletionHandler</c> answers the keystroke that asked.
+    ///
+    /// Read the DISTRIBUTION, not the total. The question this exists to answer is whether a single
+    /// request completes before the user types the next character, which is a p99 question; a sum
+    /// over ten thousand requests answers nothing anybody experiences.
+    ///
+    /// The per-kilobyte column in the report is MEANINGLESS here and should be ignored — it is the
+    /// one place this sweep's shape differs from the others. A parse costs what the file costs, so
+    /// ms/KB finds superlinear parsing. A completion costs what the WORKSPACE costs: the queries
+    /// behind it walk the record store, so a one-line file in a large workspace is as expensive as a
+    /// long one. That is the property being measured.
+    ///
+    /// Needs a finished index for the same reason the lint sweep does, and more so: every query on
+    /// this path reads the store, so against a partial index they return little and time nothing.
+    ///
+    /// CoD4 and BO3 only, per the two dialect families — and here the split is the point rather than
+    /// a saving. A namespace dialect reaches <c>FunctionsInNamespace</c> once per imported namespace;
+    /// a merge dialect reaches <c>FunctionsInIncludeScope</c> once. They are different code paths
+    /// with different costs, and one game cannot stand in for the other.
+    ///
+    /// Reporting, not asserting, like the rest of this class.
+    /// </summary>
+    [Fact]
+    public async Task Completion_WhereTheTimeGoes()
+    {
+        bool measured = false;
+
+        if ( CorpusFixture.Available )
+        {
+            await MeasureCompletionAsync(
+                GameProfile.BlackOps3,
+                CorpusFixture.RawRoot!,
+                CorpusFixture.Resolver,
+                CorpusFixture.Scripts,
+                (path, resolver, names) => CorpusFixture.Analyze(path, resolver, names));
+
+            measured = true;
+        }
+
+        // CoD4 for the merge dialect, and BO1 for SIZE — the exception to the two-corpora rule, taken
+        // for the same reason ColdIndex_WhereTheTimeGoes takes it. Every query on this path reads the
+        // record store, so the quantity under test scales with the STORE rather than with the file,
+        // and BO1's 2,963 scripts are the only corpus large enough to show that. Without it this
+        // sweep can only say completion is fast on a thousand files, which is not the claim anybody
+        // needs — a mod workspace is bigger than a stock one.
+        foreach ( GameProfile profile in new[] { GameProfile.Cod4, GameProfile.BlackOps } )
+        {
+            GameCorpus? corpus = GameCorpusFixture.For(profile);
+            if ( corpus is null )
+            {
+                continue;
+            }
+
+            GameCorpus captured = corpus;
+            await MeasureCompletionAsync(
+                captured.Profile,
+                captured.RawRoot,
+                () => GameCorpusFixture.Resolver(captured),
+                () => GameCorpusFixture.Scripts(captured),
+                (path, resolver, names) => GameCorpusFixture.Analyze(captured, path, resolver, names));
+
+            measured = true;
+        }
+
+        if ( !measured )
+        {
+            _output.WriteLine("SKIPPED: no %GSCODE_CORPUS_BO3%, %GSCODE_CORPUS_COD4% or %GSCODE_CORPUS_BO1% found.");
+        }
+    }
+
+    private async Task MeasureCompletionAsync(
+        GameProfile profile,
+        string rawRoot,
+        Func<PathResolver> resolverFactory,
+        Func<IReadOnlyList<string>> scriptsFactory,
+        Func<string, PathResolver, NameTable, ParseResult> analyse)
+    {
+        // Same reason as MeasureLintsAsync: the indexer enumerates through Active.ScriptGlobs and the
+        // completion engine defaults its dialect to Active. GameProfileCollection stops this racing
+        // another class.
+        GameProfile previous = GameProfile.Active;
+        try
+        {
+            GameProfile.Select(profile.ShortName);
+
+            PathResolver resolver = resolverFactory();
+            NameTable names = new();
+            ScriptDatabase database = new();
+
+            WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+
+            string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
+            BuiltinApiSet builtins = BuiltinApiSet.Load(apiDirectory);
+            ObjectFields objectFields = ObjectFields.Load(apiDirectory);
+            CompletionEngine engine = new(database, builtins, objectFields);
+
+            List<PerfReport.Item> timings = [];
+            List<int> entryCounts = [];
+
+            foreach ( string path in scriptsFactory() )
+            {
+                try
+                {
+                    ParseResult parsed = analyse(path, resolver, names);
+                    string contextId = ScriptDatabase.ContextIdOf(resolver.GetContext(path));
+                    long bytes = new FileInfo(path).Length;
+
+                    foreach ( Position position in CompletionSamplePositions(parsed) )
+                    {
+                        // Warm, then measure — matching the other sweeps. The first completion in a
+                        // file also pays for anything the parse result builds lazily, which belongs
+                        // to neither this measurement nor the next file's.
+                        entryCounts.Add(Complete(engine, parsed, contextId, position, profile));
+
+                        PerfTracker.Reset();
+
+                        Stopwatch watch = Stopwatch.StartNew();
+                        Complete(engine, parsed, contextId, position, profile);
+                        watch.Stop();
+
+                        Dictionary<string, (double Milliseconds, long Count)> scopes = [];
+                        PerfTracker.Snapshot(scopes);
+
+                        // One item per REQUEST, not per file: the distribution being read is over
+                        // keystrokes, and folding ten requests into one row would report a number
+                        // no user ever waits for.
+                        timings.Add(new PerfReport.Item(
+                            path, watch.Elapsed.TotalMilliseconds, bytes,
+                            SubPhases: scopes.Count > 0 ? scopes : null));
+                    }
+                }
+                catch ( Exception )
+                {
+                    // Crashes are the lex/parse gate's business, not this one's.
+                    continue;
+                }
+            }
+
+            Report(profile.ShortName + "-completion", timings, rawRoot, cachedHeaders: 0);
+            ReportEntryCounts(entryCounts);
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
+        }
+    }
+
+    /// <summary>
+    /// Completes with the SETTING DEFAULTS rather than the method defaults, so the sweep measures
+    /// what a stock install actually runs. The dialect is passed explicitly for the reason
+    /// <c>CompletionEngine.Complete</c> documents — a measurement that reads Active is at the mercy
+    /// of whatever else touched it.
+    /// </summary>
+    /// <returns>How many entries came back — see <see cref="ReportEntryCounts"/> for why that matters.</returns>
+    private static int Complete(
+        CompletionEngine engine, ParseResult parsed, string contextId, Position position, GameProfile profile)
+    {
+        return engine.Complete(
+            parsed,
+            contextId,
+            position,
+            includeLiterals: true,
+            fieldScope: FieldScope.Owner,
+            callPunctuation: CallPunctuation.Parens,
+            profile: profile,
+            parameterHints: true).Length;
+    }
+
+    /// <summary>
+    /// How big the returned lists were — which is how to tell whether the timings above mean
+    /// anything.
+    ///
+    /// <c>Complete</c> has around ten arms and most of them are cheap and return almost nothing: a
+    /// path segment list, an asset type list, an empty result where the position turned out not to be
+    /// a completion site at all. Only the statement-scope arm reaches the store queries, and it
+    /// returns thousands of entries in a real workspace.
+    ///
+    /// So a median time is only evidence about the expensive path if the median REQUEST took it. A
+    /// sweep whose sample quietly landed on cheap arms reports fast completions and has measured
+    /// nothing — which is the same failure mode PERF.md records for the lint sweep against a partial
+    /// index, arriving by a different route.
+    /// </summary>
+    private void ReportEntryCounts(List<int> counts)
+    {
+        if ( counts.Count == 0 )
+        {
+            return;
+        }
+
+        List<int> sorted = [.. counts.Order()];
+        int large = counts.Count(static c => c > 500);
+
+        _output.WriteLine(
+            $"    entries returned: median {Percentile([.. sorted.Select(static c => (double)c)], 0.50):F0} | "
+            + $"p90 {Percentile([.. sorted.Select(static c => (double)c)], 0.90):F0} | max {sorted[^1]:N0}");
+        _output.WriteLine(
+            $"    {large:N0} of {counts.Count:N0} requests ({large * 100.0 / counts.Count:F1}%) returned over 500 entries "
+            + "- those are the statement-scope arm, the one that queries the store");
+    }
+
+    /// <summary>
+    /// The positions to complete at: the end of each call's NAME, which is exactly where the editor
+    /// asks. A user typing <c>flag_wa|</c> has a partial identifier in statement position, the parser
+    /// has read it as a call, and the engine takes its statement-scope arm — the arm that reaches the
+    /// store queries this sweep exists to time.
+    ///
+    /// Read from the extraction's call references rather than found by scanning tokens, so the sample
+    /// is real call sites in real files and needs no judgement about what counts as one.
+    /// </summary>
+    private static List<Position> CompletionSamplePositions(ParseResult parsed)
+    {
+        List<Position> calls = [];
+        foreach ( ReferenceEntry entry in parsed.Extraction.References )
+        {
+            if ( entry.Kind == ReferenceKind.Call )
+            {
+                calls.Add(entry.Range.End);
+            }
+        }
+
+        if ( calls.Count <= CompletionSamplesPerFile )
+        {
+            return calls;
+        }
+
+        // Evenly spaced, so the sample spans the file rather than clustering in its first function.
+        List<Position> sampled = new(CompletionSamplesPerFile);
+        for ( int i = 0; i < CompletionSamplesPerFile; i++ )
+        {
+            sampled.Add(calls[i * calls.Count / CompletionSamplesPerFile]);
+        }
+
+        return sampled;
     }
 
     private static PerfReport.Item Time(

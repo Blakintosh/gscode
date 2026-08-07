@@ -81,9 +81,9 @@ surfaces.
   completion (assert/assertmsg excluded — they come from the builtin API instead). Documented
   entries get their KeywordDocs blurb as the completion's documentation.
 
-## Completion/CompletionEngine.cs
+## Completion/CompletionEngine.cs (+ .Context / .Producers / .Entries partials)
 
-- `sealed class CompletionEngine.Complete(result, contextId, position, includeLiterals)` —
+- `sealed partial class CompletionEngine.Complete(result, contextId, position, includeLiterals)` —
   context-aware completion driven by the tokens around the cursor: inside a
   `"..."`/`&"..."`/`#"..."` literal it offers the known literals of that kind from the visible
   reference index (gated by `includeLiterals` = the completion.literals setting; disabled →
@@ -91,6 +91,19 @@ surfaces.
   `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
   (+ `.size`), and statement/top-level scope (keywords, the dialect's global objects and snippets,
   file macros, namespace functions, visible classes, namespace-less builtins as call snippets).
+- Split across four files because one class of 1,891 lines hid the shape of the thing: `Complete`
+  is a dispatcher over ~10 contexts, and reading which context reaches which query meant scrolling
+  past every scanning helper in between. Same convention as `Parser.cs (+ .Declarations /
+  .Statements / .Expressions)`, and the same reason.
+  - `.Context.cs` — WHERE the cursor is. All static, and reads only tokens, source text and the
+    parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `IsInsideFunctionBody`,
+    `EnclosingFunction`, `PreviousSignificant`, `TryPrecacheContext` and the rest. Nothing here
+    touches the database, which is the property that makes the boundary hold.
+  - `.Producers.cs` — the lists themselves, one producer per context. This is the file that reaches
+    `ScriptDatabase`, `BuiltinApiSet` and `ObjectFields`, so its cost is a function of the
+    workspace rather than of the file; PERF.md's completion sweep measures it.
+  - `.Entries.cs` — one symbol → one `CompletionEntry`: labels, detail text, call snippets,
+    parameter hints. Shared by several producers and owned by none.
 
 ## Completion/GscSnippets.cs
 

@@ -83,8 +83,29 @@ public sealed class CompletionHandler : CompletionHandlerBase
         };
     }
 
+    /// <summary>
+    /// Answers one completion request.
+    ///
+    /// The cancellation checks are here because this is the ONE read path with no debounce in front
+    /// of it. Diagnostics wait ~250 ms behind <c>TextSyncHandler</c>, so a burst of keystrokes
+    /// produces one analysis; completion answers the keystroke that asked, and a client that types
+    /// through its own request cancels it and sends another. Without a check, every superseded
+    /// request was still built in full and its result thrown away by the client.
+    ///
+    /// Two places, for two different costs. The first is the request that was cancelled before it
+    /// was ever started, which is the common one under fast typing and costs nothing to skip. The
+    /// second is the mapping loop, which is the part worth interrupting: statement scope returns a
+    /// median of 1,168 entries and up to 5,059 on the BO3 corpus, and <see cref="ToItem"/> allocates
+    /// per entry.
+    ///
+    /// <c>Complete</c> itself is deliberately NOT made cancellable. That would mean threading a token
+    /// through the engine, and the completion sweep in PERF.md puts its p99 at 4.22 ms — there is no
+    /// worthwhile interruption point inside it.
+    /// </summary>
     public override Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // Fresh: the cursor position is live, so it only means anything against live text.
         NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri);
         if ( target is null )
@@ -103,6 +124,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
             profile: null,
             parameterHints: _settings.CompletionParameterHints) )
         {
+            cancellationToken.ThrowIfCancellationRequested();
             items.Add(ToItem(entry, request.TextDocument.Uri));
         }
 

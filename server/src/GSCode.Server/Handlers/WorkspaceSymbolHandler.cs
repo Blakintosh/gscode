@@ -31,6 +31,17 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
         return new WorkspaceSymbolRegistrationOptions();
     }
 
+    /// <summary>
+    /// Answers one workspace symbol query.
+    ///
+    /// Cancellation is checked per record for the same reason <see cref="CompletionHandler"/> checks
+    /// it: the client sends one of these per keystroke in the symbol box and cancels the previous,
+    /// and this walks EVERY record in both stores — thousands on a real install — with no index
+    /// narrowing it first. An abandoned query used to be walked to the end regardless.
+    ///
+    /// Per record rather than per symbol: a record's function list is short, and the walk is the
+    /// cost, not the match.
+    /// </summary>
     public override Task<Container<WorkspaceSymbol>?> Handle(WorkspaceSymbolParams request, CancellationToken cancellationToken)
     {
         string query = request.Query ?? "";
@@ -38,6 +49,8 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
 
         foreach ( ScriptRecord record in _database.AllRecords )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if ( results.Count >= MaxResults )
             {
                 break;

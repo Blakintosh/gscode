@@ -119,6 +119,13 @@ LSP types anywhere.
 - `sealed partial class Parser` — recursive descent over PTokens; `static Parse(tokens)
   → ParseTree`. Panic-mode recovery: one diagnostic then silent skip to a sync token
   (declaration keywords / ';' / '}' / '#/'), always guaranteeing progress.
+- Nesting is capped at `MaxNestingDepth = 512` grammar entries (3015 NestingTooDeep, then a
+  skip to the next statement boundary and silence until the parser is back at declaration
+  level). Counted in `ParseExpression` / `ParseTernary` / `ParseUnary` / `ParseStatement` —
+  between them every cycle in the grammar — and once per pass of the `ParseBinary` and
+  `ParsePostfixChain` loops, because `1 + 1 + …` and `a.b.c…` cost the parser nothing but
+  build a tree every walker then recurses down. The cap is therefore on TREE DEPTH, which is
+  what makes SymbolExtractor, FoldingRegions, AstPrinter and AstSearch safe by construction.
 - Declarations: #using path joining (+ using-after-declaration diagnostic), #namespace,
   #precache (raw args for P4 validation), #using_animtree, functions (private/autoexec,
   defaults, &byRef, ... varargs), classes (single inheritance, var members, ctor/dtor,
@@ -202,6 +209,9 @@ LSP types anywhere.
   tokens with the engine's exact grammar (verified against v1): `||` and `&&` chains,
   SINGLE ==/!= and relational applications, parens, INTEGER literals only — no
   defined(), no arithmetic. Unparseable → null → branch inactive; trailing junk ignored.
+- Paren nesting is capped at 64: it is a second recursive descent, over the condition's own
+  tokens, so the parser's tree ceiling does not reach it. Past the cap the condition is simply
+  unresolvable, which is a case the caller already handles.
 
 ## Preprocessing/Preprocessor.cs
 

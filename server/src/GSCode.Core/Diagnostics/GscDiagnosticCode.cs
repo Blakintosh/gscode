@@ -55,6 +55,16 @@ public enum GscDiagnosticCode
     /// </summary>
     MissingSemicolon = 3014,
 
+    /// <summary>
+    /// A construct nested past the parser's ceiling — see Parser.MaxNestingDepth. Reported so the
+    /// truncated tree is explained rather than silently short: everything from that point to the
+    /// next statement boundary is missing from the outline, from references, and from every lint.
+    ///
+    /// It exists because the alternative is a StackOverflowException, which .NET cannot catch and
+    /// which takes the whole server process down with every open document's state.
+    /// </summary>
+    NestingTooDeep = 3015,
+
     // Extraction / per-file semantics (4xxx)
     UnknownPrecacheType = 4000,
     WrongPrecacheArgumentCount = 4001,

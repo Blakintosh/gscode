@@ -19,6 +19,9 @@ namespace GSCode.Parser.Tests.Syntax;
 ///
 /// Every case here is run under a timeout, so a regression fails the suite instead of taking the
 /// machine down with it.
+///
+/// Terminating is only half of it: input can also be too DEEP rather than non-terminating, which
+/// fails as a stack overflow instead of as memory growth. That half is <see cref="ParserDepthTests"/>.
 /// </summary>
 public class ParserTerminationTests
 {

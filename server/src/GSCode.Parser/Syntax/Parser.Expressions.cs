@@ -10,7 +10,26 @@ namespace GSCode.Parser.Syntax;
 public sealed partial class Parser
 {
     /// <summary>Full expression: assignment is the lowest level (right-associative).</summary>
+    /// <remarks>
+    /// One of the four points nesting is counted at; the others are <see cref="ParseTernary"/> (an
+    /// arm, or a case label), <see cref="ParseUnary"/> (a prefix operand) and
+    /// <see cref="ParseStatement"/>. Between them they cut every cycle in the call graph — the only
+    /// back edge that avoids all four is <c>ParseBinary</c>'s own <c>ParseBinary(precedence + 1)</c>,
+    /// which the ten entries of the precedence table already bound.
+    /// </remarks>
     private ExprNode ParseExpression()
+    {
+        if ( !EnterNesting() )
+        {
+            return AbandonNesting();
+        }
+
+        ExprNode expression = ParseExpressionCore();
+        ExitNesting();
+        return expression;
+    }
+
+    private ExprNode ParseExpressionCore()
     {
         ExprNode left = ParseTernary();
 
@@ -72,6 +91,18 @@ public sealed partial class Parser
     /// <summary>cond ? whenTrue : whenFalse — supported by the engine though absent from the PDF.</summary>
     private ExprNode ParseTernary()
     {
+        if ( !EnterNesting() )
+        {
+            return AbandonNesting();
+        }
+
+        ExprNode expression = ParseTernaryCore();
+        ExitNesting();
+        return expression;
+    }
+
+    private ExprNode ParseTernaryCore()
+    {
         ExprNode condition = ParseBinary(1);
 
         if ( !Match(TokenKind.QuestionMark) )
@@ -90,19 +121,33 @@ public sealed partial class Parser
     private ExprNode ParseBinary(int minPrecedence)
     {
         ExprNode left = ParseCallChain();
+        int levels = 0;
 
         while ( true )
         {
             int precedence = GetBinaryPrecedence(Kind);
             if ( precedence < minPrecedence )
             {
-                return left;
+                break;
             }
 
+            // The loop costs the parser nothing, but each pass wraps what came before in one more
+            // BinaryNode, and every walker over the result recurses down that chain. `1 + 1 + …`
+            // overflowed SymbolExtractor at ~1,430 terms, so the chain counts too.
+            if ( !EnterNesting() )
+            {
+                StopAtNestingLimit();
+                break;
+            }
+
+            levels++;
             TokenKind op = Advance().Kind;
             ExprNode right = ParseBinary(precedence + 1);
             left = new BinaryNode(SpanOf(left, right), left, op, right);
         }
+
+        ExitNesting(levels);
+        return left;
     }
 
     private static int GetBinaryPrecedence(TokenKind kind)
@@ -383,6 +428,18 @@ public sealed partial class Parser
 
     private ExprNode ParseUnary()
     {
+        if ( !EnterNesting() )
+        {
+            return AbandonNesting();
+        }
+
+        ExprNode expression = ParseUnaryCore();
+        ExitNesting();
+        return expression;
+    }
+
+    private ExprNode ParseUnaryCore()
+    {
         switch ( Kind )
         {
             case TokenKind.Thread:
@@ -487,8 +544,28 @@ public sealed partial class Parser
     /// </summary>
     private ExprNode ParsePostfixChain(ExprNode expression)
     {
+        int levels = 0;
+        ExprNode result = ParsePostfixChainCore(expression, ref levels);
+        ExitNesting(levels);
+        return result;
+    }
+
+    private ExprNode ParsePostfixChainCore(ExprNode expression, ref int levels)
+    {
         while ( true )
         {
+            // Claimed per pass rather than per case, because every case below that continues the
+            // loop wraps `expression` in one more node — `a.b.c.d`, `a[0][0][0]` — and walkers
+            // recurse down that chain exactly as they do a binary one. The claim the `default`
+            // branch does not use is released with the rest.
+            if ( !EnterNesting() )
+            {
+                StopAtNestingLimit();
+                return expression;
+            }
+
+            levels++;
+
             switch ( Kind )
             {
                 case TokenKind.Dot:

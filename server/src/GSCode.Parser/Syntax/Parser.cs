@@ -20,6 +20,27 @@ public sealed partial class Parser
     private readonly GameProfile _profile;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
     private int _index;
+    private int _nesting;
+    private bool _abandonedNesting;
+
+    /// <summary>
+    /// Ceiling on how deeply one construct may nest, counted in GRAMMAR ENTRIES rather than in
+    /// source levels: a <c>(</c> costs three (expression, ternary, unary), while a <c>{</c>, a
+    /// <c>!</c>, a <c>?</c> or one link of an <c>a.b.c</c> / <c>1 + 1 + 1</c> chain costs one.
+    ///
+    /// Measured on a thread with the platform default 1 MB stack — what the server's thread-pool
+    /// threads get — the cliff sits at 480 nested <c>(</c> (1,440 entries) and at ~1,430 links of a
+    /// left-nested chain. The chain is the reason this counts TREE levels and not parser frames:
+    /// the parser builds it with a loop and costs nothing, and it is
+    /// <c>SymbolExtractor.WalkExpression</c> that then recurses one frame per link. Both shapes
+    /// work out at ~0.7 KB of stack per entry, so 512 reaches about a third of the way to the cliff
+    /// and every walker over the resulting tree inherits the same bound.
+    ///
+    /// Nothing hand-written comes near it: 512 entries is 170 nested parentheses, or 512 terms in
+    /// one expression. What it prevents is a StackOverflowException, the one .NET failure that
+    /// cannot be caught — it kills the whole server process, not the request.
+    /// </summary>
+    private const int MaxNestingDepth = 512;
 
     private Parser(ImmutableArray<PToken> tokens, GameProfile profile)
     {
@@ -174,10 +195,70 @@ public sealed partial class Parser
         return previous;
     }
 
+    // --- Nesting ---
+
+    /// <summary>
+    /// Claims one level of nesting. False means the ceiling is reached and the caller must stop
+    /// descending — see <see cref="StopAtNestingLimit"/>. Every successful claim is released by
+    /// <see cref="ExitNesting"/>; nothing in the parser throws, so no path can skip the release.
+    /// </summary>
+    private bool EnterNesting()
+    {
+        if ( _nesting >= MaxNestingDepth )
+        {
+            return false;
+        }
+
+        _nesting++;
+        return true;
+    }
+
+    /// <summary>Releases claimed levels. A loop that built one node per pass releases them together.</summary>
+    private void ExitNesting(int levels = 1)
+    {
+        _nesting -= levels;
+
+        // Back at declaration level: whatever was abandoned is fully unwound, so reporting resumes.
+        if ( _nesting == 0 )
+        {
+            _abandonedNesting = false;
+        }
+    }
+
+    /// <summary>
+    /// Reports the ceiling and skips to the next statement boundary, so the caller resumes on
+    /// something it can parse rather than walking straight back into the same nesting.
+    /// </summary>
+    private void StopAtNestingLimit()
+    {
+        // The message deliberately does not quote MaxNestingDepth: it counts grammar entries, not
+        // anything the reader can count in their own file, and a number they cannot reconcile with
+        // what they are looking at is worse than no number.
+        AddError(GscDiagnosticCode.NestingTooDeep, Current.RootRange);
+        _abandonedNesting = true;
+        RecoverUnstuck();
+    }
+
+    /// <summary><see cref="StopAtNestingLimit"/> plus a placeholder covering the tokens it skipped.</summary>
+    private ErrorNode AbandonNesting()
+    {
+        PToken start = Current;
+        StopAtNestingLimit();
+        return new ErrorNode(RangeFrom(start));
+    }
+
     // --- Diagnostics ---
 
     private void AddError(GscDiagnosticCode code, TextRange range, params object[] arguments)
     {
+        // An abandoned construct is reported once. Everything it drags down with it — a ')' that
+        // will now never be found at each of the hundreds of levels being unwound — is a
+        // consequence of that one report, and repeating it per level would bury it.
+        if ( _abandonedNesting )
+        {
+            return;
+        }
+
         _diagnostics.Add(Diagnostic.Create(range, DiagnosticSeverity.Error, code, arguments));
     }
 

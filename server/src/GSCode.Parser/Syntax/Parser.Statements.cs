@@ -40,7 +40,25 @@ public sealed partial class Parser
         return new BlockNode(RangeFrom(open), statements.ToImmutable());
     }
 
+    /// <summary>
+    /// One statement. Counts against the nesting ceiling, which is what bounds <c>{{{{…</c> (through
+    /// <see cref="ParseBlock"/>) and a braceless <c>if ( x ) if ( x ) …</c> chain.
+    /// </summary>
     private AstNode ParseStatement()
+    {
+        if ( !EnterNesting() )
+        {
+            // RecoverUnstuck inside guarantees a token is consumed, which the switch-body loop in
+            // ParseSwitch needs: unlike ParseBlock it has no progress check of its own.
+            return AbandonNesting();
+        }
+
+        AstNode statement = ParseStatementCore();
+        ExitNesting();
+        return statement;
+    }
+
+    private AstNode ParseStatementCore()
     {
         switch ( Kind )
         {

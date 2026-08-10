@@ -51,6 +51,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.InvalidAssignmentTarget] = "Cannot assign to {0} — assignment needs a variable, field or array element on the left.",
         [GscDiagnosticCode.AssignmentUsedAsCondition] = "This assigns to '{0}' and tests the assigned value; '==' compares. Wrap it in parentheses if the assignment is deliberate.",
         [GscDiagnosticCode.MissingSemicolon] = "Expected ';' at the end of this statement.",
+        [GscDiagnosticCode.NestingTooDeep] = "Nested too deeply to analyse; the rest of this statement was skipped.",
 
         // Extraction / per-file semantics
         [GscDiagnosticCode.UnknownPrecacheType] = "'{0}' is not a known #precache asset type.",

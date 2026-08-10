@@ -149,6 +149,119 @@ an on-disk change now republishes closed files' stored diagnostics (`WatchedFile
 `WorkspaceDiagnosticsPublisher.Refresh()`), so what closed files do report is at least no longer
 stale after a branch switch.
 
+### Variadic builtins are not modelled, so a builtin call has no upper argument bound
+
+`ArgumentCountLint` treats a builtin's mandatory count as a LOWER bound and stops there. The upper
+bound was written, measured and withdrawn: it reported 634 Errors across 134 shipped BO3 scripts,
+and every one was the library under-declaring rather than the script over-calling — `Array( a, b, c )`
+is variadic against a single declared parameter, `Record3DText` takes six against one. The full
+reasoning sits on `InspectBuiltin`; this is the entry `ARCHITECTURE.md` points at for it.
+
+**The data has since grown the marker the check needs.** A parameter's type is structured in the
+bundled JSON (`"type": { "dataType": …, "isArray": … }`) and `vararg` is one of its spellings — 34 of
+BO3's 2,191 GSC entries carry it and 15 of its 803 CSC ones, both names above among them.
+`ApiLoader.FormatType` flattens the structure to display text on load, so nothing can read it today:
+`BuiltinParameter.TypeText` reaches only `MarkdownDocRenderer` and one `"bool"` string compare in
+`PreferBooleanLiteralLint`.
+
+**Carrying the marker is the easy half; coverage is the whole problem.** The bound is only worth
+having where `HasReliableBuiltinSignatures` holds, which is CoD4 and BO3 — and CoD4's 819 entries
+mark no vararg at all, while BO1 marks 10, WaW 2 and MW2 none. So on one of the two eligible games
+the marker is certainly incomplete and on the other it is merely untested, and an upper bound shipped
+on a marker that is mostly-there is the 634 again.
+
+Route, in order:
+
+1. Carry `vararg` as a flag on `BuiltinParameter` rather than losing it in `FormatType`. Additive —
+   nothing reads the current string for anything but display.
+2. Re-run the upper-bound check per game with vararg parameters exempt, and read the TOP REPORTED
+   NAMES rather than the count: a shape shared across them is another library gap, not a user
+   mistake. `tests/GSCode.Server.Tests/harvest/*_client_arity.json` is already this measurement in
+   miniature — it records `declaredMax` against observed counts (`PlaySound`: 1 declared, 2–4
+   observed across 190 calls).
+3. Ship it per game only where the remainder is zero, the way `HasReliableBuiltinSignatures` was
+   earned in the first place.
+
+Worth knowing before step 3: the JSON also carries per-entry `flags` and `confidence` that the loader
+drops entirely (BO3's GSC library: 157 `verified` against 2,032 `processed`; BO1's and MW2's carry 259
+and 264 `aiGenerated`). If a game's remainder will not reach zero, that is the discriminator for a
+weaker severity rather than none — it is what 1.5 used to split `ArgumentTypeMismatch` from its
+`Unverified` twin.
+
+### 1.5's type-derived diagnostics have no counterpart here
+
+This tree is at parity with 1.5 or ahead of it in every diagnostic layer but one — lexing, preprocessing,
+parsing, extraction, resolution and arity, across five dialects rather than one — and the exception is a
+coherent family rather than a scatter. 1.5 ran an abstract-interpretation pass — `CFA/ControlFlowAnalyser`
+built a CFG and `DFA/TypeFlowAnalyser` (3,166 lines across three partials; the `DFA/` and `CFA/` folders
+together ~290 KB with `ScrData`, `ScrEntity` and `OperatorSemantics`) walked it over a 17-BIT FLAG
+lattice with real unions (`Int = 1 << 1 | Bool`, `Number = Int | Float`), constant-value tracking and
+entity subtypes. Seventeen codes came out of it that nothing here raises, plus the type half of an
+eighteenth:
+
+| family | 1.5 codes |
+|---|---|
+| operators and conversions | `OperatorNotSupportedOnTypes`, `NoImplicitConversionExists`, `DivisionByZero` |
+| argument types vs. the builtin library | `ArgumentTypeMismatch`, `ArgumentTypeMismatchUnverified` |
+| `const` | `CannotAssignToConstant`, `ExpectedConstantExpression` |
+| member, index, enumeration, vector component | `DoesNotContainMember`, `CannotUseAsIndexer`, `CannotEnumerateType`, `InvalidVectorComponent` |
+| engine field data | `PredefinedFieldTypeMismatch`, `CannotAssignToImmutableEntity` |
+| function values | `StoreFunctionAsPointer`, `ExpectedFunction` |
+| threaded calls | `ConsumedThreadedCallResult` |
+| statements | `InvalidExpressionStatement`, and the type-compatibility half of `UnreachableCase` |
+
+Three more went in the same removal and are NOT type-derived, which makes them separable and much
+cheaper: `MultipleDefaultLabels` (duplicate `default:`, raised from the CFG builder — it belongs beside
+`CaseLabelLint`'s 5017 and needs no types at all), `AssignOnThreadedFunction` (an assignment whose
+right-hand side contains a `thread` call — a plain AST walk in `SPA/ScriptDiagnosticsAnalyser`, no
+lattice involved), and `DuplicateMacroDefinition`/`DuplicateMacroParameter` from 1.5's preprocessor,
+which are a 2xxx-band rule about directives.
+
+**This is not a story of a working feature being dropped.** By the end of 1.5 the surrounding analysis
+was largely switched off — `SPA/Logic/Analysers/Analysers.cs` was 398 of 399 non-blank lines commented,
+`AST/Expressions/OperatorData.cs` 913 of 926, `ExpressionAnalyzer.cs` 143 of 157 — and the parts still
+live carried their own noise admission: the `ArgumentTypeMismatch`/`Unverified` split exists precisely
+because the library's declared types could not be trusted enough for one severity. What was not carried
+over was an attempt that had already been half retired, and saying so is the honest version. The gap is
+still real, and nothing recorded it until now.
+
+**What this tree already has to build on:**
+
+- `Typing/FlowTyper.cs` (910 lines) — a forward per-function walk that types assignments from literals,
+  arithmetic, globals and builtin return types, over `ScrType`, a 12-value FLAT enum with a `Join`.
+  It already feeds hover, inlay hints, `PreferBooleanLiteralLint` (5002) and `ReadOnlyWriteLint`
+  (5004/5005), so it is not true that it produces nothing — what produces nothing is UNCERTAINTY:
+  `ScrType`'s own summary states that `Unknown` never yields a hint or diagnostic, and `Join`
+  collapses any disagreement to `Unknown` rather than guess a union. Against 1.5 what is missing is
+  unions, constant values, entity subtypes, and an environment retained per position.
+- The API data. Every bundled library states each parameter's and return's type, unused for checking:
+  BO3's GSC file alone has 2,191 entries and, across parameters and returns, 25 distinct `dataType`
+  spellings — ten of them unions such as `"int | string"`, so mapping the data onto `ScrType` is
+  itself a decision and not a line of code. `VoidResultLint` (5019) is the standing proof that a rule
+  can be driven off this data without a lattice at all.
+
+**The route back, and the order it has to go in:**
+
+1. **Compute and emit have to separate first.** The two lints that use FlowTyper today read
+   `InferAssignments` — a list of assignment SITES — and emit from their own walks. A type rule needs
+   the environment AT a position instead, and the walk does not retain one; that is the same missing
+   piece as the hover-join limitation below. Built once it serves hover, the join and every rule after;
+   built per rule it serves none of them.
+2. **One rule at a time, each measured over the corpus before it is given a severity.** `add-diagnostic`
+   step 6 is not optional here, and this family is exactly the shape that fails it: `GSCode.Workspace/FOLDER.md`
+   states the rule as an Error must never land on code that ships and works, and GSC's typelessness means
+   most of these can honestly only ever be Warnings. The evidence that the data cannot carry an Error
+   already exists — the mandatory-COUNT check alone reported 141, 280 and 157 findings on CoD4, WaW and
+   BO1 from library errors, and the builtin upper bound 634 on BO3. A type check depends on the same data
+   more heavily than a count does.
+3. **Cheapest first, because each is worth having alone.** Duplicate `default:` needs no types.
+   `DivisionByZero` on a literal zero divisor needs constant folding of a literal, not a lattice. `const`
+   validation needs neither: `ConstDeclNode` is already in the AST and both `UnassignedVariableLint` and
+   `UnusedLocalLint` already walk it, so "assigned after declaration" is a syntactic question.
+
+Restoring the family AS a family is the one approach to rule out. It is what 1.5 did, and commenting the
+result out is what 1.5 then had to do about it.
+
 ---
 
 ## Known limitations from the triage pass

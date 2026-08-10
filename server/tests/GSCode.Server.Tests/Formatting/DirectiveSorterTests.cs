@@ -11,6 +11,10 @@ namespace GSCode.Server.Tests.Formatting;
 /// one depends on. And the whole pass stands down when a `#define` precedes an `#insert`, the one
 /// arrangement where regrouping could lift an insert above a macro it needs — which no stock script
 /// does, but a mod might.
+///
+/// A backslash-continued directive is one entry. The preprocessor ends a macro body at the first
+/// newline not preceded by a backslash, so a separator dropped between the `\` and the line it
+/// continues empties the macro and turns its body into top-level code.
 /// </summary>
 public class DirectiveSorterTests
 {
@@ -98,6 +102,69 @@ public class DirectiveSorterTests
         string source = "#using scripts\\a;\n\nfunction f()\n{\n}\n\n#precache( \"model\", \"m\" );\n\nfunction g()\n{\n}\n";
 
         Assert.Null(DirectiveSorter.Sort(source));
+    }
+
+    [Fact]
+    public void AMultiLineDefineStaysWithItsContinuation()
+    {
+        // A blank line between the '\' and the line it continues ends the macro: FOO becomes empty
+        // and its body becomes a stray top-level statement.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\b;\n#define FOO( a ) \\\n    a + 1\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\b;\n\n#define FOO( a ) \\\n    a + 1\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void AMultiLineDefineMovesAsOneUnitWhenItsGroupIsReordered()
+    {
+        // Both body lines have to travel with the #define when the group order puts it after the
+        // #precache that preceded it.
+        string? sorted = DirectiveSorter.Sort(
+            "#precache( \"model\", \"m\" );\n#define FOO( a ) \\\n    a + \\\n    1\n#using scripts\\a;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\a;\n\n#define FOO( a ) \\\n    a + \\\n    1\n\n#precache( \"model\", \"m\" );\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void AContinuationSwallowedByABlankLineIsRejectedByTheSafetyGate()
+    {
+        // The gate joins a '\' to the next PHYSICAL line, so an inserted blank there changes a
+        // logical line rather than disappearing into the blank-line exemption.
+        string intact = "#define FOO( a ) \\\n    a + 1\n\nfunction f()\n{\n}\n";
+        string severed = "#define FOO( a ) \\\n\n    a + 1\n\nfunction f()\n{\n}\n";
+
+        Assert.False(DirectiveSorter.SameLines(intact, severed));
+        Assert.True(DirectiveSorter.SameLines(intact, intact));
+    }
+
+    [Fact]
+    public void AHeaderBannerSeparatedByABlankLineStaysAtTheTop()
+    {
+        // A banner divorced from the first import by a blank line describes the FILE, so sorting
+        // must not carry it into the middle of the import block.
+        string? sorted = DirectiveSorter.Sort(
+            "// ============\n// t.gsc\n// ============\n\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// ============\n// t.gsc\n// ============\n\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void SortingIsIdempotent()
+    {
+        string source =
+            "// banner\n\n#precache( \"model\", \"b\" );\n#using scripts\\z;\n#using scripts\\a;\n"
+            + "#define FOO( a ) \\\n    a + 1\n\nfunction f()\n{\n}\n";
+
+        string once = DirectiveSorter.Sort(source)!;
+
+        Assert.Null(DirectiveSorter.Sort(once));
     }
 
     [Fact]

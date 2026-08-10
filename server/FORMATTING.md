@@ -117,9 +117,19 @@ operation that moves code rather than whitespace, so it is fenced on three sides
 It also runs a line-multiset check on its own output, so a line can be moved but never dropped,
 duplicated or edited — and it applies to **Format Document only**, never to range or on-type
 formatting, where hoisting the whole file's header from under a partial edit would be startling.
+A backslash-continued line is compared joined to what physically follows it, blank or not: a blank
+line after a `\` is not a separator but a semantic edit, and the multiset check would otherwise be
+blind to the one whitespace change this pass can make that changes meaning.
 
-Comments travel with the directive beneath them. Only the leading block is touched; a `#precache`
-sitting between two functions is someone's deliberate placement and stays there.
+A directive continued with a trailing backslash owns every line of its continuation and moves as
+one unit. That matters for `#define`: the preprocessor ends a macro body at the first newline not
+preceded by a backslash, so a blank line between the `\` and the line it continues would empty the
+macro and leave its body as top-level code.
+
+Comments travel with the directive beneath them. A comment run separated from the first directive
+by a blank line is a file banner rather than an annotation, and stays above the block instead of
+being carried into the middle of it. Only the leading block is touched; a `#precache` sitting
+between two functions is someone's deliberate placement and stays there.
 
 Worth it: 498 of the 980 stock scripts are not in canonical order, and the same 498 have unsorted
 `#using` lines.

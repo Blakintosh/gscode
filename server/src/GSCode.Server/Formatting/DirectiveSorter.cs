@@ -23,7 +23,14 @@ namespace GSCode.Server.Formatting;
 ///   arrangement where regrouping could move an insert above a macro it needs. That does not occur
 ///   in any of the 980 stock scripts, but a mod is not the stock scripts.
 ///
+/// A directive continued with a trailing backslash owns every line of the continuation. That is
+/// load-bearing for <c>#define</c>: the preprocessor ends a macro body at the first newline not
+/// preceded by a backslash, so a blank line inserted between the <c>\</c> and the line it continues
+/// empties the macro and turns its body into top-level code.
+///
 /// Comments travel with the directive beneath them, so an annotated import keeps its annotation.
+/// A comment run separated from the first directive by a blank line is a FILE banner rather than an
+/// annotation, and stays put above the block.
 /// </summary>
 public static class DirectiveSorter
 {
@@ -77,6 +84,7 @@ public static class DirectiveSorter
         string[] lines = formatted.Split('\n');
 
         List<Entry> entries = [];
+        List<string> banner = [];
         List<string> pending = [];
         int consumedThrough = -1;
         int ordinal = 0;
@@ -92,6 +100,15 @@ public static class DirectiveSorter
                 // Blank lines inside the block are the separators this pass rewrites; drop them.
                 // A blank line only ends the block if code has already followed, which the
                 // directive/comment checks below decide.
+                if ( entries.Count == 0 && pending.Count > 0 )
+                {
+                    // Comments above the FIRST directive with a blank line between them describe
+                    // the file, not the import under them. Sorting must not carry them into the
+                    // middle of the block.
+                    banner.AddRange(pending);
+                    pending.Clear();
+                }
+
                 continue;
             }
 
@@ -121,6 +138,15 @@ public static class DirectiveSorter
 
             List<string> owned = [.. pending, line];
             pending.Clear();
+
+            // A trailing backslash binds the next PHYSICAL line, so the whole run is one entry.
+            // Leaving the continuation to the remainder puts this pass's blank separator between a
+            // '\' and the line it continues, which ends a macro body.
+            while ( index + 1 < lines.Length && IsContinued(lines[index]) )
+            {
+                index++;
+                owned.Add(lines[index]);
+            }
 
             entries.Add(new Entry
             {
@@ -157,6 +183,16 @@ public static class DirectiveSorter
         });
 
         StringBuilder rebuilt = new();
+        foreach ( string line in banner )
+        {
+            rebuilt.Append(line).Append('\n');
+        }
+
+        if ( banner.Count > 0 )
+        {
+            rebuilt.Append('\n');
+        }
+
         int previousGroup = -1;
         foreach ( Entry entry in ordered )
         {
@@ -195,14 +231,26 @@ public static class DirectiveSorter
         return trimmed[..end];
     }
 
+    /// <summary>Whether a line ends in a backslash, so the next physical line continues it.</summary>
+    private static bool IsContinued(string line)
+    {
+        string trimmed = line.TrimEnd();
+        return trimmed.Length > 0 && trimmed[^1] == '\\';
+    }
+
     /// <summary>
     /// The safety gate: reordering may move lines but must never change the set of them. Blank
     /// lines are excluded, since rewriting the separators is the point.
+    ///
+    /// Except after a backslash. There a blank line is not a separator but a semantic edit — it
+    /// ends the macro the backslash was continuing — so a continued line is compared JOINED to
+    /// what physically follows it, blank or not. Without that, the one whitespace change this pass
+    /// can make that alters meaning is the one change the gate is blind to.
     /// </summary>
-    private static bool SameLines(string before, string after)
+    internal static bool SameLines(string before, string after)
     {
-        List<string> left = [.. before.Split('\n').Select(static line => line.Trim()).Where(static line => line.Length > 0)];
-        List<string> right = [.. after.Split('\n').Select(static line => line.Trim()).Where(static line => line.Length > 0)];
+        List<string> left = LogicalLines(before);
+        List<string> right = LogicalLines(after);
 
         if ( left.Count != right.Count )
         {
@@ -221,5 +269,32 @@ public static class DirectiveSorter
         }
 
         return true;
+    }
+
+    /// <summary>Trimmed non-blank lines, with a backslash-continued run folded into one entry.</summary>
+    private static List<string> LogicalLines(string text)
+    {
+        string[] lines = text.Split('\n');
+        List<string> logical = [];
+
+        for ( int index = 0; index < lines.Length; index++ )
+        {
+            string trimmed = lines[index].Trim();
+            if ( trimmed.Length == 0 )
+            {
+                continue;
+            }
+
+            StringBuilder joined = new(trimmed);
+            while ( index + 1 < lines.Length && joined[^1] == '\\' )
+            {
+                index++;
+                joined.Append('\n').Append(lines[index].Trim());
+            }
+
+            logical.Add(joined.ToString());
+        }
+
+        return logical;
     }
 }

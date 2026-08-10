@@ -90,6 +90,35 @@ public class GscFormatterTests
     }
 
     [Fact]
+    public void Format_KeepsAMultiLineDefineAttachedToItsContinuation()
+    {
+        // The directive sorter runs outside the token-equality gate. Separating a '\' from the line
+        // it continues ends the macro: FOO becomes empty and its body becomes top-level code.
+        string source = "#using scripts\\b;\n#define FOO( a ) \\\n    a + 1\n\nfunction f()\n{\n    x = FOO( 1 );\n}\n";
+
+        string? formatted = Format(source);
+
+        Assert.NotNull(formatted);
+        Assert.DoesNotContain("\\\n\n", formatted);
+
+        // A non-null second pass is the proof the body is still the macro's: severing it leaves
+        // `a + 1` as a top-level statement, and Format refuses a file with syntax errors.
+        Assert.NotNull(Format(formatted));
+    }
+
+    [Fact]
+    public void Format_IsIdempotentOverAMultiLineDefine()
+    {
+        string source = "#precache( \"model\", \"m\" );\n#using scripts\\b;\n#define FOO( a ) \\\n    a + 1\n\nfunction f()\n{\n    x = FOO( 1 );\n}\n";
+
+        string? once = Format(source);
+        Assert.NotNull(once);
+        string? twice = Format(once);
+
+        Assert.Equal(once, twice);
+    }
+
+    [Fact]
     public void Format_KeepsTrailingCommentOnItsLine()
     {
         string source = "function f()\n{\n    a = 1; // note\n}\n";

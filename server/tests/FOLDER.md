@@ -137,7 +137,8 @@ resolution diagnostics · `PathCallResolutionTests` a path call into a file the
 distribution does not ship, reported once for the file rather than once per call ·
 `UnreachableCodeLintTests` 5015 · `UnassignedVariableLintTests` 5016, and the ten shapes that are
 NOT mistakes — each appeared in code that ships and works · `PragmaDirectiveTests` in-comment
-suppression · `GameShapeDetectorTests` inferring a workspace's game · `WorkspaceDiagnosticBatchTests`
+suppression · `IgnoreCommentTests` 1.5's `// gscode ignore` alias, which suppresses the line below
+it alone · `GameShapeDetectorTests` inferring a workspace's game · `WorkspaceDiagnosticBatchTests`
 the batching and stored-diagnostic path used for indexed files.
 
 **Api.** `ApiLoaderTests` the builtin library · `ClientApiTests` client-library derivation ·

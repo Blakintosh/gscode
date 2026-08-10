@@ -123,6 +123,18 @@ To leave a hand-formatted region untouched while keeping diagnostics enabled, us
 `format` affects GSCode formatting only; it does not suppress diagnostics. Prefer a specific code
 over `all` so new diagnostics are not hidden accidentally.
 
+GSCode 1.5's `// gscode ignore` is still accepted as a legacy alias. It suppresses every diagnostic
+on the one line below the comment — no more, and it opens no region:
+
+```gsc
+// gscode ignore
+foo_that_exists_only_in_a_custom_engine_build();
+```
+
+`// gsc ignore` and the block form `/* gscode ignore */` work the same way; a block comment covers
+the line below the line it closes on. Prefer `#pragma warning disable` in new code — it names the
+code it suppresses and says where it stops.
+
 ### Commands and useful editor features
 
 - **GSCode: Show Server Output** opens the language-server log.

@@ -26,6 +26,9 @@ A complete ground-up rewrite of the language server and VS Code extension.
   lint.
 - Commands: `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, and
   `gscode.openApiLibrary` (`shift+f1` in gsc/csc/gsh files).
+- In-source suppression carried inside comments: `#pragma warning disable|restore <code>|all|format`.
+  1.5's `// gscode ignore` still works as a legacy alias for it, suppressing every diagnostic on the
+  line below the comment.
 
 ### Changed
 - Requires the .NET 10 runtime.

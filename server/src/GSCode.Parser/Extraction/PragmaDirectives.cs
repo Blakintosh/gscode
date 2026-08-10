@@ -18,8 +18,27 @@ public enum PragmaTarget
     Format,
 }
 
-/// <summary>One <c>disable</c> or <c>restore</c>, at the line it was written on.</summary>
-public readonly record struct PragmaDirective(int Line, bool Disable, PragmaTarget Target, int Code);
+/// <summary>How far a directive reaches.</summary>
+public enum PragmaScope
+{
+    /// <summary>From its line to the next directive that touches the same target, or end of file.</summary>
+    FromHere,
+
+    /// <summary>Its line alone. Reads and writes no running state.</summary>
+    OneLine,
+}
+
+/// <summary>
+/// One <c>disable</c> or <c>restore</c>, at the line it applies from — which for a
+/// <see cref="PragmaScope.OneLine"/> directive is the line it covers, not the line it was
+/// written on.
+/// </summary>
+public readonly record struct PragmaDirective(
+    int Line,
+    bool Disable,
+    PragmaTarget Target,
+    int Code,
+    PragmaScope Scope = PragmaScope.FromHere);
 
 /// <summary>
 /// In-source pragmas, carried INSIDE COMMENTS.
@@ -45,6 +64,12 @@ public readonly record struct PragmaDirective(int Line, bool Disable, PragmaTarg
 /// <c>all</c> is accepted in place of a code, and codes may be written bare (<c>5014</c>) or
 /// prefixed the way the editor displays them (<c>gscode-5014</c>), because that is what is on
 /// screen when someone decides to suppress one.
+///
+/// 1.5's <c>// gscode ignore</c> is scanned here too, as an alias rather than a second mechanism:
+/// it becomes a <see cref="PragmaTarget.AllCodes"/> disable scoped to the one line below the
+/// comment. Files carrying it are already written, and a suppression that silently stops
+/// suppressing is the worst kind of regression — the diagnostics come back, and nothing on screen
+/// says why.
 /// </summary>
 public static class PragmaDirectives
 {
@@ -52,7 +77,7 @@ public static class PragmaDirectives
         @"#pragma\s+warning\s+(?<action>disable|restore)\s+(?<target>[A-Za-z0-9\-]+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    /// <summary>Every pragma in the file, in source order.</summary>
+    /// <summary>Every directive in the file, including the ignore alias, in source order.</summary>
     public static ImmutableArray<PragmaDirective> Scan(ImmutableArray<Token> tokens, Core.Text.SourceText text)
     {
         ImmutableArray<PragmaDirective>.Builder directives = ImmutableArray.CreateBuilder<PragmaDirective>();
@@ -64,11 +89,26 @@ public static class PragmaDirectives
                 continue;
             }
 
+            ReadOnlySpan<char> comment = token.GetText(text);
+
+            if ( IsIgnoreComment(comment) )
+            {
+                // 1.5 keyed off the comment's END line, so a block comment covers the line below
+                // where it closes rather than below where it opened. A line comment's range ends
+                // on the line it started on, so one expression serves both.
+                directives.Add(new PragmaDirective(
+                    token.Range.End.Line + 1,
+                    Disable: true,
+                    PragmaTarget.AllCodes,
+                    Code: 0,
+                    PragmaScope.OneLine));
+                continue;
+            }
+
             // The word has to be present before the string and the regex are worth paying for.
             // This runs over every comment of every file on every analysis, and a doc-commented
             // script has hundreds; almost none of them contain a pragma. Matching the regex's
             // IgnoreCase here, so the cheap test never disagrees with the expensive one.
-            ReadOnlySpan<char> comment = token.GetText(text);
             if ( !comment.Contains("#pragma", StringComparison.OrdinalIgnoreCase) )
             {
                 continue;
@@ -99,6 +139,11 @@ public static class PragmaDirectives
     /// state an earlier one set. Scoping would have to decide what an unmatched <c>disable</c>
     /// means at the end of a file, and "it stays off" is both the obvious answer and the one this
     /// gives for free.
+    ///
+    /// A <see cref="PragmaScope.OneLine"/> directive stands outside that running state in both
+    /// directions: a <c>restore</c> above it cannot undo it, and it cannot leak onto the lines
+    /// below. That is what makes the <c>// gscode ignore</c> alias an annotation on one line
+    /// rather than a third way of opening a region.
     /// </summary>
     public static bool IsSuppressed(ImmutableArray<PragmaDirective> directives, GscDiagnosticCode code, int line)
     {
@@ -106,12 +151,29 @@ public static class PragmaDirectives
 
         foreach ( PragmaDirective directive in directives )
         {
-            if ( directive.Line > line || directive.Target == PragmaTarget.Format )
+            if ( directive.Target == PragmaTarget.Format )
             {
                 continue;
             }
 
-            if ( directive.Target == PragmaTarget.AllCodes || directive.Code == (int)code )
+            bool matchesCode = directive.Target == PragmaTarget.AllCodes || directive.Code == (int)code;
+
+            if ( directive.Scope == PragmaScope.OneLine )
+            {
+                if ( directive.Line == line && matchesCode && directive.Disable )
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if ( directive.Line > line )
+            {
+                continue;
+            }
+
+            if ( matchesCode )
             {
                 suppressed = directive.Disable;
             }
@@ -136,6 +198,54 @@ public static class PragmaDirectives
         }
 
         return disabled;
+    }
+
+    /// <summary>
+    /// 1.5's <c>// gscode ignore</c> / <c>/* gsc ignore */</c>, matching that release's
+    /// <c>^(?://|/\*)\s*(?:gscode|gsc)\s+ignore\b</c> exactly — including its case sensitivity,
+    /// since every file carrying one was written against it.
+    /// </summary>
+    private static bool IsIgnoreComment(ReadOnlySpan<char> comment)
+    {
+        // Hand-matched rather than run through a Regex: this sits on the same
+        // every-comment-of-every-file path the #pragma pre-check exists to protect, and the shape
+        // is anchored at the opener, so two span comparisons settle it.
+        if ( comment.Length < 2 || comment[0] != '/' || (comment[1] != '/' && comment[1] != '*') )
+        {
+            return false;
+        }
+
+        ReadOnlySpan<char> rest = comment[2..].TrimStart();
+
+        if ( rest.StartsWith("gscode", StringComparison.Ordinal) )
+        {
+            rest = rest["gscode".Length..];
+        }
+        else if ( rest.StartsWith("gsc", StringComparison.Ordinal) )
+        {
+            rest = rest["gsc".Length..];
+        }
+        else
+        {
+            return false;
+        }
+
+        // \s+ : "gscodeignore" and "gscodex ignore" are not this.
+        if ( rest.Length == 0 || !char.IsWhiteSpace(rest[0]) )
+        {
+            return false;
+        }
+
+        rest = rest.TrimStart();
+        if ( !rest.StartsWith("ignore", StringComparison.Ordinal) )
+        {
+            return false;
+        }
+
+        // \b : "gscode ignores the return value" is prose, and prose must not switch a file's
+        // diagnostics off.
+        rest = rest["ignore".Length..];
+        return rest.Length == 0 || !(char.IsLetterOrDigit(rest[0]) || rest[0] == '_');
     }
 
     private static bool TryParseTarget(string written, out PragmaTarget target, out int code)

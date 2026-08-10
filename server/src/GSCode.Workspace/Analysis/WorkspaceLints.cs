@@ -112,7 +112,7 @@ public static class WorkspaceLints
         lints.AddRange(UsingNotFoundLint.Analyze(result, language, resolver, path));
         PerfTracker.End();
         PerfTracker.Begin("lint.NamespaceUsageLint");
-        lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path, contextId, imports));
+        lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path, contextId, imports: imports));
         PerfTracker.End();
         PerfTracker.Begin("lint.UnusedUsingLint");
         lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path, imports));

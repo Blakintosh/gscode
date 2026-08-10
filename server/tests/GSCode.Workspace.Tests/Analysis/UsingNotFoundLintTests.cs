@@ -27,6 +27,7 @@ namespace GSCode.Workspace.Tests.Analysis;
 public class UsingNotFoundLintTests
 {
     private const string Raw = @"C:\bo3\share\raw";
+    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
 
     private static (ImmutableArray<Diagnostic> Missing, ImmutableArray<Diagnostic> All) Lint(string source)
     {
@@ -102,6 +103,46 @@ public class UsingNotFoundLintTests
 
         Assert.Equal(0, missing.Range.Start.Line);
         Assert.True(missing.Range.Start.Character > 0, "the range should start after the directive keyword");
+    }
+
+    /// <summary>
+    /// The same question asked of an <c>#include</c>, which is the only import an IW dialect has.
+    /// Parsed as CoD4 because <c>#include</c> does not lex under BO3 at all.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> LintAsCod4(string source)
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\maps\_utility.gsc", "flag_init( name )\n{\n}\n");
+
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        PathResolver resolver = new(config, files);
+
+        string path = @$"{Raw}\maps\mp\_menus.gsc";
+        ParseResult result = ScriptAnalysis.Analyze(
+            path, ScriptLanguage.Gsc, SourceText.From(source),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable(), Cod4);
+
+        return UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path, Cod4);
+    }
+
+    [Fact]
+    public void AMissingIncludeTargetIsAnError()
+    {
+        // The include half of the same defect, and the one the docstring's argument applies to
+        // unchanged: IncludeUsageLint and UnusedIncludeLint both abandon their pass on an
+        // unresolvable #include, so a transposed letter switched 5026 off for the whole file with
+        // nothing to say why.
+        Diagnostic missing = Assert.Single(LintAsCod4("#include maps\\_utilty;\ninit()\n{\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.UsingNotFound, missing.Code);
+        Assert.Equal(DiagnosticSeverity.Error, missing.Severity);
+        Assert.Contains("_utilty", missing.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APresentIncludeTargetIsFine()
+    {
+        Assert.Empty(LintAsCod4("#include maps\\_utility;\ninit()\n{\n}\n"));
     }
 
     [Fact]

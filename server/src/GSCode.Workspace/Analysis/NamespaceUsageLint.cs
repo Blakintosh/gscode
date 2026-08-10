@@ -30,6 +30,10 @@ namespace GSCode.Workspace.Analysis;
 /// record, the whole lint is suppressed — a namespace that a not-yet-known import might supply
 /// is never flagged. That property is what an Error severity rests on, so weakening any of the
 /// bail-outs below now costs more than it used to.
+///
+/// Namespace dialects only, which is the same gate <see cref="IncludeUsageLint"/> opens on from the
+/// other side. Where a file merges rather than imports there is no <c>#using</c> to add, and the
+/// rule is not just inapplicable but unsatisfiable — see the comment on the check itself.
 /// </summary>
 public static class NamespaceUsageLint
 {
@@ -40,8 +44,23 @@ public static class NamespaceUsageLint
         PathResolver resolver,
         string askingPath,
         string askingContextId = "raw",
+        GameProfile? profile = null,
         FileImports? imports = null)
     {
+        GameProfile game = profile ?? GameProfile.Active;
+
+        // Only where an import is what makes a namespace reachable — the mirror of the gate
+        // IncludeUsageLint opens on. On a merge dialect the rule is not merely inapplicable but
+        // UNSATISFIABLE: `#using` does not lex there (Keywords.IsDirectiveEnabled), so Usings is
+        // always empty, `#namespace` is off too, and the available set can never hold more than the
+        // file's own stem. A CoD4 file writing `myutils::func()` alongside `#include myutils;` links
+        // and runs — extraction keys the function under no namespace, so resolution finds it — and
+        // the message would ask for a directive the dialect has no spelling for.
+        if ( !game.ResolvesByNamespace )
+        {
+            return [];
+        }
+
         // Namespaces callable without an import: the ones the file itself declares into.
         //
         // From the declarations rather than the namespace spans. The spans cover the file
@@ -59,7 +78,7 @@ public static class NamespaceUsageLint
         //
         // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
         // back to resolving here keeps this callable on its own, which the tests rely on.
-        FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
+        FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath, game);
         if ( !resolvedImports.Complete )
         {
             return [];

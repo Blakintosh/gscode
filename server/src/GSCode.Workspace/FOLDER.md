@@ -310,9 +310,9 @@ surfaces.
 
 ## Analysis/NamespaceUsageLint.cs
 
-- `static NamespaceUsageLint.Analyze(result, store, language, resolver, askingPath)` — a
-  cross-file lint: a qualified call `ns::foo()` should have a `#using` that imports a file
-  declaring namespace `ns` (or `ns` be one of the file's own namespaces). Returns Error
+- `static NamespaceUsageLint.Analyze(result, store, language, resolver, askingPath, contextId,
+  profile?, imports?)` — a cross-file lint: a qualified call `ns::foo()` should have a `#using` that
+  imports a file declaring namespace `ns` (or `ns` be one of the file's own namespaces). Returns Error
   diagnostics (`NamespaceNotImported`) — the script does not link without the import, so it is a
   broken build rather than a style point; it ran as a Warning first while the rule proved itself
   and was promoted after holding at zero across the stock corpus. Zero false positives by construction: it builds the set
@@ -320,7 +320,10 @@ surfaces.
   resolved to an INDEXED record, and if any `#using` can't be resolved to a record it suppresses
   the whole lint (a not-yet-known import might supply the namespace). Unqualified calls key under
   the current namespace so they never trip it; `sys::` builtin calls have a null namespace and
-  are skipped. Merged into open-document diagnostics by the server's TextSyncHandler.
+  are skipped. Runs on `ResolvesByNamespace` dialects only — the mirror of `IncludeUsageLint`'s gate.
+  On a merge dialect `#using` does not lex and `#namespace` is off, so the available set can never
+  hold anything but the file's own stem and no edit could clear the Error, while `myutils::func()`
+  links there through an `#include`. Merged into open-document diagnostics by the server's TextSyncHandler.
 
 ## Analysis/UnusedUsingLint.cs
 
@@ -425,7 +428,11 @@ reported as an Error must never land on code that ships and works.
   arrived at later: as Information it was the one rule of its kind that did reach the Problems panel,
   and it put 4,711 entries there across the five games — 1,716 on MW2 alone — in code that ships and
   works. The `Unnecessary` fade was always the useful half, and it is unchanged.
-- `UsingNotFoundLint` (5009) — an import naming no file.
+- `UsingNotFoundLint` (5009) — an import naming no file, `#using` or `#include` alike. One code for
+  both: no dialect has both spellings, and "Cannot find script" is the same sentence either way. The
+  `#include` half was the missing one, and it took 5026 with it — that rule stands down on an
+  unresolvable include, so a transposed letter switched off the merge dialects' only import Error
+  and said nothing about why.
 - `VoidResultLint` (5019) — keeping the result of a builtin that returns nothing. Only builtins:
   GSC declares no return type, so the same claim about a script function would be a guess.
 - `GameShapeDetector` — not a lint but the mismatch check behind it: reads a file's directives to

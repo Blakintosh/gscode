@@ -123,7 +123,9 @@ that by building `ScriptRecord`s by hand before the profile was a parameter.
 **Analysis (the lints).** `IncludeUsageLintTests` 5026, the reported case plus every gate the Error
 rests on and the transitive chain the corpus proved is required · `ArgumentCountLintTests` 5022/5023,
 which declaration a call is judged against when a script function and a builtin share a name —
-including the differently-SPELLED case that must not shadow · `UsingNotFoundLintTests` 5009 · `NamespaceUsageLintTests` 5000 ·
+including the differently-SPELLED case that must not shadow · `UsingNotFoundLintTests` 5009, both
+import spellings, since an unresolvable `#include` reported nothing at all and silenced 5026 with it ·
+`NamespaceUsageLintTests` 5000, including the merge dialect where the rule is unsatisfiable and says nothing ·
 `UnusedUsingLintTests` 5001 · `UnusedIncludeLintTests` 5012 · `PreferBooleanLiteralLintTests` 5002 ·
 `PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests` 5004/5005 · `DevBlockCallLintTests` 5006,
 including which dev-only builtin candidates the stock corpus contradicts · `AmbiguousFunctionLintTests`

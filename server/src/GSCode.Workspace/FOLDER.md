@@ -149,7 +149,12 @@ surfaces.
   live parse result so unsaved edits count), and one that cannot falls back to same-file
   visibility. `FindGshReferences` is the deliberate language-guard exception: a `.gsh` serves
   both languages, so macros declared in headers live in the shared GSH store and are
-  unreachable from either LanguageStore.
+  unreachable from either LanguageStore. `FindAllReferences` extends that exception to the
+  language stores themselves — a MACRO key is answered against BOTH worlds whoever asks, because a
+  header is inserted into `.gsc` and `.csc` alike and the asking file's language decides nothing
+  about where its uses are. Scoped to the asking store, a rename started in a `.gsc` left every
+  `.csc` use spelled the old way. Functions keep the isolation: a same-named function in the other
+  world is a different function.
 - `LookupFunctions` asks `DeclarationIndex` for its candidate files rather than scanning every
   record; everything it does with them is unchanged. `IncludeClosure` walks the `#include` graph
   TRANSITIVELY — the compiler flattens the chain, which the corpus settled — and reports whether the
@@ -239,13 +244,19 @@ surfaces.
 
 ## Documents/DocumentStore.cs
 
+- `sealed record AnalysisSnapshot(Result, Version)` — a completed parse and the document version
+  its text came from, as ONE value. Two analyses can be in flight on one document (the debounced
+  run and a request thread through `AnalyzeIfStale`), so the result and the version it is stamped
+  with are published in a single reference write and `Publish` refuses one from an older version
+  than the snapshot already there. As separate fields they could interleave into a new version
+  stamped on an old parse — a document reporting itself FRESH while holding replaced text.
 - `sealed class OpenDocument` — one open editor file: normalized path, language, live
-  SourceText, version, latest ParseResult, and the pending-analysis CTS (newer edits
-  cancel in-flight debounced runs).
+  SourceText, version, the latest `AnalysisSnapshot` (`LatestResult`/`AnalyzedVersion`/`IsStale`
+  all read from it), and the pending-analysis CTS (newer edits cancel in-flight debounced runs).
 - `sealed class DocumentStore` — open-document tracking keyed by normalized path.
   `Open`/`Close`/`TryGet`, `ApplyChange` (LSP incremental splice or full replace), and
   `Analyze` (runs ScriptAnalysis with an insert provider bound to the file's context
-  via the injected factory).
+  via the injected factory, and hands back whichever snapshot stands afterwards).
 
 ## Resolution/ResolverInsertProvider.cs
 

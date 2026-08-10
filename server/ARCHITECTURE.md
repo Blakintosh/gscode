@@ -51,7 +51,9 @@ are answered solely by the `PathResolver`.
 
 All handlers live in `GSCode.Server/Handlers`, each thin over a Workspace query and mapping
 through `Mapping/LspMapping`. The query brain is `Database/DatabaseQueries` + `SymbolAtPosition`;
-GSC/CSC isolation is enforced by resolving the store once from the asking file's language.
+GSC/CSC isolation is enforced by resolving the store once from the asking file's language. The one
+exception is a MACRO key: a header is inserted into both worlds, so its uses are looked up in both
+whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.csc` use behind.
 
 - **Sync + diagnostics**: incremental text sync with debounced re-analysis (`TextSyncHandler`),
   push-model `publishDiagnostics` merging parse diagnostics with cross-file lints

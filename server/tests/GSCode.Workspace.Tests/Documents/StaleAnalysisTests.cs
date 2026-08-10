@@ -25,6 +25,32 @@ public class StaleAnalysisTests
         return new DocumentStore(static _ => NullInsertProvider.Instance, new NameTable());
     }
 
+    /// <summary>How long a gate may wait before the test is declared hung rather than slow.</summary>
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// A store whose FIRST analysis parks inside the insert-provider factory. The factory is
+    /// called within Analyze, which makes it the one place a test can hold an analysis open while
+    /// an edit — or a second analysis — lands on the same document.
+    /// </summary>
+    private static DocumentStore GatedStore(ManualResetEventSlim entered, ManualResetEventSlim release)
+    {
+        int started = 0;
+
+        return new DocumentStore(
+            _ =>
+            {
+                if ( Interlocked.Increment(ref started) == 1 )
+                {
+                    entered.Set();
+                    release.Wait(Patience);
+                }
+
+                return NullInsertProvider.Instance;
+            },
+            new NameTable());
+    }
+
     private static OpenDocument OpenAndAnalyze(DocumentStore store, string text)
     {
         OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", text, version: 1);
@@ -91,19 +117,62 @@ public class StaleAnalysisTests
     }
 
     [Fact]
-    public void AnEditArrivingDuringAnalysisLeavesTheDocumentStale()
+    public async Task AnOlderAnalysisFinishingLast_DoesNotReplaceTheNewerOne()
+    {
+        // Two analyses run on one document at once: the debounced one on a thread-pool
+        // continuation while a request thread enters AnalyzeIfStale through ResolveFresh. They do
+        // not finish in the order they started, and the one that finishes last used to win — so
+        // the document could end up holding a parse of text the user replaced two edits ago, or
+        // (writing the result and the version separately) a NEW version stamped on an OLD parse,
+        // which reports itself fresh.
+        //
+        ManualResetEventSlim insideFirst = new(false);
+        ManualResetEventSlim releaseFirst = new(false);
+        DocumentStore store = GatedStore(insideFirst, releaseFirst);
+
+        OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
+
+        Task<ParseResult> older = Task.Run(() => store.Analyze(document));
+        Assert.True(insideFirst.Wait(Patience));
+
+        store.ApplyChange(document, range: null, "#pre\n", version: 2);
+        store.Analyze(document);
+
+        releaseFirst.Set();
+        ParseResult olderResult = await older.WaitAsync(Patience);
+
+        Assert.Equal(2, document.AnalyzedVersion);
+        Assert.Equal("#pre\n", document.LatestResult!.Text.Text);
+        Assert.False(document.IsStale);
+
+        // The superseded analysis' own caller publishes diagnostics from what Analyze hands back,
+        // so it has to be handed the parse that won, not the one it computed.
+        Assert.Equal("#pre\n", olderResult.Text.Text);
+    }
+
+    [Fact]
+    public async Task AnEditArrivingDuringAnalysisLeavesTheDocumentStale()
     {
         // Analyze stamps the version it READ, not the version at the end. Stamping the latter
         // would mark the document current against text that was never analysed — the same bug,
         // reintroduced through the fix.
-        DocumentStore store = NewStore();
+        ManualResetEventSlim inside = new(false);
+        ManualResetEventSlim release = new(false);
+        DocumentStore store = GatedStore(inside, release);
+
         OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
 
-        // Stand in for the race: the edit lands between Analyze reading Version and finishing.
-        document.Version = 2;
-        document.Text = SourceText.From("#pre\n");
-        document.AnalyzedVersion = 1;
+        Task<ParseResult> analysis = Task.Run(() => store.Analyze(document));
+        Assert.True(inside.Wait(Patience));
+
+        // The edit lands after Analyze has taken the version and the text, and before it finishes.
+        store.ApplyChange(document, range: null, "#pre\n", version: 2);
+
+        release.Set();
+        await analysis.WaitAsync(Patience);
 
         Assert.True(document.IsStale);
+        Assert.Equal(1, document.AnalyzedVersion);
+        Assert.Equal("#p\n", document.LatestResult!.Text.Text);
     }
 }

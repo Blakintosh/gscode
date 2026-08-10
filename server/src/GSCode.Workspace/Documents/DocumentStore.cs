@@ -9,6 +9,19 @@ using GSCode.Parser.Preprocessing;
 
 namespace GSCode.Workspace.Documents;
 
+/// <summary>
+/// A completed analysis and the document version whose text produced it, published as one
+/// immutable pair.
+///
+/// The two were separate fields, written one after the other. Two analyses can run on one document
+/// at once — the debounced one on a thread-pool continuation while a request thread enters
+/// <see cref="DocumentStore.AnalyzeIfStale"/> — so the writes could interleave into a NEW version
+/// stamped on an OLD parse: a document that reports itself fresh while holding text the user has
+/// already replaced, which is exactly what the staleness check exists to prevent. One reference
+/// write of a pair cannot come apart that way.
+/// </summary>
+public sealed record AnalysisSnapshot(ParseResult Result, int Version);
+
 /// <summary>One open editor document: its live text and latest analysis.</summary>
 public sealed class OpenDocument
 {
@@ -17,23 +30,71 @@ public sealed class OpenDocument
     public required SourceText Text { get; set; }
     public int Version { get; set; }
 
-    /// <summary>Latest completed analysis; null only before the first run finishes.</summary>
-    public ParseResult? LatestResult { get; set; }
+    private AnalysisSnapshot? _analysis;
 
     /// <summary>
-    /// The <see cref="Version"/> that <see cref="LatestResult"/> was produced from, or -1 before
-    /// the first run.
+    /// The latest published analysis and the version it came from; null before the first run
+    /// finishes.
     ///
     /// Text updates synchronously on every keystroke while analysis is debounced, so between an
-    /// edit and the debounce firing these disagree. Any feature that pairs a LIVE cursor position
-    /// with the STALE result text is then reading the wrong characters entirely.
+    /// edit and the debounce firing the snapshot's version and <see cref="Version"/> disagree. Any
+    /// feature that pairs a LIVE cursor position with the STALE result text is then reading the
+    /// wrong characters entirely.
     /// </summary>
-    public int AnalyzedVersion { get; set; } = -1;
+    public AnalysisSnapshot? Analysis
+    {
+        get { return Volatile.Read(ref _analysis); }
+    }
+
+    /// <summary>Latest completed analysis; null only before the first run finishes.</summary>
+    public ParseResult? LatestResult
+    {
+        get { return Analysis?.Result; }
+    }
+
+    /// <summary>The <see cref="Version"/> <see cref="LatestResult"/> was produced from, or -1 before the first run.</summary>
+    public int AnalyzedVersion
+    {
+        get { return Analysis?.Version ?? -1; }
+    }
 
     /// <summary>True when the text has moved on since the last completed analysis.</summary>
     public bool IsStale
     {
-        get { return AnalyzedVersion != Version; }
+        get
+        {
+            AnalysisSnapshot? analysis = Analysis;
+            return analysis is null || analysis.Version != Version;
+        }
+    }
+
+    /// <summary>
+    /// Publishes an analysis, unless one from a newer version is already published, and returns
+    /// whichever now stands.
+    ///
+    /// Analyses do not complete in the order they started: a request-thread run that began first
+    /// can return after the debounced run that overtook it. Letting the last writer win would put
+    /// a parse of two-edits-ago text back in front of the editor, so the version decides instead.
+    /// The caller is handed the winner because it publishes diagnostics from what it gets back,
+    /// and a superseded parse must not be what those describe.
+    /// </summary>
+    public AnalysisSnapshot Publish(ParseResult result, int version)
+    {
+        AnalysisSnapshot published = new(result, version);
+
+        while ( true )
+        {
+            AnalysisSnapshot? current = Volatile.Read(ref _analysis);
+            if ( current is not null && current.Version >= version )
+            {
+                return current;
+            }
+
+            if ( ReferenceEquals(Interlocked.CompareExchange(ref _analysis, published, current), current) )
+            {
+                return published;
+            }
+        }
     }
 
     /// <summary>Cancels the in-flight debounced analysis when a newer edit arrives.</summary>
@@ -118,22 +179,24 @@ public sealed class DocumentStore
     /// <summary>Runs the full per-file pipeline on the document's current text.</summary>
     public ParseResult Analyze(OpenDocument document)
     {
-        // Read the version FIRST: an edit arriving mid-analysis must leave the document marked
-        // stale, not stamped with a version whose text was never analysed.
+        // Read the version and the text TOGETHER, before anything slow, and analyse those: an edit
+        // arriving mid-analysis must leave the document marked stale, not stamped with a version
+        // whose text was never analysed. Both are read from a document another thread is free to
+        // edit, so taking them in one place is what keeps the pair the analysis is stamped with
+        // consistent.
         int version = document.Version;
+        SourceText text = document.Text;
 
         ParseResult result = ScriptAnalysis.Analyze(
             document.Path,
             document.Language,
-            document.Text,
+            text,
             _insertProviderFactory(document.Path),
             _names,
             profile: null,
             headerCache: _headerCache);
 
-        document.LatestResult = result;
-        document.AnalyzedVersion = version;
-        return result;
+        return document.Publish(result, version).Result;
     }
 
     /// <summary>
@@ -146,9 +209,13 @@ public sealed class DocumentStore
     /// </summary>
     public ParseResult AnalyzeIfStale(OpenDocument document)
     {
-        if ( !document.IsStale && document.LatestResult is not null )
+        // One read of the published pair, not a staleness check followed by a separate fetch: the
+        // two reads could straddle a concurrent publish and return a result from a version other
+        // than the one just found to be current.
+        AnalysisSnapshot? analysis = document.Analysis;
+        if ( analysis is not null && analysis.Version == document.Version )
         {
-            return document.LatestResult;
+            return analysis.Result;
         }
 
         return Analyze(document);

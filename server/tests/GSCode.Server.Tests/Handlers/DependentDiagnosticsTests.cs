@@ -1,5 +1,5 @@
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
+using GSCode.Core;
+using GSCode.Parser.Preprocessing;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Documents;
 using Xunit;
@@ -16,16 +16,26 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class DependentDiagnosticsTests
 {
+    /// <summary>
+    /// A document analysed at <paramref name="analyzedVersion"/> and then edited up to
+    /// <paramref name="version"/>. Built through the store rather than by setting the two
+    /// versions: the analysed version is published with its parse as one pair and has no setter,
+    /// which is what stops the two from ever disagreeing about which text was analysed.
+    /// </summary>
     private static OpenDocument Document(string path, int version = 1, int analyzedVersion = 1)
     {
-        return new OpenDocument
+        const string Source = "function main()\n{\n}\n";
+
+        DocumentStore store = new(static _ => NullInsertProvider.Instance, new NameTable());
+        OpenDocument document = store.Open(path, Source, analyzedVersion);
+        store.Analyze(document);
+
+        if ( version != analyzedVersion )
         {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            Text = SourceText.From("function main()\n{\n}\n"),
-            Version = version,
-            AnalyzedVersion = analyzedVersion,
-        };
+            store.ApplyChange(document, range: null, Source, version);
+        }
+
+        return document;
     }
 
     [Fact]

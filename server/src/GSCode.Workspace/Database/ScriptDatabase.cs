@@ -58,6 +58,20 @@ public sealed class ScriptDatabase
     }
 
     /// <summary>
+    /// Both language worlds, for the queries whose subject belongs to neither.
+    ///
+    /// A macro is the case: it is declared in a <c>.gsh</c> that both worlds insert, so the asking
+    /// file's language says nothing about where its uses are. Cached rather than built per call —
+    /// every reference query on a macro key asks for it.
+    /// </summary>
+    public ImmutableArray<LanguageStore> BothLanguageStores { get; }
+
+    public ScriptDatabase()
+    {
+        BothLanguageStores = [Gsc, Csc];
+    }
+
+    /// <summary>
     /// Every store a file of this language may see references in.
     ///
     /// A <c>.gsh</c> is inserted into BOTH worlds, so a macro it defines is used from <c>.gsc</c>
@@ -66,13 +80,15 @@ public sealed class ScriptDatabase
     /// CSC uses of a header macro invisible from the header itself.
     ///
     /// GSC and CSC stay single-store: their separation is what stops a same-named symbol in the
-    /// other world from being conflated with this one.
+    /// other world from being conflated with this one. That is a LANGUAGE scope, not a symbol one —
+    /// a macro key is answered against <see cref="BothLanguageStores"/> whoever asks, because the
+    /// symbol is not in either world (see <see cref="DatabaseQueries.FindAllReferences"/>).
     /// </summary>
     public ImmutableArray<LanguageStore> StoresFor(ScriptLanguage language)
     {
         if ( language == ScriptLanguage.Gsh )
         {
-            return [Gsc, Csc];
+            return BothLanguageStores;
         }
 
         return [StoreFor(language)];

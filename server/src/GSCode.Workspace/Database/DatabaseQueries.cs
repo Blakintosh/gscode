@@ -926,7 +926,18 @@ public static class DatabaseQueries
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
-        foreach ( LanguageStore store in stores )
+        // A MACRO is not a symbol of one language world. It is declared in a .gsh, which is
+        // inserted into .gsc and .csc alike, so a use in either world is a use of the same name and
+        // the asking file's own language decides nothing. Scoped to the asking store, a rename
+        // started in a .gsc rewrote the .gsc and the .gsh and left every .csc use spelled the old
+        // way — expanding to nothing — which is the failure RenameHandler's own comment says it
+        // exists to avoid. Everything else keeps the isolation: a same-named FUNCTION in the other
+        // world is a different function, and conflating the two is what the split is for.
+        ImmutableArray<LanguageStore> scope = key.Kind == SymbolKind.Macro
+            ? database.BothLanguageStores
+            : stores;
+
+        foreach ( LanguageStore store in scope )
         {
             results.AddRange(FindReferences(store, askingContextId, key));
         }

@@ -161,16 +161,38 @@ public class GshMacroLookupTests
     }
 
     [Fact]
-    public void ReferencesFromAScript_StayInThatLanguage()
+    public void MacroReferencesFromAScript_SpanBothLanguages()
     {
-        // Asked from the .gsc, the .csc use is out of scope — but the header's own definition is
-        // still folded in, which is what makes go-to-definition on an inserted macro work.
+        // A macro is not part of a language world: it is declared in a .gsh, which is inserted into
+        // .gsc and .csc alike, so a use in either world is a use of the same symbol. This set is
+        // exactly what RenameHandler turns into edits — scoped to the asking file's own store, a
+        // rename started in the .gsc rewrote the .gsc and the .gsh and left every .csc use spelled
+        // the old way, expanding to nothing.
         ScriptDatabase database = BuildWorkspace();
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found = DatabaseQueries.FindAllReferences(
             database, database.StoresFor(ScriptLanguage.Gsc), "raw", MacroKey("IS_TRUE"));
 
-        Assert.DoesNotContain(found, f => f.Record.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(found, f => f.Record.Path.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(found, f => f.Record.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(found, f => f.Entry.Kind == ReferenceKind.Definition);
+    }
+
+    [Fact]
+    public void FunctionReferencesFromAScript_StayInThatLanguage()
+    {
+        // The macro rule must not widen this one. array_shared.gsc and array_shared.csc each
+        // declare their own array::run, and they are different functions — a rename of one must
+        // not touch the other.
+        ScriptDatabase database = BuildWorkspace();
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found = DatabaseQueries.FindAllReferences(
+            database,
+            database.StoresFor(ScriptLanguage.Gsc),
+            "raw",
+            new SymbolKey("array", "run", SymbolKind.Function));
+
+        Assert.Contains(found, f => f.Record.Path.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(found, f => f.Record.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
     }
 }

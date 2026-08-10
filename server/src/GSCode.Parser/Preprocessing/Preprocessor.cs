@@ -47,6 +47,16 @@ public sealed class Preprocessor
     /// </summary>
     private List<MacroDefinition>? _recordingDefinitions;
 
+    /// <summary>
+    /// How many <c>#if</c> chains have been processed. Bracketed around an inserted header's walk
+    /// the same way the diagnostic and invocation counters are: a conditional makes a header's
+    /// contribution a function of the INCLUDING file's macro state, which is exactly what the cache
+    /// cannot represent. The undefined case is the one that needs the counter — a condition naming
+    /// a macro the file DID define records an invocation and is caught by that gate anyway, while an
+    /// undefined name expands to nothing, leaves no trace, and silently takes the <c>#else</c>.
+    /// </summary>
+    private int _conditionalChains;
+
     private readonly HashSet<string> _activeInsertPaths = new(StringComparer.Ordinal);
     private readonly HashSet<string> _expansionStack = new(StringComparer.Ordinal);
 
@@ -401,7 +411,8 @@ public sealed class Preprocessor
         // it shadowed, and the nested insert edges come with them because dependency tracking
         // needs them whether or not the walk happened.
         if ( _headerCache is not null
-            && _headerCache.TryGet(inserted.Path, out HeaderContribution known) )
+            && _headerCache.TryGet(inserted.Path, out HeaderContribution known)
+            && NestedInsertsResolveAsRecorded(known.Inserts) )
         {
             foreach ( MacroDefinition definition in known.Definitions )
             {
@@ -420,6 +431,7 @@ public sealed class Preprocessor
         int diagnosticsBefore = _diagnostics.Count;
         int invocationsBefore = _invocations.Count;
         int insertsBefore = _inserts.Count;
+        int conditionalsBefore = _conditionalChains;
 
         List<MacroDefinition> recorded = [];
         List<MacroDefinition>? outerRecording = _recordingDefinitions;
@@ -435,15 +447,18 @@ public sealed class Preprocessor
         // A definition recorded inside this header also belongs to whatever header inserted it.
         outerRecording?.AddRange(recorded);
 
-        // Cached ONLY when the header emitted no tokens, reported nothing and invoked nothing -
-        // that is, when its whole effect was to define macros. Anything else is per-includer:
-        // emitted tokens land in that file's stream, and a diagnostic or an invocation carries
-        // the invoking site's range, which differs for every file that inserts it. Those headers
-        // keep being walked, exactly as before. BO3's are all macro banks, so in practice this
-        // refuses nothing.
+        // Cached ONLY when the header emitted no tokens, reported nothing, invoked nothing and
+        // evaluated no condition - that is, when its whole effect was to define macros and that
+        // effect cannot have depended on the file it was inserted from. Anything else is
+        // per-includer: emitted tokens land in that file's stream, a diagnostic or an invocation
+        // carries the invoking site's range, and a #if can see macros this file happens to have
+        // defined. Those headers keep being walked, exactly as before. BO3's stock headers are all
+        // unconditional macro banks (checked: zero #if lines across all 118), so in practice this
+        // refuses nothing there.
         bool pureMacroBank = sink.Count == outputBefore
             && _diagnostics.Count == diagnosticsBefore
-            && _invocations.Count == invocationsBefore;
+            && _invocations.Count == invocationsBefore
+            && _conditionalChains == conditionalsBefore;
 
         if ( _headerCache is not null && pureMacroBank )
         {
@@ -453,6 +468,40 @@ public sealed class Preprocessor
         }
 
         return index;
+    }
+
+    /// <summary>
+    /// Whether every nested <c>#insert</c> the recorded walk followed still names the same file from
+    /// THIS root file's context. A cached contribution is only valid where that holds.
+    ///
+    /// The header cache is keyed by the outer header's resolved path, but the value was produced by
+    /// resolving the nested paths through whichever file walked it first, and resolution is
+    /// per-context: <c>scripts\shared.gsh</c> is the mod's copy for a mod file and raw's for a raw
+    /// one. A mod that overlays only the nested header leaves the outer one resolving to the same
+    /// file, so the key matches while the contribution belongs to another world.
+    ///
+    /// Re-resolving on the hit rather than refusing to cache these headers at all: a refusal would
+    /// give up the cache for every header carrying a nested insert, and re-resolution costs one path
+    /// probe per nested edge against a read, a lex and a full walk. The stored list is the whole
+    /// transitive set the walk produced - a nested header's own nested edges merge upward - and the
+    /// provider is bound to the root file for the entire walk, so checking every entry against this
+    /// one provider asks exactly the question the walk would have asked.
+    /// </summary>
+    private bool NestedInsertsResolveAsRecorded(ImmutableArray<InsertEdge> nested)
+    {
+        foreach ( InsertEdge edge in nested )
+        {
+            // Unresolved edges come with a diagnostic, so a contribution carrying one was never
+            // stored; treated as a mismatch rather than trusted.
+            if ( edge.ResolvedPath is null
+                || !_insertProvider.TryResolveInsertPath(edge.RawPath, out string resolved)
+                || !string.Equals(resolved, edge.ResolvedPath, StringComparison.OrdinalIgnoreCase) )
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsIllegalInsertPath(string rawPath)
@@ -481,6 +530,7 @@ public sealed class Preprocessor
     {
         Token chainStart = frame.Tokens[index];
         bool branchTaken = false;
+        _conditionalChains++;
 
         while ( index < endExclusive )
         {

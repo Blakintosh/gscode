@@ -22,6 +22,16 @@ public interface IInsertProvider
     /// file cannot be found (the preprocessor reports the diagnostic).
     /// </summary>
     bool TryGetInsert(string rawInsertPath, out InsertedFile inserted);
+
+    /// <summary>
+    /// Where the raw path lands from THIS file's context, without reading or lexing the target.
+    ///
+    /// Separate from <see cref="TryGetInsert"/> because the header cache asks it about a header it
+    /// is not going to walk: on a hit it re-resolves every nested <c>#insert</c> the cached walk
+    /// took to confirm they still name the same files. Same answer as TryGetInsert's
+    /// <see cref="InsertedFile.Path"/>, minus the read.
+    /// </summary>
+    bool TryResolveInsertPath(string rawInsertPath, out string resolvedPath);
 }
 
 /// <summary>An insert provider for contexts with no resolver (isolated parses, some tests).</summary>
@@ -32,6 +42,12 @@ public sealed class NullInsertProvider : IInsertProvider
     public bool TryGetInsert(string rawInsertPath, out InsertedFile inserted)
     {
         inserted = null!;
+        return false;
+    }
+
+    public bool TryResolveInsertPath(string rawInsertPath, out string resolvedPath)
+    {
+        resolvedPath = "";
         return false;
     }
 }

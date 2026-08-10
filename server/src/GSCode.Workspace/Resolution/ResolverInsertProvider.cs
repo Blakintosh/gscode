@@ -52,6 +52,13 @@ public sealed class ResolverInsertProvider : IInsertProvider
         return true;
     }
 
+    public bool TryResolveInsertPath(string rawInsertPath, out string resolvedPath)
+    {
+        string? resolved = _resolver.Resolve(_context, rawInsertPath);
+        resolvedPath = resolved ?? "";
+        return resolved is not null;
+    }
+
     /// <summary>Reads and lexes one header, or null when it cannot be read.</summary>
     private InsertedFile? Read(string resolved)
     {

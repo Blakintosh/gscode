@@ -402,5 +402,12 @@ public sealed class WorkspaceIndexer
             inserted = loaded!;
             return loaded is not null;
         }
+
+        public bool TryResolveInsertPath(string rawInsertPath, out string resolvedPath)
+        {
+            string? resolved = _indexer.Resolver.Resolve(_context, rawInsertPath);
+            resolvedPath = resolved ?? "";
+            return resolved is not null;
+        }
     }
 }

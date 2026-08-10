@@ -109,10 +109,19 @@ LSP types anywhere.
   here because the parser cannot reference the workspace that owns the instance; `InsertCache`
   implements it.
 - The preprocessor stores a contribution ONLY when the header emitted no tokens, reported no
-  diagnostic and invoked no macro — when its whole effect was to define things. Anything else is
-  per-includer: emitted tokens belong in that file's stream, and a diagnostic or invocation carries
-  the invoking site's range, which differs per file. Those headers keep being walked, so the cache
-  cannot change what anyone sees.
+  diagnostic, invoked no macro and evaluated no `#if` — when its whole effect was to define things
+  and that effect cannot have depended on the including file. Anything else is per-includer: emitted
+  tokens belong in that file's stream, a diagnostic or invocation carries the invoking site's range,
+  and a condition can name a macro the including file defined. The conditional case needs its own
+  counter because an UNDEFINED name in a condition expands to nothing and leaves no invocation
+  behind — the walk takes the `#else` with no trace that it chose. Those headers keep being walked,
+  so the cache cannot change what anyone sees.
+- Nested `#insert`s are re-resolved on a cache HIT, through the current root file's provider, and a
+  mismatch with the recorded resolved path is treated as a miss. The key is the outer header's
+  resolved path, but the value was produced by resolving the nested paths through whichever file
+  walked it first: a mod overlaying only the nested header leaves the outer one resolving to the
+  same file, so the key would match while the contribution belonged to raw's world. Re-resolving
+  costs one path probe per nested edge, against a read, a lex and a walk to refuse the entry.
 
 ## Syntax/Parser.cs (+ .Declarations / .Statements / .Expressions partials)
 
@@ -190,7 +199,8 @@ LSP types anywhere.
 
 - `sealed record InsertedFile(Path, Text, Tokens)` — a resolved, lexed insert target.
 - `interface IInsertProvider` — supplies #insert targets; Workspace implements it over
-  PathResolver + a lexed-GSH cache, keeping this project I/O-free.
+  PathResolver + a lexed-GSH cache, keeping this project I/O-free. `TryResolveInsertPath` answers
+  where a raw path lands without reading it, for the header-cache hit that re-checks nested inserts.
 - `sealed class NullInsertProvider` — always misses (isolated parses, tests).
 
 ## Preprocessing/PreprocessResult.cs

@@ -83,7 +83,7 @@ public class WatchedFileUpdaterTests
 
         // Disk moves on while the editor holds a different buffer.
         files.AddFile(path, "function renamed()\n{\n}\n");
-        IReadOnlyList<string> touched = updater.Apply(path, WatchedFileChange.Changed, ownedByEditor: true);
+        IReadOnlyList<string> touched = updater.Apply(path, WatchedFileChange.Changed, _ => true);
 
         Assert.Empty(touched);
 
@@ -100,7 +100,7 @@ public class WatchedFileUpdaterTests
         (ScriptDatabase database, WatchedFileUpdater updater, _) = Build();
         string path = @$"{Raw}\scripts\uses_it.gsc";
 
-        updater.Apply(path, WatchedFileChange.Deleted, ownedByEditor: true);
+        updater.Apply(path, WatchedFileChange.Deleted, _ => true);
 
         Assert.True(database.Gsc.TryGet(PathUtil.NormalizeAbsolute(path), out _));
         Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", "", null, "f"));
@@ -116,8 +116,31 @@ public class WatchedFileUpdaterTests
         string gshPath = @$"{Raw}\scripts\shared\shared.gsh";
 
         files.AddFile(gshPath, "#define CAP 9\n");
-        IReadOnlyList<string> touched = updater.Apply(gshPath, WatchedFileChange.Changed, ownedByEditor: true);
+        IReadOnlyList<string> touched = updater.Apply(
+            gshPath, WatchedFileChange.Changed, path => PathUtil.NormalizeAbsolute(path) == PathUtil.NormalizeAbsolute(gshPath));
 
         Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\uses_it.gsc"), touched);
+    }
+
+    [Fact]
+    public void AnOpenDependentOfAChangedHeaderIsNotReindexedFromDisk()
+    {
+        // The other half of the skip: a header's dependents are re-indexed FROM DISK, and one of
+        // them being open makes that the same clobber the changed file's own gate prevents.
+        (ScriptDatabase database, WatchedFileUpdater updater, FakeFileSystem files) = Build();
+        string gshPath = @$"{Raw}\scripts\shared\shared.gsh";
+        string dependent = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\uses_it.gsc");
+
+        // Disk has moved on behind the buffer whose record the database holds.
+        files.AddFile(dependent, "function renamed()\n{\n}\n");
+        files.AddFile(gshPath, "#define CAP 99\n");
+
+        IReadOnlyList<string> touched = updater.Apply(
+            gshPath, WatchedFileChange.Changed, path => PathUtil.NormalizeAbsolute(path) == dependent);
+
+        // The header itself is not open, so it re-indexes; its open dependent does not.
+        Assert.DoesNotContain(dependent, touched);
+        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", "", null, "f"));
+        Assert.Empty(DatabaseQueries.LookupFunctions(database.Gsc, "raw", "", null, "renamed"));
     }
 }

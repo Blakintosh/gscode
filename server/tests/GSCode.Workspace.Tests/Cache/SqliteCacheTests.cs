@@ -320,4 +320,44 @@ public class ColdRestoreTests : IDisposable
         // The dependent resolves and the workspace is intact (no crash, no stale drop).
         Assert.Single(DatabaseQueries.LookupFunctions(db2.Gsc, "raw", "", null, "f"));
     }
+
+    /// <summary>
+    /// The chain case: base.gsh -> wrapper.gsh -> script.gsc, with only base.gsh changed between
+    /// starts. wrapper.gsh's own bytes are untouched so it restores from cache, and marking only
+    /// the headers that were ANALYSED left it out of the changed set — its dependents kept the
+    /// record built against the OLD macro values for the rest of the session.
+    ///
+    /// The macro names the function, so what the second session extracts says which value it saw.
+    /// </summary>
+    [Fact]
+    public async Task AChainedGshChangeBetweenStarts_ReachesTheFarDependent()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\base.gsh", "#define FN alpha\n")
+            .AddFile(@$"{Raw}\scripts\wrapper.gsh", "#insert scripts\\base.gsh;\n")
+            .AddFile(@$"{Raw}\scripts\script.gsc", "#insert scripts\\wrapper.gsh;\nfunction FN()\n{\n}\n");
+
+        (ScriptDatabase db1, WorkspaceIndexer indexer1, _) = Build(files);
+        await using ( SqliteCache cache1 = SqliteCache.Open(_dbPath, "id") )
+        {
+            indexer1.UseCache(cache1, cache1.LoadAll());
+            await indexer1.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+        }
+
+        Assert.Single(DatabaseQueries.LookupFunctions(db1.Gsc, "raw", "", null, "alpha"));
+
+        // Only the far end of the chain changes; both files between it and the script are
+        // byte-identical and restore from the cache.
+        files.AddFile(@$"{Raw}\scripts\base.gsh", "#define FN beta\n");
+
+        (ScriptDatabase db2, WorkspaceIndexer indexer2, _) = Build(files);
+        await using ( SqliteCache cache2 = SqliteCache.Open(_dbPath, "id") )
+        {
+            indexer2.UseCache(cache2, cache2.LoadAll());
+            await indexer2.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+        }
+
+        Assert.Single(DatabaseQueries.LookupFunctions(db2.Gsc, "raw", "", null, "beta"));
+        Assert.Empty(DatabaseQueries.LookupFunctions(db2.Gsc, "raw", "", null, "alpha"));
+    }
 }

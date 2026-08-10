@@ -191,7 +191,9 @@ surfaces.
   `IndexFile` is the single-file path the watcher reuses. `UseCache` enables cold-restore:
   the two-pass `IndexAsync` restores files whose on-disk content hash matches the cached
   record (skipping the parse), then re-parses restored files that #insert a header which
-  itself changed (phase two), and write-throughs every fresh analysis to the cache.
+  itself changed (phase two), and write-throughs every fresh analysis to the cache. Phase
+  two closes the changed-header set over the insert graph first, since a restored `.gsh`
+  that inserts a changed one contributes something new despite its own bytes matching.
   `RemoveFile` drops a deleted file from the database, the cache, and the GSH lex cache.
 
 ## Cache/CacheSchema.cs
@@ -231,7 +233,9 @@ surfaces.
   applies on-disk changes to the database: re-index created/changed files, drop deleted
   ones, and when a GSH changes invalidate its lex cache and re-index every file that
   #inserts it (via `ScriptDatabase.FilesInserting`) so macro edits propagate. Returns
-  the touched paths for diagnostic republishing.
+  the touched paths for diagnostic republishing. Takes an `ownedByEditor` predicate and
+  skips every record it would rewrite for a file that is OPEN — the changed file and any
+  dependent alike — because this reads disk and a buffer may hold unsaved edits.
 
 ## Documents/DocumentStore.cs
 

@@ -201,8 +201,39 @@ public sealed class WorkspaceIndexer
         // Phase two: re-parse restored files whose inserted headers actually changed.
         if ( !changedHeaders.IsEmpty )
         {
+            List<ScriptRecord> restoredList = [.. restoredRecords];
+
+            // A restored header that inserts a changed one changes too — its own bytes are
+            // identical, which is exactly why it restored, but what it contributes is not. Close
+            // the changed set over the header insert graph before asking who is stale: computing
+            // 'stale' straight off the analysed headers reaches one hop only, so in a
+            // base.gsh -> wrapper.gsh -> script.gsc chain the script keeps the record built
+            // against the OLD macro values for the rest of the session.
+            bool grew = true;
+            while ( grew )
+            {
+                grew = false;
+                foreach ( ScriptRecord record in restoredList )
+                {
+                    if ( record.Language != ScriptLanguage.Gsh || changedHeaders.ContainsKey(record.Path) )
+                    {
+                        continue;
+                    }
+
+                    foreach ( DependencyEdge edge in record.Dependencies )
+                    {
+                        if ( edge.IsInsert && changedHeaders.ContainsKey(edge.ResolvedPath) )
+                        {
+                            changedHeaders.TryAdd(record.Path, 0);
+                            grew = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
             List<string> stale = [];
-            foreach ( ScriptRecord record in restoredRecords )
+            foreach ( ScriptRecord record in restoredList )
             {
                 foreach ( DependencyEdge edge in record.Dependencies )
                 {

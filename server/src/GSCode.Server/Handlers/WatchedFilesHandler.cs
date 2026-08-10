@@ -59,6 +59,15 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
         bool exportsMoved = false;
         bool applied = false;
 
+        // The editor's buffer wins for any open file the update would rewrite — the changed file
+        // itself, and every dependent of a changed header. The text-sync handler analyses an open
+        // document on open, change and save, so re-reading disk here would either duplicate that
+        // work or, with unsaved edits, quietly replace its record with older content.
+        bool OwnedByEditor(string candidate)
+        {
+            return _documents.TryGet(candidate, out OpenDocument _);
+        }
+
         foreach ( FileEvent change in request.Changes )
         {
             WatchedFileChange kind = change.Type switch
@@ -75,13 +84,8 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
                 // Whether this change is one an OPEN file's diagnostics could notice. Read either
                 // side of the update, the same test the edit path uses — a branch switch that
                 // rewrites a hundred bodies moves no signature and needs no re-linting.
-                // The editor's buffer wins for an open file: the text-sync handler analyses it on
-                // open, change and save, so re-reading disk here would either duplicate that work
-                // or, with unsaved edits, quietly replace the buffer's record with older content.
-                bool ownedByEditor = _documents.TryGet(path, out OpenDocument _);
-
                 ulong before = SignatureOf(path);
-                _updater.Apply(path, kind, ownedByEditor);
+                _updater.Apply(path, kind, OwnedByEditor);
                 exportsMoved |= SignatureOf(path) != before;
                 applied = true;
             }

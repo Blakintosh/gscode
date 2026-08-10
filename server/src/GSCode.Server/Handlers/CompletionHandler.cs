@@ -86,11 +86,12 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// <summary>
     /// Answers one completion request.
     ///
-    /// The cancellation checks are here because this is the ONE read path with no debounce in front
-    /// of it. Diagnostics wait ~250 ms behind <c>TextSyncHandler</c>, so a burst of keystrokes
-    /// produces one analysis; completion answers the keystroke that asked, and a client that types
-    /// through its own request cancels it and sends another. Without a check, every superseded
-    /// request was still built in full and its result thrown away by the client.
+    /// The cancellation checks are here because this is a read path with no debounce in front of it
+    /// — as are <see cref="SignatureHelpHandler"/> and <see cref="WorkspaceSymbolHandler"/>, which
+    /// check for the same reason. Diagnostics wait ~250 ms behind <c>TextSyncHandler</c>, so a burst
+    /// of keystrokes produces one analysis; completion answers the keystroke that asked, and a
+    /// client that types through its own request cancels it and sends another. Without a check,
+    /// every superseded request was still built in full and its result thrown away by the client.
     ///
     /// Two places, for two different costs. The first is the request that was cancelled before it
     /// was ever started, which is the common one under fast typing and costs nothing to skip. The

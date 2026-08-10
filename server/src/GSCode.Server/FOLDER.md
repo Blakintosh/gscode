@@ -137,6 +137,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/SignatureHelpHandler.cs
 
 - Maps `SignatureEngine` results to LSP signature help; triggers on `(` and `,` (retrigger `,`).
+- Checks its `CancellationToken` on entry, like completion and workspace symbols: retriggering on
+  every comma means the client cancels one request per keystroke, and `ResolveFresh` sits behind no
+  debounce. On entry only — one signature is built, so there is no loop worth interrupting.
 
 ## Handlers/CodeLensHandler.cs
 

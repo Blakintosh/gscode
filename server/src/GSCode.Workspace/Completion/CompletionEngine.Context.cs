@@ -245,6 +245,13 @@ public sealed partial class CompletionEngine
     /// segment of a path, and the suggestion list would become script paths everywhere. Once a '\'
     /// has been typed the intent is unambiguous — nothing else in GSC expression syntax contains
     /// one, string literals having already been handled by the caller.
+    ///
+    /// '\' ONLY, unlike <see cref="TypedPathBefore"/>. That argument holds for the backslash and
+    /// not for '/', which is division and the start of a comment: accepting it classified
+    /// `hp = maxhealth/2` as a path, and since '/' is a completion trigger character the empty
+    /// result popped over the cursor and — returned with IsIncomplete false — was then filtered
+    /// client-side for the rest of the identifier. A directive's path has no such collision, so
+    /// the normalisation stays there, where a user genuinely does type either separator.
     /// </remarks>
     private static string InlinePathBefore(SourceText text, int offset)
     {
@@ -255,7 +262,7 @@ public sealed partial class CompletionEngine
         while ( start > 0 )
         {
             char c = text.Text[start - 1];
-            if ( c == '\\' || c == '/' )
+            if ( c == '\\' )
             {
                 sawSeparator = true;
             }
@@ -267,7 +274,7 @@ public sealed partial class CompletionEngine
             start--;
         }
 
-        return sawSeparator ? text.Text[start..cursor].Replace('/', '\\') : "";
+        return sawSeparator ? text.Text[start..cursor] : "";
     }
 
     /// <summary>

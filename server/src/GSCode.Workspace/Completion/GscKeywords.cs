@@ -95,6 +95,22 @@ public static class GscKeywords
     ];
 
     /// <summary>
+    /// The directives that are legal INSIDE a function body as well as at top level.
+    ///
+    /// Preprocessing runs over a flat token stream with no notion of where a body starts:
+    /// <c>Preprocessor.ProcessRange</c> dispatches <c>#define</c>, <c>#insert</c> and the
+    /// <c>#if</c> chain from the same walk at any depth, which is what makes the conditional
+    /// wrapping of a single argument or statement work. The rest of the family — the imports,
+    /// <c>#namespace</c>, <c>#precache</c>, the animtree pair — is consumed by the PARSER at file
+    /// scope, so those stay out.
+    ///
+    /// Still filtered through <see cref="IsAvailable"/> by the caller, so a dialect without headers
+    /// is not offered <c>#insert</c>.
+    /// </summary>
+    public static ImmutableArray<string> BodyDirectives { get; } =
+        ["#if", "#elif", "#else", "#endif", "#define", "#insert"];
+
+    /// <summary>
     /// Whether a keyword/directive exists in the given dialect, so completion offers only what the
     /// game has. Directives are gated by their own capability flags (import style, headers, precache);
     /// every plain keyword is gated by the profile's keyword SET — the same data the lexer gates on

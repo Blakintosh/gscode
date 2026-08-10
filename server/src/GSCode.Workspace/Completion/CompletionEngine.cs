@@ -101,12 +101,26 @@ public sealed partial class CompletionEngine
         }
         else if ( IsAfterDirectiveHash(result.Text, offset) )
         {
-            // A '#' inside a function body begins a HASH STRING, the one thing it can mean there.
-            // The quotes are added because the cursor is not inside a string yet — only the '#'
-            // has been typed.
-            return includeLiterals
-                ? LiteralCompletions(result, contextId, SymbolKind.HashString, quoted: true)
-                : [];
+            // A '#' inside a function body has TWO readings, and both are offered.
+            //
+            // The preprocessor walks a flat token stream — Preprocessor.ProcessRange dispatches
+            // #define, #insert and the #if chain with no top-level restriction — so the
+            // conditional family is as legal in a body as it is at file scope, and wrapping one
+            // argument or one statement in an #if is what it is for. Assuming a hash string here
+            // meant typing "#i" in a body offered string literals and never a directive.
+            //
+            // The hash string is the OTHER reading, and only on a dialect that has one: CoD4, WaW
+            // and MW2 have no #"..." literal at all, so there the branch returned a hard empty
+            // array for any '#' typed in a body — and '#' is a completion trigger character, so
+            // that empty list popped over the cursor.
+            //
+            // The quotes come with the literal because the cursor is not inside a string yet.
+            ImmutableArray<CompletionEntry> directives =
+                DirectiveCompletions(game, GscKeywords.BodyDirectives);
+
+            return game.HasHashStrings && includeLiterals
+                ? directives.AddRange(LiteralCompletions(result, contextId, SymbolKind.HashString, quoted: true))
+                : directives;
         }
 
         // An INLINE path call — `maps\mp\_utility::foo()`. On the dialects that have them a file is

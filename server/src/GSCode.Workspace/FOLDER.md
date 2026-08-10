@@ -80,6 +80,10 @@ surfaces.
 - `static GscKeywords` — the statement-scope and top-level keyword/directive lists offered in
   completion (assert/assertmsg excluded — they come from the builtin API instead). Documented
   entries get their KeywordDocs blurb as the completion's documentation.
+- `BodyDirectives` is the third list: the directives the preprocessor dispatches from its flat
+  token walk (`#if`/`#elif`/`#else`/`#endif`, `#define`, `#insert`), which are therefore legal
+  inside a function body as well as at file scope. Everything else in the family is consumed by
+  the parser at file scope and stays out of the in-body list.
 
 ## Completion/CompletionEngine.cs (+ .Context / .Producers / .Entries partials)
 
@@ -91,6 +95,12 @@ surfaces.
   `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
   (+ `.size`), and statement/top-level scope (keywords, the dialect's global objects and snippets,
   file macros, namespace functions, visible classes, namespace-less builtins as call snippets).
+- A `#` INSIDE a body has two readings and gets both: `GscKeywords.BodyDirectives`, plus the
+  `#"..."` literals where `GameProfile.HasHashStrings`. Reading it as a hash string alone lost the
+  `#if` family everywhere and left the three dialects without hash strings an empty list.
+- An inline path (`maps\mp\_utility::foo`) is detected on `\` ONLY. `/` is division, and accepting
+  it classified `hp = maxhealth/2` as a path; the directives' own scan still normalises both,
+  where there is no such collision.
 - Split across four files because one class of 1,891 lines hid the shape of the thing: `Complete`
   is a dispatcher over ~10 contexts, and reading which context reaches which query meant scrolling
   past every scanning helper in between. Same convention as `Parser.cs (+ .Declarations /

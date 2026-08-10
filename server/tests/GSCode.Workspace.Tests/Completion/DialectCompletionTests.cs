@@ -319,6 +319,49 @@ public class DialectCompletionTests
         Assert.DoesNotContain(entries, e => e.Kind is CompletionKind.PathSegment or CompletionKind.PathFile);
     }
 
+    [Theory]
+    [InlineData("hp = maxhealth/")]
+    [InlineData("hp = maxhealth/2")]
+    [InlineData("frac = count/total")]
+    public void UnspacedDivisionIsNotAnInlinePath(string line)
+    {
+        // '/' is the division operator (and the start of a comment); only '\' begins a path. It is
+        // also a completion trigger character, so accepting it as a separator turned every unspaced
+        // division on the four inline-path dialects into a path query that matches nothing — and an
+        // empty list with IsIncomplete false is cached and filtered client-side, so the rest of the
+        // identifier got no suggestions either.
+        ImmutableArray<CompletionEntry> entries = CompleteInCode(line, Cod4);
+
+        Assert.DoesNotContain(entries, e => e.Kind is CompletionKind.PathSegment or CompletionKind.PathFile);
+        Assert.NotEmpty(entries);
+    }
+
+    [Fact]
+    public void ABackslashPathStillCompletesAfterTheSeparatorNarrowing()
+    {
+        // The other half of the same claim: narrowing the scan to '\' must not cost the feature.
+        Assert.Contains(
+            CompleteInCode(@"maps\mp\_ut", Cod4),
+            e => e.Label == "_utility" && e.Kind == CompletionKind.PathFile);
+    }
+
+    [Fact]
+    public void AHashInAFunctionBodyOffersDirectivesOnADialectWithNoHashStrings()
+    {
+        // CoD4, WaW and MW2 have no #"..." literal, so the in-body '#' branch had nothing to offer
+        // and returned a hard empty list. '#' is a trigger character, so that list popped — the
+        // "feels dead" symptom the trigger characters were added to fix.
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("#", Cod4);
+
+        Assert.NotEmpty(entries);
+        Assert.Contains(entries, e => e.Label == "#if");
+        Assert.Contains(entries, e => e.Label == "#define");
+
+        // #insert is a header directive and CoD4 has no headers; #include is its import and is top
+        // level only. Neither belongs in the body list.
+        Assert.DoesNotContain(entries, e => e.Label is "#insert" or "#include");
+    }
+
     [Fact]
     public void IncludeDirectivesGetPathCompletion()
     {

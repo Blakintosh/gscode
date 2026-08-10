@@ -1024,19 +1024,39 @@ public class CompletionEngineTests
     [InlineData("self notify(#")]
     [InlineData("x = #")]
     [InlineData("#")]
-    public void DirectivesAreNotOfferedInsideAFunctionBody(string line)
+    public void TopLevelDirectivesAreNotOfferedInsideAFunctionBody(string line)
     {
-        // The reported bug: `self notify(#` listed all 11 directives.
+        // The reported bug: `self notify(#` listed all 11 directives. The ones that are top level
+        // only stay out; the preprocessor family below is a separate question.
         ImmutableArray<CompletionEntry> entries = CompleteInsideFunction(line);
 
-        Assert.DoesNotContain(entries, e => e.Label.StartsWith("#", StringComparison.Ordinal));
+        Assert.DoesNotContain(entries, e => e.Label is "#using" or "#include" or "#namespace"
+            or "#precache" or "#using_animtree" or "#animtree");
+    }
+
+    [Theory]
+    [InlineData("#")]
+    [InlineData("#i")]
+    [InlineData("x = #")]
+    [InlineData("self notify(#")]
+    public void ThePreprocessorFamilyIsOfferedInsideAFunctionBody(string line)
+    {
+        // The preprocessor walks a flat token stream (Preprocessor.ProcessRange), so #if, #define
+        // and #insert are dispatched wherever they appear — a function body included. Treating the
+        // '#' there as a hash string and nothing else lost the whole family.
+        ImmutableArray<CompletionEntry> entries = CompleteInsideFunction(line);
+
+        foreach ( string directive in new[] { "#if", "#elif", "#else", "#endif", "#define", "#insert" } )
+        {
+            Assert.Contains(entries, e => e.Label == directive);
+        }
     }
 
     [Fact]
-    public void AHashInsideAFunctionBodyOffersHashStrings()
+    public void AHashInsideAFunctionBodyOffersHashStringsToo()
     {
-        // The one thing a '#' can begin there. The quotes come with it, since only the '#' has
-        // been typed and the cursor is not inside a string yet.
+        // The other thing a '#' can begin on a dialect that has them. The quotes come with it,
+        // since only the '#' has been typed and the cursor is not inside a string yet.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(@$"{Raw}\scripts\ui.gsc", "#namespace ui;\nfunction f()\n{\n    x = #\"zombie_state\";\n}\n");
 
@@ -1044,6 +1064,9 @@ public class CompletionEngineTests
 
         CompletionEntry hash = Assert.Single(entries, e => e.Label == "zombie_state");
         Assert.Equal("\"zombie_state\"", hash.InsertText);
+
+        // Both readings at once — the directives do not displace the literals.
+        Assert.Contains(entries, e => e.Label == "#if");
     }
 
     [Fact]

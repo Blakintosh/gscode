@@ -436,11 +436,18 @@ public sealed partial class CompletionEngine
     /// bug. Filtering on "precache" matches, and inserting "precache" onto the '#' already in the
     /// buffer avoids producing "##precache". The label keeps its '#' so the list stays readable.
     /// </summary>
-    private static ImmutableArray<CompletionEntry> DirectiveCompletions(GameProfile game)
+    /// <param name="keywords">
+    /// Which set to draw from — <see cref="GscKeywords.TopLevelKeywords"/> at file scope, or
+    /// <see cref="GscKeywords.BodyDirectives"/> inside a function body, where only the directives
+    /// the preprocessor dispatches from its flat walk are legal. Non-directive words are skipped
+    /// either way, so the top-level list can be passed whole.
+    /// </param>
+    private static ImmutableArray<CompletionEntry> DirectiveCompletions(
+        GameProfile game, ImmutableArray<string> keywords)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
 
-        foreach ( string keyword in GscKeywords.TopLevelKeywords )
+        foreach ( string keyword in keywords )
         {
             if ( !keyword.StartsWith('#') || !GscKeywords.IsAvailable(keyword, game) )
             {
@@ -585,10 +592,11 @@ public sealed partial class CompletionEngine
 
         // A '#' has been typed at top level, so nothing but a directive can be meant. Returning
         // early also keeps functions and variables out of the list. Inside a function body the
-        // caller has already handled '#' as the start of a hash string.
+        // caller has already answered '#' — with the body-legal directives and, where the dialect
+        // has them, hash strings.
         if ( !insideFunction && IsAfterDirectiveHash(result.Text, offset) )
         {
-            return DirectiveCompletions(game);
+            return DirectiveCompletions(game, GscKeywords.TopLevelKeywords);
         }
 
         // Both scopes are filtered to what the active game actually has, so e.g. CoD4 is not

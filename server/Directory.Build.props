@@ -1,16 +1,50 @@
 <Project>
 
-  <!-- Debug Configuration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
-  <!-- add any debug-specific properties or constants here -->
+  <!-- Shared build settings for every project in the v2 solution. LangVersion is pinned
+       (never 'latest') so builds are reproducible across SDK versions. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
+
+    <!-- Parse the XML doc comments so the compiler VALIDATES them. This project keeps its reasoning
+         in doc comments rather than in separate documents, and until this was turned on nothing
+         checked them: a comment could be malformed, attached to the wrong member, or reference a
+         parameter that does not exist, and the build stayed green. Turning it on found 70 such
+         cases, including badly formed XML that silently truncated what the comment said.
+
+         Two rules are suppressed, both because they demand documentation be COMPLETE rather than
+         checking that what is written is correct — and this codebase deliberately comments only
+         what needs explaining rather than restating every signature:
+
+           CS1591 - missing comment on a public member (fired 3,234 times).
+           CS1573 - some parameters documented but not all (fired 34 times). Turning it on would
+                    mean answering "<param name="result">The parse result.</param>" 34 times.
+
+         What is left all reports something actually WRONG: CS1570 malformed XML, CS1587 a comment
+         attached to nothing, CS1734 a paramref naming a parameter that does not exist, CS0419 an
+         ambiguous cref. Those were fixed rather than suppressed.
+
+         Note what this does NOT catch: two <summary> blocks on one member is silently accepted.
+         CorpusTests carried exactly that for some time, and it surfaced only because the orphaned
+         block happened to contain a paramref. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+
+    <!-- The one place the server's version is stated. It must match client/package.json, since the
+         two ship together as one extension and the server reports this in its startup log. Without
+         it every assembly claimed 1.0.0 while the extension said 2.0.0. -->
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
-  <!-- Uncomment to enable performance tracking -->
-  <!--
-  <PropertyGroup>
-    <DefineConstants>$(DefineConstants);FLAG_PERFORMANCE_TRACKING</DefineConstants>
-    <DefineConstants>$(DefineConstants);FLAG_MEMORY_DEBUG</DefineConstants>
+  <!-- Opt-in perf instrumentation: build with -p:GscodeInstrumentation=true to compile in
+       the [Conditional("GSCODE_INSTRUMENTATION")] PerfTracker calls. Off in normal builds. -->
+  <PropertyGroup Condition="'$(GscodeInstrumentation)' == 'true'">
+    <DefineConstants>$(DefineConstants);GSCODE_INSTRUMENTATION</DefineConstants>
   </PropertyGroup>
-  -->
 
 </Project>

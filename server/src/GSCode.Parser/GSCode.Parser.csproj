@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure per-file analysis pipeline: lexer, preprocessor, parser, extraction.
+       A deterministic function library — no I/O except through injected providers. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\GSCode.Core\GSCode.Core.csproj" />
+  </ItemGroup>
+
+</Project>

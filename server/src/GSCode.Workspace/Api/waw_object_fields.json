@@ -1,0 +1,424 @@
+{
+  "entity": [
+    {
+      "Name": "accuracy",
+      "Type": ""
+    },
+    {
+      "Name": "activatecrosshair",
+      "Type": ""
+    },
+    {
+      "Name": "aiweapon",
+      "Type": ""
+    },
+    {
+      "Name": "allowdeath",
+      "Type": ""
+    },
+    {
+      "Name": "allowpain",
+      "Type": ""
+    },
+    {
+      "Name": "anim_pose",
+      "Type": ""
+    },
+    {
+      "Name": "attackeraccuracy",
+      "Type": ""
+    },
+    {
+      "Name": "badplaceawareness",
+      "Type": ""
+    },
+    {
+      "Name": "chainfallback",
+      "Type": ""
+    },
+    {
+      "Name": "chainnode",
+      "Type": ""
+    },
+    {
+      "Name": "classname",
+      "Type": ""
+    },
+    {
+      "Name": "damagedir",
+      "Type": ""
+    },
+    {
+      "Name": "damagelocation",
+      "Type": ""
+    },
+    {
+      "Name": "damagemod",
+      "Type": ""
+    },
+    {
+      "Name": "damagetaken",
+      "Type": ""
+    },
+    {
+      "Name": "damageweapon",
+      "Type": ""
+    },
+    {
+      "Name": "damageyaw",
+      "Type": ""
+    },
+    {
+      "Name": "delayeddeath",
+      "Type": ""
+    },
+    {
+      "Name": "desiredangle",
+      "Type": ""
+    },
+    {
+      "Name": "dontavoidplayer",
+      "Type": ""
+    },
+    {
+      "Name": "drawoncompass",
+      "Type": ""
+    },
+    {
+      "Name": "dropweapon",
+      "Type": ""
+    },
+    {
+      "Name": "enemy",
+      "Type": ""
+    },
+    {
+      "Name": "engagemaxdist",
+      "Type": ""
+    },
+    {
+      "Name": "engagemaxfalloffdist",
+      "Type": ""
+    },
+    {
+      "Name": "engagemindist",
+      "Type": ""
+    },
+    {
+      "Name": "engageminfalloffdist",
+      "Type": ""
+    },
+    {
+      "Name": "exposedduration",
+      "Type": ""
+    },
+    {
+      "Name": "favoriteenemy",
+      "Type": ""
+    },
+    {
+      "Name": "fixednode",
+      "Type": ""
+    },
+    {
+      "Name": "fixednodesaferadius",
+      "Type": ""
+    },
+    {
+      "Name": "flashbangimmunity",
+      "Type": ""
+    },
+    {
+      "Name": "followmax",
+      "Type": ""
+    },
+    {
+      "Name": "followmin",
+      "Type": ""
+    },
+    {
+      "Name": "fovcosine",
+      "Type": ""
+    },
+    {
+      "Name": "goalheight",
+      "Type": ""
+    },
+    {
+      "Name": "goalpos",
+      "Type": ""
+    },
+    {
+      "Name": "goalradius",
+      "Type": ""
+    },
+    {
+      "Name": "goodshootpos",
+      "Type": ""
+    },
+    {
+      "Name": "goodshootposvalid",
+      "Type": ""
+    },
+    {
+      "Name": "grenade",
+      "Type": ""
+    },
+    {
+      "Name": "grenadeammo",
+      "Type": ""
+    },
+    {
+      "Name": "grenadeawareness",
+      "Type": ""
+    },
+    {
+      "Name": "grenadethrowback",
+      "Type": ""
+    },
+    {
+      "Name": "grenadeweapon",
+      "Type": ""
+    },
+    {
+      "Name": "groundtype",
+      "Type": ""
+    },
+    {
+      "Name": "health",
+      "Type": ""
+    },
+    {
+      "Name": "ignoreall",
+      "Type": ""
+    },
+    {
+      "Name": "ignoreclosefoliage",
+      "Type": ""
+    },
+    {
+      "Name": "ignoreforfixednodesafecheck",
+      "Type": ""
+    },
+    {
+      "Name": "ignoreme",
+      "Type": ""
+    },
+    {
+      "Name": "ignorerandombulletdamage",
+      "Type": ""
+    },
+    {
+      "Name": "ignoresuppression",
+      "Type": ""
+    },
+    {
+      "Name": "ignoretriggers",
+      "Type": ""
+    },
+    {
+      "Name": "interval",
+      "Type": ""
+    },
+    {
+      "Name": "keepclaimednode",
+      "Type": ""
+    },
+    {
+      "Name": "keepclaimednodeingoal",
+      "Type": ""
+    },
+    {
+      "Name": "keepnodeduringscriptedanim",
+      "Type": ""
+    },
+    {
+      "Name": "lastenemysightpos",
+      "Type": ""
+    },
+    {
+      "Name": "lastscriptstate",
+      "Type": ""
+    },
+    {
+      "Name": "leanamount",
+      "Type": ""
+    },
+    {
+      "Name": "lookaheaddir",
+      "Type": ""
+    },
+    {
+      "Name": "lookforward",
+      "Type": ""
+    },
+    {
+      "Name": "lookright",
+      "Type": ""
+    },
+    {
+      "Name": "lookup",
+      "Type": ""
+    },
+    {
+      "Name": "maxhealth",
+      "Type": ""
+    },
+    {
+      "Name": "maxsightdistsqrd",
+      "Type": ""
+    },
+    {
+      "Name": "maxvisibledist",
+      "Type": ""
+    },
+    {
+      "Name": "meleeattackdist",
+      "Type": ""
+    },
+    {
+      "Name": "model",
+      "Type": ""
+    },
+    {
+      "Name": "movemode",
+      "Type": ""
+    },
+    {
+      "Name": "name",
+      "Type": ""
+    },
+    {
+      "Name": "node",
+      "Type": ""
+    },
+    {
+      "Name": "nododgemove",
+      "Type": ""
+    },
+    {
+      "Name": "pacifist",
+      "Type": ""
+    },
+    {
+      "Name": "pacifistwait",
+      "Type": ""
+    },
+    {
+      "Name": "pathenemyfightdist",
+      "Type": ""
+    },
+    {
+      "Name": "pathenemylookahead",
+      "Type": ""
+    },
+    {
+      "Name": "pathgoalpos",
+      "Type": ""
+    },
+    {
+      "Name": "prevnode",
+      "Type": ""
+    },
+    {
+      "Name": "proneok",
+      "Type": ""
+    },
+    {
+      "Name": "providecoveringfire",
+      "Type": ""
+    },
+    {
+      "Name": "pushable",
+      "Type": ""
+    },
+    {
+      "Name": "requestarrivalnotify",
+      "Type": ""
+    },
+    {
+      "Name": "safetochangescript",
+      "Type": ""
+    },
+    {
+      "Name": "scriptstate",
+      "Type": ""
+    },
+    {
+      "Name": "spawnflags",
+      "Type": ""
+    },
+    {
+      "Name": "statechangereason",
+      "Type": ""
+    },
+    {
+      "Name": "stopanimdistsq",
+      "Type": ""
+    },
+    {
+      "Name": "suppressionduration",
+      "Type": ""
+    },
+    {
+      "Name": "suppressionmeter",
+      "Type": ""
+    },
+    {
+      "Name": "suppressionstarttime",
+      "Type": ""
+    },
+    {
+      "Name": "suppressionwait",
+      "Type": ""
+    },
+    {
+      "Name": "syncedmeleetarget",
+      "Type": ""
+    },
+    {
+      "Name": "takedamage",
+      "Type": ""
+    },
+    {
+      "Name": "targetname",
+      "Type": ""
+    },
+    {
+      "Name": "team",
+      "Type": ""
+    },
+    {
+      "Name": "threatbias",
+      "Type": ""
+    },
+    {
+      "Name": "threatbiasgroup",
+      "Type": ""
+    },
+    {
+      "Name": "turretinvulnerability",
+      "Type": ""
+    },
+    {
+      "Name": "type",
+      "Type": ""
+    },
+    {
+      "Name": "useable",
+      "Type": ""
+    },
+    {
+      "Name": "voice",
+      "Type": ""
+    },
+    {
+      "Name": "walkdist",
+      "Type": ""
+    },
+    {
+      "Name": "weapon",
+      "Type": ""
+    }
+  ]
+}

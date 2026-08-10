@@ -1,0 +1,1784 @@
+[
+  {
+    "Name": "ambience_inner",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "ambience_outer",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "ambient",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "String index of the level.ambient_track to play on this trigger."
+  },
+  {
+    "Name": "angles",
+    "Type": "vector",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "count",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "delay",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "destructible_type",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "identifier"
+  },
+  {
+    "Name": "dontdrawoncompass",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "If set, the AI will not be drawn on the player's compass. Only matters for friendlies"
+  },
+  {
+    "Name": "dontdropweapon",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "If set, the AI will not drop a weapon when he dies"
+  },
+  {
+    "Name": "end_color",
+    "Type": "vector",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "end_fardist",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "end_neardist",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "export",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "fixednodesaferadius",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "the safe radius"
+  },
+  {
+    "Name": "groupname",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "height",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "name",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "origin",
+    "Type": "vector",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "radius",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_accel",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks to change the acceleration on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_accel_fraction",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "for Jeepride platforms smoother movements"
+  },
+  {
+    "Name": "script_accumulate",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "damage that must accumulate for destruction to occur"
+  },
+  {
+    "Name": "script_accuracy",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Set this on AI to have them spawn with a modified accuracy"
+  },
+  {
+    "Name": "script_aigroup",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_airspeed",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks for setting speed on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_allowdeath",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_ammo_40mm",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "does nothing right now"
+  },
+  {
+    "Name": "script_ammo_clip",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "weapon placed in radiant - this many rounds in the clip - must be used with script_ammo_extra"
+  },
+  {
+    "Name": "script_ammo_extra",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "weapon placed in radiant - this many rounds outside the clip - must be used with script_ammo_clip"
+  },
+  {
+    "Name": "script_angles",
+    "Type": "vector",
+    "Side": "both",
+    "Comment": "generic angles storage"
+  },
+  {
+    "Name": "script_anglevehicle",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_animation",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "If defined, patrollers will play a random pause animation at this node."
+  },
+  {
+    "Name": "script_area",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "used by battlechatter system"
+  },
+  {
+    "Name": "script_assaultnode",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "generic identifier for nodes"
+  },
+  {
+    "Name": "script_attackmetype",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "for jeepride.  set this on nodes to tell it to fire missiles"
+  },
+  {
+    "Name": "script_attackpattern",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "used in checks to control weapons firing on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_attackspeed",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_autosave",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_autosavename",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_avoidplayer",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "setting to 1 will cause the tank to perform collision avoidance on the player"
+  },
+  {
+    "Name": "script_avoidvehicles",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "setting to 0 on a tank will make it not do collision avoidance stuff"
+  },
+  {
+    "Name": "script_badplace",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "no badplaces on tanks.  for tanks that won't be near ai. on big tank battles."
+  },
+  {
+    "Name": "script_balcony",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "current mechanism for flagging an actor to test for balcony death"
+  },
+  {
+    "Name": "script_battlechatter",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_bcdialog",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set to 0 on a spawner/ai when you want to turn off battlechatter forever on that individual"
+  },
+  {
+    "Name": "script_bctrigger",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_bg_offset",
+    "Type": "vector",
+    "Side": "both",
+    "Comment": "I'm using this in cobrapilot to move the background pieces into place"
+  },
+  {
+    "Name": "script_bombmode_dual",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_bombmode_original",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_bombmode_single",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_breach_id",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used on a door to force a special type of breach."
+  },
+  {
+    "Name": "script_bulletshield",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used to apply toggleable bullet shields to vehicles that have them enabled."
+  },
+  {
+    "Name": "script_burst",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_burst_max",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Put on an mg turret, max time of a burst"
+  },
+  {
+    "Name": "script_burst_min",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Put on an mg turret, min time of a burst"
+  },
+  {
+    "Name": "script_chance",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "chance that an exploder will explode, checked every 4 seconds or whatever script_delay is on the trigger."
+  },
+  {
+    "Name": "script_char_group",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "indicate this guy is a member of a group of same chars"
+  },
+  {
+    "Name": "script_char_index",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "overwrite the character index"
+  },
+  {
+    "Name": "script_cheap",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "makes vehicles lose some functionality but be far fewer variables"
+  },
+  {
+    "Name": "script_cleartargetyaw",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks to reset a target yaw on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_cobratarget",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set to 1 to create a target for this entity on pilotcobra missions"
+  },
+  {
+    "Name": "script_color_allies",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "groups allied AI with nodes/triggers of that color"
+  },
+  {
+    "Name": "script_color_axis",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "groups axis AI with nodes/triggers of that color"
+  },
+  {
+    "Name": "script_crashtype",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "designates a crashpath"
+  },
+  {
+    "Name": "script_crashtypeoverride",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "override the type of crash a vehicle will do when it dies values are \"tank\", \"mobile\""
+  },
+  {
+    "Name": "script_damage",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Damage of radius damage on an exploder"
+  },
+  {
+    "Name": "script_death",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_death_max",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_death_min",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_deathchain",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_deathflag",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_deathflag_longdeath",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set to on and script_deathflag guys will notify on death OR longpaindeath"
+  },
+  {
+    "Name": "script_deathroll",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "turns on and off deathroll for vehicles crossing paths"
+  },
+  {
+    "Name": "script_decel",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks to change the deceleration on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_decel_fraction",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "for Jeepride platforms smoother movements"
+  },
+  {
+    "Name": "script_delay",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Action will be delayed for this long before triggering"
+  },
+  {
+    "Name": "script_delay_goto_goalmax",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "z: an AI will spawn, but not run to his goal for a random amount of time"
+  },
+  {
+    "Name": "script_delay_goto_goalmin",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "z: an AI will spawn, but not run to his goal for a random amount of time"
+  },
+  {
+    "Name": "script_delay_max",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Maximum delay before action is triggered"
+  },
+  {
+    "Name": "script_delay_min",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Minimum delay before action is triggered"
+  },
+  {
+    "Name": "script_delayed_playerseek",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_delete",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_deleteai",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_destructable_area",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "used to let destructable walls block off areas of the map (affects spawning, for instance)"
+  },
+  {
+    "Name": "script_disconnectpaths",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "makes exploder script_brushes connectpaths when hidden and disconnect when shown. could be used to disable cover nodes."
+  },
+  {
+    "Name": "script_displaceable",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "makes an AI able to change his goal radius from animscript."
+  },
+  {
+    "Name": "script_dont_link_turret",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_dontshootwhilemoving",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_dot",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "used on targetname trigger_lookat triggers to change the fov"
+  },
+  {
+    "Name": "script_drone",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "setting to 1 makes the spawner a script drone"
+  },
+  {
+    "Name": "script_dronelag",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "amount of timed space between drones following vehicle paths"
+  },
+  {
+    "Name": "script_drones_max",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_drones_min",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_dronestartmove",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_duration",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_earthquake",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "References level.earthquake variables to do an earthquake"
+  },
+  {
+    "Name": "script_emptyspawner",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "When you go through a trigger with this on it, any spawners that have the same # will have their count set to 0."
+  },
+  {
+    "Name": "script_ender",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Stop a looping effect"
+  },
+  {
+    "Name": "script_engage",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks to fire weapons on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_engagedelay",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks to delay weapons firing on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_explode",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Tells a plane to explode with this exploder."
+  },
+  {
+    "Name": "script_exploder",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Grouping things that explode"
+  },
+  {
+    "Name": "script_fallback",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_fallback_group",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Makes stray spawned guys part of bigger falling back movements."
+  },
+  {
+    "Name": "script_falldirection",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Used to specify the direction a treeburst tree trunk falls towards"
+  },
+  {
+    "Name": "script_fightdist",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Spawners will spawn with this pathEnemyFightDist"
+  },
+  {
+    "Name": "script_firefx",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Fx to play infinitely from a used exploder"
+  },
+  {
+    "Name": "script_firefxdelay",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "repetition rate on a firefx for exploders"
+  },
+  {
+    "Name": "script_firefxsound",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Looping sound for an exploder firefx"
+  },
+  {
+    "Name": "script_firefxtimeout",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Amount of time before a looping effect fades out"
+  },
+  {
+    "Name": "script_fireondrones",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "toggles machineguns firing on drones behavior"
+  },
+  {
+    "Name": "script_fixednode",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "can force .fixednode on an AI"
+  },
+  {
+    "Name": "script_flag",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "the flag that gets enabled/disabled by targetname flag_set and flag_unset"
+  },
+  {
+    "Name": "script_flag_clear",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "clears the flag when it hits this spot"
+  },
+  {
+    "Name": "script_flag_false",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "This entity should not activate unless all the flags in this string are false"
+  },
+  {
+    "Name": "script_flag_set",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "helis using helipath will set this flag when they reach this point"
+  },
+  {
+    "Name": "script_flag_true",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "This entity should not activate unless at least one of the flags in this string is true"
+  },
+  {
+    "Name": "script_flag_wait",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "helis using helipath will wait at this point until this flag is set"
+  },
+  {
+    "Name": "script_flakaicount",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "for setting the amount of ai to spawn on a flak"
+  },
+  {
+    "Name": "script_flashbangs",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set this to > 0 to give an AI flashbangs instead of frag grenades."
+  },
+  {
+    "Name": "script_followmax",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_followmin",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_followmode",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_force_count",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "set to true on spawner - flood spawner will not increment this spawners count if the player didnt see the guy die"
+  },
+  {
+    "Name": "script_forcecolor",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "forces an AI to use all nodes of this color"
+  },
+  {
+    "Name": "script_forcegoal",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "forces an AI to use the goal radius of the node they target, rather than switch to 2000 (for flood_and_secure spawners)"
+  },
+  {
+    "Name": "script_forcegrenade",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Set to 1 to enable AI to throw as many grenades as they want rather than extremely rarely."
+  },
+  {
+    "Name": "script_forcespawn",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_forceyaw",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks for a target or goal yaw on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_friendname",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_fxcommand",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "What to do with the effect"
+  },
+  {
+    "Name": "script_fxid",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "The id of the effect to do"
+  },
+  {
+    "Name": "script_fxstart",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Identifies effects so they can be turned on by grouping with a trigger"
+  },
+  {
+    "Name": "script_fxstop",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Identifies effects so they can be turned off by grouping with a trigger"
+  },
+  {
+    "Name": "script_gameobjectname",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Used in multiplayer to add/remove entities based on gametype."
+  },
+  {
+    "Name": "script_gametype_ctf",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on gametype."
+  },
+  {
+    "Name": "script_gametype_dm",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on gametype."
+  },
+  {
+    "Name": "script_gametype_hq",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on gametype."
+  },
+  {
+    "Name": "script_gametype_sd",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on gametype."
+  },
+  {
+    "Name": "script_gametype_tdm",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on gametype."
+  },
+  {
+    "Name": "script_gatetrigger",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "vehicles will wait at vehicle nodes with this untill the trigger is hit."
+  },
+  {
+    "Name": "script_ghettotag",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "for jeepride."
+  },
+  {
+    "Name": "script_goalvolume",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "groups guys so they use a goalvolume"
+  },
+  {
+    "Name": "script_goalyaw",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set to true to set the goal yaw"
+  },
+  {
+    "Name": "script_godmode",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "makes a vehicle be god mode"
+  },
+  {
+    "Name": "script_grenades",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_grenadespeed",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used for setting magic grenade launch speeds on script origins"
+  },
+  {
+    "Name": "script_growl",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "makes a dog growl as he runs, instead of barking"
+  },
+  {
+    "Name": "script_health",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "bringing it back!"
+  },
+  {
+    "Name": "script_hidden",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "the thing which is hidden and appears later (mortars)"
+  },
+  {
+    "Name": "script_hint",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "put on trigger_hint"
+  },
+  {
+    "Name": "script_hoverwait",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks to set hovering times on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_ignore_suppression",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "sets .ignoreSuppression to true if its set."
+  },
+  {
+    "Name": "script_ignoreall",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "sets .ignoreall to true if its set."
+  },
+  {
+    "Name": "script_ignoreme",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "If this setting exists on a spawner this guy will have his .ignoreme set to true"
+  },
+  {
+    "Name": "script_immunetoflash",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_increment",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_index",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "can be used generically as an index for whatever reason"
+  },
+  {
+    "Name": "script_keepdriver",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set this on the vehicle to make the vehilce driver not unload."
+  },
+  {
+    "Name": "script_killspawner",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "When you go through a trigger with this on it, any spawners that have the same # will be deleted."
+  },
+  {
+    "Name": "script_killspawner_group",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_label",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_landmark",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "used by battlechatter system"
+  },
+  {
+    "Name": "script_layer",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_light_toggle",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set to 1 on vehicle enables vehicles ability to turn on and off lights."
+  },
+  {
+    "Name": "script_linkname",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Works with script_linkTo"
+  },
+  {
+    "Name": "script_linkto",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "A compound string that is a list of script_linkname'd entities that this entity links to."
+  },
+  {
+    "Name": "script_location",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "used by battlechatter system"
+  },
+  {
+    "Name": "script_longdeath",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set to 0 disable long death animations like lying on the ground and shooting"
+  },
+  {
+    "Name": "script_looping",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_mapsize_08",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on the set mapsize."
+  },
+  {
+    "Name": "script_mapsize_16",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on the set mapsize."
+  },
+  {
+    "Name": "script_mapsize_32",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on the set mapsize."
+  },
+  {
+    "Name": "script_mapsize_64",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Preston: Used in multiplayer to add/remove entities based on the set mapsize."
+  },
+  {
+    "Name": "script_maxdist",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Spawners will spawn with this pathEnemyLookAhead"
+  },
+  {
+    "Name": "script_maxspawn",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used on flood spawn trigger to regulate the max number of ai"
+  },
+  {
+    "Name": "script_mg42auto",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "When you hit this trigger any grouped mg42s will go into auto mode and clear target."
+  },
+  {
+    "Name": "script_mg_angle",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "this gives option to start the machinegun at an angle"
+  },
+  {
+    "Name": "script_mgturret",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Group AI with a node that targets an mg42 and the AI will keep the gun in use."
+  },
+  {
+    "Name": "script_minspec_hooks_level",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_minspec_level",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_mortargroup",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "to group mortars with their triggers"
+  },
+  {
+    "Name": "script_moveoverride",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Spawners with this will go to their (targetted) node before fighting."
+  },
+  {
+    "Name": "script_namenumber",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "General purpose string identifier that used to be in this file that I use frequently"
+  },
+  {
+    "Name": "script_node_pausetime",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used for attack routing, amount of time to wait at marked goalnode"
+  },
+  {
+    "Name": "script_nodestate",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "generic identifier for nodes"
+  },
+  {
+    "Name": "script_noenemyinfo",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "setting to 1 makes a guy spawn with no enemy info"
+  },
+  {
+    "Name": "script_nofriendlywave",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "disables tracking of this ai for friendly_wave's"
+  },
+  {
+    "Name": "script_nohealth",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "makes the guy not drop health"
+  },
+  {
+    "Name": "script_nomg",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "makes machineguns not spawn at all on a tank. used for big tank battles where they aren't necessary on all the tanks."
+  },
+  {
+    "Name": "script_noteworthy",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Used to get a string for scripted sequences mainly."
+  },
+  {
+    "Name": "script_nowall",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "make AI play a special set of corner animations that dont require a wall"
+  },
+  {
+    "Name": "script_objective",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_objective_active",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "used with flood_and_Secure and \"friendlychain\"s to only be active if this objective"
+  },
+  {
+    "Name": "script_objective_inactive",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "is active"
+  },
+  {
+    "Name": "script_offradius",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Guys get off a flak if a player gets this close to a flak after hitting the off-trigger, default 350"
+  },
+  {
+    "Name": "script_offtime",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Number of milliseconds before guys get off a flak when you hit the off-trigger, defaults to 20000"
+  },
+  {
+    "Name": "script_onlyidle",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_pacifist",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_parameters",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "generic string used for similar purpose as script_noteworthy"
+  },
+  {
+    "Name": "script_patroller",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_personality",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "This guy will use this personality type"
+  },
+  {
+    "Name": "script_physics",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "used for exploder_chunk to use physics throw"
+  },
+  {
+    "Name": "script_physicsjolt",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "toggle tanks shaking physics as it drives by."
+  },
+  {
+    "Name": "script_pilottalk",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks to trigger dialogue on helicopter path origins or nodes"
+  },
+  {
+    "Name": "script_plane",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Specifies which plane set this is, so they can all be started together."
+  },
+  {
+    "Name": "script_playerconeradius",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "used optionally with script_avoidplayer if you want a cone radius other than 200."
+  },
+  {
+    "Name": "script_playerseek",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_prefab_exploder",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Override an exploder since exploders in prefabs get unique'd."
+  },
+  {
+    "Name": "script_presound",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "To play sounds on exploders before the explosion, for pathfinder only"
+  },
+  {
+    "Name": "script_radius",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Sets an AI's starting goal radius. On an exploder this sets the radius damage's radius."
+  },
+  {
+    "Name": "script_random_killspawner",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "group a trigger with some spawners"
+  },
+  {
+    "Name": "script_randomspawn",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "use with a script_random_killspawner - script will randomly spawn one of the groups"
+  },
+  {
+    "Name": "script_repeat",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "# of times an effect in an exploder will repeat"
+  },
+  {
+    "Name": "script_requires_player",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_reuse",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_reuse_max",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Maximum time before a new AI will use this turret."
+  },
+  {
+    "Name": "script_reuse_min",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Minimum time before a new AI will use this turret."
+  },
+  {
+    "Name": "script_rumble",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "rumble file to play on an exploder"
+  },
+  {
+    "Name": "script_savetrigger_timer",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "used to set minimum required times on autosave triggers in timed missions"
+  },
+  {
+    "Name": "script_seekgoal",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_shotcount",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "for jeepride.  how many missiles to fire at a moving point"
+  },
+  {
+    "Name": "script_sightrange",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_skilloverride",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_smokegroup",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_sound",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Plays level.scr_sound [\"string\"]"
+  },
+  {
+    "Name": "script_soundalias",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "play this soundalias on exploders"
+  },
+  {
+    "Name": "script_spawn_here",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "for camper_spawner"
+  },
+  {
+    "Name": "script_squad",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Group spawners/ai so they share enemy information"
+  },
+  {
+    "Name": "script_squadname",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "squad (spawner cluster) identifier"
+  },
+  {
+    "Name": "script_stack",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "for walls where friendlies hang out"
+  },
+  {
+    "Name": "script_stance",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "General purpose string identifier useful for stance related scripting"
+  },
+  {
+    "Name": "script_start",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_startinghealth",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_startingposition",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used for riders of vehicles to manually designate riding postions (also used for walkers)"
+  },
+  {
+    "Name": "script_stealth_dontseek",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "dont set your goalpos to the enemy's goalpos on combat"
+  },
+  {
+    "Name": "script_stopnode",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "tells helicopters to stop at a node."
+  },
+  {
+    "Name": "script_stoptoshoot",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used for tanks, setting this to greater than zero will make a tank stop before firing it's main cannon"
+  },
+  {
+    "Name": "script_suppression",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Suppression wait for this AI"
+  },
+  {
+    "Name": "script_tankgroup",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "used to add a tankgroup to vehicles."
+  },
+  {
+    "Name": "script_targetoffset_z",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "offset from model where missiles should aim - used for helicopter pilot levels"
+  },
+  {
+    "Name": "script_targettype",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "\"air\" or \"ground\" - used for helicopter pilot levels"
+  },
+  {
+    "Name": "script_team",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "how to know which team a tank is on (needed to free up target/targetname for radiant linkability)"
+  },
+  {
+    "Name": "script_threatbiasgroup",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "adds spawned ai to this threatbiasgroup"
+  },
+  {
+    "Name": "script_threshold",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "min damage that has any effect"
+  },
+  {
+    "Name": "script_timeout",
+    "Type": "float",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_timer",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Timeout for friendly_chat"
+  },
+  {
+    "Name": "script_trace",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_trigger_group",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used to disable a group of triggers when one gets hit."
+  },
+  {
+    "Name": "script_triggered_playerseek",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "group a trigger and an ai with this and he the grouped ai will do playerseek behaviour when the trigger is hit"
+  },
+  {
+    "Name": "script_triggername",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "Z: used for elevators in the dam"
+  },
+  {
+    "Name": "script_turningdir",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "set this to the direction of the anim set you want a vehicle to use.  \"right\",\"hard_right\",\"left\",\"hard_left\",\"forward\""
+  },
+  {
+    "Name": "script_turret",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_turret_ambush",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "shares turret spots for portable mgs"
+  },
+  {
+    "Name": "script_turret_share",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "shares turret spots for portable mgs"
+  },
+  {
+    "Name": "script_turretmg",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_unload",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "tells the vehicle to unload this group of guys"
+  },
+  {
+    "Name": "script_unloaddelay",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "make a vehicle delay this long before unloading at the end of a path. < 1 means never unload // nate we should remove this or make it work on all of the unloads."
+  },
+  {
+    "Name": "script_unloadmgguy",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set this on the halftrack to make the mg guy unload."
+  },
+  {
+    "Name": "script_usemg42",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "If set to false, a friendly will not use be told by friendly_mg42 triggers to use an mg42."
+  },
+  {
+    "Name": "script_vehicle_lights_off",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "set to a group of lights to turn them off"
+  },
+  {
+    "Name": "script_vehicle_lights_on",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "set to a group of lights to turn them on"
+  },
+  {
+    "Name": "script_vehicle_selfremove",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "vehicle will delete itself when it reaches the end of its path"
+  },
+  {
+    "Name": "script_vehicleaianim",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "this will be a radiant drop down list that tells the ai on the vehicle which animations to play"
+  },
+  {
+    "Name": "script_vehicledetour",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_vehicledetourgroup",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "use this for telling a detour node to only detour vehicles in matching groups"
+  },
+  {
+    "Name": "script_vehicledetourtype",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "describing how a vehicledetour node works,  first non default type being \"scriptswitch\" which will let the script notify the path to become a switch node. Useful in situations where a tank will fight in circles and then procede on whatever script condition."
+  },
+  {
+    "Name": "script_vehiclegroup",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "links a vehicle to its spawners"
+  },
+  {
+    "Name": "script_vehiclegroupdelete",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "Deletes associated vehicles and their aigroups (as still designated by script_vehiclegroup on the vehicles and the ai's)"
+  },
+  {
+    "Name": "script_vehiclenodegroup",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used for getting an array of vehicle nodes"
+  },
+  {
+    "Name": "script_vehicleride",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_vehiclespawngroup",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "spawns associated vehicles and their aigroups (as still designated by script_vehiclegroup on the vehicles and the ai's)"
+  },
+  {
+    "Name": "script_vehiclestartmove",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "initiates associated vehicles movement on its path, note that if no script_vehicleStart nodes or triggers exist then the vehicle will stay and wait for the level script to initiate it's movement stacking this with script_VehicleSpawngroup will make spawn and go right away."
+  },
+  {
+    "Name": "script_vehicletriggergroup",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "a more generic grouping.  I'm using this so that paths can be shared easier.   setting this on a node with other vehicle trigger functions will only effect vehicles in the matching group."
+  },
+  {
+    "Name": "script_volume",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "set to 1 if you want to control the vehicle's volume in your script rather than have it lerp automatically"
+  },
+  {
+    "Name": "script_volumedown",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "on a vehicle node this makes the vehicle go to no sound over this much time"
+  },
+  {
+    "Name": "script_volumeramp",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "time to ramp in a vehicles engine noise."
+  },
+  {
+    "Name": "script_volumeup",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "on a vehicle node this makes the vehicle go to max volume over this much time"
+  },
+  {
+    "Name": "script_wait",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Script will wait this long between actions"
+  },
+  {
+    "Name": "script_wait_add",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Additive delay is the # of seconds extra added between actions"
+  },
+  {
+    "Name": "script_wait_max",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Maximum wait time between actions"
+  },
+  {
+    "Name": "script_wait_min",
+    "Type": "float",
+    "Side": "both",
+    "Comment": "Minimum wait time between actions"
+  },
+  {
+    "Name": "script_wheeldirection",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "1 goes forward 0 goes backwards."
+  },
+  {
+    "Name": "script_wingman",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_wtf",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "script_yawspeed",
+    "Type": "int",
+    "Side": "both",
+    "Comment": "used in checks for setting yaw speed on helicopter path origins or nodes"
+  },
+  {
+    "Name": "spawner_id",
+    "Type": "string",
+    "Side": "both",
+    "Comment": "using this for jeepride, guh, grunt, blarg! -nate"
+  },
+  {
+    "Name": "spawnflags",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "speed",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "squadnum",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "start_color",
+    "Type": "vector",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "start_fardist",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "start_neardist",
+    "Type": "int",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "target",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "targetname",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "vehicletype",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  },
+  {
+    "Name": "weaponinfo",
+    "Type": "string",
+    "Side": "both",
+    "Comment": ""
+  }
+]

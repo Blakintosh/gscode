@@ -1,0 +1,17 @@
+// #precache for the SERVER world - contributed to .gsc only.
+//
+// The choices are exactly the types PrecacheAssetTypes marks PrecacheSide.Both, so anything
+// offered here is accepted by gscode-4000. The client_* family is deliberately absent: writing one
+// in a .gsc is a call the engine will not honour, and gscode-4006 reports it, so a snippet must not
+// suggest it.
+//
+// A .gsh takes precache-client.json instead - not this file - because that one is the superset and
+// a header is inserted into whichever world includes it. Contributing both would give a header two
+// competing snippets on the same prefix.
+{
+	"precache (BO3)": {
+		"prefix": "precache",
+		"body": ["#precache( \"${1|model,xmodel,xmodelalias,fx,material,menu,weapon,vehicle,character,playercharacter,aitype,zbarrier,xcam,destructible,streamerhint,headicon,statusicon,locationselector,objective,rumble,shellshock,lui_menu,lui_menu_data,string,debugstring,eventstring,triggerstring|}\", \"${2:asset}\" );"],
+		"description": "Precache a server-side asset at load - BO3 only"
+	}
+}

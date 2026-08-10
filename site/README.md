@@ -1,38 +1,26 @@
-# create-svelte
+# gscode-site
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/master/packages/create-svelte).
+The GSCode website: the browsable GSC/CSC API library the extension links out to, built with
+SvelteKit.
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```bash
-# create a new project in the current directory
-npm create svelte@latest
-
-# create a new project in my-app
-npm create svelte@latest my-app
-```
+`shift+f1` in a script opens a function's page here, so the URL shape this site serves is part of the
+extension's contract — see `BuiltinAtHandler` on the server side.
 
 ## Developing
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
 ```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+npm install
+npm run dev          # or: npm run dev -- --open
 ```
 
-## Building
+Other scripts: `build`, `preview`, `check` (svelte-check), `test` / `test:unit`, `lint`, `format`.
 
-To create a production version of your app:
+## API data
 
-```bash
-npm run build
-```
+`src/lib/apiSource/` holds the library this site renders — `t7_api_gsc.json` and `t7_api_csc.json`,
+the same documents the extension bundles in `server/src/GSCode.Workspace/Api/`.
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+They are **copies, not a shared source**: both live in this repo but neither reads the other's, so a
+correction made on one side has to be carried across deliberately. The extension also bundles data
+this site does not render — the four pre-BO3 games' libraries, object fields and Radiant keys.
+Sharing the generated artifacts is tracked in `server/FOLLOWUPS.md`.

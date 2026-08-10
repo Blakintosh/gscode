@@ -1,6 +1,31 @@
-/server/GSCode.CLI/Properties/
+# Editor and tool state: per-machine, never shared. settings.local.json is the
+# one that kept getting committed.
+.claude/*
+.vs/
 .DS_Store
+
+# Skills are the exception: they are project tooling, written once and useful to
+# everyone working here, so they belong in the repo rather than on one machine.
+!.claude/skills/
+
+# Debug profiles carry local paths, so they stay out for every project rather
+# than being listed one project at a time.
 launchSettings.json
+
+# Site build output. client/, server/ and site/ each have their own .gitignore
+# for the rest; these two are the roots nothing else claims.
 .svelte-kit/
 .vite/
-server/GSCode.CLI/Properties/launchSettings.json
+
+# Scratch output: corpus sweep reports and anything else a local run produces.
+#
+# A whole folder rather than a list of filenames, because the point is that
+# NOTHING written here is committable. Their contents are a snapshot of whichever
+# game installs happen to be on one machine, so committing one would be
+# committing somebody's local state — and a filename pattern only protects the
+# names somebody thought of.
+/temp/
+
+# The same reports if they are written anywhere else, since GSCODE_SWEEP_REPORT
+# can point at any directory.
+gscode-sweep-*.html

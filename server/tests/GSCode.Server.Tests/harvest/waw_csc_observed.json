@@ -1,0 +1,561 @@
+{
+  "game": "waw",
+  "clientScriptsSwept": 226,
+  "serverLibrarySize": 1060,
+  "observed": 92,
+  "coverage": "CONTROL — 158 names are in both this game's server and client libraries, so are certainly client-side; its stock client scripts call 92 of them (58.2%). A corpus-only prune keeps that share and discards the rest.",
+  "functions": [
+    {
+      "name": "IsDefined",
+      "calls": 752,
+      "fileCount": 93,
+      "inControlLibrary": true
+    },
+    {
+      "name": "println",
+      "calls": 215,
+      "fileCount": 73,
+      "inControlLibrary": true
+    },
+    {
+      "name": "loadfx",
+      "calls": 1941,
+      "fileCount": 49,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetDvarInt",
+      "calls": 60,
+      "fileCount": 47,
+      "inControlLibrary": true
+    },
+    {
+      "name": "playsound",
+      "calls": 154,
+      "fileCount": 28,
+      "inControlLibrary": true
+    },
+    {
+      "name": "randomfloatrange",
+      "calls": 71,
+      "fileCount": 24,
+      "inControlLibrary": true
+    },
+    {
+      "name": "playfx",
+      "calls": 52,
+      "fileCount": 24,
+      "inControlLibrary": true
+    },
+    {
+      "name": "AnglesToForward",
+      "calls": 37,
+      "fileCount": 18,
+      "inControlLibrary": true
+    },
+    {
+      "name": "spawnStruct",
+      "calls": 33,
+      "fileCount": 17,
+      "inControlLibrary": true
+    },
+    {
+      "name": "ASSERTMSG",
+      "calls": 39,
+      "fileCount": 15,
+      "inControlLibrary": true
+    },
+    {
+      "name": "RandomIntRange",
+      "calls": 27,
+      "fileCount": 14,
+      "inControlLibrary": true
+    },
+    {
+      "name": "ASSERTEX",
+      "calls": 33,
+      "fileCount": 13,
+      "inControlLibrary": true
+    },
+    {
+      "name": "spawnfakeent",
+      "calls": 22,
+      "fileCount": 13,
+      "inControlLibrary": true
+    },
+    {
+      "name": "assert",
+      "calls": 36,
+      "fileCount": 11,
+      "inControlLibrary": true
+    },
+    {
+      "name": "playLoopSound",
+      "calls": 15,
+      "fileCount": 11,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getArrayKeys",
+      "calls": 15,
+      "fileCount": 10,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetEntArray",
+      "calls": 23,
+      "fileCount": 9,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getdvar",
+      "calls": 19,
+      "fileCount": 9,
+      "inControlLibrary": true
+    },
+    {
+      "name": "deletefakeent",
+      "calls": 16,
+      "fileCount": 9,
+      "inControlLibrary": true
+    },
+    {
+      "name": "spawn",
+      "calls": 25,
+      "fileCount": 8,
+      "inControlLibrary": true
+    },
+    {
+      "name": "RandomInt",
+      "calls": 20,
+      "fileCount": 8,
+      "inControlLibrary": true
+    },
+    {
+      "name": "print3d",
+      "calls": 16,
+      "fileCount": 8,
+      "inControlLibrary": true
+    },
+    {
+      "name": "DistanceSquared",
+      "calls": 15,
+      "fileCount": 8,
+      "inControlLibrary": true
+    },
+    {
+      "name": "setfakeentorg",
+      "calls": 15,
+      "fileCount": 8,
+      "inControlLibrary": true
+    },
+    {
+      "name": "anglesToUp",
+      "calls": 12,
+      "fileCount": 7,
+      "inControlLibrary": true
+    },
+    {
+      "name": "RandomFloat",
+      "calls": 9,
+      "fileCount": 7,
+      "inControlLibrary": true
+    },
+    {
+      "name": "StopSound",
+      "calls": 7,
+      "fileCount": 7,
+      "inControlLibrary": true
+    },
+    {
+      "name": "delete",
+      "calls": 33,
+      "fileCount": 6,
+      "inControlLibrary": true
+    },
+    {
+      "name": "int",
+      "calls": 12,
+      "fileCount": 6,
+      "inControlLibrary": true
+    },
+    {
+      "name": "stopLoopSound",
+      "calls": 9,
+      "fileCount": 6,
+      "inControlLibrary": true
+    },
+    {
+      "name": "setmodel",
+      "calls": 30,
+      "fileCount": 5,
+      "inControlLibrary": true
+    },
+    {
+      "name": "SpawnFx",
+      "calls": 16,
+      "fileCount": 5,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getent",
+      "calls": 12,
+      "fileCount": 5,
+      "inControlLibrary": true
+    },
+    {
+      "name": "VectorToAngles",
+      "calls": 5,
+      "fileCount": 5,
+      "inControlLibrary": true
+    },
+    {
+      "name": "triggerfx",
+      "calls": 15,
+      "fileCount": 4,
+      "inControlLibrary": true
+    },
+    {
+      "name": "playLocalSound",
+      "calls": 5,
+      "fileCount": 4,
+      "inControlLibrary": true
+    },
+    {
+      "name": "BulletTracer",
+      "calls": 4,
+      "fileCount": 4,
+      "inControlLibrary": true
+    },
+    {
+      "name": "earthQuake",
+      "calls": 4,
+      "fileCount": 4,
+      "inControlLibrary": true
+    },
+    {
+      "name": "iprintlnbold",
+      "calls": 13,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "playfxontag",
+      "calls": 12,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "setVolFog",
+      "calls": 10,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "LoadedFX",
+      "calls": 9,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getTagOrigin",
+      "calls": 7,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getTagAngles",
+      "calls": 7,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "moveto",
+      "calls": 7,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getentitynumber",
+      "calls": 5,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "distance",
+      "calls": 3,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "VectorNormalize",
+      "calls": 3,
+      "fileCount": 3,
+      "inControlLibrary": true
+    },
+    {
+      "name": "VisionSetNaked",
+      "calls": 18,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "setLightIntensity",
+      "calls": 12,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getspeed",
+      "calls": 8,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getLightIntensity",
+      "calls": 6,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "RotateTo",
+      "calls": 6,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "splitargs",
+      "calls": 4,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "PlayRumbleLoopOnEntity",
+      "calls": 3,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "SetClientDvar",
+      "calls": 3,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "UpdateGamerProfile",
+      "calls": 3,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "precacherumble",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "isalive",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getwheelsurface",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "StopRumble",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "playLoopedFx",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "syncsystemstates",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "deactivateReverb",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "cos",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "setReverb",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "lengthsquared",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "line",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "VectorDot",
+      "calls": 2,
+      "fileCount": 2,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetCurrentWeapon",
+      "calls": 7,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetPersistentProfileVar",
+      "calls": 6,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "SetSunLight",
+      "calls": 5,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetVisionSetNaked",
+      "calls": 5,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getentnum",
+      "calls": 4,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "IsThrowingGrenade",
+      "calls": 2,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "SetPersistentProfileVar",
+      "calls": 2,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "deletefx",
+      "calls": 2,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getsubstr",
+      "calls": 2,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetWeaponAmmoClip",
+      "calls": 2,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "AnglesToRight",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetEye",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetPlayerAngles",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GetOrigin",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "getdvarfloat",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "fireweapon",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "attach",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "bullettrace",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "PlayRumbleOnPosition",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "ShellShock",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "ResetSunLight",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "GiveAchievement",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    },
+    {
+      "name": "LinkTo",
+      "calls": 1,
+      "fileCount": 1,
+      "inControlLibrary": true
+    }
+  ]
+}

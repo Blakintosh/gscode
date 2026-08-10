@@ -1,0 +1,380 @@
+[
+    {
+        "name": "GetAIArray",
+        "optionalFrom": 1,
+        "reason": "Called with no arguments throughout the stock scripts, where it returns every AI regardless of team. The page's signature line is 'GetAIArray( <team>, <team>, ... )' and it lists one required team, but the team filter is optional in the engine."
+    },
+    {
+        "name": "StartPath",
+        "optionalFrom": 1,
+        "reason": "The page contradicts itself: its signature line is 'StartPath()' with no parameters while its Required Args list one node index. The signature line is the truthful half - the vehicle follows the path it is already attached to."
+    },
+    {
+        "name": "Teleport",
+        "optionalFrom": 2,
+        "reason": "The angles are optional; teleporting to a position without respecifying the actor's facing is the common call. The page lists both arguments as required."
+    },
+    {
+        "name": "AssertEx",
+        "optionalFrom": 2,
+        "reason": "The message is optional, which is what makes AssertEx degrade to Assert rather than fail to compile. The page lists both arguments as required."
+    },
+    {
+        "name": "MakeDvarServerInfo",
+        "optionalFrom": 2,
+        "reason": "The value is optional: flagging an existing dvar DVAR_CODINFO without changing it is a valid call. The page lists both arguments as required."
+    },
+    {
+        "name": "BadPlace_Cylinder",
+        "optionalFrom": 6,
+        "reason": "The team list is optional - a bad place with no team named is bad for everyone. The page's signature line ends '<team>, <team>...' (variadic) while its Required Args insist on at least one team."
+    },
+    {
+        "name": "AllowedStances",
+        "parameters": [
+            "stance",
+            "stance2",
+            "stance3"
+        ],
+        "reason": "The pages list 1 parameter(s); 60 call(s) in the shipped scripts pass up to 3, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "AnimMode",
+        "parameters": [
+            "mode",
+            "update"
+        ],
+        "reason": "The pages list 1 parameter(s); 7 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "Announcement",
+        "parameters": [
+            "string",
+            "string2"
+        ],
+        "reason": "The pages list 1 parameter(s); 2 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "Assert",
+        "parameters": [
+            "value"
+        ],
+        "reason": "Pinned to the documented single parameter. This entry used to widen it to ['value','message'] because 6 shipped calls pass a message, and that inference is wrong here: CoD4's Assert takes the condition only, AssertEx is the form that takes a message, and the engine ignores the extra argument rather than rejecting it - so those calls are a bug Infinity Ward shipped and never noticed, not evidence of a short page. Kept rather than deleted so a later pass does not re-derive the widening. What separates this from IsSubStr or ToLower is that the page is COMPLETE - description, example, and one Required Arg - where theirs list no parameters at all."
+    },
+    {
+        "name": "BadPlace_Arc",
+        "parameters": [
+            "name",
+            "duration",
+            "origin",
+            "radius",
+            "height",
+            "direction",
+            "right_angle",
+            "left_angle",
+            "team",
+            "team2"
+        ],
+        "reason": "The pages list 9 parameter(s); 2 call(s) in the shipped scripts pass up to 10, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "BadPlace_Brush",
+        "parameters": [
+            "name",
+            "duration",
+            "brush_entity",
+            "team",
+            "team2"
+        ],
+        "reason": "The pages list 4 parameter(s); 4 call(s) in the shipped scripts pass up to 5, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "ButtonPressed",
+        "parameters": [
+            "button"
+        ],
+        "reason": "The pages list 0 parameter(s); 82 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "EnterProne",
+        "parameters": [
+            "transition_time"
+        ],
+        "reason": "The pages list 0 parameter(s); 1 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "FinishPlayerDamage",
+        "parameters": [
+            "inflictor",
+            "attacker",
+            "damage",
+            "damage_flags",
+            "means_of_death",
+            "weapon",
+            "point",
+            "direction",
+            "hit_loc",
+            "offset_time"
+        ],
+        "reason": "The pages list 9 parameter(s); 1 call(s) in the shipped scripts pass up to 10, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "GetStat",
+        "parameters": [
+            "stat_index"
+        ],
+        "reason": "The pages list 0 parameter(s); 25 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "GetSubStr",
+        "parameters": [
+            "string",
+            "start_index",
+            "end_index"
+        ],
+        "reason": "The pages list 0 parameter(s); 25 call(s) in the shipped scripts pass up to 3, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "GiveAchievement",
+        "parameters": [
+            "achievement"
+        ],
+        "reason": "The pages list 0 parameter(s); 1 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "GiveWeapon",
+        "parameters": [
+            "weapon_name",
+            "camo_index"
+        ],
+        "reason": "The pages list 1 parameter(s); 1 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "IPrintLn",
+        "parameters": [
+            "text",
+            "text2",
+            "text3"
+        ],
+        "reason": "The pages list 1 parameter(s); 22 call(s) in the shipped scripts pass up to 3, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "IPrintLnBold",
+        "parameters": [
+            "text",
+            "text2"
+        ],
+        "reason": "The pages list 1 parameter(s); 8 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "IsSubStr",
+        "parameters": [
+            "string",
+            "substring"
+        ],
+        "reason": "The pages list 0 parameter(s); 210 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "NotifyOnCommand",
+        "parameters": [
+            "notify",
+            "command"
+        ],
+        "reason": "The pages list 0 parameter(s); 21 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "Objective_String",
+        "parameters": [
+            "objective_number",
+            "string",
+            "parameter"
+        ],
+        "reason": "The pages list 2 parameter(s); 11 call(s) in the shipped scripts pass up to 3, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "PlayerLinkToAbsolute",
+        "parameters": [
+            "lockto_entity",
+            "tag",
+            "right_arc",
+            "left_arc"
+        ],
+        "reason": "The pages list 2 parameter(s); 4 call(s) in the shipped scripts pass up to 4, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "PlayerPhysicsTrace",
+        "parameters": [
+            "start",
+            "end",
+            "ignore_entity",
+            "mask"
+        ],
+        "reason": "The pages list 2 parameter(s); 2 call(s) in the shipped scripts pass up to 4, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "PrintLn",
+        "parameters": [
+            "text",
+            "text2",
+            "text3",
+            "text4",
+            "text5",
+            "text6",
+            "text7",
+            "text8"
+        ],
+        "devOnly": false,
+        "reason": "Two corrections. PARAMETERS: the pages list 1; 84 call(s) in the shipped scripts pass up to 8, so the list is short rather than the calls wrong. DEV-ONLY: false, despite the page saying 'Development only'. The shipped scripts call it 438 times outside a /# #/ dev block against 220 inside, so the diagnostic's claim - that the name will not exist in a release build - is contradicted by the game that shipped: were it removed, those 438 calls would not link. The page is best read as 'only useful in development' rather than 'absent in release'. Stated here because the loader's fallback list is Black Ops 3's, where the same count is 2 outside against 269 inside."
+    },
+    {
+        "name": "SetAnimRestart",
+        "parameters": [
+            "anim",
+            "weight",
+            "blend_time",
+            "rate"
+        ],
+        "reason": "The pages list 0 parameter(s); 15 call(s) in the shipped scripts pass up to 4, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetArchive",
+        "parameters": [
+            "archive"
+        ],
+        "reason": "The pages list 0 parameter(s); 1 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetClientDvar",
+        "parameters": [
+            "dvarname",
+            "value",
+            "value2"
+        ],
+        "reason": "The pages list 2 parameter(s); 1 call(s) in the shipped scripts pass up to 3, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetClientDvars",
+        "parameters": [
+            "dvarname",
+            "value",
+            "dvarname2",
+            "value2",
+            "dvarname3",
+            "value3",
+            "dvarname4",
+            "value4",
+            "dvarname5",
+            "value5",
+            "dvarname6",
+            "value6",
+            "dvarname7",
+            "value7"
+        ],
+        "reason": "The pages list 2 parameter(s); 13 call(s) in the shipped scripts pass up to 14, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetGameEndTime",
+        "parameters": [
+            "time"
+        ],
+        "reason": "The pages list 0 parameter(s); 12 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetMapCenter",
+        "parameters": [
+            "origin"
+        ],
+        "reason": "The pages list 0 parameter(s); 6 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetMissionDvar",
+        "parameters": [
+            "dvarname",
+            "value"
+        ],
+        "reason": "The pages list 0 parameter(s); 5 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetPlayerTeamRank",
+        "parameters": [
+            "player",
+            "team",
+            "rank"
+        ],
+        "reason": "The pages list 0 parameter(s); 2 call(s) in the shipped scripts pass up to 3, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetStance",
+        "parameters": [
+            "stance"
+        ],
+        "reason": "The pages list 0 parameter(s); 11 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetStat",
+        "parameters": [
+            "stat_index",
+            "value"
+        ],
+        "reason": "The pages list 0 parameter(s); 19 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "SetTimeScale",
+        "parameters": [
+            "scale"
+        ],
+        "reason": "The pages list 0 parameter(s); 8 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "StopLoopSound",
+        "parameters": [
+            "alias"
+        ],
+        "reason": "The pages list 0 parameter(s); 15 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "StrTok",
+        "parameters": [
+            "string",
+            "delimiters"
+        ],
+        "reason": "The pages list 0 parameter(s); 73 call(s) in the shipped scripts pass up to 2, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "ToLower",
+        "parameters": [
+            "string"
+        ],
+        "reason": "The pages list 0 parameter(s); 105 call(s) in the shipped scripts pass up to 1, so the list is short rather than the calls wrong."
+    },
+    {
+        "name": "GetEntArray",
+        "optionalFrom": 1,
+        "reason": "Both arguments are optional: GetEntArray() returns every entity and GetEntArray( name ) filters by targetname. Six shipped calls pass fewer than the two the page marks required."
+    },
+    {
+        "name": "GetEnt",
+        "optionalFrom": 2,
+        "reason": "The key defaults to targetname, so GetEnt( name ) is the common call. Two shipped calls pass one argument where the page marks both required."
+    },
+    {
+        "name": "CanShoot",
+        "optionalFrom": 2,
+        "reason": "The offset from the gun is optional. Three shipped calls pass only the position."
+    },
+    {
+        "name": "Print3d",
+        "devOnly": false,
+        "reason": "Same reading as PrintLn: 83 calls outside a /# #/ dev block against 48 inside, across the shipped scripts."
+    },
+    {
+        "name": "Line",
+        "devOnly": false,
+        "reason": "Same reading as PrintLn: 110 calls outside a /# #/ dev block against 40 inside. The debug-draw primitives are reachable from release code in this engine."
+    },
+    {
+        "name": "Print",
+        "devOnly": false,
+        "reason": "Same reading as PrintLn, on a thinner margin: 3 calls outside a /# #/ dev block against 7 inside. The direction is what matters - a single outside call in shipped code is enough to make an Error wrong."
+    }
+]

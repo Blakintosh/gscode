@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, next, rewrite/v2]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # Warnings-as-errors is set in Directory.Build.props, so a warning fails this step.
+      - name: Build server
+        run: dotnet build server/GSCode.slnx --nologo
+
+      - name: Test server
+        # Corpus tests read each game's scripts from GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}, which
+        # point at local game or mod-tools installs CI does not have. They no-op when those are
+        # unset, so excluding them is not what makes CI pass - it makes the omission EXPLICIT, since
+        # a run that silently swept nothing looks exactly like one that swept 7,000 scripts.
+        run: dotnet test server/GSCode.slnx --nologo --no-build --filter "Category!=Corpus&Category!=Perf"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Compile client
+        run: npm run compile
+        working-directory: client

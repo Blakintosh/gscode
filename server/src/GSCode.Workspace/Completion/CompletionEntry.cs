@@ -1,0 +1,107 @@
+namespace GSCode.Workspace.Completion;
+
+/// <summary>
+/// How widely assignment-derived field names are offered after a `.` (the
+/// gscode.completion.fieldScope setting).
+/// </summary>
+public enum FieldScope
+{
+    /// <summary>Only fields seen assigned on THIS owner — `level.` offers level's fields.</summary>
+    Owner,
+
+    /// <summary>Every field name assigned on any owner: broader, and noisier.</summary>
+    All,
+}
+
+/// <summary>
+/// How much punctuation a completed call brings with it (the gscode.completion.callPunctuation
+/// setting).
+/// </summary>
+public enum CallPunctuation
+{
+    /// <summary>Insert the bare name; the user types everything else.</summary>
+    Off,
+
+    /// <summary>Insert `name()` with the cursor between the parentheses.</summary>
+    Parens,
+
+    /// <summary>Also close a STATEMENT with a semicolon: `name(&lt;cursor&gt;);`.</summary>
+    ParensAndSemicolon,
+}
+
+/// <summary>The kind of a completion item (maps onto LSP CompletionItemKind in the handler).</summary>
+public enum CompletionKind
+{
+    Function,
+    Class,
+    Keyword,
+    Variable,
+    Field,
+    Macro,
+    Namespace,
+    AssetType,
+
+    /// <summary>A folder in a #using/#insert path — inserts a trailing '\' and reopens the list.</summary>
+    PathSegment,
+
+    /// <summary>A script or header file: the end of a #using/#insert path.</summary>
+    PathFile,
+    Literal,
+    Snippet,
+}
+
+/// <summary>
+/// One completion suggestion, LSP-free. InsertText defaults to Label when empty; snippet
+/// insertion is signalled by CompletionKind.Snippet with placeholders in InsertText.
+/// </summary>
+/// <param name="FilterText">
+/// What the editor matches the typed prefix against, when that differs from the label. Needed
+/// for directives: the language's word pattern excludes '#', so after typing "#p" the editor's
+/// current word is "p" and a "#precache" label would be filtered out.
+/// </param>
+/// <param name="Namespace">
+/// The declaring namespace, carried so completionItem/resolve can find the symbol again and
+/// render its full documentation. Empty for anything without one (builtins, macros, keywords).
+/// </param>
+/// <param name="RetriggerCompletion">
+/// Whether accepting this entry should immediately reopen the suggestion list.
+///
+/// For entries that insert a snippet landing the cursor somewhere with its own vocabulary —
+/// `#precache( "&lt;here&gt;", … )` wants asset types, `#using &lt;here&gt;;` wants path segments. Nothing
+/// otherwise reopens the list, so the user had to delete the inserted quotes and retype one just
+/// to fire the '"' trigger character again.
+/// </param>
+/// <param name="ResolveName">
+/// The symbol's own name, when the label is not it. Resolve looks a symbol up by name to render
+/// its documentation, and an imported function is LABELLED qualified (<c>util::get_players</c>) so
+/// that typing the namespace finds it — a name no lookup will ever match. Empty means "the label
+/// is the name", which is true of everything else.
+/// </param>
+/// <param name="LabelDetail">
+/// Secondary text shown DIMMED immediately after the label, never part of it — a function's
+/// parameter list, <c>( team, alive )</c>.
+///
+/// Kept out of the label on purpose. The editor filters and sorts on the label, so folding this in
+/// would mean matching what the user types against parameter NAMES, and the handler would have to
+/// undo that with FilterText. Delivered as <c>CompletionItem.labelDetails</c> where the client
+/// supports it, and appended to the label only as a fallback where it does not.
+/// </param>
+public sealed record CompletionEntry(
+    string Label,
+    CompletionKind Kind,
+    string Detail = "",
+    string InsertText = "",
+    string Documentation = "",
+    string FilterText = "",
+    string Namespace = "",
+    bool RetriggerCompletion = false,
+    string ResolveName = "",
+    string LabelDetail = "",
+
+    // IsBuiltin: whether this row IS the engine function, as opposed to a script one. Carried
+    // explicitly because a name can be BOTH — BO3 has an engine SpawnSpectator and three scripts
+    // declaring one — and the two are separate rows in the list. Documentation is fetched later, by
+    // a second request that has only the row's Data to go on, so a row that does not say which of
+    // the two it is gets whichever the NAME resolves to: the builtin row rendered
+    // globallogic_spawn::spawnSpectator under a header reading "builtin".
+    bool IsBuiltin = false);

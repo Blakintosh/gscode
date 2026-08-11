@@ -140,7 +140,11 @@ LSP types anywhere.
   between them every cycle in the grammar — and once per pass of the `ParseBinary` and
   `ParsePostfixChain` loops, because `1 + 1 + …` and `a.b.c…` cost the parser nothing but
   build a tree every walker then recurses down. The cap is therefore on TREE DEPTH, which is
-  what makes SymbolExtractor, FoldingRegions, AstPrinter and AstSearch safe by construction.
+  what makes SymbolExtractor, FoldingRegions and AstSearch safe by construction. AstPrinter is
+  the exception and carries its own lower ceiling (`MaxPrintDepth = 128`, truncating to `(...)`):
+  a bound in tree levels only transfers to a walker whose frames are no fatter than the ones it
+  was measured against, and that one's are — at 512 it cleared a 1 MB stack in Release and died
+  at 242 levels in Debug.
 - Declarations: #using path joining (+ using-after-declaration diagnostic), #namespace,
   #precache (raw args for P4 validation), #using_animtree, functions (private/autoexec,
   defaults, &byRef, ... varargs), classes (single inheritance, var members, ctor/dtor,
@@ -178,7 +182,11 @@ LSP types anywhere.
 ## Syntax/AstPrinter.cs
 
 - `static class AstPrinter.Print(node)` — deterministic S-expression rendering; the
-  golden format for parser tests and a debugging aid.
+  golden format for parser tests and a debugging aid. Not test-only: `CaseLabelLint` prints a
+  case label to compare it, and `SymbolExtractor` prints a parameter's default value, so its
+  recursion runs inside the server on whatever the parser produced.
+- Descends at most `MaxPrintDepth = 128` levels and renders anything deeper as `(...)`. See the
+  nesting note above for why the parser's own cap is not enough here.
 
 ## Preprocessing/PToken.cs
 

@@ -32,9 +32,11 @@ A complete ground-up rewrite of the language server and VS Code extension.
   lint.
 - Commands: `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, and
   `gscode.openApiLibrary` (`shift+f1` in gsc/csc/gsh files).
-- In-source suppression carried inside comments: `#pragma warning disable|restore <code>|all|format`.
-  1.5's `// gscode ignore` still works as a legacy alias for it, suppressing every diagnostic on the
-  line below the comment.
+- In-source suppression carried inside comments: `#pragma disable|restore <code>|all|format`.
+  A named code is suppressed at whatever severity it carries, errors and syntax errors included —
+  wider than the C# pragma the spelling comes from, which is why `warning` is not part of it (though
+  the C# form is still accepted). 1.5's `// gscode ignore` still works as a legacy alias, suppressing
+  every diagnostic on the line below the comment.
 - A settings surface for the above, under `gscode.*`: the game and script roots
   (`game`, `raw.enabled`, `rawPath`, `modsPath`, `rawFileWarningMode`), indexing
   (`workspaceIndexingMode`, `enableWorkspaceCache`, `diagnostics.scope`), the editor features

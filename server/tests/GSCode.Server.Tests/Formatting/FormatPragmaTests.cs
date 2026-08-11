@@ -10,7 +10,7 @@ using Xunit;
 namespace GSCode.Server.Tests.Formatting;
 
 /// <summary>
-/// `#pragma warning disable format` leaves a hand-laid-out region alone.
+/// `#pragma disable format` leaves a hand-laid-out region alone.
 ///
 /// Implemented by dropping EDITS that touch a protected region rather than by formatting
 /// differently, which is what makes it safe: the formatter still runs over the whole file and
@@ -36,10 +36,10 @@ public class FormatPragmaTests
         string source =
             "function f()\n"
             + "{\n"
-            + "// #pragma warning disable format\n"
+            + "// #pragma disable format\n"
             + "        a = 1;\n"
             + "            b = 2;\n"
-            + "// #pragma warning restore format\n"
+            + "// #pragma restore format\n"
             + "}\n";
 
         ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(Analyze(source));
@@ -58,9 +58,9 @@ public class FormatPragmaTests
         string source =
             "function f()\n"
             + "{\n"
-            + "// #pragma warning disable format\n"
+            + "// #pragma disable format\n"
             + "        a = 1;\n"
-            + "// #pragma warning restore format\n"
+            + "// #pragma restore format\n"
             + "            b = 2;\n"
             + "}\n";
 

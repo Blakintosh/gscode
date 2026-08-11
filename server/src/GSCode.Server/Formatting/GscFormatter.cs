@@ -158,7 +158,7 @@ public static class GscFormatter
         return rebuilt.ToString();
     }
 
-    /// <summary>Whether the file carries any <c>#pragma warning disable format</c>.</summary>
+    /// <summary>Whether the file carries any <c>#pragma disable format</c>.</summary>
     private static bool HasFormatPragma(ParseResult result)
     {
         foreach ( PragmaDirective directive in PragmaDirectives.Scan(result.Lexed.Tokens, result.Text) )

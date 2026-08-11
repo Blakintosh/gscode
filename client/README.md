@@ -89,13 +89,13 @@ persistent caching entirely.
 ### In-source pragmas
 
 Pragmas are GSCode directives carried inside comments. They suppress GSCode output; they do not
-change what the game's compiler or Linker accepts. The syntax deliberately follows C#'s warning
-pragma form:
+change what the game's compiler or Linker accepts. `disable` and `restore` are C#'s pair, chosen
+because each word says which way it goes — which `on`/`off` stops doing as soon as two are nested:
 
 ```gsc
-// #pragma warning disable 5014
+// #pragma disable 5014
 foo_that_exists_only_in_a_custom_engine_build();
-// #pragma warning restore 5014
+// #pragma restore 5014
 ```
 
 Use the numeric diagnostic code shown in the Problems panel. Both `5014` and `gscode-5014` are
@@ -103,29 +103,32 @@ accepted. A `disable` applies from its comment onward until the matching `restor
 disable continues to the end of the file. The directives can be in line, block, or documentation
 comments.
 
-**"warning" is the borrowed spelling, not a limit on what it suppresses.** Any code can be named,
-whatever severity it carries — errors, warnings, information and hints alike, and syntax errors as
-readily as lints. This is wider than the C# pragma the syntax comes from, where an error cannot be
-suppressed, so do not assume an error survives a `disable`. Suppressing one hides the report and
-nothing else: a file whose syntax errors are turned off still does not parse, and the features that
-need a parsed file — completion, go-to-definition, rename — stay degraded with nothing on screen
-explaining it. Suppress an error only when you know why it is wrong.
+**Any code can be named, whatever severity it carries** — errors, warnings, information and hints
+alike, and syntax errors as readily as lints. If you know C#'s `#pragma warning disable`, note that
+this is wider than it: there an error cannot be suppressed at all, so do not assume one survives a
+`disable` here. Suppressing an error hides the report and nothing else — a file whose syntax errors
+are turned off still does not parse, and the features that need a parsed file (completion,
+go-to-definition, rename) stay degraded with nothing on screen explaining it. Suppress an error only
+when you know why it is wrong.
+
+The C# spelling `#pragma warning disable 5014` is also accepted, so an early file written against it
+keeps working. Prefer the short form: `warning` would suggest a narrowness this does not have.
 
 To suppress every diagnostic in a region:
 
 ```gsc
-// #pragma warning disable all
+// #pragma disable all
 legacy_or_generated_code();
-// #pragma warning restore all
+// #pragma restore all
 ```
 
 To leave a hand-formatted region untouched while keeping diagnostics enabled, use the separate
 `format` target:
 
 ```gsc
-// #pragma warning disable format
+// #pragma disable format
         hand_formatted_code();
-// #pragma warning restore format
+// #pragma restore format
 ```
 
 `format` affects GSCode formatting only; it does not suppress diagnostics. Prefer a specific code
@@ -141,7 +144,7 @@ foo_that_exists_only_in_a_custom_engine_build();
 ```
 
 `// gsc ignore` and the block form `/* gscode ignore */` work the same way; a block comment covers
-the line below the line it closes on. Prefer `#pragma warning disable` in new code — it names the
+the line below the line it closes on. Prefer `#pragma disable` in new code — it names the
 code it suppresses and says where it stops.
 
 ### Commands and useful editor features

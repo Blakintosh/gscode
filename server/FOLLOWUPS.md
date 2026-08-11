@@ -316,8 +316,8 @@ written for exactly this:
 GET https://www.gscode.net/api/getLibrary?gameId=t7&languageId=gsc|csc
 ```
 
-It serves the same shape we bundle, and today the files are byte-identical (2,892,926 bytes
-each). The payload carries its own version marker, so "is there something newer" is answerable:
+It serves the same shape we bundle, from `site/src/lib/apiSource/`. The payload carries its own
+version marker, so "is there something newer" is answerable:
 
 ```json
 { "gameId": "t7", "languageId": "gsc", "revision": 32,
@@ -339,8 +339,19 @@ Three things to settle before building it:
   parse it, require a `revision` newer than the bundled one and a non-empty `api[]`, and only
   then swap.
 
-**It buys nothing today** — the bundled data is identical to the site's. The value is entirely
-future-facing, for when the library improves between extension releases.
+**It buys nothing today** — the site now serves exactly what we bundle. It did not, and the way
+that happened is the argument for building this properly rather than the argument against: both
+sides carried T7 revision 32 with the same 2,191 entries, while the bundled copy had three GSC
+entries hand-corrected (`BadPlace_Cylinder`, `DebugStar`, `Print3d`, each flagged `corrected`) and
+two CSC entries the site lacked entirely (`DebugStar`, `Print3d`). Nothing detected it, because the
+REVISION did not move — a curation pass edits entries without bumping the number the endpoint
+reports.
+
+So the version marker below answers "is there a newer revision", not "is this the same data", and
+an update path built on `revision` alone would have carried the stale copy forward indefinitely.
+Whatever gets built should compare content, and the duplication that allowed the drift — the same
+library tracked in `server/src/GSCode.Workspace/Api/` and again in `site/src/lib/apiSource/` —
+should become a copy step rather than two files someone has to remember to edit together.
 
 ### 2. Curate the dev-only builtin list
 
@@ -393,6 +404,25 @@ The plan's original P13: `gscode check <folder>` (workspace-only resolver, full 
 non-zero exit on errors) and `gscode format --check|--write`, packaged as a dotnet tool for
 mod-project CI. Cheap to build because the layering already isolates OmniSharp in
 `GSCode.Server`, so Workspace + Parser are a complete LSP-free engine. Ships only if wanted.
+
+### 4. The site's library browser is Black Ops III's alone
+
+The extension bundles eight builtin libraries across five games; `gscode.net/library` browses one.
+Two places hardcode it — `site/src/routes/api/getLibrary/+server.ts` dispatches on
+`gameId === "t7"`, and `site/src/routes/(gscode)/library/[languageId]/+layout.ts` sets
+`const gameId = "t7"` — and only the T7 pair is imported under `site/src/lib/apiSource/`.
+
+The seam is already there and is not the hard part: `library.ts`'s
+`getLibrary(fetch, gameId, languageId)` takes the game, and `ApiLibrarian.initialise` is passed
+one. What has to be decided is the URL shape, and it is a one-way door: a game route segment
+(`/library/[gameId]/[languageId]`) is linkable and cacheable per game but moves every existing
+`/library/gsc` URL and needs redirects, while a selector over the current routes keeps those URLs
+and cannot put the game in a link. Sizes, since they land in the site bundle: CoD4 527 KB, WaW
+772 KB (GSC + CSC), MW2 882 KB, BO1 1.23 MB (GSC + CSC) — about 3.3 MB on top of T7's 3.7 MB.
+
+Not a release blocker; the extension has never read this endpoint. It is a claim-versus-reality
+gap on the public site of a five-game release, which is why it is written down rather than left
+to be noticed.
 
 ---
 

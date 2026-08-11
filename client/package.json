@@ -44,6 +44,17 @@
 						"variable.language"
 					]
 				}
+			},
+			{
+				"language": "gsh",
+				"scopes": {
+					"parameter.defaultLibrary": [
+						"variable.language"
+					],
+					"variable.defaultLibrary": [
+						"variable.language"
+					]
+				}
 			}
 		],
 		"languages": [

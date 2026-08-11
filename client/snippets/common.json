@@ -5,9 +5,9 @@
 // one, so a snippet here MUST be valid in all five. That is the whole entry rule for this file.
 //
 // Anything dialect-specific - foreach, class, new, the function declaration, the ScriptDoc forms,
-// and every import directive - is served by the SERVER instead, which is the only side that knows
-// the active game. See GscSnippets in GSCode.Workspace/Completion. Those used to live here and
-// were offered while editing CoD4, which has none of them.
+// #precache, and every import directive - is served by the SERVER instead, which is the only side
+// that knows the active game. See GscSnippets in GSCode.Workspace/Completion. Those used to live
+// here and were offered while editing CoD4, which has none of them.
 //
 // Bodies are copied from the shape the stock scripts use rather than invented - the brace and
 // spacing style matches the formatter's defaults.
@@ -17,8 +17,11 @@
 // the hover that reads from it - lost to a one-line body. Where a construct is a keyword, the
 // server already offers it with its docs attached; a snippet of the same name only competes.
 //
-// #precache lives in precache-server.json and precache-client.json instead, because its asset
-// types differ by world. See PrecacheAssetTypes.IsAvailableIn.
+// #precache was the last exception here, split across two files because its asset types differ by
+// world. It broke the rule above in the other direction: the directive is BO3's alone, so four of
+// the five games were offered it. The server now serves it, and hands the asset type to the same
+// completion the typed `#` route uses - which is what makes the world split one answer rather than
+// two files. See PrecacheAssetTypes.IsAvailableIn.
 {
 	"if": {
 		"prefix": "if",

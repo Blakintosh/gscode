@@ -1505,14 +1505,22 @@ public class CompletionEngineTests
 
     // --- Asset types inside #precache's first argument ---
 
-    /// <summary>Completes with the cursor between the quotes of the given line.</summary>
-    private static ImmutableArray<CompletionEntry> CompleteInsideQuotes(string line, int quoteIndex)
+    /// <summary>
+    /// Completes with the cursor between the quotes of the given line.
+    /// </summary>
+    /// <param name="extension">
+    /// The asking file's extension, which is what decides the WORLD: `Analyze` reads the language
+    /// from the path. It matters for the asset types, since the `client_*` family belongs to the
+    /// client world only.
+    /// </param>
+    private static ImmutableArray<CompletionEntry> CompleteInsideQuotes(
+        string line, int quoteIndex, string extension = "gsc")
     {
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n    s = \"some free text\";\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", line + "\n\nfunction run()\n{\n}\n");
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.{extension}", line + "\n\nfunction run()\n{\n}\n");
 
         return engine.Complete(result, "raw", new Position(0, quoteIndex + 1));
     }
@@ -1546,6 +1554,35 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = CompleteInsideQuotes("#precache( \"model\", \"\" );", 20);
 
         Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.AssetType);
+    }
+
+    [Fact]
+    public void TheAssetTypesOffered_AreTheAskingFilesOwnWorld()
+    {
+        // The `precache` SNIPPET carries no asset types of its own — it retriggers into this list —
+        // so this split is the only thing keeping a .gsc from being offered a client_* type that
+        // gscode-4006 would then report. It used to be enforced by shipping two contributed snippet
+        // files; it is enforced here now, and nowhere else.
+        ImmutableArray<CompletionEntry> server = CompleteInsideQuotes("#precache( \"\" );", 11);
+        ImmutableArray<CompletionEntry> client = CompleteInsideQuotes("#precache( \"\" );", 11, "csc");
+
+        Assert.True(HasLabel(server, "model"));
+        Assert.False(HasLabel(server, "client_fx"));
+
+        Assert.True(HasLabel(client, "client_fx"));
+        Assert.True(HasLabel(client, "model"));
+    }
+
+    [Fact]
+    public void AHeaderIsOfferedBothWorldsAssetTypes()
+    {
+        // A .gsh is inserted into whichever world includes it, so the language it ends up in is not
+        // knowable from the header. PrecacheAssetTypes.IsAvailableIn allows everything there, and
+        // the completion has to agree with the lint that will judge the result.
+        ImmutableArray<CompletionEntry> entries = CompleteInsideQuotes("#precache( \"\" );", 11, "gsh");
+
+        Assert.True(HasLabel(entries, "client_fx"));
+        Assert.True(HasLabel(entries, "model"));
     }
 
     [Fact]

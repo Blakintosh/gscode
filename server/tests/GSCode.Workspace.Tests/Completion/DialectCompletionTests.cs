@@ -168,6 +168,7 @@ public class DialectCompletionTests
     [InlineData("using")]
     [InlineData("insert")]
     [InlineData("namespace")]
+    [InlineData("precache")]
     public void Cod4IsNotOfferedBlackOps3Snippets(string label)
     {
         Assert.DoesNotContain(CompleteInCode("", Cod4), e => e.Label == label);
@@ -187,6 +188,25 @@ public class DialectCompletionTests
 
         Assert.Contains(TopLevelCompletions(Bo3), e => e.Label == "using");
         Assert.DoesNotContain(TopLevelCompletions(Bo3), e => e.Label == "include");
+    }
+
+    [Fact]
+    public void ThePrecacheSnippetIsBlackOps3sAloneAndHandsOffItsAssetType()
+    {
+        // This one was contributed by the extension until it was the last file breaking the rule
+        // the rest of this section exists for: #precache is BO3's directive, and four games were
+        // offered it. The client carried the asset types as a snippet CHOICE LIST, which is why it
+        // needed two files — one per world. The body here names none of them: the tab stop lands
+        // inside the quotes and Retrigger reopens the list, so PrecacheAssetTypes stays the only
+        // place the vocabulary is written down and the world split is answered once.
+        CompletionEntry snippet = Assert.Single(TopLevelCompletions(Bo3), e => e.Label == "precache");
+
+        Assert.Equal(CompletionKind.Snippet, snippet.Kind);
+        Assert.StartsWith("#precache(", snippet.InsertText, StringComparison.Ordinal);
+        Assert.True(snippet.RetriggerCompletion);
+
+        // No asset type is written into the body — that is the whole point of the handoff.
+        Assert.DoesNotContain("model", snippet.InsertText, StringComparison.Ordinal);
     }
 
     [Fact]

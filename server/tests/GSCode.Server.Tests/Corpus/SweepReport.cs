@@ -52,8 +52,13 @@ internal static class SweepReport
         int warnings = items.Count(i => i.Severity == DiagnosticSeverity.Warning);
 
         html.Append("<h1>Corpus diagnostic sweep</h1>");
-        html.Append("<p class=\"lede\">Every diagnostic the editor would raise over the shipped BO3 scripts. ")
-            .Append("Those scripts shipped in a released game, so each finding here is either a real defect in ")
+
+        // The game is whichever GSCODE_CORPUS_* root this run was pointed at, so the lede says
+        // "these scripts" rather than naming one. It used to say BO3 on every report, including
+        // the CoD4 and WaW ones - and a report that names the wrong game is exactly how a
+        // BO3-measured conclusion got applied to four other games once already.
+        html.Append("<p class=\"lede\">Every diagnostic the editor would raise over these shipped scripts. ")
+            .Append("They shipped in a released game, so each finding here is either a real defect in ")
             .Append("them or — far more often — a false positive in GSCode.</p>");
 
         html.Append("<div class=\"stats\">");

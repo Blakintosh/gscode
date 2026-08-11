@@ -43,6 +43,45 @@ public class DialectCompletionTests
         Assert.True(GscKeywords.IsAvailable(keyword, Bo3));
     }
 
+    [Theory]
+    [InlineData("#define")]
+    [InlineData("#if")]
+    [InlineData("#elif")]
+    [InlineData("#else")]
+    [InlineData("#endif")]
+    public void Cod4HasNoPreprocessorDirectives(string directive)
+    {
+        // Reported from a screenshot: typing '#' at the top of a CoD4 file offered #define and the
+        // whole #if chain. IsAvailable gated five directives by capability and then let anything
+        // else beginning with '#' through, on a comment claiming the rest "exist across the whole
+        // lineage". They do not — `#define` appears in one file per IW-line game, always the same
+        // commented-out block of C in _hud.gsc, and the #if family in none.
+        Assert.False(GscKeywords.IsAvailable(directive, Cod4));
+        Assert.True(GscKeywords.IsAvailable(directive, Bo3));
+    }
+
+    [Fact]
+    public void TheAnimtreePairIsOfferedInEveryDialect()
+    {
+        // The genuinely universal directives, and all that is left of the old blanket rule: 193
+        // CoD4 files use #using_animtree and 54 use #animtree, against 66 and 45 in BO3.
+        Assert.True(GscKeywords.IsAvailable("#using_animtree", Cod4));
+        Assert.True(GscKeywords.IsAvailable("#using_animtree", Bo3));
+        Assert.True(GscKeywords.IsAvailable("#animtree", Cod4));
+        Assert.True(GscKeywords.IsAvailable("#animtree", Bo3));
+    }
+
+    [Fact]
+    public void AnimtreeIsOfferedInABodyAndNeverAtFileScope()
+    {
+        // #animtree is a directive by spelling and an expression atom by grammar — the argument to
+        // UseAnimTree( #animtree ), which is a call. Across the five corpora it appears in 415 files
+        // and not once at the start of a line, so file scope is a position it cannot occupy. It sat
+        // in TopLevelKeywords, which is exactly where the screenshot showed it.
+        Assert.DoesNotContain("#animtree", GscKeywords.TopLevelKeywords);
+        Assert.Contains("#animtree", GscKeywords.BodyDirectives);
+    }
+
     [Fact]
     public void Cod4OffersIncludeButBlackOps3DoesNot()
     {
@@ -58,8 +97,11 @@ public class DialectCompletionTests
     [InlineData("return")]
     [InlineData("waittill")]
     [InlineData("thread")]
-    [InlineData("#define")]
-    [InlineData("#if")]
+    // #define and #if used to be here, on the same assumption IsAvailable's fallthrough made. They
+    // are BO3's alone; Cod4HasNoPreprocessorDirectives above is the corrected claim. What is left of
+    // the directive family that really is universal is the animtree pair.
+    [InlineData("#using_animtree")]
+    [InlineData("#animtree")]
     public void UniversalKeywordsAreOfferedEverywhere(string keyword)
     {
         Assert.True(GscKeywords.IsAvailable(keyword, Cod4));
@@ -221,6 +263,48 @@ public class DialectCompletionTests
         Assert.StartsWith("/@", bo3.InsertText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TypingAHashAtTopLevelInCod4_OffersOnlyWhatCod4Has()
+    {
+        // The reported case, end to end rather than through IsAvailable alone: this is the list in
+        // the screenshot. CoD4 has two top-level directives and was being offered eight.
+        ImmutableArray<CompletionEntry> entries = DirectivesAfterHash(Cod4);
+
+        Assert.Equal(
+            new[] { "#include", "#using_animtree" },
+            entries.Select(e => e.Label).OrderBy(l => l, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public void TypingAHashAtTopLevelInBlackOps3_IsUnchanged()
+    {
+        // The gate must not cost BO3 anything: it is the game that has all of them.
+        ImmutableArray<CompletionEntry> entries = DirectivesAfterHash(Bo3);
+
+        foreach ( string directive in (string[])["#using", "#insert", "#namespace", "#precache", "#define", "#if"] )
+        {
+            Assert.Contains(entries, e => e.Label == directive);
+        }
+
+        // Still not #animtree, which is a body position in every game including this one.
+        Assert.DoesNotContain(entries, e => e.Label == "#animtree");
+    }
+
+    /// <summary>What a '#' typed at file scope offers, for one dialect.</summary>
+    private static ImmutableArray<CompletionEntry> DirectivesAfterHash(GameProfile profile)
+    {
+        CompletionEngine engine = BuildEngine();
+        ParseResult result = ScriptAnalysis.Analyze(
+            @$"{Raw}\maps\mp\test.gsc",
+            ScriptLanguage.Gsc,
+            SourceText.From("#\n"),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
+            new NameTable(),
+            profile);
+
+        return engine.Complete(result, "raw", new Position(0, 1), profile: profile);
+    }
+
     /// <summary>Completes at the top of a file, outside any function body, for one dialect.</summary>
     private static ImmutableArray<CompletionEntry> TopLevelCompletions(GameProfile profile)
     {
@@ -374,12 +458,16 @@ public class DialectCompletionTests
         ImmutableArray<CompletionEntry> entries = CompleteInCode("#", Cod4);
 
         Assert.NotEmpty(entries);
-        Assert.Contains(entries, e => e.Label == "#if");
-        Assert.Contains(entries, e => e.Label == "#define");
+
+        // #animtree is the whole of it, and the list being one item long is the point rather than a
+        // weakness of the test. This asserted #if and #define until they were found to be BO3's
+        // alone; what keeps the branch from returning an empty list on this dialect — the reason it
+        // exists — is the one directive CoD4 can write in a body.
+        Assert.Contains(entries, e => e.Label == "#animtree");
 
         // #insert is a header directive and CoD4 has no headers; #include is its import and is top
-        // level only. Neither belongs in the body list.
-        Assert.DoesNotContain(entries, e => e.Label is "#insert" or "#include");
+        // level only; #if and #define need a preprocessor CoD4 does not have. None belongs here.
+        Assert.DoesNotContain(entries, e => e.Label is "#insert" or "#include" or "#if" or "#define");
     }
 
     [Fact]

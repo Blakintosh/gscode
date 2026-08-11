@@ -85,13 +85,20 @@ public static class GscKeywords
         "thisthread",
     ];
 
-    /// <summary>Top-level keywords/directives offered outside a function body.</summary>
+    /// <summary>
+    /// Top-level keywords/directives offered outside a function body.
+    ///
+    /// <c>#animtree</c> is deliberately NOT here. It is a directive by spelling and an expression
+    /// atom by grammar — the argument to <c>UseAnimTree( #animtree )</c>, which is a call, and calls
+    /// live in bodies. Across the five corpora it appears in 415 files and not once at the start of
+    /// a line, so file scope is a position it can never occupy. It lives in
+    /// <see cref="BodyDirectives"/> instead.
+    /// </summary>
     public static ImmutableArray<string> TopLevelKeywords { get; } =
     [
         "function", "class", "var", "autoexec", "private", "constructor", "destructor",
         "#using", "#include", "#insert", "#namespace", "#precache", "#define", "#using_animtree",
-        // Documented in KeywordDocs and hoverable, but previously never offered.
-        "#animtree", "#if", "#elif", "#else", "#endif",
+        "#if", "#elif", "#else", "#endif",
     ];
 
     /// <summary>
@@ -104,11 +111,18 @@ public static class GscKeywords
     /// <c>#namespace</c>, <c>#precache</c>, the animtree pair — is consumed by the PARSER at file
     /// scope, so those stay out.
     ///
+    /// <c>#animtree</c> is here for a different reason, and is the only entry the paragraph above
+    /// does not describe: the preprocessor never sees it. It is the argument to
+    /// <c>UseAnimTree( #animtree )</c> — an expression atom wearing a directive's spelling — so a
+    /// body is the only place it can be written, and it is the one directive on this list every
+    /// dialect has.
+    ///
     /// Still filtered through <see cref="IsAvailable"/> by the caller, so a dialect without headers
-    /// is not offered <c>#insert</c>.
+    /// is not offered <c>#insert</c> and one without macros is offered neither <c>#define</c> nor
+    /// the <c>#if</c> chain — which, for the four games before BO3, leaves <c>#animtree</c> alone.
     /// </summary>
     public static ImmutableArray<string> BodyDirectives { get; } =
-        ["#if", "#elif", "#else", "#endif", "#define", "#insert"];
+        ["#if", "#elif", "#else", "#endif", "#define", "#insert", "#animtree"];
 
     /// <summary>
     /// Whether a keyword/directive exists in the given dialect, so completion offers only what the
@@ -131,10 +145,22 @@ public static class GscKeywords
                 return profile.HasHeaders;
             case "#precache":
                 return profile.HasPrecacheDirective;
+            case "#define":
+            case "#if":
+            case "#elif":
+            case "#else":
+            case "#endif":
+                return profile.HasMacros;
         }
 
-        // The remaining directives (#define, #using_animtree, #animtree, the #if family) exist across
-        // the whole lineage.
+        // What is genuinely universal, and all that is left: the animtree pair. #using_animtree
+        // declares the tree at file scope and #animtree names it in a UseAnimTree call, and both
+        // appear in every one of the five corpora.
+        //
+        // This used to be a blanket "any directive exists everywhere", with a comment listing
+        // #define and the #if family among them. It is where CoD4 came to be offered a preprocessor
+        // it does not have — the same failure as the contributed #precache snippet, one layer down,
+        // and the reason each directive above now names the flag it depends on.
         if ( keyword.StartsWith('#') )
         {
             return true;

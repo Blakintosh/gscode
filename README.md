@@ -18,9 +18,9 @@ their capabilities checked against their own shipped scripts:
 |---|---|
 | Call of Duty 4 (2007) | `#include` merge, `maps\x::foo()` path calls, `///` ScriptDoc |
 | World at War (2008) | as CoD4, plus client scripts (`.csc`) |
-| Modern Warfare 2 (2009) | adds `foreach`, `childthread`, `call`, file-scope constants |
+| Modern Warfare 2 (2009) | adds `foreach`, `childthread`, `call`, file-scope constants (`CONST = 4;` — not macros; no game before BO3 has a preprocessor) |
 | Black Ops (2010) | as WaW, plus `#"hash strings"` |
-| **Black Ops III (2015)** | `#using` namespaces, classes, `function`, `&` pointers, `/@ @/` ScriptDoc, headers |
+| **Black Ops III (2015)** | `#using` namespaces, classes, `function`, `&` pointers, `/@ @/` ScriptDoc, headers, the preprocessor (`#define`, `#if`) |
 
 Every other mainline game up to Black Ops 6 is present as a *core* — a nameable identity over the
 shared base dialect, with its specifics left for a contributor to fill in. See

@@ -230,6 +230,11 @@ LSP types anywhere.
 
 - `sealed class Preprocessor` — `static Process(rootFilePath, tokens, text, insertProvider, names)`.
   One linear pass per file; inserts recurse (depth cap 16 + active-path cycle set).
+  - The dialect is asked exactly twice, and everything else here is game-independent: the
+    header-extension rule on `#insert`, and `ReportIfNoPreprocessor`, which raises `2016
+    MacrosNotInDialect` when a `#define` or an `#if` member appears in a game without
+    `GameProfile.HasMacros` — everything before BO3. Once per file, and the directive is then
+    processed anyway so suppressing the code leaves a working file; the reasoning is on the code.
   - `#define`: keyword-or-identifier names; parameter list only when `(` is ADJACENT to
     the name; `\` continuation must immediately precede the line break (else diagnostic,
     backslash excluded); trailing comment captured as documentation.

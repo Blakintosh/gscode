@@ -1031,7 +1031,12 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = CompleteInsideFunction(line);
 
         Assert.DoesNotContain(entries, e => e.Label is "#using" or "#include" or "#namespace"
-            or "#precache" or "#using_animtree" or "#animtree");
+            or "#precache" or "#using_animtree");
+
+        // #animtree was in this list, on the same mistake that put it in TopLevelKeywords. It is the
+        // argument to UseAnimTree( #animtree ), so a body is the ONLY place it can be written — and
+        // `self notify(#` is an expression position, which is precisely where it belongs.
+        Assert.Contains(entries, e => e.Label == "#animtree");
     }
 
     [Theory]
@@ -1628,16 +1633,25 @@ public class CompletionEngineTests
     }
 
     [Theory]
-    [InlineData("#animtree")]
     [InlineData("#if")]
     [InlineData("#elif")]
     [InlineData("#else")]
     [InlineData("#endif")]
     public void PreviouslyUnofferedDirectives_AreNowOffered(string directive)
     {
-        // These five are documented in KeywordDocs and hover on them, but were absent from
-        // TopLevelKeywords, so they could never be completed.
+        // These are documented in KeywordDocs and hover on them, but were absent from
+        // TopLevelKeywords, so they could never be completed. (This world is BO3; on a dialect
+        // without a preprocessor the same four are gated out again — see DialectCompletionTests.)
         Assert.True(HasLabel(CompleteAfter("#"), directive));
+    }
+
+    [Fact]
+    public void Animtree_IsNotATopLevelDirective()
+    {
+        // It was added to TopLevelKeywords with these four and does not belong with them: #animtree
+        // is an expression atom wearing a directive's spelling, and across the five corpora it
+        // appears in 415 files without once starting a line.
+        Assert.False(HasLabel(CompleteAfter("#"), "#animtree"));
     }
 
     [Fact]

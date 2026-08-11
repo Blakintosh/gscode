@@ -31,6 +31,19 @@ public enum GscDiagnosticCode
     InsertNotAHeader = 2014,
     WrongMacroArgumentCount = 2015,
 
+    /// <summary>
+    /// A <c>#define</c> or a member of the <c>#if</c> chain in a dialect with no preprocessor —
+    /// everything before BO3. See <see cref="GameProfile.HasMacros"/> for the measurement.
+    ///
+    /// The directive is still PROCESSED after being reported, which is the one thing about this
+    /// rule worth knowing. Skipping it would model the game's compiler more faithfully, and would
+    /// punish the case this is most likely to be wrong about: a custom compiler that does accept
+    /// macros. Reporting-and-expanding leaves suppression a complete answer — <c>#pragma disable
+    /// 2016</c> and everything still resolves — where reporting-and-skipping would leave a
+    /// suppressed file with its macros silently unexpanded.
+    /// </summary>
+    MacrosNotInDialect = 2016,
+
     // Parsing (3xxx)
     ExpectedToken = 3000,
     ExpectedDeclaration = 3001,

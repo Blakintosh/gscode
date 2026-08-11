@@ -35,6 +35,11 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.InsertNotAHeader] = "'{0}' is not a header; '#insert' expects a '{1}' file.",
         [GscDiagnosticCode.WrongMacroArgumentCount] = "Macro '{0}' takes {1} argument(s) but {2} were passed.",
 
+        // Names the game, because the fix is either "use a file-scope constant" or "you picked the
+        // wrong game", and which one it is depends on something the message cannot see.
+        [GscDiagnosticCode.MacrosNotInDialect] =
+            "'{0}' is not available in {1}, which has no preprocessor — macros and conditional compilation arrive in Black Ops III.",
+
         // Parsing
         [GscDiagnosticCode.ExpectedToken] = "Expected '{0}' but found '{1}'.",
         [GscDiagnosticCode.ExpectedDeclaration] = "Expected a function, class, or directive but found '{0}'.",

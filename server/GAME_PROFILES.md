@@ -181,6 +181,7 @@ in the corpus are strings and comments).
 | headers `.gsh` / `#insert` (`HasHeaders`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | hash strings `#"…"` (`HasHashStrings`) | ✗ | ✗ | ✗ | ✓ | ✓ |
 | `#precache( "type", … )` directive (`HasPrecacheDirective`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| preprocessor: `#define`, `#if`/`#elif`/`#else`/`#endif` (`HasMacros`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | arrays passed by reference (`ArraysPassedByReference`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | ScriptDoc style (`ScriptDocStyle`) | `///` | `///` | `///` | `///` | `/@ @/` |
 
@@ -188,6 +189,18 @@ in the corpus are strings and comments).
 comment (not `/# #/`, which is a dev block). BO3 uses `/@ … @/`. Hash strings and `.csc` are Treyarch
 features — hence BO1 and BO3 have them and the Infinity Ward line has none. BO3 passes arrays **by
 reference only**; earlier games copy by value, which changes aliasing analysis, not syntax.
+
+`HasMacros` and `HasHeaders` coincide today and are still separate flags, because they are separate
+claims: a header IS macros, but a dialect could define them in-file with nowhere to put them. What
+the four earlier games have instead is `HasFileScopeConstants`, whose ALL_CAPS naming makes it look
+convincingly like a macro. Measured before the flag was added: `#define` appears in exactly one file
+per pre-BO3 game — always `maps/mp/gametypes/_hud.gsc`, inside a `/* */` block holding pasted C —
+and the `#if` family in none of the four. A directive written against a game without the flag is
+`gscode-2016`, raised by the preprocessor, which then processes it anyway; the reasoning for that is
+on the code.
+
+Note the animtree pair is genuinely universal and is not part of this: `#using_animtree` declares
+the tree at file scope and `#animtree` names it inside a `UseAnimTree( … )` call, in all five games.
 
 ### Directives
 

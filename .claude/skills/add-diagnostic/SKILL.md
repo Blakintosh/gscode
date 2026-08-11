@@ -73,5 +73,5 @@ See the `build-and-test` skill for the environment variables and the duration ch
 
 ## 7. Suppression comes for free
 
-`WorkspaceLints.ApplyPragmas` filters the combined set, so `// #pragma warning disable NNNN`
-already works for a new code. Do not add per-lint suppression.
+`WorkspaceLints.ApplyPragmas` filters the combined set, so `// #pragma disable NNNN` already works
+for a new code — at any severity, including an Error. Do not add per-lint suppression.

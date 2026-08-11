@@ -128,12 +128,14 @@ The language server requires the .NET 10 Runtime, available at
 ## Building
 
 ```
-cd server && dotnet build GSCode.slnx && dotnet test --filter "Category!=Corpus"
+cd server && dotnet build GSCode.slnx && dotnet test --filter "Category!=Corpus&Category!=Perf"
 cd client && npm ci && npm run compile
 ```
 
-Warnings are errors. The corpus tests are excluded above because they read real game installs
-through `GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}`; without those set they silently sweep nothing.
+Warnings are errors. Two categories are excluded above, and both for the same reason: the corpus
+sweep reads real game installs through `GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}` and, without those
+set, silently sweeps nothing; the perf sweep needs the same installs and makes a second pass over
+every script. This is the filter CI uses.
 [server/ARCHITECTURE.md](server/ARCHITECTURE.md) is the map of the server, and each project carries a
 `FOLDER.md` describing its own contents.
 

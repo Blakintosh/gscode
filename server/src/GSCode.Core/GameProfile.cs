@@ -545,7 +545,7 @@ public sealed partial record GameProfile
 
     /// <summary>
     /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. Five are SUPPORTED
-    /// with capabilities verified against real scripts (CoD4, WaW, MW2, BO1, BO3 — only BO3 is also
+    /// with capabilities established from real scripts (CoD4, WaW, MW2, BO1, BO3 — all five are also
     /// <see cref="Verified"/>); the rest are CORES (see <see cref="Core"/>) — nameable identities over
     /// the shared base dialect, left for a contributor to fill in. All live in
     /// <c>Profiles/SupportedProfiles.cs</c>.

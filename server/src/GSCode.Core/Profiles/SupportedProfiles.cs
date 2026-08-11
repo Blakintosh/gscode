@@ -2,8 +2,9 @@ namespace GSCode.Core;
 
 /// <summary>
 /// The mainline Call of Duty lineage as <see cref="GameProfile"/>s. Five are SUPPORTED, with
-/// capabilities verified against each game's real scripts — CoD4, WaW, MW2, BO1, BO3 — though only
-/// BO3 is fully <see cref="GameProfile.Verified"/> (implemented end to end). Every other game up to
+/// capabilities established from each game's real scripts — CoD4, WaW, MW2, BO1, BO3 — and all five
+/// now also set <see cref="GameProfile.Verified"/>, having been proven against their own script
+/// trees by the corpus gate rather than filled in from a worksheet. Every other game up to
 /// BO6 is a CORE: a nameable identity over the shared base dialect, its specifics deliberately left
 /// unset for a contributor to fill in and promote. Each game's keyword set is <c>[..BaseKeywords, …]</c>
 /// — the base every game shares, plus that dialect's own additions.

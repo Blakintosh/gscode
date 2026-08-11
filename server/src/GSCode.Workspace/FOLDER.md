@@ -5,8 +5,8 @@ resolution, background indexing, the SQLite cache, and the bundled game data. LS
 
 Everything below is built. The folders map to the layers: `Resolution/` turns a script path into a
 file, `Documents/` holds open-buffer state, `Database/` and `Indexing/` own the record store,
-`Api/` the bundled game data, `Analysis/` the lints, `Completion/` and `Typing/` the information
-surfaces.
+`Cache/` persists it to SQLite between sessions, `Api/` the bundled game data, `Analysis/` the
+lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Database/ScriptRecord.cs
 

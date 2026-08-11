@@ -27,7 +27,9 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 
 ## Symbols/ScriptLanguage.cs
 
-- `enum ScriptLanguage` — Gsc / Csc; picks which structurally-isolated store a file belongs to.
+- `enum ScriptLanguage` — Gsc / Csc / Gsh; picks which store a file belongs to. Gsc and Csc are the
+  two structurally-isolated worlds; Gsh is the shared header store, and is a live case wherever a
+  question has a per-world answer (`GameProfile.ExtensionFor`, `PrecacheAssetTypes.IsAvailableIn`).
 
 ## Symbols/SymbolKey.cs
 
@@ -168,4 +170,6 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   - `Begin(string scopeName)` / `End()` — open/close a scope on the current thread
     (thread-local stack; unmatched End is ignored).
   - `Report(Action<string> writeLine)` — per-scope call count, total ms, mean ms.
+  - `Snapshot(IDictionary<string, (double, long)>)` — the same statistics as data rather than
+    text, which is what the perf report reads to build its own tables (see `PERF.md`).
   - `Reset()` — clears recorded statistics between measurement runs.

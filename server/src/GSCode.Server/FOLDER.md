@@ -12,11 +12,14 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Configuration/ServerSettings.cs
 
-- `sealed class ServerSettings` — the parsed gscode.* view (serverLogLevel, raw.enabled,
-  rawPath/modsPath overrides, rawFileWarningMode, outline.showAssignments, codeLens.enabled,
-  inlayHints.parameterNames, inlayHints.inferredTypes, completion.literals). `Apply(JToken)`
-  merges a settings payload (accepting both dotted and nested key forms); missing keys keep
-  current values.
+- `sealed class ServerSettings` — the parsed gscode.* view. It covers EVERY key
+  `client/package.json` contributes and reads nothing else, which is the invariant worth stating
+  rather than a list that goes stale: the game and script roots (game, serverLogLevel, raw.enabled,
+  rawPath/modsPath overrides, rawFileWarningMode), indexing (workspaceIndexingMode,
+  enableWorkspaceCache, diagnostics.scope), the editor features (outline.showAssignments,
+  codeLens.enabled, the inlayHints.* and completion.* pairs) and the four format.* knobs.
+  `Apply(JToken)` merges a settings payload (accepting both dotted and nested key forms); missing
+  keys keep current values.
 
 ## Configuration/ResolverHolder.cs
 
@@ -29,7 +32,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - Incremental text sync. didOpen → immediate analysis; didChange → ~250 ms debounced
   re-analysis with per-document cancellation (superseded runs are cancelled, silently);
   didSave → immediate (bypasses debounce); didClose → clears diagnostics. Before publishing,
-  it merges the parse diagnostics with cross-file lints (`NamespaceUsageLint`) for GSC/CSC docs.
+  it merges the parse diagnostics with the cross-file lints — all of them, via
+  `WorkspaceLints.Analyze` — for GSC/CSC docs.
 
 ## Handlers/DiagnosticsPublisher.cs
 
@@ -269,7 +273,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   handlers share it. `Format(ParseResult)` returns the full formatted text (or null).
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
   every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman
-  braces, one statement per line, 4-space indent from brace/dev-block depth, padded
+  braces, one statement per line, one `FormatOptions.IndentUnit` per brace/dev-block level (a tab
+  or `tabSize` spaces, from the request's `insertSpaces` — the client defaults all three languages
+  to tabs, which is what the corpus does), padded
   control-flow and non-empty parens (`( x )`, `()` stays tight), hugging `.`/`::`/`->`/`[ ]`
   and backslash paths, and blank lines capped at two. Line breaks are forced structurally
   (Allman) but original breaks are otherwise preserved, which keeps newline-terminated
@@ -289,9 +295,10 @@ transport, and starts the OmniSharp `LanguageServer` with `OnInitialize` (reads
 On indexing completion it logs `Workspace indexing complete: N files in X.Xs` (info), then a
 formatted `LogIndexBreakdown` block — per-language file counts (`GSC`/`CSC`/`GSH`) each split by
 raw/mod/workspace context (`CategorizeContext` + `FormatLanguageLine`), and a totals line of
-functions · classes · macros · distinct namespaces — and then starts `RunMemoryMonitorAsync`, a
-lifetime background loop that samples the working set every 2 s and logs `Server memory: N MB`
-only on >= 1 MB changes (so a stable process stays quiet).
+functions · classes · macros · distinct namespaces — and then starts `ServerStatusNotifier.RunAsync`,
+a lifetime background loop that samples the working set every 3 s and pushes a `gscode/serverStatus`
+notification only on >= 1 MB changes (so a stable process stays quiet). It does NOT log: the status
+bar is the readout.
 
 ## Transport/TransportOptions.cs
 

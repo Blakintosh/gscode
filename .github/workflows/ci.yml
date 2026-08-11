@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, next, rewrite/v2]
+    # next-major is where 2.0 integrates; main is what it eventually lands on. A branch missing
+    # here is not silent - pull_request still covers it - but its direct pushes run nothing.
+    branches: [main, next, next-major]
   pull_request:
 
 jobs:
@@ -24,6 +26,10 @@ jobs:
         # point at local game or mod-tools installs CI does not have. They no-op when those are
         # unset, so excluding them is not what makes CI pass - it makes the omission EXPLICIT, since
         # a run that silently swept nothing looks exactly like one that swept 7,000 scripts.
+        #
+        # Read the per-assembly totals, not just the step's colour: a test host that dies takes its
+        # remaining tests with it and vstest still prints "Passed!" for the ones that finished, so a
+        # crashed run and a clean one differ by the word "Aborted" and by the count.
         run: dotnet test server/GSCode.slnx --nologo --no-build --filter "Category!=Corpus&Category!=Perf"
 
       - uses: actions/setup-node@v4
@@ -37,3 +43,25 @@ jobs:
       - name: Compile client
         run: npm run compile
         working-directory: client
+
+      # The bar is zero ERRORS. The naming-convention warnings are pre-existing and expected - they
+      # are the gscode.* setting keys, which are dotted by contract and cannot be camelCase - so the
+      # count is deliberately not asserted anywhere.
+      - name: Lint client
+        run: npm run lint
+        working-directory: client
+
+      # Builds the artifact users actually install: publishes the server into client/service, then
+      # packs the VSIX. Nothing above touches either half, so without this step a broken
+      # bundle-server, a missing bundled game library or a .vscodeignore mistake is first discovered
+      # by hand on release day.
+      - name: Package extension
+        run: npm run package
+        working-directory: client
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: gscode-vsix
+          path: client/*.vsix
+          if-no-files-found: error

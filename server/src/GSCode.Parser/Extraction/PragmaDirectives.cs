@@ -61,6 +61,24 @@ public readonly record struct PragmaDirective(
 /// documentation — <c>disable</c> and <c>restore</c> say which way they go, which
 /// <c>on</c>/<c>off</c> does not once two of them are nested.
 ///
+/// <b>The word "warning" is the borrowed spelling, not the scope.</b> Suppression is keyed on the
+/// CODE alone: <see cref="IsSuppressed"/> takes a code and a line and never sees a
+/// <see cref="DiagnosticSeverity"/>, and <c>WorkspaceLints.ApplyPragmas</c> runs it over the
+/// combined set — the file's own parse diagnostics as well as the lints. So every severity is
+/// suppressible, Errors and Hints alike, and every band with them: a 3xxx syntax error is turned
+/// off by its code the same way a 5xxx hint is.
+///
+/// That is BROADER than the C# the syntax is borrowed from, where a compiler error cannot be
+/// suppressed at all, and the difference is worth stating because the familiarity that makes the
+/// spelling a good choice is also what carries the wrong expectation across. It follows from where
+/// suppression is applied rather than from a decision taken here: one filter over one merged list
+/// cannot branch on a severity it is not given. If a band should ever become exempt, this is the
+/// summary that has to change with it.
+///
+/// The practical consequence, and the reason <c>all</c> carries a warning in the user
+/// documentation: a file whose parse errors are suppressed still fails to parse. Only the report
+/// goes away, so the features that need a good tree stay degraded with nothing on screen saying why.
+///
 /// <c>all</c> is accepted in place of a code, and codes may be written bare (<c>5014</c>) or
 /// prefixed the way the editor displays them (<c>gscode-5014</c>), because that is what is on
 /// screen when someone decides to suppress one.

@@ -103,6 +103,14 @@ accepted. A `disable` applies from its comment onward until the matching `restor
 disable continues to the end of the file. The directives can be in line, block, or documentation
 comments.
 
+**"warning" is the borrowed spelling, not a limit on what it suppresses.** Any code can be named,
+whatever severity it carries — errors, warnings, information and hints alike, and syntax errors as
+readily as lints. This is wider than the C# pragma the syntax comes from, where an error cannot be
+suppressed, so do not assume an error survives a `disable`. Suppressing one hides the report and
+nothing else: a file whose syntax errors are turned off still does not parse, and the features that
+need a parsed file — completion, go-to-definition, rename — stay degraded with nothing on screen
+explaining it. Suppress an error only when you know why it is wrong.
+
 To suppress every diagnostic in a region:
 
 ```gsc
@@ -121,10 +129,11 @@ To leave a hand-formatted region untouched while keeping diagnostics enabled, us
 ```
 
 `format` affects GSCode formatting only; it does not suppress diagnostics. Prefer a specific code
-over `all` so new diagnostics are not hidden accidentally.
+over `all` so new diagnostics are not hidden accidentally — and note that `all` means all, so an
+`all` region hides the errors in it too.
 
 GSCode 1.5's `// gscode ignore` is still accepted as a legacy alias. It suppresses every diagnostic
-on the one line below the comment — no more, and it opens no region:
+on the one line below the comment, at any severity — no more, and it opens no region:
 
 ```gsc
 // gscode ignore

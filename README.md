@@ -144,7 +144,7 @@ every script. This is the filter CI uses.
 GSCode is open-source software licenced under the GNU General Public License v3.0.
 
 ```
-GSCode - Black Ops III GSC Language Extension
+GSCode - Call of Duty GSC Language Extension
 Copyright (C) 2026 Blakintosh
 
 This program is free software: you can redistribute it and/or modify

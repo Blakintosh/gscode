@@ -195,102 +195,30 @@ A complete ground-up rewrite of the language server and extension for speed, low
 - Added snippets for the common constructs. The dialect-specific ones (`foreach`, `function`, `class`, `new`, `#using`, `#precache`, ScriptDoc) are served by the language server and are only offered where the selected game has the construct, rather than being offered everywhere with a note in the description. `#precache` is Black Ops III's alone, and its asset types are further split by world: a `.gsc` is offered only server-side types and a `.csc` gets the `client_*` family — a header (`.gsh`) sees both, since it is inserted into whichever world includes it.
 - Expanded diagnostics: argument counts against builtin and script signatures, macro arity, unreachable code, unassigned and unused variables, duplicate imports, duplicate case labels, assignment used as a condition, inheritance cycles, `...` placement, and a missing semicolon reported at the end of the statement that is missing it.
 
-### 1.5.0
+For releases before 2.0, and for the full 2.0 entry including what the rewrite removed, see the
+[changelog](CHANGELOG.md). New releases are written there; this section keeps the current one only.
 
-- Added game script indexing so GSCode can discover namespaces and functions across the workspace and shared raw scripts without every file needing to be opened first.
-- Added workspace-wide namespace and `namespace::function` completions, including `sys::` API completions and automatic `#using` insertion for functions from unimported scripts.
-- Added field completions for dot-access on common globals such as `level`, `world`, and `game`, with fields learned from indexed scripts.
-- Added optional persistent workspace caching for faster startup after scripts have already been indexed.
-- Improved `#using` quick fixes so they work for more missing namespace/function cases, insert alphabetically, skip duplicates, and avoid suggesting scripts from the wrong VM.
-- Improved protected raw-folder warnings with `gscode.rawFileWarningMode`, warning for stock shared-raw scripts by default while staying quiet for custom scripts kept in `share/raw`.
-- Fixed GSH and macro invalidation so changes to inserted files, added/removed macros, and macro body edits are picked up after save without restarting VS Code.
-- Fixed several diagnostics, navigation, and highlighting edge cases, including string `.size`, no-op `break` statements, boolean-literal hints, namespace scope leakage, dev blocks, switch expressions, usage detection, and type-flow convergence.
-- Updated the extension baseline to VS Code 1.85+ with newer client/server dependencies.
+## Reporting Issues
 
-Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed many of the above changes.
+GSCode is an independent implementation of a GSC parser, so it may not have exact parity with the
+game's compiler. If the compiler (Linker) reports an error that GSCode does not — or GSCode reports
+one on code that compiles — that is a bug worth filing.
 
-### 1.4
-
-- Added a `gscode ignore` comment directive that suppresses diagnostics on the following line.
-- Added context-aware completion suggestions based on editor location.
-- Significant API updates & improvements aimed to reduce false-positive diagnostics. Added typing to most methods.
-- Added type checking against function signatures.
-- Added quick fix action capability with action for unused usings.
-- Various codebase quality improvements, optimisations, and bug fixes.
-
-Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed many of the above changes ([#54](https://github.com/Blakintosh/gscode/pull/54), [#63](https://github.com/Blakintosh/gscode/pull/63)).
-
-### 1.3
-
-- Add capability for more detailed diagnostics by 'emulating' select functions, such as `LuiNotifyEvent`.
-- Significant memory-focused optimisations.
-- Various bug fixes and API updates.
-
-### 1.2
-
-- Re-added indexing support.
-- Various optimisations and bug fixes.
-
-Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed many of the above changes ([#51](https://github.com/Blakintosh/gscode/pull/51)).
-
-### 1.1 
-
-- Various type system improvements, including new support for inference on entity fields.
-- Added type inference support for built-in functions (via the API).
-- Added `vectorscale` analysis.
-- Various bug fixes. 
-
-### 1.0
-
-- Adds semantic analysis steps & type inference associated validation.
-- Various bug fixes.
-- End of beta phase.
-
-### 0.10 beta
-
-- Disabled workspace indexing temporarily due to performance concerns.
-- Added reference finding (Go to Reference, Find All References)
-- Added workspace indexing of scripts.
-- Fixed switch case analysis with braced bodies.
-
-Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed all of the above changes ([#30](https://github.com/Blakintosh/gscode/pull/30), [#31](https://github.com/Blakintosh/gscode/pull/31)).
-
-### 0.9 beta
-
-- Added Outliner support for classes, functions, and macros.
-- Added goto definition support for usings, script functions, and macros.
-- Added signature support for script functions & builtins.
-- Fixed function & variable names not showing signatures & tooltips due to case-sensitivity.
-- Added analyser checks for: unknown namespace, unused using, unused variable, unused parameters, switch checks.
-
-Special thanks go to [iAmThatMichael](https://github.com/iAmThatMichael) who contributed all of the above changes ([#24](https://github.com/Blakintosh/gscode/pull/24)).
-
-Additionally,
-
-- Added comment code region support (`/* region Name */` `/* endregion */` syntax) with folding ranges in the editor ([#22](https://github.com/Blakintosh/gscode/issues/22)).
-
-### 0.2 beta
-
-- Added a non-contextual completion handler to suggest function completions.
-- Added a non-contextual handler to provide GSCode API hover documentation on built-in functions.
-- Added diagnostic for missing scripts from using.
-- Added basic signature analysis for highlighting of class, function, method and parameter definitions.
-- Added using highlight with script path hint.
-- Various bug fixes.
-
-### 0.1 beta
-
-- Initial public release. Adds GSC & CSC language support, providing syntax highlighting and IntelliSense for preprocessor and syntactic analysis.
-
-## Reporting Issues and Tweaks
-
-As GSCode is an indepedent implementation of a GSC language parser, it may not immediately have feature parity with the GSC compiler. Any instance where it does not catch bugs that the GSC compiler does will be considered a bug. Additionally, we're hoping to catch more bugs than the GSC compiler eventually.
-
-With that in mind, if you encounter any situations where the GSC compiler (Linker) reports a syntax error, but GSCode does not, this constitutes an issue. You can report these issues to the [issue tracker on GitHub](https://github.com/Blakintosh/gscode/issues); please provide the expected error and attach a script that can reproduce the issue. Issues reporting bugs in isolated script cases without attaching a script (snippet) will not be looked into!
+The [repository README](https://github.com/Blakintosh/gscode#bug-reports) has the full reporting
+guide, including the details a report needs and a copy/paste template. The one requirement worth
+repeating here: attach the smallest script that reproduces the problem. Reports without one will
+not be investigated.
 
 ## Known Issues
 
-- Macro hoverables only show nested macro expansions if nested macros are not at the start or end of the expansion.
+- A macro hover shows the macro's own body with the call site's arguments substituted. Macros used
+  *inside* that body are shown by name and are not themselves expanded, so one hover is one level
+  deep.
+- A macro body longer than 240 characters is truncated with an ellipsis. A hover is a glance, not a
+  code listing; use go-to-definition to read the whole macro.
+- Files that are not open report the problems found when they were indexed — syntax errors, unknown
+  directives and precache mistakes. The cross-file lints (unused `#using`, private access, dev-block
+  calls, read-only writes) need an open document, so a file can gain problems on being opened.
 
 ## Licence
 

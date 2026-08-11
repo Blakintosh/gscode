@@ -21,11 +21,14 @@ LSP types anywhere.
 ## Extraction/PragmaDirectives.cs
 
 - `PragmaTarget` / `PragmaScope` / `PragmaDirective` — the parsed target, reach, and source line
-  of an in-comment `#pragma warning disable|restore` directive.
+  of an in-comment `#pragma disable|restore` directive.
 - `static PragmaDirectives` — scans line, block, and documentation comments; accepts one
   diagnostic code, `gscode-<code>`, `all`, or `format`; and answers whether a diagnostic or the
   formatter is suppressed at a given line. State is source-ordered, so a later directive replaces
   the earlier state.
+- Suppression is keyed on the CODE and never on a severity, so an Error is as suppressible as a
+  Hint — wider than the C# pragma the spelling comes from, and why `warning` is not part of it.
+  The C# form is still scanned as an undocumented alias, as is 1.5's `// gscode ignore`.
 - 1.5's `// gscode ignore` / `/* gsc ignore */` is scanned as an alias, not a parallel mechanism:
   an `AllCodes` disable with `PragmaScope.OneLine` over the line below the comment's END line. A
   one-line directive neither reads nor writes the running disable/restore state.

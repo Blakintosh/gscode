@@ -85,7 +85,9 @@ cursor · `KeywordDialectTests` which words are keywords per game (`foreach`, `d
 
 **Preprocessing.** `DefineTests` object- and function-like macros · `BuiltinMacroTests` engine-defined
 macros · `ConditionalTests` `#if`/`#elif`/`#else`/`#endif` · `InactiveBranchHintTests` the greyed-out
-branch hint · `InsertTests` `#insert`, including cycles and depth limits.
+branch hint · `InsertTests` `#insert`, including cycles and depth limits · `MacrosNotInDialectTests`
+that `#define` and the `#if` chain are BO3's alone, that the directive is reported once per file and
+still EXPANDS, and that an orphan `#endif` gets the dialect answer rather than "unexpected".
 
 **Syntax.** `DeclarationTests`, `StatementTests`, `ExpressionTests` the core grammar ·
 `RecoveryTests` error recovery and resync · `LocalizedStringTests` · `StrayDevBlockCloseTests` an
@@ -152,7 +154,9 @@ to CSC — covering both how BO3 marks them (a `client` prefix) and how WaW/BO1 
 `RealisticKeystrokeTests` completion mid-typing rather than at tidy boundaries ·
 `ClassMethodCompletionTests` inherited and overriding methods · `ArrowSignatureTests` signatures
 for unknown-receiver method calls · `DialectCompletionTests` that a dialect is offered only its
-own keywords and global objects.
+own keywords, global objects, snippets and DIRECTIVES — including the reported case end to end, a
+`#` at file scope under CoD4 returning exactly `#include` and `#using_animtree`, and that
+`#animtree` is a body position in every game.
 
 **Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order ·
 `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·
@@ -218,7 +222,7 @@ line means "suppressed on this game" rather than "run twice".
 `StaleFormatEditTests` edits against a changed buffer · `UnbracedBodyFormattingTests`,
 `UnbracedBodyShapeTests` braceless bodies · `ElseIfChainTests` · `OperatorSpacingTests`,
 `BracketSpacingTests` · `ColumnAlignerTests`, `AssignmentAlignerTests` · `DirectiveSorterTests` ·
-`FormatOptionsTests` the settings layer · `FormatPragmaTests` `#pragma warning disable format` ·
+`FormatOptionsTests` the settings layer · `FormatPragmaTests` `#pragma disable format` ·
 `GuidelineExampleTests` the examples in `FORMATTING.md`.
 
 **Handlers.** `CodeActionHandlerTests` quick fixes · `DependentDiagnosticsTests` debounced

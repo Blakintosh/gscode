@@ -28,6 +28,22 @@ and `DatabaseQueries.ScopeToIncludeGraph` exist for exactly this.
 reachability rule that only follows `#include` will be wrong on these — that mistake took a
 function's reference count from 1,230 to zero, which reads as "this is dead code".
 
+## Directives are gated one at a time, and the default is NOT "everything has it"
+
+`GscKeywords.IsAvailable` and `Keywords.IsDirectiveEnabled` each name the flag a directive depends
+on — `ImportStyle` for the imports, `HasNamespaceDirective`, `HasHeaders`, `HasPrecacheDirective`,
+`HasMacros` for `#define` and the `#if` chain. Both used to end in "anything else beginning with
+`#` exists everywhere", and that is how CoD4 came to be offered a preprocessor it does not have.
+Only the animtree pair is genuinely universal.
+
+A new profile therefore has to answer each flag, and answer it from that game's own scripts. The
+trap is the shape of the evidence rather than its absence: file-scope constants (`MAX = 4;`) read
+exactly like macros, and `#animtree` is real in every game but never starts a line, so a
+line-anchored grep says it is unused. Measure the construct the way it is actually written.
+
+Where a game lacks a capability, the corresponding rule should SAY so rather than go quiet —
+`gscode-2016` for the preprocessor, `gscode-5025` for a word another game has as a keyword.
+
 ## Install layout
 
 `RawSubfolder` and `ModsSubfolder` say what the folders are CALLED, never where the game is — that

@@ -204,10 +204,18 @@ the tree at file scope and `#animtree` names it inside a `UseAnimTree( … )` ca
 
 ### Directives
 
-Directives are gated by capability flags, **not** by the keyword set. `#include` is the IW import;
-`#using`/`#namespace`/`#insert`/`#precache` are BO3. `#define`, `#using_animtree`, `#animtree`, and
-the `#if`/`#elif`/`#else`/`#endif` preprocessor family exist across the whole lineage and are never
-gated.
+Directives are gated by capability flags, **not** by the keyword set, and each names the flag it
+depends on. `#include` is the IW import; `#using`/`#namespace`/`#insert`/`#precache` are BO3;
+`#define` and the `#if`/`#elif`/`#else`/`#endif` family are BO3's too, on `HasMacros`.
+
+**Only the animtree pair is ungated**, because only it is genuinely universal. Both
+`GscKeywords.IsAvailable` and `Keywords.IsDirectiveEnabled` used to end in "anything else beginning
+with `#` exists across the whole lineage", which is how CoD4 came to be offered a preprocessor it
+does not have. The default for a new directive is gated; universal has to be earned from the corpus.
+
+The two lists a directive can appear in are not interchangeable. `TopLevelKeywords` is file scope
+and `BodyDirectives` is inside a function — `#animtree` belongs to the second in every game, since
+it is the argument to a `UseAnimTree( … )` call and calls live in bodies.
 
 ---
 

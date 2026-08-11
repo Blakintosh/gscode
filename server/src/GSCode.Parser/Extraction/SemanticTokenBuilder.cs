@@ -6,11 +6,16 @@ using GSCode.Parser.Lexing;
 namespace GSCode.Parser.Extraction;
 
 /// <summary>
-/// Produces semantic highlight tokens for a file. Identifiers are classified from the
-/// extracted reference list (function/class/macro/field); keywords, numbers, strings, and
-/// comments come straight from the raw token stream. Only single-line tokens are emitted
-/// (the LSP encoding is per-line), which suits every kind here except block comments —
-/// those are handled line by line.
+/// Produces semantic highlight tokens for a file, and IDENTIFIERS are the whole of it: each is
+/// classified from the extracted reference list as a function, class, macro or field. Keywords,
+/// numbers, strings and comments were once emitted from the raw token stream too and no longer are
+/// — <see cref="ClassifyToken"/> returns null for every one of them, because a grammar already
+/// colours them correctly and a second opinion could only disagree.
+///
+/// Only single-line tokens are emitted, which the LSP encoding requires. Nothing that survives
+/// classification can span a line, so the multi-line split in <see cref="AppendToken"/> is
+/// unreachable today; it is kept because the legend still holds slots for the withdrawn kinds and
+/// re-adding one would need it back.
 /// </summary>
 public static class SemanticTokenBuilder
 {
@@ -117,8 +122,12 @@ public static class SemanticTokenBuilder
             default:
                 // Keywords included — see above. What is left for this pass is the one thing a
                 // grammar genuinely cannot do: decide what an IDENTIFIER means. Whether `foo` is a
-                // function, a macro, a parameter or a field is a question about the workspace, not
-                // about the characters, and that is the whole reason semantic tokens exist.
+                // function, a macro or a field is a question about the workspace, not about the
+                // characters, and that is the whole reason semantic tokens exist.
+                //
+                // Parameters and locals are NOT among them, though the legend has slots for both:
+                // SymbolKind has no member for either, so ClassifyReference has nothing to answer
+                // with and they fall through to TextMate's default variable styling.
                 return null;
         }
     }

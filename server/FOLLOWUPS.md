@@ -13,15 +13,6 @@ worklist; when its last entry goes, so does it.
 
 ## Backlog
 
-### Three probable CSC builtins are missing from the BO3 library
-
-The corpus sweep reports `error`, `add_object` and `warning` as unknown builtins in BO3's
-`scene_shared.csc`/`.gsc`. Almost certainly real client-script builtins absent from
-`t7_api_csc.json`; confirm against the reference library before adding.
-
-Add them by HAND rather than regenerating: a regeneration rewrites fifteen files and invalidates
-every workspace cache through `ServerBuildIdentity`, which is not worth it for three names.
-
 ### `5014 BuiltinFunctionNotFound` cannot tell a typo from a missing builtin
 
 An unqualified call that nothing explains is reported as `5014`, and the rule cannot say which of
@@ -473,16 +464,17 @@ and no change to `DevBlockCallLint` is warranted:
 with comments stripped, finds an actual `ns::` use in **zero** of them. Stock scripts simply carry a
 lot of stale imports. It is a Hint, so they grey out rather than nag.
 
-### Corpus grammar gaps (1 of the 3 found)
+### Corpus grammar gaps (1 of the 3 found still open)
 
-The corpus run over real `share\raw` found 4 failing files out of 980. One — `&"..."` parsing
-as address-of instead of an istring — was fixed, because it also broke the spaced form
-`& "loc"` in ordinary hand-written code. The other two are **deliberately left**: the game has
-shipped, so these stock files are frozen, and neither pattern justifies a grammar change.
-Diagnosis kept only because it was already done:
+The corpus run over real `share\raw` found 4 failing files out of 980, from three causes. Two were
+fixed — `&"..."` parsing as address-of instead of an istring, because it also broke the spaced form
+`& "loc"` in ordinary hand-written code; and a dev-block close with nothing open. The remaining one
+is **deliberately left**: the game has shipped, so these stock files are frozen, and the pattern
+does not justify a grammar change. Diagnosis kept only because it was already done:
 
 - **`gib.gsc(58)` / `gib.csc(35)`** — `#define GET_GIB_BUNDLES struct::get_script_bundles(...)`
   is object-like, but the call site writes `GET_GIB_BUNDLES()`, so expansion yields a call
   applied to a call result. Would be fixed by letting `ParsePostfixChain` accept `(` alongside
   `[` and `.`.
+
 The corpus test prints it on every local run, so it cannot be quietly forgotten.

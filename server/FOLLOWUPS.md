@@ -365,20 +365,30 @@ before it fails on the lattice.
 Recorded because each was a deliberate stopping point, not an oversight. P0, P1 and the
 hover/doc half of P2 are done; the remaining items below are the decisions still worth making.
 
-### Parameters still get no inferred type
+### Parameter inference stops at the file boundary
 
-Only locals with a typed assignment are covered. A parameter has no assignment to read, so the
-environment seeds it as unknown carrying `ScrImprecision.UntypedParameter` — which names the gap
-rather than closing it.
+`Typing/ParameterTypes.Infer` reads the arguments passed at every call site IN ONE FILE and unions
+them per position, which answers "is this parameter an array" — the question a dialect transpiler
+blocks on, since whether an array parameter is mutated by its callee is the only behavioural
+difference between BO3 and the earlier games. Two passes: the first types every expression with
+parameters unknown, which is enough to type the arguments; the second seeds the parameters from
+them. Not iterated to a fixpoint, so a parameter passed straight through to another call stays
+unknown and says so.
 
-Closing it means reading the ARGUMENTS at every call site of a function and unioning them, which
-leaves per-function scope and so needs the workspace index and the `HasCompletedIndex` gate the
-resolution lints use. It is the one piece a dialect transpiler genuinely blocks on: whether an array
-parameter is mutated by its callee is the only behavioural difference between BO3 and the earlier
-games, and nothing can answer "is this parameter an array" without it.
+**Cross-file is the part left, and the obstacle is structural rather than effort.** A call site's
+ARGUMENTS live in the caller's syntax tree, and `ScriptRecord` stores extraction output — symbols,
+references, dependencies — not trees. Reading arguments from another file means re-parsing it, and
+the measurement already on record is ~44 ms per file, so roughly 43 seconds for BO3's 980 scripts on
+every query. What would make it affordable is an argument index built during indexing and persisted
+with the rest of the record: per call site, the callee key and the typed value of each argument.
+That is a cache-schema change, which is why it is not folded into this.
 
-The field half of this entry is done: `HoverHandler.InferredFieldType` reports an inferred type for
-a field the scripts invented, and `ScrValue` carries the reason when it cannot.
+Worth knowing before starting: the same-file half already covers a helper declared and called in one
+script, which is most of what a per-file rewrite reasons about. The cross-file half matters for
+shared utilities, where it matters most.
+
+The field half of the old entry here is done: `HoverHandler.InferredFieldType` reports an inferred
+type for a field the scripts invented, and `ScrValue` carries the reason when it cannot.
 
 ### `#using` is treated as non-transitive for class completion
 

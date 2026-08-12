@@ -760,6 +760,10 @@ public sealed class FlowTyper
 
         if ( expression is not AssignmentNode assignment )
         {
+            // Not an assignment, so there is nothing to hint and nothing to bind — but a bare call
+            // statement is still full of expressions, and `helper( 5 );` was contributing nothing to
+            // the map at all. Typed for its value, which is then discarded.
+            TypeOf(expression, environment);
             return;
         }
 
@@ -891,7 +895,7 @@ public sealed class FlowTyper
             case BinaryNode binary:
                 return TypeOfBinary(binary, environment);
             case CallNode call:
-                return TypeOfCall(call);
+                return TypeOfCall(call, environment);
             case MemberNode member:
                 return TypeOfField(member);
 
@@ -1179,8 +1183,21 @@ public sealed class FlowTyper
         }
     }
 
-    private ScrValue TypeOfCall(CallNode call)
+    private ScrValue TypeOfCall(CallNode call, Dictionary<string, ScrValue> environment)
     {
+        // The arguments are expressions in their own right and were never typed — the old code read
+        // only the callee's name. A per-node map with holes wherever an argument sits is no use to a
+        // rewriter, and inferring a parameter from its call sites needs exactly these values.
+        foreach ( ExprNode argument in call.Arguments )
+        {
+            TypeOf(argument, environment);
+        }
+
+        if ( call.Target is not null )
+        {
+            TypeOf(call.Target, environment);
+        }
+
         // Only builtin return types are known here; script-function return inference is
         // out of scope for this pass (their bodies aren't re-typed).
         string? name = call.Callee switch

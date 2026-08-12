@@ -1133,11 +1133,24 @@ public sealed class FlowTyper
             return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
         }
 
-        ScrTypeSet mapped = MapDeclaredType(builtin.Overloads[0].ReturnTypeText);
+        // The union across EVERY overload, parsed at load. The old code read overload zero and no
+        // further, so a builtin whose overloads return different things was reported as returning
+        // whichever happened to be listed first.
+        ScrTypeSet mapped = builtin.ReturnTypes;
 
-        return mapped == ScrTypeSet.None
-            ? ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.BuiltinTypeUnmapped)
-            : ScrValue.Of(mapped);
+        if ( mapped == ScrTypeSet.None )
+        {
+            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.BuiltinTypeUnmapped);
+        }
+
+        // A low-confidence entry is a weaker fact than a verified one, and saying so is what lets a
+        // consumer decide for itself — v1.5 shipped a whole second diagnostic code because it had
+        // nowhere to record this.
+        return ScrValue.Of(
+            mapped,
+            builtin.Confidence == BuiltinConfidence.Low
+                ? ScrImprecision.BuiltinUnverified
+                : ScrImprecision.None);
     }
 
     /// <summary>

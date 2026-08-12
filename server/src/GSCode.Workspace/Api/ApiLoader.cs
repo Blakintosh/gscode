@@ -9,7 +9,8 @@ namespace GSCode.Workspace.Api;
 
 // DTOs mirroring the api_*.json shape, deserialized via source generation.
 internal sealed record ApiFile(List<ApiEntry>? Api);
-internal sealed record ApiEntry(string? Name, string? Description, List<ApiOverload>? Overloads, string? Example, bool? DevOnly);
+internal sealed record ApiEntry(
+    string? Name, string? Description, List<ApiOverload>? Overloads, string? Example, bool? DevOnly, string? Confidence);
 internal sealed record ApiOverload(ApiCalledOn? CalledOn, List<ApiParameter>? Parameters, ApiReturn? Returns);
 internal sealed record ApiCalledOn(string? Name);
 internal sealed record ApiParameter(string? Name, string? Description, bool Mandatory, ApiType? Type);
@@ -93,14 +94,18 @@ public static class ApiLoader
                     parameter.Name ?? "",
                     parameter.Description ?? "",
                     parameter.Mandatory,
-                    FormatType(parameter.Type)));
+                    FormatType(parameter.Type),
+                    ParseType(parameter.Type?.DataType, parameter.Type?.IsArray ?? false),
+                    IsVararg(parameter.Type)));
             }
 
             overloads.Add(new BuiltinOverload(
                 overload.CalledOn?.Name,
                 parameters.ToImmutable(),
                 FormatType(overload.Returns?.Type),
-                overload.Returns?.Void ?? false));
+                overload.Returns?.Void ?? false,
+                ParseType(overload.Returns?.Type?.DataType, overload.Returns?.Type?.IsArray ?? false),
+                ScrTypeSet.None));
         }
 
         string name = entry.Name ?? "";
@@ -116,7 +121,19 @@ public static class ApiLoader
             // overrides it and only a silent one falls back. CoD4's four affected names carry
             // `"devOnly": false` for exactly that reason — see DevOnlyBuiltins.
             IsDevOnly = entry.DevOnly ?? DevOnlyBuiltins.Contains(name),
+            Confidence = ParseConfidence(entry.Confidence),
         };
+    }
+
+    private static BuiltinConfidence ParseConfidence(string? confidence)
+    {
+        switch ( confidence?.ToLowerInvariant() )
+        {
+            case "high": return BuiltinConfidence.High;
+            case "medium": return BuiltinConfidence.Medium;
+            case "low": return BuiltinConfidence.Low;
+            default: return BuiltinConfidence.Unstated;
+        }
     }
 
     private static string FormatType(ApiType? type)
@@ -127,5 +144,89 @@ public static class ApiLoader
         }
 
         return type.IsArray ? type.DataType + "[]" : type.DataType;
+    }
+
+    /// <summary>True when the declared type is the parameter pack.</summary>
+    private static bool IsVararg(ApiType? type)
+    {
+        return string.Equals(type?.DataType, "vararg", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Parses a declared type onto the lattice, ONCE at load rather than re-switching on display
+    /// text at every call.
+    ///
+    /// The data is richer than the old text switch could see, and all of this was being dropped:
+    ///
+    /// - <c>isArray</c>. 114 of BO3's GSC declarations set it, and an array return produced nothing
+    ///   at all — so <see cref="ScrTypeSet.Array"/> was never once produced by a builtin call. Given
+    ///   that arrays are the only kind whose pass semantics differ between dialects, that was the
+    ///   single most costly omission here.
+    /// - Unions, spelled pipe-separated inside <c>dataType</c>: <c>"int | string"</c>,
+    ///   <c>"bool | int"</c>, <c>"number | vector"</c>. The flat lattice had no way to hold one, so
+    ///   they were dropped; this one splits them.
+    /// - <c>number</c>, which is 349 declarations in BO3's GSC library alone and is exactly
+    ///   <c>int|float</c> — expressible now, and previously discarded as vague.
+    /// - <c>vararg</c>, the parameter pack, which is an array.
+    ///
+    /// Returns <see cref="ScrTypeSet.None"/> for a spelling the lattice genuinely cannot express —
+    /// <c>any</c>, <c>enum</c>, <c>anim</c> — so the caller can report WHY rather than treating it
+    /// as an ordinary unknown.
+    /// </summary>
+    public static ScrTypeSet ParseType(string? dataType, bool isArray)
+    {
+        if ( dataType is null )
+        {
+            return ScrTypeSet.None;
+        }
+
+        // An array of anything is an array; the element type is not modelled either way.
+        if ( isArray )
+        {
+            return ScrTypeSet.Array;
+        }
+
+        ScrTypeSet parsed = ScrTypeSet.None;
+        foreach ( string part in dataType.Split('|') )
+        {
+            ScrTypeSet member = ParseTypeName(part.Trim());
+            if ( member == ScrTypeSet.None )
+            {
+                // One unmappable member makes the whole union unknowable, since the value could be
+                // that member.
+                return ScrTypeSet.None;
+            }
+
+            parsed |= member;
+        }
+
+        return parsed;
+    }
+
+    private static ScrTypeSet ParseTypeName(string name)
+    {
+        switch ( name.ToLowerInvariant() )
+        {
+            case "int": return ScrTypeSet.Int;
+            case "float": return ScrTypeSet.Float;
+            case "number": return ScrTypeSet.Number;
+            case "bool": return ScrTypeSet.Bool;
+            case "string": return ScrTypeSet.String;
+            case "istring": return ScrTypeSet.IString;
+            case "hash": return ScrTypeSet.HashString;
+            case "vector": return ScrTypeSet.Vector;
+            case "struct": return ScrTypeSet.Struct;
+            case "array": return ScrTypeSet.Array;
+            case "entity": return ScrTypeSet.Entity;
+            case "function": return ScrTypeSet.Function;
+            case "undefined": return ScrTypeSet.Undefined;
+
+            // The pack is bound as an array on the one dialect that has it.
+            case "vararg": return ScrTypeSet.Array;
+
+            // Engine handles the lattice does not separate — weapon, pathnode and the rest are
+            // entity-shaped, and calling them Entity would claim more than the data supports.
+            default: return ScrTypeSet.None;
+        }
     }
 }

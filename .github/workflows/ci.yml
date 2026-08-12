@@ -11,9 +11,15 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      # Action majors are pinned at the LOWEST one that runs on Node 24, not the newest available:
+      # checkout and the two setups moved at v5, upload-artifact not until v6 (its v5 is still
+      # Node 20). Every earlier major declares `using: node20`, which the runners now force onto
+      # Node 24 with a deprecation warning and will eventually stop running at all. Taking the
+      # minimum keeps this a runtime bump rather than an unrelated behaviour change - checkout is
+      # four majors past v4 by now, and none of that is wanted here.
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -32,7 +38,9 @@ jobs:
         # crashed run and a clean one differ by the word "Aborted" and by the count.
         run: dotnet test server/GSCode.slnx --nologo --no-build --filter "Category!=Corpus&Category!=Perf"
 
-      - uses: actions/setup-node@v4
+      # node-version is the Node the CLIENT BUILD runs on and is unrelated to the action's own
+      # runtime above. 20 is what the extension targets, so it stays.
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -60,7 +68,7 @@ jobs:
         working-directory: client
 
       - name: Upload VSIX
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gscode-vsix
           path: client/*.vsix

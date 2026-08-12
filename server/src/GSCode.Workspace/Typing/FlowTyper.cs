@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Symbols;
@@ -149,9 +150,17 @@ public sealed class FlowTyper
         // The walk already computes that join; it simply threw the environment away. Running it
         // with a stop position keeps it.
         string name = identifier.Token.Text;
-        Dictionary<string, ScrType> environment = EnvironmentAt(function, position);
+        Dictionary<string, ScrValue> environment = EnvironmentAt(function, position);
 
-        if ( !environment.TryGetValue(name, out ScrType type) || !type.IsKnown() )
+        // Projected onto the coarse lattice at the boundary: a union has no single-value answer for
+        // a hover label, which is exactly what the old behaviour was.
+        if ( !environment.TryGetValue(name, out ScrValue value) )
+        {
+            return false;
+        }
+
+        ScrType type = value.ToScrType();
+        if ( !type.IsKnown() )
         {
             return false;
         }
@@ -163,17 +172,19 @@ public sealed class FlowTyper
     /// <summary>
     /// The local environment of one function as it stands at <paramref name="position"/>.
     ///
-    /// Parameters seed it as <see cref="ScrType.Unknown"/> so that a name is at least KNOWN to be a
-    /// local — an assignment to a parameter then types it from that point, which is exactly what
-    /// the flow says, while an untyped parameter still reports nothing rather than a guess. Typing
-    /// one properly needs call-site analysis, which is a different pass.
+    /// Parameters seed it as unknown so that a name is at least KNOWN to be a local — an assignment
+    /// to a parameter then types it from that point, which is exactly what the flow says, while an
+    /// untyped parameter still reports nothing rather than a guess. Typing one properly needs
+    /// call-site analysis, which is a different pass — and the seed says so, carrying
+    /// <see cref="ScrImprecision.UntypedParameter"/> rather than an anonymous unknown.
     /// </summary>
-    private Dictionary<string, ScrType> EnvironmentAt(FunctionNode function, Position position)
+    private Dictionary<string, ScrValue> EnvironmentAt(FunctionNode function, Position position)
     {
-        Dictionary<string, ScrType> environment = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, ScrValue> environment = new(StringComparer.OrdinalIgnoreCase);
         foreach ( ParameterNode parameter in function.Parameters )
         {
-            environment[parameter.NameToken.Text] = ScrType.Unknown;
+            environment[parameter.NameToken.Text] =
+                ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UntypedParameter);
         }
 
         ImmutableArray<InferredAssignment>.Builder hints = ImmutableArray.CreateBuilder<InferredAssignment>();
@@ -196,12 +207,12 @@ public sealed class FlowTyper
 
     private void TypeFunction(FunctionNode function, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
     {
-        Dictionary<string, ScrType> environment = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, ScrValue> environment = new(StringComparer.OrdinalIgnoreCase);
         HashSet<string> hinted = new(StringComparer.OrdinalIgnoreCase);
         WalkStatement(function.Body, environment, hinted, hints, writes);
     }
 
-    private void WalkStatement(AstNode statement, Dictionary<string, ScrType> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
+    private void WalkStatement(AstNode statement, Dictionary<string, ScrValue> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
     {
         // Everything below the cursor is skipped when one is set: it says nothing about the value
         // being read at the cursor, and letting it run would report a type the variable has not
@@ -244,8 +255,8 @@ public sealed class FlowTyper
 
                 // The two arms are alternatives, so each walks its own copy and the results
                 // are joined. Sharing one environment would let whichever arm ran last win.
-                Dictionary<string, ScrType> thenEnvironment = Clone(environment);
-                Dictionary<string, ScrType> elseEnvironment = Clone(environment);
+                Dictionary<string, ScrValue> thenEnvironment = Clone(environment);
+                Dictionary<string, ScrValue> elseEnvironment = Clone(environment);
                 ApplyIsDefinedNarrowing(ifNode.Condition, thenEnvironment, elseEnvironment);
 
                 WalkStatement(ifNode.Then, thenEnvironment, hinted, hints, writes);
@@ -304,7 +315,7 @@ public sealed class FlowTyper
     /// </summary>
     private void MergeDevBlock(
         DevBlockStmtNode devBlock,
-        Dictionary<string, ScrType> environment,
+        Dictionary<string, ScrValue> environment,
         HashSet<string> hinted,
         ImmutableArray<InferredAssignment>.Builder hints,
         ImmutableArray<FieldWrite>.Builder writes)
@@ -320,7 +331,7 @@ public sealed class FlowTyper
             return;
         }
 
-        Dictionary<string, ScrType> blockEnvironment = Clone(environment);
+        Dictionary<string, ScrValue> blockEnvironment = Clone(environment);
         foreach ( AstNode statement in devBlock.Statements )
         {
             WalkStatement(statement, blockEnvironment, hinted, hints, writes);
@@ -335,7 +346,7 @@ public sealed class FlowTyper
     /// </summary>
     private void MergeLoopBody(
         AstNode body,
-        Dictionary<string, ScrType> environment,
+        Dictionary<string, ScrValue> environment,
         HashSet<string> hinted,
         ImmutableArray<InferredAssignment>.Builder hints,
         ImmutableArray<FieldWrite>.Builder writes)
@@ -348,7 +359,7 @@ public sealed class FlowTyper
             return;
         }
 
-        Dictionary<string, ScrType> bodyEnvironment = Clone(environment);
+        Dictionary<string, ScrValue> bodyEnvironment = Clone(environment);
         WalkStatement(body, bodyEnvironment, hinted, hints, writes);
 
         // One join suffices: Join only ever moves toward Unknown, so iterating to a fixpoint
@@ -362,16 +373,16 @@ public sealed class FlowTyper
     /// </summary>
     private void WalkSwitch(
         SwitchNode switchNode,
-        Dictionary<string, ScrType> environment,
+        Dictionary<string, ScrValue> environment,
         HashSet<string> hinted,
         ImmutableArray<InferredAssignment>.Builder hints,
         ImmutableArray<FieldWrite>.Builder writes)
     {
-        List<Dictionary<string, ScrType>> paths = new();
+        List<Dictionary<string, ScrValue>> paths = new();
 
         foreach ( CaseGroupNode group in switchNode.Cases )
         {
-            Dictionary<string, ScrType> caseEnvironment = Clone(environment);
+            Dictionary<string, ScrValue> caseEnvironment = Clone(environment);
             foreach ( AstNode child in group.Statements )
             {
                 WalkStatement(child, caseEnvironment, hinted, hints, writes);
@@ -390,14 +401,14 @@ public sealed class FlowTyper
             return;
         }
 
-        Dictionary<string, ScrType> merged = paths[0];
+        Dictionary<string, ScrValue> merged = paths[0];
         for ( int index = 1; index < paths.Count; index++ )
         {
             MergeAlternatives(merged, merged, paths[index]);
         }
 
         environment.Clear();
-        foreach ( KeyValuePair<string, ScrType> entry in merged )
+        foreach ( KeyValuePair<string, ScrValue> entry in merged )
         {
             environment[entry.Key] = entry.Value;
         }
@@ -429,8 +440,8 @@ public sealed class FlowTyper
     /// </summary>
     private static void ApplyIsDefinedNarrowing(
         ExprNode condition,
-        Dictionary<string, ScrType> thenEnvironment,
-        Dictionary<string, ScrType> elseEnvironment)
+        Dictionary<string, ScrValue> thenEnvironment,
+        Dictionary<string, ScrValue> elseEnvironment)
     {
         bool negated = false;
         ExprNode current = condition;
@@ -459,16 +470,23 @@ public sealed class FlowTyper
             return;
         }
 
-        Dictionary<string, ScrType> definedSide = negated ? elseEnvironment : thenEnvironment;
-        Dictionary<string, ScrType> undefinedSide = negated ? thenEnvironment : elseEnvironment;
+        Dictionary<string, ScrValue> definedSide = negated ? elseEnvironment : thenEnvironment;
+        Dictionary<string, ScrValue> undefinedSide = negated ? thenEnvironment : elseEnvironment;
 
-        // Known to exist, but the guard says nothing about which type it holds.
-        if ( definedSide.TryGetValue(name, out ScrType existing) && existing == ScrType.Undefined )
+        // Known to exist, so undefined comes out of the set. On the union lattice this is exact
+        // rather than approximate: a name that was `Int | Undefined` becomes plain `Int` here, where
+        // the flat lattice could only raise a pure Undefined up to Unknown and had no way to express
+        // the mixed case at all.
+        if ( definedSide.TryGetValue(name, out ScrValue existing) )
         {
-            definedSide[name] = ScrType.Unknown;
+            ScrValue defined = existing.Without(ScrTypeSet.Undefined);
+
+            // Narrowing away everything means the guard contradicts the flow. Say nothing rather
+            // than assert a value that cannot exist.
+            definedSide[name] = defined.Types == ScrTypeSet.None ? ScrValue.Unknown : defined;
         }
 
-        undefinedSide[name] = ScrType.Undefined;
+        undefinedSide[name] = ScrValue.Of(ScrTypeSet.Undefined);
     }
 
     /// <summary>The local name inside <c>isdefined( name )</c>, when the expression is exactly that.</summary>
@@ -498,51 +516,53 @@ public sealed class FlowTyper
         return true;
     }
 
-    private static Dictionary<string, ScrType> Clone(Dictionary<string, ScrType> environment)
+    private static Dictionary<string, ScrValue> Clone(Dictionary<string, ScrValue> environment)
     {
-        return new Dictionary<string, ScrType>(environment, StringComparer.OrdinalIgnoreCase);
+        return new Dictionary<string, ScrValue>(environment, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// Replaces <paramref name="destination"/> with the join of two alternative paths. A name
-    /// typed on only one path becomes Unknown: it may be undefined on the other, and the
-    /// lattice never guesses a union.
+    /// Replaces <paramref name="destination"/> with the join of two alternative paths.
+    ///
+    /// The join is now a set UNION rather than a collapse. Two arms assigning an int and a string
+    /// produce <c>int|string</c>, where the flat lattice produced nothing usable — and the
+    /// projection still reports Unknown to the editor, so nothing visible changes.
+    ///
+    /// A name typed on only one path unions with <c>undefined</c> rather than becoming anonymously
+    /// unknown, because that is what is actually true: the other path did not assign it. That is
+    /// also what makes a later <c>isdefined</c> narrowing able to recover the type exactly.
     /// </summary>
     private static void MergeAlternatives(
-        Dictionary<string, ScrType> destination,
-        Dictionary<string, ScrType> first,
-        Dictionary<string, ScrType> second)
+        Dictionary<string, ScrValue> destination,
+        Dictionary<string, ScrValue> first,
+        Dictionary<string, ScrValue> second)
     {
-        Dictionary<string, ScrType> joined = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, ScrValue> joined = new(StringComparer.OrdinalIgnoreCase);
+        ScrValue unassigned = ScrValue.Of(ScrTypeSet.Undefined);
 
-        foreach ( KeyValuePair<string, ScrType> entry in first )
+        foreach ( KeyValuePair<string, ScrValue> entry in first )
         {
-            if ( second.TryGetValue(entry.Key, out ScrType other) )
-            {
-                joined[entry.Key] = ScrTypes.Join(entry.Value, other);
-            }
-            else
-            {
-                joined[entry.Key] = ScrType.Unknown;
-            }
+            joined[entry.Key] = second.TryGetValue(entry.Key, out ScrValue other)
+                ? ScrValue.Union(entry.Value, other)
+                : ScrValue.Union(entry.Value, unassigned);
         }
 
-        foreach ( KeyValuePair<string, ScrType> entry in second )
+        foreach ( KeyValuePair<string, ScrValue> entry in second )
         {
             if ( !joined.ContainsKey(entry.Key) )
             {
-                joined[entry.Key] = ScrType.Unknown;
+                joined[entry.Key] = ScrValue.Union(entry.Value, unassigned);
             }
         }
 
         destination.Clear();
-        foreach ( KeyValuePair<string, ScrType> entry in joined )
+        foreach ( KeyValuePair<string, ScrValue> entry in joined )
         {
             destination[entry.Key] = entry.Value;
         }
     }
 
-    private void TypeExpressionForEffects(ExprNode expression, Dictionary<string, ScrType> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
+    private void TypeExpressionForEffects(ExprNode expression, Dictionary<string, ScrValue> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
     {
         // ++ and -- read and write in one step, so they are field writes too.
         MemberNode? incremented = IncrementedMember(expression);
@@ -551,7 +571,7 @@ public sealed class FlowTyper
             writes.Add(new FieldWrite(
                 incremented.NameToken.RootRange,
                 incremented.NameToken.Text,
-                TypeOf(incremented.Object, environment)));
+                TypeOf(incremented.Object, environment).ToScrType()));
             return;
         }
 
@@ -568,7 +588,7 @@ public sealed class FlowTyper
             writes.Add(new FieldWrite(
                 member.NameToken.RootRange,
                 member.NameToken.Text,
-                TypeOf(member.Object, environment),
+                TypeOf(member.Object, environment).ToScrType(),
                 assignment.Operator == TokenKind.Assign ? assignment.Value : null));
 
             // A field assignment is an assignment: `level.foo = "text"` says as much about foo as
@@ -581,7 +601,7 @@ public sealed class FlowTyper
             if ( assignment.Operator == TokenKind.Assign
                 && member.NameToken.Provenance.DefinitionSite is null )
             {
-                ScrType fieldType = TypeOf(assignment.Value, environment);
+                ScrType fieldType = TypeOf(assignment.Value, environment).ToScrType();
                 if ( fieldType.IsKnown() )
                 {
                     // Keyed by the whole path, so `self.count` and `level.count` are separate names
@@ -603,9 +623,13 @@ public sealed class FlowTyper
             return;
         }
 
-        ScrType type = TypeOf(assignment.Value, environment);
+        ScrValue value = TypeOf(assignment.Value, environment);
         string name = target.Token.Text;
-        environment[name] = type;
+        environment[name] = value;
+
+        // Projected only to decide whether there is a hint worth showing. The environment keeps the
+        // full value, so a union survives the assignment even though no label is emitted for it.
+        ScrType type = value.ToScrType();
 
         // An assignment inside a macro body reports the INVOCATION's range, so hinting it
         // would label the call site with a type the user never wrote there. The environment
@@ -642,20 +666,22 @@ public sealed class FlowTyper
         return kind == TokenKind.PlusPlus || kind == TokenKind.MinusMinus;
     }
 
-    private ScrType TypeOf(ExprNode expression, Dictionary<string, ScrType> environment)
+    private ScrValue TypeOf(ExprNode expression, Dictionary<string, ScrValue> environment)
     {
         switch ( expression )
         {
             case LiteralNode literal:
-                return TypeOfLiteral(literal.Token.Kind);
+                return TypeOfLiteral(literal);
             case ParenNode paren:
                 return TypeOf(paren.Inner, environment);
-            case VectorNode:
-                return ScrType.Vector;
+            case VectorNode vector:
+                return TypeOfVector(vector, environment);
             case ArrayLiteralNode:
-                return ScrType.Array;
-            case NewNode:
-                return ScrType.Struct;
+                return ScrValue.Of(ScrTypeSet.Array);
+            case NewNode newNode:
+                // A class instance, not a bare struct: the class name is part of the value's
+                // identity and a rewriter lowering BO3 objects needs it.
+                return ScrValue.Of(ScrTypeSet.Instance) with { InstanceClass = newNode.ClassToken.Text };
             case IdentifierNode identifier:
                 return TypeOfIdentifier(identifier.Token.Text, environment);
             case PrefixNode prefix:
@@ -667,8 +693,29 @@ public sealed class FlowTyper
             case MemberNode member:
                 return TypeOfField(member);
             default:
-                return ScrType.Unknown;
+                return ScrValue.Unknown;
         }
+    }
+
+    /// <summary>
+    /// A vector literal, folded when all three components are constant — which is most of them:
+    /// <c>( 0, 0, 1 )</c> is the commonest expression in the corpora.
+    /// </summary>
+    private ScrValue TypeOfVector(VectorNode vector, Dictionary<string, ScrValue> environment)
+    {
+        ScrValue x = TypeOf(vector.X, environment);
+        ScrValue y = TypeOf(vector.Y, environment);
+        ScrValue z = TypeOf(vector.Z, environment);
+
+        if ( x.Constant is { } cx && y.Constant is { } cy && z.Constant is { } cz
+            && cx.Type is ScrTypeSet.Int or ScrTypeSet.Float
+            && cy.Type is ScrTypeSet.Int or ScrTypeSet.Float
+            && cz.Type is ScrTypeSet.Int or ScrTypeSet.Float )
+        {
+            return ScrValue.OfConstant(ScrConstant.OfVector(new Vec3(cx.AsDouble(), cy.AsDouble(), cz.AsDouble())));
+        }
+
+        return ScrValue.Of(ScrTypeSet.Vector);
     }
 
     /// <summary>
@@ -694,159 +741,206 @@ public sealed class FlowTyper
     /// object-field data seeds a type, but only when every entity kind that declares the
     /// field name agrees (the owner's entity kind isn't inferred, so disagreement → Unknown).
     /// </summary>
-    private ScrType TypeOfField(MemberNode member)
+    private ScrValue TypeOfField(MemberNode member)
     {
         string fieldName = member.NameToken.Text;
         if ( string.Equals(fieldName, "size", StringComparison.OrdinalIgnoreCase) )
         {
-            return ScrType.Int;
+            return ScrValue.Of(ScrTypeSet.Int);
         }
 
         ImmutableArray<ObjectField> fields = _objectFields.FindField(fieldName);
         if ( fields.Length == 0 )
         {
-            return ScrType.Unknown;
+            // A field the scripts invented, which is most of them. Named as such rather than left
+            // anonymously unknown, so a rewriter can tell it from a field we simply failed to type.
+            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.StructField);
         }
 
-        ScrType agreed = MapReturnType(fields[0].Type.ToLowerInvariant());
+        ScrTypeSet agreed = MapDeclaredType(fields[0].Type);
         for ( int index = 1; index < fields.Length; index++ )
         {
-            if ( MapReturnType(fields[index].Type.ToLowerInvariant()) != agreed )
+            if ( MapDeclaredType(fields[index].Type) != agreed )
             {
-                return ScrType.Unknown;
+                // The declaring kinds disagree and the owner's kind is not inferred, so no
+                // declaration can be the one that applies.
+                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UnknownFieldOwner);
             }
         }
 
-        return agreed;
+        return agreed == ScrTypeSet.None
+            ? ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.BuiltinTypeUnmapped)
+            : ScrValue.Of(agreed);
     }
 
-    private static ScrType TypeOfLiteral(TokenKind kind)
+    /// <summary>
+    /// A literal, carrying its VALUE and not only its type. This is where constant folding starts;
+    /// everything <see cref="ScrOperators"/> can fold traces back to a literal read here.
+    /// </summary>
+    private ScrValue TypeOfLiteral(LiteralNode literal)
     {
-        switch ( kind )
+        string text = literal.Token.Text;
+
+        switch ( literal.Token.Kind )
         {
             case TokenKind.Integer:
+                return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long integer)
+                    ? ScrValue.OfConstant(ScrConstant.OfInt(integer))
+                    : ScrValue.Of(ScrTypeSet.Int);
+
             case TokenKind.Hex:
+                return text.Length > 2
+                    && long.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out long hex)
+                    ? ScrValue.OfConstant(ScrConstant.OfInt(hex))
+                    : ScrValue.Of(ScrTypeSet.Int);
+
+            // A Treyarch #"…" is a compile-time hash, not a string and not really an int either.
+            // The lattice gives it its own member; the projection maps it back onto int, which is
+            // what the coarse lattice said.
             case TokenKind.HashString:
-                return ScrType.Int;
+                return ScrValue.Of(ScrTypeSet.HashString);
+
             case TokenKind.Float:
-                return ScrType.Float;
+                return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real)
+                    ? ScrValue.OfConstant(ScrConstant.OfFloat(real))
+                    : ScrValue.Of(ScrTypeSet.Float);
+
+            // The token's text is already interned, so it is carried as written — quotes included —
+            // rather than substringed. ScrConstant.Content unquotes on demand for the rare caller
+            // that wants the characters.
             case TokenKind.String:
-                return ScrType.String;
+                return ScrValue.OfConstant(ScrConstant.OfString(text));
+
             case TokenKind.LocalizedString:
-                return ScrType.IString;
+                return ScrValue.OfConstant(ScrConstant.OfString(text, ScrTypeSet.IString));
+
             case TokenKind.True:
+                return ScrValue.OfConstant(ScrConstant.OfBool(true));
             case TokenKind.False:
-                return ScrType.Bool;
+                return ScrValue.OfConstant(ScrConstant.OfBool(false));
+
             case TokenKind.Undefined:
-                return ScrType.Undefined;
+                return ScrValue.OfConstant(ScrConstant.OfUndefined());
+
             default:
-                return ScrType.Unknown;
+                // Anim references and #animtree are literals too, and nothing here can type them.
+                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UnsupportedExpression);
         }
     }
 
-    private ScrType TypeOfIdentifier(string name, Dictionary<string, ScrType> environment)
+    private ScrValue TypeOfIdentifier(string name, Dictionary<string, ScrValue> environment)
     {
-        if ( environment.TryGetValue(name, out ScrType type) )
+        if ( environment.TryGetValue(name, out ScrValue value) )
         {
-            return type;
+            return value;
         }
 
         switch ( name.ToLowerInvariant() )
         {
             case "self":
-                return ScrType.Entity;
+                return ScrValue.Of(ScrTypeSet.Entity);
             // world is a BO3+ global; where the dialect has no world, a bare "world" is an ordinary
             // name (the case falls through to default), so it isn't mistyped as the world struct.
             case "world" when _game.HasWorldObject:
             case "level":
             case "anim":
-                return ScrType.Struct;
+                return ScrValue.Of(ScrTypeSet.Struct);
             case "game":
-                return ScrType.Array;
+                return ScrValue.Of(ScrTypeSet.Array);
+
+            // `world` where the dialect has none. Reported as a distinct reason rather than an
+            // anonymous unknown, since a transpiler re-homing world's fields needs to see it.
+            case "world":
+                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.DialectGlobalAbsent);
+
             default:
-                return ScrType.Unknown;
+                return ScrValue.Unknown;
         }
     }
 
-    private ScrType TypeOfPrefix(PrefixNode prefix, Dictionary<string, ScrType> environment)
+    /// <summary>
+    /// A prefix operator, delegated to <see cref="ScrOperators"/> — which is what makes <c>-vec</c>
+    /// a vector rather than Unknown, and lets <c>!</c> and <c>~</c> fold a constant operand.
+    /// </summary>
+    private ScrValue TypeOfPrefix(PrefixNode prefix, Dictionary<string, ScrValue> environment)
     {
-        switch ( prefix.Operator )
+        if ( !TryMapUnary(prefix.Operator, out ScrUnaryOp op) )
         {
-            case TokenKind.Bang:
-                return ScrType.Bool;
-            case TokenKind.Ampersand:
-                return ScrType.Function;
-            case TokenKind.Tilde:
-                return ScrType.Int;
-            case TokenKind.Minus:
-            {
-                ScrType operand = TypeOf(prefix.Operand, environment);
-                return operand is ScrType.Int or ScrType.Float ? operand : ScrType.Unknown;
-            }
-            default:
-                return ScrType.Unknown;
+            return ScrValue.Unknown;
         }
+
+        // Address-of needs no operand type, and asking for one would type the callee name as an
+        // undefined local.
+        ScrValue operand = op == ScrUnaryOp.AddressOf
+            ? ScrValue.Unknown
+            : TypeOf(prefix.Operand, environment);
+
+        return ScrOperators.Apply(op, operand).Value;
     }
 
-    private ScrType TypeOfBinary(BinaryNode binary, Dictionary<string, ScrType> environment)
+    /// <summary>
+    /// A binary operator, delegated to <see cref="ScrOperators"/>.
+    ///
+    /// This is where the <c>vector * 0.5</c> bug is actually fixed: the old code routed every
+    /// arithmetic operator through a helper that took no operator and knew only Int/Float/Unknown,
+    /// so a scaled vector came out a float. The operand diagnosis is discarded here — this pass
+    /// types expressions and does not report — but it is what a rule or a rewriter would read.
+    /// </summary>
+    private ScrValue TypeOfBinary(BinaryNode binary, Dictionary<string, ScrValue> environment)
     {
-        switch ( binary.Operator )
+        if ( !TryMapBinary(binary.Operator, out ScrBinaryOp op) )
         {
-            case TokenKind.EqualsEquals:
-            case TokenKind.NotEquals:
-            case TokenKind.StrictEquals:
-            case TokenKind.StrictNotEquals:
-            case TokenKind.LessThan:
-            case TokenKind.LessThanEquals:
-            case TokenKind.GreaterThan:
-            case TokenKind.GreaterThanEquals:
-            case TokenKind.LogicalAnd:
-            case TokenKind.LogicalOr:
-                return ScrType.Bool;
-            case TokenKind.Plus:
-            {
-                ScrType left = TypeOf(binary.Left, environment);
-                ScrType right = TypeOf(binary.Right, environment);
-                // String concatenation if either side is a string; otherwise numeric.
-                if ( left == ScrType.String || right == ScrType.String )
-                {
-                    return ScrType.String;
-                }
-
-                return NumericResult(left, right);
-            }
-            case TokenKind.Minus:
-            case TokenKind.Star:
-            case TokenKind.Slash:
-            case TokenKind.Percent:
-                return NumericResult(TypeOf(binary.Left, environment), TypeOf(binary.Right, environment));
-            case TokenKind.ShiftLeft:
-            case TokenKind.ShiftRight:
-            case TokenKind.Ampersand:
-            case TokenKind.Pipe:
-            case TokenKind.Caret:
-                return ScrType.Int;
-            default:
-                return ScrType.Unknown;
+            return ScrValue.Unknown;
         }
+
+        ScrValue left = TypeOf(binary.Left, environment);
+        ScrValue right = TypeOf(binary.Right, environment);
+
+        return ScrOperators.Apply(op, left, right).Value;
     }
 
-    private static ScrType NumericResult(ScrType left, ScrType right)
+    /// <summary>Maps a token kind onto the semantic operator. The one place syntax meets semantics.</summary>
+    private static bool TryMapBinary(TokenKind kind, out ScrBinaryOp op)
     {
-        if ( left == ScrType.Float || right == ScrType.Float )
+        switch ( kind )
         {
-            return ScrType.Float;
+            case TokenKind.Plus: op = ScrBinaryOp.Add; return true;
+            case TokenKind.Minus: op = ScrBinaryOp.Subtract; return true;
+            case TokenKind.Star: op = ScrBinaryOp.Multiply; return true;
+            case TokenKind.Slash: op = ScrBinaryOp.Divide; return true;
+            case TokenKind.Percent: op = ScrBinaryOp.Modulo; return true;
+            case TokenKind.EqualsEquals: op = ScrBinaryOp.Equal; return true;
+            case TokenKind.NotEquals: op = ScrBinaryOp.NotEqual; return true;
+            case TokenKind.StrictEquals: op = ScrBinaryOp.StrictEqual; return true;
+            case TokenKind.StrictNotEquals: op = ScrBinaryOp.StrictNotEqual; return true;
+            case TokenKind.LessThan: op = ScrBinaryOp.Less; return true;
+            case TokenKind.LessThanEquals: op = ScrBinaryOp.LessOrEqual; return true;
+            case TokenKind.GreaterThan: op = ScrBinaryOp.Greater; return true;
+            case TokenKind.GreaterThanEquals: op = ScrBinaryOp.GreaterOrEqual; return true;
+            case TokenKind.LogicalAnd: op = ScrBinaryOp.And; return true;
+            case TokenKind.LogicalOr: op = ScrBinaryOp.Or; return true;
+            case TokenKind.Ampersand: op = ScrBinaryOp.BitAnd; return true;
+            case TokenKind.Pipe: op = ScrBinaryOp.BitOr; return true;
+            case TokenKind.Caret: op = ScrBinaryOp.BitXor; return true;
+            case TokenKind.ShiftLeft: op = ScrBinaryOp.ShiftLeft; return true;
+            case TokenKind.ShiftRight: op = ScrBinaryOp.ShiftRight; return true;
+            default: op = default; return false;
         }
-
-        if ( left == ScrType.Int && right == ScrType.Int )
-        {
-            return ScrType.Int;
-        }
-
-        return ScrType.Unknown;
     }
 
-    private ScrType TypeOfCall(CallNode call)
+    private static bool TryMapUnary(TokenKind kind, out ScrUnaryOp op)
+    {
+        switch ( kind )
+        {
+            case TokenKind.Bang: op = ScrUnaryOp.Not; return true;
+            case TokenKind.Minus: op = ScrUnaryOp.Negate; return true;
+            case TokenKind.Tilde: op = ScrUnaryOp.BitNot; return true;
+            case TokenKind.Ampersand: op = ScrUnaryOp.AddressOf; return true;
+            default: op = default; return false;
+        }
+    }
+
+    private ScrValue TypeOfCall(CallNode call)
     {
         // Only builtin return types are known here; script-function return inference is
         // out of scope for this pass (their bodies aren't re-typed).
@@ -860,51 +954,55 @@ public sealed class FlowTyper
 
         if ( name is null )
         {
-            return ScrType.Unknown;
+            return ScrValue.Unknown;
         }
 
         // Callable keywords (isdefined, vectorscale) have no API entry, so their return types
         // come from the emulation table instead.
         if ( BuiltinEmulations.TryGetReturnType(name, out ScrType emulated) )
         {
-            return emulated;
+            return ScrValue.FromScrType(emulated);
         }
 
         BuiltinFunction? builtin = _builtins.Find(name);
         if ( builtin is null || builtin.Overloads.Length == 0 )
         {
-            return ScrType.Unknown;
+            // Either a script function, whose body is not re-typed here, or a name the game's
+            // library does not carry. Both are worth telling apart from an untypeable expression.
+            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
         }
 
-        return MapReturnType(builtin.Overloads[0].ReturnTypeText);
+        ScrTypeSet mapped = MapDeclaredType(builtin.Overloads[0].ReturnTypeText);
+
+        return mapped == ScrTypeSet.None
+            ? ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.BuiltinTypeUnmapped)
+            : ScrValue.Of(mapped);
     }
 
-    /// <summary>Maps a builtin's return-type text to the lattice; unions and vague types stay Unknown.</summary>
-    private static ScrType MapReturnType(string typeText)
+    /// <summary>
+    /// Maps a declared type spelling from the bundled data onto the lattice. <see cref="ScrTypeSet.None"/>
+    /// means the spelling is one this cannot express.
+    ///
+    /// Still text-driven and still dropping <c>any[]</c>, unions and <c>number</c> — the loader
+    /// flattens the structured JSON to a display string before anything here can see it, and
+    /// unpicking that is its own change. What is different is that failure is now REPORTED as
+    /// <see cref="ScrImprecision.BuiltinTypeUnmapped"/> instead of being indistinguishable from
+    /// every other unknown.
+    /// </summary>
+    private static ScrTypeSet MapDeclaredType(string typeText)
     {
-        switch ( typeText )
+        switch ( typeText.ToLowerInvariant() )
         {
-            case "int":
-                return ScrType.Int;
-            case "float":
-                return ScrType.Float;
-            case "bool":
-                return ScrType.Bool;
-            case "string":
-                return ScrType.String;
-            case "istring":
-                return ScrType.IString;
-            case "vector":
-                return ScrType.Vector;
-            case "struct":
-                return ScrType.Struct;
-            case "entity":
-                return ScrType.Entity;
-            case "function":
-                return ScrType.Function;
-            default:
-                // Arrays ("t[]"), unions ("int | number"), "number", "any" → not certain.
-                return ScrType.Unknown;
+            case "int": return ScrTypeSet.Int;
+            case "float": return ScrTypeSet.Float;
+            case "bool": return ScrTypeSet.Bool;
+            case "string": return ScrTypeSet.String;
+            case "istring": return ScrTypeSet.IString;
+            case "vector": return ScrTypeSet.Vector;
+            case "struct": return ScrTypeSet.Struct;
+            case "entity": return ScrTypeSet.Entity;
+            case "function": return ScrTypeSet.Function;
+            default: return ScrTypeSet.None;
         }
     }
 }

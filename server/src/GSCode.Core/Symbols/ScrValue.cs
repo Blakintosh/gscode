@@ -501,6 +501,14 @@ public readonly record struct ScrValue
             case ScrTypeSet.Function: return ScrType.Function;
             // A class instance is a struct with a name, and ScrType cannot carry the name.
             case ScrTypeSet.Instance: return ScrType.Struct;
+
+            // The one union the coarse lattice had an answer for: ScrTypes.Join widens an int/float
+            // disagreement to float. Reproduced here rather than collapsing to Unknown, because this
+            // is a PROJECTION — it has to give the editor exactly what the old lattice gave it, and
+            // a hover that used to read "float" must not start reading nothing. The richer value
+            // underneath still says Int|Float, which is what a rewriter needs.
+            case ScrTypeSet.Number: return ScrType.Float;
+
             default: return ScrType.Unknown;
         }
     }

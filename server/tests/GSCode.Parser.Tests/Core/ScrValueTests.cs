@@ -339,6 +339,18 @@ public class ScrValueTests
     }
 
     [Fact]
+    public void AnIntFloatUnionProjectsToFloatBecauseTheCoarseLatticeWidened()
+    {
+        // The one union ScrTypes.Join had an answer for. The projection has to reproduce it or a
+        // hover that reads "float" today would start reading nothing — while the value underneath
+        // still says int|float, which is what a rewriter needs.
+        ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.Float));
+
+        Assert.Equal(ScrTypeSet.Number, joined.Types);
+        Assert.Equal(ScrType.Float, joined.ToScrType());
+    }
+
+    [Fact]
     public void RoundTrippingThroughScrTypePreservesEveryMemberItCanCarry()
     {
         foreach ( ScrType type in Enum.GetValues<ScrType>() )

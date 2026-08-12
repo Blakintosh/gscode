@@ -141,6 +141,9 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.ArithmeticLint");
         lints.AddRange(ArithmeticLint.Analyze(result));
         PerfTracker.End();
+        PerfTracker.Begin("lint.ExpressionStatementLint");
+        lints.AddRange(ExpressionStatementLint.Analyze(result));
+        PerfTracker.End();
         PerfTracker.Begin("lint.UnassignedVariableLint");
         lints.AddRange(UnassignedVariableLint.Analyze(result));
         PerfTracker.End();

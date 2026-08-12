@@ -261,4 +261,10 @@ public enum GscDiagnosticCode
     /// propagation, and the literal case needs none.
     /// </summary>
     DivisionByZero = 5031,
+
+    /// <summary>
+    /// A statement whose expression cannot do anything, so the line has no effect: <c>a + b;</c>,
+    /// <c>x == 1;</c>. Usually a missing <c>=</c> or a call that lost its parentheses.
+    /// </summary>
+    InvalidExpressionStatement = 5032,
 }

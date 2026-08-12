@@ -137,6 +137,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.ExpectedConstantExpression] =
             "'{0}' is declared 'const', so its value must be known at compile time — a literal, or arithmetic over literals.",
         [GscDiagnosticCode.CannotAssignToConstant] = "'{0}' is declared 'const' and cannot be assigned to.",
+        [GscDiagnosticCode.DivisionByZero] = "The divisor here is zero.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

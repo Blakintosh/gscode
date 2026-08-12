@@ -254,4 +254,11 @@ public enum GscDiagnosticCode
     /// and nothing establishes the engine refuses a later write to one.
     /// </summary>
     CannotAssignToConstant = 5030,
+
+    /// <summary>
+    /// Division, or modulo, by a divisor written as literal zero. Narrower than 1.5's, which tracked
+    /// constant VALUES and so caught <c>d = 0; x = n / d;</c> — this tree has no constant
+    /// propagation, and the literal case needs none.
+    /// </summary>
+    DivisionByZero = 5031,
 }

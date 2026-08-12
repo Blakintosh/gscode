@@ -72,6 +72,13 @@ public sealed class FlowTyper
     private Position? _cursor;
 
     /// <summary>
+    /// Set only while <see cref="InferValues"/> is running. Null the rest of the time so the hint
+    /// and hover passes cost nothing extra — they ask about one name or one position and would pay
+    /// for a whole file's map to answer it.
+    /// </summary>
+    private Dictionary<ExprNode, ScrValue>? _recorded;
+
+    /// <summary>
     /// <paramref name="profile"/> defaults to the active one, matching how every <c>Analyze</c>
     /// entry point in Analysis, Api and Database takes it — so a test can type a function against a
     /// dialect other than the one the server happens to be running.
@@ -209,8 +216,60 @@ public sealed class FlowTyper
     private void TypeFunction(FunctionNode function, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
     {
         Dictionary<string, ScrValue> environment = new(StringComparer.OrdinalIgnoreCase);
+
+        // Parameters are seeded here as well as in EnvironmentAt, so a name is known to be a local
+        // whichever entry point ran. They were seeded only for the hover pass, which meant the hint
+        // pass could not tell an assignment to a parameter from one to a fresh local.
+        foreach ( ParameterNode parameter in function.Parameters )
+        {
+            environment[parameter.NameToken.Text] =
+                ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UntypedParameter);
+        }
+
         HashSet<string> hinted = new(StringComparer.OrdinalIgnoreCase);
         WalkStatement(function.Body, environment, hinted, hints, writes);
+    }
+
+    /// <summary>
+    /// Every value the pass worked out for a file, keyed by the expression that produced it.
+    ///
+    /// The transpiler entry point. Unlike <see cref="InferAssignments(ParseResult)"/>, which reports
+    /// the sites an editor wants to decorate, this keeps the value of EVERY expression walked —
+    /// including the ones nothing is reported about, which is most of them.
+    /// </summary>
+    public ScriptTypes InferValues(ParseResult result)
+    {
+        _recorded = new Dictionary<ExprNode, ScrValue>(ReferenceEqualityComparer.Instance);
+
+        try
+        {
+            ImmutableArray<InferredAssignment> assignments = InferAssignments(result, out ImmutableArray<FieldWrite> writes);
+            return new ScriptTypes(_recorded, assignments, writes);
+        }
+        finally
+        {
+            _recorded = null;
+        }
+    }
+
+    /// <summary>
+    /// The full value of the local under a cursor, where <see cref="TryGetLocalTypeAt"/> gives the
+    /// coarse projection an editor label needs. A caller deciding how to translate a parameter wants
+    /// the union and the reason, not a single name.
+    /// </summary>
+    public bool TryGetValueAt(ParseResult result, Position position, out ScrValue value)
+    {
+        value = ScrValue.Unknown;
+
+        if ( !AstSearch.TryFindLocalContext(
+            result.Tree.Root, position, out IdentifierNode identifier, out FunctionNode function) )
+        {
+            return false;
+        }
+
+        Dictionary<string, ScrValue> environment = EnvironmentAt(function, position);
+
+        return environment.TryGetValue(identifier.Token.Text, out value);
     }
 
     private void WalkStatement(AstNode statement, Dictionary<string, ScrValue> environment, HashSet<string> hinted, ImmutableArray<InferredAssignment>.Builder hints, ImmutableArray<FieldWrite>.Builder writes)
@@ -790,7 +849,26 @@ public sealed class FlowTyper
         return kind == TokenKind.PlusPlus || kind == TokenKind.MinusMinus;
     }
 
+    /// <summary>
+    /// Types one expression, recording the answer when a caller asked for the whole map.
+    ///
+    /// Wrapped rather than folded into the switch so every return path is captured — including the
+    /// early ones and the default — which is the difference between a map a rewriter can rely on
+    /// and one with holes wherever a case returns directly.
+    /// </summary>
     private ScrValue TypeOf(ExprNode expression, Dictionary<string, ScrValue> environment)
+    {
+        ScrValue value = TypeOfCore(expression, environment);
+
+        if ( _recorded is not null )
+        {
+            _recorded[expression] = value;
+        }
+
+        return value;
+    }
+
+    private ScrValue TypeOfCore(ExprNode expression, Dictionary<string, ScrValue> environment)
     {
         switch ( expression )
         {

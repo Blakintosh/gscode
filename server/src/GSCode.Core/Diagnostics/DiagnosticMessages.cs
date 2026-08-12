@@ -132,6 +132,11 @@ public static class DiagnosticMessages
         // correct value, and dismisses the rule.
         [GscDiagnosticCode.ConsumedThreadedCallResult] =
             "A 'thread' call returns at the function's first 'wait', not at its 'return' — so this reads 'undefined' as soon as the thread waits.",
+        // Names what IS allowed, because "not constant" leaves the reader guessing whether
+        // arithmetic counts -- and the stock scripts are full of `const AREA = 64 * 64;`.
+        [GscDiagnosticCode.ExpectedConstantExpression] =
+            "'{0}' is declared 'const', so its value must be known at compile time — a literal, or arithmetic over literals.",
+        [GscDiagnosticCode.CannotAssignToConstant] = "'{0}' is declared 'const' and cannot be assigned to.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

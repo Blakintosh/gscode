@@ -241,4 +241,17 @@ public enum GscDiagnosticCode
     /// return value all consume a value without being an assignment.
     /// </summary>
     ConsumedThreadedCallResult = 5028,
+
+    /// <summary>
+    /// A <c>const</c> whose value is not known at compile time. What counts as known was measured
+    /// over Black Ops III's 117 stock declarations: literals, and arithmetic over them.
+    /// </summary>
+    ExpectedConstantExpression = 5029,
+
+    /// <summary>
+    /// An assignment to a name bound by <c>const</c>. Black Ops III only — the Infinity Ward
+    /// dialects' file-scope constants are our modelling of a bare assignment between two functions,
+    /// and nothing establishes the engine refuses a later write to one.
+    /// </summary>
+    CannotAssignToConstant = 5030,
 }

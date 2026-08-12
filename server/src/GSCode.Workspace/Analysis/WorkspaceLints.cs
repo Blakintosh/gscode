@@ -135,6 +135,9 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.ThreadedResultLint");
         lints.AddRange(ThreadedResultLint.Analyze(result));
         PerfTracker.End();
+        PerfTracker.Begin("lint.ConstDeclarationLint");
+        lints.AddRange(ConstDeclarationLint.Analyze(result));
+        PerfTracker.End();
         PerfTracker.Begin("lint.UnassignedVariableLint");
         lints.AddRange(UnassignedVariableLint.Analyze(result));
         PerfTracker.End();

@@ -408,9 +408,9 @@ public sealed class FlowTyper
     {
         foreach ( CaseGroupNode group in switchNode.Cases )
         {
-            foreach ( ExprNode? label in group.Labels )
+            foreach ( CaseLabel label in group.Labels )
             {
-                if ( label is null )
+                if ( label.Value is null )
                 {
                     return true;
                 }

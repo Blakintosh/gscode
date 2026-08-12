@@ -70,16 +70,16 @@ public static class CaseLabelLint
 
         foreach ( CaseGroupNode group in switchNode.Cases )
         {
-            foreach ( ExprNode? label in group.Labels )
+            foreach ( CaseLabel label in group.Labels )
             {
-                // A null label is `default:`, which has no value to check.
-                if ( label is null )
+                // A null value is `default:`, which has no expression to check.
+                if ( label.Value is null )
                 {
                     continue;
                 }
 
-                Inspect(label, diagnostics);
-                InspectDuplicate(label, seenLabels, diagnostics);
+                Inspect(label.Value, diagnostics);
+                InspectDuplicate(label.Value, seenLabels, diagnostics);
             }
         }
     }

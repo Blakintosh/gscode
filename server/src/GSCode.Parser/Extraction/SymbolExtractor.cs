@@ -499,11 +499,11 @@ public sealed class SymbolExtractor
                 WalkExpression(switchNode.Subject, assignments);
                 foreach ( CaseGroupNode caseGroup in switchNode.Cases )
                 {
-                    foreach ( ExprNode? label in caseGroup.Labels )
+                    foreach ( CaseLabel label in caseGroup.Labels )
                     {
-                        if ( label is not null )
+                        if ( label.Value is not null )
                         {
-                            WalkExpression(label, assignments);
+                            WalkExpression(label.Value, assignments);
                         }
                     }
 

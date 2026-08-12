@@ -20,8 +20,15 @@ public sealed record ForNode(TextRange Range, AstNode? Initializer, ExprNode? Co
 /// <summary>foreach ( [key,] value in collection ) body — KeyToken is null in the one-variable form.</summary>
 public sealed record ForeachNode(TextRange Range, PToken? KeyToken, PToken ValueToken, ExprNode Collection, AstNode Body) : AstNode(Range);
 
-/// <summary>One case/default group: null in Labels marks 'default'; several labels may share a body.</summary>
-public sealed record CaseGroupNode(TextRange Range, ImmutableArray<ExprNode?> Labels, ImmutableArray<AstNode> Statements) : AstNode(Range);
+/// <summary>
+/// One label in a case group. <see cref="Value"/> is null for 'default:', which is the reason the
+/// keyword's own range is carried separately: a default has no expression for a diagnostic to point
+/// at, and the group's range covers its whole body.
+/// </summary>
+public readonly record struct CaseLabel(TextRange KeywordRange, ExprNode? Value);
+
+/// <summary>One case/default group: a null label Value marks 'default'; several labels may share a body.</summary>
+public sealed record CaseGroupNode(TextRange Range, ImmutableArray<CaseLabel> Labels, ImmutableArray<AstNode> Statements) : AstNode(Range);
 
 public sealed record SwitchNode(TextRange Range, ExprNode Subject, ImmutableArray<CaseGroupNode> Cases) : AstNode(Range);
 

@@ -135,4 +135,86 @@ public class CaseLabelLintTests
             Lint("        case 1:\n            break;\n        case 2:\n            break;\n        default:\n            break;"),
             diagnostic => diagnostic.Code == GscDiagnosticCode.DuplicateCaseLabel);
     }
+
+    // --- 5027: a second `default:` ---
+
+    [Fact]
+    public void ASecondDefaultIsReported()
+    {
+        // The control. 1.5 raised this from its CFG builder, which is the only reason it went out
+        // with a family of type-derived rules it has nothing in common with.
+        Diagnostic reported = Assert.Single(
+            Lint("        default:\n            break;\n        default:\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels);
+
+        Assert.Contains("only the first", reported.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnlyTheLaterDefaultIsReported()
+    {
+        // Reporting both would leave the reader no way to tell which one still runs.
+        Assert.Single(
+            Lint("        default:\n            break;\n        default:\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels);
+    }
+
+    [Fact]
+    public void AThirdDefaultIsReportedToo()
+    {
+        Assert.Equal(
+            2,
+            Lint("        default:\n            break;\n        default:\n            break;\n        default:\n            break;")
+                .Count(diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels));
+    }
+
+    [Fact]
+    public void ADefaultStackedOntoACaseGroupStillCounts()
+    {
+        // `case 1: default:` share one body, so the two defaults are in different groups AND one of
+        // them is not the group's first label — the shape a per-group check would miss.
+        Assert.Single(
+            Lint("        default:\n            break;\n        case 1:\n        default:\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels);
+    }
+
+    [Fact]
+    public void OneDefaultIsFine()
+    {
+        Assert.DoesNotContain(
+            Lint("        case 1:\n            break;\n        default:\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels);
+    }
+
+    [Fact]
+    public void TwoSwitchesEachWithADefaultAreFine()
+    {
+        // The counter is per switch. Sharing it across the file would report the second switch's
+        // perfectly ordinary `default:`.
+        string source =
+            "function f( v, w )\n{\n"
+            + "    switch ( v )\n    {\n        default:\n            break;\n    }\n"
+            + "    switch ( w )\n    {\n        default:\n            break;\n    }\n}\n";
+
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        Assert.DoesNotContain(
+            CaseLabelLint.Analyze(result),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels);
+    }
+
+    [Fact]
+    public void ItIsReportedOnTheKeywordRatherThanTheWholeGroup()
+    {
+        // A case group's range covers its body. Squiggling that would grey out working statements
+        // for a mistake that is seven characters long — which is why CaseLabel carries its own
+        // range rather than the rule falling back on the group's.
+        Diagnostic reported = Assert.Single(
+            Lint("        default:\n            break;\n        default:\n            do_work();\n            break;"),
+            diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels);
+
+        Assert.Equal(reported.Range.Start.Line, reported.Range.End.Line);
+        Assert.Equal("default".Length, reported.Range.End.Character - reported.Range.Start.Character);
+    }
 }

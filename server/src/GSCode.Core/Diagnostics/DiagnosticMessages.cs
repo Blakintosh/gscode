@@ -117,6 +117,10 @@ public static class DiagnosticMessages
         // Names the file that HAS it, which is the whole difference between this and 5014: the
         // reader's fix is one '#include' line, and the message carries the argument for it.
         [GscDiagnosticCode.FunctionNotIncluded] = "'{0}' is declared in '{1}', but this file has no '#include' bringing it into scope.",
+        // Says which one runs, because "duplicate" alone leaves the reader to guess whether the
+        // engine takes the first or the last -- and the answer decides whether this is a typo or
+        // dead code they can delete.
+        [GscDiagnosticCode.MultipleDefaultLabels] = "This switch already has a 'default' label; only the first one can ever be reached.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

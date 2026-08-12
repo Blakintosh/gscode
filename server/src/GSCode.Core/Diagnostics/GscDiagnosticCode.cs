@@ -198,4 +198,14 @@ public enum GscDiagnosticCode
     /// reports.
     /// </summary>
     FunctionNotIncluded = 5026,
+
+    /// <summary>
+    /// A second <c>default:</c> in one switch. Only the first can be reached, so the later one is
+    /// dead in exactly the way <see cref="DuplicateCaseLabel"/> describes for a value label — and
+    /// this rule sits beside it for that reason.
+    ///
+    /// Raised by 1.5 from its CFG builder, which is why it went out with the type-derived family it
+    /// has nothing to do with. It needs no types: a count per switch answers it.
+    /// </summary>
+    MultipleDefaultLabels = 5027,
 }

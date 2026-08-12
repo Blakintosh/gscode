@@ -21,6 +21,10 @@ namespace GSCode.Workspace.Analysis;
 /// reasoning the default-parameter rule used before it was retired — the preprocessor has already
 /// made them constant, and the squiggle would point into an expansion rather than at anything the
 /// author wrote.
+///
+/// Also owns the two unreachable-label findings, which are the same class of mistake seen from
+/// either side: a value label the switch has already seen (5017), and a second <c>default:</c>
+/// (5027).
 /// </summary>
 public static class CaseLabelLint
 {
@@ -67,14 +71,17 @@ public static class CaseLabelLint
         // Per SWITCH, not per group: `case 1:` in one group and `case 1:` in another is the same
         // collision, and grouping is a formatting choice rather than a scope.
         HashSet<string> seenLabels = new(StringComparer.Ordinal);
+        bool seenDefault = false;
 
         foreach ( CaseGroupNode group in switchNode.Cases )
         {
             foreach ( CaseLabel label in group.Labels )
             {
-                // A null value is `default:`, which has no expression to check.
+                // A null value is `default:`, which has no expression to check — but two of them
+                // in one switch is its own finding.
                 if ( label.Value is null )
                 {
+                    InspectDefault(label, ref seenDefault, diagnostics);
                     continue;
                 }
 
@@ -82,6 +89,25 @@ public static class CaseLabelLint
                 InspectDuplicate(label.Value, seenLabels, diagnostics);
             }
         }
+    }
+
+    /// <summary>
+    /// Reports every <c>default:</c> after the first. Reported on the keyword rather than the group,
+    /// which spans the whole body — this is why <see cref="CaseLabel"/> carries a range of its own.
+    /// </summary>
+    private static void InspectDefault(
+        CaseLabel label, ref bool seenDefault, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        if ( !seenDefault )
+        {
+            seenDefault = true;
+            return;
+        }
+
+        diagnostics.Add(Diagnostic.Create(
+            label.KeywordRange,
+            DiagnosticSeverity.Warning,
+            GscDiagnosticCode.MultipleDefaultLabels));
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using GSCode.Parser.Preprocessing;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Symbols;
@@ -253,6 +254,10 @@ public sealed class FlowTyper
                     return;
                 }
 
+                // The condition is evaluated before either arm, so an assignment inside it applies
+                // on both paths. Typed against the live environment for that reason.
+                TypeExpressionForEffects(ifNode.Condition, environment, hinted, hints, writes);
+
                 // The two arms are alternatives, so each walks its own copy and the results
                 // are joined. Sharing one environment would let whichever arm ran last win.
                 Dictionary<string, ScrValue> thenEnvironment = Clone(environment);
@@ -269,11 +274,14 @@ public sealed class FlowTyper
                 return;
             }
             case WhileNode whileNode:
+                // The condition runs whether or not the body does.
+                TypeExpressionForEffects(whileNode.Condition, environment, hinted, hints, writes);
                 MergeLoopBody(whileNode.Body, environment, hinted, hints, writes);
                 return;
             case DoWhileNode doWhile:
                 // The body always runs at least once, so its effects apply directly.
                 WalkStatement(doWhile.Body, environment, hinted, hints, writes);
+                TypeExpressionForEffects(doWhile.Condition, environment, hinted, hints, writes);
                 return;
             case ForNode forNode:
                 if ( forNode.Initializer is not null )
@@ -282,10 +290,17 @@ public sealed class FlowTyper
                     WalkStatement(forNode.Initializer, environment, hinted, hints, writes);
                 }
 
-                MergeLoopBody(forNode.Body, environment, hinted, hints, writes);
+                // The condition is evaluated even when the body never runs, and an assignment can
+                // hide in it. The increment runs only if the body did, so it goes with the body.
+                if ( forNode.Condition is not null )
+                {
+                    TypeExpressionForEffects(forNode.Condition, environment, hinted, hints, writes);
+                }
+
+                MergeLoopBody(forNode.Body, environment, hinted, hints, writes, forNode.Increment);
                 return;
             case ForeachNode foreachNode:
-                MergeLoopBody(foreachNode.Body, environment, hinted, hints, writes);
+                WalkForeach(foreachNode, environment, hinted, hints, writes);
                 return;
             case SwitchNode switchNode:
                 WalkSwitch(switchNode, environment, hinted, hints, writes);
@@ -301,6 +316,37 @@ public sealed class FlowTyper
                 // exact; outside, a name typed only there joins with the environment as it stood
                 // before and becomes Unknown, which is the honest answer.
                 MergeDevBlock(devBlock, environment, hinted, hints, writes);
+                return;
+            case ConstDeclNode constDecl:
+            {
+                // A `const` binds a name for the rest of the function exactly as an assignment
+                // does, and it was falling through the default case — so `const MAX = 4;` left MAX
+                // untyped and unhinted while `MAX = 4;` was both.
+                ScrValue value = TypeOf(constDecl.Value, environment);
+                environment[constDecl.NameToken.Text] = value;
+
+                ScrType type = value.ToScrType();
+                if ( type.IsKnown() && constDecl.NameToken.Provenance.DefinitionSite is null )
+                {
+                    hints.Add(new InferredAssignment(
+                        constDecl.NameToken.RootRange, type, constDecl.NameToken.Text,
+                        IsFirstForName: hinted.Add(constDecl.NameToken.Text)));
+                }
+
+                return;
+            }
+            case ReturnNode returnNode:
+                // Typed for its effects only. Nothing collects return values yet, but an assignment
+                // can hide in one, and typing it here is the prerequisite for ever inferring a
+                // script function's return type.
+                if ( returnNode.Value is not null )
+                {
+                    TypeExpressionForEffects(returnNode.Value, environment, hinted, hints, writes);
+                }
+
+                return;
+            case WaitNode wait:
+                TypeExpressionForEffects(wait.Duration, environment, hinted, hints, writes);
                 return;
             default:
                 return;
@@ -344,12 +390,17 @@ public sealed class FlowTyper
     /// Walks a loop body as an alternative path: the body may run zero times, so its effects
     /// are joined with the environment as it stood before the loop.
     /// </summary>
+    /// <param name="increment">
+    /// A for-loop's increment, which runs only on iterations where the body ran — so it belongs on
+    /// the body's path rather than the outer one.
+    /// </param>
     private void MergeLoopBody(
         AstNode body,
         Dictionary<string, ScrValue> environment,
         HashSet<string> hinted,
         ImmutableArray<InferredAssignment>.Builder hints,
-        ImmutableArray<FieldWrite>.Builder writes)
+        ImmutableArray<FieldWrite>.Builder writes,
+        AstNode? increment = null)
     {
         // Inside the body the loop HAS run, so the zero-iteration alternative is not a possibility
         // the code at the cursor has to allow for.
@@ -362,9 +413,75 @@ public sealed class FlowTyper
         Dictionary<string, ScrValue> bodyEnvironment = Clone(environment);
         WalkStatement(body, bodyEnvironment, hinted, hints, writes);
 
-        // One join suffices: Join only ever moves toward Unknown, so iterating to a fixpoint
-        // could never yield a more precise answer than this single pass.
+        if ( increment is not null )
+        {
+            WalkStatement(increment, bodyEnvironment, hinted, hints, writes);
+        }
+
+        // One join suffices: a union only ever grows, so iterating to a fixpoint could not narrow
+        // the answer this single pass gives.
         MergeAlternatives(environment, environment, bodyEnvironment);
+    }
+
+    /// <summary>
+    /// A <c>foreach</c>, whose BINDINGS were never entered into the environment — so
+    /// <c>foreach ( item in items )</c> left <c>item</c> untracked and nothing downstream could say
+    /// anything about it. That is also the blocker for lowering a foreach into a <c>for</c> over
+    /// <c>getarraykeys</c>, which needs to know the collection is an array.
+    ///
+    /// The collection is typed but its ELEMENT type is not modelled, so the value binding is an
+    /// unknown carrying <see cref="ScrImprecision.ArrayElement"/> — enough to say the name is a
+    /// local and to say why nothing more is known. A key, where the two-variable form is used, is a
+    /// string or an int, which is the array-key rule rather than a guess.
+    /// </summary>
+    private void WalkForeach(
+        ForeachNode foreachNode,
+        Dictionary<string, ScrValue> environment,
+        HashSet<string> hinted,
+        ImmutableArray<InferredAssignment>.Builder hints,
+        ImmutableArray<FieldWrite>.Builder writes)
+    {
+        // Typed for its effects, and for the collection's own sake: `foreach ( x in a[ 0 ] )` has an
+        // expression worth walking.
+        TypeExpressionForEffects(foreachNode.Collection, environment, hinted, hints, writes);
+
+        // Inside the body the loop HAS run, so the bindings apply to the live environment and the
+        // zero-iteration alternative is not a possibility the code at the cursor has to allow for.
+        // Same shape as MergeLoopBody, and decided ONCE rather than asked twice.
+        if ( ContainsCursor(foreachNode.Body) )
+        {
+            BindLoopVariables(foreachNode, environment);
+            WalkStatement(foreachNode.Body, environment, hinted, hints, writes);
+            return;
+        }
+
+        Dictionary<string, ScrValue> bodyEnvironment = Clone(environment);
+        BindLoopVariables(foreachNode, bodyEnvironment);
+        WalkStatement(foreachNode.Body, bodyEnvironment, hinted, hints, writes);
+
+        // The bindings are NOT dropped before the join. GSC scopes locals to the function, not the
+        // block — `for ( i = 0; … )` and then reading `i` afterwards is an ordinary idiom, and a
+        // foreach binding is the same kind of variable — so after the loop the name holds the last
+        // element, or is undefined where the collection was empty. Removing it here said instead
+        // that the name kept whatever it held BEFORE the loop, which is the one thing it cannot be.
+        MergeAlternatives(environment, environment, bodyEnvironment);
+    }
+
+    /// <summary>
+    /// Enters a foreach's bindings. The element type is not modelled, so the value binding says only
+    /// that the name IS a local and why nothing more is known; a key is a string or an int, which is
+    /// the array-key rule rather than a guess.
+    /// </summary>
+    private static void BindLoopVariables(ForeachNode foreachNode, Dictionary<string, ScrValue> environment)
+    {
+        environment[foreachNode.ValueToken.Text] =
+            ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ArrayElement);
+
+        if ( foreachNode.KeyToken is PToken keyToken )
+        {
+            environment[keyToken.Text] =
+                ScrValue.Of(ScrTypeSet.Int | ScrTypeSet.String, ScrImprecision.ArrayElement);
+        }
     }
 
     /// <summary>
@@ -575,6 +692,13 @@ public sealed class FlowTyper
             return;
         }
 
+        // Parentheses around an assignment are how the deliberate form is written — `if ( ( x = f() ) )`
+        // is what suppresses 3013 — so they must not hide the assignment from the walk.
+        while ( expression is ParenNode paren )
+        {
+            expression = paren.Inner;
+        }
+
         if ( expression is not AssignmentNode assignment )
         {
             return;
@@ -692,6 +816,43 @@ public sealed class FlowTyper
                 return TypeOfCall(call);
             case MemberNode member:
                 return TypeOfField(member);
+
+            // `a[ i ]`. The element type is not modelled — neither did v1.5, whose indexer analysis
+            // returned "any" unconditionally — but the BASE being indexed is the question that
+            // matters, and the reason says so rather than leaving an anonymous unknown.
+            case IndexNode:
+                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ArrayElement);
+
+            // Both arms are live, so the value is one or the other. The flat lattice had no way to
+            // say that and returned Unknown.
+            case TernaryNode ternary:
+                return ScrValue.Union(
+                    TypeOf(ternary.WhenTrue, environment),
+                    TypeOf(ternary.WhenFalse, environment));
+
+            // `x++` evaluates to the operand's value, and only a number can be incremented.
+            case PostfixNode postfix when IsIncrementOrDecrement(postfix.Operator):
+                return TypeOf(postfix.Operand, environment).Restrict(ScrTypeSet.Number);
+
+            // A chained assignment evaluates to what was assigned: `a = b = 5`.
+            case AssignmentNode chained when chained.Operator == TokenKind.Assign:
+                return TypeOf(chained.Value, environment);
+
+            // A class method call. The class is known but return types are not modelled for script
+            // code, so this is the script-return case rather than an unsupported form.
+            case ArrowCallNode:
+                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
+
+            // A bare `ns::foo` or `path\to\file::foo` with no argument list is a function pointer;
+            // the parser only produces these outside call position.
+            case QualifiedNode:
+            case PathQualifiedNode:
+                return ScrValue.Of(ScrTypeSet.Function);
+
+            // `[[ f ]]` names the function it dereferences.
+            case PointerDerefNode:
+                return ScrValue.Of(ScrTypeSet.Function);
+
             default:
                 return ScrValue.Unknown;
         }

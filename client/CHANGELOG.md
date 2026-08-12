@@ -17,6 +17,14 @@ A complete ground-up rewrite of the language server and VS Code extension.
   the shared base dialect, for a contributor with those tools to fill in.
 - New analysis pipeline: span-based lexer, provenance-tracking preprocessor, recursive-descent
   parser with error recovery, and symbol extraction — none of which throw on malformed input.
+- **Eight diagnostics 1.5 raised, brought back.** A macro name defined twice, or defined in a header
+  and again in the script that inserts it, naming which definition wins (`2017`); a macro parameter
+  written twice (`2018`); a switch's second `default:` (`5027`); reading the value of a `thread`
+  call, which is `undefined` as soon as the thread waits (`5028`); a `const` whose value is not
+  known at compile time, and an assignment to one (`5029`, `5030`); division by a literal zero
+  (`5031`); and a statement that computes a value and discards it (`5032`). Each was measured over
+  all five games' shipped scripts before being given a severity, and all report nothing there except
+  `5028`, whose findings are real.
 - Mod-tools support: `share/raw` and each `mods/<name>` indexed in isolation with overlay
   resolution; a first-class workspace-only mode for machines with no game install.
 - A single script database with structurally isolated GSC/CSC worlds and a shared GSH store,
@@ -58,24 +66,26 @@ A complete ground-up rewrite of the language server and VS Code extension.
 Named rather than left to be discovered, because a 1.5 user upgrading loses these.
 
 - **The type-derived diagnostics.** 1.5 ran an abstract-interpretation pass over a control-flow
-  graph, and seventeen diagnostics came out of it that 2.0 does not raise: the operator and
-  conversion checks (`OperatorNotSupportedOnTypes`, `NoImplicitConversionExists`, `DivisionByZero`),
-  argument-type checking against the builtin library (`ArgumentTypeMismatch` and its `Unverified`
-  twin), the `const` pair (`CannotAssignToConstant`, `ExpectedConstantExpression`), the member,
-  index, enumeration and vector-component family (`DoesNotContainMember`, `CannotUseAsIndexer`,
-  `CannotEnumerateType`, `InvalidVectorComponent`), the engine-field pair
+  graph, and thirteen diagnostics that came out of it are still not raised here: the operator and
+  conversion checks (`OperatorNotSupportedOnTypes`, `NoImplicitConversionExists`), argument-type
+  checking against the builtin library (`ArgumentTypeMismatch` and its `Unverified` twin), the
+  member, index, enumeration and vector-component family (`DoesNotContainMember`,
+  `CannotUseAsIndexer`, `CannotEnumerateType`, `InvalidVectorComponent`), the engine-field pair
   (`PredefinedFieldTypeMismatch`, `CannotAssignToImmutableEntity`), the function-value pair
-  (`StoreFunctionAsPointer`, `ExpectedFunction`), `ConsumedThreadedCallResult`,
-  `InvalidExpressionStatement`, and the type half of `UnreachableCase`. Also gone with them:
-  `MultipleDefaultLabels`, `AssignOnThreadedFunction`, and the duplicate-macro pair.
+  (`StoreFunctionAsPointer`, `ExpectedFunction`), and the type half of `UnreachableCase`.
 
-  Worth being exact about what was lost. By the end of 1.5 most of that analysis was already
-  switched off — whole analyser and operator-data files were commented out — and the parts still
-  running carried their own noise admission, since `ArgumentTypeMismatch` existed in two severities
-  precisely because the library's declared types could not be trusted enough for one. 2.0 has type
-  inference and uses it for hovers, inlay hints and two lints; what it does not have is the lattice
-  those seventeen needed. Every other diagnostic layer — lexing, preprocessing, parsing, extraction,
-  resolution and arity — is at parity or ahead, across five dialects rather than one.
+  Eight others named in an earlier draft of this entry have since been restored, and are listed
+  under Added above.
+
+  Worth being exact about what is missing, and about one thing this entry previously got wrong. It
+  said most of 1.5's analysis was already switched off, pointing at commented-out analyser and
+  operator-data files. Those files are real, but they were an abandoned earlier generation: the pass
+  that replaced them ran on every analysis, and 1.5 shipped editor quick fixes for five of these
+  codes. Nothing here was switched off. What 2.0 has instead is type inference that feeds hovers,
+  inlay hints and four lints; what it does not have is the union lattice with constant tracking and
+  entity subtypes that the thirteen above need. Every other diagnostic layer — lexing,
+  preprocessing, parsing, extraction, resolution and arity — is at parity or ahead, across five
+  dialects rather than one.
 
 - **The headless CLI.** 1.5 shipped a `GSCode.CLI` project. 2.0 does not, though the layering keeps
   it cheap to restore: the LSP dependency is isolated in the server project, so the parser and

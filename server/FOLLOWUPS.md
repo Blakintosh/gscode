@@ -208,13 +208,28 @@ right-hand side contains a `thread` call — a plain AST walk in `SPA/ScriptDiag
 lattice involved), and `DuplicateMacroDefinition`/`DuplicateMacroParameter` from 1.5's preprocessor,
 which are a 2xxx-band rule about directives.
 
-**This is not a story of a working feature being dropped.** By the end of 1.5 the surrounding analysis
-was largely switched off — `SPA/Logic/Analysers/Analysers.cs` was 398 of 399 non-blank lines commented,
-`AST/Expressions/OperatorData.cs` 913 of 926, `ExpressionAnalyzer.cs` 143 of 157 — and the parts still
-live carried their own noise admission: the `ArgumentTypeMismatch`/`Unverified` split exists precisely
-because the library's declared types could not be trusted enough for one severity. What was not carried
-over was an attempt that had already been half retired, and saying so is the honest version. The gap is
-still real, and nothing recorded it until now.
+**Correction — an earlier version of this entry said 1.5's analysis "was largely switched off", and
+that is wrong.** The commented-out files it cited are real: `SPA/Logic/Analysers/Analysers.cs` is 398
+of 399 non-blank lines commented, `AST/Expressions/OperatorData.cs` 913 of 926 (12 live lines, no type
+declared), `ExpressionAnalyzer.cs` 143 of 157. But those were a SUPERSEDED generation, not the live
+one, and the inference drawn from them was backwards. Checked against the tag:
+
+- `v1.5.0:server/GSCode.Parser/Script/Script.cs:315-321` constructs and runs `ControlFlowAnalyser`
+  then `DataFlowAnalyser` unconditionally, on every analysis, wrapped in nothing but `try`/`catch`.
+- The `Silent` flag that looks like a kill switch (`DFA/AnalysisFlags.cs:5`, defaulting `true`) is the
+  two-pass shape of a worklist fixpoint: `TypeFlowAnalyser.AnalyseFunction` sets it `true` while
+  iterating (`:104`) and flips it `false` at `:351` for a final emitting pass over every visited node.
+- The live operator implementation is `DFA/OperatorSemantics.cs`, raising `OperatorNotSupportedOnTypes`
+  at 20 sites and `DivisionByZero` at 2.
+- `GSCode.NET/LSP/Handlers/CodeActionHandler.cs` shipped quick fixes keyed off five of these codes
+  (`:70`, `:78`, `:86`, `:106`, `:134`), and `GSCode.Tests/ScrDataApiTypeTests.cs:149,181` is a
+  false-positive regression test for `OperatorNotSupportedOnTypes`.
+
+Zero of the twenty-one were switched off. Only `AssignOnThreadedFunction` was gated at all, and only
+to editor mode (`Script.cs:325`). What remains true is the narrower point: the parts still live carried
+their own noise admission, since the `ArgumentTypeMismatch`/`Unverified` split exists precisely because
+the library's declared types could not be trusted enough for one severity. `client/CHANGELOG.md`
+carried the same wrong claim and has been corrected with it.
 
 **What this tree already has to build on:**
 
@@ -252,6 +267,67 @@ still real, and nothing recorded it until now.
 
 Restoring the family AS a family is the one approach to rule out. It is what 1.5 did, and commenting the
 result out is what 1.5 then had to do about it.
+
+### What has since been restored, and what the attempt taught
+
+Eight of the twenty-one are back, all from the tier that needs no type information at all — the third
+step above, taken in order. `2017`/`2018` (the duplicate-macro pair), `5027` (a second `default:`),
+`5028` (reading the value of a threaded call, merging 1.5's `ConsumedThreadedCallResult` and
+`AssignOnThreadedFunction`, which were one mistake counted twice), `5029`/`5030` (the `const` pair),
+`5031` (a literal-zero divisor) and `5032` (a statement with no effect). Each was swept over the five
+corpora before being given a severity; all report zero on shipped code except `5028`, whose 172 are
+genuine instances of the pattern.
+
+Two of them only became sound because the sweep contradicted the obvious implementation, which is
+worth keeping:
+
+- `5030` collecting `const` names FILE-wide reported ten writes on BO3, every one an ordinary local in
+  a different function that shared the name (`_hud_message.gsc`'s `duration`,
+  `vehicle_death_shared.gsc`'s `max_angluar_vel`). The scope is per function.
+- `5032` reported nine statements across the five games and not one was a statement with no effect —
+  every one was recovery wreckage after a parse error, including the known `gib.gsc(58)` gap and
+  bo1's `= % o_full_interstitial_01_camera;`. It now stands down on a file the parser could not read.
+
+**`PredefinedFieldTypeMismatch` was written, measured and withdrawn**, which is the useful part. It
+needs no lattice — `FlowTyper` knows the assigned value's type and the object-field data states the
+field's — and it was built by exclusion (only combinations that cannot be right), scalar declared types
+only, `undefined` always allowed. It still reported **46 findings on BO3 and zero elsewhere, none of
+them real**, from two separate causes:
+
+1. **The object-field data is wrong for several fields.** `self.team = self.sessionteam;`
+   (`_globallogic_player.gsc:968`) reports because the data types `team` as `int` and `sessionteam` as
+   `string` — the two contradict each other and both hold team strings. `horzalign`/`vertalign` are
+   typed `int` and are assigned `"user_right"` throughout `hud_util_shared.gsc`; `combatmode` and
+   `type` are the same shape. Fixing the data is the prerequisite, and this list is the worklist.
+2. **A real bug in our own inference.** `NumericResult` (`FlowTyper.cs:847`) returns `Float` whenever
+   either side is `Float`, so `vector * 0.5` types as Float and `self.velocity = self.origin * 0.5`
+   reports. This is wrong for hover and inlay hints TODAY, independently of any lint — 1.5's
+   `OperatorSemantics` had it right, casting upward to vector when one side is numeric. Worth fixing
+   on its own; it needs the operator passed in, since `vector * vector` is not `vector + vector`.
+
+So the tier-3 warning above is now measured rather than predicted: a type rule fails on this data
+before it fails on the lattice.
+
+**Still not restored, and what each needs:**
+
+| Code | Blocker |
+|---|---|
+| `CannotUseAsIndexer`, `CannotEnumerateType`, `InvalidVectorComponent`, `ExpectedFunction` | `FlowTyper.TypeOf` does not descend into index expressions or vector components and returns Unknown for `IndexNode`, so there is no type at those positions to read. These need the compute/emit split of step 1 for real — an observer invoked during the walk, not a wider `TypeOf`. |
+| `StoreFunctionAsPointer` | Not a type question: it needs to know a bare identifier names a function, which is resolution. Its complication is that `UnassignedVariableLint` already reports that identifier as `5016`, so it must REPLACE that diagnostic rather than stack a second one on the same range. |
+| `PredefinedFieldTypeMismatch` | The two causes above. |
+| `CannotAssignToImmutableEntity` | Not expressible in the data. `ObjectField` carries a per-FIELD `ReadOnly` flag and an `EntityKind`, and nothing marks a kind immutable as a whole. |
+
+**Ruled out permanently**, with reasons, so they are not revisited as oversights:
+
+- `DoesNotContainMember` — unsound in GSC. Fields can be added to any entity or struct at runtime, so
+  "does not contain" is never knowable. 1.5 shipped it as an Error and needed a false-positive
+  regression test (`StringSizeAndBreakTests.cs:73`) to hold it back.
+- `OperatorNotSupportedOnTypes` and `NoImplicitConversionExists` — both need real unions. Under
+  `ScrType.Join` almost every operand pair reaches Unknown, so the rule is silent where it is safe and
+  wrong where it is not. GSC truthiness accepts nearly everything, which leaves the conversion rule no
+  sound core at all.
+- The type half of `UnreachableCase` — same collapse, on both the switch subject and each label. The
+  duplicate-label half already ships as `5017`, and the duplicate-`default:` half now as `5027`.
 
 ---
 

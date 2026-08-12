@@ -226,4 +226,19 @@ public enum GscDiagnosticCode
     /// has nothing to do with. It needs no types: a count per switch answers it.
     /// </summary>
     MultipleDefaultLabels = 5027,
+
+    /// <summary>
+    /// The value of a <c>thread</c> call used for something. A threaded call returns at the callee's
+    /// first <c>wait</c>, not at its <c>return</c>, so what the caller receives is whatever had been
+    /// reached by then — <c>undefined</c> for anything that waits at all.
+    ///
+    /// Worth a Warning rather than an Error precisely because it is not always wrong today: a
+    /// threaded function containing no wait runs to completion first, so the value is correct until
+    /// someone adds a wait to it and every caller starts reading undefined at once.
+    ///
+    /// 1.5 raised this and <c>AssignOnThreadedFunction</c> as two codes for one mistake; an
+    /// assignment satisfied both. This is the general question — an argument, a condition and a
+    /// return value all consume a value without being an assignment.
+    /// </summary>
+    ConsumedThreadedCallResult = 5028,
 }

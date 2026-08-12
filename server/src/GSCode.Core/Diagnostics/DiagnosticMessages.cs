@@ -127,6 +127,11 @@ public static class DiagnosticMessages
         // engine takes the first or the last -- and the answer decides whether this is a typo or
         // dead code they can delete.
         [GscDiagnosticCode.MultipleDefaultLabels] = "This switch already has a 'default' label; only the first one can ever be reached.",
+        // Says WHEN it breaks, not just that it is unreliable: a threaded call with no wait in it
+        // returns the right value today, so a reader told only "this is undefined" checks, sees a
+        // correct value, and dismisses the rule.
+        [GscDiagnosticCode.ConsumedThreadedCallResult] =
+            "A 'thread' call returns at the function's first 'wait', not at its 'return' — so this reads 'undefined' as soon as the thread waits.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

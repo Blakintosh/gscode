@@ -79,6 +79,18 @@ public sealed class Preprocessor
         private Provenance? _provenance;
 
         /// <summary>
+        /// The macro names this frame's own <c>#define</c>s have introduced, for
+        /// <see cref="GscDiagnosticCode.DuplicateMacroDefinition"/>.
+        ///
+        /// Per FRAME rather than per <see cref="MacroTable"/>, and that is the whole rule. Redefining
+        /// a macro across files is legal and deliberate — a header defines a default and the script
+        /// inserting it overrides — so the table's own "redefinition silently replaces" is correct and
+        /// must stay unreported. Two frames also exist for one header inserted twice, and scoping by
+        /// SourceFile instead would report every macro it defines on the second insert.
+        /// </summary>
+        public HashSet<string> DefinedNames { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
         /// The provenance every token from this frame carries, built once.
         ///
         /// It is a function of SourceFile and RootSite, both fixed for the frame's lifetime, so
@@ -293,10 +305,56 @@ public sealed class Preprocessor
             index++;
         }
 
+        ReportIfAlreadyDefined(frame, name, nameToken.Range);
+
         MacroDefinition definition = new(name, frame.SourceFile, nameToken.Range, parameters, [.. body], documentation);
         _macros.Define(definition);
         _recordingDefinitions?.Add(definition);
         return index;
+    }
+
+    /// <summary>
+    /// Reports a <c>#define</c> of a name something has already defined, at the LATER definition —
+    /// which is the one that takes effect, since the table is order-based and the last one wins.
+    ///
+    /// Two questions, because one of them cannot answer the other:
+    ///
+    /// - The frame's own set catches a name written twice in one file.
+    /// - The macro table catches a name already defined by a DIFFERENT file, which is the case that
+    ///   matters most in practice: a header defines it, the script inserting the header defines it
+    ///   again, and which body a call site expands to depends purely on which was seen last.
+    ///
+    /// The table alone would be wrong. A header whose contribution cannot be replayed from the cache
+    /// is walked again from scratch, and the table still holds what the previous walk put there — so
+    /// every <c>#define</c> in it would report itself as a redefinition of itself. Comparing the
+    /// source file is what separates "this directive, seen a second time" from "a second directive",
+    /// and only the frame's set can then still catch a genuine in-file duplicate on that second walk.
+    ///
+    /// NOT gated on the dialect. 2016 reports that a pre-BO3 game has no preprocessor and then
+    /// expands the macro anyway, so that suppressing it leaves a working file — the case that exists
+    /// for is a custom compiler which does accept macros. Gating this would make it Black Ops III's
+    /// alone, and that same user would lose it silently along with the 2016 they suppressed.
+    /// </summary>
+    private void ReportIfAlreadyDefined(FileFrame frame, string name, TextRange nameRange)
+    {
+        bool duplicateInThisFile = !frame.DefinedNames.Add(name);
+
+        bool duplicateFromAnotherFile = _macros.TryGet(name, out MacroDefinition earlier)
+            && !string.Equals(earlier.SourceFile, frame.SourceFile, StringComparison.OrdinalIgnoreCase);
+
+        if ( !duplicateInThisFile && !duplicateFromAnotherFile )
+        {
+            return;
+        }
+
+        // Naming where the earlier one lives is the whole value of the report: the reader's question
+        // is never "is this a duplicate" but "which body does my call site get", and the answer is
+        // the one written here — so the message has to identify the definition being replaced.
+        string origin = duplicateFromAnotherFile
+            ? $"'{earlier.SourceFile ?? _rootFilePath}'"
+            : "this file";
+
+        AddDiagnostic(frame, nameRange, GscDiagnosticCode.DuplicateMacroDefinition, name, origin);
     }
 
     private int ParseMacroParameters(FileFrame frame, int openParenIndex, string macroName, out ImmutableArray<string>? parameters)
@@ -321,7 +379,18 @@ public sealed class Preprocessor
 
             if ( IsMacroCandidate(current.Kind) )
             {
-                names.Add(_names.Intern(current.GetText(frame.Text)));
+                string parameterName = _names.Intern(current.GetText(frame.Text));
+
+                // Unlike a duplicate DEFINITION, this has no reading under which the author got what
+                // they wanted: the second parameter can never be bound, so every argument passed for
+                // it is discarded. Reported and then added anyway, so the arity the call sites are
+                // judged against still matches what was written.
+                if ( names.Contains(parameterName) )
+                {
+                    AddDiagnostic(frame, current.Range, GscDiagnosticCode.DuplicateMacroParameter, parameterName, macroName);
+                }
+
+                names.Add(parameterName);
             }
 
             // Commas, whitespace, and anything unexpected are simply stepped over.

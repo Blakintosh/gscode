@@ -35,6 +35,12 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.InsertNotAHeader] = "'{0}' is not a header; '#insert' expects a '{1}' file.",
         [GscDiagnosticCode.WrongMacroArgumentCount] = "Macro '{0}' takes {1} argument(s) but {2} were passed.",
 
+        // Names WHERE the earlier definition is, because the reader's question is never "is this a
+        // duplicate" but "which body does my call site expand to" -- and the answer is order, which
+        // the source does not show when the two definitions are in different files.
+        [GscDiagnosticCode.DuplicateMacroDefinition] = "'{0}' is already defined in {1}; this definition is seen later and replaces it.",
+        [GscDiagnosticCode.DuplicateMacroParameter] = "Macro '{1}' already has a parameter named '{0}'; arguments passed for this one are discarded.",
+
         // Names the game, because the fix is either "use a file-scope constant" or "you picked the
         // wrong game", and which one it is depends on something the message cannot see.
         [GscDiagnosticCode.MacrosNotInDialect] =

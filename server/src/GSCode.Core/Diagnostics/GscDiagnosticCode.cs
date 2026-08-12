@@ -44,6 +44,24 @@ public enum GscDiagnosticCode
     /// </summary>
     MacrosNotInDialect = 2016,
 
+    /// <summary>
+    /// A <c>#define</c> of a name something has already defined — twice in one file, or once in an
+    /// inserted header and again in the script that inserts it.
+    ///
+    /// Reported at the LATER definition, because that is the one that takes effect: the macro table
+    /// is order-based and the last definition seen wins. Which body a call site expands to therefore
+    /// depends on insert order, and nothing at the call site shows it, so the message names the file
+    /// holding the definition being replaced.
+    /// </summary>
+    DuplicateMacroDefinition = 2017,
+
+    /// <summary>
+    /// A parameter name repeated on one <c>#define</c>. The counterpart of
+    /// <see cref="DuplicateParameter"/> for macros, and unambiguous for the same reason: only one of
+    /// the two can ever be substituted, so every argument passed for the other is discarded.
+    /// </summary>
+    DuplicateMacroParameter = 2018,
+
     // Parsing (3xxx)
     ExpectedToken = 3000,
     ExpectedDeclaration = 3001,

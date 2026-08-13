@@ -151,9 +151,13 @@ reasoning sits on `InspectBuiltin`; this is the entry `ARCHITECTURE.md` points a
 **The data has since grown the marker the check needs.** A parameter's type is structured in the
 bundled JSON (`"type": { "dataType": …, "isArray": … }`) and `vararg` is one of its spellings — 34 of
 BO3's 2,191 GSC entries carry it and 15 of its 803 CSC ones, both names above among them.
-`ApiLoader.FormatType` flattens the structure to display text on load, so nothing can read it today:
-`BuiltinParameter.TypeText` reaches only `MarkdownDocRenderer` and one `"bool"` string compare in
-`PreferBooleanLiteralLint`.
+
+**Step 1 below is now done** (corrected 2026-08-12; this entry said the marker was still being lost
+in `FormatType`, and it is not). `ApiLoader` passes `IsVararg(parameter.Type)` into
+`BuiltinParameter.IsVariadic`, and alongside it `ParseType` puts the declared type on the lattice as
+`BuiltinParameter.Types`. Neither has a production reader: `IsVariadic` is read only by
+`ApiTypeParsingTests`, `Types` by nothing at all, and `ArgumentCountLint` still consults only
+`Mandatory`. So the remaining work is steps 2 and 3 — the per-game measurement — not the carrying.
 
 **Carrying the marker is the easy half; coverage is the whole problem.** The bound is only worth
 having where `HasReliableBuiltinSignatures` holds, which is CoD4 and BO3 — and CoD4's 819 entries
@@ -362,6 +366,33 @@ detail because the two causes are different traps:
 | `StoreFunctionAsPointer` | Not a type question: it needs to know a bare identifier names a function, which is resolution. Its complication is that `UnassignedVariableLint` already reports that identifier as `5016`, so it must REPLACE that diagnostic rather than stack a second one on the same range. |
 | `PredefinedFieldTypeMismatch` | The two causes above. |
 | `CannotAssignToImmutableEntity` | Not expressible in the data. `ObjectField` carries a per-FIELD `ReadOnly` flag and an `EntityKind`, and nothing marks a kind immutable as a whole. |
+| `ArgumentTypeMismatch` / `…Unverified` | Not the plumbing — a corpus sweep. See below; this pair had no row here at all until 2026-08-12. |
+
+**`ArgumentTypeMismatch` is the one of the twenty-one that went unaccounted for**, listed in the
+family table at the top and named in neither this table nor the ruled-out list. That was an
+oversight rather than a decision, and it matters because the pair is the piece the lattice most
+directly enables — checking a call's arguments against the library's declared parameter types.
+
+Its plumbing is already finished, which is the surprising part:
+
+- `BuiltinParameter.Types` is the declared type **already parsed onto `ScrTypeSet` at load**, once
+  per entry rather than re-switched per call. Nothing in the tree reads it — not one production
+  caller, not one test. It exists solely for this rule.
+- `BuiltinFunction.Confidence` is loaded and carries `high`/`medium`/`low` (1,291 / 684 / 80 on
+  BO3's GSC library). That is precisely where the `Unverified` twin's severity split comes from, and
+  the reason 1.5 needed a whole second CODE is that it had nowhere to put the distinction. We do.
+- `FlowTyper` already reads `Confidence` for `ScrImprecision.BuiltinUnverified` and already reads
+  `ReturnTypes`, so both halves of the pattern are in service elsewhere.
+
+So the blocker is step 2 of `add-diagnostic`, not step 1: **measure it over the five corpora before
+it is given a severity, and read the top reported NAMES rather than the count.** Treat a high count
+as a library defect until proven otherwise. Every precedent points that way — the mandatory-COUNT
+check alone reported 141, 280 and 157 findings on CoD4, WaW and BO1 purely from library errors, the
+builtin upper bound 634 on BO3, `PredefinedFieldTypeMismatch` 46 and `OperatorNotSupportedOnTypes`
+752, and in all five cases the inference was right and the data was wrong. A type check leans on
+that data harder than a count does, so this rule is the most likely of the family to end the same
+way. Ship it per game only where the remainder is zero, the way `HasReliableBuiltinSignatures` was
+earned.
 
 **Ruled out permanently**, with reasons, so they are not revisited as oversights:
 

@@ -242,18 +242,31 @@ carried the same wrong claim and has been corrected with it.
 
 **What this tree already has to build on:**
 
-- `Typing/FlowTyper.cs` (910 lines) — a forward per-function walk that types assignments from literals,
-  arithmetic, globals and builtin return types, over `ScrType`, a 12-value FLAT enum with a `Join`.
-  It already feeds hover, inlay hints, `PreferBooleanLiteralLint` (5002) and `ReadOnlyWriteLint`
-  (5004/5005), so it is not true that it produces nothing — what produces nothing is UNCERTAINTY:
-  `ScrType`'s own summary states that `Unknown` never yields a hint or diagnostic, and `Join`
-  collapses any disagreement to `Unknown` rather than guess a union. Against 1.5 what is missing is
-  unions, constant values, entity subtypes, and an environment retained per position.
-- The API data. Every bundled library states each parameter's and return's type, unused for checking:
-  BO3's GSC file alone has 2,191 entries and, across parameters and returns, 25 distinct `dataType`
-  spellings — ten of them unions such as `"int | string"`, so mapping the data onto `ScrType` is
-  itself a decision and not a line of code. `VoidResultLint` (5019) is the standing proof that a rule
-  can be driven off this data without a lattice at all.
+**Correction — this bullet described the state before the lattice landed, and was left standing after
+it did.** It said `FlowTyper` was 910 lines over a flat `ScrType`, and that against 1.5 the tree was
+missing unions, constant values, entity subtypes and an environment retained per position. All four
+of those exist now, and the entry below on step 1 contradicted this one for weeks rather than editing
+it. That is the failure mode this file keeps producing: a reader arriving here first gets the old
+picture and no signal to keep reading. What follows is the current state.
+
+- `Typing/FlowTyper.cs` (1,285 lines) — a forward per-function walk that types assignments from
+  literals, arithmetic, globals and builtin return types. It carries `ScrValue` internally and
+  projects to `ScrType` at its public boundary, so hover, inlay hints, `PreferBooleanLiteralLint`
+  (5002) and `ReadOnlyWriteLint` (5004/5005) still read the flat 12-value enum and were untouched by
+  the change. What produces nothing is still UNCERTAINTY, but the reason moved down a layer:
+  `ScrType.Join` collapses any disagreement to `Unknown` because it is a PROJECTION of a union, not
+  because no union was computed.
+- The four gaps against 1.5 are closed. Unions are `ScrTypeSet`'s disjoint bits with `ScrValue.Union`;
+  constant values are `ScrConstant`; entity subtypes are `ScrValue.EntityKinds`, unioned at joins;
+  and the per-position environment is `InferValues` returning a `ScriptTypes` node map, with
+  `FlowTyper.TryGetValueAt(result, position, out ScrValue)` for a single query. `ScrValue` goes
+  further than 1.5 did in one respect it did not ask for — every imprecision carries a REASON.
+- The API data is on the lattice too. `ApiLoader.ParseType` maps each parameter's and return's
+  declared type onto `ScrTypeSet` once at load, including the pipe-separated unions (`"int | string"`)
+  and `number`, and `ApiLoader.ParseConfidence` keeps the per-entry `high`/`medium`/`low`.
+  `FlowTyper` reads the return types and the confidence; **nothing reads the parameter types**, which
+  is `ArgumentTypeMismatch`'s row in the table below. `VoidResultLint` (5019) remains the standing
+  proof that a rule can be driven off this data without a lattice at all.
 
 **The route back, and the order it has to go in:**
 

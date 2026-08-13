@@ -360,8 +360,14 @@ that chose it. These are the pieces that implement it:
   no symbol knowledge of its own and cannot tell a builtin from a script function.
 - `ClearCacheHandler` — drains the cache and deletes only THIS workspace's database, server-side
   where the paths are known.
-- `DependentDiagnosticsRefresher` — debounced re-linting of other open documents when an edited
-  file's exported cross-file signature changes, reusing their cached parse instead of reparsing.
+- `DependentDiagnosticsRefresher` — debounced re-linting of open documents when the world under them
+  moves, reusing their cached parse instead of reparsing. Three callers, and the second and third
+  pass no origin because the event belongs to no open document: an edit that changes a file's
+  exported cross-file signature (`TextSyncHandler`), a change arriving on disk behind the editor's
+  back (`WatchedFilesHandler`), and the completion of the initial index (`Program.cs`). The last is
+  not optional — a tab restored with the window is opened during initialize, so its `didOpen` linted
+  it against a half-built index and the codes gated on `HasCompletedIndex` (5013/5014/5025/5026)
+  were silent until it was closed and reopened.
 - `PrepareRenameHandler` — validates a rename before the UI opens: the symbol's range for anything
   the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
   the editor says "cannot rename here" instead of prompting and then failing. Shares
@@ -369,7 +375,9 @@ that chose it. These are the pieces that implement it:
 - `ServerStatusNotifier` — keeps the status-bar tooltip's memory figure current. It was previously
   set once from the `gscode/indexingComplete` payload and never updated again.
 - `WorkspaceDiagnosticsPublisher` — publishes problems for files that are not open, per
-  `gscode.diagnostics.scope`.
+  `gscode.diagnostics.scope`. It skips open documents deliberately, since `TextSyncHandler` owns
+  those and publishes a richer set for them — which is why every caller of its `Refresh()` has to
+  pair it with `DependentDiagnosticsRefresher.Schedule()` to cover the other half.
 
 ## .editorconfig
 

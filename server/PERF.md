@@ -230,6 +230,31 @@ At 66–74% of requests returning over 500 entries (median 847–1,404), the sam
 arm. A sweep that quietly hit cheap arms would report fast completions and have measured nothing,
 which is the partial-index failure above arriving by a different route.
 
+### 2026-08-12: the list grew by two thirds and the timings did not move
+
+Statement scope gained the enclosing function's parameters and locals, the enclosing class's `var`
+members, and every macro an `#insert`ed header supplies — the last of which had been filtered out.
+Measured as a BEFORE/AFTER PAIR in one session on one machine, which is the only way this reads:
+the absolute numbers in the table above were taken elsewhere and are not comparable to these.
+
+| | entries median | entries max | p99 |
+|---|---:|---:|---:|
+| bo3 before | 1,168 | 5,059 | 6.01 ms |
+| bo3 after | **1,930** | **5,937** | 6.03 ms |
+| cod4 before | 847 | 2,580 | 1.28 ms |
+| cod4 after | 847 | 2,592 | 1.41 ms |
+
+**A 65% larger list for 0.02 ms at the tail.** The added work is per-request bounded — one walk of
+the enclosing declaration's parameters and assignments, one inheritance walk for members, and a
+table the preprocessor had already built — while the cost this path is made of is the per-namespace
+store walk above, which did not change.
+
+CoD4 is flat because the two dialects gain different things: a merge dialect has no `#insert`, so
+the macro half is empty, and its scripts assign through `level.` rather than to locals — three
+sampled functions in `animscripts\battlechatter.gsc` declare 12, 15 and 7 assignments and only 1, 1
+and 2 of them are locals. Two entries per request is not a measurement. That the numbers barely
+moved there is the expected answer, not a sign the feature is missing on that dialect.
+
 ## Measured: COLD INDEXING, the first-run path
 
 `CorpusPerfTests.ColdIndex_WhereTheTimeGoes` times `IndexAsync` with **no cache attached**, so every

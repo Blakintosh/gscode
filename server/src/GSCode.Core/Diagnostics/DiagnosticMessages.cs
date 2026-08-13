@@ -142,6 +142,8 @@ public static class DiagnosticMessages
         // that the line does nothing -- what they need is the reason it ended up that way.
         [GscDiagnosticCode.InvalidExpressionStatement] =
             "This statement computes a value and discards it, so it has no effect — a missing '=' or a call missing its '()'.",
+        [GscDiagnosticCode.CannotEnumerateType] = "'foreach' needs an array or a struct, but this is {0}.",
+        [GscDiagnosticCode.InvalidVectorComponent] = "A vector component must be a number, but this is {0}.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

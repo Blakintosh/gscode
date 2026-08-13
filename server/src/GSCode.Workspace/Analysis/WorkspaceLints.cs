@@ -171,6 +171,9 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.PreferBooleanLiteralLint");
         lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins, objectFields, typer));
         PerfTracker.End();
+        PerfTracker.Begin("lint.TypeMismatchLint");
+        lints.AddRange(TypeMismatchLint.Analyze(result, typer));
+        PerfTracker.End();
         PerfTracker.Begin("lint.PrivateAccessLint");
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
         PerfTracker.End();

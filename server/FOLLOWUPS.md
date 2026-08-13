@@ -337,11 +337,28 @@ them real**, from two separate causes:
 So the tier-3 warning above is now measured rather than predicted: a type rule fails on this data
 before it fails on the lattice.
 
+**`CannotEnumerateType` (5033) and `InvalidVectorComponent` (5034) are now restored**, which is what the
+union lattice bought. Both report zero across all five corpora and both carry controls that must fire,
+since a rule that is silent everywhere is indistinguishable from one that does not work.
+
+**`OperatorNotSupportedOnTypes` was written alongside them, measured and withdrawn** at 752 findings
+on code that ships and works — the same ending as `PredefinedFieldTypeMismatch`, and worth the same
+detail because the two causes are different traps:
+
+1. The guard tested `ScrValue.IsUnknown`, which is exact equality with the universe. A value narrowed
+   by `isdefined` is the universe MINUS undefined, so it is no longer "unknown" by that test while
+   still knowing nothing. Any future rule guarding on `IsUnknown` has this hole.
+2. `vector + scalar` reports as unsupported and appears throughout the stock scripts. The operator
+   table is stricter than the engine, so the table itself is not yet a sound basis for a diagnostic
+   even though it is a fine basis for TYPING. Fixing the rule cannot fix that; the table has to be
+   corrected against the corpus first, and nothing establishes what the engine actually does here.
+
 **Still not restored, and what each needs:**
 
 | Code | Blocker |
 |---|---|
-| `CannotUseAsIndexer`, `CannotEnumerateType`, `InvalidVectorComponent`, `ExpectedFunction` | `FlowTyper.TypeOf` does not descend into index expressions or vector components and returns Unknown for `IndexNode`, so there is no type at those positions to read. These need the compute/emit split of step 1 for real — an observer invoked during the walk, not a wider `TypeOf`. |
+| `CannotUseAsIndexer` | `FlowTyper.TypeOf` returns a value for an `IndexNode` without typing the index EXPRESSION, so there is nothing to judge. Additive, but its own change. |
+| `ExpectedFunction` | Needs `[[ x ]]()` to resolve what `x` holds. The lattice can say Function; what is missing is that nothing types a pointer dereference's operand. |
 | `StoreFunctionAsPointer` | Not a type question: it needs to know a bare identifier names a function, which is resolution. Its complication is that `UnassignedVariableLint` already reports that identifier as `5016`, so it must REPLACE that diagnostic rather than stack a second one on the same range. |
 | `PredefinedFieldTypeMismatch` | The two causes above. |
 | `CannotAssignToImmutableEntity` | Not expressible in the data. `ObjectField` carries a per-FIELD `ReadOnly` flag and an `EntityKind`, and nothing marks a kind immutable as a whole. |
@@ -351,11 +368,13 @@ before it fails on the lattice.
 - `DoesNotContainMember` — unsound in GSC. Fields can be added to any entity or struct at runtime, so
   "does not contain" is never knowable. 1.5 shipped it as an Error and needed a false-positive
   regression test (`StringSizeAndBreakTests.cs:73`) to hold it back.
-- `OperatorNotSupportedOnTypes` and `NoImplicitConversionExists` — both need real unions. Under
-  `ScrType.Join` almost every operand pair reaches Unknown, so the rule is silent where it is safe and
-  wrong where it is not. GSC truthiness accepts nearly everything, which leaves the conversion rule no
-  sound core at all.
-- The type half of `UnreachableCase` — same collapse, on both the switch subject and each label. The
+- `NoImplicitConversionExists` — GSC truthiness accepts nearly everything, so the broad form has no
+  sound core to narrow down to. Unions did not change that: the problem was never the lattice.
+- `OperatorNotSupportedOnTypes` — written against the union lattice, measured at 752 findings on
+  shipped code, withdrawn. See the entry above for the two causes; the second of them says the
+  operator table is stricter than the engine, which is a data problem rather than a rule problem.
+- The type half of `UnreachableCase` — needs the switch subject and every label typed exactly, and a
+  label is usually a macro or a bare literal while the subject is usually a parameter. The
   duplicate-label half already ships as `5017`, and the duplicate-`default:` half now as `5027`.
 
 ---

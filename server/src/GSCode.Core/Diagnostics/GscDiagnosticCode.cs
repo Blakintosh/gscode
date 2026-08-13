@@ -267,4 +267,13 @@ public enum GscDiagnosticCode
     /// <c>x == 1;</c>. Usually a missing <c>=</c> or a call that lost its parentheses.
     /// </summary>
     InvalidExpressionStatement = 5032,
+
+    /// <summary>
+    /// <c>foreach</c> over a value that is certainly a scalar. Structs are excluded — the engine
+    /// enumerates one — so this is only the int/float/bool/string/vector case.
+    /// </summary>
+    CannotEnumerateType = 5033,
+
+    /// <summary>A vector component that cannot be a number.</summary>
+    InvalidVectorComponent = 5034,
 }

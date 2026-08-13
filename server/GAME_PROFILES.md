@@ -187,8 +187,25 @@ in the corpus are strings and comments).
 
 `///` = the pre-BO3 form, `///ScriptDocBegin` / `///ScriptDocEnd` lines inside an ordinary `/* */`
 comment (not `/# #/`, which is a dev block). BO3 uses `/@ … @/`. Hash strings and `.csc` are Treyarch
-features — hence BO1 and BO3 have them and the Infinity Ward line has none. BO3 passes arrays **by
-reference only**; earlier games copy by value, which changes aliasing analysis, not syntax.
+features — hence BO1 and BO3 have them and the Infinity Ward line has none.
+
+**Arrays are the only kind whose pass semantics fork.** BO3 passes arrays by reference; earlier games
+copy them by value, so a callee that mutates an array parameter is doing something different after a
+translation in either direction. Everything else that aliases, aliases in *every* game:
+
+| kind | passed as | differs by dialect? |
+|---|---|---|
+| entity — a player, or `ent = Spawn( "script_model" )` | reference | no |
+| struct — `spawnstruct()`, and BO3's `new Foo()` | reference | no |
+| **array** | **reference on BO3, copy before it** | **yes — the only one** |
+| int, float, bool, string, istring, hash, vector, undefined | value | no |
+
+Worth stating both halves, because "arrays copy" invites the assumption that structs copy too, and
+they do not — `spawnstruct` is used in all five corpora (cod4 117 files, waw 173, mw2 190, bo1 363,
+bo3 177), so both kinds sit side by side in real code. This changes aliasing analysis, not syntax:
+telling an array from a struct is what a rewriter has to get right, and it is why
+`Workspace/Typing` grew a union lattice that can answer "must this be an array" separately from
+"might it be".
 
 `HasMacros` and `HasHeaders` coincide today and are still separate flags, because they are separate
 claims: a header IS macros, but a dialect could define them in-file with nowhere to put them. What

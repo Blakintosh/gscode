@@ -531,6 +531,35 @@ in-process, while the server indexes cold at `ProcessorCount - 1`:
 4. For the steady-state working set, hover the status bar once the process settles. That is the only
    readout — it is pushed as a notification, not logged.
 
+## Measured: the type lattice, and why its 112-byte value was left alone
+
+`ScrValue` replaced a 4-byte `ScrType` as the flow typer's environment value. Measured with
+`Unsafe.SizeOf`: **`ScrValue` is 112 bytes**, of which `ScrConstant` is 64 and the `Vec3` inside
+that is 24. Twenty-eight times the enum it replaced, in dictionaries that are CLONED per if-arm,
+per loop body, per switch case group and per dev block.
+
+That looks alarming and is not, which is the point of writing it down rather than acting on it.
+`WorkspaceLints_WhereTheTimeGoes` over BO3's 980 files, one test invocation each so the warm-up
+state matches:
+
+| | BO3, 980 files | median | P99 |
+|---|---:|---:|---:|
+| before the type work (`f5896493`) | 2,528 ms | 0.697 ms | 34.7 ms |
+| after it, with five more lint rules | 2,811 ms | 0.664 ms | 36.7 ms |
+
+**+11% in total for five additional rules AND the lattice, with the median slightly BETTER.** The
+environments are short-lived gen-0 garbage rather than anything retained, so the size shows up as
+allocation churn and not as the steady-state footprint the 400 MB budget covers.
+
+The obvious shrink is available if it is ever wanted — the payloads are mutually exclusive, so
+`long`, `double`, `bool` and `Vec3` could share one 24-byte union under an explicit layout and take
+`ScrConstant` from 64 to about 40. It is not done because explicit layout beside a GC reference is a
+known footgun and the measurement says there is nothing to buy. Re-measure before reaching for it.
+
+Note the invocation mode matters more than the change did: the same test reports 1,595 ms inside a
+full `Category=Perf` run and 2,811 ms run alone, because the suite warms the process first. Compare
+like with like or the noise swamps the signal.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

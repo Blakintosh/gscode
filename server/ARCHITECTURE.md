@@ -68,8 +68,13 @@ whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.
   remove-duplicate and add-missing `#using`, add-missing `#include` (5026), and the pair offered for
   a call that resolved to nothing (5013/5014): declare the function here, or import and qualify it.
 
-Type inference is `Workspace/Typing/FlowTyper`, a small per-function forward type-flow pass over
-the `ScrType` lattice, seeded with engine object-field types; it feeds inlay hints and hovers.
+Type inference is `Workspace/Typing/FlowTyper`, a small per-function forward type-flow pass seeded
+with engine object-field types; it feeds inlay hints, hovers and two lints. It carries `ScrValue`
+(`Core/Symbols`) — a union lattice with constant folding, entity kinds and a reason attached to every
+imprecision — and projects onto the coarse `ScrType` at its public boundary, so those consumers see
+what they always saw. The richer value is reached through `InferValues`, and exists for a future
+dialect-to-dialect transpiler: a lint may stay silent on an unknown, a rewriter has to emit something
+anyway and needs to know why it does not know.
 
 ## The client (`client/`)
 

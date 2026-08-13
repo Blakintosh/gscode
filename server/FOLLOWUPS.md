@@ -186,9 +186,14 @@ parsing, extraction, resolution and arity, across five dialects rather than one 
 coherent family rather than a scatter. 1.5 ran an abstract-interpretation pass — `CFA/ControlFlowAnalyser`
 built a CFG and `DFA/TypeFlowAnalyser` (3,166 lines across three partials; the `DFA/` and `CFA/` folders
 together ~290 KB with `ScrData`, `ScrEntity` and `OperatorSemantics`) walked it over a 17-BIT FLAG
-lattice with real unions (`Int = 1 << 1 | Bool`, `Number = Int | Float`), constant-value tracking and
-entity subtypes. Seventeen codes came out of it that nothing here raises, plus the type half of an
-eighteenth:
+lattice with real unions (`Int = 1 << 1 | Bool`, `Number = Int | Float`) and entity subtypes.
+Seventeen codes came out of it that nothing here raises, plus the type half of an eighteenth:
+
+**Correction — this entry used to credit 1.5 with "constant-value tracking" as well. It had none.**
+`ScrData` carried exactly one value-level fact, `bool? BooleanValue`; every arithmetic operator
+returned a fresh valueless type, and its divide-by-zero check tested `right.BooleanValue == false` —
+falsiness standing in for zero, which misses `2 - 2` and fires on `x / ""`. Constant folding was a
+from-scratch build here, not a port.
 
 | family | 1.5 codes |
 |---|---|
@@ -268,6 +273,30 @@ carried the same wrong claim and has been corrected with it.
 Restoring the family AS a family is the one approach to rule out. It is what 1.5 did, and commenting the
 result out is what 1.5 then had to do about it.
 
+### Step 1 is done — the lattice exists, and nothing raises a diagnostic off it
+
+Built as infrastructure for a future dialect-to-dialect transpiler rather than for a rule, which is
+why it went in despite the family above staying shut. `ScrValue` (Core/Symbols) is a union lattice
+with disjoint bits, constant values, tri-state truthiness, entity kinds and — the piece no linter
+would have asked for — a REASON attached to every imprecision. `ScrOperators` is the operator table.
+`FlowTyper` carries it and projects to `ScrType` at its public boundary, so hover, inlay hints and
+the two typing lints are untouched and every one of the 42 typing tests passed unedited.
+
+What that bought, none of it surfaced to a user:
+
+- The `NumericResult` bug above is fixed. `vector * 0.5` types as a vector.
+- Builtins can produce an array. `isArray` was dropped by the loader, so `ScrType.Array` was never
+  once produced by a call — the engine was confident about structs and entities, which are the SAFE
+  kinds, and silent on arrays, the only unsafe one.
+- `number` (349 declarations on BO3's GSC library) and pipe-separated unions (`"int | string"`) now
+  parse, and `confidence` survives loading — which is where `ArgumentTypeMismatchUnverified` would
+  get its severity split from, if that pair is ever restored.
+- `InferValues` gives a per-node map and `ImprecisionHistogram` a coverage count by reason, so "how
+  much of a file can be translated" is measurable rather than guessed.
+
+Two things it did NOT change, deliberately: no new diagnostic, and no movement in the corpus. Every
+sweep across the five games reported identical counts before and after.
+
 ### What has since been restored, and what the attempt taught
 
 Eight of the twenty-one are back, all from the tier that needs no type information at all — the third
@@ -336,28 +365,20 @@ before it fails on the lattice.
 Recorded because each was a deliberate stopping point, not an oversight. P0, P1 and the
 hover/doc half of P2 are done; the remaining items below are the decisions still worth making.
 
-### Type hover across branches reports the last arm, not the join
+### Parameters still get no inferred type
 
-`FlowTyper.TryGetLocalTypeAt` now takes the last assignment at or before the cursor, which is
-exact for straight-line code and fixed the reported "reassigned variable still says int" bug.
-Across `if`/`else` it reports whichever arm is written last rather than `Join` of both:
+Only locals with a typed assignment are covered. A parameter has no assignment to read, so the
+environment seeds it as unknown carrying `ScrImprecision.UntypedParameter` — which names the gap
+rather than closing it.
 
-```gsc
-if ( c ) { x = 1; } else { x = "s"; }
-use( x );   // reports string; the truth is int|string
-```
+Closing it means reading the ARGUMENTS at every call site of a function and unioning them, which
+leaves per-function scope and so needs the workspace index and the `HasCompletedIndex` gate the
+resolution lints use. It is the one piece a dialect transpiler genuinely blocks on: whether an array
+parameter is mutated by its callee is the only behavioural difference between BO3 and the earlier
+games, and nothing can answer "is this parameter an array" without it.
 
-The join machinery exists (`ScrType.Join`, already wired into the walk) but the walk does not
-retain its environment per position, so the hover has nothing to sample. Fixing it properly
-means recording the environment at statement boundaries — worth doing only if the wrong answer
-here turns out to bite in practice, since both the old and new behaviour are wrong in this case
-and the new one is right far more often.
-
-### Parameters and fields still get no inferred type on hover
-
-Only locals with a typed assignment are covered. A parameter has no assignment to read, and
-`self.foo` shows the engine's field data but never an inferred type. Both are additive on top
-of the current lookup.
+The field half of this entry is done: `HoverHandler.InferredFieldType` reports an inferred type for
+a field the scripts invented, and `ScrValue` carries the reason when it cannot.
 
 ### `#using` is treated as non-transitive for class completion
 

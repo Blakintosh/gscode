@@ -370,7 +370,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Analysis/ReadOnlyWriteLint.cs
 
-- `static ReadOnlyWriteLint.Analyze(result, objectFields)` — reports writes to `.size` (Error;
+- `static ReadOnlyWriteLint.Analyze(result, objectFields, typer)` — reports writes to `.size` (Error;
   a language-spec fact) and to engine fields the curated data marks read-only (Warning, since
   that data can carry mistakes). Assignments including compound forms and `++`/`--` all count
   as writes. A field is only flagged when EVERY entity kind declaring the name agrees it is
@@ -492,28 +492,41 @@ reported as an Error must never land on code that ships and works.
 
 ## Typing/FlowTyper.cs
 
-- `readonly record struct InferredAssignment(NameRange, Type, Name)` — the inferred `ScrType`
-  of a local at its assignment site (with its display-case name), consumed by the inlay-hint
-  handler and the hover lookup.
+- `readonly record struct InferredAssignment(NameRange, Type, Name, IsFirstForName, IsField)` — the
+  inferred `ScrType` of a local or field at ONE assignment site. Every typed assignment is recorded
+  and each consumer filters: inlay hints take `IsFirstForName` only, hover takes them all so it can
+  report the type as of the cursor. `IsField` separates `self.count = 1` from a local of the same
+  name.
 - `readonly record struct LocalTypeHover(Name, Range, Type)` — the inferred type of the local
   identifier under a cursor, consumed by hover.
+- `readonly record struct FieldWrite(NameRange, FieldName, OwnerType, Value)` — one `owner.field = …`
+  write with the owner's inferred type at that point, consumed by `ReadOnlyWriteLint` and
+  `PreferBooleanLiteralLint`. `Value` is null for a compound write or `++`/`--`, which have no single
+  assigned value.
 - `sealed class FlowTyper` — a deliberately-small forward type-flow pass, per function.
   `InferAssignments(ParseResult)` walks each function/method body with a per-function
-  local environment (`name → ScrType`), recording the FIRST assignment of each local that
-  resolves to a concrete type; later assignments update the environment but never add a
-  second hint. `TryGetLocalTypeAt(result, position)` finds the innermost identifier under a
-  cursor and its enclosing function (via `AstSearch.ChainAt`) and returns the local's inferred
-  type when one exists — so a hover always agrees with the inlay hint at the assignment.
+  local environment (`name → ScrValue`), recording every assignment that resolves to a concrete
+  type. `TryGetLocalTypeAt(result, position)` finds the innermost identifier under a
+  cursor and its enclosing function (via `AstSearch.TryFindLocalContext`) and returns the local's
+  inferred type when one exists — so a hover always agrees with the inlay hint at the assignment.
   `TypeOf` types literals, parenthesised/vector/array/`new` expressions,
   identifiers (earlier locals, then the globals `self`/`level`/`world`/`anim`/`game`),
-  prefix ops (`!`→bool, `&`→function, `~`→int, `-`→numeric), binary ops (comparisons and
-  logicals→bool, `+` string-concatenation vs numeric widening, shifts/bitwise→int),
-  builtin call return types via `MapReturnType`, and field access `owner.field` (`.size`→int;
-  else the engine object-field data seeds a type, but only when every entity kind declaring
-  the field name agrees — the owner's kind isn't inferred). Anything uncertain stays `Unknown`
-  and produces no hint — the zero-false-positive rule. Script-function return inference is out
-  of scope (their bodies aren't re-typed here). Constructed with the per-language `BuiltinApi`
-  and the shared `ObjectFields`.
+  prefix and binary operators via `ScrOperators`, builtin call return types unioned across every
+  overload, and field access `owner.field` (`.size`→int; else the engine object-field data seeds a
+  type, but only when every entity kind declaring the field name agrees — the owner's kind isn't
+  inferred). Anything uncertain stays unknown and produces no hint — the zero-false-positive rule.
+  Script-function return inference is out of scope (their bodies aren't re-typed here). Constructed
+  with the per-language `BuiltinApi` and the shared `ObjectFields`.
+- **The environment holds `ScrValue`, not `ScrType`.** Everything above describes what the editor
+  sees, which is the coarse `ScrType` projection at the public boundary. Underneath, the walk carries
+  unions (`int|string` where the projection says Unknown), folded constants, entity kinds and a
+  REASON for every imprecision. That exists for a future dialect-to-dialect transpiler, which unlike
+  a lint must emit something for every expression and so needs to know WHY a type is unknown.
+- `ScriptTypes` + `FlowTyper.InferValues(result)` — the transpiler-facing surface: the value of every
+  expression the walk touched, keyed by node REFERENCE (AST nodes are records, so structural equality
+  would make the three zeroes in `( 0, 0, 0 )` one key). `TryGetValueAt` is the position query that
+  returns the union rather than the label. `ImprecisionHistogram()` counts expressions by reason,
+  which is the coverage number a rewriter is budgeted against.
 
 ## Api/
 

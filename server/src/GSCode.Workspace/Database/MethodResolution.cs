@@ -14,6 +14,9 @@ namespace GSCode.Workspace.Database;
 /// </summary>
 public sealed record ClassMethod(FunctionSymbol Method, ClassSymbol OwnerClass, ScriptRecord? Record);
 
+/// <summary>One <c>var</c> member reachable on a class, with the class that declares it.</summary>
+public sealed record ClassMember(MemberSymbol Member, ClassSymbol OwnerClass);
+
 /// <summary>
 /// Maps the key a call SITE was written with onto the key its DEFINITION uses.
 ///
@@ -285,6 +288,61 @@ public static class MethodResolution
                 // declaration of a name seen is the one that wins — which is what makes an override
                 // shadow the method it overrides instead of being offered beside it.
                 byName.TryAdd(method.KeyName, new ClassMethod(method, resolved, record));
+            }
+
+            current = resolved.ParentKeyName;
+        }
+
+        return [.. byName.Values];
+    }
+
+    /// <summary>
+    /// Every <c>var</c> member reachable on a class, own and inherited, with the most derived
+    /// declaration winning — <see cref="MethodsOf"/> for the other half of a class's surface.
+    ///
+    /// Members are read as BARE NAMES inside the class body, not through <c>self.</c>: BO3's own
+    /// <c>AnimationAdjustmentInfoZ</c> constructor writes <c>adjustMentStarted = false;</c>, and
+    /// all 210 <c>var</c> declarations in the shipped scripts are used that way. So this feeds
+    /// statement scope, beside the parameters and locals, rather than field completion after a dot.
+    /// </summary>
+    public static ImmutableArray<ClassMember> MembersOf(
+        LanguageStore store,
+        string askingContextId,
+        string classKeyName,
+        ImmutableArray<ClassSymbol> localClasses = default)
+    {
+        Dictionary<string, ClassMember> byName = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> visited = new(StringComparer.Ordinal);
+        string? current = classKeyName;
+
+        for ( int depth = 0; depth < MaxDepth; depth++ )
+        {
+            if ( current is null || !visited.Add(current) )
+            {
+                break;
+            }
+
+            ClassSymbol? resolved = FindLocal(localClasses, current);
+
+            if ( resolved is null )
+            {
+                ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
+                    store, askingContextId, namespaceName: null, current);
+
+                if ( classes.Length == 0 )
+                {
+                    break;
+                }
+
+                resolved = classes[0].Class;
+            }
+
+            foreach ( MemberSymbol member in resolved.Members )
+            {
+                // TryAdd for the reason MethodsOf uses it: the walk starts at the most derived
+                // class, so a redeclared name resolves to the nearest declaration rather than
+                // being offered twice.
+                byName.TryAdd(member.Name, new ClassMember(member, resolved));
             }
 
             current = resolved.ParentKeyName;

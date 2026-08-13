@@ -94,7 +94,20 @@ lints, `Completion/` and `Typing/` the information surfaces.
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
   (+ `.size`), and statement/top-level scope (keywords, the dialect's global objects and snippets,
-  file macros, namespace functions, visible classes, namespace-less builtins as call snippets).
+  the enclosing function's parameters and locals, every macro in scope, namespace functions,
+  visible classes, namespace-less builtins as call snippets).
+- `CollectLocalScope(function, position, entries)` — the names bound INSIDE the function being
+  edited, and the only per-function list here. Parameters, then the locals introduced by an
+  assignment AT OR ABOVE the cursor; an owner (`self.count = 1`) makes it a field rather than a
+  local, the same exclusion `LocalDefinition` makes. Below the cursor is left out because nothing
+  is bound there yet and reading it earns a 5016 — the rule `vararg` is held to. These were
+  missing entirely, and the editor's own word-based suggestions covered for them until the
+  server's lists (a median of ~1,900 entries) began out-scoring those.
+- Macros come from `Preprocessed.Macros.All` WHOLE. That table is built per parse from the root
+  file plus the headers it `#insert`s, so it already is "what this file can expand"; filtering it
+  to `SourceFile is null` kept the root file's own and dropped every constant a shared `.gsh`
+  exists to supply. A function-like macro takes the call punctuation a function does, since at the
+  use site it is a call; the detail names the defining header.
 - A `#` INSIDE a body has two readings and gets both: `GscKeywords.BodyDirectives`, plus the
   `#"..."` literals where `GameProfile.HasHashStrings`. Reading it as a hash string alone lost the
   `#if` family everywhere and left the three dialects without hash strings an empty list.
@@ -106,8 +119,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   past every scanning helper in between. Same convention as `Parser.cs (+ .Declarations /
   .Statements / .Expressions)`, and the same reason.
   - `.Context.cs` — WHERE the cursor is. All static, and reads only tokens, source text and the
-    parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `IsInsideFunctionBody`,
-    `EnclosingFunction`, `PreviousSignificant`, `TryPrecacheContext` and the rest. Nothing here
+    parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `EnclosingFunction`,
+    `PreviousSignificant`, `TryPrecacheContext` and the rest. `EnclosingFunction` is carried by the
+    dispatcher as a symbol rather than reduced to a bool, since the same walk answers which keyword
+    set is legal, whether `vararg` binds, and which parameters and locals are in scope. Nothing here
     touches the database, which is the property that makes the boundary hold.
   - `.Producers.cs` — the lists themselves, one producer per context. This is the file that reaches
     `ScriptDatabase`, `BuiltinApiSet` and `ObjectFields`, so its cost is a function of the

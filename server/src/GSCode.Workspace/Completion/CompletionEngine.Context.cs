@@ -538,11 +538,6 @@ public sealed partial class CompletionEngine
         return index;
     }
 
-    private static bool IsInsideFunctionBody(ParseResult result, Position position)
-    {
-        return EnclosingFunction(result, position) is not null;
-    }
-
     /// <summary>
     /// The function or class METHOD whose body contains this position.
     ///
@@ -592,22 +587,5 @@ public sealed partial class CompletionEngine
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Whether the parameter pack is in scope here — the dialect binds one AND the enclosing
-    /// function declares <c>...</c>.
-    /// </summary>
-    /// <remarks>
-    /// Both halves matter. Offering <c>vararg</c> from the plain keyword list would suggest it in
-    /// every function on the dialect, and in a function without <c>...</c> nothing binds it, so
-    /// accepting the suggestion earns a 5024. A completion list that leads to a diagnostic is worse
-    /// than one entry short.
-    /// </remarks>
-    private static bool IsVarargInScope(ParseResult result, Position position, GameProfile game)
-    {
-        return game.HasVarargBinding
-            && EnclosingFunction(result, position) is FunctionSymbol function
-            && function.HasVarargs;
     }
 }

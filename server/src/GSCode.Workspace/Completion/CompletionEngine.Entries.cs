@@ -257,6 +257,43 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>
+    /// A macro, which is a call or a constant depending on how it was defined.
+    ///
+    /// A function-like macro takes the same call punctuation a function does, because at the use
+    /// site it IS a call — `#define ABS(x)` written without its parentheses expands to nothing
+    /// usable. An object-like one inserts its bare name.
+    ///
+    /// The detail names the header a macro came from, since that is the question asked about one
+    /// that is not in the file being read: `#insert`ed constants outnumber locally-defined ones in
+    /// the stock scripts, and "macro" alone said nothing about where to go look.
+    ///
+    /// The documentation is the trailing comment on the `#define` line, carried at parse time —
+    /// free here, so unlike a function's doc block it needs no resolve round trip.
+    /// </summary>
+    private static CompletionEntry MacroEntry(
+        GSCode.Parser.Preprocessing.MacroDefinition macro, string callSuffix, bool parameterHints)
+    {
+        string detail = macro.SourceFile is null
+            ? "macro"
+            : "macro (" + System.IO.Path.GetFileName(macro.SourceFile) + ")";
+
+        if ( macro.Parameters is not ImmutableArray<string> parameters )
+        {
+            return new CompletionEntry(macro.Name, CompletionKind.Macro, detail, "", macro.Documentation ?? "");
+        }
+
+        return new CompletionEntry(
+            macro.Name,
+            CompletionKind.Macro,
+            detail,
+            macro.Name + callSuffix,
+            macro.Documentation ?? "",
+            LabelDetail: parameterHints
+                ? ParameterHint([.. parameters.Select(static p => new ParameterSymbol(p, false, ""))], hasVarargs: false)
+                : "");
+    }
+
+    /// <summary>
     /// An imported namespace, offered by NAME so it is findable without already knowing one of its
     /// functions. Inserts the qualifier and reopens the list — which the explicit `ns::` handler
     /// above then fills with that namespace's members — the same walk-it-down shape path segments

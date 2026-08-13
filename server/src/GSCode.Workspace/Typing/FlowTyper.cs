@@ -902,6 +902,10 @@ public sealed class FlowTyper
             // `a[ i ]`. The element type is not modelled — neither did v1.5, whose indexer analysis
             // returned "any" unconditionally — but the BASE being indexed is the question that
             // matters, and the reason says so rather than leaving an anonymous unknown.
+            //
+            // This arm is what blocks v1.5's `CannotUseAsIndexer`: the INDEX expression is never
+            // typed, so there is nothing for that rule to judge. Typing it is additive and belongs
+            // in its own change — see FOLLOWUPS.md.
             case IndexNode:
                 return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ArrayElement);
 
@@ -932,6 +936,10 @@ public sealed class FlowTyper
                 return ScrValue.Of(ScrTypeSet.Function);
 
             // `[[ f ]]` names the function it dereferences.
+            //
+            // Unconditionally, which is what blocks v1.5's `ExpectedFunction`: this says what the
+            // DEREFERENCE is, never what the operand holds. The lattice can already express
+            // "f is not a function" — nothing types `f` here to find out. See FOLLOWUPS.md.
             case PointerDerefNode:
                 return ScrValue.Of(ScrTypeSet.Function);
 

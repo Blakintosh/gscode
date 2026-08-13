@@ -8,6 +8,18 @@ using GSCode.Core.Symbols;
 namespace GSCode.Workspace.Api;
 
 /// <summary>One engine object field: its type and whether it is read-only, on a given entity kind.</summary>
+/// <remarks>
+/// <c>ReadOnly</c> is per FIELD, and nothing here marks an entity KIND immutable as a whole — which
+/// is why v1.5's <c>CannotAssignToImmutableEntity</c> is not expressible against this data rather
+/// than merely unwritten. Restoring it needs the source data to state the fact first, so this record
+/// is where that would land. See FOLLOWUPS.md.
+///
+/// <c>Type</c> is known to be wrong for several BO3 fields — <c>team</c> is typed <c>int</c> while
+/// <c>sessionteam</c> is <c>string</c> and both hold team strings, and <c>horzalign</c>/
+/// <c>vertalign</c> are typed <c>int</c> and assigned <c>"user_right"</c> throughout. That is one of
+/// the two causes that got <c>PredefinedFieldTypeMismatch</c> withdrawn at 46 unreal findings, and
+/// it is a data fix, not a rule fix.
+/// </remarks>
 public sealed record ObjectField(string Name, string Type, bool ReadOnly, string EntityKind);
 
 /// <summary>One radiant map-entity KVP key from keys.txt.</summary>

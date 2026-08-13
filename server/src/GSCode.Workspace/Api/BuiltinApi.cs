@@ -25,6 +25,12 @@ public enum BuiltinConfidence
 /// <param name="Types">
 /// The same thing parsed onto the lattice, once at load rather than re-switched per call.
 /// <see cref="ScrTypeSet.None"/> means the spelling is one the lattice cannot express.
+///
+/// NOT DEAD, though nothing reads it: this is what v1.5's <c>ArgumentTypeMismatch</c> checks a call's
+/// arguments against, and it is parsed here so that rule needs no plumbing when it is measured. Do
+/// not delete it as unused — see FOLLOWUPS.md, which records that the blocker is the corpus sweep
+/// rather than the data. <see cref="BuiltinFunction.Confidence"/> is the other half, and supplies
+/// the severity split that v1.5 spent a whole second diagnostic code on.
 /// </param>
 /// <param name="IsVariadic">
 /// The parameter pack. Spelled as the <c>vararg</c> DATA TYPE rather than the JSON's

@@ -349,6 +349,18 @@ LanguageServer server = await LanguageServer.From(options =>
                         // diagnostics are meaningless for files still waiting to be analysed.
                         languageServer.Services.GetRequiredService<WorkspaceDiagnosticsPublisher>().Refresh();
 
+                        // That publisher deliberately skips OPEN documents, so on its own it leaves
+                        // the one file the user is actually looking at stale. A tab restored with the
+                        // window is opened during initialize, which is before this point, so its
+                        // didOpen linted it against a half-built index — and the lints gated on
+                        // HasCompletedIndex (5013/5014/5025/5026) stayed silent. The file looked clean
+                        // until it was closed and reopened, which is why starting on a DIFFERENT file
+                        // and switching to it appeared to fix the problem: that switch was the
+                        // didOpen. Same reasoning as an on-disk change: the world moved under every
+                        // open document and none of them owns the event, so all of them are
+                        // dependents. Costs a lint pass each, not a re-parse.
+                        languageServer.Services.GetRequiredService<DependentDiagnosticsRefresher>().Schedule();
+
                         // Sampled before the monitor starts, so the number reflects the state
                         // indexing left behind rather than anything steady-state traffic did.
                         LogMemoryReport("indexing", outcome);

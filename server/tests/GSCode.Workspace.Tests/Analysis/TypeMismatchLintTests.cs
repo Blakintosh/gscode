@@ -77,10 +77,23 @@ public class TypeMismatchLintTests
     }
 
     [Fact]
+    public void EnumeratingSomethingCertainlyUndefinedIsReported()
+    {
+        // The gap the first version of this rule had. `foo = undefined;` is not a scalar, so a
+        // "is it certainly a scalar" test declined — and 5016 stays quiet because the name genuinely
+        // WAS assigned, so nothing reported it at all. Asking "could this possibly be enumerable"
+        // instead catches it, and undefined falls out as one more thing that cannot be.
+        Assert.Single(
+            Lint("    foo = undefined;\n    foreach ( ent in foo )\n    {\n    }"),
+            d => d.Code == GscDiagnosticCode.CannotEnumerateType);
+    }
+
+    [Fact]
     public void AnUnassignedNameIsTheOtherRulesFinding()
     {
-        // Enumerating something that may be undefined is 5016's business, not this rule's, and two
-        // diagnostics on one range for one mistake is the failure this avoids.
+        // The case the rule above must NOT swallow. Assigned on one branch only is `array|undefined`
+        // — it MIGHT be enumerable, so it belongs to 5016, and two diagnostics on one range for one
+        // mistake is the failure this avoids.
         Assert.Empty(Lint("    if ( a )\n    {\n        c = [];\n    }\n    foreach ( x in c )\n    {\n    }"));
     }
 

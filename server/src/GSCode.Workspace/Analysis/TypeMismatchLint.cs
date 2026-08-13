@@ -79,13 +79,19 @@ public static class TypeMismatchLint
             return;
         }
 
-        // MustBe, so a value that MIGHT be an array is left alone. Undefined is excluded from the
-        // test rather than reported: enumerating an unassigned name is the unassigned-variable
-        // rule's finding, not this one's.
-        ScrTypeSet scalars = ScrTypeSet.Int | ScrTypeSet.Float | ScrTypeSet.Bool
-            | ScrTypeSet.AnyString | ScrTypeSet.Vector | ScrTypeSet.Function;
+        // Asked as "could this possibly be enumerable", not "is it certainly a scalar". The two are
+        // not the same, and the difference is a real gap the first version had: `foo = undefined;`
+        // followed by `foreach ( x in foo )` is CERTAINLY wrong, but it went unreported — the value
+        // is not a scalar, and 5016 stays quiet because the name genuinely was assigned.
+        //
+        // Phrased this way, undefined falls out as one more thing that cannot be enumerated, while a
+        // value that MIGHT be an array is still left alone. That keeps the one case this must not
+        // touch: a name assigned on only one branch is `array|undefined`, which may be enumerable
+        // and belongs to 5016.
+        ScrTypeSet enumerable = ScrTypeSet.Array | ScrTypeSet.Struct
+            | ScrTypeSet.Instance | ScrTypeSet.Entity;
 
-        if ( !collection.Without(ScrTypeSet.Undefined).MustBe(scalars) )
+        if ( collection.MayBe(enumerable) )
         {
             return;
         }

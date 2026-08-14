@@ -100,7 +100,9 @@ on half-typed text.
 
 **Extraction.** `ExtractionTests` symbols and references · `ClassExtractionTests` class members,
 methods, and constructors · `DuplicateFunctionTests` ·
-`LoopVariableTests` induction variables · `MacroDefaultParameterTests`, `MacroExpansionReferenceTests`
+`LoopVariableTests` induction variables · `WaittillBindingTests` that `waittill`'s trailing arguments
+are BOUND, not read — the only place those names come into existence ·
+`MacroDefaultParameterTests`, `MacroExpansionReferenceTests`
 macro provenance · `SemanticTokenBuilderTests`, which pins what is deliberately NOT emitted (comments, keywords,
 strings and numbers all belong to the grammar) · `TripleSlashScriptDocTests` ScriptDoc on the pre-BO3
 games · `DialectResolutionTests` per-dialect symbol keys.
@@ -168,7 +170,10 @@ qualified method lookup · `MethodReferenceTests` class-method reference unions 
 `ReferenceScopingTests` the same narrowing for reference COUNTS, including that a file declaring the
 name in another namespace does not claim the reference ·
 `LocalDefinitionTests` go-to-definition on a local, which the shared reference index deliberately
-does not carry · `RootDerivationTests` finding the game when nothing is configured ·
+does not carry · `LocalReferencesTests` the occurrence list behind find-references, highlight and
+rename on a variable — what counts as a WRITE, and the names a per-function answer must refuse
+(globals, IW file-scope constants, class members) · `RootDerivationTests` finding the game when
+nothing is configured ·
 `ServerBuildIdentityTests` that two games can never share a cache.
 
 **Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` · `StaleAnalysisTests` edits

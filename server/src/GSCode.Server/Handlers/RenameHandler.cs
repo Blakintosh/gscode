@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -6,6 +7,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using Position = GSCode.Core.Text.Position;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 
 namespace GSCode.Server.Handlers;
@@ -48,7 +50,11 @@ public sealed class RenameHandler : RenameHandlerBase
         PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
         if ( !IsRenameable(hit, _builtins.For(target.Language), _objectFields) )
         {
-            return Task.FromResult<WorkspaceEdit?>(null);
+            // A local is always the script's to rename — the engine defines no locals — but it is
+            // absent from the reference index, so IsRenameable cannot see it and the AST answers
+            // instead. PrepareRenameHandler takes the same fallthrough, so the preview and the
+            // rename still cannot disagree about what is allowed.
+            return Task.FromResult(RenameLocal(target, request));
         }
 
         Dictionary<DocumentUri, List<TextEdit>> edits = new();
@@ -75,6 +81,41 @@ public sealed class RenameHandler : RenameHandlerBase
             static pair => (IEnumerable<TextEdit>)pair.Value);
 
         return Task.FromResult<WorkspaceEdit?>(new WorkspaceEdit { Changes = changes });
+    }
+
+    /// <summary>
+    /// Renames a local across the function that scopes it — one file, and never beyond that body.
+    ///
+    /// Refused when the function already binds the new name. That case does not fail loudly: it
+    /// MERGES two variables into one, and the script keeps running while meaning something else.
+    /// In a language where reading an undefined variable is not an error, a silent merge is the
+    /// worst shape a refactor can take, so no edit at all is the better answer.
+    /// </summary>
+    private WorkspaceEdit? RenameLocal(NavigationTarget target, RenameParams request)
+    {
+        Position position = request.Position.ToCore();
+
+        ImmutableArray<LocalOccurrence> occurrences = _support.LocalOccurrencesAt(target, position);
+        if ( occurrences.Length == 0 )
+        {
+            return null;
+        }
+
+        if ( LocalReferences.BindsName(target.Result, position, request.NewName) )
+        {
+            return null;
+        }
+
+        List<TextEdit> edits = [];
+        foreach ( LocalOccurrence occurrence in occurrences )
+        {
+            edits.Add(new TextEdit { Range = occurrence.Range.ToLsp(), NewText = request.NewName });
+        }
+
+        DocumentUri uri = DocumentUri.FromFileSystemPath(target.Path);
+        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
+
+        return new WorkspaceEdit { Changes = changes };
     }
 
     /// <summary>

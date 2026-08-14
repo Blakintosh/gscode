@@ -168,6 +168,28 @@ lints, `Completion/` and `Typing/` the information surfaces.
   within the enclosing function. Locals stay outside the shared reference index, so this AST-based
   lookup prevents same-named variables in unrelated functions from colliding.
 
+## Database/LocalReferences.cs
+
+- `readonly record struct LocalOccurrence(Range, IsWrite, IsDeclaration)` + `static LocalReferences`
+  — the occurrence list for a local, the companion to `LocalDefinition` and outside the shared index
+  for the same reason. Backs find-references, document highlight and rename on variables.
+- `Find` walks the enclosing function's body with the classification the lints already proved: an
+  assignment target is a WRITE down to the name it is rooted at (`a[ 0 ] = x` creates `a`) while its
+  subscript is a read, `foreach` bindings and `waittill` outputs are writes, and a bare identifier
+  callee or `&foo` names a function rather than a variable.
+- `IsDeclaration` marks the parameter, or the first write when there is none — the same "where the
+  name is introduced" rule `UnusedLocalLint` reports against. Only that one is dropped when a
+  request excludes the declaration; a later `x = 2` is a reference to something already existing.
+- Answers EMPTY rather than a wrong per-function answer when the name is not the function's to own:
+  a global from the profile, an Infinity Ward file-scope constant (readable from every function), a
+  class `var` member or an ancestor's (same file), a macro-expanded token, `vararg`/`thisthread`.
+- `BindsName` is the collision test a rename needs. Renaming onto a name the function already binds
+  does not fail — it MERGES two variables and the script keeps running meaning something else.
+- Finds the name token itself rather than calling `AstSearch.TryFindLocalContext`, which reports an
+  `IdentifierNode`: a parameter, a `foreach` key/value and a `const` name are bare tokens on their
+  declaring node, so clicking the binding — the occurrence a user is most likely to click — found
+  nothing at all.
+
 ## Database/DatabaseQueries.cs
 
 - `ResolvedFunction`/`ResolvedClass` + `static DatabaseQueries` — context-filtered

@@ -123,11 +123,17 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - Find-all-references across the visible context (functions/classes/macros/fields and
   string/hash/istring/anim literals), honoring includeDeclaration.
+- A cursor the reference index does not know falls through to `Workspace/Database/LocalReferences`,
+  which is every LOCAL — the index is keyed by SymbolKey and shared workspace-wide, so locals are
+  deliberately absent from it. Same fallthrough `DefinitionHandler` takes. `includeDeclaration`
+  drops only the introduction there (the parameter, or the first write), not every write.
 
 ## Handlers/DocumentHighlightHandler.cs
 
 - Highlights every occurrence of the symbol under the cursor within the current file
   (definition sites as Write, others as Read).
+- Locals take the same `LocalReferences` fallthrough, with assignments, loop bindings, `waittill`
+  outputs and the parameter all highlighted as Write.
 
 ## Handlers/DocumentLinkHandler.cs
 
@@ -190,6 +196,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - Rename functions/classes/macros across every reference in the visible context (mods can't
   see each other, so a rename never leaks across them). prepareRename returns the symbol
   range only for renameable kinds — builtins, keywords, and literals get "cannot rename".
+- A LOCAL is always the script's to rename but is invisible to `IsRenameable`, which reads the
+  reference index. BOTH handlers take the `LocalReferences` fallthrough, so the preview and the
+  rename still cannot disagree — which is the whole reason `IsRenameable` is shared. Refused when
+  the function already binds the new name: that case does not fail, it merges two variables.
 
 ## Handlers/CallHierarchyHandler.cs
 

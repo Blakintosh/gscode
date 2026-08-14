@@ -126,6 +126,23 @@ public sealed class NavigationSupport
     }
 
     /// <summary>
+    /// Every occurrence of the LOCAL under a position, within the function that scopes it.
+    ///
+    /// The local counterpart of <see cref="FindAllReferences"/>, and shared for the same reason:
+    /// find-references, highlight and rename must agree about what a variable's occurrences are,
+    /// and three copies of the walk is how they stop agreeing.
+    ///
+    /// Empty when the position is not on a local — which is also the answer for everything the
+    /// reference index DOES know, so a caller can reach here unconditionally after a failed
+    /// <see cref="SymbolAtPosition"/> lookup.
+    /// </summary>
+    public ImmutableArray<LocalOccurrence> LocalOccurrencesAt(
+        NavigationTarget target, GSCode.Core.Text.Position position)
+    {
+        return LocalReferences.Find(target.Result, position);
+    }
+
+    /// <summary>
     /// Every reference to a key visible from this document, across both language worlds when the
     /// document is a header. The single entry point, so the count a CodeLens shows and the list a
     /// peek opens are computed the same way.

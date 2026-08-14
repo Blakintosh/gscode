@@ -124,10 +124,6 @@ public sealed class NavigationSupport
         // its declaration's key first and then unions the ways a call site can spell it. Done HERE
         // for the same reason the narrowing below is: the CodeLens count and the peek list run this
         // one query, so they cannot disagree.
-        // A method is not reachable under one key the way a function is — inheritance, the
-        // Class::method form and untyped arrow calls each name it differently — so it gets its own
-        // query. Done HERE for the same reason the narrowing below is: the CodeLens count and the
-        // peek list run this one method, so they cannot disagree.
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> methodReferences =
             MethodResolution.FindReferencesForCall(
                 _database, target.Stores, target.Store, target.ContextId, key, referenceKind);

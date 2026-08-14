@@ -104,6 +104,10 @@ LanguageServer server = await LanguageServer.From(options =>
             services.AddSingleton(provider =>
                 new DiagnosticsPublisher(provider.GetRequiredService<ILanguageServerFacade>()));
             services.AddSingleton<WorkspaceDiagnosticsPublisher>();
+
+            // The one place the cross-file lint pipeline is called from. Registered before its two
+            // consumers only for readability — the container resolves in dependency order.
+            services.AddSingleton<DocumentLinter>();
             services.AddSingleton<DependentDiagnosticsRefresher>();
             services.AddSingleton<ServerStatusNotifier>();
 
@@ -530,26 +534,21 @@ static string RootSource(string configured, string? resolved)
     return "derived";
 }
 
-// Compacts the heap once, at the indexing -> serving transition, when indexing left enough
-// fragmentation to be worth it.
+// One compacting collection at the indexing -> serving transition, UNCONDITIONALLY.
 //
-// Calling GC.Collect is normally wrong, but this is the case that justifies it: a one-off
-// phase change after which the allocation profile is completely different. Analysing a file
-// allocates token and PToken arrays that clear the 85 KB large-object threshold, so most
-// scripts put theirs straight on the LOH — which is NOT compacted by default. Measured on
-// 1,105 files: a cold index left 183 MB fragmented out of a 282 MB heap (65% holes) even
-// after 19 gen2 collections, because ordinary collections reclaim LOH memory without moving
-// anything. Serving requests allocates nothing like that, so the holes would simply persist.
+// Calling GC.Collect is normally wrong, but this is the case that justifies it: a one-off phase
+// change after which the allocation profile is completely different. Analysing a file allocates
+// token and PToken arrays that clear the 85 KB large-object threshold, so most scripts put theirs
+// straight on the LOH — which is NOT compacted by default. Measured on 1,105 files: a cold index
+// left 183 MB fragmented out of a 282 MB heap (65% holes) even after 19 gen2 collections, because
+// ordinary collections reclaim LOH memory without moving anything. Serving requests allocates
+// nothing like that, so anything left behind would simply persist.
 //
-// Gated on measured fragmentation so a warm start, which restores records and fragments
-// almost nothing, skips the pause entirely.
-// One compacting collection at the indexing -> serving transition.
-//
-// UNCONDITIONAL, and it used to be gated on 32 MB of measured fragmentation. The gate made sense
-// while fragmentation was the whole problem — a warm start had none and skipped the pause. It
-// stopped making sense once System.GC.ConserveMemory took fragmentation to roughly zero: the gate
-// then read "nothing to do" while the large-object heap was still holding tens of megabytes of
-// committed, unfragmented, unreturned space that no ordinary collection gives back.
+// It used to be gated on 32 MB of measured fragmentation, and that gate made sense while
+// fragmentation was the whole problem — a warm start had none and skipped the pause. It stopped
+// making sense once System.GC.ConserveMemory took fragmentation to roughly zero: the gate then read
+// "nothing to do" while the large-object heap was still holding tens of megabytes of committed,
+// unfragmented, unreturned space that no ordinary collection gives back.
 //
 // Fragmentation was never the thing worth measuring. What the user sees is committed memory, and
 // CompactOnce is the only thing that returns large-object pages to the OS. It runs once per index,
@@ -565,14 +564,6 @@ static void Compact()
     GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
 }
 
-// A one-shot memory breakdown, logged at the indexing -> serving transition.
-//
-// The point is the gap between the managed heap and the working set. Cold indexing allocates
-// heavily per file (source text, token arrays, AST, extraction builders) at
-// ProcessorCount - 1 way parallelism, all of it garbage once the record is built; a warm
-// restore just deserializes records. If the LIVE numbers match across a cold and a warm start
-// while the working set differs, the extra footprint is grown, uncompacted heap rather than
-// retained data — and a one-time compacting collect here is the fix.
 // The settings that shape behaviour, logged once at startup at Information — so they are in the
 // log a user attaches to a bug report without anyone having to ask for a higher level first.
 static void LogEffectiveSettings(ServerSettings settings)
@@ -592,17 +583,22 @@ static void LogEffectiveSettings(ServerSettings settings)
     }
 }
 
-// The detailed memory breakdown, at Verbose.
+// The detailed memory breakdown, at Verbose. Called twice a session, after indexing and after
+// compaction.
+//
+// The point is the gap between the managed heap and the working set. Cold indexing allocates
+// heavily per file (source text, token arrays, AST, extraction builders) at ProcessorCount - 1 way
+// parallelism, all of it garbage once the record is built; a warm restore just deserializes
+// records. If the LIVE numbers match across a cold and a warm start while the working set differs,
+// the extra footprint is grown, uncompacted heap rather than retained data — which is what
+// Compact() above exists to give back.
 //
 // Gated by the LOG LEVEL rather than an environment variable. A setting the user can change from
 // the settings UI beats one that needs an env var and a restart — and GSCODE_INSTRUMENTATION was
 // doubly confusing, since PerfTracker already uses that name as a COMPILE-TIME symbol for
 // something else entirely.
-//
-// Called twice a session, after indexing and after compaction, so it is not the noisy part.
 static void LogMemoryReport(string phase, IndexOutcome outcome)
 {
-
     GCMemoryInfo info = GC.GetGCMemoryInfo();
 
     double workingSet = Environment.WorkingSet / (1024.0 * 1024.0);

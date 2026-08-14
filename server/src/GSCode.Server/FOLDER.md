@@ -32,8 +32,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - Incremental text sync. didOpen → immediate analysis; didChange → ~250 ms debounced
   re-analysis with per-document cancellation (superseded runs are cancelled, silently);
   didSave → immediate (bypasses debounce); didClose → clears diagnostics. Before publishing,
-  it merges the parse diagnostics with the cross-file lints — all of them, via
-  `WorkspaceLints.Analyze` — for GSC/CSC docs.
+  it merges the parse diagnostics with the cross-file lints — all of them, via `DocumentLinter`
+  — for GSC/CSC docs.
+
+## Handlers/DocumentLinter.cs
+
+- `DocumentLinter` — the one call site for `WorkspaceLints.Analyze`, holding the four workspace
+  singletons that call needs (database, resolver, builtin API, object fields). Stateless; it exists
+  so the seven-argument pipeline signature is written once rather than in both `TextSyncHandler`
+  and `DependentDiagnosticsRefresher`.
 
 ## Handlers/DiagnosticsPublisher.cs
 
@@ -321,12 +328,6 @@ bar is the readout.
     (off/error/warning/info/verbose) to a Serilog level; `off` maps to a level past
     Fatal so the channel is truly silent; unknown values fall back to info.
 
-## Configuration/InitializationOptionsReader.cs
-
-- `static class InitializationOptionsReader`
-  - `ReadServerLogLevel(JToken)` — extracts `gscode.serverLogLevel` from the raw
-    `initialize` options; returns null when the section or key is absent.
-
 ## Configuration/CacheHolder.cs
 
 - `CacheHolder` — owns the persistent cache's lifetime so handlers can reach it through DI. The
@@ -350,9 +351,15 @@ that chose it. These are the pieces that implement it:
 - `DirectiveSorter` — groups and sorts the directive block at the top of a file. The formatter's one
   operation that MOVES code rather than whitespace, so it runs as a post-pass on already-reflowed
   text, after the token-stream equality gate.
-- `LineFacts` — shared line-level predicates for comment tokens, leading whitespace, code-only
-  tokens, and comment-only lines. Keeping these premises in one place prevents the aligners and
-  formatter scope logic from disagreeing.
+- `LineFacts` — shared line-level premises: comment tokens, leading whitespace, code-only tokens,
+  comment-only lines, and `BucketByLine` (a line's significant tokens, whitespace and newlines
+  dropped). Keeping these in one place prevents the aligners and formatter scope logic from
+  disagreeing.
+- `FormattingSupport` — the steps the three formatting handlers share before they diverge:
+  `Prepare` resolves the open document and analyses it FRESH before diffing (a stale read here
+  writes a corrupting edit rather than merely showing something wrong), `ToLspEdits` projects the
+  formatter's per-region edits onto the protocol. Each handler then keeps whichever edits its
+  feature is scoped to.
 
 ## Handlers/ — the remainder
 

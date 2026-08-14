@@ -216,7 +216,10 @@ line means "suppressed on this game" rather than "run twice".
 - `GameCorpusTests` — the same three properties per game, and the evidence behind
   `GameProfile.Verified`.
 - `ClassResolutionCorpusTests` — class inheritance and method calls across the shipped corpus,
-  including cases where a receiver's concrete class is unknown.
+  including cases where a receiver's concrete class is unknown. Every lookup passes the context of
+  the record the symbol came from, never the literal `"raw"`: the fixture indexes the mods folder
+  beside the raw one, so a class declared in an installed mod is only findable in that mod's
+  context.
 - `BuiltinHarvestTests` — sweeps for calls resolving to neither a script function nor a known engine
   function and writes `harvest/<game>_missing_builtins.json` and `_missing_script_functions.json`.
   This is the curation input for the builtin libraries, ranked by how many files want a name.

@@ -40,9 +40,10 @@ namespace GSCode.Server.Formatting;
 /// preceded by a backslash, so a blank line inserted between the <c>\</c> and the line it continues
 /// empties the macro and turns its body into top-level code.
 ///
-/// Comments travel with the directive beneath them, so an annotated import keeps its annotation.
-/// A comment run separated from the first directive by a blank line is a FILE banner rather than an
-/// annotation, and stays put above the block.
+/// Comments travel with the directive beneath them, so an annotated import keeps its annotation —
+/// except the run above the FIRST directive, which is a banner for the block and stays above it,
+/// blank line or no blank line. Whatever spacing the author left between a banner and the block is
+/// reproduced rather than normalised.
 /// </summary>
 public static class DirectiveSorter
 {
@@ -121,10 +122,12 @@ public static class DirectiveSorter
                 // directive/comment checks below decide.
                 if ( entries.Count == 0 && pending.Count > 0 )
                 {
-                    // Comments above the FIRST directive with a blank line between them describe
-                    // the file, not the import under them. Sorting must not carry them into the
-                    // middle of the block.
+                    // A comment run above the block, ended by the author's own blank line. The
+                    // blank is carried into the banner rather than re-added at the end, so a file
+                    // header and a section header below it keep the gap the author put between
+                    // them, and a banner that hugged the block still hugs it.
                     banner.AddRange(pending);
+                    banner.Add("");
                     pending.Clear();
                 }
 
@@ -155,7 +158,20 @@ public static class DirectiveSorter
                 return null;
             }
 
-            List<string> owned = [.. pending, line];
+            // Comments above the FIRST directive describe the BLOCK, not the import they happen to
+            // touch, so they stay above it rather than travelling with whichever directive sorting
+            // puts first. Whether a blank line separated them is not the signal it looks like: of
+            // the fourteen files across the BO3 and CoD4 corpora with a comment run hugging their
+            // first import, all fourteen are headers — `// COMMON AI SYSTEMS INCLUDES`,
+            // `// ARCHETYPE UTILITY SCRIPTS`, and a ruled banner in `_siegebot.gsc` whose text is
+            // literally `#using`. None annotates the one import beneath it. Carrying those into
+            // the middle of the block is what this rule exists to stop.
+            List<string> owned = entries.Count == 0 ? [line] : [.. pending, line];
+            if ( entries.Count == 0 )
+            {
+                banner.AddRange(pending);
+            }
+
             pending.Clear();
 
             // A trailing backslash binds the next PHYSICAL line, so the whole run is one entry.
@@ -205,11 +221,6 @@ public static class DirectiveSorter
         foreach ( string line in banner )
         {
             rebuilt.Append(line).Append('\n');
-        }
-
-        if ( banner.Count > 0 )
-        {
-            rebuilt.Append('\n');
         }
 
         int previousGroup = -1;

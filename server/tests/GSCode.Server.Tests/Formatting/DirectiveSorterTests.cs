@@ -73,10 +73,58 @@ public class DirectiveSorterTests
     public void CommentsTravelWithTheDirectiveTheySitAbove()
     {
         string? sorted = DirectiveSorter.Sort(
-            "// zebra matters\n#using scripts\\zebra;\n// apple matters\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+            "#using scripts\\middle;\n// zebra matters\n#using scripts\\zebra;\n// apple matters\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
 
         Assert.Equal(
-            "// apple matters\n#using scripts\\apple;\n// zebra matters\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            "// apple matters\n#using scripts\\apple;\n#using scripts\\middle;\n// zebra matters\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    // --- the comment run above the FIRST directive is a banner ---
+
+    [Fact]
+    public void AHuggingBannerStaysAboveTheBlockInsteadOfSplittingIt()
+    {
+        // It used to travel with the directive it hugged, so sorting carried a section header into
+        // the middle of the very block it introduces.
+        string? sorted = DirectiveSorter.Sort(
+            "// ---------- directives ----------\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// ---------- directives ----------\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void AHuggingBannerIsNotPushedOffTheBlockByABlankLine()
+    {
+        // The author wrote it touching the block; a banner separated by a blank keeps its blank.
+        // Spacing is reproduced rather than normalised, so neither shape drifts into the other.
+        string? hugging = DirectiveSorter.Sort(
+            "// header\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// header\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            hugging);
+
+        string? separated = DirectiveSorter.Sort(
+            "// header\n\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// header\n\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            separated);
+    }
+
+    [Fact]
+    public void AFileHeaderAndASectionHeaderBothStayAboveTheBlock()
+    {
+        // Two runs, one blank-separated and one hugging. Both are banners, and the blank between
+        // them is where the author put it.
+        string? sorted = DirectiveSorter.Sort(
+            "// file header\n\n// section header\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// file header\n\n// section header\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
             sorted);
     }
 

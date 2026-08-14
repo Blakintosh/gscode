@@ -89,12 +89,21 @@ needs to know WHY a type is unknown.
   disagreement. `None` with a single-bit set is the only state safe to rewrite blind.
 - `readonly record struct ScrConstant` / `Vec3` — a folded compile-time value. New here; v1.5 tracked
   only `bool? BooleanValue` and folded nothing.
+- `readonly record struct ScrFunctionRef` — which function a pointer holds, namespace and name, in
+  the shape symbol keys use so a consumer can query the database without re-parsing a joined string.
 - `readonly record struct ScrValue` — types + constant + tri-state truthiness + entity kinds +
   imprecision. `MustBe`/`MayBe` replace v1.5's single `Indeterminate` flag, which could say "do not
   trust this" but not "it is one of exactly two things and one is unsafe" — the question array
   pass-semantics turns on. `Union` never collapses; `ToScrType()` is the projection that keeps every
   existing consumer unchanged. Structural equality with an agreeing order-independent hash, because
   anything in a dataflow fixpoint needs it (v1.5's reference equality made worklists never converge).
+
+  Two fields carry a value's IDENTITY rather than its type, and neither survives the projection:
+  `InstanceClass` (the class of a `new Foo()`) and `FunctionTarget` (the function behind a `&foo`).
+  Both are dropped by `Union` when two branches disagree, and both take part in equality and the
+  hash. `DisplayName()` is the label surface — the class name, `hash` for a `#"str"`, and otherwise
+  `ToScrType().DisplayName()`; a caller JUDGING a type still asks `ToScrType`, which is what keeps
+  the typing lints comparing exactly what they always compared.
 - `static class ScrValues` — `IsAssignableTo`, `IsByReference(type, arraysByReference)` (the dialect
   fork in one predicate), and `Describe` for rendering.
 

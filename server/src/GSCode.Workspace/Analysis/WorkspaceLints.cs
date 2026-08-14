@@ -138,6 +138,9 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.ConstDeclarationLint");
         lints.AddRange(ConstDeclarationLint.Analyze(result));
         PerfTracker.End();
+        PerfTracker.Begin("lint.GlobalObjectWriteLint");
+        lints.AddRange(GlobalObjectWriteLint.Analyze(result));
+        PerfTracker.End();
         PerfTracker.Begin("lint.ArithmeticLint");
         lints.AddRange(ArithmeticLint.Analyze(result));
         PerfTracker.End();

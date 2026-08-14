@@ -131,7 +131,9 @@ including the differently-SPELLED case that must not shadow · `UsingNotFoundLin
 import spellings, since an unresolvable `#include` reported nothing at all and silenced 5026 with it ·
 `NamespaceUsageLintTests` 5000, including the merge dialect where the rule is unsatisfiable and says nothing ·
 `UnusedUsingLintTests` 5001 · `UnusedIncludeLintTests` 5012 · `PreferBooleanLiteralLintTests` 5002 ·
-`PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests` 5004/5005 · `DevBlockCallLintTests` 5006,
+`PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests` 5004/5005 ·
+`GlobalObjectWriteLintTests` 5035, bare name versus write-THROUGH, and the dialect where `world` is
+an ordinary local name · `DevBlockCallLintTests` 5006,
 including which dev-only builtin candidates the stock corpus contradicts · `AmbiguousFunctionLintTests`
 5007 · `UnusedLocalLintTests` 5008 · `CaseLabelLintTests` 5010/5011 ·
 `FunctionResolutionLintTests` 5013/5014/5025, the split between a script miss and a builtin miss,
@@ -178,7 +180,9 @@ nothing is configured ·
 
 **Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` · `StaleAnalysisTests` edits
 racing analysis · `WatchedFileUpdaterTests` · `FlowTyperTests`, `TypeFlowConvergenceTests` local type
-inference and that the walk terminates.
+inference and that the walk terminates · `ValueIdentityTests` the two facts the `ScrType` projection
+cannot hold — which class an instance is, which function a pointer holds — including the guard that
+no OTHER label moved when display stopped going through the projection.
 
 ---
 

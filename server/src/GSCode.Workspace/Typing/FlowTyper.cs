@@ -14,7 +14,15 @@ namespace GSCode.Workspace.Typing;
 
 /// <summary>The inferred type of a local at one assignment site.</summary>
 /// <param name="NameRange">Root-file range of the assigned local's name.</param>
-/// <param name="Type">The inferred concrete type.</param>
+/// <param name="Value">
+/// The inferred value, carried whole rather than already projected.
+///
+/// A consumer that JUDGES a type wants <see cref="InferredAssignment.Type"/>, the coarse
+/// projection the typing lints compare against. A consumer that SHOWS one wants
+/// <see cref="InferredAssignment.Display"/>, which keeps the class name of a `new Foo()` and the
+/// hashness of a `#"str"` — both of which the projection has to collapse. Storing the projection
+/// here is what threw those away before either consumer could ask.
+/// </param>
 /// <param name="Name">Display-case local name (lets hover match an identifier by name).</param>
 /// <param name="IsFirstForName">
 /// Whether this is the first typed assignment to the name in its function.
@@ -31,10 +39,36 @@ namespace GSCode.Workspace.Typing;
 /// usually named alike.
 /// </param>
 public readonly record struct InferredAssignment(
-    TextRange NameRange, ScrType Type, string Name, bool IsFirstForName = true, bool IsField = false);
+    TextRange NameRange, ScrValue Value, string Name, bool IsFirstForName = true, bool IsField = false)
+{
+    /// <summary>The coarse projection, for a caller judging the type rather than showing it.</summary>
+    public ScrType Type
+    {
+        get { return Value.ToScrType(); }
+    }
+
+    /// <summary>The label to show a reader.</summary>
+    public string Display
+    {
+        get { return Value.DisplayName(); }
+    }
+}
 
 /// <summary>The inferred type of the local identifier under a cursor (for hover).</summary>
-public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrType Type);
+public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrValue Value)
+{
+    /// <summary>The coarse projection, for a caller judging the type rather than showing it.</summary>
+    public ScrType Type
+    {
+        get { return Value.ToScrType(); }
+    }
+
+    /// <summary>The label to show a reader.</summary>
+    public string Display
+    {
+        get { return Value.DisplayName(); }
+    }
+}
 
 /// <summary>
 /// One write to `owner.field`, carrying the owner's inferred type AT THAT POINT. Lets a lint decide
@@ -173,7 +207,7 @@ public sealed class FlowTyper
             return false;
         }
 
-        hover = new LocalTypeHover(name, identifier.Range, type);
+        hover = new LocalTypeHover(name, identifier.Range, value);
         return true;
     }
 
@@ -388,7 +422,7 @@ public sealed class FlowTyper
                 if ( type.IsKnown() && constDecl.NameToken.Provenance.DefinitionSite is null )
                 {
                     hints.Add(new InferredAssignment(
-                        constDecl.NameToken.RootRange, type, constDecl.NameToken.Text,
+                        constDecl.NameToken.RootRange, value, constDecl.NameToken.Text,
                         IsFirstForName: hinted.Add(constDecl.NameToken.Text)));
                 }
 
@@ -788,14 +822,14 @@ public sealed class FlowTyper
             if ( assignment.Operator == TokenKind.Assign
                 && member.NameToken.Provenance.DefinitionSite is null )
             {
-                ScrType fieldType = TypeOf(assignment.Value, environment).ToScrType();
-                if ( fieldType.IsKnown() )
+                ScrValue fieldValue = TypeOf(assignment.Value, environment);
+                if ( fieldValue.ToScrType().IsKnown() )
                 {
                     // Keyed by the whole path, so `self.count` and `level.count` are separate names
                     // and hinting one does not silently suppress the other.
                     string path = FieldPathOf(member);
                     hints.Add(new InferredAssignment(
-                        member.NameToken.RootRange, fieldType, member.NameToken.Text,
+                        member.NameToken.RootRange, fieldValue, member.NameToken.Text,
                         IsFirstForName: hinted.Add(path), IsField: true));
                 }
             }
@@ -828,7 +862,7 @@ public sealed class FlowTyper
 
         if ( type.IsKnown() )
         {
-            hints.Add(new InferredAssignment(target.Token.RootRange, type, name, IsFirstForName: hinted.Add(name)));
+            hints.Add(new InferredAssignment(target.Token.RootRange, value, name, IsFirstForName: hinted.Add(name)));
         }
     }
 
@@ -926,22 +960,38 @@ public sealed class FlowTyper
 
             // A class method call. The class is known but return types are not modelled for script
             // code, so this is the script-return case rather than an unsupported form.
-            case ArrowCallNode:
+            //
+            // The object is typed for its effects, so `[[ thing ]]->bump()` records what `thing`
+            // holds — which is how a method call is connected to the class declaring it.
+            case ArrowCallNode arrowCall:
+                TypeOf(arrowCall.Object, environment);
+                foreach ( ExprNode argument in arrowCall.Arguments )
+                {
+                    TypeOf(argument, environment);
+                }
+
                 return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
 
             // A bare `ns::foo` or `path\to\file::foo` with no argument list is a function pointer;
             // the parser only produces these outside call position.
-            case QualifiedNode:
+            case QualifiedNode bareQualified:
+                return ScrValue.Of(ScrTypeSet.Function) with { FunctionTarget = FunctionRefOf(bareQualified) };
+
             case PathQualifiedNode:
                 return ScrValue.Of(ScrTypeSet.Function);
 
             // `[[ f ]]` names the function it dereferences.
             //
-            // Unconditionally, which is what blocks v1.5's `ExpectedFunction`: this says what the
-            // DEREFERENCE is, never what the operand holds. The lattice can already express
-            // "f is not a function" — nothing types `f` here to find out. See FOLLOWUPS.md.
-            case PointerDerefNode:
-                return ScrValue.Of(ScrTypeSet.Function);
+            // Still unconditionally a function, which is what blocks v1.5's `ExpectedFunction`: this
+            // says what the DEREFERENCE is, never what the operand holds. The lattice can already
+            // express "f is not a function" — nothing here judges the operand. See FOLLOWUPS.md.
+            //
+            // The operand IS typed, which is a different thing from being judged: it carries which
+            // function the pointer holds, and a call site with no way to ask that can show nothing
+            // about the function it is calling.
+            case PointerDerefNode deref:
+                return ScrValue.Of(ScrTypeSet.Function)
+                    with { FunctionTarget = TypeOf(deref.Pointer, environment).FunctionTarget };
 
             default:
                 return ScrValue.Unknown;
@@ -1126,7 +1176,36 @@ public sealed class FlowTyper
             ? ScrValue.Unknown
             : TypeOf(prefix.Operand, environment);
 
-        return ScrOperators.Apply(op, operand).Value;
+        ScrValue value = ScrOperators.Apply(op, operand).Value;
+
+        // `&helper` is the one place a pointer's target is written down. Recording it here is what
+        // lets `[[ ptr ]]( ... )` further down the function name the function it calls.
+        if ( op == ScrUnaryOp.AddressOf )
+        {
+            return value with { FunctionTarget = FunctionRefOf(prefix.Operand) };
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// The function an expression NAMES, for the two forms that name one: <c>helper</c> and
+    /// <c>ns::helper</c>. Null for anything else, including a path-qualified reference — resolving
+    /// one needs the path resolver, which this pass does not have.
+    /// </summary>
+    private static ScrFunctionRef? FunctionRefOf(ExprNode expression)
+    {
+        switch ( expression )
+        {
+            case IdentifierNode identifier:
+                return new ScrFunctionRef(null, identifier.Token.Text);
+
+            case QualifiedNode qualified:
+                return new ScrFunctionRef(qualified.NamespaceToken.Text, qualified.NameToken.Text);
+
+            default:
+                return null;
+        }
     }
 
     /// <summary>
@@ -1204,6 +1283,13 @@ public sealed class FlowTyper
         if ( call.Target is not null )
         {
             TypeOf(call.Target, environment);
+        }
+
+        // `[[ ptr ]]( ... )`. The callee is typed only in this form: the other callees are NAMES,
+        // and typing one would look up a local that does not exist and record it as undefined.
+        if ( call.Callee is PointerDerefNode )
+        {
+            TypeOf(call.Callee, environment);
         }
 
         // Only builtin return types are known here; script-function return inference is

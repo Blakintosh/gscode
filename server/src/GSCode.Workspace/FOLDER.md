@@ -417,6 +417,16 @@ lints, `Completion/` and `Typing/` the information surfaces.
   as writes. A field is only flagged when EVERY entity kind declaring the name agrees it is
   read-only, because the owner's kind isn't inferred at this layer.
 
+## Analysis/GlobalObjectWriteLint.cs
+
+- `static GlobalObjectWriteLint.Analyze(result)` — reports an assignment to one of the engine's
+  global objects (5035, Error): `level = 1`, `anim = 1`. The names come from
+  `GameProfile.GlobalObjectNames`, never a table here, so `world` is a global on BO3 and an ordinary
+  local name on CoD4. Only a BARE name counts — `level.things = []` and `game[ "k" ] = 1` write
+  THROUGH the object and are how every script in every corpus uses one. `classes` is excluded even
+  where the profile lists it: nothing establishes what the compiler does with an assignment to it,
+  and an Error has to be certain. Swept clean over 8,289 scripts across all five games.
+
 ## Analysis/ — the remaining lints
 
 Each is a `static Analyze(...)` returning diagnostics, run per open document and merged by the
@@ -533,13 +543,18 @@ reported as an Error must never land on code that ships and works.
 
 ## Typing/FlowTyper.cs
 
-- `readonly record struct InferredAssignment(NameRange, Type, Name, IsFirstForName, IsField)` — the
-  inferred `ScrType` of a local or field at ONE assignment site. Every typed assignment is recorded
+- `readonly record struct InferredAssignment(NameRange, Value, Name, IsFirstForName, IsField)` — the
+  inferred value of a local or field at ONE assignment site. Every typed assignment is recorded
   and each consumer filters: inlay hints take `IsFirstForName` only, hover takes them all so it can
   report the type as of the cursor. `IsField` separates `self.count = 1` from a local of the same
   name.
-- `readonly record struct LocalTypeHover(Name, Range, Type)` — the inferred type of the local
-  identifier under a cursor, consumed by hover.
+
+  Carries the whole `ScrValue`, with `Type` (the projection) and `Display` (the label) as computed
+  properties. Storing the projection instead threw away the two facts only display wants: a
+  `new Foo()` reached the editor as `struct` and a `#"str"` as `int`, both computed correctly and
+  both discarded at this boundary. A consumer judging a type still reads `Type`.
+- `readonly record struct LocalTypeHover(Name, Range, Value)` — the value of the local identifier
+  under a cursor, consumed by hover. Same `Type`/`Display` split, for the same reason.
 - `readonly record struct FieldWrite(NameRange, FieldName, OwnerType, Value)` — one `owner.field = …`
   write with the owner's inferred type at that point, consumed by `ReadOnlyWriteLint` and
   `PreferBooleanLiteralLint`. `Value` is null for a compound write or `++`/`--`, which have no single
@@ -552,6 +567,8 @@ reported as an Error must never land on code that ships and works.
   inferred type when one exists — so a hover always agrees with the inlay hint at the assignment.
   `TypeOf` types literals, parenthesised/vector/array/`new` expressions,
   identifiers (earlier locals, then the globals `self`/`level`/`world`/`anim`/`game`),
+  `&foo` and `[[ ptr ]]` (which carry a `ScrFunctionRef` naming the function, so a call through a
+  pointer can be connected to the declaration behind it) and an arrow call's object,
   prefix and binary operators via `ScrOperators`, builtin call return types unioned across every
   overload, and field access `owner.field` (`.size`→int; else the engine object-field data seeds a
   type, but only when every entity kind declaring the field name agrees — the owner's kind isn't

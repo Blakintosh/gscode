@@ -144,6 +144,8 @@ public static class DiagnosticMessages
             "This statement computes a value and discards it, so it has no effect — a missing '=' or a call missing its '()'.",
         [GscDiagnosticCode.CannotEnumerateType] = "'foreach' needs an array or a struct, but this is {0}.",
         [GscDiagnosticCode.InvalidVectorComponent] = "A vector component must be a number, but this is {0}.",
+        [GscDiagnosticCode.CannotAssignToGlobalObject] =
+            "'{0}' is an engine global and cannot be assigned to; write to a field on it instead, as in '{0}.field = value'.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

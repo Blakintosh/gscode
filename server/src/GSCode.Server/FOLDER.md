@@ -166,7 +166,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/CodeLensHandler.cs
 
 - "N references" lenses above function/class declarations (counts from the reference index,
-  gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge.
+  gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge. An
+  `autoexec` function reads "autoexec entry point" when the count is zero: the engine calls it on
+  load, so its call sites are in no script and a bare "0 references" reads as dead code.
 
 ## Handlers/WorkspaceFoldersHandler.cs
 
@@ -214,12 +216,21 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/InlayHintHandler.cs
 
 - Inlay hints, two independently-toggleable families over the visible range: inferred-type
-  hints (`: int`) at each FlowTyper `InferredAssignment` name-range end (gated by
-  inlayHints.inferredTypes), and parameter-name hints (`amount:`) before each call argument,
-  resolving the callee's parameter names from the database (script functions in the file's
-  namespaces, else builtins) and qualified `ns::fn` calls (gated by inlayHints.parameterNames).
+  hints (`: int`, and `: derived_thing` for a class instance) at each FlowTyper
+  `InferredAssignment` name-range end (gated by inlayHints.inferredTypes), and parameter-name
+  hints (`amount:`) before each call argument (gated by inlayHints.parameterNames).
   The FlowTyper it builds is seeded with the shared ObjectFields for field-type inference.
   ResolveProvider is false, so the resolve handler is a passthrough.
+
+  Parameter names come from four callee forms. A bare name and a `ns::fn` are answered from the
+  SYNTAX, through `UnqualifiedParameterNames` (script functions in the file's namespaces, else
+  builtins; a method first inside a class body) and `QualifiedParameterNames` (namespace first,
+  then the qualifier as a class name). The two indirect forms are answered from the flow pass
+  instead, because their callee is a VALUE and the syntax only names a local: `[[ ptr ]]( … )`
+  reads the `ScrFunctionRef` the pointer carries, and `[[ obj ]]->method( … )` reads the object's
+  `InstanceClass`. Both showed nothing at all before, which on a BO3 script is most of the
+  dispatch in some files. That is why the handler runs `FlowTyper.InferValues` once per request
+  when parameter hints are on, rather than a position query per call site.
 
 ## Handlers/DocumentFormattingHandler.cs
 

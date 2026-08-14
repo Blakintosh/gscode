@@ -298,6 +298,15 @@ public readonly record struct Vec3(double X, double Y, double Z)
 }
 
 /// <summary>
+/// The function a pointer value refers to.
+///
+/// <paramref name="Namespace"/> is null for a bare <c>&amp;helper</c> and set for
+/// <c>&amp;ns::helper</c>, which is the same shape the symbol keys use — so a consumer resolving
+/// one can ask the database directly rather than re-parsing a joined string.
+/// </summary>
+public readonly record struct ScrFunctionRef(string? Namespace, string Name);
+
+/// <summary>
 /// What is known about one value: which types it may hold, its constant value if it has one, its
 /// truthiness, its entity kinds, and why it is not exact.
 ///
@@ -344,6 +353,16 @@ public readonly record struct ScrValue
 
     /// <summary>The class of a BO3 <c>new Foo()</c>, when known.</summary>
     public string? InstanceClass { get; init; }
+
+    /// <summary>
+    /// The function a <c>&amp;name</c> pointer refers to, when known.
+    ///
+    /// Carried for the same reason as <see cref="InstanceClass"/>: which function a pointer holds is
+    /// part of the value's identity, not merely its type. Without it every pointer is
+    /// indistinguishably "a function", and a <c>[[ ptr ]]( ... )</c> call cannot be connected back
+    /// to the declaration whose parameter names and documentation it should show.
+    /// </summary>
+    public ScrFunctionRef? FunctionTarget { get; init; }
 
     public ScrImprecision Imprecision { get; init; }
 
@@ -444,6 +463,11 @@ public readonly record struct ScrValue
             InstanceClass = string.Equals(left.InstanceClass, right.InstanceClass, StringComparison.OrdinalIgnoreCase)
                 ? left.InstanceClass
                 : null,
+            // Two branches assigning DIFFERENT pointers leave the target unknown, exactly as they do
+            // for a class: a label naming one of the two would be wrong half the time it is shown.
+            FunctionTarget = Nullable.Equals(left.FunctionTarget, right.FunctionTarget)
+                ? left.FunctionTarget
+                : null,
             Imprecision = disagreed && left.Imprecision == ScrImprecision.None && right.Imprecision == ScrImprecision.None
                 ? ScrImprecision.BranchDisagreement
                 : (ScrImprecision)Math.Max((int)left.Imprecision, (int)right.Imprecision),
@@ -513,6 +537,33 @@ public readonly record struct ScrValue
         }
     }
 
+    /// <summary>
+    /// The name to SHOW for this value, which is not always the name of its projection.
+    ///
+    /// <see cref="ToScrType"/> is a lossy projection kept lossy on purpose — the coarse enum is what
+    /// the typing lints compare against, and widening it would change what they judge. But two of
+    /// the losses are visible to a reader and read as wrong: a <c>new Foo()</c> shown as
+    /// <c>struct</c> throws away the class name the value already carries, and a <c>#"hash"</c>
+    /// shown as <c>int</c> names the runtime shape rather than the thing written.
+    ///
+    /// So display goes through here and judgement goes through <see cref="ToScrType"/>. Everything
+    /// else falls back to the projection, which keeps every other label byte-identical.
+    /// </summary>
+    public string DisplayName()
+    {
+        if ( Types == ScrTypeSet.Instance && !string.IsNullOrEmpty(InstanceClass) )
+        {
+            return InstanceClass;
+        }
+
+        if ( Types == ScrTypeSet.HashString )
+        {
+            return "hash";
+        }
+
+        return ToScrType().DisplayName();
+    }
+
     /// <summary>Widens a coarse <see cref="ScrType"/> into a value, for the boundary going the other way.</summary>
     public static ScrValue FromScrType(ScrType type)
     {
@@ -549,6 +600,7 @@ public readonly record struct ScrValue
             && Truthiness == other.Truthiness
             && Imprecision == other.Imprecision
             && string.Equals(InstanceClass, other.InstanceClass, StringComparison.OrdinalIgnoreCase)
+            && Nullable.Equals(FunctionTarget, other.FunctionTarget)
             && KindsEqual(EntityKinds, other.EntityKinds);
     }
 
@@ -560,6 +612,7 @@ public readonly record struct ScrValue
         hash.Add(Truthiness);
         hash.Add(Imprecision);
         hash.Add(InstanceClass, StringComparer.OrdinalIgnoreCase);
+        hash.Add(FunctionTarget);
 
         // Order-independent, matching KindsEqual: two values whose kinds arrived in a different
         // order are equal, so they must hash the same.

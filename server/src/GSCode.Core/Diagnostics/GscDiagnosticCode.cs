@@ -276,4 +276,12 @@ public enum GscDiagnosticCode
 
     /// <summary>A vector component that cannot be a number.</summary>
     InvalidVectorComponent = 5034,
+
+    /// <summary>
+    /// An assignment to one of the engine's global objects — <c>level</c>, <c>self</c>,
+    /// <c>game</c>, <c>anim</c>, <c>world</c>. The names come from the active
+    /// <c>GameProfile</c>, so a dialect without <c>world</c> keeps <c>world</c> as an ordinary
+    /// local and is not reported.
+    /// </summary>
+    CannotAssignToGlobalObject = 5035,
 }

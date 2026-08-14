@@ -1,12 +1,11 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser;
-using GSCode.Server.Configuration;
-using GSCode.Workspace.Analysis;
-using GSCode.Workspace.Api;
+
+// Kept for the ExportSignature cref in the class comment below — the gate this whole type hangs
+// off. Nothing in the body references the namespace, so the build's cref check is what holds it.
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using Serilog;
 
@@ -50,28 +49,17 @@ public sealed class DependentDiagnosticsRefresher
 
     private readonly DocumentStore _documents;
     private readonly DiagnosticsPublisher _diagnostics;
-    private readonly ScriptDatabase _database;
-    private readonly ResolverHolder _resolver;
-    private readonly BuiltinApiSet _builtins;
-    private readonly ObjectFields _objectFields;
+    private readonly DocumentLinter _linter;
 
     private readonly object _gate = new();
     private CancellationTokenSource? _pending;
 
     public DependentDiagnosticsRefresher(
-        DocumentStore documents,
-        DiagnosticsPublisher diagnostics,
-        ScriptDatabase database,
-        ResolverHolder resolver,
-        BuiltinApiSet builtins,
-        ObjectFields objectFields)
+        DocumentStore documents, DiagnosticsPublisher diagnostics, DocumentLinter linter)
     {
         _documents = documents;
         _diagnostics = diagnostics;
-        _database = database;
-        _resolver = resolver;
-        _builtins = builtins;
-        _objectFields = objectFields;
+        _linter = linter;
     }
 
     /// <summary>
@@ -160,8 +148,7 @@ public sealed class DependentDiagnosticsRefresher
         // Reuses the cached parse — the text has not changed, only the world around it.
         ParseResult result = _documents.AnalyzeIfStale(document);
 
-        ImmutableArray<Diagnostic> diagnostics = WorkspaceLints.Analyze(
-            result, document.Language, document.Path, _database, _resolver.Current, _builtins, _objectFields);
+        ImmutableArray<Diagnostic> diagnostics = _linter.Analyze(document, result);
 
         _diagnostics.Publish(DocumentUri.FromFileSystemPath(document.Path), document.Version, diagnostics);
     }

@@ -56,8 +56,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly TextDocumentSelector _selector;
     private readonly ServerSettings _settings;
     private readonly StockScripts _stockScripts;
-    private readonly BuiltinApiSet _builtins;
-    private readonly ObjectFields _objectFields;
+    private readonly DocumentLinter _linter;
     private readonly ILanguageServerFacade _server;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
     private readonly DependentDiagnosticsRefresher _dependents;
@@ -70,16 +69,14 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         TextDocumentSelector selector,
         ServerSettings settings,
         StockScripts stockScripts,
-        BuiltinApiSet builtins,
-        ObjectFields objectFields,
+        DocumentLinter linter,
         ILanguageServerFacade server,
         WorkspaceDiagnosticsPublisher workspaceDiagnostics,
         DependentDiagnosticsRefresher dependents)
     {
         _dependents = dependents;
         _workspaceDiagnostics = workspaceDiagnostics;
-        _builtins = builtins;
-        _objectFields = objectFields;
+        _linter = linter;
         _documents = documents;
         _diagnostics = diagnostics;
         _database = database;
@@ -282,7 +279,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
 
         ParseResult result = _documents.Analyze(document);
-        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics = WithWorkspaceLints(document, result);
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics = _linter.Analyze(document, result);
 
         _diagnostics.Publish(uri, document.Version, diagnostics);
         CommitAndRefreshLenses(document, result);
@@ -338,15 +335,5 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _ = _server.SendRequest("workspace/codeLens/refresh")
             .ReturningVoid(CancellationToken.None)
             .ContinueWith(static _ => { }, TaskScheduler.Default);
-    }
-
-    /// <summary>
-    /// The file's diagnostics plus the cross-file lints, from the shared pipeline so the editor
-    /// and any offline sweep report the same thing.
-    /// </summary>
-    private ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> WithWorkspaceLints(OpenDocument document, ParseResult result)
-    {
-        return WorkspaceLints.Analyze(
-            result, document.Language, document.Path, _database, _resolver.Current, _builtins, _objectFields);
     }
 }

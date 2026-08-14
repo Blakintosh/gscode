@@ -44,6 +44,11 @@ namespace GSCode.Server.Formatting;
 /// except the run above the FIRST directive, which is a banner for the block and stays above it,
 /// blank line or no blank line. Whatever spacing the author left between a banner and the block is
 /// reproduced rather than normalised.
+///
+/// A run part-way down the block followed by a BLANK LINE is owned by nothing — the blank says it
+/// does not annotate what follows, and it is not the banner either — so the block ends there. That
+/// is the same answer <c>#using_animtree</c> gets and for the same reason: with nothing to move it
+/// with, the only defensible move is none.
 /// </summary>
 public static class DirectiveSorter
 {
@@ -129,6 +134,17 @@ public static class DirectiveSorter
                     banner.AddRange(pending);
                     banner.Add("");
                     pending.Clear();
+                    continue;
+                }
+
+                if ( pending.Count > 0 )
+                {
+                    // A comment run PART-WAY DOWN the block, ended by a blank line, is owned by
+                    // nothing: it does not annotate the directive below it — the author's blank
+                    // says so — and it is not the banner either. With no owner there is no
+                    // defensible place to move it to, so the block ends here and everything from
+                    // the run down is reproduced as written.
+                    break;
                 }
 
                 continue;

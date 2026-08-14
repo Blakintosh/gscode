@@ -382,7 +382,8 @@ that chose it. These are the pieces that implement it:
   binds every `%anim` below it until the next one, so it is not a preamble directive at all and
   moving it rebinds animations invisibly. A comment run travels with the directive beneath it,
   except the run above the FIRST directive — that is the block's banner and stays above it, with
-  whatever spacing the author left.
+  whatever spacing the author left — and a run followed by a blank line part-way down, which is
+  owned by nothing and so ends the block.
 - `LineFacts` — shared line-level premises: comment tokens, leading whitespace, code-only tokens,
   comment-only lines, and `BucketByLine` (a line's significant tokens, whitespace and newlines
   dropped). Keeping these in one place prevents the aligners and formatter scope logic from

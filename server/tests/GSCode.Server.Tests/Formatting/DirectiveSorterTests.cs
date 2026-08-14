@@ -277,6 +277,47 @@ public class DirectiveSorterTests
             sorted);
     }
 
+    // --- a comment run owned by nothing ends the block ---
+
+    [Fact]
+    public void ACommentRunFollowedByABlankLineEndsTheBlock()
+    {
+        // It annotates neither the directive above it nor the one below, so there is no owner to
+        // move it with. The imports above still sort; it and everything under it stay as written.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\zebra;\n#using scripts\\apple;\n// section header\n\n#namespace foo;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\apple;\n#using scripts\\zebra;\n\n// section header\n\n#namespace foo;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void ACommentedOutDirectiveIsNotGluedToTheNextRealOne()
+    {
+        // `_healthoverlay.gsc`'s shape: a disabled #precache written as a note under the imports.
+        // It used to arrive glued to `#namespace`, having lost the blank line the author left.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\zebra;\n#using scripts\\apple;\n//#precache( \"material\", \"overlay_low_health\" );\n\n#namespace foo;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\apple;\n#using scripts\\zebra;\n\n//#precache( \"material\", \"overlay_low_health\" );\n\n#namespace foo;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void ACommentRunAboveCodeRatherThanADirectiveIsUnaffected()
+    {
+        // The far commoner shape — 38 of the 55 BO3 files with an orphan run — where the block was
+        // already over. Ending at the blank has to leave these byte-identical to what they were.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\zebra;\n#using scripts\\apple;\n// ---- utility ----\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\apple;\n#using scripts\\zebra;\n\n// ---- utility ----\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
     // --- #using_animtree is positional and ends the block ---
 
     [Fact]

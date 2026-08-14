@@ -619,36 +619,6 @@ say so and this should be re-run. Whoever does will need to settle where a break
 matter), what the continuation indent is, and whether the `TokenStreamMatches` corruption guard
 still holds once one line becomes several.
 
-### A comment inside the directive block that annotates nothing
-
-`DirectiveSorter` gives every comment run an owner: the directive beneath it, except the run above
-the FIRST directive, which is a banner for the block and stays above it. That leaves one shape
-unowned — a run separated from what follows by a BLANK LINE, part-way down the block:
-
-```gsc
-#using scripts\shared\util_shared;
-// #insert scripts\shared\shared.gsh;   // needs a real .gsh to resolve
-
-#namespace kitchen_sink;
-```
-
-The comment is written as a trailing note on the imports. It is attached to `#namespace` instead,
-because that is the next directive, so sorting drags it down and glues it to a line it has nothing
-to do with — losing the author's blank line on the way.
-
-Measured before choosing what to do: **54 of 862 BO3 files and 8 of 894 CoD4 files** have one. That
-rules out the cheap answer of standing the pass down, which would silently stop sorting 6% of BO3
-files, and it is too many to call an edge case.
-
-Neither remaining option is obviously right, which is why this is a note rather than a change. The
-comment could travel with the directive ABOVE it as a trailing note — local, and correct for the
-shape above, but that directive is itself sortable and can still land the comment mid-block. Or the
-block could END at an unowned run, keeping everything below it verbatim, which is what
-`#using_animtree` does — safe, but it stops sorting at the first stray comment, and a file's imports
-are usually above one rather than below.
-
-Whoever picks needs a measurement of which way the 62 files actually read.
-
 ### Corpus diagnostic sweep — nothing outstanding
 
 `CorpusDiagnosticSweepTests` runs the editor's whole lint pipeline over the shipped scripts. Since

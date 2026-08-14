@@ -11,7 +11,11 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using LspDiagnostic = OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic;
 using Position = GSCode.Core.Text.Position;
+using ReferenceEntry = GSCode.Core.Symbols.ReferenceEntry;
+using ReferenceKind = GSCode.Core.Symbols.ReferenceKind;
+using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 
 namespace GSCode.Server.Handlers;
 
@@ -128,10 +132,10 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         // Tracked per directive. No dialect has both — #include is gated by import style — but the
         // bulk action names the directive in its title, and one shared list would let a CoD4 user
         // be offered "Remove all 3 unused #using directives".
-        List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unusedUsings = [];
-        List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unusedIncludes = [];
+        List<LspDiagnostic> unusedUsings = [];
+        List<LspDiagnostic> unusedIncludes = [];
 
-        foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in request.Context.Diagnostics )
+        foreach ( LspDiagnostic diagnostic in request.Context.Diagnostics )
         {
             switch ( CodeOf(diagnostic) )
             {
@@ -275,7 +279,15 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             get { return _includeInsertAt ??= ImportInsertionPoint<IncludeNode>(Result); }
         }
 
-        private static HashSet<string> GatherUsings(ParseResult result)
+        /// <summary>
+        /// The extensionless paths the file already imports with <c>#using</c>.
+        /// </summary>
+        /// <remarks>
+        /// Shared with <see cref="FindMissingUsingSites"/>, which asks the same question of the same
+        /// tree. Two answers to "is this path already imported" is two chances to offer an import
+        /// that is already there.
+        /// </remarks>
+        internal static HashSet<string> GatherUsings(ParseResult result)
         {
             HashSet<string> paths = new(StringComparer.Ordinal);
             foreach ( AstNode element in result.Tree.Root.Elements )
@@ -292,7 +304,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
     private static void AddRemoveAllUnusedAction(
         DocumentUri uri,
-        List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unused,
+        List<LspDiagnostic> unused,
         string directive,
         List<CommandOrCodeAction> actions)
     {
@@ -302,7 +314,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         }
     }
 
-    private static GscDiagnosticCode? CodeOf(OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
+    private static GscDiagnosticCode? CodeOf(LspDiagnostic diagnostic)
     {
         if ( diagnostic.Code is null || !diagnostic.Code.Value.IsLong )
         {
@@ -336,22 +348,15 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
     private const char SemiColon = ';';
 
-    private static CodeAction BuildDeleteLineAction(DocumentUri uri, ParseResult result, OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
+    private static CodeAction BuildDeleteLineAction(DocumentUri uri, ParseResult result, LspDiagnostic diagnostic)
     {
         TextRange range = diagnostic.Range.ToCore();
         TextEdit edit = new() { Range = LineRangeOf(range).ToLsp(), NewText = "" };
 
-        return new CodeAction
-        {
-            Title = "Remove unused " + LineTextOf(result, range.Start.Line),
-            Kind = CodeActionKind.QuickFix,
-            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
-
-            // The answer for the import under the cursor, and there is only one — so this is what
-            // Auto Fix should take, not the bulk sweep sitting next to it.
-            IsPreferred = true,
-            Edit = SingleEdit(uri, edit),
-        };
+        // Preferred: the answer for the import under the cursor, and there is only one — so this is
+        // what Auto Fix should take, not the bulk sweep sitting next to it.
+        return QuickFix(
+            "Remove unused " + LineTextOf(result, range.Start.Line), uri, [edit], diagnostic, preferred: true);
     }
 
     /// <summary>
@@ -368,13 +373,13 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// </summary>
     private static CodeAction BuildRemoveAllUnusedAction(
         DocumentUri uri,
-        List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic> unused,
+        List<LspDiagnostic> unused,
         string directive)
     {
         // Whole-line deletions on distinct lines never overlap, so order does not matter.
         HashSet<int> lines = [];
         List<TextEdit> edits = [];
-        foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in unused )
+        foreach ( LspDiagnostic diagnostic in unused )
         {
             TextRange range = diagnostic.Range.ToCore();
             if ( lines.Add(range.Start.Line) )
@@ -383,15 +388,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
-
-        return new CodeAction
-        {
-            Title = "Remove all " + edits.Count + " unused " + directive + " directives",
-            Kind = CodeActionKind.QuickFix,
-            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(unused),
-            Edit = new WorkspaceEdit { Changes = changes },
-        };
+        return QuickFix(
+            "Remove all " + edits.Count + " unused " + directive + " directives",
+            uri,
+            edits,
+            new Container<LspDiagnostic>(unused));
     }
 
     /// <summary>
@@ -399,7 +400,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// diagnostic's range rather than parsed out of its message, so the fix cannot drift if the
     /// wording ever changes.
     /// </summary>
-    private static void AddBooleanLiteralFix(DocumentUri uri, ParseResult result, OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic, List<CommandOrCodeAction> actions)
+    private static void AddBooleanLiteralFix(DocumentUri uri, ParseResult result, LspDiagnostic diagnostic, List<CommandOrCodeAction> actions)
     {
         TextRange range = diagnostic.Range.ToCore();
         int start = result.Text.GetOffset(range.Start);
@@ -426,20 +427,15 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         }
 
         TextEdit edit = new() { Range = range.ToLsp(), NewText = replacement };
-        actions.Add(new CommandOrCodeAction(new CodeAction
-        {
-            Title = "Replace " + literal + " with " + replacement,
-            Kind = CodeActionKind.QuickFix,
-            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
-            Edit = SingleEdit(uri, edit),
-        }));
+        actions.Add(new CommandOrCodeAction(
+            QuickFix("Replace " + literal + " with " + replacement, uri, [edit], diagnostic)));
     }
 
     /// <summary>
     /// Moves a #using that appears after the first declaration up to where imports belong. Two
     /// edits — delete the offending line, insert it at the top — applied as one operation.
     /// </summary>
-    private static void AddMoveUsingFix(DocumentUri uri, ParseResult result, OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic, List<CommandOrCodeAction> actions)
+    private static void AddMoveUsingFix(DocumentUri uri, ParseResult result, LspDiagnostic diagnostic, List<CommandOrCodeAction> actions)
     {
         TextRange range = diagnostic.Range.ToCore();
         string directive = LineTextOf(result, range.Start.Line);
@@ -461,18 +457,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             new TextEdit { Range = new TextRange(insertAt, insertAt).ToLsp(), NewText = directive + ";" + "\n" },
         ];
 
-        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
-
-        actions.Add(new CommandOrCodeAction(new CodeAction
-        {
-            Title = "Move " + directive + " above the first declaration",
-            Kind = CodeActionKind.QuickFix,
-            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
-
-            // There is one way to fix a misplaced directive, so Auto Fix can take it.
-            IsPreferred = true,
-            Edit = new WorkspaceEdit { Changes = changes },
-        }));
+        // Preferred: there is one way to fix a misplaced directive, so Auto Fix can take it.
+        actions.Add(new CommandOrCodeAction(QuickFix(
+            "Move " + directive + " above the first declaration", uri, edits, diagnostic, preferred: true)));
     }
 
     /// <summary>
@@ -488,7 +475,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     internal static List<CodeAction> UnresolvedCallFixes(
         DocumentUri uri,
         CallFixContext context,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
+        LspDiagnostic diagnostic)
     {
         ParseResult result = context.Result;
         List<CodeAction> fixes = [];
@@ -606,7 +593,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     internal static List<CodeAction> MissingIncludeFixes(
         DocumentUri uri,
         CallFixContext context,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
+        LspDiagnostic diagnostic)
     {
         List<CodeAction> fixes = [];
         if ( context.Store is null || context.Profile.ResolvesByNamespace )
@@ -656,18 +643,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 NewText = "#include " + candidate + ";\n",
             };
 
-            fixes.Add(new CodeAction
-            {
-                Title = "Add #include " + candidate,
-                Kind = CodeActionKind.QuickFix,
-                Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
-
-                // Preferred only when one file can supply the name. Several same-named functions is
-                // the normal state of a merge dialect, and picking one for Auto Fix would change
-                // which function the call means without saying so.
-                IsPreferred = candidates.Count == 1,
-                Edit = SingleEdit(uri, edit),
-            });
+            // Preferred only when one file can supply the name. Several same-named functions is the
+            // normal state of a merge dialect, and picking one for Auto Fix would change which
+            // function the call means without saying so.
+            fixes.Add(QuickFix(
+                "Add #include " + candidate, uri, [edit], diagnostic, preferred: candidates.Count == 1));
         }
 
         return fixes;
@@ -685,7 +665,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         DocumentUri uri,
         ParseResult result,
         string name,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic)
+        LspDiagnostic diagnostic)
     {
         string opening = GameProfile.Active.HasFunctionKeyword ? "function " : "";
 
@@ -699,17 +679,10 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             NewText = separator + opening + name + "()\n{\n}\n",
         };
 
-        return new CodeAction
-        {
-            Title = "Create function '" + name + "'",
-            Kind = CodeActionKind.QuickFix,
-            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
-
-            // Never preferred: writing an empty declaration is a reasonable thing to OFFER and a
-            // poor thing for Auto Fix to do silently, since it makes the error disappear without
-            // the function doing anything.
-            Edit = SingleEdit(uri, edit),
-        };
+        // Never preferred: writing an empty declaration is a reasonable thing to OFFER and a poor
+        // thing for Auto Fix to do silently, since it makes the error disappear without the
+        // function doing anything.
+        return QuickFix("Create function '" + name + "'", uri, [edit], diagnostic);
     }
 
     /// <summary>
@@ -725,7 +698,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         Position insertAt,
         TextRange nameRange,
         TextRange? qualifier,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic,
+        LspDiagnostic diagnostic,
         bool unambiguous)
     {
         List<TextEdit> edits = [];
@@ -741,20 +714,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         TextRange qualifierRange = qualifier ?? new TextRange(nameRange.Start, nameRange.Start);
         edits.Add(new TextEdit { Range = qualifierRange.ToLsp(), NewText = namespaceName + "::" });
 
-        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
-
         string title = alreadyImported
             ? "Qualify with '" + namespaceName + "::'"
             : "Add #using " + usingPath + " and qualify with '" + namespaceName + "::'";
 
-        return new CodeAction
-        {
-            Title = title,
-            Kind = CodeActionKind.QuickFix,
-            Diagnostics = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(diagnostic),
-            IsPreferred = unambiguous,
-            Edit = new WorkspaceEdit { Changes = changes },
-        };
+        return QuickFix(title, uri, edits, diagnostic, preferred: unambiguous);
     }
 
     /// <summary>
@@ -884,7 +848,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            if ( Overlaps(element.Range, selection) )
+            if ( element.Range.Overlaps(selection) )
             {
                 duplicates.Add(new RedundantImport(path, directive, element.Range));
             }
@@ -932,22 +896,15 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             ownNamespaces.Add(declared);
         }
 
-        HashSet<string> existingUsings = new(StringComparer.Ordinal);
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            if ( element is UsingNode usingNode )
-            {
-                existingUsings.Add(StripExtension(NormalizePath(usingNode.Path)));
-            }
-        }
+        HashSet<string> existingUsings = CallFixContext.GatherUsings(result);
 
         List<MissingUsing> missing = [];
         HashSet<string> offered = new(StringComparer.Ordinal);
 
-        foreach ( GSCode.Core.Symbols.ReferenceEntry entry in result.Extraction.References )
+        foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != GSCode.Core.Symbols.ReferenceKind.Call
-                || entry.Key.Kind != GSCode.Core.Symbols.SymbolKind.Function )
+            if ( entry.Kind != ReferenceKind.Call
+                || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
             }
@@ -958,7 +915,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            if ( !Overlaps(entry.Range, selection) )
+            if ( !entry.Range.Overlaps(selection) )
             {
                 continue;
             }
@@ -1014,26 +971,19 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     private static CodeAction BuildRemoveAction(
         DocumentUri uri,
         RedundantImport duplicate,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic? reported)
+        LspDiagnostic? reported)
     {
         // Delete the whole line the directive sits on, including its trailing newline.
-        int line = duplicate.Range.Start.Line;
-        TextRange lineRange = new(new Position(line, 0), new Position(line + 1, 0));
-        TextEdit edit = new() { Range = lineRange.ToLsp(), NewText = "" };
+        TextEdit edit = new() { Range = LineRangeOf(duplicate.Range).ToLsp(), NewText = "" };
 
-        return new CodeAction
-        {
-            Title = "Remove duplicate " + duplicate.Directive + " " + duplicate.Path,
-            Kind = CodeActionKind.QuickFix,
-            Diagnostics = reported is null
-                ? null
-                : new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(reported),
-
-            // One way to remove a redundant import, and the line is provably dead — the same file is
-            // imported above. Safe for Auto Fix to take.
-            IsPreferred = reported is not null,
-            Edit = SingleEdit(uri, edit),
-        };
+        // Preferred: one way to remove a redundant import, and the line is provably dead — the same
+        // file is imported above. Safe for Auto Fix to take.
+        return QuickFix(
+            "Remove duplicate " + duplicate.Directive + " " + duplicate.Path,
+            uri,
+            [edit],
+            reported,
+            preferred: reported is not null);
     }
 
     /// <summary>
@@ -1048,37 +998,28 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         DocumentUri uri,
         string usingPath,
         Position insertAt,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic? reported,
+        LspDiagnostic? reported,
         bool unambiguous)
     {
         TextRange insertRange = new(insertAt, insertAt);
         TextEdit edit = new() { Range = insertRange.ToLsp(), NewText = "#using " + usingPath + ";\n" };
 
-        return new CodeAction
-        {
-            Title = "Add #using " + usingPath,
-            Kind = CodeActionKind.QuickFix,
-            Diagnostics = reported is null
-                ? null
-                : new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>(reported),
-
-            // Only when one import can serve the call. Preferring one of several would make Auto Fix
-            // pick a file for the user without saying so.
-            IsPreferred = reported is not null && unambiguous,
-            Edit = SingleEdit(uri, edit),
-        };
+        // Preferred only when one import can serve the call. Preferring one of several would make
+        // Auto Fix pick a file for the user without saying so.
+        return QuickFix(
+            "Add #using " + usingPath, uri, [edit], reported, preferred: reported is not null && unambiguous);
     }
 
     /// <summary>
     /// The diagnostic of a given code that the client reported over a range, or null when it did
     /// not report one — the action is still offered then, just not bound to anything.
     /// </summary>
-    private static OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic? ReportedAt(
+    private static LspDiagnostic? ReportedAt(
         CodeActionParams request, GscDiagnosticCode code, TextRange range)
     {
-        foreach ( OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic diagnostic in request.Context.Diagnostics )
+        foreach ( LspDiagnostic diagnostic in request.Context.Diagnostics )
         {
-            if ( CodeOf(diagnostic) == code && Overlaps(diagnostic.Range.ToCore(), range) )
+            if ( CodeOf(diagnostic) == code && diagnostic.Range.ToCore().Overlaps(range) )
             {
                 return diagnostic;
             }
@@ -1087,14 +1028,54 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return null;
     }
 
-    private static WorkspaceEdit SingleEdit(DocumentUri uri, TextEdit edit)
+    /// <summary>
+    /// One quick fix over this document: its title, the edits it applies, and the diagnostics it
+    /// answers.
+    ///
+    /// The diagnostic binding is the whole difference between an action a user can find and one
+    /// they cannot. Unbound, an action is a general-lightbulb entry only — it never appears as the
+    /// fix FOR the error, Auto Fix skips it (that runs preferred actions only), and Fix All does
+    /// not see it. Every offer here that answers a reported diagnostic must carry it.
+    /// </summary>
+    /// <param name="preferred">
+    /// Whether Auto Fix may take this without asking. True only where the fix is the single
+    /// unambiguous answer: preferring one of several candidates decides for the user silently.
+    /// Defaults to false, which is what <see cref="CodeAction.IsPreferred"/> already is when left
+    /// unset — it is a plain bool, not a nullable one.
+    /// </param>
+    private static CodeAction QuickFix(
+        string title,
+        DocumentUri uri,
+        IEnumerable<TextEdit> edits,
+        Container<LspDiagnostic>? diagnostics,
+        bool preferred = false)
     {
-        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new()
-        {
-            [uri] = new[] { edit },
-        };
+        Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
 
-        return new WorkspaceEdit { Changes = changes };
+        return new CodeAction
+        {
+            Title = title,
+            Kind = CodeActionKind.QuickFix,
+            Diagnostics = diagnostics,
+            IsPreferred = preferred,
+            Edit = new WorkspaceEdit { Changes = changes },
+        };
+    }
+
+    /// <inheritdoc cref="QuickFix(string, DocumentUri, IEnumerable{TextEdit}, Container{LspDiagnostic}, bool)"/>
+    /// <param name="diagnostic">
+    /// The one diagnostic this answers, or null when the client reported none over the range — the
+    /// action is still offered then, just not bound to anything.
+    /// </param>
+    private static CodeAction QuickFix(
+        string title,
+        DocumentUri uri,
+        IEnumerable<TextEdit> edits,
+        LspDiagnostic? diagnostic,
+        bool preferred = false)
+    {
+        return QuickFix(
+            title, uri, edits, diagnostic is null ? null : new Container<LspDiagnostic>(diagnostic), preferred);
     }
 
     private static string NormalizePath(string path)
@@ -1115,10 +1096,5 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         }
 
         return path;
-    }
-
-    private static bool Overlaps(TextRange node, TextRange selection)
-    {
-        return node.Start <= selection.End && selection.Start <= node.End;
     }
 }

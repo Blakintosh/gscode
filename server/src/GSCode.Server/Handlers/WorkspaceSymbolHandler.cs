@@ -6,6 +6,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 using SymbolKind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -82,17 +83,13 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
         return query.Length == 0 || name.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static WorkspaceSymbol Make(string name, SymbolKind kind, ScriptRecord record, GSCode.Core.Text.TextRange range)
+    private static WorkspaceSymbol Make(string name, SymbolKind kind, ScriptRecord record, TextRange range)
     {
         return new WorkspaceSymbol
         {
             Name = name,
             Kind = kind,
-            Location = new Location
-            {
-                Uri = DocumentUri.FromFileSystemPath(record.Path),
-                Range = range.ToLsp(),
-            },
+            Location = LspMapping.LocationAt(record.Path, range),
         };
     }
 }

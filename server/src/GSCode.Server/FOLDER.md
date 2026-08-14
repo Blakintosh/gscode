@@ -9,6 +9,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - `static class LspMapping` — the ONLY place Core and protocol types meet: structural
   Position/TextRange conversions (both UTF-16 zero-based) and Diagnostic mapping
   (severity cast, numeric code, source "gscode").
+- `LocationAt(path, range)` — a Location for a range in a file on disk. Composition rather than
+  conversion, kept here because a file path reaches the client as a URI exactly one way.
 
 ## Configuration/ServerSettings.cs
 
@@ -86,6 +88,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - `NavigationTarget` + `NavigationSupport.Resolve(uri)` — shared plumbing turning a
   document URI into its live analysis + the language store and context id to query.
+- `ResolveDirectivePath(target, path)` — the file a `#using`/`#include` names, with the extension
+  taken from the ASKING document's language. Go-to-definition and ctrl-click ask this same
+  question; with a copy each, a new directive form had to be found twice.
 - `FindAllReferences` is the single query behind both the CodeLens count and the peek list, so the
   number and the list cannot disagree. It narrows via `DeclaringFile`, which resolves "which file
   does this key mean, FROM THIS DOCUMENT" — a lens on a declaration answers itself, a call answers

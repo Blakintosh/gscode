@@ -37,8 +37,10 @@ internal static class FormattingSupport
     /// </remarks>
     public static FormatRequest? Prepare(DocumentStore documents, DocumentUri uri, FormatOptions options)
     {
-        if ( !documents.TryGet(uri.GetFileSystemPath(), out OpenDocument document)
-            || document.LatestResult is null )
+        // Only that an analysis EXISTS is asked here — a document nothing has parsed yet has
+        // nothing to format. The one actually formatted is taken fresh on the next line, for the
+        // reason the remarks above give, so the result this hands back is deliberately discarded.
+        if ( !documents.TryGetAnalyzed(uri.GetFileSystemPath(), out OpenDocument document, out ParseResult _) )
         {
             return null;
         }

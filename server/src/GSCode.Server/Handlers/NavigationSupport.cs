@@ -107,6 +107,25 @@ public sealed class NavigationSupport
     }
 
     /// <summary>
+    /// The file a <c>#using</c> or <c>#include</c> path names, or null when nothing resolves.
+    ///
+    /// The extension comes from the ASKING document, not the path: a <c>.csc</c> writing
+    /// <c>#using maps\mp\x</c> means the client script, whose server twin may not exist at all.
+    /// Written once because go-to-definition and ctrl-click ask the identical question — with a
+    /// copy each, a new directive form or a change to how the extension is chosen had to be found
+    /// twice, and finding one of the two is silent.
+    /// </summary>
+    public string? ResolveDirectivePath(NavigationTarget target, string directivePath)
+    {
+        string extension = target.Language == ScriptLanguage.Csc
+            ? GameProfile.Active.ClientScriptExtension
+            : GameProfile.Active.ServerScriptExtension;
+
+        PathResolver resolver = _resolver.Current;
+        return resolver.Resolve(resolver.GetContext(target.Path), directivePath + extension);
+    }
+
+    /// <summary>
     /// Every reference to a key visible from this document, across both language worlds when the
     /// document is a header. The single entry point, so the count a CodeLens shows and the list a
     /// peek opens are computed the same way.

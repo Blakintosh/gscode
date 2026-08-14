@@ -287,6 +287,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `Open`/`Close`/`TryGet`, `ApplyChange` (LSP incremental splice or full replace), and
   `Analyze` (runs ScriptAnalysis with an insert provider bound to the file's context
   via the injected factory, and hands back whichever snapshot stands afterwards).
+- `TryGetAnalyzed(path, out document, out result)` — the document AND its latest completed
+  analysis, false when either is missing. The cheap resolve: it answers only what the store knows,
+  where the server's `NavigationSupport.Resolve` also builds the store, context id and declared
+  namespaces. Five handlers wrote the lookup-then-null-check by hand before this existed.
 
 ## Resolution/ResolverInsertProvider.cs
 

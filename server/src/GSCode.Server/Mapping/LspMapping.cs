@@ -38,6 +38,20 @@ public static class LspMapping
         return new TextRange(range.Start.ToCore(), range.End.ToCore());
     }
 
+    /// <summary>
+    /// A protocol Location for a range in a file on disk. Composition rather than conversion, but
+    /// it belongs here for the reason the conversions do: it is the same three lines everywhere,
+    /// and a file path reaches the client as a URI exactly one way.
+    /// </summary>
+    public static Location LocationAt(string path, TextRange range)
+    {
+        return new Location
+        {
+            Uri = DocumentUri.FromFileSystemPath(path),
+            Range = range.ToLsp(),
+        };
+    }
+
     public static LspDiagnostic ToLsp(this GSCode.Core.Diagnostics.Diagnostic diagnostic)
     {
         return new LspDiagnostic
@@ -82,11 +96,7 @@ public static class LspMapping
         {
             mapped.Add(new DiagnosticRelatedInformation
             {
-                Location = new Location
-                {
-                    Uri = DocumentUri.FromFileSystemPath(relation.FilePath),
-                    Range = relation.Range.ToLsp(),
-                },
+                Location = LocationAt(relation.FilePath, relation.Range),
                 Message = relation.Message,
             });
         }

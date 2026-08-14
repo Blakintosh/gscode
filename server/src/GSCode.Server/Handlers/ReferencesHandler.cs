@@ -61,11 +61,7 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
                 continue;
             }
 
-            locations.Add(new Location
-            {
-                Uri = DocumentUri.FromFileSystemPath(record.Path),
-                Range = entry.Range.ToLsp(),
-            });
+            locations.Add(LspMapping.LocationAt(record.Path, entry.Range));
         }
 
         return Task.FromResult<LocationContainer?>(new LocationContainer(locations));

@@ -6,6 +6,8 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
+using LspSymbolKind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 
 namespace GSCode.Server.Handlers;
@@ -111,11 +113,11 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
 
     private static TypeHierarchyItem MakeItem(ClassSymbol classSymbol, ScriptRecord record, NavigationTarget target)
     {
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Range nameRange = classSymbol.NameRange.ToLsp();
+        LspRange nameRange = classSymbol.NameRange.ToLsp();
         return new TypeHierarchyItem
         {
             Name = classSymbol.Name,
-            Kind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind.Class,
+            Kind = LspSymbolKind.Class,
             Uri = DocumentUri.FromFileSystemPath(record.Path),
             Range = classSymbol.FullRange.ToLsp(),
             SelectionRange = nameRange,

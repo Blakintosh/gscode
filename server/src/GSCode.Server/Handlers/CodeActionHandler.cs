@@ -57,13 +57,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
     public override Task<CommandOrCodeActionContainer?> Handle(CodeActionParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document)
-            || document.LatestResult is null )
+        if ( !_documents.TryGetAnalyzed(
+            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
         {
             return Task.FromResult<CommandOrCodeActionContainer?>(null);
         }
 
-        ParseResult result = document.LatestResult;
         TextRange selection = request.Range.ToCore();
         List<CommandOrCodeAction> actions = [];
 

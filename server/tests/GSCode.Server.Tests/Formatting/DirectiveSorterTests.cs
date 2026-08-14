@@ -155,6 +155,127 @@ public class DirectiveSorterTests
             sorted);
     }
 
+    // --- #include is the other dialect's #using ---
+
+    [Fact]
+    public void IncludesSortLikeUsings()
+    {
+        // Until #include was a group, `GroupOf` returned -1 for it and the block ended at the
+        // first line of the file — so this pass did nothing at all on CoD4, WaW, MW2 and BO1.
+        string? sorted = DirectiveSorter.Sort(
+            "#include maps\\_zebra;\n#include maps\\_apple;\n\nmain()\n{\n}\n");
+
+        Assert.Equal(
+            "#include maps\\_apple;\n#include maps\\_zebra;\n\nmain()\n{\n}\n",
+            sorted);
+    }
+
+    // --- the #insert / #define dependency chain ---
+
+    [Fact]
+    public void ADefineAboveAnInsertStandsTheWholePassDown()
+    {
+        // The one arrangement where regrouping could lift an insert above a macro it needs.
+        Assert.Null(DirectiveSorter.Sort(
+            "#define A 1\n#insert scripts\\x.gsh;\n\nfunction f()\n{\n}\n"));
+    }
+
+    [Fact]
+    public void ADefineAboveAnInsertStandsDownEvenWithDirectivesBetweenThem()
+    {
+        // The guard is sticky rather than adjacent, so an intervening directive cannot slip a
+        // define past it.
+        Assert.Null(DirectiveSorter.Sort(
+            "#define A 1\n#namespace foo;\n#precache( \"model\", \"m\" );\n#insert scripts\\x.gsh;\n\nfunction f()\n{\n}\n"));
+    }
+
+    [Fact]
+    public void AnInsertAboveADefineKeepsThatOrder()
+    {
+        // The safe direction, and it must stay safe: a macro defined by the inserted header has to
+        // still be defined before the #define that uses it.
+        string? sorted = DirectiveSorter.Sort(
+            "#namespace foo;\n#insert scripts\\x.gsh;\n#define A 1\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#insert scripts\\x.gsh;\n\n#namespace foo;\n\n#define A 1\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void ChainedDefinesKeepTheirOrder()
+    {
+        // `#define B A` depends on `#define A`. Group 3 is not sortable, so the chain survives
+        // even though B sorts before A alphabetically.
+        string? sorted = DirectiveSorter.Sort(
+            "#namespace foo;\n#define B_MACRO 1\n#define A_MACRO B_MACRO\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#namespace foo;\n\n#define B_MACRO 1\n#define A_MACRO B_MACRO\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void APrecacheUsingAMacroEndsUpBelowTheDefine()
+    {
+        // A precache can name a macro, and group order puts every define above every precache. So
+        // the one file this could rearrange is one where the macro was ALREADY used before it was
+        // defined: the pass moves it toward correct, never away from it.
+        string? sorted = DirectiveSorter.Sort(
+            "#precache( \"model\", MODEL );\n#define MODEL \"tag_origin\"\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#define MODEL \"tag_origin\"\n\n#precache( \"model\", MODEL );\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    // --- #using_animtree is positional and ends the block ---
+
+    [Fact]
+    public void AnAnimtreeDirectiveIsNotHoistedIntoTheUsingBlock()
+    {
+        // `#using_animtree` binds every `%anim` reference BELOW it until the next one, so its
+        // position is its meaning. util_shared.gsc names "generic" at line 1530 and "all_player"
+        // at 1551 and 1995; hoisting or sorting those would silently rebind every animation
+        // between them.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\z;\n#using scripts\\a;\n\n#namespace foo;\n\n#using_animtree( \"generic\" );\n\nfunction f()\n{\n}\n");
+
+        // The usings still sort and the namespace still groups — the animtree simply stays below
+        // both, where it was written, instead of being lifted into the using block.
+        Assert.Equal(
+            "#using scripts\\a;\n#using scripts\\z;\n\n#namespace foo;\n\n#using_animtree( \"generic\" );\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void DirectivesBelowAnAnimtreeAreLeftAlone()
+    {
+        // The block ENDS at the animtree rather than skipping over it: a directive below one is
+        // below it for a reason this pass cannot check, and sorting the tail would step over the
+        // very line that makes position matter.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\z;\n#using scripts\\a;\n\n#using_animtree( \"generic\" );\n\n"
+            + "#precache( \"model\", \"z\" );\n#precache( \"model\", \"a\" );\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\a;\n#using scripts\\z;\n\n#using_animtree( \"generic\" );\n\n"
+            + "#precache( \"model\", \"z\" );\n#precache( \"model\", \"a\" );\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void TwoAnimtreesKeepBothTheirNamesAndTheirOrder()
+    {
+        // The shape from util_shared.gsc, reduced. Two DIFFERENT tree names is what proves the
+        // directive is positional rather than declarative.
+        string source =
+            "#using scripts\\a;\n\n#using_animtree( \"generic\" );\n\nfunction f()\n{\n}\n\n"
+            + "#using_animtree( \"all_player\" );\n\nfunction g()\n{\n}\n";
+
+        Assert.Null(DirectiveSorter.Sort(source));
+    }
+
     [Fact]
     public void SortingIsIdempotent()
     {

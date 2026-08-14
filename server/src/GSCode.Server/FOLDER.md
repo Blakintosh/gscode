@@ -376,7 +376,11 @@ that chose it. These are the pieces that implement it:
   statements sharing a shape has each bracket and argument column padded to its widest.
 - `DirectiveSorter` — groups and sorts the directive block at the top of a file. The formatter's one
   operation that MOVES code rather than whitespace, so it runs as a post-pass on already-reflowed
-  text, after the token-stream equality gate.
+  text, after the token-stream equality gate. `#using` and `#include` share a group (one idea, one
+  spelling per dialect) and sort with `#precache`; `#insert` and `#define` keep their order, and a
+  `#define` above an `#insert` stands the whole pass down. `#using_animtree` ENDS the block: it
+  binds every `%anim` below it until the next one, so it is not a preamble directive at all and
+  moving it rebinds animations invisibly.
 - `LineFacts` — shared line-level premises: comment tokens, leading whitespace, code-only tokens,
   comment-only lines, and `BucketByLine` (a line's significant tokens, whitespace and newlines
   dropped). Keeping these in one place prevents the aligners and formatter scope logic from

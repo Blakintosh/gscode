@@ -14,14 +14,26 @@ namespace GSCode.Server.Formatting;
 ///
 /// Ordering rules, and why they differ per kind:
 ///
-/// - <c>#using</c> and <c>#precache</c> are SORTED. A using is a namespace import resolved by the
-///   linker and a precache is a registration; neither can observe the other's position.
+/// - <c>#using</c>, <c>#include</c> and <c>#precache</c> are SORTED. An import is resolved by the
+///   linker and a precache is a registration; neither can observe the other's position. The two
+///   import spellings share a group because they are one idea per dialect, and where two imports
+///   declare the same name the call is AMBIGUOUS rather than won by whichever came first — which
+///   is what <c>AmbiguousFunctionLint</c> reports, and what makes sorting them safe.
 /// - <c>#insert</c> and <c>#define</c> keep their relative order. An insert is textual — the file's
 ///   contents are spliced in where it sits — so two inserts can disagree about a macro, and a
 ///   define can be what an insert or a later define depends on.
 /// - The whole pass BAILS if a <c>#define</c> appears before an <c>#insert</c>, which is the one
 ///   arrangement where regrouping could move an insert above a macro it needs. That does not occur
 ///   in any of the 980 stock scripts, but a mod is not the stock scripts.
+/// - <c>#using_animtree</c> ENDS the block. It is not a preamble directive at all: it binds every
+///   <c>%anim</c> reference below it until the next one, so its position is its meaning. The stock
+///   scripts settle it — <c>util_shared.gsc</c> names <c>"generic"</c> at line 1530 and
+///   <c>"all_player"</c> at 1551 and 1995, and <c>_civ_pickup.gsc</c> carries four, each sitting
+///   directly above the function whose animations it binds, a thousand lines below any import.
+///   Grouping it with <c>#using</c> hoisted it to the top of the file, which rebinds every
+///   animation between the old position and the new one and cannot be seen in a diff of names.
+///   The block ends rather than skipping over it, because a directive written BELOW one is below
+///   it for a reason this pass has no way to check.
 ///
 /// A directive continued with a trailing backslash owns every line of the continuation. That is
 /// load-bearing for <c>#define</c>: the preprocessor ends a macro body at the first newline not
@@ -34,23 +46,30 @@ namespace GSCode.Server.Formatting;
 /// </summary>
 public static class DirectiveSorter
 {
-    /// <summary>Canonical group order. Lower sorts first.</summary>
+    /// <summary>
+    /// Canonical group order. Lower sorts first. A negative result ENDS the block, so the directive
+    /// and everything below it is reproduced exactly.
+    /// </summary>
     private static int GroupOf(string directive)
     {
         switch ( directive )
         {
+            // The two spellings of an import, one per dialect (GameProfile.ImportStyle). Sorting
+            // was a no-op on every Infinity Ward game until #include was here: the block ended at
+            // the first directive in the file, so four of the five dialects got nothing.
             case "#using":
-            case "#using_animtree":
+            case "#include":
                 return 0;
             case "#insert":
                 return 1;
             case "#namespace":
-            case "#animtree":
                 return 2;
             case "#define":
                 return 3;
             case "#precache":
                 return 4;
+
+            // Everything else, including #using_animtree — see the remark on the class.
             default:
                 return -1;
         }

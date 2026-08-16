@@ -235,7 +235,7 @@
 				<Button href={marketplaceUrl} target="_blank" rel="noopener noreferrer" size="lg">
 					<DownloadIcon class="size-4" />
 					Install
-					<span class="type-data text-2xs font-normal tracking-wider opacity-90">v{extensionVersion}</span>
+					<span class="type-data text-2xs tracking-wider">v{extensionVersion}</span>
 				</Button>
 				<Button href={discordInviteUrl} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">
 					<DiscordIcon class="size-4" />

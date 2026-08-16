@@ -122,7 +122,7 @@
 			>
 				<DownloadIcon class="size-3.5" />
 				Install
-				<span class="type-data text-2xs font-normal tracking-wider opacity-90">
+				<span class="type-data text-2xs tracking-wider">
 					v{extensionVersion}
 				</span>
 			</Button>
@@ -192,7 +192,7 @@
 							>
 								<DownloadIcon class="size-3.5" />
 								Install for VS Code
-								<span class="type-data text-2xs font-normal tracking-wider opacity-90">
+								<span class="type-data text-2xs tracking-wider">
 									v{extensionVersion}
 								</span>
 							</Button>

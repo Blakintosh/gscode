@@ -435,6 +435,7 @@
 }
 @utility type-data {
 	font-family: var(--font-mono);
+	font-weight: 425;
 	letter-spacing: var(--tracking-data);
 	font-variant-numeric: tabular-nums;
 }

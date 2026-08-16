@@ -421,7 +421,7 @@
 @utility type-label {
 	font-family: var(--font-mono);
 	font-size: var(--text-2xs);
-	font-weight: 500;
+	font-weight: 600;
 	letter-spacing: var(--tracking-label);
 	text-transform: uppercase;
 	line-height: 1;
@@ -435,7 +435,7 @@
 }
 @utility type-data {
 	font-family: var(--font-mono);
-	font-weight: 425;
+	font-weight: 400;
 	letter-spacing: var(--tracking-data);
 	font-variant-numeric: tabular-nums;
 }
@@ -500,14 +500,15 @@
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
 	}
-	/* Mono never inherits the body's 300: 425 is Cascadia's legible floor at 11–13px, and
-	   uppercase labels/nav sit at 500. An explicit font-* utility still wins. */
+	/* Mono never inherits the body's Sora 300: it sits at Cascadia's Regular (400); the
+	   small uppercase labels and nav use its SemiBold (600). Real instances only — Cascadia
+	   ships 200/300/350/400/600/700. An explicit font-* utility still wins. */
 	.font-mono,
 	code,
 	pre,
 	kbd,
 	samp {
-		font-weight: 425;
+		font-weight: 400;
 	}
 	/* Emphasis is a weight change, never italics. */
 	strong,

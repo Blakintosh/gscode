@@ -48,9 +48,9 @@
 	}
 
 	const navItem =
-		'px-3 py-1.5 font-mono text-xs font-medium tracking-label uppercase transition-colors outline-none focus-visible:text-primary';
+		'px-3 py-1.5 font-mono text-xs font-semibold tracking-label uppercase transition-colors outline-none focus-visible:text-primary';
 	const sheetItem =
-		'flex items-center gap-3 px-4 py-2.5 font-mono text-xs font-medium tracking-label uppercase text-muted-foreground transition-colors hover:text-foreground hover:bg-[var(--wash-hover)] outline-none focus-visible:text-primary';
+		'flex items-center gap-3 px-4 py-2.5 font-mono text-xs font-semibold tracking-label uppercase text-muted-foreground transition-colors hover:text-foreground hover:bg-[var(--wash-hover)] outline-none focus-visible:text-primary';
 </script>
 
 <!-- Raise-coloured bar on an edge; nav is mono uppercase, mute → teal. -->

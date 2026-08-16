@@ -1,20 +1,21 @@
 <script lang="ts">
-	import type { WithElementRef, WithoutChildren } from "bits-ui";
 	import type { HTMLTextareaAttributes } from "svelte/elements";
-	import { cn } from "$lib/utils.js";
+	import { cn, type WithElementRef } from "$lib/utils.js";
 
 	let {
 		ref = $bindable(null),
 		value = $bindable(),
 		class: className,
 		...restProps
-	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> = $props();
+	}: WithElementRef<HTMLTextareaAttributes, HTMLTextAreaElement> = $props();
 </script>
 
+<!-- Datum: the same recess as Input, but Sora — mono never runs multi-line prose. -->
 <textarea
 	bind:this={ref}
+	data-slot="textarea"
 	class={cn(
-		"border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[80px] w-full rounded-md border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+		"chamfer chamfer-sm bg-recess text-foreground placeholder:text-dim block w-full min-h-24 border-0 p-4 font-sans text-sm leading-relaxed outline-none transition-[box-shadow,color] shadow-[inset_0_0_0_1px_var(--border)] focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] aria-invalid:shadow-[inset_0_0_0_1px_var(--destructive)] disabled:cursor-not-allowed disabled:opacity-50",
 		className
 	)}
 	bind:value

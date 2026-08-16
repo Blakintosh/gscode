@@ -1,15 +1,22 @@
 <script lang="ts">
+	import type { WithElementRef } from "$lib/utils.js";
 	import type { HTMLAttributes } from "svelte/elements";
+	import { cn } from "$lib/utils.js";
 
-	type $$Props = HTMLAttributes<HTMLElement> & {
-		el?: HTMLElement;
-	};
-
-	export let el: $$Props["el"] = undefined;
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLElement>> = $props();
 </script>
 
-<nav class={className} bind:this={el} aria-label="breadcrumb" {...$$restProps}>
-	<slot />
+<nav
+	bind:this={ref}
+	data-slot="breadcrumb"
+	aria-label="breadcrumb"
+	class={cn("cn-breadcrumb", className)}
+	{...restProps}
+>
+	{@render children?.()}
 </nav>

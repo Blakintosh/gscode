@@ -1,21 +1,13 @@
 <script lang="ts">
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
-	// @ts-ignore
-	import Flag from 'lucide-svelte/icons/flag';
-	// @ts-ignore
-	import Link from 'lucide-svelte/icons/link';
-	// @ts-ignore
-	import Check from 'lucide-svelte/icons/check';
-	// @ts-ignore
-	import FileJson from 'lucide-svelte/icons/file-json';
-	// @ts-ignore
-	import Trash2 from 'lucide-svelte/icons/trash-2';
-	// @ts-ignore
-	import Plus from 'lucide-svelte/icons/plus';
-	// @ts-ignore
-	import Copy from 'lucide-svelte/icons/copy';
-	// @ts-ignore
-	import X from 'lucide-svelte/icons/x';
+	import Flag from '@lucide/svelte/icons/flag';
+	import Link from '@lucide/svelte/icons/link';
+	import Check from '@lucide/svelte/icons/check';
+	import FileJson from '@lucide/svelte/icons/file-json';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Copy from '@lucide/svelte/icons/copy';
+	import X from '@lucide/svelte/icons/x';
 	import Button from '$components/ui/button/button.svelte';
 	import CopyButton from '$components/ui/copy-button/copy-button.svelte';
 	import ValidationStatus from '$components/app/pages/editor/article/ValidationStatus.svelte';

@@ -6,24 +6,15 @@
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import VirtualList from '$lib/components/ui/virtual-list/VirtualList.svelte';
 
-	// @ts-ignore
-	import Command from 'lucide-svelte/icons/command';
-	// @ts-ignore
-	import Search from 'lucide-svelte/icons/search';
-	// @ts-ignore
-	import Upload from 'lucide-svelte/icons/upload';
-	// @ts-ignore
-	import Download from 'lucide-svelte/icons/download';
-	// @ts-ignore
-	import Save from 'lucide-svelte/icons/save';
-	// @ts-ignore
-	import FolderOpen from 'lucide-svelte/icons/folder-open';
-	// @ts-ignore
-	import Plus from 'lucide-svelte/icons/plus';
-	// @ts-ignore
-	import Undo2 from 'lucide-svelte/icons/undo-2';
-	// @ts-ignore
-	import X from 'lucide-svelte/icons/x';
+	import Command from '@lucide/svelte/icons/command';
+	import Search from '@lucide/svelte/icons/search';
+	import Upload from '@lucide/svelte/icons/upload';
+	import Download from '@lucide/svelte/icons/download';
+	import Save from '@lucide/svelte/icons/save';
+	import FolderOpen from '@lucide/svelte/icons/folder-open';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Undo2 from '@lucide/svelte/icons/undo-2';
+	import X from '@lucide/svelte/icons/x';
 
 	import EditorFilters from './EditorFilters.svelte';
 	import type { ScrFunction } from '$lib/models/library';

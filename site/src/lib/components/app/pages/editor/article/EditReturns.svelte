@@ -7,10 +7,8 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import TypePicker from './TypePicker.svelte';
 	import { typeToString } from '$lib/util/scriptApi';
-	// @ts-ignore
-	import Pencil from 'lucide-svelte/icons/pencil';
-	// @ts-ignore
-	import X from 'lucide-svelte/icons/x';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import X from '@lucide/svelte/icons/x';
 
 	interface Props {
 		functionEditor: FunctionEditor;

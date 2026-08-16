@@ -5,12 +5,9 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as Sidebar from '$components/ui/sidebar/index.js';
 
-	// @ts-ignore
-	import Command from 'lucide-svelte/icons/command';
-	// @ts-ignore
-	import LoaderCircle from 'lucide-svelte/icons/loader-circle';
-	// @ts-ignore
-	import Search from 'lucide-svelte/icons/search';
+	import Command from '@lucide/svelte/icons/command';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import Search from '@lucide/svelte/icons/search';
 
 	import LanguageRadio from './drawer/LanguageRadio.svelte';
 	import type { ScrFunction, ScrLibrary } from '$lib/models/library';

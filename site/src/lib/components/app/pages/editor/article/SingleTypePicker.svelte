@@ -3,8 +3,7 @@
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	// @ts-ignore
-	import X from 'lucide-svelte/icons/x';
+	import X from '@lucide/svelte/icons/x';
 
 	interface Props {
 		value: ScrDataType;

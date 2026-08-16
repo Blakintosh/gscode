@@ -3,8 +3,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import SingleTypePicker from './SingleTypePicker.svelte';
-	// @ts-ignore
-	import Plus from 'lucide-svelte/icons/plus';
+	import Plus from '@lucide/svelte/icons/plus';
 
 	interface Props {
 		value: ScrDataType | null | undefined;

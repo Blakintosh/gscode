@@ -1,14 +1,9 @@
 <script lang="ts">
-	// @ts-ignore
-	import BadgeCheck from "lucide-svelte/icons/badge-check";
-	// @ts-ignore
-	import EyeOff from "lucide-svelte/icons/eye-off";
-	// @ts-ignore
-	import MessageCircleQuestion from "lucide-svelte/icons/message-circle-question";
-	// @ts-ignore
-	import BookOpenText from "lucide-svelte/icons/book-open-text";
-	// @ts-ignore
-	import SquareCode from "lucide-svelte/icons/square-code";
+	import BadgeCheck from "@lucide/svelte/icons/badge-check";
+	import EyeOff from "@lucide/svelte/icons/eye-off";
+	import MessageCircleQuestion from "@lucide/svelte/icons/message-circle-question";
+	import BookOpenText from "@lucide/svelte/icons/book-open-text";
+	import SquareCode from "@lucide/svelte/icons/square-code";
 	import FlagAlert from './FlagAlert.svelte';
 
 	interface Props {

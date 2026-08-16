@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { sineIn } from 'svelte/easing';
 	import * as Sidebar from "$components/ui/sidebar/index.js";
-    // @ts-ignore
-    import PanelLeftOpen from "lucide-svelte/icons/panel-left-open";
-    // @ts-ignore
-    import PanelLeftClose from "lucide-svelte/icons/panel-left-close";
+    import PanelLeftOpen from "@lucide/svelte/icons/panel-left-open";
+    import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
 
 	import type { LayoutData } from './$types';
 	import LibrarySidebar from '$components/app/pages/library/LibrarySidebar.svelte';

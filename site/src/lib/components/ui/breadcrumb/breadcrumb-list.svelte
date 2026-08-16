@@ -1,23 +1,24 @@
 <script lang="ts">
 	import type { HTMLOlAttributes } from "svelte/elements";
-	import { cn } from "$lib/utils.js";
+	import { cn, type WithElementRef } from "$lib/utils.js";
 
-	type $$Props = HTMLOlAttributes & {
-		el?: HTMLOListElement;
-	};
-
-	export let el: $$Props["el"] = undefined;
-	let className: $$Props["class"] = undefined;
-	export { className as class };
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLOlAttributes> = $props();
 </script>
 
+<!-- Datum: a breadcrumb is a readout — mono 10px uppercase in dim, separated by slashes. -->
 <ol
-	bind:this={el}
+	bind:this={ref}
+	data-slot="breadcrumb-list"
 	class={cn(
-		"flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground sm:gap-2.5",
+		"text-dim flex flex-wrap items-center gap-2 font-mono text-[10px] tracking-[.14em] uppercase wrap-break-word",
 		className
 	)}
-	{...$$restProps}
+	{...restProps}
 >
-	<slot />
+	{@render children?.()}
 </ol>

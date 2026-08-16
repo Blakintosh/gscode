@@ -3,7 +3,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 
-	import Filter from 'lucide-svelte/icons/filter';
+	import Filter from '@lucide/svelte/icons/filter';
 
 	interface Props {
 		showVerified: boolean;

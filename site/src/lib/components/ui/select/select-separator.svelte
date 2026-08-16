@@ -10,4 +10,9 @@
 	}: SeparatorPrimitive.RootProps = $props();
 </script>
 
-<Separator bind:ref class={cn("bg-muted -mx-1 my-1 h-px", className)} {...restProps} />
+<Separator
+	bind:ref
+	data-slot="select-separator"
+	class={cn("bg-border pointer-events-none my-1.5 h-px", className)}
+	{...restProps}
+/>

@@ -1,23 +1,24 @@
 <script lang="ts">
 	import type { HTMLAttributes } from "svelte/elements";
-	import { cn } from "$lib/utils.js";
+	import { cn, type WithElementRef } from "$lib/utils.js";
 
-	type $$Props = HTMLAttributes<HTMLSpanElement> & {
-		el?: HTMLSpanElement;
-	};
-
-	export let el: $$Props["el"] = undefined;
-	export let className: $$Props["class"] = undefined;
-	export { className as class };
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLSpanElement>> = $props();
 </script>
 
+<!-- The current node is the lit one. -->
 <span
-	bind:this={el}
+	bind:this={ref}
+	data-slot="breadcrumb-page"
 	role="link"
 	aria-disabled="true"
 	aria-current="page"
-	class={cn("font-normal text-foreground", className)}
-	{...$$restProps}
+	class={cn("text-primary font-normal", className)}
+	{...restProps}
 >
-	<slot />
+	{@render children?.()}
 </span>

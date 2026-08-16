@@ -1,24 +1,33 @@
 <script lang="ts">
-	import { Select as SelectPrimitive, type WithoutChild } from "bits-ui";
-	import ChevronDown from "@lucide/svelte/icons/chevron-down";
-	import { cn } from "$lib/utils.js";
+	import { Select as SelectPrimitive } from "bits-ui";
+	import { cn, type WithoutChild } from "$lib/utils.js";
 
 	let {
 		ref = $bindable(null),
 		class: className,
 		children,
+		size = "default",
 		...restProps
-	}: WithoutChild<SelectPrimitive.TriggerProps> = $props();
+	}: WithoutChild<SelectPrimitive.TriggerProps> & {
+		size?: "sm" | "default";
+	} = $props();
 </script>
 
+<!-- Datum: the trigger is a recess, like an input, with a teal caret in the corner. -->
 <SelectPrimitive.Trigger
 	bind:ref
+	data-slot="select-trigger"
+	data-size={size}
 	class={cn(
-		"border-input bg-background ring-offset-background data-[placeholder]:text-muted-foreground focus:ring-ring flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+		"chamfer chamfer-sm bg-recess text-foreground data-placeholder:text-dim flex w-fit cursor-pointer items-center justify-between gap-3 border-0 px-4 font-mono text-[13px] whitespace-nowrap transition-[box-shadow,color] outline-none select-none",
+		"shadow-[inset_0_0_0_1px_var(--border)] focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] aria-invalid:shadow-[inset_0_0_0_1px_var(--destructive)]",
+		"data-[size=default]:h-11 data-[size=sm]:h-9 data-[size=sm]:text-xs",
+		"*:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5",
+		"disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 		className
 	)}
 	{...restProps}
 >
 	{@render children?.()}
-	<ChevronDown class="size-4 opacity-50" />
+	<span aria-hidden="true" class="text-primary pointer-events-none leading-none">&#9662;</span>
 </SelectPrimitive.Trigger>

@@ -1,20 +1,13 @@
 <script>
 	import { onMount } from 'svelte';
 	import * as Code from '$lib/components/ui/code';
-	// @ts-ignore
-	import Download from 'lucide-svelte/icons/download';
-	// @ts-ignore
-	import Bug from 'lucide-svelte/icons/bug';
-	// @ts-ignore
-	import BookOpen from 'lucide-svelte/icons/book-open';
-	// @ts-ignore
-	import Sparkles from 'lucide-svelte/icons/sparkles';
-	// @ts-ignore
-	import Navigation from 'lucide-svelte/icons/navigation';
-	// @ts-ignore
-	import FolderSearch from 'lucide-svelte/icons/folder-search';
-	// @ts-ignore
-	import Palette from 'lucide-svelte/icons/palette';
+	import Download from '@lucide/svelte/icons/download';
+	import Bug from '@lucide/svelte/icons/bug';
+	import BookOpen from '@lucide/svelte/icons/book-open';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import Navigation from '@lucide/svelte/icons/navigation';
+	import FolderSearch from '@lucide/svelte/icons/folder-search';
+	import Palette from '@lucide/svelte/icons/palette';
 </script>
 
 <svelte:head>

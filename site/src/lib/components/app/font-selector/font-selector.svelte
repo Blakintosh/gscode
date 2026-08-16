@@ -4,8 +4,7 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-    // @ts-ignore
-    import Type from "lucide-svelte/icons/type";
+    import Type from "@lucide/svelte/icons/type";
     import { onMount } from "svelte";
 
     let font: string = $state(

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { FunctionEditor } from '$lib/api-editor/function-editor.svelte';
-	// @ts-ignore
-	import CircleHelp from 'lucide-svelte/icons/circle-help';
+	import CircleHelp from '@lucide/svelte/icons/circle-help';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';

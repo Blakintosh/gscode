@@ -2,10 +2,8 @@
 	import type { FunctionEditor } from '$lib/api-editor/function-editor.svelte';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import * as Code from '$lib/components/ui/code/index.js';
-	// @ts-ignore
-	import Pencil from 'lucide-svelte/icons/pencil';
-	// @ts-ignore
-	import Plus from 'lucide-svelte/icons/plus';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import Plus from '@lucide/svelte/icons/plus';
 
 	interface Props {
 		functionEditor: FunctionEditor;

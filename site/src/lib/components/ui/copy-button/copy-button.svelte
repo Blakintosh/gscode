@@ -1,34 +1,26 @@
 <script module lang="ts">
-	import type { Snippet } from "svelte";
-	import type { ButtonProps } from "../button";
-    import { Button } from "../button";
+	import type { Snippet } from 'svelte';
+	import { Button, type ButtonProps } from '$lib/components/ui/button';
 
-    export type CopyButtonProps = ButtonProps & {
-        child: Snippet<[{ copied: boolean }]>;
-        text: string;
-    };
+	export type CopyButtonProps = ButtonProps & {
+		child: Snippet<[{ copied: boolean }]>;
+		text: string;
+	};
 </script>
 
 <script lang="ts">
-    let { child, text, class: className, ...props }: CopyButtonProps = $props();
-    let copied = $state(false);
+	let { child, text, class: className, ...props }: CopyButtonProps = $props();
+	let copied = $state(false);
+	let copyStateTimeout: ReturnType<typeof setTimeout> | undefined;
 
-    let copyStateTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
-
-    function copy() {
-        navigator.clipboard.writeText(text);
-        copied = true;
-
-        if(copyStateTimeout) {
-            clearTimeout(copyStateTimeout);
-        }
-
-        copyStateTimeout = setTimeout(() => {
-            copied = false;
-        }, 1500);
-    }
+	function copy() {
+		navigator.clipboard.writeText(text);
+		copied = true;
+		clearTimeout(copyStateTimeout);
+		copyStateTimeout = setTimeout(() => (copied = false), 1500);
+	}
 </script>
 
 <Button class={className} {...props} onclick={copy}>
-    {@render child({ copied })}
+	{@render child({ copied })}
 </Button>

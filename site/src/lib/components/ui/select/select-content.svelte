@@ -1,8 +1,11 @@
 <script lang="ts">
-	import { Select as SelectPrimitive, type WithoutChild } from "bits-ui";
+	import { Select as SelectPrimitive } from "bits-ui";
+	import SelectPortal from "./select-portal.svelte";
 	import SelectScrollUpButton from "./select-scroll-up-button.svelte";
 	import SelectScrollDownButton from "./select-scroll-down-button.svelte";
-	import { cn } from "$lib/utils.js";
+	import { cn, type WithoutChild } from "$lib/utils.js";
+	import type { ComponentProps } from "svelte";
+	import type { WithoutChildrenOrChild } from "$lib/utils.js";
 
 	let {
 		ref = $bindable(null),
@@ -10,18 +13,25 @@
 		sideOffset = 4,
 		portalProps,
 		children,
+		preventScroll = true,
 		...restProps
 	}: WithoutChild<SelectPrimitive.ContentProps> & {
-		portalProps?: SelectPrimitive.PortalProps;
+		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof SelectPortal>>;
 	} = $props();
 </script>
 
-<SelectPrimitive.Portal {...portalProps}>
+<!-- Datum: an overlay floats on raise behind an edge rim, with a real drop shadow.
+     clip-path kills box-shadow, so the shadow is a filter and the rim is the background. -->
+<SelectPortal {...portalProps}>
 	<SelectPrimitive.Content
 		bind:ref
 		{sideOffset}
+		{preventScroll}
+		data-slot="select-content"
 		class={cn(
-			"data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 bg-popover text-popover-foreground relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border shadow-md data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+			"chamfer chamfer-sm rim-edge text-popover-foreground relative isolate z-50 min-w-36 overflow-x-hidden overflow-y-auto py-1.5 font-mono text-xs [filter:drop-shadow(var(--shadow-overlay))]",
+			"before:bg-popover before:absolute before:inset-px before:-z-10 before:[clip-path:inherit] before:content-['']",
+			"data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 duration-150",
 			className
 		)}
 		{...restProps}
@@ -29,11 +39,11 @@
 		<SelectScrollUpButton />
 		<SelectPrimitive.Viewport
 			class={cn(
-				"h-[var(--bits-select-anchor-height)] w-full min-w-[var(--bits-select-anchor-width)] p-1"
+				"h-(--bits-select-anchor-height) w-full min-w-(--bits-select-anchor-width) scroll-my-1"
 			)}
 		>
 			{@render children?.()}
 		</SelectPrimitive.Viewport>
 		<SelectScrollDownButton />
 	</SelectPrimitive.Content>
-</SelectPrimitive.Portal>
+</SelectPortal>

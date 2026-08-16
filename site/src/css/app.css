@@ -1,99 +1,459 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ─────────────────────────────────────────────────────────────────────────────
+   DATUM — the gscode design system, applied to gscode.net.
+   Kept in lockstep with gscode-assetplace/src/app.css so the two sites read as one
+   product; only the last section (site-specific) should differ.
+   ───────────────────────────────────────────────────────────────────────────── */
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --primary: 244 55% 41%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 244 55% 41%;
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 244 55% 41%;
-    --destructive: 0 72.2% 50.6%;
-    --destructive-foreground: 210 20% 98%;
-    --ring: 224 71.4% 4.1%;
-    --radius: 0.5rem;
-	  --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    --article-background: 0 0% 100%;
-  }
+/* Fonts (Fontsource, self-hosted). Three faces, three jobs:
+   Chakra Petch 700 — display (headings, wordmark, buttons, HUD values), always uppercase
+   Sora             — all prose (300 body · 500 emphasis · 600 subheads)
+   IBM Plex Mono    — labels, readouts, versions, counts, code, nav */
+@import '@fontsource/chakra-petch/700.css';
+@import '@fontsource-variable/sora';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
 
-  .dark {
-    --background: 240 6% 10%;
-    --foreground: 210 20% 98%;
-    --muted: 240 4% 16%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --popover: 240 6% 10%;
-    --popover-foreground: 210 20% 98%;
-    --card: 240 6% 10%;
-    --card-foreground: 210 20% 98%;
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
-    --primary: 210 20% 98%;
-    --primary-foreground: 224 71.4% 4.1%;
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 210 20% 98%;
-    --accent: 240 4% 16%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
-    --ring: 216 12.2% 83.9%;
-	  --sidebar-background: 240 6% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    --article-background: 240 4% 16%;
-  }
+@import 'tailwindcss';
 
-  @font-face {
-    font-family: "OpenDyslexic";
-    src: url("/fonts/OpenDyslexic-Regular.otf") format("opentype");
-    font-weight: 400;
-    font-style: normal;
-  }
+@import 'tw-animate-css';
 
-  @font-face {
-    font-family: "OpenDyslexic";
-    src: url("/fonts/OpenDyslexic-Bold.otf") format("opentype");
-    font-weight: 700;
-    font-style: normal;
-  }
+@theme {
+	--font-sans:
+		'Sora Variable', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+		'Segoe UI Symbol', 'Noto Color Emoji';
+	--font-display: 'Chakra Petch', var(--font-sans);
+	--font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	/* Accessibility alternative offered by the font selector — not a brand face. */
+	--font-dyslexic: 'OpenDyslexic', var(--font-sans);
+}
 
-  @font-face {
-    font-family: "OpenDyslexic";
-    src: url("/fonts/OpenDyslexic-Italic.otf") format("opentype");
-    font-weight: 400;
-    font-style: italic;
-  }
-  
+@custom-variant dark (&:is(.dark *));
+
+/* ── Light — full parity ─────────────────────────────────────────────────── */
+:root {
+	--radius: 0rem; /* nothing in Datum is round; corners are chamfered via utilities */
+	--cut: 15px; /* chamfer size: 15 surfaces · 10 controls · 7 chips */
+
+	--background: #edf1f2; /* paper */
+	--foreground: #10181d; /* ink */
+	--card: #ffffff;
+	--card-foreground: #10181d;
+	--popover: #ffffff;
+	--popover-foreground: #10181d;
+	--primary: #0f9484; /* teal 700 — keeps AA on white */
+	--primary-foreground: #ffffff;
+	--secondary: #e2e9eb;
+	--secondary-foreground: #10181d;
+	--muted: #e2e9eb;
+	--muted-foreground: #5a6c76;
+	--accent: #d9f3ee;
+	--accent-foreground: #0b6b60;
+	--destructive: #d8375c;
+	--destructive-foreground: #ffffff;
+	--border: #d7e0e3;
+	--input: #d7e0e3;
+	--ring: #0f9484;
+	--chart-1: #0f9484;
+	--chart-2: #3ed1bd;
+	--chart-3: #5fc6e0;
+	--chart-4: #6c5ce8;
+	--chart-5: #3e7f8f;
+	--sidebar: #ffffff;
+	--sidebar-foreground: #10181d;
+	--sidebar-primary: #0f9484;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #d9f3ee;
+	--sidebar-accent-foreground: #0b6b60;
+	--sidebar-border: #d7e0e3;
+	--sidebar-ring: #0f9484;
+
+	/* Datum extras the shadcn set lacks */
+	--ink: #05201c; /* text on teal fills (both modes) */
+	--bright: #7befdd; /* lit edge · ring · hover (dark); gradients only in light */
+	--teal: #3ed1bd; /* the one brand hue, unchanged in both modes (used inside gradients/fills w/ ink) */
+	--steel: #b8c6cb; /* unselected geometry */
+	--deep: #0b6b60; /* structural teal · hover fill · accent text */
+	--dim: #5a6c76; /* tertiary text — 9–10px metadata only */
+	--violet: #6c5ce8; /* gradients only. Never text, never a panel */
+	--recess: #ffffff; /* input body: one step below its panel */
+	--table: #ffffff; /* recessed table surface */
+	--handle: #b8c6cb; /* corner handle stroke at rest */
+	--rim-rest: linear-gradient(146deg, #d7e0e3, #d7e0e3);
+	--rim-active: linear-gradient(146deg, #0f9484, #0f9484);
+	--rim-hover: linear-gradient(146deg, #0f9484, #0f9484);
+	--rim-danger: linear-gradient(146deg, #d8375c 0, #d7e0e3 40%, #d7e0e3 74%, #d7e0e3 100%);
+	--rim-deep: linear-gradient(146deg, #0b6b60, #0b6b60);
+	--grad-action: linear-gradient(112deg, #7befdd, #3ed1bd 70%, #3ea9c9);
+	--grad-text: linear-gradient(94deg, #0f9484, #0b6b60 55%, #6c5ce8);
+	--grad-avatar: linear-gradient(142deg, #7befdd, #3ed1bd 58%, #6c5ce8);
+	--shadow-overlay: 0 10px 22px rgba(16, 24, 29, 0.1);
+	--shadow-panel: 0 10px 22px rgba(16, 24, 29, 0.08);
+	--wash-active: rgba(15, 148, 132, 0.1);
+	--wash-hover: rgba(15, 148, 132, 0.05);
+	--sheen: #d7e0e3;
+}
+
+/* ── Dark — the native mode ──────────────────────────────────────────────── */
+.dark {
+	--background: #07080c; /* ground */
+	--foreground: #e2eaec; /* chalk  */
+	--card: #111720; /* panel  */
+	--card-foreground: #e2eaec;
+	--popover: #19212c; /* raise  */
+	--popover-foreground: #e2eaec;
+	--primary: #3ed1bd; /* teal   */
+	--primary-foreground: #05201c;
+	--secondary: #19212c;
+	--secondary-foreground: #e2eaec;
+	--muted: #19212c;
+	--muted-foreground: #8b9ba3;
+	--accent: #16564f;
+	--accent-foreground: #7befdd;
+	--destructive: #ff5c7a;
+	--destructive-foreground: #2a040d;
+	--border: #27333f; /* edge */
+	--input: #27333f;
+	--ring: #7befdd; /* bright */
+	--chart-1: #3ed1bd;
+	--chart-2: #7befdd;
+	--chart-3: #5fc6e0;
+	--chart-4: #8b7bff;
+	--chart-5: #3e7f8f;
+	--sidebar: #111720;
+	--sidebar-foreground: #e2eaec;
+	--sidebar-primary: #3ed1bd;
+	--sidebar-primary-foreground: #05201c;
+	--sidebar-accent: #19212c;
+	--sidebar-accent-foreground: #7befdd;
+	--sidebar-border: #27333f;
+	--sidebar-ring: #7befdd;
+
+	--ink: #05201c;
+	--bright: #7befdd;
+	--teal: #3ed1bd;
+	--steel: #3e5661;
+	--deep: #16564f;
+	--dim: #5a6c76;
+	--violet: #8b7bff;
+	--recess: #07080c;
+	--table: #0b0f15;
+	--handle: #3e5661;
+	--rim-rest: linear-gradient(146deg, #3e5661 0, #27333f 40%, #27333f 74%, #4b4574 100%);
+	--rim-active: linear-gradient(146deg, #7befdd 0, #3ed1bd 12%, #27333f 44%, #27333f 68%, #8b7bff 100%);
+	--rim-hover: linear-gradient(146deg, #7befdd, #7befdd);
+	--rim-danger: linear-gradient(146deg, #ff5c7a 0, #27333f 40%, #27333f 74%, #4b4574 100%);
+	--rim-deep: linear-gradient(146deg, #16564f, #16564f);
+	--grad-action: linear-gradient(112deg, #7befdd, #3ed1bd 70%, #5fc6e0);
+	--grad-text: linear-gradient(94deg, #7befdd, #3ed1bd 55%, #8b7bff);
+	--grad-avatar: linear-gradient(142deg, #7befdd, #3ed1bd 58%, #8b7bff);
+	--shadow-overlay: 0 18px 32px rgba(0, 0, 0, 0.8);
+	--shadow-panel: 0 18px 28px rgba(0, 0, 0, 0.6);
+	--wash-active: rgba(62, 209, 189, 0.09);
+	--wash-hover: rgba(62, 209, 189, 0.05);
+	--sheen: #222d3a;
+}
+
+@theme inline {
+	--radius-sm: 0px;
+	--radius-md: 0px;
+	--radius-lg: 0px;
+	--radius-xl: 0px;
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+	--color-chart-5: var(--chart-5);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+	/* Datum extras → utilities (text-ink, bg-deep, border-steel, text-dim …) */
+	--color-ink: var(--ink);
+	--color-bright: var(--bright);
+	--color-teal: var(--teal);
+	--color-steel: var(--steel);
+	--color-deep: var(--deep);
+	--color-dim: var(--dim);
+	--color-violet: var(--violet);
+	--color-recess: var(--recess);
+	--color-table: var(--table);
+	--color-handle: var(--handle);
+	--shadow-overlay: var(--shadow-overlay);
+	--shadow-panel: var(--shadow-panel);
+	--animate-sheen: datum-sheen 1.4s linear infinite;
+	--ease-datum: ease;
+	--default-transition-duration: 150ms;
+}
+
+/* ── The chamfered brush ─────────────────────────────────────────────────── */
+/* Top-left and bottom-right cuts only. --cut is inherited, so `chamfer chamfer-sm`
+   or an inline `[--cut:12px]` changes the size. */
+@utility chamfer {
+	clip-path: polygon(
+		var(--cut) 0,
+		100% 0,
+		100% calc(100% - var(--cut)),
+		calc(100% - var(--cut)) 100%,
+		0 100%,
+		0 var(--cut)
+	);
+}
+@utility chamfer-sm {
+	--cut: 10px;
+}
+@utility chamfer-xs {
+	--cut: 7px;
+}
+@utility chamfer-2xs {
+	--cut: 4px;
+}
+/* Type tab that docks into a brush's top-left cut: cut on the left, slanted on the right. */
+@utility tab-cut {
+	clip-path: polygon(15px 0, 100% 0, calc(100% - 9px) 100%, 0 100%, 0 15px);
+}
+/* Filter chip: slanted both ends. */
+@utility chip-cut {
+	clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+/* Chip (badge) shape: TL cut + slanted BR. */
+@utility badge-cut {
+	clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+
+/* Rims — the 1px gradient border of a brush. Apply to the outer (clipped) element and
+   give the inner body a 1px inset. */
+@utility rim {
+	background: var(--rim-rest);
+}
+@utility rim-active {
+	background: var(--rim-active);
+}
+@utility rim-hover {
+	background: var(--rim-hover);
+}
+@utility rim-danger {
+	background: var(--rim-danger);
+}
+@utility rim-deep {
+	background: var(--rim-deep);
+}
+@utility rim-edge {
+	background: var(--border);
+}
+
+/* Gradients — the only three that exist. */
+@utility grad-action {
+	background: var(--grad-action);
+	color: var(--ink);
+}
+@utility grad-text {
+	background: var(--grad-text);
+	background-clip: text;
+	-webkit-background-clip: text;
+	color: transparent;
+}
+@utility grad-avatar {
+	background: var(--grad-avatar);
+}
+
+/* The lit grid — the home hero only. */
+@utility lit-grid {
+	background-image:
+		linear-gradient(color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px),
+		linear-gradient(
+			90deg,
+			color-mix(in oklab, var(--foreground) 5%, transparent) 1px,
+			transparent 1px
+		),
+		linear-gradient(color-mix(in oklab, var(--foreground) 9%, transparent) 1px, transparent 1px),
+		linear-gradient(
+			90deg,
+			color-mix(in oklab, var(--foreground) 9%, transparent) 1px,
+			transparent 1px
+		);
+	background-size:
+		16px 16px,
+		16px 16px,
+		128px 128px,
+		128px 128px;
+}
+/* The light on the grid, masked to the top-right source. */
+@utility lit-grid-glow {
+	background-image:
+		linear-gradient(color-mix(in oklab, var(--primary) 30%, transparent) 1px, transparent 1px),
+		linear-gradient(
+			90deg,
+			color-mix(in oklab, var(--primary) 30%, transparent) 1px,
+			transparent 1px
+		),
+		linear-gradient(color-mix(in oklab, var(--bright) 44%, transparent) 1px, transparent 1px),
+		linear-gradient(
+			90deg,
+			color-mix(in oklab, var(--bright) 44%, transparent) 1px,
+			transparent 1px
+		);
+	background-size:
+		16px 16px,
+		16px 16px,
+		128px 128px,
+		128px 128px;
+	mask-image: radial-gradient(58% 80% at 76% -8%, #000 0, rgba(0, 0, 0, 0.42) 38%, transparent 74%);
+}
+
+/* Sidebar / menu item — active is always a 2px left border plus a 9% teal wash. */
+@utility nav-item {
+	border-left: 2px solid transparent;
+	color: var(--muted-foreground);
+	transition:
+		color 150ms ease,
+		background-color 150ms ease;
+}
+@utility nav-item-hover {
+	color: var(--foreground);
+	background-color: var(--wash-hover);
+}
+@utility nav-item-active {
+	color: var(--primary);
+	border-left-color: var(--primary);
+	background-color: var(--wash-active);
+}
+
+/* Inset hairline (bars, HUD strips, tables) — a border that doesn't take space. */
+@utility inset-edge {
+	box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* Type roles */
+@utility type-label {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	letter-spacing: 0.17em;
+	text-transform: uppercase;
+	line-height: 1;
+}
+@utility type-display {
+	font-family: var(--font-display);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	line-height: 1.1;
+}
+@utility type-data {
+	font-family: var(--font-mono);
+	letter-spacing: 0.04em;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Skeleton sheen — light travels top-left → bottom-right. */
+@keyframes datum-sheen {
+	from {
+		background-position: -200px 0;
+	}
+	to {
+		background-position: 260px 0;
+	}
+}
+@utility sheen {
+	background: linear-gradient(90deg, var(--muted) 25%, var(--sheen) 37%, var(--muted) 63%);
+	background-size: 400px 100%;
+	animation: datum-sheen 1.4s linear infinite;
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+	* {
+		@apply border-border outline-ring/50;
+	}
+	html {
+		color-scheme: light dark;
+	}
+	body {
+		@apply bg-background text-foreground font-sans;
+		font-weight: 300;
+		line-height: 1.66;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+	/* Emphasis is a weight change, never italics. */
+	strong,
+	b {
+		font-weight: 500;
+	}
+	/* Lucide: 1.5px stroke, always. */
+	svg.lucide {
+		stroke-width: 1.5;
+	}
+	/* Nothing in Datum is round — including native controls that slip through. */
+	button,
+	input,
+	select,
+	textarea {
+		border-radius: 0;
+	}
+	::selection {
+		background: color-mix(in oklab, var(--primary) 30%, transparent);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			transition: none !important;
+			animation: none !important;
+		}
+	}
+}
+
+/* ── Site-specific ───────────────────────────────────────────────────────── */
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic-Regular.otf') format('opentype');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic-Bold.otf') format('opentype');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'OpenDyslexic';
+	src: url('/fonts/OpenDyslexic-Italic.otf') format('opentype');
+	font-weight: 400;
+	font-style: italic;
+	font-display: swap;
+}
+
+/* The font selector toggles these on <html>. Sora is the default; OpenDyslexic is an
+   accessibility alternative and deliberately overrides the display face too. */
+@layer base {
+	html.font-dyslexic,
+	html.font-dyslexic .font-display,
+	html.font-dyslexic .font-sans {
+		font-family: var(--font-dyslexic);
+	}
 }

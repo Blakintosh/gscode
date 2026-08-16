@@ -7,18 +7,12 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import TypePicker from './TypePicker.svelte';
 	import ParameterEntry from './ParameterEntry.svelte';
-	// @ts-ignore
-	import Plus from 'lucide-svelte/icons/plus';
-	// @ts-ignore
-	import Trash2 from 'lucide-svelte/icons/trash-2';
-	// @ts-ignore
-	import Pencil from 'lucide-svelte/icons/pencil';
-	// @ts-ignore
-	import X from 'lucide-svelte/icons/x';
-	// @ts-ignore
-	import ChevronUp from 'lucide-svelte/icons/chevron-up';
-	// @ts-ignore
-	import ChevronDown from 'lucide-svelte/icons/chevron-down';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import X from '@lucide/svelte/icons/x';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 
 	interface Props {
 		functionEditor: FunctionEditor;

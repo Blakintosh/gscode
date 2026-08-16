@@ -1,8 +1,7 @@
 <script lang="ts">
 	import type { FunctionEditor } from '$lib/api-editor/function-editor.svelte';
 	import { Input } from '$lib/components/ui/input/index.js';
-	// @ts-ignore
-	import Pencil from 'lucide-svelte/icons/pencil';
+	import Pencil from '@lucide/svelte/icons/pencil';
 
 	interface Props {
 		functionEditor: FunctionEditor;

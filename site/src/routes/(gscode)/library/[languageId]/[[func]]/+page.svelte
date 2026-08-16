@@ -3,16 +3,11 @@
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import * as Code from '$lib/components/ui/code/index.js';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
-	// @ts-ignore
-	import Flag from 'lucide-svelte/icons/flag';
-	// @ts-ignore
-	import Link from 'lucide-svelte/icons/link';
-	// @ts-ignore
-	import TriangleAlert from 'lucide-svelte/icons/triangle-alert';
-	// @ts-ignore
-	import Check from 'lucide-svelte/icons/check';
-	// @ts-ignore
-	import Github from 'lucide-svelte/icons/github';
+	import Flag from '@lucide/svelte/icons/flag';
+	import Link from '@lucide/svelte/icons/link';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Check from '@lucide/svelte/icons/check';
+	import Github from '@lucide/svelte/icons/github';
 	import Button from '$components/ui/button/button.svelte';
 	import CopyButton from '$components/ui/copy-button/copy-button.svelte';
 	import FlagsAlert from '$components/app/pages/library/article/FlagsAlert.svelte';

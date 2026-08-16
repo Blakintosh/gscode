@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { FunctionEditor } from '$lib/api-editor/function-editor.svelte';
-	// @ts-ignore
-	import TriangleAlert from 'lucide-svelte/icons/triangle-alert';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
 	interface Props {
 		functionEditor: FunctionEditor;

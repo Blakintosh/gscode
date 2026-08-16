@@ -4,7 +4,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
-	import { Separator } from '$lib/components/ui/separator/index.js';
+	import Brush from '$lib/components/site/Brush.svelte';
 	import TypePicker from './TypePicker.svelte';
 	import ParameterEntry from './ParameterEntry.svelte';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -35,61 +35,69 @@
 
 <div class="flex flex-col gap-4">
 	{#if parameters.length > 0}
-		<div class="divide-y border-b mb-2">
+		<div class="border-border divide-border mb-1 divide-y border-b">
 			{#each parameters as parameter, i}
 				<div class="group relative">
 					{#if editingIndex === i}
-						<div class="flex flex-col gap-4 p-4 border rounded-lg bg-muted/30 my-2">
-							<div class="flex items-center justify-between">
-								<span class="font-medium text-sm">Edit Parameter {i + 1}</span>
-								<div class="flex gap-2">
-									<div class="flex items-center border rounded-md px-1 bg-background">
-										<Button
-											variant="ghost"
-											size="icon"
-											class="h-7 w-7"
-											disabled={i === 0}
-											onclick={() => {
-												functionEditor.moveParameter(overloadIndex, i, 'up');
-												editingIndex = i - 1;
-											}}
-										>
-											<ChevronUp class="w-4 h-4" />
-										</Button>
-										<Separator orientation="vertical" class="h-4" />
-										<Button
-											variant="ghost"
-											size="icon"
-											class="h-7 w-7"
-											disabled={i === parameters.length - 1}
-											onclick={() => {
-												functionEditor.moveParameter(overloadIndex, i, 'down');
-												editingIndex = i + 1;
-											}}
-										>
-											<ChevronDown class="w-4 h-4" />
-										</Button>
-									</div>
+						<Brush
+							surface="popover"
+							cut={10}
+							rim="edge"
+							class="my-2"
+							bodyClass="flex flex-col gap-4 px-4 py-4"
+						>
+							<div class="flex items-center justify-between gap-2">
+								<span class="type-label text-dim">Parameter {i + 1}</span>
+								<div class="flex items-center gap-1">
 									<Button
 										variant="ghost"
-										size="sm"
+										size="icon-xs"
+										title="Move up"
+										disabled={i === 0}
+										onclick={() => {
+											functionEditor.moveParameter(overloadIndex, i, 'up');
+											editingIndex = i - 1;
+										}}
+									>
+										<ChevronUp />
+										<span class="sr-only">Move up</span>
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										title="Move down"
+										disabled={i === parameters.length - 1}
+										onclick={() => {
+											functionEditor.moveParameter(overloadIndex, i, 'down');
+											editingIndex = i + 1;
+										}}
+									>
+										<ChevronDown />
+										<span class="sr-only">Move down</span>
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										title="Remove parameter"
+										class="hover:text-destructive"
 										onclick={() => {
 											functionEditor.removeParameter(overloadIndex, i);
 											stopEditing();
 										}}
-										class="text-destructive hover:text-destructive hover:bg-destructive/10"
 									>
-										<Trash2 class="w-4 h-4" />
+										<Trash2 />
+										<span class="sr-only">Remove parameter</span>
 									</Button>
-									<Button variant="ghost" size="sm" onclick={stopEditing}>
-										<X class="w-4 h-4" />
+									<Button variant="ghost" size="icon-xs" title="Done" onclick={stopEditing}>
+										<X />
+										<span class="sr-only">Done</span>
 									</Button>
 								</div>
 							</div>
 
-							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 								<div class="flex flex-col gap-2">
-									<label for="param-name-{i}" class="text-sm font-medium">Name</label>
+									<label for="param-name-{i}" class="type-label text-dim">Name</label>
 									<Input
 										id="param-name-{i}"
 										type="text"
@@ -98,11 +106,13 @@
 											functionEditor.setParameterName(overloadIndex, i, e.currentTarget.value)}
 										placeholder="Parameter name"
 									/>
-									<p class="text-xs text-muted-foreground">camelCase, e.g. hasAmmo.</p>
+									<p class="text-dim font-mono text-[10px] tracking-[.06em]">
+										camelCase, e.g. hasAmmo.
+									</p>
 								</div>
 
 								<div class="flex flex-col gap-2">
-									<span class="text-sm font-medium">Type</span>
+									<span class="type-label text-dim">Type</span>
 									<TypePicker
 										value={parameter.type}
 										onchange={(type) => functionEditor.setParameterType(overloadIndex, i, type)}
@@ -110,23 +120,20 @@
 								</div>
 							</div>
 
-							<div class="flex items-center gap-2">
+							<div class="flex items-center gap-2.5">
 								<Checkbox
 									id="param-mandatory-{i}"
 									checked={parameter.mandatory ?? false}
 									onCheckedChange={(checked) =>
 										functionEditor.setParameterMandatory(overloadIndex, i, checked === true)}
 								/>
-								<label
-									for="param-mandatory-{i}"
-									class="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-								>
+								<label for="param-mandatory-{i}" class="text-sm leading-none">
 									Mandatory (required)
 								</label>
 							</div>
 
 							<div class="flex flex-col gap-2">
-								<label for="param-desc-{i}" class="text-sm font-medium">Description</label>
+								<label for="param-desc-{i}" class="type-label text-dim">Description</label>
 								<Textarea
 									id="param-desc-{i}"
 									value={parameter.description ?? ''}
@@ -136,20 +143,22 @@
 									rows={2}
 									class="resize-none"
 								/>
-								<p class="text-xs text-muted-foreground">Statement sentence in American English, ending with a period.</p>
+								<p class="text-dim font-mono text-[10px] tracking-[.06em]">
+									Statement sentence in American English, ending with a period.
+								</p>
 							</div>
-						</div>
+						</Brush>
 					{:else}
 						<button
 							type="button"
 							onclick={() => startEditing(i)}
-							class="group/item flex items-start gap-2 text-left cursor-pointer hover:bg-muted/50 rounded-md px-3 py-2 -mx-3 transition-colors w-full"
+							class="group/item -mx-3 flex w-full cursor-pointer items-start gap-2 px-3 py-2 text-left transition-colors hover:bg-[var(--wash-hover)]"
 						>
 							<div class="flex-1">
 								<ParameterEntry {...parameter} />
 							</div>
 							<Pencil
-								class="w-4 h-4 opacity-0 group-hover/item:opacity-50 transition-opacity mt-2 shrink-0"
+								class="text-dim mt-2 size-4 shrink-0 opacity-0 transition-opacity group-hover/item:opacity-100"
 							/>
 						</button>
 					{/if}
@@ -157,20 +166,19 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="text-sm text-muted-foreground italic mb-2">No parameters.</div>
+		<div class="text-dim mb-1 text-sm">No parameters.</div>
 	{/if}
 
 	<Button
 		variant="outline"
 		size="sm"
-		class="w-full gap-2 border-dashed"
+		class="w-full"
 		onclick={() => {
 			functionEditor.addParameter(overloadIndex);
 			startEditing(parameters.length); // Edit the newly added parameter
 		}}
 	>
-		<Plus class="w-4 h-4" />
-		Add Parameter
+		<Plus />
+		Add parameter
 	</Button>
 </div>
-

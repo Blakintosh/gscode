@@ -1,21 +1,20 @@
 <script lang="ts">
-	import * as Alert from '$lib/components/ui/alert/index.js';
-	import { Button } from '$components/ui/button';
+	import Brush from '$lib/components/site/Brush.svelte';
 	import type { Component } from 'svelte';
 
-    type FlagAlertProps = {
-        Icon: Component,
-        title: string,
-        description: string
-    }
+	type FlagAlertProps = {
+		Icon: Component;
+		title: string;
+		description: string;
+	};
 
-    let { Icon, title, description }: FlagAlertProps = $props();
+	let { Icon, title, description }: FlagAlertProps = $props();
 </script>
 
-<Alert.Root class={'[&:has(svg)]:pl-12'}>
-    <Icon class="w-6 h-6" />
-    <Alert.Title class="text-sm lg:text-base">{title}</Alert.Title>
-    <Alert.Description class="flex flex-col gap-2 items-start text-xs lg:text-sm">
-        {description}
-    </Alert.Description>
-</Alert.Root>
+<Brush surface="card" cut={10} rim="edge" bodyClass="flex items-start gap-3 px-4 py-3.5">
+	<Icon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
+	<div class="flex flex-col gap-1">
+		<span class="type-label text-dim">{title}</span>
+		<p class="text-muted-foreground text-xs lg:text-sm">{description}</p>
+	</div>
+</Brush>

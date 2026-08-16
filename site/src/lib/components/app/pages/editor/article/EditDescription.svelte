@@ -29,7 +29,7 @@
 </script>
 
 {#if editing}
-	<div>
+	<div class="flex flex-col gap-1.5">
 		<Textarea
 			bind:ref={textareaRef}
 			value={functionEditor.function.description ?? ''}
@@ -38,23 +38,27 @@
 			onkeydown={handleKeydown}
 			placeholder="Add a description..."
 			rows={2}
-			class="text-base lg:text-xl text-muted-foreground resize-none"
+			class="resize-none text-base"
 		/>
-		<p class="text-xs text-muted-foreground mt-1 px-2">Statement sentence in American English, ending with a period.</p>
+		<p class="text-dim font-mono text-[10px] tracking-[.06em]">
+			Statement sentence in American English, ending with a period.
+		</p>
 	</div>
 {:else}
 	<button
 		type="button"
 		onclick={startEditing}
-		class="group flex items-start gap-2 text-left cursor-pointer hover:bg-muted/50 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors w-full"
+		class="group -mx-2 -my-1 flex w-full cursor-pointer items-start gap-2.5 px-2 py-1 text-left transition-colors hover:bg-[var(--wash-hover)]"
 	>
-		<h2 class="text-base lg:text-xl text-muted-foreground flex-1">
+		<h2 class="text-muted-foreground flex-1 text-base leading-relaxed lg:text-[16.5px]">
 			{#if functionEditor.function.description}
 				{functionEditor.function.description}
 			{:else}
-				<span class="italic opacity-50">No description. Click to add one.</span>
+				<span class="text-dim">No description. Click to add one.</span>
 			{/if}
 		</h2>
-		<Pencil class="w-4 h-4 opacity-0 group-hover:opacity-50 transition-opacity mt-1 shrink-0" />
+		<Pencil
+			class="text-dim mt-1 size-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+		/>
 	</button>
 {/if}

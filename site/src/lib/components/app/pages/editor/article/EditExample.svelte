@@ -2,6 +2,7 @@
 	import type { FunctionEditor } from '$lib/api-editor/function-editor.svelte';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import * as Code from '$lib/components/ui/code/index.js';
+	import { getEditorContext } from '$lib/api-editor/editor.svelte';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Plus from '@lucide/svelte/icons/plus';
 
@@ -12,6 +13,9 @@
 	let { functionEditor }: Props = $props();
 	let editing = $state(false);
 	let textareaRef = $state<HTMLTextAreaElement | null>(null);
+
+	const editor = getEditorContext();
+	let language = $derived(editor.library?.languageId === 'csc' ? 'CSC' : 'GSC');
 
 	function startEditing() {
 		editing = true;
@@ -30,7 +34,7 @@
 </script>
 
 {#if editing}
-	<div class="flex flex-col gap-2">
+	<div class="flex flex-col gap-1.5">
 		<Textarea
 			bind:ref={textareaRef}
 			value={functionEditor.function.example ?? ''}
@@ -39,42 +43,35 @@
 			onkeydown={handleKeydown}
 			placeholder="// Add example code here..."
 			rows={8}
-			class="font-mono text-sm resize-none"
+			class="resize-none font-mono text-xs"
 		/>
-		<p class="text-xs text-muted-foreground">Press Escape or click outside to finish editing</p>
+		<p class="text-dim font-mono text-[10px] tracking-[.06em]">
+			Press Escape or click outside to finish editing
+		</p>
 	</div>
 {:else if functionEditor.function.example}
-	<button
-		type="button"
-		onclick={startEditing}
-		class="group relative cursor-pointer w-full text-left"
-	>
-		<Code.Root value="1">
-			<Code.Tabs>
-				<Code.Tab value="1">Example</Code.Tab>
-			</Code.Tabs>
-			<Code.Example value="1">
+	<button type="button" onclick={startEditing} class="group relative w-full cursor-pointer text-left">
+		<Code.Root value="example" tab="example" {language}>
+			<Code.Example value="example">
 				<Code.Block code={functionEditor.function.example} />
 			</Code.Example>
 		</Code.Root>
-		<div
-			class="absolute inset-0 bg-muted/0 group-hover:bg-muted/30 transition-colors rounded-lg flex items-center justify-center"
-		>
-			<div
-				class="opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 rounded-md px-3 py-1.5 flex items-center gap-2 text-sm"
+		<div class="absolute inset-0 flex items-center justify-center">
+			<span
+				class="chip-cut bg-popover text-foreground inset-edge flex items-center gap-2 px-3 py-2 font-mono text-[10px] tracking-[.13em] uppercase opacity-0 transition-opacity group-hover:opacity-100"
 			>
-				<Pencil class="w-4 h-4" />
+				<Pencil class="size-3.5" />
 				Click to edit
-			</div>
+			</span>
 		</div>
 	</button>
 {:else}
 	<button
 		type="button"
 		onclick={startEditing}
-		class="w-full border border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors cursor-pointer"
+		class="border-border text-dim hover:text-primary flex w-full cursor-pointer flex-col items-center justify-center gap-2 border border-dashed p-6 transition-colors hover:bg-[var(--wash-hover)]"
 	>
-		<Plus class="w-6 h-6" />
-		<span class="text-sm">Add example code</span>
+		<Plus class="size-5" />
+		<span class="font-mono text-[10px] tracking-[.13em] uppercase">Add example code</span>
 	</button>
 {/if}

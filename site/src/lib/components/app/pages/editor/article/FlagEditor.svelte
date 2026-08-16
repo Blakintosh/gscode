@@ -52,26 +52,24 @@
 
 	let showConfidence = $derived(
 		functionEditor.function.flags.includes('processed') ||
-			(functionEditor.function.flags.includes('verified') && functionEditor.function.confidence != null)
+			(functionEditor.function.flags.includes('verified') &&
+				functionEditor.function.confidence != null)
 	);
 </script>
 
 <div>
-	<div class="font-medium text-sm mb-3">Function Flags</div>
+	<div class="type-label text-dim mb-3">Function flags</div>
 	<div class="flex flex-col gap-3">
 		{#each flags as flag}
 			<div class="flex items-center justify-between gap-2">
-				<label
-					for={flag.id}
-					class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-grow"
-				>
+				<label for={flag.id} class="flex-grow cursor-pointer text-sm leading-none">
 					{flag.label}
 				</label>
-				<div class="flex items-center gap-2">
+				<div class="flex items-center gap-2.5">
 					<Tooltip.Provider>
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<CircleHelp class="size-3.5 text-muted-foreground" />
+								<CircleHelp class="text-dim size-3.5" />
 							</Tooltip.Trigger>
 							<Tooltip.Content>
 								<p class="max-w-xs text-xs">{flag.tooltip}</p>
@@ -88,22 +86,21 @@
 		{/each}
 
 		{#if showConfidence}
-			<div class="flex items-center justify-between gap-2 mt-1">
-				<label
-					for="confidence"
-					class="text-sm font-medium leading-none cursor-pointer flex-grow"
-				>
+			<div class="mt-1 flex items-center justify-between gap-2">
+				<label for="confidence" class="flex-grow cursor-pointer text-sm leading-none">
 					Confidence
 				</label>
 				<Select.Root
 					type="single"
 					value={functionEditor.function.confidence ?? undefined}
-					onValueChange={(value: string) => functionEditor.setConfidence(value as 'low' | 'medium' | 'high' | null)}
+					onValueChange={(value: string) =>
+						functionEditor.setConfidence(value as 'low' | 'medium' | 'high' | null)}
 				>
-					<Select.Trigger class="w-28 h-8 text-xs">
+					<Select.Trigger size="sm" class="w-28 text-xs">
 						{functionEditor.function.confidence
-							? confidenceLevels.find((l) => l.value === functionEditor.function.confidence)?.label ?? 'Select...'
-							: 'Select...'}
+							? (confidenceLevels.find((l) => l.value === functionEditor.function.confidence)
+									?.label ?? 'Select…')
+							: 'Select…'}
 					</Select.Trigger>
 					<Select.Content>
 						{#each confidenceLevels as level}
@@ -115,4 +112,3 @@
 		{/if}
 	</div>
 </div>
-

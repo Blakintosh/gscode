@@ -97,7 +97,7 @@
 	<div class="flex flex-col gap-2">
 		{#each types as type, index (index)}
 			{#if index > 0}
-				<div class="text-xs text-muted-foreground font-medium">OR</div>
+				<div class="type-label text-dim">or</div>
 			{/if}
 			<SingleTypePicker
 				value={type}
@@ -107,29 +107,19 @@
 			/>
 		{/each}
 
-		<Button
-			variant="outline"
-			size="sm"
-			class="w-fit text-xs"
-			onclick={handleAddType}
-		>
-			<Plus class="h-3 w-3 mr-1" />
+		<Button variant="ghost" size="xs" class="w-fit" onclick={handleAddType}>
+			<Plus />
 			Add alternative type
 		</Button>
 	</div>
 
-	<div class="flex items-center gap-2">
+	<div class="flex items-center gap-2.5">
 		<Checkbox
 			id="is-array"
 			checked={isArray}
 			onCheckedChange={(checked) => handleArrayChange(checked === true)}
 			disabled={!types[0]?.dataType}
 		/>
-		<label
-			for="is-array"
-			class="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-		>
-			Array
-		</label>
+		<label for="is-array" class="text-sm leading-none">Array</label>
 	</div>
 </div>

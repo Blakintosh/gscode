@@ -79,15 +79,15 @@
 	}
 </script>
 
-<div class="flex items-center gap-2">
-	<div class="flex flex-col gap-1">
-		<span class="text-xs text-muted-foreground">Data Type</span>
+<div class="flex items-end gap-2">
+	<div class="flex flex-col gap-1.5">
+		<span class="type-label text-dim">Data type</span>
 		<Select.Root type="single" value={selectedType} onValueChange={handleTypeChange}>
-			<Select.Trigger class="w-32">
+			<Select.Trigger size="sm" class="w-32">
 				{#if selectedType}
 					<span>{selectedType}</span>
 				{:else}
-					<span class="text-muted-foreground">Select...</span>
+					<span class="text-dim">Select…</span>
 				{/if}
 			</Select.Trigger>
 			<Select.Content>
@@ -116,14 +116,14 @@
 	</div>
 
 	{#if needsEntitySubType}
-		<div class="flex flex-col gap-1">
-			<span class="text-xs text-muted-foreground">Entity Type</span>
+		<div class="flex flex-col gap-1.5">
+			<span class="type-label text-dim">Entity type</span>
 			<Select.Root type="single" value={subType} onValueChange={handleSubTypeChange}>
-				<Select.Trigger class="w-32">
+				<Select.Trigger size="sm" class="w-32">
 					{#if subType}
 						<span>{subType}</span>
 					{:else}
-						<span class="text-muted-foreground">any</span>
+						<span class="text-dim">any</span>
 					{/if}
 				</Select.Trigger>
 				<Select.Content>
@@ -134,26 +134,22 @@
 			</Select.Root>
 		</div>
 	{:else if needsEnumSubType}
-		<div class="flex flex-col gap-1">
-			<span class="text-xs text-muted-foreground">Enum Type</span>
+		<div class="flex flex-col gap-1.5">
+			<span class="type-label text-dim">Enum type</span>
 			<Input
 				type="text"
 				value={subType}
 				oninput={(e) => handleSubTypeChange(e.currentTarget.value)}
 				placeholder="e.g. WeaponType"
-				class="w-32"
+				class="h-9 w-32 text-xs"
 			/>
 		</div>
 	{/if}
 
 	{#if showRemove && onremove}
-		<Button
-			variant="ghost"
-			size="sm"
-			class="h-8 w-8 p-0 mt-4 text-muted-foreground hover:text-destructive"
-			onclick={onremove}
-		>
-			<X class="h-4 w-4" />
+		<Button variant="ghost" size="icon-sm" class="hover:text-destructive" onclick={onremove}>
+			<X />
+			<span class="sr-only">Remove type</span>
 		</Button>
 	{/if}
 </div>

@@ -29,7 +29,7 @@
 </script>
 
 {#if editing}
-	<div>
+	<div class="flex flex-col gap-1.5">
 		<Input
 			bind:ref={inputRef}
 			type="text"
@@ -37,19 +37,21 @@
 			oninput={(e) => functionEditor.setName(e.currentTarget.value)}
 			onblur={stopEditing}
 			onkeydown={handleKeydown}
-			class="text-xl font-bold tracking-tight lg:text-4xl h-auto py-1 px-2"
+			class="h-auto py-2 text-xl lg:text-3xl"
 		/>
-		<p class="text-xs text-muted-foreground mt-1 px-2">PascalCase. Lowercase subsequent initials, e.g. IPrintLnBold, SetLpf.</p>
+		<p class="text-dim font-mono text-[10px] tracking-[.06em]">
+			PascalCase. Lowercase subsequent initials, e.g. IPrintLnBold, SetLpf.
+		</p>
 	</div>
 {:else}
 	<button
 		type="button"
 		onclick={startEditing}
-		class="group flex items-center gap-2 text-left cursor-pointer hover:bg-muted/50 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors"
+		class="group -mx-2 -my-1 flex cursor-pointer items-center gap-2.5 px-2 py-1 text-left transition-colors hover:bg-[var(--wash-hover)]"
 	>
-		<h1 class="scroll-m-20 text-xl font-bold tracking-tight lg:text-4xl">
+		<h1 class="scroll-m-20 font-mono text-xl tracking-[-.01em] lg:text-3xl">
 			{functionEditor.function.name}
 		</h1>
-		<Pencil class="w-4 h-4 opacity-0 group-hover:opacity-50 transition-opacity" />
+		<Pencil class="text-dim size-4 opacity-0 transition-opacity group-hover:opacity-100" />
 	</button>
 {/if}

@@ -99,9 +99,9 @@
 	>
 		<EditorSidebar />
 		<article
-			class="grow overflow-auto bg-article-background/30 pt-12 pb-4 lg:pt-8 lg:pb-8 grid relative"
+			class="bg-background relative grid grow overflow-auto pt-12 pb-4 lg:pt-8 lg:pb-8"
 		>
-			<Sidebar.Trigger class="absolute top-4 left-4">
+			<Sidebar.Trigger class="absolute top-4 left-4 z-10">
 				{#if sidebarOpen}
 					<PanelLeftClose />
 					<span class="sr-only">Close sidebar</span>

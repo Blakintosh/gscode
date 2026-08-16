@@ -20,7 +20,7 @@
 	<p class="text-muted-foreground mt-2 text-[14px] font-light">
 		{description}
 	</p>
-	<p class="text-dim mt-3 font-mono text-[10px] tracking-[.14em] uppercase">
+	<p class="text-dim mt-3 font-mono text-[11px] tracking-[.14em] uppercase">
 		Revised {revisedOn}
 	</p>
 </HoverCard.Content>

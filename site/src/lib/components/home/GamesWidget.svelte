@@ -120,7 +120,7 @@ function main()
 						touched = true;
 						index = i;
 					}}
-					class="chip-cut min-w-[64px] grow px-3 py-2 font-mono text-[10px] tracking-[.14em] uppercase transition-colors {i === index
+					class="chip-cut min-w-[64px] grow px-3 py-2 font-mono text-[11px] tracking-[.14em] uppercase transition-colors {i === index
 						? 'bg-primary text-primary-foreground'
 						: 'text-muted-foreground hover:text-primary'}"
 				>

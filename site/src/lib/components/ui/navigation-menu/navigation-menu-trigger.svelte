@@ -4,7 +4,7 @@
 
 	// Header nav is mono, 10px, uppercase — teal when open or hovered.
 	export const navigationMenuTriggerStyle = tv({
-		base: "text-muted-foreground hover:text-primary focus-visible:text-primary data-open:text-primary data-popup-open:text-primary group/navigation-menu-trigger inline-flex h-auto w-max items-center justify-center gap-1 bg-transparent px-0 py-1 font-mono text-[10px] tracking-[.15em] uppercase transition-colors outline-none disabled:pointer-events-none disabled:opacity-50",
+		base: "text-muted-foreground hover:text-primary focus-visible:text-primary data-open:text-primary data-popup-open:text-primary group/navigation-menu-trigger inline-flex h-auto w-max items-center justify-center gap-1 bg-transparent px-0 py-1 font-mono text-[12px] tracking-[.15em] uppercase transition-colors outline-none disabled:pointer-events-none disabled:opacity-50",
 	});
 </script>
 

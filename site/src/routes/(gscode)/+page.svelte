@@ -68,7 +68,7 @@
 
 	<!-- The frame declares itself: tag in the top-left slot, handles on the square corners. -->
 	<span
-		class="tab-cut bg-primary text-primary-foreground absolute top-0 left-0 z-10 px-[13px] py-1 pl-[9px] font-mono text-[9px] leading-none tracking-[.16em] uppercase"
+		class="tab-cut bg-primary text-primary-foreground absolute top-0 left-0 z-10 px-[13px] py-1 pl-[9px] font-mono text-[11px] leading-none tracking-[.16em] uppercase"
 		>vs code · language server</span
 	>
 	<i aria-hidden="true" class="border-primary bg-background absolute top-3 right-3 z-10 block size-[7px] border-[1.5px]"></i>
@@ -76,7 +76,7 @@
 
 	<div class="relative mx-auto max-w-7xl px-4 pt-20 pb-24 sm:px-6 lg:pt-28 lg:pb-32">
 		<!-- Origin crosshair -->
-		<div class="text-primary pointer-events-none absolute top-8 left-4 font-mono text-[9px] tracking-[.12em] sm:left-6" aria-hidden="true">
+		<div class="text-primary pointer-events-none absolute top-8 left-4 font-mono text-[11px] tracking-[.12em] sm:left-6" aria-hidden="true">
 			<i class="bg-primary absolute block h-px w-8"></i>
 			<i class="bg-primary absolute block h-8 w-px"></i>
 			<span class="absolute top-[-6px] left-9 whitespace-nowrap">0, 0</span>
@@ -84,11 +84,11 @@
 
 		<h1
 			id="hero-title"
-			class="font-display text-foreground max-w-[16ch] text-[clamp(36px,6.4vw,88px)] leading-[0.98] font-bold tracking-[.005em] uppercase"
+			class="font-display text-foreground max-w-[16ch] text-[clamp(32px,6.4vw,76px)] leading-[0.98] font-bold tracking-[.005em] uppercase"
 		>
-			The reference<br />
-			<span class="grad-text">everything else</span><br />
-			is measured from
+			IDE tooling for<br />
+			Call of Duty
+			<span class="grad-text">scripting</span><br />
 		</h1>
 		<p class="text-muted-foreground mt-7 max-w-[52ch] text-[17px] leading-[1.6] font-light sm:text-[19px]">
 			A language server for Call of Duty’s GSC and CSC — Black Ops III first, and every game
@@ -235,7 +235,7 @@
 				<Button href={marketplaceUrl} target="_blank" rel="noopener noreferrer" size="lg">
 					<DownloadIcon class="size-4" />
 					Install
-					<span class="type-data text-[11px] font-normal tracking-[.06em] opacity-80">v{extensionVersion}</span>
+					<span class="type-data text-[11px] font-normal tracking-[.06em] opacity-90">v{extensionVersion}</span>
 				</Button>
 				<Button href={discordInviteUrl} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">
 					<DiscordIcon class="size-4" />

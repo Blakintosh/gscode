@@ -130,7 +130,7 @@
 		<span
 			data-slot="brush-tab"
 			class={cn(
-				'tab-cut bg-primary text-primary-foreground pointer-events-none absolute top-0 left-0 z-[5] font-mono text-[9px] leading-none tracking-[.16em] uppercase transition-colors',
+				'tab-cut bg-primary text-primary-foreground pointer-events-none absolute top-0 left-0 z-[5] font-mono text-[11px] leading-none tracking-[.16em] uppercase transition-colors',
 				'px-[13px] py-1 pl-[9px]',
 				interactive && 'group-hover/brush:bg-bright group-hover/brush:text-ink',
 				tabClass
@@ -145,7 +145,7 @@
 		<span
 			data-slot="brush-readout"
 			class={cn(
-				'pointer-events-none absolute right-0 -bottom-2 z-[5] font-mono text-[9.5px] leading-[16px] tracking-[.1em] transition-colors',
+				'pointer-events-none absolute right-0 -bottom-2 z-[5] font-mono text-[11px] leading-[16px] tracking-[.1em] transition-colors',
 				rim === 'active' ? 'text-primary' : 'text-dim',
 				interactive && 'group-hover/brush:text-bright',
 				readoutClass
@@ -159,7 +159,8 @@
 	<div
 		data-slot="brush-rim"
 		class={cn(
-			'chamfer relative transition-[background] duration-150 [--cut:var(--brush-cut)]',
+			// p-px keeps the content inside the 1px rim (covers full-bleed media, e.g. card covers).
+			'chamfer relative p-px transition-[background] duration-150 [--cut:var(--brush-cut)]',
 			rimClass[rim],
 			interactive && 'group-hover/brush:rim-hover group-focus-visible/brush:[background:var(--ring)]',
 			// Body: 1px inset, same chamfer, surface colour.

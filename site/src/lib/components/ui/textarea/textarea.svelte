@@ -10,14 +10,20 @@
 	}: WithElementRef<HTMLTextareaAttributes, HTMLTextAreaElement> = $props();
 </script>
 
-<!-- Datum: the same recess as Input, but Sora — mono never runs multi-line prose. -->
-<textarea
-	bind:this={ref}
-	data-slot="textarea"
+<!-- Datum: the same recess as Input (rim wrapper follows the chamfer), but Sora — mono
+     never runs multi-line prose. Sizing classes land on the wrapper. -->
+<span
+	data-slot="textarea-rim"
 	class={cn(
-		"chamfer chamfer-sm bg-recess text-foreground placeholder:text-dim block w-full min-h-24 border-0 p-4 font-sans text-sm leading-relaxed outline-none transition-[box-shadow,color] shadow-[inset_0_0_0_1px_var(--border)] focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] aria-invalid:shadow-[inset_0_0_0_1px_var(--destructive)] disabled:cursor-not-allowed disabled:opacity-50",
+		"chamfer chamfer-sm rimmed rimmed-recess flex min-h-24 w-full text-foreground has-disabled:opacity-50",
 		className
 	)}
-	bind:value
-	{...restProps}
-></textarea>
+>
+	<textarea
+		bind:this={ref}
+		data-slot="textarea"
+		class="placeholder:text-dim block min-h-0 w-full min-w-0 flex-1 self-stretch border-0 bg-transparent p-4 font-sans text-sm leading-relaxed outline-none disabled:cursor-not-allowed"
+		bind:value
+		{...restProps}
+	></textarea>
+</span>

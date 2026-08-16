@@ -82,7 +82,7 @@
 						oninput={(e) => functionEditor.setCalledOnName(overloadIndex, e.currentTarget.value)}
 						placeholder="e.g. self, player, entity"
 					/>
-					<p class="text-dim font-mono text-[10px] tracking-[.06em]">camelCase, e.g. hasAmmo.</p>
+					<p class="text-dim font-mono text-[11px] tracking-[.06em]">camelCase, e.g. hasAmmo.</p>
 				</div>
 
 				<div class="flex flex-col gap-2">
@@ -96,7 +96,7 @@
 						rows={2}
 						class="resize-none"
 					/>
-					<p class="text-dim font-mono text-[10px] tracking-[.06em]">
+					<p class="text-dim font-mono text-[11px] tracking-[.06em]">
 						Statement sentence in American English, ending with a period.
 					</p>
 				</div>

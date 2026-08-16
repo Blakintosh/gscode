@@ -88,7 +88,7 @@
 				bind:ref={inputElement}
 			/>
 			<span
-				class="text-dim pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-[10px] tracking-[.12em]"
+				class="text-dim pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-[11px] tracking-[.12em]"
 			>
 				CTRL K
 			</span>
@@ -105,7 +105,7 @@
 	{:then data}
 		<div class="flex shrink-0 items-baseline justify-between px-4 pt-4 pb-2">
 			<p class="type-label text-dim tracking-[.2em]">Functions</p>
-			<span class="type-data text-dim text-[10px]">{data.entries.length}</span>
+			<span class="type-data text-dim text-[11px]">{data.entries.length}</span>
 		</div>
 		<nav class="min-h-0 grow overflow-y-auto pb-4" aria-label="Script API functions">
 			{#each data.entries as apiFunction (apiFunction.name)}
@@ -133,7 +133,7 @@
 	{/await}
 
 	<div
-		class="border-border text-dim flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3.5 font-mono text-[10px] tracking-[.12em] uppercase"
+		class="border-border text-dim flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3.5 font-mono text-[11px] tracking-[.12em] uppercase"
 	>
 		<span>Part of GSCode</span>
 		<a

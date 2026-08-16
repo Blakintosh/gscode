@@ -19,32 +19,30 @@
 		...restProps
 	}: Props = $props();
 
-	/* Datum: an input is a RECESS — one surface step below the panel it sits on, with a
-	   1px edge drawn as an inset shadow (clip-path clips real borders). Focus swaps the
-	   edge for the ring colour; there is no glow. Single-line fields are mono. */
+	/* Datum: an input is a RECESS — one surface step below the panel it sits on, inside a
+	   1px edge that follows the chamfer (the wrapper; inputs can't carry pseudo-elements).
+	   Focus swaps the edge for the ring colour; there is no glow. Single-line fields are
+	   mono. Sizing/colour classes passed in land on the wrapper; the control fills it. */
+	const wrap =
+		"chamfer chamfer-sm rimmed rimmed-recess flex h-11 w-full min-w-0 text-foreground has-disabled:opacity-50 has-disabled:pointer-events-none";
 	const base =
-		"chamfer chamfer-sm bg-recess text-foreground placeholder:text-dim font-mono text-[13px] w-full min-w-0 border-0 px-4 h-11 outline-none transition-[box-shadow,color] shadow-[inset_0_0_0_1px_var(--border)] focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] aria-invalid:shadow-[inset_0_0_0_1px_var(--destructive)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
+		"placeholder:text-dim h-full min-h-0 w-full min-w-0 flex-1 border-0 bg-transparent px-4 font-mono text-[13px] outline-none disabled:cursor-not-allowed";
 	const fileBits =
 		"file:font-display file:font-bold file:uppercase file:tracking-[.06em] file:text-[11px] file:bg-popover file:text-foreground file:border-0 file:h-8 file:px-3 file:mr-3 file:cursor-pointer file:inline-flex file:items-center";
 </script>
 
-{#if type === "file"}
-	<input
-		bind:this={ref}
-		data-slot={dataSlot}
-		class={cn(base, fileBits, className)}
-		type="file"
-		bind:files
-		bind:value
-		{...restProps}
-	/>
-{:else}
-	<input
-		bind:this={ref}
-		data-slot={dataSlot}
-		class={cn(base, className)}
-		{type}
-		bind:value
-		{...restProps}
-	/>
-{/if}
+<span data-slot="input-rim" class={cn(wrap, className)}>
+	{#if type === "file"}
+		<input
+			bind:this={ref}
+			data-slot={dataSlot}
+			class={cn(base, fileBits)}
+			type="file"
+			bind:files
+			bind:value
+			{...restProps}
+		/>
+	{:else}
+		<input bind:this={ref} data-slot={dataSlot} class={base} {type} bind:value {...restProps} />
+	{/if}
+</span>

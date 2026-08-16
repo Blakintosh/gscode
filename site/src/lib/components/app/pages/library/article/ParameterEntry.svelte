@@ -18,12 +18,12 @@
 		{/if}
 		<span class="ml-auto flex shrink-0 items-center gap-2">
 			{#if variadic}
-				<span class="text-dim font-mono text-[10px] tracking-[.14em] uppercase">variadic</span>
+				<span class="text-dim font-mono text-[11px] tracking-[.14em] uppercase">variadic</span>
 			{/if}
 			{#if mandatory}
-				<span class="text-primary font-mono text-[10px] tracking-[.14em] uppercase">required</span>
+				<span class="text-primary font-mono text-[11px] tracking-[.14em] uppercase">required</span>
 			{:else if mandatory !== undefined && mandatory !== null}
-				<span class="text-dim font-mono text-[10px] tracking-[.14em] uppercase">optional</span>
+				<span class="text-dim font-mono text-[11px] tracking-[.14em] uppercase">optional</span>
 			{/if}
 		</span>
 	</div>

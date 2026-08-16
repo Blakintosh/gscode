@@ -41,10 +41,10 @@
 
 <div class="relative">
 	<Brush surface="table" behind="background" handles readout="GSC" class="my-0" bodyClass="flex flex-col">
-		<div class="bg-popover border-border border-b py-2 pr-4 pl-[36px] font-mono text-[10px] tracking-[.04em]">
+		<div class="bg-popover border-border border-b py-2 pr-4 pl-[36px] font-mono text-[11px] tracking-[.04em]">
 			<span class="text-primary border-primary -mb-px border-b-2 py-2">_init.gsc</span>
 		</div>
-		<pre class="m-0 overflow-x-auto px-5 py-4 font-mono text-[13px] leading-[1.6]"><span class="text-[var(--code-directive)]">#using</span> scripts\shared\util_shared;
+		<pre class="m-0 overflow-x-auto px-5 py-4 font-mono text-[13.5px] leading-[1.6]"><span class="text-[var(--code-directive)]">#using</span> scripts\shared\util_shared;
 
 <span class="text-primary">function</span> <span class="text-bright">init</span>()
 &#123;
@@ -64,7 +64,7 @@
 						? 'border-primary bg-[var(--wash-active)]'
 						: 'border-transparent'}"
 				>
-					<span class="chip-cut bg-deep text-bright grid size-4 shrink-0 place-items-center text-[9px] font-medium">f</span>
+					<span class="chip-cut bg-deep text-bright grid size-4 shrink-0 place-items-center text-[11px] font-medium">f</span>
 					<span class="text-foreground">{m.name}</span>
 					<span class="text-dim ml-auto truncate text-[11px]">{m.sig}</span>
 				</div>

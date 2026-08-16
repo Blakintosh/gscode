@@ -62,7 +62,7 @@
 	<!-- Designator line: one line, mono, uppercased in CSS. -->
 	<div class="border-border border-t">
 		<p
-			class="text-dim mx-auto max-w-7xl px-4 py-5 font-mono text-[10px] tracking-[.14em] uppercase sm:px-6"
+			class="text-dim mx-auto max-w-7xl px-4 py-5 font-mono text-[12px] tracking-[.14em] uppercase sm:px-6"
 		>
 			gscode · GPL-3.0 · a community project · not affiliated with Activision or Treyarch
 		</p>

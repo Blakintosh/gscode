@@ -38,32 +38,32 @@
 	--card-foreground: #10181d;
 	--popover: #ffffff;
 	--popover-foreground: #10181d;
-	--primary: #0f9484; /* teal 700 — keeps AA on white */
+	--primary: #0b7466; /* teal 800 — 5.7:1 on white, 5.0:1 on paper (AA for small text) */
 	--primary-foreground: #ffffff;
 	--secondary: #e2e9eb;
 	--secondary-foreground: #10181d;
 	--muted: #e2e9eb;
-	--muted-foreground: #5a6c76;
+	--muted-foreground: #54656f; /* 4.9:1 on raise */
 	--accent: #d9f3ee;
 	--accent-foreground: #0b6b60;
-	--destructive: #d8375c;
+	--destructive: #c22a4e; /* 4.9:1 on paper */
 	--destructive-foreground: #ffffff;
 	--border: #d7e0e3;
 	--input: #d7e0e3;
-	--ring: #0f9484;
-	--chart-1: #0f9484;
+	--ring: #0b7466;
+	--chart-1: #0b7466;
 	--chart-2: #3ed1bd;
 	--chart-3: #5fc6e0;
 	--chart-4: #6c5ce8;
 	--chart-5: #3e7f8f;
 	--sidebar: #ffffff;
 	--sidebar-foreground: #10181d;
-	--sidebar-primary: #0f9484;
+	--sidebar-primary: #0b7466;
 	--sidebar-primary-foreground: #ffffff;
 	--sidebar-accent: #d9f3ee;
 	--sidebar-accent-foreground: #0b6b60;
 	--sidebar-border: #d7e0e3;
-	--sidebar-ring: #0f9484;
+	--sidebar-ring: #0b7466;
 
 	/* Datum extras the shadcn set lacks */
 	--ink: #05201c; /* text on teal fills (both modes) */
@@ -71,23 +71,23 @@
 	--teal: #3ed1bd; /* the one brand hue, unchanged in both modes (used inside gradients/fills w/ ink) */
 	--steel: #b8c6cb; /* unselected geometry */
 	--deep: #0b6b60; /* structural teal · hover fill · accent text */
-	--dim: #5a6c76; /* tertiary text — 9–10px metadata only */
+	--dim: #54656f; /* tertiary text — never below 11px */
 	--violet: #6c5ce8; /* gradients only. Never text, never a panel */
 	--recess: #ffffff; /* input body: one step below its panel */
 	--table: #ffffff; /* recessed table surface */
 	--handle: #b8c6cb; /* corner handle stroke at rest */
 	--rim-rest: linear-gradient(146deg, #d7e0e3, #d7e0e3);
-	--rim-active: linear-gradient(146deg, #0f9484, #0f9484);
-	--rim-hover: linear-gradient(146deg, #0f9484, #0f9484);
-	--rim-danger: linear-gradient(146deg, #d8375c 0, #d7e0e3 40%, #d7e0e3 74%, #d7e0e3 100%);
+	--rim-active: linear-gradient(146deg, #0b7466, #0b7466);
+	--rim-hover: linear-gradient(146deg, #0b7466, #0b7466);
+	--rim-danger: linear-gradient(146deg, #c22a4e 0, #d7e0e3 40%, #d7e0e3 74%, #d7e0e3 100%);
 	--rim-deep: linear-gradient(146deg, #0b6b60, #0b6b60);
 	--grad-action: linear-gradient(112deg, #7befdd, #3ed1bd 70%, #3ea9c9);
-	--grad-text: linear-gradient(94deg, #0f9484, #0b6b60 55%, #6c5ce8);
+	--grad-text: linear-gradient(94deg, #0b7466, #0b6b60 55%, #6c5ce8);
 	--grad-avatar: linear-gradient(142deg, #7befdd, #3ed1bd 58%, #6c5ce8);
 	--shadow-overlay: 0 10px 22px rgba(16, 24, 29, 0.1);
 	--shadow-panel: 0 10px 22px rgba(16, 24, 29, 0.08);
-	--wash-active: rgba(15, 148, 132, 0.1);
-	--wash-hover: rgba(15, 148, 132, 0.05);
+	--wash-active: rgba(11, 116, 102, 0.1);
+	--wash-hover: rgba(11, 116, 102, 0.05);
 	--sheen: #d7e0e3;
 }
 
@@ -104,7 +104,7 @@
 	--secondary: #19212c;
 	--secondary-foreground: #e2eaec;
 	--muted: #19212c;
-	--muted-foreground: #8b9ba3;
+	--muted-foreground: #96a4ac; /* 6.5:1 on raise */
 	--accent: #16564f;
 	--accent-foreground: #7befdd;
 	--destructive: #ff5c7a;
@@ -131,7 +131,7 @@
 	--teal: #3ed1bd;
 	--steel: #3e5661;
 	--deep: #16564f;
-	--dim: #5a6c76;
+	--dim: #8593a0; /* 5.2:1 on raise, 5.7:1 on panel */
 	--violet: #8b7bff;
 	--recess: #07080c;
 	--table: #0b0f15;
@@ -262,6 +262,45 @@
 	background: var(--border);
 }
 
+/* Rimmed element — a 1px edge that FOLLOWS the chamfer (an inset box-shadow would vanish
+   along the cut edges). Use with `chamfer*`; the ::before is the body, inset 1px, clipped
+   to the same polygon. Body colour via --rim-body (default card). */
+@utility rimmed {
+	position: relative;
+	z-index: 0;
+	background: var(--rim-color, var(--border));
+	&::before {
+		content: '';
+		position: absolute;
+		inset: 1px;
+		z-index: -1;
+		clip-path: inherit;
+		background: var(--rim-body, var(--card));
+		transition: background 150ms ease;
+	}
+}
+/* Recess (inputs, selects, search): body = ground/white; focus swaps the edge for the ring. */
+@utility rimmed-recess {
+	--rim-body: var(--recess);
+	&:focus-within,
+	&:focus-visible {
+		background: var(--ring);
+	}
+	&:has([aria-invalid='true']),
+	&[aria-invalid='true'] {
+		background: var(--destructive);
+	}
+}
+@utility rimmed-popover {
+	--rim-body: var(--popover);
+}
+@utility rimmed-card {
+	--rim-body: var(--card);
+}
+@utility rimmed-background {
+	--rim-body: var(--background);
+}
+
 /* Gradients — the only three that exist. */
 @utility grad-action {
 	background: var(--grad-action);
@@ -347,7 +386,7 @@
 /* Type roles */
 @utility type-label {
 	font-family: var(--font-mono);
-	font-size: 10px;
+	font-size: 11px;
 	letter-spacing: 0.17em;
 	text-transform: uppercase;
 	line-height: 1;

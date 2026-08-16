@@ -33,7 +33,7 @@
 
 	/** Filter chip — teal fill when the group is shown, hairline outline when hidden. */
 	const chipBase =
-		'chip-cut px-3 py-1.5 text-left font-mono text-[10px] leading-none tracking-[.13em] uppercase transition-colors';
+		'chip-cut px-3 py-1.5 text-left font-mono text-[11px] leading-none tracking-[.13em] uppercase transition-colors';
 	const chipOn = `${chipBase} bg-primary text-primary-foreground`;
 	const chipOff = `${chipBase} inset-edge text-dim hover:text-primary`;
 </script>

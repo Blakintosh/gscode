@@ -53,7 +53,7 @@
 
 <div class="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
 	<Breadcrumb.Root>
-		<Breadcrumb.List class="font-mono text-[10px] tracking-[.14em] uppercase">
+		<Breadcrumb.List class="font-mono text-[11px] tracking-[.14em] uppercase">
 			<Breadcrumb.Item>
 				<Breadcrumb.Link href="/library">Black Ops III</Breadcrumb.Link>
 			</Breadcrumb.Item>

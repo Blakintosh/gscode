@@ -29,7 +29,7 @@
 </script>
 
 <div class={cn('min-w-0 px-5 py-4', className)}>
-	<span class="type-label block text-[9px] tracking-[.19em] text-dim">{label}</span>
+	<span class="type-label block text-[11px] tracking-[.19em] text-dim">{label}</span>
 	<b
 		class={cn(
 			'type-display mt-1.5 block truncate leading-none tracking-[.02em] tabular-nums',
@@ -40,6 +40,6 @@
 		{#if children}{@render children()}{:else}{value}{/if}
 	</b>
 	{#if sub}
-		<span class="mt-1 block font-mono text-[10px] text-dim">{sub}</span>
+		<span class="mt-1 block font-mono text-[12px] text-dim">{sub}</span>
 	{/if}
 </div>

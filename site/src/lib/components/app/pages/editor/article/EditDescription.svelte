@@ -40,7 +40,7 @@
 			rows={2}
 			class="resize-none text-base"
 		/>
-		<p class="text-dim font-mono text-[10px] tracking-[.06em]">
+		<p class="text-dim font-mono text-[11px] tracking-[.06em]">
 			Statement sentence in American English, ending with a period.
 		</p>
 	</div>

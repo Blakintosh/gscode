@@ -13,7 +13,7 @@
 	bind:ref
 	data-slot="tabs-trigger"
 	class={cn(
-		"text-muted-foreground hover:text-foreground relative -mb-px inline-flex cursor-pointer items-center justify-center gap-1.5 border-0 border-b-2 border-transparent bg-transparent px-4 py-2.5 whitespace-nowrap transition-colors outline-none",
+		"text-muted-foreground hover:text-foreground relative -mb-px inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 border-0 border-b-2 border-transparent bg-transparent px-4 py-2.5 whitespace-nowrap transition-colors outline-none",
 		"data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none",
 		"focus-visible:outline-ring focus-visible:outline-1 focus-visible:-outline-offset-1",
 		"disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",

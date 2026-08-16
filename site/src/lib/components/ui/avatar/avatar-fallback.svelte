@@ -14,7 +14,7 @@
 	bind:ref
 	data-slot="avatar-fallback"
 	class={cn(
-		"grad-avatar text-ink font-display flex size-full items-center justify-center text-xs leading-none font-bold tracking-[.04em] uppercase group-data-[size=lg]/avatar:text-sm group-data-[size=sm]/avatar:text-[10px]",
+		"grad-avatar text-ink font-display flex size-full items-center justify-center text-xs leading-none font-bold tracking-[.04em] uppercase group-data-[size=lg]/avatar:text-sm group-data-[size=sm]/avatar:text-[12px]",
 		className
 	)}
 	{...restProps}

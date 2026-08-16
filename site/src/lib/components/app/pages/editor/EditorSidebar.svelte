@@ -289,7 +289,7 @@
 							style={`width: ${verifiedPercent}%`}
 						></div>
 					</div>
-					<div class="text-dim font-mono text-[10px] tracking-[.08em]">
+					<div class="text-dim font-mono text-[11px] tracking-[.08em]">
 						{stats.verifiedCount} / {totalFunctionCount} verified
 					</div>
 				</div>
@@ -389,7 +389,7 @@
 						bind:ref={inputElement}
 					/>
 					<span
-						class="chip-cut text-dim bg-card pointer-events-none absolute top-[50%] right-2 flex -translate-y-[50%] items-center gap-1 px-1.5 py-1 font-mono text-[10px]"
+						class="chip-cut text-dim bg-card pointer-events-none absolute top-[50%] right-2 flex -translate-y-[50%] items-center gap-1 px-1.5 py-1 font-mono text-[11px]"
 					>
 						<Command class="size-3" />
 						K

@@ -39,7 +39,7 @@
 			onkeydown={handleKeydown}
 			class="h-auto py-2 text-xl lg:text-3xl"
 		/>
-		<p class="text-dim font-mono text-[10px] tracking-[.06em]">
+		<p class="text-dim font-mono text-[11px] tracking-[.06em]">
 			PascalCase. Lowercase subsequent initials, e.g. IPrintLnBold, SetLpf.
 		</p>
 	</div>

@@ -27,7 +27,7 @@
 	:global(.shiki) {
 		background: transparent !important;
 		font-family: var(--font-mono);
-		font-size: 13px;
+		font-size: 13.5px;
 		line-height: 1.6;
 		padding: 16px 20px;
 		margin: 0;

@@ -6,6 +6,8 @@
 		language?: string;
 		/** Small mono tag docked in the top-left cut, e.g. "example" or "before". */
 		tab?: string;
+		/** The surface behind the panel (what handles and readout paint over). */
+		behind?: 'card' | 'popover' | 'background' | 'recess' | 'table';
 	};
 </script>
 
@@ -22,6 +24,7 @@
 		class: className,
 		language = 'GSC',
 		tab,
+		behind = 'background',
 		children,
 		...restProps
 	}: CodeProps = $props();
@@ -29,7 +32,7 @@
 
 <Brush
 	surface="table"
-	behind="background"
+	{behind}
 	handles
 	{tab}
 	readout={language}

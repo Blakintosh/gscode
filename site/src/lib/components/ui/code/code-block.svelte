@@ -54,21 +54,21 @@
 
 	/* Shaku annotations — error underlines are Clip (the destructive colour), the one
 	   warm-leaning value in the system, reserved for exactly this meaning. */
-	:global(.shaku-underline) {
+	:global(.shiki .shaku-underline) {
 		padding: 0 1ch;
 		position: relative;
 		display: block;
-		color: var(--destructive);
+		color: var(--destructive) !important;
 		margin: 0;
 		width: min-content;
 	}
-	:global(.shaku-underline-line) {
+	:global(.shiki .shaku-underline-line) {
 		line-height: 0;
 		top: 0.5em;
 		position: absolute;
 		text-decoration-line: overline;
 		text-decoration-color: var(--destructive);
-		color: transparent;
+		color: transparent !important;
 		pointer-events: none;
 		user-select: none;
 		text-decoration-thickness: 2px;

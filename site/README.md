@@ -13,7 +13,19 @@ npm install
 npm run dev          # or: npm run dev -- --open
 ```
 
-Other scripts: `build`, `preview`, `check` (svelte-check), `test` / `test:unit`, `lint`, `format`.
+Other scripts: `build`, `preview`, `check` (svelte-check), `lint` / `format` (prettier),
+`brand-assets` (regenerates the favicon, touch icons, OG card and web manifest from the mark).
+
+The dev server defaults to port 5174 so it can run beside the assetplace on 5173.
+
+## Design
+
+The site follows **Datum**, the gscode design system, and shares its tokens, utilities and restyled
+shadcn-svelte primitives with [gscode-assetplace](https://github.com/Blakintosh/gscode-assetplace)
+(`src/css/app.css` here mirrors `src/app.css` there). Brand pieces live in `src/lib/components/site/`
+(`Brush`, `HudStat`, `Logo`, `DatumMark` …); site-wide constants (URLs, extension version) in
+`src/lib/data/site.ts`. Three faces, one hue, nothing round: Chakra Petch 700 uppercase for display,
+Sora for prose, IBM Plex Mono for labels and data; teal is the only brand colour.
 
 ## API data
 

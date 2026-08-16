@@ -10,6 +10,7 @@
 		align = "center",
 		sideOffset = 4,
 		portalProps,
+		children,
 		...restProps
 	}: HoverCardPrimitive.ContentProps & {
 		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof HoverCardPortal>>;
@@ -22,7 +23,17 @@
 		data-slot="hover-card-content"
 		{align}
 		{sideOffset}
-		class={cn("w-64 rounded-lg bg-popover p-2.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-50 origin-(--transform-origin) outline-hidden", className)}
+		class={cn(
+			"data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 z-50 w-64 origin-(--transform-origin) duration-150 outline-hidden [filter:drop-shadow(var(--shadow-overlay))]",
+			className
+		)}
 		{...restProps}
-	/>
+	>
+		<div
+			data-slot="hover-card-content-body"
+			class="chamfer chamfer-sm rim-edge text-popover-foreground relative z-0 p-4 text-sm before:absolute before:inset-px before:-z-10 before:bg-popover before:content-[''] before:[clip-path:inherit]"
+		>
+			{@render children?.()}
+		</div>
+	</HoverCardPrimitive.Content>
 </HoverCardPortal>

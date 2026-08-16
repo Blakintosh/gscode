@@ -327,31 +327,31 @@
 									{#if isDeleted}
 										<i
 											aria-hidden="true"
-											class="bg-steel block size-[6px] shrink-0"
+											class="bg-steel marker"
 											title="This function is marked for deletion"
 										></i>
 									{:else if fnEditor.isNew}
 										<i
 											aria-hidden="true"
-											class="bg-bright block size-[6px] shrink-0"
+											class="bg-bright marker"
 											title="This is a new function"
 										></i>
 									{:else if fnFlags.includes('verified')}
 										<i
 											aria-hidden="true"
-											class="bg-primary block size-[6px] shrink-0"
+											class="bg-primary marker"
 											title="This function is verified"
 										></i>
 									{:else if fnFlags.includes('processed')}
 										<i
 											aria-hidden="true"
-											class="bg-steel block size-[6px] shrink-0"
+											class="bg-steel marker"
 											title="This function was batch-processed"
 										></i>
 									{:else}
 										<i
 											aria-hidden="true"
-											class="border-steel block size-[6px] shrink-0 border"
+											class="border-steel marker border"
 											title="This function is unverified"
 										></i>
 									{/if}

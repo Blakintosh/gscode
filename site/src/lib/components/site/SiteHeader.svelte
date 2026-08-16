@@ -98,7 +98,7 @@
 				aria-label="Join us on Discord"
 				class="hidden sm:inline-flex"
 			>
-				<DiscordIcon class="size-[18px]" />
+				<DiscordIcon class="size-4.5" />
 			</Button>
 			<Button
 				href={githubUrl}
@@ -109,7 +109,7 @@
 				aria-label="GSCode on GitHub"
 				class="hidden sm:inline-flex"
 			>
-				<GithubIcon class="size-[18px]" />
+				<GithubIcon class="size-4.5" />
 			</Button>
 			<ThemeToggle />
 			<Button

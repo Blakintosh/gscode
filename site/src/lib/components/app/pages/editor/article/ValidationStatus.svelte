@@ -14,16 +14,16 @@
 	<div class="flex flex-col gap-2">
 		<div class="flex items-center gap-2 font-mono text-2xs tracking-widest uppercase">
 			{#if functionEditor.isValid && !functionEditor.isUnverified}
-				<i aria-hidden="true" class="bg-primary block size-[6px] shrink-0"></i>
+				<i aria-hidden="true" class="bg-primary marker"></i>
 				<span class="text-primary">Valid</span>
 			{:else if functionEditor.isValid && functionEditor.isUnverified}
-				<i aria-hidden="true" class="bg-dim block size-[6px] shrink-0"></i>
+				<i aria-hidden="true" class="bg-dim marker"></i>
 				<span class="text-dim">Unverified</span>
 			{:else if functionEditor.isVerified && !functionEditor.isValid}
-				<i aria-hidden="true" class="bg-destructive block size-[6px] shrink-0"></i>
+				<i aria-hidden="true" class="bg-destructive marker"></i>
 				<span class="text-destructive">Bad verification</span>
 			{:else}
-				<i aria-hidden="true" class="bg-destructive block size-[6px] shrink-0"></i>
+				<i aria-hidden="true" class="bg-destructive marker"></i>
 				<span class="text-destructive">Problems detected</span>
 			{/if}
 		</div>

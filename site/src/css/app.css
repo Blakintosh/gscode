@@ -399,6 +399,14 @@
 	background-color: var(--wash-active);
 }
 
+/* Status marker — a 6px square. Nothing in Datum is round, including dots. Colour it with bg-*. */
+@utility marker {
+	display: block;
+	width: 6px;
+	height: 6px;
+	flex-shrink: 0;
+}
+
 /* Inset hairline (bars, HUD strips, tables) — a border that doesn't take space. */
 @utility inset-edge {
 	box-shadow: inset 0 0 0 1px var(--border);

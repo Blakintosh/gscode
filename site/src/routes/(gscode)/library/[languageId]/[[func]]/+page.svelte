@@ -226,7 +226,7 @@
 				<ul class="flex max-w-[72ch] flex-col gap-2.5">
 					{#each remarks as remark, remarkIndex (remarkIndex)}
 						<li class="text-muted-foreground flex gap-3 text-base leading-relaxed font-light">
-							<i aria-hidden="true" class="bg-primary mt-[9px] block size-[6px] shrink-0"></i>
+							<i aria-hidden="true" class="bg-primary mt-[9px] marker"></i>
 							<span>{remark}</span>
 						</li>
 					{/each}

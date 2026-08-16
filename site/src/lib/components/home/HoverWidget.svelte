@@ -74,7 +74,7 @@
 		aria-hidden={step >= 2 ? undefined : 'true'}
 	>
 		<Brush surface="popover" behind="background" cut={7} rim="edge" shadow="overlay" bodyClass="flex items-center gap-2.5 px-3 py-2 font-mono text-sm">
-			<i class="bg-primary block size-[6px] shrink-0"></i>
+			<i class="bg-primary marker"></i>
 			<span class="text-primary">/@ weapon @/</span>
 			<span class="text-foreground">w_weapon</span>
 			<span class="text-dim">· inferred</span>

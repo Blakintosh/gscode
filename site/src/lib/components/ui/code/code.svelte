@@ -37,7 +37,7 @@
 	{tab}
 	readout={language}
 	class={cn('my-3', className)}
-	bodyClass="flex flex-col"
+	bodyClass="chamfer m-px flex flex-col"
 >
 	<Tabs.Root class="flex flex-col gap-0" {...restProps}>
 		{@render children?.()}

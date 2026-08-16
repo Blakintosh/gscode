@@ -40,7 +40,7 @@
 </script>
 
 <div class="relative">
-	<Brush surface="table" behind="background" handles readout="GSC" class="my-0" bodyClass="flex flex-col">
+	<Brush surface="table" behind="background" handles readout="GSC" class="my-0" bodyClass="chamfer m-px flex flex-col">
 		<div class="bg-popover border-border border-b py-2 pr-4 pl-[36px] font-mono text-2xs tracking-data">
 			<span class="text-primary border-primary -mb-px border-b-2 py-2">_init.gsc</span>
 		</div>

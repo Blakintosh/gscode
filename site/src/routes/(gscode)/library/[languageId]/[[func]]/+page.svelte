@@ -1,246 +1,237 @@
 <script lang="ts">
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
-	import * as Alert from '$lib/components/ui/alert/index.js';
 	import * as Code from '$lib/components/ui/code/index.js';
-	import * as Tabs from '$lib/components/ui/tabs/index.js';
 	import Flag from '@lucide/svelte/icons/flag';
 	import Link from '@lucide/svelte/icons/link';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Check from '@lucide/svelte/icons/check';
-	import Github from '@lucide/svelte/icons/github';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Button from '$components/ui/button/button.svelte';
+	import { Badge } from '$lib/components/ui/badge/index.js';
 	import CopyButton from '$components/ui/copy-button/copy-button.svelte';
+	import Brush from '$lib/components/site/Brush.svelte';
+	import GithubIcon from '$lib/components/site/GithubIcon.svelte';
 	import FlagsAlert from '$components/app/pages/library/article/FlagsAlert.svelte';
-	import { page } from '$app/stores';
-	import type { ScrFunction } from '$lib/models/library';
 	import ParameterEntry from '$components/app/pages/library/article/ParameterEntry.svelte';
-	import { onMount } from 'svelte';
-	import { overloadToSyntacticString } from '$lib/util/scriptApi';
+	import { page } from '$app/state';
+	import type { ScrFunction } from '$lib/models/library';
+	import { siteUrl } from '$lib/data/site';
+	import { overloadToSyntacticString, typeToString } from '$lib/util/scriptApi';
 
 	let { name, description, example, remarks, overloads, flags }: ScrFunction = $derived(
-		$page.data.func as ScrFunction
+		page.data.func as ScrFunction
 	);
-	let languageName = $derived.by(() => {
-		switch ($page.data.languageId) {
-			case 'gsc':
-				return 'GSC';
-			case 'csc':
-				return 'CSC';
-			default:
-				return 'Unknown';
-		}
-	});
 
-	let languageJsonFile = $derived.by(() => {
-		switch ($page.data.languageId) {
-			case 'gsc':
-				return 't7_api_gsc.json';
-			case 'csc':
-				return 't7_api_csc.json';
-		}
-	});
+	const languageId = $derived((page.data.languageId as string) ?? 'gsc');
+	const languageName = $derived(
+		languageId === 'gsc' ? 'GSC' : languageId === 'csc' ? 'CSC' : 'Unknown'
+	);
 
-	onMount(() => {
-		$effect(() => {
-			document.title = `${name} - Script API Reference | GSCode`;
-		});
+	const languageJsonFile = $derived(languageId === 'csc' ? 't7_api_csc.json' : 't7_api_gsc.json');
+
+	/** Header chips: what the symbol is, at a glance. */
+	const calledOnLabel = $derived.by(() => {
+		const calledOn = overloads?.[0]?.calledOn;
+		if (!calledOn) return '';
+		return typeToString(calledOn.type) || (calledOn.name ?? '');
+	});
+	const returnLabel = $derived(
+		overloads?.[0]?.returns?.void
+			? 'void'
+			: overloads?.[0]?.returns
+				? typeToString(overloads[0].returns.type)
+				: ''
+	);
+	const dangerFlag = $derived((flags ?? []).includes('unlisted'));
+
+	/** Sora 600 sentence case — the only heading role a doc page gets. */
+	const heading = 'text-foreground text-[17px] font-semibold tracking-[-.03em]';
+
+	$effect(() => {
+		document.title = `${name} - Script API Reference | GSCode`;
 	});
 </script>
 
-<div
-	class="flex flex-col-reverse lg:flex-row gap-4 items-stretch min-w-0 w-full lg:w-auto lg:h-full lg:min-h-0 text-sm lg:text-base"
->
-	<div class="grow px-6 lg:px-16 overflow-y-auto">
-		<Breadcrumb.Root>
-			<Breadcrumb.List class="text-xs lg:text-sm">
-				<Breadcrumb.Item>
-					<Breadcrumb.Link class="hover:text-foreground-muted">Black Ops III</Breadcrumb.Link>
-				</Breadcrumb.Item>
-				<Breadcrumb.Separator />
-				<Breadcrumb.Item>
-					<Breadcrumb.Link class="hover:text-foreground-muted">{languageName}</Breadcrumb.Link>
-				</Breadcrumb.Item>
-				<Breadcrumb.Separator />
-				<Breadcrumb.Item>
-					<Breadcrumb.Page>{name}</Breadcrumb.Page>
-				</Breadcrumb.Item>
-			</Breadcrumb.List>
-		</Breadcrumb.Root>
+<div class="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
+	<Breadcrumb.Root>
+		<Breadcrumb.List class="font-mono text-[10px] tracking-[.14em] uppercase">
+			<Breadcrumb.Item>
+				<Breadcrumb.Link href="/library">Black Ops III</Breadcrumb.Link>
+			</Breadcrumb.Item>
+			<Breadcrumb.Separator />
+			<Breadcrumb.Item>
+				<Breadcrumb.Link href={`/library/${languageId}`}>{languageName}</Breadcrumb.Link>
+			</Breadcrumb.Item>
+			<Breadcrumb.Separator />
+			<Breadcrumb.Item>
+				<Breadcrumb.Page>{name}</Breadcrumb.Page>
+			</Breadcrumb.Item>
+		</Breadcrumb.List>
+	</Breadcrumb.Root>
 
-		<div class="py-4">
-			<h1 class="scroll-m-20 text-xl font-bold tracking-tight lg:text-4xl mb-1">{name}</h1>
+	<header class="mt-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+		<div class="min-w-0">
+			<h1 class="text-foreground font-mono text-xl leading-tight break-words lg:text-2xl">
+				{name}
+			</h1>
 
-			<h2 class="text-base lg:text-xl text-muted-foreground">
-				{description}
-			</h2>
-
-			<div class="grid grid-cols-1 3xl:grid-cols-5 3xl:gap-8 gap-16 py-8 min-h-0">
-				<div class="3xl:col-span-3 flex flex-col gap-8 min-h-0">
-					{#each overloads as overload, index}
-						<div class="flex flex-col gap-4">
-							<h2 class="font-medium text-lg lg:text-xl border-b py-2">
-								{#if overloads.length === 1}
-									Specification
-								{:else}
-									Specification (Overload {index + 1})
-								{/if}
-							</h2>
-							<code class="font-mono bg-background border rounded-lg px-4 py-3 text-sm lg:text-lg">
-								{overloadToSyntacticString(name, overload)}
-							</code>
-						</div>
-
-						{#if overload.calledOn}
-							<div class="flex flex-col gap-4">
-								<h3 class="font-medium text-base lg:text-lg border-b py-2">Called on Entity</h3>
-								<div class="divide-y">
-									<ParameterEntry {...overload.calledOn} />
-								</div>
-							</div>
-						{/if}
-
-						<div class="flex flex-col gap-4">
-							<h3 class="font-medium text-base lg:text-lg border-b py-2">Parameters</h3>
-							{#if overload.parameters && overload.parameters.length}
-								<div class="divide-y">
-									{#each overload.parameters as parameter}
-										<ParameterEntry {...parameter} />
-									{/each}
-								</div>
-							{:else}
-								<div class="text-sm">No parameters.</div>
-							{/if}
-						</div>
-
-						<div class="flex flex-col gap-4">
-							<h3 class="font-medium text-base lg:text-lg border-b py-2">Returns</h3>
-							{#if overload.returns}
-								{#if !overload.returns.void}
-									<div class="divide-y">
-										<ParameterEntry {...overload.returns} />
-									</div>
-								{:else}
-									<div class="text-xs lg:text-sm">This function does not return a value.</div>
-								{/if}
-							{:else}
-								<div class="text-sm flex gap-4 items-center">
-									<TriangleAlert class="w-5 h-5 lg:w-6 lg:h-6" />
-									<span class="italic text-xs lg:text-sm">
-										This function's return type is unknown.
-										<!-- Are you able to correct this? Help us <a href="#">fix this</a>. -->
-									</span>
-								</div>
-							{/if}
-						</div>
-					{/each}
-				</div>
-
-				{#if example || remarks}
-					<div class="flex flex-col gap-4 3xl:col-span-2">
-						{#if example}
-							<h2 class="font-medium text-lg lg:text-xl border-b py-2">Usage</h2>
-							<Code.Root value={'1'}>
-								<Code.Tabs>
-									<Code.Tab value={'1'}>Example</Code.Tab>
-								</Code.Tabs>
-								<Code.Example value={'1'}>
-									<Code.Block code={example} />
-								</Code.Example>
-							</Code.Root>
-						{/if}
-
-						{#if remarks}
-							<h2 class="font-medium text-xl border-b py-2">Remarks</h2>
-							<ul class="text-sm list-disc marker:text-muted-foreground pl-8">
-								{#each remarks as remark}
-									<li class="pl-4">
-										{remark}
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</div>
+			<div class="mt-3 flex flex-wrap items-center gap-1.5">
+				<Badge>{languageName}</Badge>
+				{#if calledOnLabel}
+					<Badge variant="secondary">Called on {calledOnLabel}</Badge>
+				{/if}
+				{#if returnLabel}
+					<Badge variant="outline">Returns {returnLabel}</Badge>
+				{/if}
+				{#if dangerFlag}
+					<Badge variant="destructive">Unlisted</Badge>
 				{/if}
 			</div>
 		</div>
-	</div>
 
-	<div class="flex flex-col shrink-0 justify-between px-4 border-l lg:w-80">
-		<div class="flex flex-col gap-4">
-			<FlagsAlert {flags} />
+		<div class="flex shrink-0 items-center gap-1">
+			<CopyButton
+				variant="ghost"
+				size="icon"
+				aria-label="Copy a link to this function"
+				title="Copy a link to this function"
+				text={`${siteUrl}/library/${languageId}/${(name ?? '').toLowerCase()}`}
+			>
+				{#snippet child({ copied })}
+					{#if copied}
+						<Check class="text-primary size-4" />
+					{:else}
+						<Link class="size-4" />
+					{/if}
+				{/snippet}
+			</CopyButton>
+			<!-- Issue 36 is for GSC, issue 35 is for CSC -->
+			<Button
+				variant="ghost"
+				size="icon"
+				aria-label="Report an API issue"
+				title="Report an API issue"
+				href={languageName === 'GSC'
+					? 'https://github.com/Blakintosh/gscode/issues/36'
+					: 'https://github.com/Blakintosh/gscode/issues/35'}
+				target="_blank"
+				rel="noopener noreferrer"
+			>
+				<Flag class="size-4" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="icon"
+				aria-label="Edit this entry on GitHub"
+				title="Edit this entry on GitHub"
+				href={`https://github.com/Blakintosh/gscode/blob/main/site/src/lib/apiSource/${languageJsonFile}`}
+				target="_blank"
+				rel="noopener noreferrer"
+			>
+				<GithubIcon class="size-4" />
+			</Button>
+		</div>
+	</header>
 
-			<div class="font-medium text-sm hidden lg:block">Actions</div>
-			<div class="flex flex-row lg:flex-col gap-2">
-				<CopyButton
-					variant="secondary"
-					size={'sm'}
-					class="w-full gap-4"
-					text={`https://gscode.net/library/${languageName.toLowerCase()}/${name.toLowerCase()}`}
-				>
-					{#snippet child({ copied })}
-						{#if copied}
-							<Check class="w-4 h-4" />
-							<span class="hidden lg:block">Copied to clipboard</span>
-						{:else}
-							<Link class="w-4 h-4" />
-							<span class="hidden lg:block">Share this function</span>
-						{/if}
-					{/snippet}
-				</CopyButton>
-				<!-- Issue 36 is for GSC, issue 35 is for CSC -->
-				<Button
-					variant="secondary"
-					size={'sm'}
-					class="w-full gap-4"
-					href={languageName === 'GSC'
-						? 'https://github.com/Blakintosh/gscode/issues/36'
-						: 'https://github.com/Blakintosh/gscode/issues/35'}
-					target="_blank"
-					rel="noopener noreferrer"
-				>
-					<Flag class="w-4 h-4" />
-					<span class="hidden lg:block">Report an API issue</span>
-				</Button>
-				<Button
-					variant="secondary"
-					size={'sm'}
-					class="w-full gap-4"
-					href={`https://github.com/Blakintosh/gscode/blob/main/site/src/lib/apiSource/${languageJsonFile}`}
-					target="_blank"
-					rel="noopener noreferrer"
-				>
-					<svg
-						role="img"
-						class="w-4 h-4"
-						fill="currentColor"
-						viewBox="0 0 24 24"
-						xmlns="http://www.w3.org/2000/svg"
-						><title>GitHub</title><path
-							d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
-						/></svg
+	<p class="text-muted-foreground mt-5 max-w-[72ch] text-[16.5px] leading-[1.65] font-light">
+		{description}
+	</p>
+
+	<FlagsAlert {flags} class="mt-6 max-w-[72ch]" />
+
+	<div class="mt-10 flex flex-col gap-10">
+		{#each overloads as overload, index (index)}
+			<section class="flex flex-col gap-6">
+				<div class="flex flex-col gap-3">
+					<h2 class={heading}>
+						{overloads.length === 1 ? 'Signature' : `Signature (overload ${index + 1})`}
+					</h2>
+					<Brush
+						surface="table"
+						behind="background"
+						cut={10}
+						handles
+						readout={languageName}
+						class="max-w-[72ch]"
+						bodyClass="overflow-x-auto px-4 py-3.5"
 					>
-					<span class="hidden lg:block">View on GitHub</span>
-				</Button>
-			</div>
-		</div>
-		<div class="flex flex-col gap-2">
-			<!-- <div class="font-medium text-sm">
-                See also
-            </div>
-            <div class="grid grid-flow-row auto-rows-max w-full">
-                <Button variant="link" size={"sm"} class="justify-start font-normal text-muted-foreground">
-                    IPrintLn
-                </Button>
-                <Button variant="link" size={"sm"} class="justify-start font-normal text-muted-foreground">
-                    IPrintLn
-                </Button>
-                <Button variant="link" size={"sm"} class="justify-start font-normal text-muted-foreground">
-                    IPrintLn
-                </Button>
-                <Button variant="link" size={"sm"} class="justify-start font-normal text-muted-foreground">
-                    IPrintLn
-                </Button>
-            </div> -->
-		</div>
+						<code class="text-foreground block font-mono text-[13px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere] lg:text-[14px]">
+							{overloadToSyntacticString(name, overload)}
+						</code>
+					</Brush>
+				</div>
+
+				{#if overload.calledOn}
+					<div class="flex flex-col gap-1">
+						<h3 class={heading}>Called on</h3>
+						<div class="max-w-[72ch]">
+							<ParameterEntry {...overload.calledOn} />
+						</div>
+					</div>
+				{/if}
+
+				<div class="flex flex-col gap-1">
+					<h3 class={heading}>Parameters</h3>
+					{#if overload.parameters && overload.parameters.length}
+						<div class="max-w-[72ch]">
+							{#each overload.parameters as parameter, parameterIndex (parameterIndex)}
+								<ParameterEntry {...parameter} />
+							{/each}
+						</div>
+					{:else}
+						<p class="text-dim mt-1 text-[14.5px] font-light">This function takes no parameters.</p>
+					{/if}
+				</div>
+
+				<div class="flex flex-col gap-1">
+					<h3 class={heading}>Returns</h3>
+					{#if overload.returns}
+						{#if !overload.returns.void}
+							<div class="max-w-[72ch]">
+								<ParameterEntry {...overload.returns} />
+							</div>
+						{:else}
+							<p class="text-dim mt-1 text-[14.5px] font-light">
+								This function does not return a value.
+							</p>
+						{/if}
+					{:else}
+						<p class="text-muted-foreground mt-1 flex items-center gap-2.5 text-[14.5px] font-light">
+							<TriangleAlert class="text-dim size-4 shrink-0" />
+							This function's return type is unknown.
+						</p>
+					{/if}
+				</div>
+			</section>
+		{/each}
+
+		{#if example}
+			<section class="flex flex-col gap-3">
+				<h2 class={heading}>Usage</h2>
+				<div class="max-w-[72ch]">
+					<Code.Root value="1" language={languageName}>
+						<Code.Tabs>
+							<Code.Tab value="1">Example</Code.Tab>
+						</Code.Tabs>
+						<Code.Example value="1">
+							<Code.Block code={example} />
+						</Code.Example>
+					</Code.Root>
+				</div>
+			</section>
+		{/if}
+
+		{#if remarks && remarks.length}
+			<section class="flex flex-col gap-3">
+				<h2 class={heading}>Remarks</h2>
+				<ul class="flex max-w-[72ch] flex-col gap-2.5">
+					{#each remarks as remark, remarkIndex (remarkIndex)}
+						<li class="text-muted-foreground flex gap-3 text-[15px] leading-[1.6] font-light">
+							<i aria-hidden="true" class="bg-primary mt-[9px] block size-[6px] shrink-0"></i>
+							<span>{remark}</span>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
 	</div>
 </div>

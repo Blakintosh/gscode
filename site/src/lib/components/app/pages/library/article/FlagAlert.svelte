@@ -1,28 +1,35 @@
 <script lang="ts">
-	import * as Alert from '$lib/components/ui/alert/index.js';
-	import { Button } from '$components/ui/button';
 	import type { Component } from 'svelte';
+	import Brush from '$lib/components/site/Brush.svelte';
+	import { cn } from '$lib/utils.js';
 
-    type FlagAlertProps = {
-        Icon: Component,
-        title: string,
-        description: string
-    }
+	type FlagAlertProps = {
+		Icon: Component;
+		title: string;
+		description: string;
+		/** `danger` is reserved for flags that mean the function is unsafe or unusable. */
+		tone?: 'info' | 'danger';
+	};
 
-    let { Icon, title, description }: FlagAlertProps = $props();
+	let { Icon, title, description, tone = 'info' }: FlagAlertProps = $props();
+
+	const danger = $derived(tone === 'danger');
 </script>
 
-<Alert.Root class={'[&:has(svg)]:pl-12'}>
-    <Icon class="w-6 h-6" />
-    <Alert.Title class="text-sm lg:text-base">{title}</Alert.Title>
-    <Alert.Description class="flex flex-col gap-2 items-start text-xs lg:text-sm">
-        {description}
-
-        <!-- <Button
-            variant="link"
-            class="text-primary px-0 h-auto hidden lg:block"
-            size={'sm'}
-            href={'https://github.com/blakintosh/gscode-site'}>Report an issue</Button
-        > -->
-    </Alert.Description>
-</Alert.Root>
+<Brush
+	surface="card"
+	rim={danger ? 'danger' : 'deep'}
+	cut={10}
+	bodyClass="flex gap-3 px-4 py-3.5"
+	role="note"
+>
+	<Icon
+		class={cn('mt-px size-4 shrink-0', danger ? 'text-destructive' : 'text-muted-foreground')}
+	/>
+	<div class="min-w-0">
+		<p class={cn('type-label', danger ? 'text-destructive' : 'text-primary')}>{title}</p>
+		<p class="text-muted-foreground mt-1.5 max-w-[60ch] text-[13.5px] leading-[1.55] font-light">
+			{description}
+		</p>
+	</div>
+</Brush>

@@ -30,18 +30,16 @@
 	<meta property="og:image" content="/favicon.png" />
 </svelte:head>
 
-<div class="flex min-h-[calc(100svh-3.5rem)] w-full grow items-stretch">
-	<!-- Desktop: the index rail is a panel on an edge, sticky under the header bar. -->
-	<aside
-		class="bg-sidebar border-border sticky top-14 hidden h-[calc(100svh-3.5rem)] w-72 shrink-0 border-r lg:block xl:w-80"
-	>
+<!-- An app frame: the page never scrolls; the index and the article each scroll in their own pane. -->
+<div class="flex h-[calc(100svh-3.5rem)] w-full items-stretch overflow-hidden">
+	<aside class="bg-sidebar border-border hidden h-full w-72 shrink-0 border-r lg:block xl:w-80">
 		<LibrarySidebar />
 	</aside>
 
-	<div class="flex min-w-0 grow flex-col">
+	<div class="flex min-w-0 grow flex-col overflow-y-auto">
 		<!-- Mobile: the same index, in a sheet. -->
 		<div
-			class="bg-popover border-border sticky top-14 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-3 lg:hidden"
+			class="bg-popover border-border sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-3 lg:hidden"
 		>
 			<Sheet.Root bind:open={mobileOpen}>
 				<Sheet.Trigger>

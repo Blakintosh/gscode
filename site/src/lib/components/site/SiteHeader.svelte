@@ -54,7 +54,8 @@
 </script>
 
 <!-- Raise-coloured bar on an edge; nav is mono uppercase, mute → teal. -->
-<header class="bg-popover border-border sticky top-0 z-50 border-b">
+<!-- The edge is an inset shadow so the bar is exactly h-14: layouts subtract 3.5rem for it. -->
+<header class="bg-popover sticky top-0 z-50 shadow-[inset_0_-1px_0_var(--border)]">
 	<div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-5 sm:px-6">
 		<Logo {property} />
 

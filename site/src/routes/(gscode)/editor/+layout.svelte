@@ -92,9 +92,11 @@
 	<meta property="og:image" content="/favicon.png" />
 </svelte:head>
 
-<div class="relative grow flex w-full items-stretch overflow-hidden h-full min-h-0">
+<!-- An app frame: fixed to the viewport under the header; panes scroll, the page does not. -->
+<div class="relative flex h-[calc(100svh-3.5rem)] w-full items-stretch overflow-hidden">
 	<Sidebar.Provider
 		bind:open={sidebarOpen}
+		class="h-full min-h-0"
 		style="--sidebar-width: 18rem; --sidebar-width-mobile: 20rem;"
 	>
 		<EditorSidebar />

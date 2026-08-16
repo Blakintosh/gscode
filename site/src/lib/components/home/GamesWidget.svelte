@@ -29,8 +29,8 @@
 
 main()
 {
-    maps\\_load::main();
-    level thread setup_hostages();
+ maps\\_load::main();
+ level thread setup_hostages();
 }`
 		},
 		{
@@ -44,8 +44,8 @@ main()
 
 main()
 {
-    maps\\_zombiemode::main();
-    level thread power_switch();
+ maps\\_zombiemode::main();
+ level thread power_switch();
 }`
 		},
 		{
@@ -58,8 +58,8 @@ main()
 
 main()
 {
-    maps\\_load::main();
-    level thread objective_track();
+ maps\\_load::main();
+ level thread objective_track();
 }`
 		},
 		{
@@ -73,8 +73,8 @@ main()
 
 main()
 {
-    maps\\_zombiemode::main();
-    level thread pack_a_punch();
+ maps\\_zombiemode::main();
+ level thread pack_a_punch();
 }`
 		},
 		{
@@ -88,8 +88,8 @@ main()
 
 function main()
 {
-    util::wait_network_frame();
-    level thread power_switch();
+ util::wait_network_frame();
+ level thread power_switch();
 }`
 		}
 	];
@@ -120,7 +120,7 @@ function main()
 						touched = true;
 						index = i;
 					}}
-					class="chip-cut min-w-[64px] grow px-3 py-2 font-mono text-[11px] tracking-[.14em] uppercase transition-colors {i === index
+					class="chip-cut min-w-[64px] grow px-3 py-2 font-mono text-2xs tracking-label uppercase transition-colors {i === index
 						? 'bg-primary text-primary-foreground'
 						: 'text-muted-foreground hover:text-primary'}"
 				>
@@ -129,19 +129,19 @@ function main()
 			{/each}
 		</div>
 
-		<div class="bg-recess inset-edge px-4 py-3 font-mono text-[12.5px]">
+		<div class="bg-recess inset-edge px-4 py-3 font-mono text-sm">
 			<span class="text-dim">"gscode.game"</span><span class="text-muted-foreground">:</span>
 			<span class="text-primary">"{game.id}"</span>
 		</div>
 
-		<dl class="grid grid-cols-[auto_1fr] gap-x-5 gap-y-2 text-[13.5px]">
-			<dt class="type-label text-dim self-center tracking-[.17em]">Game</dt>
-			<dd class="text-foreground">{game.title} <span class="text-dim font-mono text-[11px]">{game.year}</span></dd>
-			<dt class="type-label text-dim self-center tracking-[.17em]">Imports</dt>
+		<dl class="grid grid-cols-[auto_1fr] gap-x-5 gap-y-2 text-sm">
+			<dt class="type-label text-dim self-center">Game</dt>
+			<dd class="text-foreground">{game.title} <span class="text-dim font-mono text-2xs">{game.year}</span></dd>
+			<dt class="type-label text-dim self-center">Imports</dt>
 			<dd class="text-muted-foreground">{game.imports}</dd>
-			<dt class="type-label text-dim self-center tracking-[.17em]">Functions</dt>
+			<dt class="type-label text-dim self-center">Functions</dt>
 			<dd class="text-muted-foreground">{game.functions}</dd>
-			<dt class="type-label text-dim self-center tracking-[.17em]">Data</dt>
+			<dt class="type-label text-dim self-center">Data</dt>
 			<dd class="text-muted-foreground">that game's builtins, object fields and Radiant keys</dd>
 		</dl>
 	</div>

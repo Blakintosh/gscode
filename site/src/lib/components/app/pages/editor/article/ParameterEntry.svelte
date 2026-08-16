@@ -17,9 +17,9 @@
 		</span>
 
 		{#if mandatory}
-			<span class="text-destructive text-[11px] tracking-[.13em] uppercase">required</span>
+			<span class="text-destructive text-2xs tracking-label uppercase">required</span>
 		{:else if mandatory !== undefined}
-			<span class="text-dim text-[11px] tracking-[.13em] uppercase">optional</span>
+			<span class="text-dim text-2xs tracking-label uppercase">optional</span>
 		{/if}
 	</div>
 	<div class="text-muted-foreground text-xs lg:text-sm">

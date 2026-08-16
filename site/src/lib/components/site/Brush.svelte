@@ -6,7 +6,7 @@
 	 *
 	 * Structure (clip-path clips borders, shadows and outlines, so each job lives on its
 	 * own layer):
-	 *   wrapper (relative, drop-shadow, handles, tab, readout)
+	 * wrapper (relative, drop-shadow, handles, tab, readout)
 	 *     └ rim (clipped, gradient background)
 	 *         └ ::before body (inset 1px, clipped, surface colour)
 	 *         └ content (z-1)
@@ -130,7 +130,7 @@
 		<span
 			data-slot="brush-tab"
 			class={cn(
-				'tab-cut bg-primary text-primary-foreground pointer-events-none absolute top-0 left-0 z-[5] font-mono text-[11px] leading-none tracking-[.16em] uppercase transition-colors',
+				'tab-cut bg-primary text-primary-foreground pointer-events-none absolute top-0 left-0 z-[5] font-mono text-2xs leading-none tracking-label uppercase transition-colors',
 				'px-[13px] py-1 pl-[9px]',
 				interactive && 'group-hover/brush:bg-bright group-hover/brush:text-ink',
 				tabClass
@@ -145,7 +145,7 @@
 		<span
 			data-slot="brush-readout"
 			class={cn(
-				'pointer-events-none absolute right-0 -bottom-2 z-[5] font-mono text-[11px] leading-[16px] tracking-[.1em] transition-colors',
+				'pointer-events-none absolute right-0 -bottom-2 z-[5] font-mono text-2xs leading-4 tracking-widest transition-colors',
 				rim === 'active' ? 'text-primary' : 'text-dim',
 				interactive && 'group-hover/brush:text-bright',
 				readoutClass

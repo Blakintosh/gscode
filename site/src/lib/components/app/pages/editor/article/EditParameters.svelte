@@ -106,7 +106,7 @@
 											functionEditor.setParameterName(overloadIndex, i, e.currentTarget.value)}
 										placeholder="Parameter name"
 									/>
-									<p class="text-dim font-mono text-[11px] tracking-[.06em]">
+									<p class="text-dim font-mono text-2xs tracking-wider">
 										camelCase, e.g. hasAmmo.
 									</p>
 								</div>
@@ -143,7 +143,7 @@
 									rows={2}
 									class="resize-none"
 								/>
-								<p class="text-dim font-mono text-[11px] tracking-[.06em]">
+								<p class="text-dim font-mono text-2xs tracking-wider">
 									Statement sentence in American English, ending with a period.
 								</p>
 							</div>

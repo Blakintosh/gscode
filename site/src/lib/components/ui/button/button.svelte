@@ -19,10 +19,10 @@
 		base: "group/button relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 font-display font-bold uppercase leading-none whitespace-nowrap outline-none select-none transition-[filter,background,color] duration-150 active:translate-y-px disabled:pointer-events-none disabled:cursor-default disabled:opacity-35 aria-disabled:pointer-events-none aria-disabled:opacity-35 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 		variants: {
 			size: {
-				default: "h-11 px-6 text-[13px] tracking-[.06em] [--cut:10px]",
-				xs: "h-7 gap-1 px-3 text-[12px] tracking-[.07em] [--cut:6px] [&_svg:not([class*='size-'])]:size-3",
-				sm: "h-9 gap-1.5 px-4 text-[11px] tracking-[.07em] [--cut:8px] [&_svg:not([class*='size-'])]:size-3.5",
-				lg: "h-13 gap-2 px-[30px] text-sm tracking-[.06em] [--cut:12px]",
+				default: "h-11 px-6 text-sm tracking-wider [--cut:10px]",
+				xs: "h-7 gap-1 px-3 text-xs tracking-wider [--cut:6px] [&_svg:not([class*='size-'])]:size-3",
+				sm: "h-9 gap-1.5 px-4 text-2xs tracking-wider [--cut:8px] [&_svg:not([class*='size-'])]:size-3.5",
+				lg: "h-13 gap-2 px-[30px] text-sm tracking-wider [--cut:12px]",
 				icon: "size-9 p-0 [--cut:8px]",
 				"icon-xs": "size-7 p-0 [--cut:6px] [&_svg:not([class*='size-'])]:size-3.5",
 				"icon-sm": "size-8 p-0 [--cut:7px] [&_svg:not([class*='size-'])]:size-3.5",

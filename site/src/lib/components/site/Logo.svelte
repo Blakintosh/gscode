@@ -21,13 +21,13 @@
 >
 	<DatumMark class="size-[17px]" />
 	<span
-		class="font-display text-[15px] leading-none font-bold tracking-[.04em] uppercase transition-colors group-hover/logo:text-primary"
+		class="font-display text-base leading-none font-bold tracking-data uppercase transition-colors group-hover/logo:text-primary"
 	>
 		gscode
 	</span>
 	{#if property}
 		<span
-			class="font-sans text-[13px] leading-none font-normal normal-case tracking-normal text-muted-foreground transition-colors group-hover/logo:text-foreground"
+			class="font-sans text-sm leading-none font-normal normal-case tracking-normal text-muted-foreground transition-colors group-hover/logo:text-foreground"
 		>
 			{property}
 		</span>

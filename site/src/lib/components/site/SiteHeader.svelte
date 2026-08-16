@@ -48,9 +48,9 @@
 	}
 
 	const navItem =
-		'px-3 py-1.5 font-mono text-[12px] tracking-[.15em] uppercase transition-colors outline-none focus-visible:text-primary';
+		'px-3 py-1.5 font-mono text-xs tracking-label uppercase transition-colors outline-none focus-visible:text-primary';
 	const sheetItem =
-		'flex items-center gap-3 px-4 py-2.5 font-mono text-[12px] tracking-[.14em] uppercase text-muted-foreground transition-colors hover:text-foreground hover:bg-[var(--wash-hover)] outline-none focus-visible:text-primary';
+		'flex items-center gap-3 px-4 py-2.5 font-mono text-xs tracking-label uppercase text-muted-foreground transition-colors hover:text-foreground hover:bg-[var(--wash-hover)] outline-none focus-visible:text-primary';
 </script>
 
 <!-- Raise-coloured bar on an edge; nav is mono uppercase, mute → teal. -->
@@ -121,7 +121,7 @@
 			>
 				<DownloadIcon class="size-3.5" />
 				Install
-				<span class="type-data text-[11px] font-normal tracking-[.06em] opacity-90">
+				<span class="type-data text-2xs font-normal tracking-wider opacity-90">
 					v{extensionVersion}
 				</span>
 			</Button>
@@ -148,7 +148,7 @@
 								{link.label}
 							</a>
 						{/each}
-						<p class="type-label text-dim px-4 pt-4 pb-1 tracking-[.2em]">Ecosystem</p>
+						<p class="type-label text-dim px-4 pt-4 pb-1">Ecosystem</p>
 						{#each ecosystemLinks as link (link.href)}
 							<a
 								href={link.href}
@@ -191,7 +191,7 @@
 							>
 								<DownloadIcon class="size-3.5" />
 								Install for VS Code
-								<span class="type-data text-[11px] font-normal tracking-[.06em] opacity-90">
+								<span class="type-data text-2xs font-normal tracking-wider opacity-90">
 									v{extensionVersion}
 								</span>
 							</Button>

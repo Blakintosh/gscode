@@ -68,7 +68,7 @@
 
 	<!-- The frame declares itself: tag in the top-left slot, handles on the square corners. -->
 	<span
-		class="tab-cut bg-primary text-primary-foreground absolute top-0 left-0 z-10 px-[13px] py-1 pl-[9px] font-mono text-[11px] leading-none tracking-[.16em] uppercase"
+		class="tab-cut bg-primary text-primary-foreground absolute top-0 left-0 z-10 px-[13px] py-1 pl-[9px] font-mono text-2xs leading-none tracking-label uppercase"
 		>vs code · language server</span
 	>
 	<i aria-hidden="true" class="border-primary bg-background absolute top-3 right-3 z-10 block size-[7px] border-[1.5px]"></i>
@@ -76,7 +76,7 @@
 
 	<div class="relative mx-auto max-w-7xl px-4 pt-20 pb-24 sm:px-6 lg:pt-28 lg:pb-32">
 		<!-- Origin crosshair -->
-		<div class="text-primary pointer-events-none absolute top-8 left-4 font-mono text-[11px] tracking-[.12em] sm:left-6" aria-hidden="true">
+		<div class="text-primary pointer-events-none absolute top-8 left-4 font-mono text-2xs tracking-widest sm:left-6" aria-hidden="true">
 			<i class="bg-primary absolute block h-px w-8"></i>
 			<i class="bg-primary absolute block h-8 w-px"></i>
 			<span class="absolute top-[-6px] left-9 whitespace-nowrap">0, 0</span>
@@ -84,13 +84,13 @@
 
 		<h1
 			id="hero-title"
-			class="font-display text-foreground max-w-[16ch] text-[clamp(32px,6.4vw,76px)] leading-[0.98] font-bold tracking-[.005em] uppercase"
+			class="font-display text-foreground max-w-[16ch] text-hero font-bold tracking-normal uppercase"
 		>
 			IDE tooling for<br />
 			Call of Duty
 			<span class="grad-text">scripting</span><br />
 		</h1>
-		<p class="text-muted-foreground mt-7 max-w-[52ch] text-[17px] leading-[1.6] font-light sm:text-[19px]">
+		<p class="text-muted-foreground mt-7 max-w-[52ch] text-lg leading-relaxed font-light sm:text-xl">
 			A language server for Call of Duty’s GSC and CSC — Black Ops III first, and every game
 			back to Call of Duty 4. It resolves your whole mod folder, then tells you what the Linker
 			would reject, before you build.
@@ -102,7 +102,7 @@
 			</Button>
 			<Button href="/library" variant="secondary" size="lg">Function library</Button>
 		</div>
-		<p class="type-label text-dim mt-6 tracking-[.18em]">
+		<p class="type-label text-dim mt-6">
 			free · open source · vs code and vs code-based ides
 		</p>
 	</div>
@@ -122,13 +122,13 @@
 <!-- ── Spreads: full-width, title block on one side, the live widget on the other. ─── -->
 {#snippet titleBlock(no: string, name: string, readout: string, heading: string, copy: string)}
 	<div class="reveal" use:reveal>
-		<p class="type-label text-primary tracking-[.2em]">
+		<p class="type-label text-primary">
 			{no} / {name} <span class="text-dim">· {readout}</span>
 		</p>
-		<h2 class="text-foreground mt-4 max-w-[16ch] text-[30px] leading-[1.08] font-semibold tracking-[-.03em] sm:text-[38px]">
+		<h2 class="text-foreground mt-4 max-w-[16ch] text-heading font-semibold tracking-heading sm:text-heading">
 			{heading}
 		</h2>
-		<p class="text-muted-foreground mt-5 max-w-[46ch] text-[16.5px] leading-[1.6] font-light">{copy}</p>
+		<p class="text-muted-foreground mt-5 max-w-[46ch] text-body leading-relaxed font-light">{copy}</p>
 	</div>
 {/snippet}
 
@@ -197,12 +197,12 @@
 	<div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:py-28">
 		<div class="reveal mb-10 flex flex-wrap items-end justify-between gap-4" use:reveal>
 			<div>
-				<p class="type-label text-primary tracking-[.2em]">05 / Specification <span class="text-dim">· v{extensionVersion}</span></p>
-				<h2 class="text-foreground mt-4 text-[30px] leading-[1.08] font-semibold tracking-[-.03em] sm:text-[38px]">
+				<p class="type-label text-primary">05 / Specification <span class="text-dim">· v{extensionVersion}</span></p>
+				<h2 class="text-foreground mt-4 text-heading font-semibold tracking-heading sm:text-heading">
 					The rest of the instrument
 				</h2>
 			</div>
-			<p class="text-muted-foreground max-w-[44ch] text-[15px] leading-[1.6] font-light">
+			<p class="text-muted-foreground max-w-[44ch] text-base leading-relaxed font-light">
 				A ground-up rewrite: a span-based lexer, a provenance-tracking preprocessor and a
 				recursive-descent parser with error recovery — none of which throw on malformed input.
 			</p>
@@ -210,9 +210,9 @@
 		<dl class="border-border reveal border-t" use:reveal>
 			{#each spec as [label, value, note] (label)}
 				<div class="border-border grid gap-x-8 gap-y-1 border-b py-4 sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[200px_320px_minmax(0,1fr)]">
-					<dt class="type-label text-dim self-center tracking-[.17em]">{label}</dt>
-					<dd class="text-foreground text-[15px] font-medium">{value}</dd>
-					<dd class="text-muted-foreground text-[14px] leading-[1.55] font-light lg:self-center">{note}</dd>
+					<dt class="type-label text-dim self-center">{label}</dt>
+					<dd class="text-foreground text-base font-medium">{value}</dd>
+					<dd class="text-muted-foreground text-sm leading-normal font-light lg:self-center">{note}</dd>
 				</div>
 			{/each}
 		</dl>
@@ -224,10 +224,10 @@
 	<div class="lit-grid pointer-events-none absolute inset-0 opacity-60" aria-hidden="true"></div>
 	<div class="relative mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-12 lg:gap-14 lg:py-24">
 		<div class="reveal lg:col-span-6" use:reveal>
-			<h2 class="font-display text-foreground text-[clamp(30px,4.6vw,56px)] leading-[1] font-bold tracking-[.005em] uppercase">
+			<h2 class="font-display text-foreground text-display font-bold tracking-normal uppercase">
 				Measure<br />from here
 			</h2>
-			<p class="text-muted-foreground mt-5 max-w-[42ch] text-[16.5px] leading-[1.6] font-light">
+			<p class="text-muted-foreground mt-5 max-w-[42ch] text-body leading-relaxed font-light">
 				Install the extension, open your mod folder, and let the server tell you what the
 				Linker would — first.
 			</p>
@@ -235,7 +235,7 @@
 				<Button href={marketplaceUrl} target="_blank" rel="noopener noreferrer" size="lg">
 					<DownloadIcon class="size-4" />
 					Install
-					<span class="type-data text-[11px] font-normal tracking-[.06em] opacity-90">v{extensionVersion}</span>
+					<span class="type-data text-2xs font-normal tracking-wider opacity-90">v{extensionVersion}</span>
 				</Button>
 				<Button href={discordInviteUrl} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">
 					<DiscordIcon class="size-4" />
@@ -251,11 +251,11 @@
 					rel="noopener noreferrer"
 					class="group bg-card inset-edge flex flex-col gap-3 p-5 transition-colors hover:bg-[var(--wash-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] outline-none"
 				>
-					<span class="type-label text-primary flex items-center justify-between tracking-[.18em]">
+					<span class="type-label text-primary flex items-center justify-between">
 						{item.label}
 						<ArrowUpRightIcon class="text-dim group-hover:text-primary size-3.5 transition-colors" />
 					</span>
-					<span class="text-muted-foreground group-hover:text-foreground text-[13.5px] leading-[1.55] font-light transition-colors">{item.copy}</span>
+					<span class="text-muted-foreground group-hover:text-foreground text-sm leading-normal font-light transition-colors">{item.copy}</span>
 				</a>
 			{/each}
 		</div>

@@ -60,10 +60,10 @@
 					</div>
 				</Sheet.Content>
 			</Sheet.Root>
-			<span class="type-label text-dim tracking-[.2em]">{languageName}</span>
+			<span class="type-label text-dim">{languageName}</span>
 			{#if currentFunction}
 				<span aria-hidden="true" class="bg-border h-3.5 w-px"></span>
-				<span class="text-muted-foreground truncate font-mono text-[12px]">{currentFunction}</span>
+				<span class="text-muted-foreground truncate font-mono text-xs">{currentFunction}</span>
 			{/if}
 		</div>
 

@@ -40,7 +40,7 @@
 			rows={2}
 			class="resize-none text-base"
 		/>
-		<p class="text-dim font-mono text-[11px] tracking-[.06em]">
+		<p class="text-dim font-mono text-2xs tracking-wider">
 			Statement sentence in American English, ending with a period.
 		</p>
 	</div>
@@ -50,7 +50,7 @@
 		onclick={startEditing}
 		class="group -mx-2 -my-1 flex w-full cursor-pointer items-start gap-2.5 px-2 py-1 text-left transition-colors hover:bg-[var(--wash-hover)]"
 	>
-		<h2 class="text-muted-foreground flex-1 text-base leading-relaxed lg:text-[16.5px]">
+		<h2 class="text-muted-foreground flex-1 text-base leading-relaxed lg:text-body">
 			{#if functionEditor.function.description}
 				{functionEditor.function.description}
 			{:else}

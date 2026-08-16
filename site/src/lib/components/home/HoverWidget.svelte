@@ -49,17 +49,17 @@
 		aria-hidden={step >= 2 ? undefined : 'true'}
 	>
 		<Brush surface="popover" behind="background" cut={10} rim="edge" shadow="overlay" bodyClass="px-4 py-3.5">
-			<p class="font-mono text-[13px] leading-snug">
+			<p class="font-mono text-sm leading-snug">
 				<span class="text-foreground">GetWeapon</span><span class="text-muted-foreground"
 					>( weaponName, attachmentName1, attachmentName2, … )</span
 				>
 			</p>
 			<hr class="border-border my-2.5" />
-			<p class="text-muted-foreground text-[13.5px] leading-[1.55]">
+			<p class="text-muted-foreground text-sm leading-normal">
 				Get the requested weapon object based on the game-mode-agnostic weapon name string.
 			</p>
-			<p class="type-label text-dim mt-3 mb-1.5 tracking-[.18em]">Parameters</p>
-			<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
+			<p class="type-label text-dim mt-3 mb-1.5">Parameters</p>
+			<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
 				<dt class="text-foreground font-mono">weaponName</dt>
 				<dd class="text-muted-foreground">The base weapon to return.</dd>
 				<dt class="text-foreground font-mono">attachmentName1</dt>
@@ -73,7 +73,7 @@
 		data-in={step >= 2 ? '' : undefined}
 		aria-hidden={step >= 2 ? undefined : 'true'}
 	>
-		<Brush surface="popover" behind="background" cut={7} rim="edge" shadow="overlay" bodyClass="flex items-center gap-2.5 px-3 py-2 font-mono text-[12.5px]">
+		<Brush surface="popover" behind="background" cut={7} rim="edge" shadow="overlay" bodyClass="flex items-center gap-2.5 px-3 py-2 font-mono text-sm">
 			<i class="bg-primary block size-[6px] shrink-0"></i>
 			<span class="text-primary">/@ weapon @/</span>
 			<span class="text-foreground">w_weapon</span>

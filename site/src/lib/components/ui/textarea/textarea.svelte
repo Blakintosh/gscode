@@ -11,7 +11,7 @@
 </script>
 
 <!-- Datum: the same recess as Input (rim wrapper follows the chamfer), but Sora — mono
-     never runs multi-line prose. Sizing classes land on the wrapper. -->
+ never runs multi-line prose. Sizing classes land on the wrapper. -->
 <span
 	data-slot="textarea-rim"
 	class={cn(

@@ -28,7 +28,7 @@
 	/>
 	<div class="min-w-0">
 		<p class={cn('type-label', danger ? 'text-destructive' : 'text-primary')}>{title}</p>
-		<p class="text-muted-foreground mt-1.5 max-w-[60ch] text-[13.5px] leading-[1.55] font-light">
+		<p class="text-muted-foreground mt-1.5 max-w-[60ch] text-sm leading-normal font-light">
 			{description}
 		</p>
 	</div>

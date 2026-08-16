@@ -39,7 +39,7 @@
 			onkeydown={handleKeydown}
 			class="h-auto py-2 text-xl lg:text-3xl"
 		/>
-		<p class="text-dim font-mono text-[11px] tracking-[.06em]">
+		<p class="text-dim font-mono text-2xs tracking-wider">
 			PascalCase. Lowercase subsequent initials, e.g. IPrintLnBold, SetLpf.
 		</p>
 	</div>
@@ -49,7 +49,7 @@
 		onclick={startEditing}
 		class="group -mx-2 -my-1 flex cursor-pointer items-center gap-2.5 px-2 py-1 text-left transition-colors hover:bg-[var(--wash-hover)]"
 	>
-		<h1 class="scroll-m-20 font-mono text-xl tracking-[-.01em] lg:text-3xl">
+		<h1 class="scroll-m-20 font-mono text-xl tracking-tight lg:text-3xl">
 			{functionEditor.function.name}
 		</h1>
 		<Pencil class="text-dim size-4 opacity-0 transition-opacity group-hover:opacity-100" />

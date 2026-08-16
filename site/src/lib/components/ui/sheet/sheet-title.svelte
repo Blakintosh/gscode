@@ -13,7 +13,7 @@
 	bind:ref
 	data-slot="sheet-title"
 	class={cn(
-		"text-foreground font-display text-[15px] leading-tight font-bold tracking-[.04em] uppercase",
+		"text-foreground font-display text-base leading-tight font-bold tracking-data uppercase",
 		className
 	)}
 	{...restProps}

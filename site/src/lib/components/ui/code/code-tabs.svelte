@@ -13,7 +13,7 @@
 
 <!-- File-tab rail on the raise colour; sits inside the rim so the tab dock stays clear. -->
 <Tabs.List
-	class={cn('bg-popover w-full justify-start gap-0 pl-[36px] text-[12px]', className)}
+	class={cn('bg-popover w-full justify-start gap-0 pl-[36px] text-xs', className)}
 	{...restProps}
 >
 	{@render children?.()}

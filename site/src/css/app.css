@@ -23,6 +23,27 @@
 		'Segoe UI Symbol', 'Noto Color Emoji';
 	--font-display: 'Chakra Petch', var(--font-sans);
 	--font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+	/* Type scale — the design's "Scale" table as tokens. Use these (and Tailwind's own
+	   steps) rather than literal px; a literal is the exception, for a genuine one-off. */
+	--text-2xs: 0.6875rem; /* 11px — mono labels, readouts, chips; nothing sits below this */
+	--text-2xs--line-height: 1;
+	--text-xs: 0.75rem; /* 12px — nav, designators, meta */
+	--text-sm: 0.84375rem; /* 13.5px — small copy, card descriptions, code, data */
+	--text-sm--line-height: 1.5;
+	--text-body: 1.03125rem; /* 16.5px — doc-page prose on a 72ch measure */
+	--text-body--line-height: 1.66;
+	--text-hero: clamp(2.25rem, 6.4vw, 5.5rem); /* display headline in the hero */
+	--text-hero--line-height: 0.98;
+	--text-display: clamp(1.875rem, 4.6vw, 3.5rem); /* display headline in a band */
+	--text-display--line-height: 1;
+	--text-heading: clamp(1.875rem, 3vw, 2.375rem); /* section heading, Sora 600 */
+	--text-heading--line-height: 1.08;
+
+	--tracking-label: 0.17em; /* mono uppercase labels */
+	--tracking-data: 0.04em; /* mono readouts, versions, counts */
+	--tracking-heading: -0.03em; /* Sora 600 subheads */
+	--leading-prose: 1.66;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -386,8 +407,8 @@
 /* Type roles */
 @utility type-label {
 	font-family: var(--font-mono);
-	font-size: 11px;
-	letter-spacing: 0.17em;
+	font-size: var(--text-2xs);
+	letter-spacing: var(--tracking-label);
 	text-transform: uppercase;
 	line-height: 1;
 }
@@ -400,7 +421,7 @@
 }
 @utility type-data {
 	font-family: var(--font-mono);
-	letter-spacing: 0.04em;
+	letter-spacing: var(--tracking-data);
 	font-variant-numeric: tabular-nums;
 }
 

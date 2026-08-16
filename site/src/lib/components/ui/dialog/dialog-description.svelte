@@ -12,6 +12,6 @@
 <DialogPrimitive.Description
 	bind:ref
 	data-slot="dialog-description"
-	class={cn("text-muted-foreground text-[13.5px] leading-[1.55]", className)}
+	class={cn("text-muted-foreground text-sm leading-normal", className)}
 	{...restProps}
 />

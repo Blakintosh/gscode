@@ -13,7 +13,7 @@
 </script>
 
 <!-- Datum: a 15px chamfered square. Unchecked = steel edge over the recess; checked =
-     teal fill with an ink tick; indeterminate = a 7px ink square. Nothing is round. -->
+ teal fill with an ink tick; indeterminate = a 7px ink square. Nothing is round. -->
 <CheckboxPrimitive.Root
 	bind:ref
 	data-slot="checkbox"

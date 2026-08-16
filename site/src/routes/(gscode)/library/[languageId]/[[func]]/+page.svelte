@@ -44,7 +44,7 @@
 	const dangerFlag = $derived((flags ?? []).includes('unlisted'));
 
 	/** Sora 600 sentence case — the only heading role a doc page gets. */
-	const heading = 'text-foreground text-[17px] font-semibold tracking-[-.03em]';
+	const heading = 'text-foreground text-lg font-semibold tracking-heading';
 
 	$effect(() => {
 		document.title = `${name} - Script API Reference | GSCode`;
@@ -53,7 +53,7 @@
 
 <div class="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
 	<Breadcrumb.Root>
-		<Breadcrumb.List class="font-mono text-[11px] tracking-[.14em] uppercase">
+		<Breadcrumb.List class="font-mono text-2xs tracking-label uppercase">
 			<Breadcrumb.Item>
 				<Breadcrumb.Link href="/library">Black Ops III</Breadcrumb.Link>
 			</Breadcrumb.Item>
@@ -132,7 +132,7 @@
 		</div>
 	</header>
 
-	<p class="text-muted-foreground mt-5 max-w-[72ch] text-[16.5px] leading-[1.65] font-light">
+	<p class="text-muted-foreground mt-5 max-w-[72ch] text-body font-light">
 		{description}
 	</p>
 
@@ -154,7 +154,7 @@
 						class="max-w-[72ch]"
 						bodyClass="overflow-x-auto px-4 py-3.5"
 					>
-						<code class="text-foreground block font-mono text-[13px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere] lg:text-[14px]">
+						<code class="text-foreground block font-mono text-sm leading-prose whitespace-pre-wrap [overflow-wrap:anywhere] lg:text-sm">
 							{overloadToSyntacticString(name, overload)}
 						</code>
 					</Brush>
@@ -178,7 +178,7 @@
 							{/each}
 						</div>
 					{:else}
-						<p class="text-dim mt-1 text-[14.5px] font-light">This function takes no parameters.</p>
+						<p class="text-dim mt-1 text-sm font-light">This function takes no parameters.</p>
 					{/if}
 				</div>
 
@@ -190,12 +190,12 @@
 								<ParameterEntry {...overload.returns} />
 							</div>
 						{:else}
-							<p class="text-dim mt-1 text-[14.5px] font-light">
+							<p class="text-dim mt-1 text-sm font-light">
 								This function does not return a value.
 							</p>
 						{/if}
 					{:else}
-						<p class="text-muted-foreground mt-1 flex items-center gap-2.5 text-[14.5px] font-light">
+						<p class="text-muted-foreground mt-1 flex items-center gap-2.5 text-sm font-light">
 							<TriangleAlert class="text-dim size-4 shrink-0" />
 							This function's return type is unknown.
 						</p>
@@ -225,7 +225,7 @@
 				<h2 class={heading}>Remarks</h2>
 				<ul class="flex max-w-[72ch] flex-col gap-2.5">
 					{#each remarks as remark, remarkIndex (remarkIndex)}
-						<li class="text-muted-foreground flex gap-3 text-[15px] leading-[1.6] font-light">
+						<li class="text-muted-foreground flex gap-3 text-base leading-relaxed font-light">
 							<i aria-hidden="true" class="bg-primary mt-[9px] block size-[6px] shrink-0"></i>
 							<span>{remark}</span>
 						</li>

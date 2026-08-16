@@ -34,7 +34,7 @@
 		bodyClass="px-6 pt-10 pb-7 sm:px-10 sm:pt-12 sm:pb-9"
 	>
 		<p class="type-display text-foreground text-6xl sm:text-7xl">{page.status}</p>
-		<p class="text-muted-foreground mt-4 max-w-[52ch] text-[16.5px] font-light">
+		<p class="text-muted-foreground mt-4 max-w-[52ch] text-body font-light">
 			{message}
 		</p>
 		<div class="mt-8 flex flex-wrap items-center gap-2">

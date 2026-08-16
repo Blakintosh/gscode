@@ -12,6 +12,6 @@
 	const tones = { primary: 'text-primary', dim: 'text-dim', muted: 'text-muted-foreground' };
 </script>
 
-<p class={cn('type-label tracking-[.2em]', tones[tone], className)}>
+<p class={cn('type-label ', tones[tone], className)}>
 	{@render children?.()}
 </p>

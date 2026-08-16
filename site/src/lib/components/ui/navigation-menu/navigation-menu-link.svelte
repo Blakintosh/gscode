@@ -17,7 +17,7 @@
 	bind:ref
 	data-slot="navigation-menu-link"
 	class={cn(
-		"text-muted-foreground hover:text-primary focus-visible:text-primary data-active:text-primary flex w-max items-center gap-1.5 bg-transparent px-0 py-1 font-mono text-[12px] tracking-[.15em] uppercase transition-colors outline-none",
+		"text-muted-foreground hover:text-primary focus-visible:text-primary data-active:text-primary flex w-max items-center gap-1.5 bg-transparent px-0 py-1 font-mono text-xs tracking-label uppercase transition-colors outline-none",
 		"[&_svg:not([class*='size-'])]:size-4",
 		className
 	)}

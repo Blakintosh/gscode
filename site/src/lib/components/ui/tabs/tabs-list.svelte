@@ -2,9 +2,9 @@
 	import { tv, type VariantProps } from "tailwind-variants";
 
 	/* Datum: tabs are the one un-chamfered component — a mono uppercase rail on a single
-	   bottom edge. Both variants render the same rail; `line` is kept for API parity. */
+	 bottom edge. Both variants render the same rail; `line` is kept for API parity. */
 	export const tabsListVariants = tv({
-		base: "group/tabs-list border-border text-muted-foreground flex h-auto w-full items-center justify-start gap-0.5 overflow-x-auto border-b bg-transparent p-0 [scrollbar-width:none] font-mono text-[11px] tracking-[.12em] uppercase group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:w-fit group-data-[orientation=vertical]/tabs:flex-col group-data-[orientation=vertical]/tabs:items-stretch group-data-[orientation=vertical]/tabs:border-r group-data-[orientation=vertical]/tabs:border-b-0",
+		base: "group/tabs-list border-border text-muted-foreground flex h-auto w-full items-center justify-start gap-0.5 overflow-x-auto border-b bg-transparent p-0 [scrollbar-width:none] font-mono text-2xs tracking-widest uppercase group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:w-fit group-data-[orientation=vertical]/tabs:flex-col group-data-[orientation=vertical]/tabs:items-stretch group-data-[orientation=vertical]/tabs:border-r group-data-[orientation=vertical]/tabs:border-b-0",
 		variants: {
 			variant: {
 				default: "cn-tabs-list-variant-default",

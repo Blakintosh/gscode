@@ -12,7 +12,7 @@
 <div>
 	<div class="type-label text-dim mb-2.5">Auto-validation</div>
 	<div class="flex flex-col gap-2">
-		<div class="flex items-center gap-2 font-mono text-[11px] tracking-[.1em] uppercase">
+		<div class="flex items-center gap-2 font-mono text-2xs tracking-widest uppercase">
 			{#if functionEditor.isValid && !functionEditor.isUnverified}
 				<i aria-hidden="true" class="bg-primary block size-[6px] shrink-0"></i>
 				<span class="text-primary">Valid</span>

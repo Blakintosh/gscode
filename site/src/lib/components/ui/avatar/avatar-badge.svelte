@@ -11,7 +11,7 @@
 </script>
 
 <!-- Status markers in Datum are squares, never dots. The 2px knockout is a box-shadow in
-     the ground colour rather than a ring so it stays radius-free. -->
+ the ground colour rather than a ring so it stays radius-free. -->
 <span
 	bind:this={ref}
 	data-slot="avatar-badge"

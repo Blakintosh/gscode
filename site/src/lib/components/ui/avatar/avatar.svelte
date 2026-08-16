@@ -14,7 +14,7 @@
 </script>
 
 <!-- Datum: an avatar is a chamfered square, never a circle. The cut scales with the tile
-     so a 24px avatar does not lose a third of itself to the corner. -->
+ so a 24px avatar does not lose a third of itself to the corner. -->
 <AvatarPrimitive.Root
 	bind:ref
 	bind:loadingStatus

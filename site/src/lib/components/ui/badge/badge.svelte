@@ -5,16 +5,16 @@
 	 * Datum badge — two families, one type role (IBM Plex Mono 9px uppercase .14em).
 	 *
 	 * Chip   (`default` / `secondary` / `destructive` / `category`): a filled 7px
-	 *         badge-cut shape. Category chips take their colour from
+	 * badge-cut shape. Category chips take their colour from
 	 *         `categoryChipStyle(cat)` inline vars via the `category-chip` utility.
 	 * Status (`outline` / `live` / `pending` / `draft` / `rejected`): no clip, no fill,
-	 *         a 1px inset ring in the status colour. This is the shape the design system
-	 *         uses for Live / Pending review / Draft / Rejected.
+	 * a 1px inset ring in the status colour. This is the shape the design system
+	 * uses for Live / Pending review / Draft / Rejected.
 	 *
-	 * Version strings are not badges — they are `font-mono text-[12px] text-primary`.
+	 * Version strings are not badges — they are `font-mono text-xs text-primary`.
 	 */
 	export const badgeVariants = tv({
-		base: "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1.5 px-2.5 font-mono text-[11px] leading-none tracking-[.14em] whitespace-nowrap uppercase transition-[filter,background,color] duration-150 outline-none focus-visible:[box-shadow:inset_0_0_0_2px_var(--ring)] [&>svg]:pointer-events-none [&>svg]:size-3",
+		base: "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1.5 px-2.5 font-mono text-2xs leading-none tracking-label whitespace-nowrap uppercase transition-[filter,background,color] duration-150 outline-none focus-visible:[box-shadow:inset_0_0_0_2px_var(--ring)] [&>svg]:pointer-events-none [&>svg]:size-3",
 		variants: {
 			variant: {
 				default: "badge-cut bg-primary text-primary-foreground [a]:hover:brightness-[1.08]",

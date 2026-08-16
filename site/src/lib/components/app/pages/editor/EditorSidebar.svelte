@@ -237,7 +237,7 @@
 		<div class="flex shrink-0 flex-col gap-3">
 			<div class="type-label text-primary">API Editor</div>
 			{#if hasLibrary && library}
-				<dl class="flex flex-col gap-1 font-mono text-[11px]">
+				<dl class="flex flex-col gap-1 font-mono text-2xs">
 					<div class="flex items-baseline justify-between gap-3">
 						<dt class="type-label text-dim">Language</dt>
 						<dd class="text-foreground">{library.languageId}</dd>
@@ -264,7 +264,7 @@
 		{#if hasLibrary}
 			<div>
 				<div class="type-label text-dim mb-2.5">Report</div>
-				<dl class="flex flex-col gap-1 font-mono text-[11px]">
+				<dl class="flex flex-col gap-1 font-mono text-2xs">
 					<div class="flex items-baseline justify-between gap-3">
 						<dt class="text-muted-foreground">Verified</dt>
 						<dd class="text-foreground">{stats.verifiedCount}</dd>
@@ -279,7 +279,7 @@
 					</div>
 				</dl>
 				<div class="mt-3 flex flex-col gap-1.5">
-					<div class="flex items-baseline justify-between font-mono text-[11px]">
+					<div class="flex items-baseline justify-between font-mono text-2xs">
 						<span class="type-label text-dim">Verified</span>
 						<span class="text-primary">{verifiedPercent}%</span>
 					</div>
@@ -289,7 +289,7 @@
 							style={`width: ${verifiedPercent}%`}
 						></div>
 					</div>
-					<div class="text-dim font-mono text-[11px] tracking-[.08em]">
+					<div class="text-dim font-mono text-2xs tracking-wider">
 						{stats.verifiedCount} / {totalFunctionCount} verified
 					</div>
 				</div>
@@ -389,7 +389,7 @@
 						bind:ref={inputElement}
 					/>
 					<span
-						class="chip-cut text-dim bg-card pointer-events-none absolute top-[50%] right-2 flex -translate-y-[50%] items-center gap-1 px-1.5 py-1 font-mono text-[11px]"
+						class="chip-cut text-dim bg-card pointer-events-none absolute top-[50%] right-2 flex -translate-y-[50%] items-center gap-1 px-1.5 py-1 font-mono text-2xs"
 					>
 						<Command class="size-3" />
 						K
@@ -409,7 +409,7 @@
 		<div>
 			<div class="type-label text-dim mb-2.5">Actions</div>
 			{#if hasLibrary}
-				<div class="text-muted-foreground mb-2.5 font-mono text-[11px]">
+				<div class="text-muted-foreground mb-2.5 font-mono text-2xs">
 					{#if stats.editedCount > 0}
 						{stats.editedCount} function{stats.editedCount === 1 ? '' : 's'} edited
 					{:else}
@@ -489,7 +489,7 @@
 	</Sidebar.Content>
 
 	<Sidebar.Footer
-		class="border-border text-dim inline-flex shrink-0 justify-between border-t px-5 py-4 font-mono text-[11px]"
+		class="border-border text-dim inline-flex shrink-0 justify-between border-t px-5 py-4 font-mono text-2xs"
 	>
 		A part of the GSCode project.
 		<a

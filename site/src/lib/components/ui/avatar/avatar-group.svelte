@@ -11,7 +11,7 @@
 </script>
 
 <!-- Overlap stays; the separator is a 2px ground-coloured border (a ring would be eaten by
-     the chamfer's clip-path). -->
+ the chamfer's clip-path). -->
 <div
 	bind:this={ref}
 	data-slot="avatar-group"

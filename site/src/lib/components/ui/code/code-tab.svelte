@@ -11,6 +11,6 @@
 	let { class: className, children, ...restProps }: CodeTabProps = $props();
 </script>
 
-<Tabs.Trigger class={cn('normal-case tracking-[.04em]', className)} {...restProps}>
+<Tabs.Trigger class={cn('normal-case tracking-data', className)} {...restProps}>
 	{@render children?.()}
 </Tabs.Trigger>

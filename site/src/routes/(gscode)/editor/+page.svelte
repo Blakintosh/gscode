@@ -66,7 +66,7 @@
 
 	/** Section heading — Sora 600, sentence case, sat on a hairline. */
 	const sectionHeading =
-		'border-border flex items-center justify-between border-b pb-2 text-base font-semibold tracking-[-.03em] lg:text-lg';
+		'border-border flex items-center justify-between border-b pb-2 text-base font-semibold tracking-heading lg:text-lg';
 </script>
 
 {#if !editor.hasLibrary}
@@ -76,7 +76,7 @@
 			<FileJson class="text-primary size-10" />
 		</Brush>
 		<div class="flex max-w-md flex-col items-center gap-3">
-			<h1 class="text-xl font-semibold tracking-[-.03em]">No library loaded</h1>
+			<h1 class="text-xl font-semibold tracking-heading">No library loaded</h1>
 			<p class="text-muted-foreground">
 				Load a library JSON file to start editing function definitions. You can load from a file or
 				pull from the latest API version.
@@ -87,7 +87,7 @@
 {:else if !functionEditor}
 	<!-- Library loaded but no function selected -->
 	<div class="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-		<h2 class="text-lg font-semibold tracking-[-.03em]">Select a function</h2>
+		<h2 class="text-lg font-semibold tracking-heading">Select a function</h2>
 		<p class="text-muted-foreground">Choose a function from the sidebar to start editing.</p>
 	</div>
 {:else}
@@ -97,7 +97,7 @@
 	>
 		<div class="grow overflow-y-auto px-6 lg:px-16">
 			<Breadcrumb.Root>
-				<Breadcrumb.List class="font-mono text-[11px] tracking-[.08em] uppercase">
+				<Breadcrumb.List class="font-mono text-2xs tracking-wider uppercase">
 					<Breadcrumb.Item>
 						<Breadcrumb.Link class="hover:text-primary"
 							>{editor.library?.gameId === 't7'

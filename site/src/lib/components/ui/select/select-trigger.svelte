@@ -19,7 +19,7 @@
 	data-slot="select-trigger"
 	data-size={size}
 	class={cn(
-		"chamfer chamfer-sm rimmed rimmed-recess text-foreground data-placeholder:text-dim flex w-fit cursor-pointer items-center justify-between gap-3 border-0 px-4 font-mono text-[13px] whitespace-nowrap transition-[box-shadow,color] outline-none select-none",
+		"chamfer chamfer-sm rimmed rimmed-recess text-foreground data-placeholder:text-dim flex w-fit cursor-pointer items-center justify-between gap-3 border-0 px-4 font-mono text-sm whitespace-nowrap transition-[box-shadow,color] outline-none select-none",
 		"data-[size=default]:h-11 data-[size=sm]:h-9 data-[size=sm]:text-xs",
 		"*:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5",
 		"disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",

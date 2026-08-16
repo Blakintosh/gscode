@@ -35,7 +35,7 @@
 	>
 		<div
 			data-slot="tooltip-content-body"
-			class="chamfer chamfer-xs rim-edge text-foreground relative z-0 px-3 py-[7px] font-mono text-[11px] whitespace-nowrap before:absolute before:inset-px before:-z-10 before:bg-popover before:content-[''] before:[clip-path:inherit]"
+			class="chamfer chamfer-xs rim-edge text-foreground relative z-0 px-3 py-[7px] font-mono text-2xs whitespace-nowrap before:absolute before:inset-px before:-z-10 before:bg-popover before:content-[''] before:[clip-path:inherit]"
 		>
 			{@render children?.()}
 		</div>

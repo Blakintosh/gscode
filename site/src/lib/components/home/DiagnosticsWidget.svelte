@@ -14,17 +14,17 @@
 //      ~~~~~~~~~~~~~~~~~~~~~~~~
 function write_some_code( weapon_name )
 {
-    w_weapon = GetWeapon( weapon_name );
-    ammo = w_weapon.clipsize * "2";
+ w_weapon = GetWeapon( weapon_name );
+ ammo = w_weapon.clipsize * "2";
 //                           ~~~~~
-    current_health = self.health;
+ current_health = self.health;
 
-    if ( current_health > 20 )
+ if ( current_health > 20 )
     {
-        self.health = current_health * 0.8;
+ self.health = current_health * 0.8;
     }
 
-    return ammo
+ return ammo
 //             ~
 }`;
 
@@ -55,19 +55,19 @@ function write_some_code( weapon_name )
 
 	<!-- The Problems panel: mono rows on the recess, 2px Clip rule — error is the one meaning Clip carries. -->
 	<div class="flex flex-col gap-2 self-start">
-		<p class="type-label text-dim flex items-center justify-between tracking-[.18em]">
+		<p class="type-label text-dim flex items-center justify-between">
 			<span>Problems</span>
 			<span class="text-destructive tabular-nums">{shown} err</span>
 		</p>
 		{#each errors as err, i (err.code)}
 			<div
-				class="reveal bg-recess border-destructive inset-edge border-l-2 px-3.5 py-2.5 font-mono text-[12.5px] leading-[1.55]"
+				class="reveal bg-recess border-destructive inset-edge border-l-2 px-3.5 py-2.5 font-mono text-sm leading-normal"
 				data-in={i < shown ? '' : undefined}
 				aria-hidden={i < shown ? undefined : 'true'}
 			>
 				<span class="text-dim">Ln {err.line}</span>
 				<span class="text-foreground ml-2">{err.text}</span>
-				<span class="text-dim ml-2 tracking-[.04em]">{err.code}</span>
+				<span class="text-dim ml-2 tracking-data">{err.code}</span>
 			</div>
 		{/each}
 	</div>

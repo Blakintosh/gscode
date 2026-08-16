@@ -42,7 +42,7 @@
 		</div>
 
 		<div>
-			<h3 class="type-label text-primary mb-3 tracking-[.17em]">gscode</h3>
+			<h3 class="type-label text-primary mb-3">gscode</h3>
 			<ul class="text-muted-foreground space-y-2 text-sm">
 				<li><a {...ext(marketplaceUrl)} class={link}>Install for VS Code</a></li>
 				<li><a href="/library" class={link}>Function library</a></li>
@@ -51,7 +51,7 @@
 		</div>
 
 		<div>
-			<h3 class="type-label text-primary mb-3 tracking-[.17em]">Ecosystem</h3>
+			<h3 class="type-label text-primary mb-3">Ecosystem</h3>
 			<ul class="text-muted-foreground space-y-2 text-sm">
 				<li><a {...ext(wikiUrl)} class={link}>Wiki</a></li>
 				<li><a {...ext(assetplaceUrl)} class={link}>Assetplace</a></li>
@@ -62,7 +62,7 @@
 	<!-- Designator line: one line, mono, uppercased in CSS. -->
 	<div class="border-border border-t">
 		<p
-			class="text-dim mx-auto max-w-7xl px-4 py-5 font-mono text-[12px] tracking-[.14em] uppercase sm:px-6"
+			class="text-dim mx-auto max-w-7xl px-4 py-5 font-mono text-xs tracking-label uppercase sm:px-6"
 		>
 			gscode · GPL-3.0 · a community project · not affiliated with Activision or Treyarch
 		</p>

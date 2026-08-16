@@ -14,12 +14,12 @@
 <HoverCard.Content class="flex flex-col gap-2">
 	<span class="flex items-baseline gap-2 font-mono text-sm">
 		{name}
-		<span class="text-primary font-mono text-[11px] tracking-[.08em]">API v{version}</span>
+		<span class="text-primary font-mono text-2xs tracking-wider">API v{version}</span>
 	</span>
 	<p class="text-muted-foreground text-sm">
 		{description}
 	</p>
-	<p class="text-dim font-mono text-[11px] tracking-[.08em]">
+	<p class="text-dim font-mono text-2xs tracking-wider">
 		API last revised on {revisedOn}
 	</p>
 </HoverCard.Content>

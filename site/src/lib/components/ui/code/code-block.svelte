@@ -53,7 +53,7 @@
 	}
 
 	/* Shaku annotations — error underlines are Clip (the destructive colour), the one
-	   warm-leaning value in the system, reserved for exactly this meaning. */
+	 warm-leaning value in the system, reserved for exactly this meaning. */
 	:global(.shiki .shaku-underline) {
 		padding: 0 1ch;
 		position: relative;

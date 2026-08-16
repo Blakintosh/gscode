@@ -13,7 +13,7 @@
 <span
 	bind:this={ref}
 	data-slot="dropdown-menu-shortcut"
-	class={cn("text-dim ml-auto font-mono text-[12px] tracking-[.14em]", className)}
+	class={cn("text-dim ml-auto font-mono text-xs tracking-label", className)}
 	{...restProps}
 >
 	{@render children?.()}

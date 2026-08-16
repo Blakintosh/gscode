@@ -21,7 +21,7 @@
 </script>
 
 <!-- Datum: an overlay floats on raise behind an edge rim, with a real drop shadow.
-     clip-path kills box-shadow, so the shadow is a filter and the rim is the background. -->
+ clip-path kills box-shadow, so the shadow is a filter and the rim is the background. -->
 <SelectPortal {...portalProps}>
 	<SelectPrimitive.Content
 		bind:ref

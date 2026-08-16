@@ -22,13 +22,13 @@
 	/* Datum: an input is a RECESS — one surface step below the panel it sits on, inside a
 	   1px edge that follows the chamfer (the wrapper; inputs can't carry pseudo-elements).
 	   Focus swaps the edge for the ring colour; there is no glow. Single-line fields are
-	   mono. Sizing/colour classes passed in land on the wrapper; the control fills it. */
+	 mono. Sizing/colour classes passed in land on the wrapper; the control fills it. */
 	const wrap =
 		"chamfer chamfer-sm rimmed rimmed-recess flex h-11 w-full min-w-0 text-foreground has-disabled:opacity-50 has-disabled:pointer-events-none";
 	const base =
-		"placeholder:text-dim h-full min-h-0 w-full min-w-0 flex-1 border-0 bg-transparent px-4 font-mono text-[13px] outline-none disabled:cursor-not-allowed";
+		"placeholder:text-dim h-full min-h-0 w-full min-w-0 flex-1 border-0 bg-transparent px-4 font-mono text-sm outline-none disabled:cursor-not-allowed";
 	const fileBits =
-		"file:font-display file:font-bold file:uppercase file:tracking-[.06em] file:text-[11px] file:bg-popover file:text-foreground file:border-0 file:h-8 file:px-3 file:mr-3 file:cursor-pointer file:inline-flex file:items-center";
+		"file:font-display file:font-bold file:uppercase file:tracking-wider file:text-2xs file:bg-popover file:text-foreground file:border-0 file:h-8 file:px-3 file:mr-3 file:cursor-pointer file:inline-flex file:items-center";
 </script>
 
 <span data-slot="input-rim" class={cn(wrap, className)}>

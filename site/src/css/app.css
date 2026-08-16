@@ -7,11 +7,13 @@
 /* Fonts (Fontsource, self-hosted). Three faces, three jobs:
    Chakra Petch 700 — display (headings, wordmark, buttons, HUD values), always uppercase
    Sora             — all prose (300 body · 500 emphasis · 600 subheads)
-   IBM Plex Mono    — labels, readouts, versions, counts, code, nav */
+   Cascadia Code    — labels, readouts, versions, counts, code, nav. Chosen over IBM Plex
+                      Mono for legibility at 11–13px on Windows (it is hinted for exactly
+                      that, and is VS Code's own default); ligatures off so GSC's `::` and
+                      `!=` read literally. */
 @import '@fontsource/chakra-petch/700.css';
 @import '@fontsource-variable/sora';
-@import '@fontsource/ibm-plex-mono/400.css';
-@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource-variable/cascadia-code';
 
 @import 'tailwindcss';
 
@@ -22,7 +24,10 @@
 		'Sora Variable', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
 		'Segoe UI Symbol', 'Noto Color Emoji';
 	--font-display: 'Chakra Petch', var(--font-sans);
-	--font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--font-mono:
+		'Cascadia Code Variable', 'Cascadia Code', 'Cascadia Mono', ui-monospace, Consolas,
+		monospace;
+	--font-mono--font-feature-settings: 'calt' 0, 'liga' 0;
 
 	/* Type scale — the design's "Scale" table as tokens. Use these (and Tailwind's own
 	   steps) rather than literal px; a literal is the exception, for a genuine one-off. */
@@ -40,7 +45,7 @@
 	--text-heading: clamp(1.875rem, 3vw, 2.375rem); /* section heading, Sora 600 */
 	--text-heading--line-height: 1.08;
 
-	--tracking-label: 0.17em; /* mono uppercase labels */
+	--tracking-label: 0.14em; /* mono uppercase labels (Cascadia sits wide already) */
 	--tracking-data: 0.04em; /* mono readouts, versions, counts */
 	--tracking-heading: -0.03em; /* Sora 600 subheads */
 	--leading-prose: 1.66;

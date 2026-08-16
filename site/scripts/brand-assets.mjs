@@ -25,13 +25,13 @@ const chakra = await fontData(
 );
 const sora = await fontData('node_modules/@fontsource-variable/sora/files/sora-latin-wght-normal.woff2');
 const mono = await fontData(
-	'node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2'
+	'node_modules/@fontsource-variable/cascadia-code/files/cascadia-code-latin-wght-normal.woff2'
 );
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{font-family:'Chakra Petch';font-weight:700;src:url(data:font/woff2;base64,${chakra}) format('woff2')}
 @font-face{font-family:'Sora';font-weight:100 800;src:url(data:font/woff2;base64,${sora}) format('woff2')}
-@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(data:font/woff2;base64,${mono}) format('woff2')}
+@font-face{font-family:'Cascadia Code';font-weight:100 900;src:url(data:font/woff2;base64,${mono}) format('woff2')}
 html,body{margin:0;width:1200px;height:630px;overflow:hidden}
 body{background:#07080C;color:#E2EAEC;font-family:'Sora',sans-serif;position:relative}
 .grid{position:absolute;inset:0;background-image:
@@ -44,7 +44,7 @@ body{background:#07080C;color:#E2EAEC;font-family:'Sora',sans-serif;position:rel
  background-size:16px 16px,16px 16px,128px 128px,128px 128px;
  -webkit-mask-image:radial-gradient(58% 80% at 78% -8%,#000 0,rgba(0,0,0,.42) 38%,transparent 74%)}
 .glow{position:absolute;inset:0;background:radial-gradient(44% 52% at 80% -6%,rgba(123,239,221,.20),rgba(139,123,255,.09) 52%,transparent 74%)}
-.origin{position:absolute;left:72px;top:64px;color:#3ED1BD;font-family:'IBM Plex Mono';font-size:14px;letter-spacing:.12em}
+.origin{position:absolute;left:72px;top:64px;color:#3ED1BD;font-family:'Cascadia Code';font-size:14px;letter-spacing:.12em}
 .origin i{position:absolute;background:#3ED1BD;display:block}
 .origin .h{width:44px;height:1px;left:0;top:0}.origin .v{width:1px;height:44px;left:0;top:0}
 .origin span{position:absolute;left:52px;top:-9px;white-space:nowrap}
@@ -54,7 +54,7 @@ body{background:#07080C;color:#E2EAEC;font-family:'Sora',sans-serif;position:rel
 .strap{margin-top:34px;font-family:'Chakra Petch';font-weight:700;text-transform:uppercase;font-size:44px;letter-spacing:.005em;line-height:1;max-width:19ch}
 .strap em{font-style:normal;background:linear-gradient(94deg,#7BEFDD,#3ED1BD 55%,#8B7BFF);-webkit-background-clip:text;background-clip:text;color:transparent}
 .lede{margin-top:20px;font-weight:300;font-size:22px;color:#8B9BA3;max-width:46ch;line-height:1.5}
-.readout{position:absolute;right:72px;bottom:72px;font-family:'IBM Plex Mono';font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#5A6C76}
+.readout{position:absolute;right:72px;bottom:72px;font-family:'Cascadia Code';font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#5A6C76}
 .readout b{color:#3ED1BD;font-weight:400}
 .handle{position:absolute;width:11px;height:11px;border:2px solid #3E5661;background:#07080C}
 </style></head><body>

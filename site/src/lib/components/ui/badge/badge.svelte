@@ -2,7 +2,7 @@
 	import { type VariantProps, tv } from "tailwind-variants";
 
 	/**
-	 * Datum badge — two families, one type role (IBM Plex Mono 9px uppercase .14em).
+	 * Datum badge — two families, one type role (Cascadia Code, 2xs uppercase .14em).
 	 *
 	 * Chip   (`default` / `secondary` / `destructive` / `category`): a filled 7px
 	 * badge-cut shape. Category chips take their colour from

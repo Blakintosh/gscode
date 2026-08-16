@@ -25,7 +25,7 @@ shadcn-svelte primitives with [gscode-assetplace](https://github.com/Blakintosh/
 (`src/css/app.css` here mirrors `src/app.css` there). Brand pieces live in `src/lib/components/site/`
 (`Brush`, `HudStat`, `Logo`, `DatumMark` …); site-wide constants (URLs, extension version) in
 `src/lib/data/site.ts`. Three faces, one hue, nothing round: Chakra Petch 700 uppercase for display,
-Sora for prose, IBM Plex Mono for labels and data; teal is the only brand colour.
+Sora for prose, Cascadia Code for labels and data; teal is the only brand colour.
 
 ## API data
 

@@ -1,0 +1,10 @@
+<!-- File icon, rendered by VS Code at ~16px: the plain chamfered square (no
+     reference line, it cannot survive the downscale) in panel, letters in
+     Chakra Petch 700. GSC takes teal - the base value of the one hue. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.6 -0.6 27.2 27.2" width="27.2" height="27.2">
+  <path fill="#111720" stroke="#27333F" stroke-width="0.8"
+        d="M8 0 H26 V18 L18 26 H0 V8 Z"/>
+  <text x="13" y="13.4" fill="#3ED1BD" font-family="Chakra Petch" font-weight="700"
+        font-size="11.6" letter-spacing="0.2" text-anchor="middle"
+        dominant-baseline="central" dx="0.1">GSC</text>
+</svg>

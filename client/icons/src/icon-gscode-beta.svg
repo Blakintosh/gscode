@@ -1,0 +1,20 @@
+<!-- Pre-release icon: the mark unchanged, plus a mono BETA tag docked into the
+     slot the top-left chamfer opens up. The tag never touches or recolours the mark. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="42" height="42">
+  <defs>
+    <linearGradient id="rim" x1="0" y1="0" x2="0.62" y2="0.79">
+      <stop offset="0" stop-color="#7BEFDD"/>
+      <stop offset="0.58" stop-color="#3ED1BD"/>
+      <stop offset="1" stop-color="#8B7BFF"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(8 8)">
+    <path fill="url(#rim)" d="M8 0 H26 V11.44 H0 V8 Z M0 14.56 H26 V18 L18 26 H0 Z"/>
+  </g>
+  <g>
+    <rect x="0.4" y="0.4" width="14.6" height="7.0" fill="#07080C" stroke="#27333F" stroke-width="0.8"/>
+    <text x="7.7" y="3.9" fill="#3ED1BD" font-family="IBM Plex Mono" font-size="4.0"
+          letter-spacing="0.42" text-anchor="middle" dominant-baseline="central"
+          dx="0.21">BETA</text>
+  </g>
+</svg>

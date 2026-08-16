@@ -3,6 +3,10 @@
 	"displayName": "GSCode",
 	"description": "IntelliSense for Call of Duty: Black Ops III's GSC & CSC languages.",
 	"icon": "icons/gscode.png",
+	"galleryBanner": {
+		"color": "#07080C",
+		"theme": "dark"
+	},
 	"version": "2.0.0",
 	"publisher": "blakintosh",
 	"repository": {

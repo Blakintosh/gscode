@@ -9,3 +9,5 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 .env
+icons/src/**
+icons/build-icons.mjs

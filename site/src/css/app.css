@@ -421,6 +421,7 @@
 @utility type-label {
 	font-family: var(--font-mono);
 	font-size: var(--text-2xs);
+	font-weight: 500;
 	letter-spacing: var(--tracking-label);
 	text-transform: uppercase;
 	line-height: 1;
@@ -497,6 +498,15 @@
 		line-height: 1.66;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
+	}
+	/* Mono never inherits the body's 300: 425 is Cascadia's legible floor at 11–13px, and
+	   uppercase labels/nav sit at 500. An explicit font-* utility still wins. */
+	.font-mono,
+	code,
+	pre,
+	kbd,
+	samp {
+		font-weight: 425;
 	}
 	/* Emphasis is a weight change, never italics. */
 	strong,

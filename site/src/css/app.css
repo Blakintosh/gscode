@@ -23,8 +23,6 @@
 		'Segoe UI Symbol', 'Noto Color Emoji';
 	--font-display: 'Chakra Petch', var(--font-sans);
 	--font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-	/* Accessibility alternative offered by the font selector — not a brand face. */
-	--font-dyslexic: 'OpenDyslexic', var(--font-sans);
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -367,6 +365,37 @@
 	font-variant-numeric: tabular-nums;
 }
 
+/* Reveal on scroll — a short move along the light direction, once. Set data-in to land. */
+@utility reveal {
+	opacity: 0;
+	transform: translate(-6px, -6px);
+	transition:
+		opacity 220ms ease-out,
+		transform 220ms ease-out;
+	&[data-in] {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* The light entering the hero on load: the sheen band sweeps in from the left and settles. */
+@keyframes datum-light-enter {
+	from {
+		transform: translateX(-60vw) skewX(-13deg);
+		opacity: 0;
+	}
+	60% {
+		opacity: 1;
+	}
+	to {
+		transform: translateX(0) skewX(-13deg);
+		opacity: 1;
+	}
+}
+@utility light-enter {
+	animation: datum-light-enter 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 /* Skeleton sheen — light travels top-left → bottom-right. */
 @keyframes datum-sheen {
 	from {
@@ -422,38 +451,5 @@
 			transition: none !important;
 			animation: none !important;
 		}
-	}
-}
-
-/* ── Site-specific ───────────────────────────────────────────────────────── */
-@font-face {
-	font-family: 'OpenDyslexic';
-	src: url('/fonts/OpenDyslexic-Regular.otf') format('opentype');
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
-}
-@font-face {
-	font-family: 'OpenDyslexic';
-	src: url('/fonts/OpenDyslexic-Bold.otf') format('opentype');
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
-}
-@font-face {
-	font-family: 'OpenDyslexic';
-	src: url('/fonts/OpenDyslexic-Italic.otf') format('opentype');
-	font-weight: 400;
-	font-style: italic;
-	font-display: swap;
-}
-
-/* The font selector toggles these on <html>. Sora is the default; OpenDyslexic is an
-   accessibility alternative and deliberately overrides the display face too. */
-@layer base {
-	html.font-dyslexic,
-	html.font-dyslexic .font-display,
-	html.font-dyslexic .font-sans {
-		font-family: var(--font-dyslexic);
 	}
 }

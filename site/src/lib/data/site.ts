@@ -11,5 +11,6 @@ export const discordInviteUrl = 'https://discord.gg/tzzn6zAVBz';
 export const githubUrl = 'https://github.com/Blakintosh/gscode';
 export const marketplaceUrl = 'https://marketplace.visualstudio.com/items?itemName=blakintosh.gscode';
 
-/** Shown on the install buttons and the hero stat strip. Bump with each release. */
-export const extensionVersion = '1.5.0';
+/** Shown on the install buttons and the hero stat strip. Keep in step with client/package.json
+ *  when a release ships (the home page describes the 2.0 feature set). */
+export const extensionVersion = '2.0.0';

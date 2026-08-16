@@ -16,7 +16,6 @@
 	} from '$lib/data/site';
 	import DiscordIcon from './DiscordIcon.svelte';
 	import GithubIcon from './GithubIcon.svelte';
-	import FontSelector from './FontSelector.svelte';
 	import Logo from './Logo.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
@@ -112,7 +111,6 @@
 			>
 				<GithubIcon class="size-[18px]" />
 			</Button>
-			<FontSelector />
 			<ThemeToggle />
 			<Button
 				href={marketplaceUrl}

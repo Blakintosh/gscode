@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
@@ -11,6 +12,24 @@ namespace GSCode.Parser.Lexing;
 /// </summary>
 public sealed class Lexer
 {
+    /// <summary>
+    /// The character classes the scan runs over, as vector-searchable sets.
+    ///
+    /// Every run below — whitespace, a word, a digit sequence, the body of a comment or a string —
+    /// used to be a loop testing one character per iteration. <see cref="SearchValues{T}"/> answers
+    /// the same question over many characters at a time, and comment and string text is most of the
+    /// CHARACTER volume of a decompiled script even though it is a handful of its tokens.
+    /// </summary>
+    private static readonly SearchValues<char> s_spacesAndTabs = SearchValues.Create(" \t");
+    private static readonly SearchValues<char> s_lineBreaks = SearchValues.Create("\r\n");
+    private static readonly SearchValues<char> s_wordChars = SearchValues.Create(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_");
+    private static readonly SearchValues<char> s_digits = SearchValues.Create("0123456789");
+    private static readonly SearchValues<char> s_hexDigits = SearchValues.Create("0123456789abcdefABCDEF");
+
+    /// <summary>Everything that ENDS a string body: the closing quote, an escape, or a line break.</summary>
+    private static readonly SearchValues<char> s_stringStops = SearchValues.Create("\"\\\r\n");
+
     private readonly SourceText _text;
     private readonly string _source;
     private readonly GameProfile _profile;
@@ -188,10 +207,7 @@ public sealed class Lexer
     private void LexWhitespaceRun()
     {
         int start = _offset;
-        while ( _offset < _source.Length && (_source[_offset] == ' ' || _source[_offset] == '\t') )
-        {
-            _offset++;
-        }
+        _offset = SkipWhile(s_spacesAndTabs, _offset);
 
         AddToken(TokenKind.Whitespace, start, _offset - start);
     }
@@ -214,10 +230,7 @@ public sealed class Lexer
     private void LexIdentifierOrKeyword()
     {
         int start = _offset;
-        while ( _offset < _source.Length && IsWordChar(_source[_offset]) )
-        {
-            _offset++;
-        }
+        _offset = SkipWhile(s_wordChars, _offset);
 
         ReadOnlySpan<char> word = _source.AsSpan(start, _offset - start);
         if ( Keywords.TryMatchKeyword(word, _profile, out TokenKind keywordKind) )
@@ -238,29 +251,20 @@ public sealed class Lexer
         if ( _source[_offset] == '0' && (Peek(1) == 'x' || Peek(1) == 'X') && char.IsAsciiHexDigit(Peek(2)) )
         {
             _offset += 2;
-            while ( _offset < _source.Length && char.IsAsciiHexDigit(_source[_offset]) )
-            {
-                _offset++;
-            }
+            _offset = SkipWhile(s_hexDigits, _offset);
 
             AddToken(TokenKind.Hex, start, _offset - start);
             return;
         }
 
-        while ( _offset < _source.Length && char.IsAsciiDigit(_source[_offset]) )
-        {
-            _offset++;
-        }
+        _offset = SkipWhile(s_digits, _offset);
 
         // A dot with a digit after it makes this a float; a bare trailing dot does not.
         bool isFloat = false;
         if ( _offset < _source.Length && _source[_offset] == '.' && char.IsAsciiDigit(Peek(1)) )
         {
             _offset++;
-            while ( _offset < _source.Length && char.IsAsciiDigit(_source[_offset]) )
-            {
-                _offset++;
-            }
+            _offset = SkipWhile(s_digits, _offset);
 
             isFloat = true;
         }
@@ -303,10 +307,7 @@ public sealed class Lexer
         }
 
         _offset += ahead;
-        while ( _offset < _source.Length && char.IsAsciiDigit(_source[_offset]) )
-        {
-            _offset++;
-        }
+        _offset = SkipWhile(s_digits, _offset);
 
         return true;
     }
@@ -318,10 +319,7 @@ public sealed class Lexer
         {
             int start = _offset;
             _offset++;
-            while ( _offset < _source.Length && char.IsAsciiDigit(_source[_offset]) )
-            {
-                _offset++;
-            }
+            _offset = SkipWhile(s_digits, _offset);
 
             // ".5e3" is as much a float as "0.5e3"; the leading zero is the only difference.
             TryLexExponent();
@@ -351,6 +349,14 @@ public sealed class Lexer
 
         while ( cursor < _source.Length )
         {
+            // Ordinary string content is skipped in bulk; only a quote, an escape or a line
+            // break needs a decision made about it.
+            cursor = SkipUntil(s_stringStops, cursor);
+            if ( cursor >= _source.Length )
+            {
+                break;
+            }
+
             char current = _source[cursor];
 
             if ( current == '\r' || current == '\n' )
@@ -358,21 +364,24 @@ public sealed class Lexer
                 break;
             }
 
-            if ( current == '\\' && cursor + 1 < _source.Length && !IsNewline(_source[cursor + 1]) )
+            if ( current == '\\' )
             {
-                cursor += 2;
+                if ( cursor + 1 < _source.Length && !IsNewline(_source[cursor + 1]) )
+                {
+                    cursor += 2;
+                }
+                else
+                {
+                    cursor++;
+                }
+
                 continue;
             }
 
-            if ( current == '"' )
-            {
-                cursor++;
-                _offset = cursor;
-                AddToken(kind, start, cursor - start);
-                return;
-            }
-
             cursor++;
+            _offset = cursor;
+            AddToken(kind, start, cursor - start);
+            return;
         }
 
         // Ran into a line break or end of file before the closing quote.
@@ -390,10 +399,7 @@ public sealed class Lexer
         if ( second == '/' )
         {
             int start = _offset;
-            while ( _offset < _source.Length && !IsNewline(_source[_offset]) )
-            {
-                _offset++;
-            }
+            _offset = SkipUntil(s_lineBreaks, _offset);
 
             AddToken(TokenKind.LineComment, start, _offset - start);
             return;
@@ -436,7 +442,16 @@ public sealed class Lexer
 
         while ( cursor + 1 < _source.Length )
         {
-            if ( _source[cursor] == closerFirstChar && _source[cursor + 1] == '/' )
+            // Jump to the next closer FIRST character; a comment body is otherwise irrelevant.
+            int marker = _source.AsSpan(cursor).IndexOf(closerFirstChar);
+            if ( marker < 0 )
+            {
+                break;
+            }
+
+            cursor += marker;
+
+            if ( cursor + 1 < _source.Length && _source[cursor + 1] == '/' )
             {
                 cursor += 2;
                 _offset = cursor;
@@ -477,11 +492,7 @@ public sealed class Lexer
         // Whole-word directive match, so "#iffoo" is an unknown directive rather than
         // silently lexing as "#if" + "foo".
         int wordStart = _offset + 1;
-        int wordEnd = wordStart;
-        while ( wordEnd < _source.Length && IsWordChar(_source[wordEnd]) )
-        {
-            wordEnd++;
-        }
+        int wordEnd = SkipWhile(s_wordChars, wordStart);
 
         if ( wordEnd == wordStart )
         {
@@ -545,11 +556,7 @@ public sealed class Lexer
         if ( nameStart < _source.Length && IsWordStart(_source[nameStart]) && IsAnimReferenceContext() )
         {
             int start = _offset;
-            _offset = nameStart;
-            while ( _offset < _source.Length && IsWordChar(_source[_offset]) )
-            {
-                _offset++;
-            }
+            _offset = SkipWhile(s_wordChars, nameStart);
 
             // One token covering the % AND the name, spaces included, so the reference has a single
             // range to hover, rename and report at. Consumers take the name with
@@ -753,6 +760,32 @@ public sealed class Lexer
         _diagnostics.Add(Diagnostic.Create(range, DiagnosticSeverity.Error, code, arguments));
     }
 
+    /// <summary>The offset of the first character at or after <paramref name="from"/> that is NOT
+    /// in <paramref name="set"/>, or the end of the text.</summary>
+    private int SkipWhile(SearchValues<char> set, int from)
+    {
+        int relative = _source.AsSpan(from).IndexOfAnyExcept(set);
+        if ( relative < 0 )
+        {
+            return _source.Length;
+        }
+
+        return from + relative;
+    }
+
+    /// <summary>The offset of the first character at or after <paramref name="from"/> that IS in
+    /// <paramref name="set"/>, or the end of the text.</summary>
+    private int SkipUntil(SearchValues<char> set, int from)
+    {
+        int relative = _source.AsSpan(from).IndexOfAny(set);
+        if ( relative < 0 )
+        {
+            return _source.Length;
+        }
+
+        return from + relative;
+    }
+
     private char Peek(int lookahead)
     {
         int index = _offset + lookahead;
@@ -767,11 +800,6 @@ public sealed class Lexer
     private static bool IsWordStart(char character)
     {
         return char.IsAsciiLetter(character) || character == '_';
-    }
-
-    private static bool IsWordChar(char character)
-    {
-        return char.IsAsciiLetterOrDigit(character) || character == '_';
     }
 
     private static bool IsNewline(char character)

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Immutable;
 
 namespace GSCode.Core.Text;
@@ -8,6 +9,8 @@ namespace GSCode.Core.Text;
 /// </summary>
 public sealed class SourceText
 {
+    private static readonly SearchValues<char> s_lineBreaks = SearchValues.Create("\r\n");
+
     /// <summary>The full document text.</summary>
     public string Text { get; }
 
@@ -43,23 +46,27 @@ public sealed class SourceText
             ImmutableArray.CreateBuilder<int>(1 + (text.Length / typicalLineLength));
         lineStarts.Add(0);
 
-        for ( int index = 0; index < text.Length; index++ )
+        int index = 0;
+        while ( index < text.Length )
         {
-            char current = text[index];
+            // The text BETWEEN breaks is the bulk of a file and needs no inspection, so it is
+            // searched a vector at a time rather than a character at a time.
+            int relative = text.AsSpan(index).IndexOfAny(s_lineBreaks);
+            if ( relative < 0 )
+            {
+                break;
+            }
 
-            if ( current == '\n' )
+            int breakIndex = index + relative;
+
+            // \r\n is one break, so a \r that has a \n after it ends at the \n.
+            if ( text[breakIndex] == '\r' && breakIndex + 1 < text.Length && text[breakIndex + 1] == '\n' )
             {
-                lineStarts.Add(index + 1);
+                breakIndex++;
             }
-            else if ( current == '\r' )
-            {
-                // \r\n counts as one line break, handled when the \n is reached.
-                bool followedByNewline = index + 1 < text.Length && text[index + 1] == '\n';
-                if ( !followedByNewline )
-                {
-                    lineStarts.Add(index + 1);
-                }
-            }
+
+            lineStarts.Add(breakIndex + 1);
+            index = breakIndex + 1;
         }
 
         return new SourceText(text, lineStarts.ToImmutable());

@@ -167,13 +167,25 @@ public sealed partial class Parser
         //
         // On a LATER LINE the statement really was left unterminated, and then naming the offender is
         // worse than useless — it sends the reader to a line that is correct.
-        if ( _index > 0 && Current.RootRange.Start.Line == _tokens[_index - 1].RootRange.End.Line )
+        if ( ContinuesPreviousLine() )
         {
             AddError(GscDiagnosticCode.ExpectedToken, Current.RootRange, ";", DescribeCurrent());
             return;
         }
 
         AddError(GscDiagnosticCode.MissingSemicolon, MissingSemicolonRange());
+    }
+
+    /// <summary>
+    /// Whether the current token was written on the same line as the one before it. Two rules turn on
+    /// this: which of two mistakes an unterminated statement is (see <see cref="ReportMissingSemicolon"/>),
+    /// and whether a second method call continues a chain or belongs to the next statement (see
+    /// <see cref="ParseCallChain"/>). Both ask the same question — did the author mean these to be one
+    /// thing — and a line break is the only evidence the grammar leaves behind.
+    /// </summary>
+    private bool ContinuesPreviousLine()
+    {
+        return _index > 0 && Current.RootRange.Start.Line == _tokens[_index - 1].RootRange.End.Line;
     }
 
     private TextRange MissingSemicolonRange()

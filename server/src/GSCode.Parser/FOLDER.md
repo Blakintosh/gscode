@@ -161,6 +161,10 @@ LSP types anywhere.
   vectors, & function references. A `ParsePostfixChain` helper applies `.field`/`[index]`/
   `++`/`--` to a call result (a call used as a temporary), so both plain and method-notation
   calls can be indexed or member-accessed — e.g. `players[q] getangles()[1]`.
+  A call result is also a legal method OBJECT, so the chain repeats — `ent getowner()
+  stopuseturret()` — but only while the next callee stays on the line the previous call
+  ended on. Across a line break a second callee is a missing semicolon far more often than
+  a chain, and chaining there swallowed the 3014 entirely (CoD4 `stairs_down.gsc`).
 
 ## Syntax/ParseTree.cs
 

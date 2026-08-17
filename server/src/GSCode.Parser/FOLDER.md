@@ -308,7 +308,10 @@ LSP types anywhere.
     than `#if` + `foo`; bare `#` is a Hash token; unknown directives → Error + diagnostic.
   - `%word` is an AnimReference only where no operand can sit to its left (after
     `= ( , : ?` `return`, or at start of file — tracked via the last significant token);
-    otherwise `%` is modulo.
+    otherwise `%` is modulo. Spaces and tabs may sit between the `%` and the name — BO1
+    ships `= % o_full_interstitial_01_camera;` — and the token covers both, so consumers
+    take the name with `TokenFacts.AnimReferenceName` rather than slicing past the `%`.
+    A newline ends it: `%` at end of line is a wrapped modulo.
   - `.5` lexes as Float; `1.` does not (Integer, then Dot); `0x` needs at least one hex
     digit; `...` is Ellipsis; `\` is a Backslash token (the preprocessor interprets it).
 

@@ -842,7 +842,7 @@ public sealed class SymbolExtractor
             }
             case TokenKind.AnimReference:
             {
-                SymbolKey key = new(null, _names.InternLower(literal.Token.Text.AsSpan(1)), SymbolKind.AnimReference);
+                SymbolKey key = new(null, _names.InternLower(TokenFacts.AnimReferenceName(literal.Token.Text)), SymbolKind.AnimReference);
                 AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }

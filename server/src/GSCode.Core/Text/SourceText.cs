@@ -81,6 +81,42 @@ public sealed class SourceText
         return new Position(line, offset - _lineStarts[line]);
     }
 
+    /// <summary>
+    /// Converts an offset into a position, resuming from <paramref name="lineHint"/> and leaving it
+    /// on the line that was found. A caller that walks the text FORWARD pays the lines it crossed
+    /// rather than a binary search per call, so a whole file costs O(lines) instead of
+    /// O(lookups x log lines) — which is what the lexer does, twice per token including trivia.
+    ///
+    /// The hint is an optimisation and never a correctness requirement: an offset behind it falls
+    /// back to the binary search, so a stale or wrong hint costs time and changes no answer.
+    /// </summary>
+    public Position GetPosition(int offset, ref int lineHint)
+    {
+        if ( offset < 0 )
+        {
+            offset = 0;
+        }
+        else if ( offset > Text.Length )
+        {
+            offset = Text.Length;
+        }
+
+        if ( lineHint < 0 || lineHint >= _lineStarts.Length || _lineStarts[lineHint] > offset )
+        {
+            lineHint = FindLineContaining(offset);
+            return new Position(lineHint, offset - _lineStarts[lineHint]);
+        }
+
+        int line = lineHint;
+        while ( line + 1 < _lineStarts.Length && _lineStarts[line + 1] <= offset )
+        {
+            line++;
+        }
+
+        lineHint = line;
+        return new Position(line, offset - _lineStarts[line]);
+    }
+
     /// <summary>Converts a position back into a UTF-16 offset, clamping to valid bounds.</summary>
     public int GetOffset(Position position)
     {

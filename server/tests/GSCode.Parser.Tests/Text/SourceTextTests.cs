@@ -66,6 +66,50 @@ public class SourceTextTests
         Assert.Equal(new Position(0, 2), text.GetPosition(99));
     }
 
+    /// <summary>
+    /// The hinted overload is an optimisation, so the only property that matters is that it never
+    /// differs from the binary search — walked forward, walked backward (which forces the
+    /// fallback), and from a hint that is nonsense.
+    /// </summary>
+    [Theory]
+    [InlineData("first\nsecond line\nthird")]
+    [InlineData("ab\r\ncd\r\n\r\nef")]
+    [InlineData("lone\rcarriage\rreturns")]
+    [InlineData("no breaks at all")]
+    [InlineData("")]
+    public void GetPosition_WithHint_MatchesTheBinarySearch(string source)
+    {
+        SourceText text = SourceText.From(source);
+
+        int forwardHint = 0;
+        for ( int offset = 0; offset <= text.Length; offset++ )
+        {
+            Assert.Equal(text.GetPosition(offset), text.GetPosition(offset, ref forwardHint));
+        }
+
+        int backwardHint = text.LineCount - 1;
+        for ( int offset = text.Length; offset >= 0; offset-- )
+        {
+            Assert.Equal(text.GetPosition(offset), text.GetPosition(offset, ref backwardHint));
+        }
+
+        int wildHint = 9999;
+        Assert.Equal(text.GetPosition(0), text.GetPosition(0, ref wildHint));
+
+        int negativeHint = -3;
+        Assert.Equal(text.GetPosition(text.Length), text.GetPosition(text.Length, ref negativeHint));
+    }
+
+    [Fact]
+    public void GetPosition_WithHint_ClampsOutOfBounds()
+    {
+        SourceText text = SourceText.From("ab\ncd");
+
+        int hint = 0;
+        Assert.Equal(new Position(0, 0), text.GetPosition(-5, ref hint));
+        Assert.Equal(new Position(1, 2), text.GetPosition(99, ref hint));
+    }
+
     [Fact]
     public void Range_Contains_IsHalfOpen()
     {

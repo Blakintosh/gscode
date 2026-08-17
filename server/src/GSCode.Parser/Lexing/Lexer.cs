@@ -19,6 +19,10 @@ public sealed class Lexer
 
     private int _offset;
 
+    // Where the last range lookup landed. Tokens are emitted in increasing offset order, so
+    // resuming from here turns two binary searches per token into a short forward step.
+    private int _lineHint;
+
     // Kind of the last non-trivia token, used to disambiguate %anim references from the
     // modulo operator. Null means start of file (which counts as an anim context).
     private TokenKind? _lastSignificantKind;
@@ -726,7 +730,12 @@ public sealed class Lexer
 
     private void AddToken(TokenKind kind, int start, int length)
     {
-        TextRange range = new(_text.GetPosition(start), _text.GetPosition(start + length));
+        // Both ends share the hint: the end is at or after the start, and the next token's start
+        // is at or after this end, so the hint only ever moves forward across a whole file.
+        Position startPosition = _text.GetPosition(start, ref _lineHint);
+        Position endPosition = _text.GetPosition(start + length, ref _lineHint);
+
+        TextRange range = new(startPosition, endPosition);
         Token token = new(kind, start, length, range);
         _tokens.Add(token);
 
@@ -738,6 +747,8 @@ public sealed class Lexer
 
     private void AddDiagnostic(GscDiagnosticCode code, int start, int length, params object[] arguments)
     {
+        // No hint here: a diagnostic is usually raised over the token just added, so its start is
+        // BEHIND the hint and would only force the fallback. Rare enough that the search is free.
         TextRange range = new(_text.GetPosition(start), _text.GetPosition(start + length));
         _diagnostics.Add(Diagnostic.Create(range, DiagnosticSeverity.Error, code, arguments));
     }

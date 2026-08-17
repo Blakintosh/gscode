@@ -39,9 +39,11 @@ public sealed class Preprocessor
 
     /// <summary>
     /// The parse stream. Sized from the lexed token count by <see cref="OutputTokensPerLexedToken"/>
-    /// rather than left to grow from empty: a PToken is 80 bytes, so this array crosses the
-    /// large-object-heap threshold at about 1,060 entries — nearly every real script — and each
-    /// array a doubling chain abandons on the way there is a hole in a heap that is never compacted.
+    /// rather than left to grow from empty: a PToken is 40 bytes, so this array crosses the
+    /// large-object-heap threshold at about 2,120 entries — which the larger scripts clear — and
+    /// each array a doubling chain abandons on the way there is a hole in a heap that is never
+    /// compacted. The width is pinned by TokenWidthTests; it was 80 bytes, and the threshold
+    /// therefore 1,060 entries, until Provenance stopped being copied into every token.
     /// </summary>
     private readonly List<PToken> _output;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();

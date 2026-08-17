@@ -33,9 +33,9 @@
 		['Formatting', 'Whitespace-only', 'refuses syntax errors and re-checks its own output'],
 		['Code actions', 'Add / remove #using', 'backed by a namespace-usage lint'],
 		['Mod tools', 'share/raw + mods/<name>', 'indexed in isolation with overlay resolution; workspace-only mode too'],
-		['Cache', 'Persistent SQLite', 'two-gate versioning for fast cold starts'],
-		['Suppression', '#pragma warning disable', 'per line, per code, or all — carried inside comments'],
-		['Library', 'shift + F1', 'opens the function’s page here, in the browser']
+		['Cache', 'Workspace cache', 'Pick up quickly from where you left off after a restart.'],
+		['Suppression', '#pragma warning disable', 'Suppress diagnostics per line, per code, or all.'],
+		['Open in Library', 'shift + F1', 'Shortcut to open the API library page for any built-in function.']
 	] as const;
 </script>
 
@@ -139,7 +139,7 @@
 				'01',
 				'Diagnostics',
 				'3 err',
-				'Catch what the Linker would reject',
+				'Don\'t wait for Linker to tell you',
 				'Syntax errors, missing files, mismatched types, unused variables — analysed as you type and resolved across the whole mod folder, not just the open file. Errors show up where they are, in the same words the compiler would use.'
 			)}
 		</div>
@@ -183,9 +183,9 @@
 			{@render titleBlock(
 				'04',
 				'Every game',
-				'5 dialects',
-				'One server. Five dialects.',
-				'Black Ops III is the verified target, and Call of Duty 4, World at War, Modern Warfare 2 and Black Ops each get their own dialect: which keywords exist, whether an import merges or names a namespace, and which engine data loads. Set the game once; the status bar shows what is active.'
+				'5 versions',
+				'One extension. Five dialects.',
+				'Developed first for Black Ops III; the extension now supports a range of GSC dialects. GSCode also includes support for Call of Duty 4, World at War, Modern Warfare 2 and Black Ops. Set the game once; the status bar shows what is active.'
 			)}
 		</div>
 		<div class="min-w-0 lg:col-span-8"><GamesWidget active={live.games} /></div>
@@ -199,12 +199,11 @@
 			<div>
 				<p class="type-label text-primary">05 / Specification <span class="text-dim">· v{extensionVersion}</span></p>
 				<h2 class="text-foreground mt-4 text-heading font-semibold tracking-heading sm:text-heading">
-					The rest of the instrument
+					Some more on features
 				</h2>
 			</div>
 			<p class="text-muted-foreground max-w-[44ch] text-base leading-relaxed font-light">
-				A ground-up rewrite: a span-based lexer, a provenance-tracking preprocessor and a
-				recursive-descent parser with error recovery — none of which throw on malformed input.
+				GSCode includes various IntelliSense features to make scripting easier and faster. The extension is free, open source and maintained by the community.
 			</p>
 		</div>
 		<dl class="border-border reveal border-t" use:reveal>
@@ -225,11 +224,11 @@
 	<div class="relative mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-12 lg:gap-14 lg:py-24">
 		<div class="reveal lg:col-span-6" use:reveal>
 			<h2 class="font-display text-foreground text-display font-bold tracking-normal uppercase">
-				Measure<br />from here
+				Try it for<br /><span class="grad-text">yourself</span>
 			</h2>
 			<p class="text-muted-foreground mt-5 max-w-[42ch] text-body leading-relaxed font-light">
-				Install the extension, open your mod folder, and let the server tell you what the
-				Linker would — first.
+				Install the extension, open your mod folder, and experience
+				a streamlined scripting workflow today.
 			</p>
 			<div class="mt-7 flex flex-wrap items-center gap-3">
 				<Button href={marketplaceUrl} target="_blank" rel="noopener noreferrer" size="lg">

@@ -20,8 +20,7 @@
 		<div class="md:col-span-2">
 			<Logo />
 			<p class="text-muted-foreground mt-4 max-w-sm text-sm">
-				A language server for Black Ops III's GSC and CSC. It resolves your whole mod folder,
-				then tells you what the Linker would reject — before you build.
+				A language server for Call of Duty GSC and CSC.
 			</p>
 			<div class="mt-5 flex items-center gap-5">
 				<a
@@ -51,7 +50,7 @@
 		</div>
 
 		<div>
-			<h3 class="type-label text-primary mb-3">Ecosystem</h3>
+			<h3 class="type-label text-primary mb-3">The Ecosystem</h3>
 			<ul class="text-muted-foreground space-y-2 text-sm">
 				<li><a {...ext(wikiUrl)} class={link}>Wiki</a></li>
 				<li><a {...ext(assetplaceUrl)} class={link}>Assetplace</a></li>
@@ -64,7 +63,7 @@
 		<p
 			class="text-dim mx-auto max-w-7xl px-4 py-5 font-mono text-xs tracking-label uppercase sm:px-6"
 		>
-			gscode · GPL-3.0 · a community project · not affiliated with Activision or Treyarch
+			gscode · GPL-3.0 · a community project. not affiliated with Activision or Treyarch.
 		</p>
 	</div>
 </footer>

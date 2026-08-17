@@ -77,15 +77,15 @@
 		</div>
 
 		<div class="relative w-full">
-			<Search
-				class="text-dim pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2"
-			/>
 			<Input
 				type="search"
 				placeholder="Search functions"
 				class="h-10 pr-14 pl-10 text-sm"
 				bind:value={searchTerm}
 				bind:ref={inputElement}
+			/>
+			<Search
+				class="text-dim pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2"
 			/>
 			<span
 				class="text-dim pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-2xs tracking-widest"

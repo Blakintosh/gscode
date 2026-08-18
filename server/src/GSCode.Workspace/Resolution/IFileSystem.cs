@@ -74,6 +74,10 @@ public sealed class PhysicalFileSystem : IFileSystem
 
     private static readonly UTF32Encoding s_utf32BigEndian = new(bigEndian: true, byteOrderMark: true);
 
+    // Every one of these is the same character, U+FEFF, encoded the way its name says. That is
+    // why the UTF-32 little-endian mark opens with the entire UTF-16 little-endian one: U+FEFF
+    // in UTF-32 little-endian is its UTF-16 little-endian form followed by two zero bytes.
+    // Declared in the order DecodeText tests them.
     private static readonly byte[] s_utf8Bom = [0xEF, 0xBB, 0xBF];
     private static readonly byte[] s_utf32LittleEndianBom = [0xFF, 0xFE, 0x00, 0x00];
     private static readonly byte[] s_utf32BigEndianBom = [0x00, 0x00, 0xFE, 0xFF];

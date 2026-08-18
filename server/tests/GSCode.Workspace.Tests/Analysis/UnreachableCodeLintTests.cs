@@ -40,7 +40,7 @@ public class UnreachableCodeLintTests
         Diagnostic diagnostic = Assert.Single(Lint(body));
 
         Assert.Equal(GscDiagnosticCode.UnreachableCode, diagnostic.Code);
-        Assert.Equal(DiagnosticSeverity.Hint, diagnostic.Severity);
+        Assert.Equal(DiagnosticSeverity.Information, diagnostic.Severity);
         Assert.Contains("return", diagnostic.Message, StringComparison.Ordinal);
     }
 

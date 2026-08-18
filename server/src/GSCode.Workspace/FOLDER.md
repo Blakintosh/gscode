@@ -479,7 +479,9 @@ reported as an Error must never land on code that ships and works.
   parameters, loop bindings, `waittill` outputs, profile globals, file-scope constants, macro-supplied
   names, and the `...` parameter pack; reports 5024 instead when the pack is read in a function that
   does not declare `...`. An unresolved import stands the whole rule down.
-- `UnreachableCodeLint` (5015) — statements after a `return`/`break`/`continue`.
+- `UnreachableCodeLint` (5015) — statements after a `return`/`break`/`continue`. **Information**, not
+  a Hint: it carries no `Unnecessary` tag, so a Hint produced no visible output at all, and the
+  corpora afford the panel — 48 findings in 42 files across all five games.
 - `UnusedBindingLint` (5020) — a parameter or `waittill` output nothing reads. A **Hint**, so it
   never reaches the Problems panel and the fade is the entire output: at any panel-visible severity
   it would report 5,277 findings on BO3's own scripts, most of them engine-fixed callback signatures.

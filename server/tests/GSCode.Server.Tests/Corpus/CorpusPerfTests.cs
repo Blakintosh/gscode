@@ -670,7 +670,8 @@ public class CorpusPerfTests
     }
 
     /// <summary>
-    /// How many completion requests to time per file. Ten rather than every call site, because this
+    /// How many CALL-SITE completion requests to time per file — one file-scope request is timed
+    /// besides, so a file contributes up to eleven. Ten rather than every call site, because this
     /// sweep pays a full index per game before it starts and a completion is far more expensive than
     /// a lint: BO3's 980 files at every call site would be tens of thousands of requests.
     ///
@@ -898,6 +899,12 @@ public class CorpusPerfTests
     /// </summary>
     private static List<Position> CompletionSamplePositions(ParseResult parsed)
     {
+        // The first sample is FILE SCOPE — the top of the file, outside every declaration. A call
+        // reference can only ever be inside a function body, so a sweep built from them alone timed
+        // one of the two arms: file scope used to return a static word list before any store query
+        // ran, and now runs the same queries a body does.
+        List<Position> sampled = [new Position(0, 0)];
+
         List<Position> calls = [];
         foreach ( ReferenceEntry entry in parsed.Extraction.References )
         {
@@ -909,11 +916,11 @@ public class CorpusPerfTests
 
         if ( calls.Count <= CompletionSamplesPerFile )
         {
-            return calls;
+            sampled.AddRange(calls);
+            return sampled;
         }
 
         // Evenly spaced, so the sample spans the file rather than clustering in its first function.
-        List<Position> sampled = new(CompletionSamplesPerFile);
         for ( int i = 0; i < CompletionSamplesPerFile; i++ )
         {
             sampled.Add(calls[i * calls.Count / CompletionSamplesPerFile]);

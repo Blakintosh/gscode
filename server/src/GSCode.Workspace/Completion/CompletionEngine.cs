@@ -89,6 +89,33 @@ public sealed partial class CompletionEngine
         FunctionSymbol? enclosingFunction = EnclosingFunction(result, position);
         bool insideFunction = enclosingFunction is not null;
 
+        // What punctuation a completed call carries, decided once for every arm below rather than
+        // per arm, because both corrections here are about the POSITION and not about which list
+        // is being produced.
+        //
+        // File scope holds no STATEMENTS, so nothing completed there takes a terminator.
+        // IsStatementPosition scans back from the caret, finds the previous function's '}' and
+        // answers true — right inside a body and meaningless outside one. The macro that stands
+        // alone at that position expands to a DECLARATION (REGISTER_SYSTEM writes `function
+        // autoexec ...() { }`), and all 447 of its uses in the shipped BO3 scripts carry none.
+        //
+        // A function POINTER takes no punctuation at all: `&foo` names the function where `&foo()`
+        // would call it and take the address of the result. BO3 writes 4,564 of these, 585 of them
+        // through a namespace, and both routes came through here — so completing one wrote
+        // parentheses that had to be deleted again. Gated on the dialect's pointer style, since in
+        // the IW line a pointer is a bare qualified name and an '&' is arithmetic.
+        CallPunctuation punctuation = callPunctuation;
+        if ( !insideFunction && punctuation == CallPunctuation.ParensAndSemicolon )
+        {
+            punctuation = CallPunctuation.Parens;
+        }
+
+        if ( game.FunctionPointerStyle == FunctionPointerStyle.Ampersand
+            && IsAddressOfPosition(tokens, triggerIndex) )
+        {
+            punctuation = CallPunctuation.Off;
+        }
+
         if ( !insideFunction )
         {
             // #precache( "type" ...) — offer asset types as the first argument.
@@ -194,7 +221,7 @@ public sealed partial class CompletionEngine
             {
                 string ns = tokens[nsIndex].GetText(result.Text).ToString().ToLowerInvariant();
                 return NamespaceFunctionCompletions(
-                    result, contextId, ns, CallSnippet(tokens, currentIndex, offset, callPunctuation), parameterHints);
+                    result, contextId, ns, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);
             }
         }
 
@@ -206,7 +233,7 @@ public sealed partial class CompletionEngine
                 result,
                 contextId,
                 ArrowReceiverClass(result, tokens, triggerIndex, position),
-                CallSnippet(tokens, currentIndex, offset, callPunctuation),
+                CallSnippet(tokens, currentIndex, offset, punctuation),
                 parameterHints);
         }
 
@@ -214,18 +241,6 @@ public sealed partial class CompletionEngine
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Dot )
         {
             return FieldCompletions(result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope);
-        }
-
-        // File scope holds no STATEMENTS, so nothing completed there takes a terminator.
-        // IsStatementPosition scans back from the caret, finds the previous function's '}' and
-        // answers true — right inside a body and meaningless outside one. The macro that stands
-        // alone at that position expands to a DECLARATION (REGISTER_SYSTEM writes `function
-        // autoexec ...() { }`), and all 447 of its uses in the shipped BO3 scripts are written
-        // without a semicolon.
-        CallPunctuation punctuation = callPunctuation;
-        if ( !insideFunction && punctuation == CallPunctuation.ParensAndSemicolon )
-        {
-            punctuation = CallPunctuation.Parens;
         }
 
         return StatementScopeCompletions(

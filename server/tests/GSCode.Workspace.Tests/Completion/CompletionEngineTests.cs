@@ -833,6 +833,69 @@ public class CompletionEngineTests
         Assert.EndsWith("($0)", CallEntry("x = get_ready() + ").InsertText, StringComparison.Ordinal);
     }
 
+    // --- Function pointers ---
+    //
+    // `&foo` NAMES a function; `&foo()` calls it and takes the address of the result. BO3 writes
+    // 4,564 pointers and only four `&name(` of any kind, so the parentheses this file adds
+    // everywhere else are a correction the user has to undo here.
+
+    [Theory]
+    [InlineData("level.on_death = &")]      // stored on an object
+    [InlineData("thread run( &")]           // passed as an argument
+    [InlineData("&")]                       // and at the start of a statement
+    public void AFunctionPointerTakesNoParentheses(string line)
+    {
+        Assert.Equal("foo", CallEntry(line).InsertText);
+    }
+
+    /// <summary>
+    /// The other 585: a pointer written through a namespace. The '::' arm produces the list, and it
+    /// reached CallSnippet by the same route the bare name does.
+    /// </summary>
+    [Fact]
+    public void ANamespaceQualifiedPointerTakesNoneEither()
+    {
+        Assert.Equal("foo", CallEntry("level.on_death = &util::").InsertText);
+    }
+
+    /// <summary>
+    /// Pre-BO3 an '&amp;' is arithmetic — a pointer there is a bare qualified name, with no operator to
+    /// key on — so the call after one is still a call and still takes its punctuation.
+    /// </summary>
+    [Fact]
+    public void AnAmpersandIsArithmeticInTheInfinityWardLine()
+    {
+        GameProfile cod4 = GameProfile.ByName("cod4")!;
+
+        (CompletionEngine engine, _, _) = BuildWorld(new FakeFileSystem());
+
+        // Asserted on a BUILTIN rather than a script function: the indexer parses the workspace
+        // with the active profile, so a merge dialect's `foo() { }` in a fixture file extracts to
+        // nothing and the store would have had no function to offer.
+        string text = "main()\n{\n    x = mask & \n}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            @$"{Raw}\maps\mp\test.gsc",
+            ScriptAnalysis.LanguageFromPath(@$"{Raw}\maps\mp\test.gsc"),
+            SourceText.From(text),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
+            new NameTable(),
+            cod4);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            result,
+            "raw",
+            new Position(2, 15),
+            callPunctuation: CallPunctuation.ParensAndSemicolon,
+            profile: cod4);
+
+        CompletionEntry entry = Assert.Single(entries, e => e.Label == "Vibrate");
+
+        // Parentheses, where the same position in BO3 would complete to the bare name. No
+        // semicolon, but that is the operand rule rather than the dialect: `x = a + f()` does not
+        // end a statement either.
+        Assert.Equal("Vibrate($0)", entry.InsertText);
+    }
+
     // --- Call-shaped keywords ---
     //
     // The distinction is expression-versus-statement, not keyword-versus-function: `isdefined` is

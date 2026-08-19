@@ -714,7 +714,13 @@ public class CompletionEngineTests
 
         Assert.True(HasLabel(entries, "function"));
         Assert.True(HasLabel(entries, "class"));
-        Assert.False(HasLabel(entries, "if"));
+
+        // The expression atoms come too, and `if` with them. A top-level macro invocation is a
+        // CALL, so file scope is not the declarations-only position it looks like: the shipped BO3
+        // scripts pass `undefined` to REGISTER_SYSTEM 467 times. Telling an atom apart from a
+        // control-flow word would be a rule to maintain in exchange for suppressing a word nobody
+        // types here by accident.
+        Assert.True(HasLabel(entries, "undefined"));
     }
 
     // --- Call punctuation ---
@@ -756,6 +762,38 @@ public class CompletionEngineTests
     public void AStatementCallGetsItsSemicolon(string line)
     {
         Assert.EndsWith("($0);", CallEntry(line).InsertText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// File scope holds no statements, so nothing completed there takes a terminator. The construct
+    /// that stands alone at that position is a macro invocation expanding to a DECLARATION —
+    /// REGISTER_SYSTEM writes `function autoexec ...() { }` — and all 447 of its uses in the shipped
+    /// BO3 scripts are written without one. Left to itself IsStatementPosition scans back, finds the
+    /// previous function's '}' and answers true, which is right in a body and meaningless outside
+    /// one.
+    /// </summary>
+    [Fact]
+    public void AFileScopeCallTakesNoSemicolon()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction foo()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        // The caret sits on the blank line after run()'s closing brace — where a REGISTER_SYSTEM
+        // line goes.
+        string text = "#namespace util;\nfunction run()\n{\n}\n\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            result, "raw", new Position(4, 0), callPunctuation: CallPunctuation.ParensAndSemicolon);
+
+        CompletionEntry entry = Assert.Single(
+            entries,
+            e => e.Kind == CompletionKind.Function && e.Label == "foo");
+
+        Assert.EndsWith("($0)", entry.InsertText, StringComparison.Ordinal);
+        Assert.DoesNotContain(";", entry.InsertText, StringComparison.Ordinal);
     }
 
     [Theory]

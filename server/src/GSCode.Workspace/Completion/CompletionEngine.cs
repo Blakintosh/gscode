@@ -216,13 +216,25 @@ public sealed partial class CompletionEngine
             return FieldCompletions(result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope);
         }
 
+        // File scope holds no STATEMENTS, so nothing completed there takes a terminator.
+        // IsStatementPosition scans back from the caret, finds the previous function's '}' and
+        // answers true — right inside a body and meaningless outside one. The macro that stands
+        // alone at that position expands to a DECLARATION (REGISTER_SYSTEM writes `function
+        // autoexec ...() { }`), and all 447 of its uses in the shipped BO3 scripts are written
+        // without a semicolon.
+        CallPunctuation punctuation = callPunctuation;
+        if ( !insideFunction && punctuation == CallPunctuation.ParensAndSemicolon )
+        {
+            punctuation = CallPunctuation.Parens;
+        }
+
         return StatementScopeCompletions(
             result,
             contextId,
             offset,
             position,
             enclosingFunction,
-            CallSnippet(tokens, currentIndex, offset, callPunctuation),
+            CallSnippet(tokens, currentIndex, offset, punctuation),
             game,
             parameterHints);
     }

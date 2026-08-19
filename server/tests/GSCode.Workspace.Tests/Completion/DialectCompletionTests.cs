@@ -153,8 +153,11 @@ public class DialectCompletionTests
     [Fact]
     public void GlobalObjectsAreNotOfferedAtTopLevel()
     {
-        // Outside a function body only declarations and directives are legal, and `self` there is
-        // not a thing anyone can write.
+        // File scope is NOT declarations-only — a top-level macro invocation is a call, so it opens
+        // an expression there — but nothing at that position can be sent a call, so `self` is still
+        // not a thing anyone writes. They are held back on a second count as well: a global is a
+        // Variable, which is the first sort tier, so offering them would put them at the head of
+        // every file-scope list.
         CompletionEngine engine = BuildEngine();
         ParseResult result = ScriptAnalysis.Analyze(
             @$"{Raw}\maps\mp\test.gsc",

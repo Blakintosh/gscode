@@ -684,9 +684,23 @@ public sealed partial class CompletionEngine
         // Both scopes are filtered to what the active game actually has, so e.g. CoD4 is not
         // offered class/#using. The dialect's global objects are NOT folded in here — see the
         // separate loop below for why.
-        IEnumerable<string> words = insideFunction
-            ? GscKeywords.StatementKeywords
-            : GscKeywords.TopLevelKeywords;
+        //
+        // File scope takes BOTH lists, because it is not the declarations-only position it looks
+        // like. A top-level macro invocation is a CALL, so it opens an expression outside every
+        // function body: the shipped BO3 scripts pass `undefined` to REGISTER_SYSTEM 467 times, and
+        // `undefined` is a statement-scope word that file scope could not complete. Splitting the
+        // statement list into expression atoms and control flow would buy nothing but a rule to
+        // maintain — `if` offered at file scope is noise, not a wrong answer.
+        List<string> words = [];
+        if ( insideFunction )
+        {
+            words.AddRange(GscKeywords.StatementKeywords);
+        }
+        else
+        {
+            words.AddRange(GscKeywords.TopLevelKeywords);
+            words.AddRange(GscKeywords.StatementKeywords);
+        }
 
         if ( !insideFunction )
         {
@@ -783,11 +797,13 @@ public sealed partial class CompletionEngine
                 keyword, CompletionKind.Keyword, "", KeywordInsertText(keyword, callSuffix), documentation));
         }
 
-        if ( !insideFunction )
-        {
-            return entries.ToImmutable();
-        }
-
+        // Everything below used to be behind a `!insideFunction` return, so file scope was a static
+        // word list and no workspace data reached it at all: the macros a header supplies, the
+        // file's own functions, its classes. None of those is a per-CURSOR fact — the macro table
+        // is built per parse from this file plus the headers it #inserts, and a function is in
+        // scope for the file, not for a body — so the return was hiding categories that had no
+        // reason to be hidden, and the two scopes now differ only where a name is BOUND
+        // differently.
         LanguageStore store = _database.StoreFor(result.Language);
 
         // The class this cursor is inside, read from the live extraction's ranges rather than the
@@ -818,7 +834,13 @@ public sealed partial class CompletionEngine
             }
         }
 
-        CollectLocalScope(enclosingFunction!, position, boundNames, entries);
+        // Parameters and locals are the one category that genuinely IS per-cursor: outside a
+        // declaration nothing is bound, so there is nothing to collect rather than a list to
+        // suppress.
+        if ( enclosingFunction is not null )
+        {
+            CollectLocalScope(enclosingFunction, position, boundNames, entries);
+        }
 
         // Methods of the class this cursor is inside, own and inherited — a bare name written in a
         // class body means a method: all 525 such calls in the stock BO3 scripts do. They are added

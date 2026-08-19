@@ -172,6 +172,33 @@ public class DialectCompletionTests
         Assert.DoesNotContain(entries, e => e.Detail == "global");
     }
 
+    /// <summary>
+    /// File scope now runs the same producers a body does, so the dialect gating has to hold at a
+    /// position it never used to reach. CoD4 has no preprocessor and no class system, so neither a
+    /// macro row nor a BO3 declaration keyword may appear there.
+    /// </summary>
+    [Fact]
+    public void Cod4FileScopeStaysWithinTheDialect()
+    {
+        CompletionEngine engine = BuildEngine();
+        ParseResult result = ScriptAnalysis.Analyze(
+            @$"{Raw}\maps\mp\test.gsc",
+            ScriptLanguage.Gsc,
+            SourceText.From("#define CAP 5\n\nmain()\n{\n}\n"),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
+            new NameTable(),
+            Cod4);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(1, 0), profile: Cod4);
+
+        Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.Macro);
+        Assert.DoesNotContain(entries, e => e.Label == "class");
+        Assert.DoesNotContain(entries, e => e.Label == "#using");
+
+        // The dialect's own file-scope word is still there, so this is not passing on an empty list.
+        Assert.Contains(entries, e => e.Label == "#include");
+    }
+
     // --- Dialect-gated snippets ---
     //
     // These used to be contributed by the extension, which registers a snippet per LANGUAGE ID and

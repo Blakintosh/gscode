@@ -863,9 +863,18 @@ public sealed partial class CompletionEngine
         // which threw away the ones a header exists to supply: a script whose constants all live
         // in a shared .gsh got none of them, which is the normal arrangement rather than an
         // unusual one.
-        foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )
+        //
+        // Gated on the dialect, like every other category here. The preprocessor records a #define
+        // whatever game is active, but only BO3 HAS one: in the IW line the single #define in the
+        // corpus is a commented-out block of C in _hud.gsc, and completing its name would offer an
+        // expansion the engine will never perform. This was already true in a body — the gate is
+        // not a consequence of file scope reaching the loop, only of the loop being read again.
+        if ( game.HasMacros )
         {
-            entries.Add(MacroEntry(macro, callSuffix, parameterHints));
+            foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )
+            {
+                entries.Add(MacroEntry(macro, callSuffix, parameterHints));
+            }
         }
 
         // The declared set rather than the namespace spans, which carry a leading region named after

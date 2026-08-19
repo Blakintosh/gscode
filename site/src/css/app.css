@@ -38,7 +38,7 @@
 	--text-sm--line-height: 1.5;
 	--text-body: 1.03125rem; /* 16.5px — doc-page prose on a 72ch measure */
 	--text-body--line-height: 1.66;
-	--text-hero: clamp(2.25rem, 6.4vw, 5.5rem); /* display headline in the hero */
+	--text-hero: clamp(1.9rem, 6.4vw, 5rem); /* display headline in the hero */
 	--text-hero--line-height: 0.98;
 	--text-display: clamp(1.875rem, 4.6vw, 3.5rem); /* display headline in a band */
 	--text-display--line-height: 1;

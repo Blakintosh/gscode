@@ -13,20 +13,19 @@
 
 	const languageName = $derived((data.languageId ?? 'gsc').toUpperCase());
 	const currentFunction = $derived(page.params.func);
+	const gameName = $derived(data.game.name);
+	const title = $derived(`${data.game.shortName} Script API Reference - GSCode`);
+	const description = $derived(
+		`Every engine function available to ${languageName} scripts in ${gameName}.`
+	);
 </script>
 
 <svelte:head>
-	<title>Script API Reference - GSCode</title>
-	<meta
-		name="description"
-		content="A library API page for all the functions available in GSC and CSC."
-	/>
-	<meta property="og:title" content="Script API Reference - GSCode" />
+	<title>{title}</title>
+	<meta name="description" content={description} />
+	<meta property="og:title" content={title} />
 	<meta property="og:site_name" content="gscode" />
-	<meta
-		property="og:description"
-		content="A reference for all the functions available in GSC and CSC."
-	/>
+	<meta property="og:description" content={description} />
 	<meta property="og:image" content="/favicon.png" />
 </svelte:head>
 
@@ -58,7 +57,7 @@
 					</div>
 				</Sheet.Content>
 			</Sheet.Root>
-			<span class="type-label text-dim">{languageName}</span>
+			<span class="type-label text-dim">{data.game.shortName} {languageName}</span>
 			{#if currentFunction}
 				<span aria-hidden="true" class="bg-border h-3.5 w-px"></span>
 				<span class="text-muted-foreground truncate font-mono text-xs">{currentFunction}</span>

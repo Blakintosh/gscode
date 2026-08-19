@@ -11,22 +11,29 @@
 	import Brush from '$lib/components/site/Brush.svelte';
 	import GithubIcon from '$lib/components/site/GithubIcon.svelte';
 	import FlagsAlert from '$components/app/pages/library/article/FlagsAlert.svelte';
+	import ProvenanceAlert from '$components/app/pages/library/article/ProvenanceAlert.svelte';
 	import ParameterEntry from '$components/app/pages/library/article/ParameterEntry.svelte';
 	import { page } from '$app/state';
-	import type { ScrFunction } from '$lib/models/library';
+	import type { ScrFunction, ScrProvenance } from '$lib/models/library';
+	import { findGame, type GameEntry } from '$lib/data/games';
 	import { siteUrl } from '$lib/data/site';
 	import { overloadToSyntacticString, typeToString } from '$lib/util/scriptApi';
 
-	let { name, description, example, remarks, overloads, flags }: ScrFunction = $derived(
-		page.data.func as ScrFunction
-	);
+	let { name, description, example, remarks, overloads, flags, module, spmp }: ScrFunction =
+		$derived(page.data.func as ScrFunction);
 
+	const game = $derived(page.data.game as GameEntry);
+	const provenance = $derived(page.data.provenance as ScrProvenance | null);
 	const languageId = $derived((page.data.languageId as string) ?? 'gsc');
 	const languageName = $derived(
 		languageId === 'gsc' ? 'GSC' : languageId === 'csc' ? 'CSC' : 'Unknown'
 	);
 
-	const languageJsonFile = $derived(languageId === 'csc' ? 't7_api_csc.json' : 't7_api_gsc.json');
+	const languageJsonFile = $derived(`${game.prefix}_api_${languageId}.json`);
+	const libraryPath = $derived(`/library/${game.slug}/${languageId}`);
+	const inheritedName = $derived(
+		provenance?.inheritsFrom ? (findGame(provenance.inheritsFrom)?.name ?? null) : null
+	);
 
 	/** Header chips: what the symbol is, at a glance. */
 	const calledOnLabel = $derived.by(() => {
@@ -47,7 +54,7 @@
 	const heading = 'text-foreground text-lg font-semibold tracking-heading';
 
 	$effect(() => {
-		document.title = `${name} - Script API Reference | GSCode`;
+		document.title = `${name} - ${game.shortName} Script API Reference | GSCode`;
 	});
 </script>
 
@@ -55,11 +62,11 @@
 	<Breadcrumb.Root>
 		<Breadcrumb.List class="font-mono text-2xs tracking-label uppercase">
 			<Breadcrumb.Item>
-				<Breadcrumb.Link href="/library">Black Ops III</Breadcrumb.Link>
+				<Breadcrumb.Link href={`/library/${game.slug}`}>{game.name}</Breadcrumb.Link>
 			</Breadcrumb.Item>
 			<Breadcrumb.Separator />
 			<Breadcrumb.Item>
-				<Breadcrumb.Link href={`/library/${languageId}`}>{languageName}</Breadcrumb.Link>
+				<Breadcrumb.Link href={libraryPath}>{languageName}</Breadcrumb.Link>
 			</Breadcrumb.Item>
 			<Breadcrumb.Separator />
 			<Breadcrumb.Item>
@@ -75,7 +82,13 @@
 			</h1>
 
 			<div class="mt-3 flex flex-wrap items-center gap-1.5">
-				<Badge>{languageName}</Badge>
+				<Badge>{game.shortName} {languageName}</Badge>
+				{#if module}
+					<Badge variant="secondary">{module}</Badge>
+				{/if}
+				{#if spmp}
+					<Badge variant="outline">{spmp}</Badge>
+				{/if}
 				{#if calledOnLabel}
 					<Badge variant="secondary">Called on {calledOnLabel}</Badge>
 				{/if}
@@ -94,7 +107,7 @@
 				size="icon"
 				aria-label="Copy a link to this function"
 				title="Copy a link to this function"
-				text={`${siteUrl}/library/${languageId}/${(name ?? '').toLowerCase()}`}
+				text={`${siteUrl}${libraryPath}/${(name ?? '').toLowerCase()}`}
 			>
 				{#snippet child({ copied })}
 					{#if copied}
@@ -123,7 +136,7 @@
 				size="icon"
 				aria-label="Edit this entry on GitHub"
 				title="Edit this entry on GitHub"
-				href={`https://github.com/Blakintosh/gscode/blob/main/site/src/lib/apiSource/${languageJsonFile}`}
+				href={`https://github.com/Blakintosh/gscode/blob/main/server/src/GSCode.Workspace/Api/${languageJsonFile}`}
 				target="_blank"
 				rel="noopener noreferrer"
 			>
@@ -136,7 +149,9 @@
 		{description}
 	</p>
 
-	<FlagsAlert {flags} class="mt-6 max-w-[72ch]" />
+	<ProvenanceAlert {provenance} {game} class="mt-6 max-w-[72ch]" />
+
+	<FlagsAlert {flags} inheritsFrom={inheritedName} class="mt-3 max-w-[72ch]" />
 
 	<div class="mt-10 flex flex-col gap-10">
 		{#each overloads as overload, index (index)}

@@ -140,7 +140,7 @@ code it suppresses and says where it stops.
 - **GSCode: Show Server Output** opens the language-server log.
 - **GSCode: Restart Language Server** restarts a wedged server or picks up a rebuilt server binary.
 - **GSCode: Clear Cache and Reindex** deletes this workspace's cache and reloads the window.
-- **GSCode: Open Documentation for Symbol** opens the matching API page on [gscode.net](https://www.gscode.net/). It is also bound to `Shift+F1` in GSC, CSC, and GSH files.
+- **GSCode: Open Documentation for Symbol** opens the matching API page on [gscode.net](https://www.gscode.net/), for the game the server has selected — a Call of Duty 4 workspace opens Call of Duty 4's library, not Black Ops III's. It is also bound to `Shift+F1` in GSC, CSC, and GSH files.
 
 GSCode provides diagnostics, hover, completion, signature help, go-to-definition, references,
 rename, document/workspace symbols, semantic tokens, folding, code lens, call/type hierarchy,

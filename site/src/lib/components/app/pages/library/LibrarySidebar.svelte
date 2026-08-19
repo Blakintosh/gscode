@@ -5,9 +5,11 @@
 	import Search from '@lucide/svelte/icons/search';
 
 	import LanguageRadio from './drawer/LanguageRadio.svelte';
+	import GamePicker from './drawer/GamePicker.svelte';
 	import type { ScrFunction, ScrLibrary } from '$lib/models/library';
 	import { page } from '$app/state';
 	import { ApiLibrarian } from '$lib/app/library/api.svelte';
+	import { games, languagesFor, type GameEntry } from '$lib/data/games';
 	import { goto } from '$app/navigation';
 	import { cn } from '$lib/utils.js';
 
@@ -27,13 +29,42 @@
 
 	let library: Promise<ScrLibrary> = $derived(librarian.library);
 
+	const game = $derived(page.data.game as GameEntry);
+
+	// Call of Duty 4 and Modern Warfare 2 have no client scripts, so GSC is the only library there.
+	// A one-option control is not a choice — it just reads as a second option being missing.
+	const hasLanguageChoice = $derived(languagesFor(game).length > 1);
+
 	async function onLanguageChange(value: string | undefined) {
-		if (!value) {
+		if (!value || value === librarian.languageId) {
 			return;
 		}
 
 		librarian.languageId = value;
-		await goto(`/library/${value}`);
+		await goto(`/library/${game.slug}/${value}`);
+		onNavigate?.();
+	}
+
+	async function onGameChange(slug: string | undefined) {
+		if (!slug || slug === game.slug) {
+			return;
+		}
+
+		const next = games.find((entry) => entry.slug === slug);
+		if (!next) {
+			return;
+		}
+
+		// A game may not have the language currently shown — only three of the five ship client
+		// scripts — so fall back to its first rather than navigating somewhere that 404s.
+		const languages = languagesFor(next);
+		const languageId = languages.includes(librarian.languageId as never)
+			? librarian.languageId
+			: languages[0];
+
+		librarian.gameId = slug;
+		librarian.languageId = languageId;
+		await goto(`/library/${slug}/${languageId}`);
 		onNavigate?.();
 	}
 
@@ -72,9 +103,16 @@
 <div class="flex h-full min-h-0 flex-col">
 	<div class="border-border flex shrink-0 flex-col gap-4 border-b px-4 py-5">
 		<div class="flex flex-col gap-2">
-			<p class="type-label text-dim">Language</p>
-			<LanguageRadio {onLanguageChange} />
+			<p class="type-label text-dim">Game</p>
+			<GamePicker {onGameChange} />
 		</div>
+
+		{#if hasLanguageChoice}
+			<div class="flex flex-col gap-2">
+				<p class="type-label text-dim">Language</p>
+				<LanguageRadio {onLanguageChange} />
+			</div>
+		{/if}
 
 		<div class="relative w-full">
 			<Input
@@ -111,7 +149,7 @@
 			{#each data.entries as apiFunction (apiFunction.name)}
 				{@const slug = apiFunction.name.toLowerCase()}
 				<a
-					href={`/library/${data.languageId}/${slug}`}
+					href={`/library/${game.slug}/${data.languageId}/${slug}`}
 					aria-current={slug === activeFunction ? 'page' : undefined}
 					onclick={() => onNavigate?.()}
 					class={cn(

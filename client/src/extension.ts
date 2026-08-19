@@ -8,6 +8,22 @@ import { registerReloadPrompt } from "./reloadPrompt";
 
 let client: LanguageClient | undefined;
 
+/**
+ * The game the SERVER selected, from gscode/serverReady.
+ *
+ * Deliberately not `gscode.game`: an unrecognised or not-yet-implemented value in that setting
+ * resolves to Black Ops III on the server side, so the setting can name a game the session is not
+ * actually running. The status bar has always shown the server's answer for that reason, and a URL
+ * is the same question — sending someone to a library that is not the one their editor is using is
+ * the same lie, just harder to notice.
+ *
+ * Undefined until the notification arrives; callers fall back to the site's own default.
+ */
+let activeGame: { game: string; gameName: string } | undefined;
+
+/** The site addresses a game by its short name, which is what `gscode.game` spells. */
+const DEFAULT_LIBRARY_GAME = "bo3";
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     // Extension-host lifecycle log. Respects VSCode's per-channel log level
     // ("Developer: Set Log Level…"); server-side events never land here.
@@ -86,11 +102,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     //
     // Whether a name IS a builtin is not a text question — a script function of the same name
     // shadows it — so the server is asked. The extension host has no symbol knowledge at all.
+    //
+    // The GAME comes from the client, not that request: the server answers with a name and a
+    // language and says so deliberately, because how the site addresses its pages is not something
+    // it should need redeploying over. The client already holds which game the server selected.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.openApiLibrary", async () => {
             const editor = vscode.window.activeTextEditor;
             const library = editor?.document.languageId === "csc" ? "csc" : "gsc";
-            let page = `https://www.gscode.net/library/${library}`;
+            const game = activeGame?.game ?? DEFAULT_LIBRARY_GAME;
+            let page = `https://www.gscode.net/library/${game}/${library}`;
 
             if (editor !== undefined) {
                 try {
@@ -105,7 +126,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
                     if (builtin?.name) {
                         // The site addresses pages in lowercase: LUINotifyEvent -> luinotifyevent.
-                        page = `https://www.gscode.net/library/${builtin.language}/${builtin.name.toLowerCase()}`;
+                        page = `https://www.gscode.net/library/${game}/${builtin.language}/${builtin.name.toLowerCase()}`;
                     }
                 } catch (error) {
                     // The index is still a useful answer, so a failed lookup opens that instead of
@@ -331,10 +352,9 @@ function registerIndexingStatusBar(
     // memory figure frozen at whatever it was the instant indexing finished.
     let indexSummary: { files: number; seconds: string } | undefined;
     let memoryMegabytes: number | undefined;
-    // Which game the SERVER selected, held from gscode/serverReady. The status bar text is rebuilt
-    // from it after indexing too, so the label is the same string in both states rather than one
-    // the client re-derives and can get wrong.
-    let activeGame: { game: string; gameName: string } | undefined;
+    // Which game the SERVER selected lives in the module-level `activeGame`: the status bar rebuilds
+    // its text from it after indexing, and the library command builds its URL from it, so both say
+    // the same thing rather than each re-deriving it.
 
     const renderTooltip = () => {
         if (indexSummary === undefined) {

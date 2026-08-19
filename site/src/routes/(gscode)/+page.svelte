@@ -2,9 +2,8 @@
 	import ArrowUpRightIcon from '@lucide/svelte/icons/arrow-up-right';
 	import DownloadIcon from '@lucide/svelte/icons/download';
 	import { Button } from '$lib/components/ui/button';
-	import HudStat from '$lib/components/site/HudStat.svelte';
-	import HudStrip from '$lib/components/site/HudStrip.svelte';
 	import DiscordIcon from '$lib/components/site/DiscordIcon.svelte';
+	import ExplodedLine from '$lib/components/home/ExplodedLine.svelte';
 	import DiagnosticsWidget from '$lib/components/home/DiagnosticsWidget.svelte';
 	import HoverWidget from '$lib/components/home/HoverWidget.svelte';
 	import CompletionsWidget from '$lib/components/home/CompletionsWidget.svelte';
@@ -20,9 +19,9 @@
 	} from '$lib/data/site';
 
 	// Each spread's widget starts its sequence when the spread scrolls in.
-	let live = $state({ diagnostics: false, hover: false, completions: false, games: false });
+	let live = $state({ line: false, diagnostics: false, hover: false, completions: false, games: false });
 
-	const title = 'GSCode — the reference everything else is measured from';
+	const title = 'GSCode — IDE tooling for Call of Duty scripting';
 	const description =
 		"A language server for Call of Duty's GSC and CSC: diagnostics, completions, navigation and a function library, before you build.";
 
@@ -66,11 +65,7 @@
 		style="background:linear-gradient(90deg, transparent, color-mix(in oklab, var(--bright) 5%, transparent) 44%, color-mix(in oklab, var(--bright) 17%, transparent) 50%, color-mix(in oklab, var(--violet) 8%, transparent) 58%, transparent);mask-image:linear-gradient(180deg, #000 0, #000 55%, transparent 100%)"
 	></div>
 
-	<!-- The frame declares itself: tag in the top-left slot, handles on the square corners. -->
-	<span
-		class="tab-cut bg-primary text-primary-foreground absolute top-0 left-0 z-10 px-[13px] py-1 pl-[9px] font-mono text-2xs leading-none tracking-label uppercase"
-		>vs code · language server</span
-	>
+	<!-- The frame declares itself: handles on the square corners. -->
 	<i aria-hidden="true" class="border-primary bg-background absolute top-3 right-3 z-10 block size-[7px] border-[1.5px]"></i>
 	<i aria-hidden="true" class="border-steel bg-background absolute bottom-3 left-3 z-10 block size-[7px] border-[1.5px]"></i>
 
@@ -91,9 +86,7 @@
 			<span class="grad-text">scripting</span><br />
 		</h1>
 		<p class="text-muted-foreground mt-7 max-w-[52ch] text-lg leading-relaxed font-light sm:text-xl">
-			A language server for Call of Duty’s GSC and CSC — Black Ops III first, and every game
-			back to Call of Duty 4. It resolves your whole mod folder, then tells you what the Linker
-			would reject, before you build.
+			A language server for Call of Duty GSC and CSC, compatible with all VS Code-based IDEs.
 		</p>
 		<div class="mt-9 flex flex-wrap items-center gap-3">
 			<Button href={marketplaceUrl} target="_blank" rel="noopener noreferrer" size="lg">
@@ -103,20 +96,14 @@
 			<Button href="/library" variant="secondary" size="lg">Function library</Button>
 		</div>
 		<p class="type-label text-dim mt-6">
-			free · open source · vs code and vs code-based ides
+			free and open source · vs code and vs code-based ides
 		</p>
 	</div>
 </section>
 
-<!-- HUD strip runs the full width: the instrument's readouts. -->
-<div class="border-border border-y">
-	<HudStrip class="[box-shadow:none] border-0">
-		<HudStat label="Languages" value="GSC · CSC · GSH" />
-		<HudStat label="Games" value="5" sub="CoD4 → Black Ops III" />
-		<HudStat label="Version" value="v{extensionVersion}" />
-		<HudStat label="Runtime" value=".NET 10" />
-		<HudStat label="Licence" value="GPL-3.0" />
-	</HudStrip>
+<!-- One line, exploded: how much of it the server understands, one game at a time. -->
+<div use:reveal={{ onIn: () => (live.line = true), threshold: 0.2 }}>
+	<ExplodedLine active={live.line} />
 </div>
 
 <!-- ── Spreads: full-width, title block on one side, the live widget on the other. ─── -->

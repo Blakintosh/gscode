@@ -29059,6 +29059,129 @@
                 "The native requires an odd total argument count: one weapon followed by zero or more pairs."
             ],
             "confidence": null
+        },
+        {
+            "name": "DebugStar",
+            "description": "Draw a star on screen",
+            "overloads": [
+                {
+                    "calledOn": null,
+                    "parameters": [
+                        {
+                            "name": "vector",
+                            "description": "location vector position of the debugstar",
+                            "mandatory": true,
+                            "type": {
+                                "dataType": "vector",
+                                "isArray": false
+                            }
+                        },
+                        {
+                            "name": "duration",
+                            "description": "How many server frames the line should persist through. Defaults to 10",
+                            "mandatory": false,
+                            "type": {
+                                "dataType": "int",
+                                "isArray": false
+                            }
+                        },
+                        {
+                            "name": "color",
+                            "description": "color of star. Defaults to white",
+                            "mandatory": false,
+                            "type": {
+                                "dataType": "vector",
+                                "isArray": false
+                            }
+                        }
+                    ],
+                    "returns": {
+                        "void": true
+                    }
+                }
+            ],
+            "flags": [
+                "verified"
+            ],
+            "example": "DebugStar( self.origin, 20, (0.9, 0.7, 0.6) );",
+            "verifiedInRevision": null,
+            "remarks": [
+                "`DebugStar` must be called from the context of a devblock. *"
+            ],
+            "devOnly": true
+        },
+        {
+            "name": "Print3d",
+            "description": "Draw 3d text on screen",
+            "overloads": [
+                {
+                    "calledOn": null,
+                    "parameters": [
+                        {
+                            "name": "origin",
+                            "description": "The world position to draw text at.",
+                            "mandatory": true,
+                            "type": {
+                                "dataType": "vector",
+                                "isArray": false
+                            }
+                        },
+                        {
+                            "name": "text",
+                            "description": "The text to display.",
+                            "mandatory": true,
+                            "type": {
+                                "dataType": "string",
+                                "isArray": false
+                            }
+                        },
+                        {
+                            "name": "color",
+                            "description": "The text color as an RGB vector.",
+                            "mandatory": false,
+                            "type": {
+                                "dataType": "vector",
+                                "isArray": false
+                            }
+                        },
+                        {
+                            "name": "alpha",
+                            "description": "The text opacity.",
+                            "mandatory": false,
+                            "type": {
+                                "dataType": "number",
+                                "isArray": false
+                            }
+                        },
+                        {
+                            "name": "scale",
+                            "description": "The text scale.",
+                            "mandatory": false,
+                            "type": {
+                                "dataType": "number",
+                                "isArray": false
+                            }
+                        },
+                        {
+                            "name": "duration",
+                            "description": "The display duration in frames.",
+                            "mandatory": false,
+                            "type": {
+                                "dataType": "int",
+                                "isArray": false
+                            }
+                        }
+                    ],
+                    "returns": {
+                        "void": true
+                    }
+                }
+            ],
+            "flags": [
+                "verified"
+            ],
+            "example": "Print3d( start, \"START\", (1.0, 0.8, 0.5), 1, 3 );",
+            "devOnly": true
         }
     ],
     "gameId": "t7",

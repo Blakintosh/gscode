@@ -112,6 +112,11 @@ no bundled data).
 parentheses would call it. `&` = BO3 makes the pointer explicit (`level.f = &foo;` / `&ns::foo`), and
 a bare `ns::foo` is always a call.
 
+Completion reads this axis too, not just the parser: after a BO3 `&` a suggestion is inserted as the
+bare name, since `&foo()` would call the function and point at what it returns. The gate has to be
+the style rather than the character, because in the `::` line an `&` is arithmetic — the shipped
+scripts hold 4,564 `&name` pointers in BO3 and none in CoD4.
+
 **Import style and resolution are two claims, not one.** `ImportStyle` is purely lexical — whether
 the directive is spelled `#using` or `#include` — and that is all the lexer, directive completion and
 shape detection need. `ResolvesByNamespace` is the deeper question: whether a function's *identity*

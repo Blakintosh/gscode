@@ -112,7 +112,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 - `static GscKeywords` — the statement-scope and top-level keyword/directive lists offered in
   completion (assert/assertmsg excluded — they come from the builtin API instead). Documented
-  entries get their KeywordDocs blurb as the completion's documentation.
+  entries get their KeywordDocs blurb as the completion's documentation. A body is offered
+  `StatementKeywords`; file scope is offered BOTH lists, since a top-level macro invocation opens
+  an expression there — see the engine below.
 - `BodyDirectives` is the third list: the directives the preprocessor dispatches from its flat
   token walk (`#if`/`#elif`/`#else`/`#endif`, `#define`, `#insert`), which are therefore legal
   inside a function body as well as at file scope. Everything else in the family is consumed by
@@ -126,9 +128,29 @@ lints, `Completion/` and `Typing/` the information surfaces.
   reference index (gated by `includeLiterals` = the completion.literals setting; disabled →
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
-  (+ `.size`), and statement/top-level scope (keywords, the dialect's global objects and snippets,
+  (+ `.size`), and statement scope (keywords, the dialect's global objects and snippets,
   the enclosing function's parameters and locals, every macro in scope, namespace functions,
   visible classes, namespace-less builtins as call snippets).
+- **File scope gets that same list.** It used to be keywords and snippets alone — a
+  `!insideFunction` return sat above every store query — so `REGISTER_SYSTEM`, written at column 0
+  in 477 of the shipped BO3 scripts, was never offered, nor was any macro, function or class. None
+  of those is a per-cursor fact; the macro table is per FILE and a function is in scope for the
+  file, so the return was hiding categories for no reason but the order they were added in. File
+  scope is also not declarations-only, which is why narrowing the list was not the fix instead: a
+  top-level macro invocation is a CALL, so it opens an expression there, and BO3 writes 510 function
+  pointers and 467 `undefined`s inside those argument lists. Hence both keyword lists at file scope.
+  What stays behind is what is not BOUND there: parameters and locals (nothing is bound outside a
+  declaration) and the engine globals (`self` at file scope is unwritable, and a global sorts in the
+  first tier, so it would head every list).
+- Two punctuation rules are decided once above the dispatch, since each is a fact about the POSITION
+  rather than about the list an arm produces. **File scope takes no terminator** —
+  `IsStatementPosition` finds the previous function's `}` and answers true, which is right in a body
+  and meaningless where there are no statements; all 447 `REGISTER_SYSTEM` uses carry no semicolon.
+  **A function pointer takes no parentheses at all** — `&foo` names the function where `&foo()`
+  calls it, and BO3 writes 4,564 pointers against four `&name(` of any kind. The pointer rule covers
+  `&ns::foo` too (585 of them), and is gated on `GameProfile.FunctionPointerStyle`, since pre-BO3 a
+  pointer is a bare qualified name and an `&` is arithmetic. Only the suffix changes: what may be
+  pointed at is what may be called, so the producers already answer that position.
 - `CollectLocalScope(function, position, entries)` — the names bound INSIDE the function being
   edited, and the only per-function list here. Parameters, then the locals introduced by an
   assignment AT OR ABOVE the cursor; an owner (`self.count = 1`) makes it a field rather than a
@@ -140,7 +162,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   file plus the headers it `#insert`s, so it already is "what this file can expand"; filtering it
   to `SourceFile is null` kept the root file's own and dropped every constant a shared `.gsh`
   exists to supply. A function-like macro takes the call punctuation a function does, since at the
-  use site it is a call; the detail names the defining header.
+  use site it is a call; the detail names the defining header. Gated on `GameProfile.HasMacros`,
+  like every other category here is gated on the dialect: the preprocessor records a `#define`
+  whatever game is active, but only BO3 has a preprocessor, and in the IW line the one `#define`
+  per corpus is a commented-out block of C in `_hud.gsc`.
 - A `#` INSIDE a body has two readings and gets both: `GscKeywords.BodyDirectives`, plus the
   `#"..."` literals where `GameProfile.HasHashStrings`. Reading it as a hash string alone lost the
   `#if` family everywhere and left the three dialects without hash strings an empty list.
@@ -153,7 +178,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   .Statements / .Expressions)`, and the same reason.
   - `.Context.cs` — WHERE the cursor is. All static, and reads only tokens, source text and the
     parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `EnclosingFunction`,
-    `PreviousSignificant`, `TryPrecacheContext` and the rest. `EnclosingFunction` is carried by the
+    `PreviousSignificant`, `TryPrecacheContext`, `IsAddressOfPosition` and the rest. `EnclosingFunction` is carried by the
     dispatcher as a symbol rather than reduced to a bool, since the same walk answers which keyword
     set is legal, whether `vararg` binds, and which parameters and locals are in scope. Nothing here
     touches the database, which is the property that makes the boundary hold.

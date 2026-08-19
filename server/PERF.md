@@ -677,9 +677,16 @@ and 980 scripts.
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced
-call sites per file, with a finished index, the parse done outside the stopwatch, and each position
-warmed before the timed run. One row per REQUEST rather than per file, because the question is
-whether one keystroke is answered in time and a per-file sum answers nothing anybody waits for.
+call sites per file **plus one file-scope position**, with a finished index, the parse done outside
+the stopwatch, and each position warmed before the timed run. One row per REQUEST rather than per
+file, because the question is whether one keystroke is answered in time and a per-file sum answers
+nothing anybody waits for.
+
+The file-scope sample was added on 2026-08-18 and the reason is worth keeping: the positions come
+from the extraction's call references, and a call only ever appears inside a function body, so the
+sweep measured one of completion's two arms and could not see the other at all. That was harmless
+while file scope returned a static word list before any store query ran, and stopped being harmless
+the moment it ran the same queries a body does.
 
 It was written expecting to find the lint problem again. `FunctionsInNamespace` walks the whole
 record store once **per namespace**, and on a namespace dialect statement-scope completion calls it
@@ -693,6 +700,9 @@ The shape is real and it is visible in the numbers. It does not matter.
 | bo3 (1,085 files, **namespace** dialect) | 6,381 | 0.42 ms | 2.03 ms | **4.22 ms** | 24.2 ms |
 | cod4 (904 files, merge dialect) | 6,944 | 0.20 ms | 0.34 ms | 1.03 ms | 16.4 ms |
 | bo1 (2,963 files, merge dialect) | 21,157 | 0.44 ms | 0.64 ms | 1.47 ms | 31.4 ms |
+
+The request counts in that table predate the file-scope sample, so a rerun now reports roughly one
+more per file (7,361 on bo3, 7,838 on cod4) — see the 2026-08-18 entry below.
 
 Reconfirmed 2026-08-12 on all three, and it is the most stable measurement in this file: bo3
 p99 4.26 ms, cod4 1.09 ms, bo1 1.57 ms, with the entry-count line identical to the digit. Nothing
@@ -734,7 +744,8 @@ section below; the `RelativePathIndex` half is still unbuilt and still unmeasure
 The sweep also reports how many entries came back, and that line is what makes the timings
 admissible rather than decorative. `Complete` has around ten arms and most return almost nothing —
 a path segment list, an asset type list, an empty result where the position was not a completion
-site. Only the statement-scope arm queries the store.
+site. Only the statement-scope arm queries the store, and since 2026-08-18 it serves file scope as
+well as bodies, so a file-scope sample lands on it rather than short-circuiting.
 
 At 66–74% of requests returning over 500 entries (median 847–1,404), the sample is landing on that
 arm. A sweep that quietly hit cheap arms would report fast completions and have measured nothing,
@@ -764,6 +775,38 @@ the macro half is empty, and its scripts assign through `level.` rather than to 
 sampled functions in `animscripts\battlechatter.gsc` declare 12, 15 and 7 assignments and only 1, 1
 and 2 of them are locals. Two entries per request is not a measurement. That the numbers barely
 moved there is the expected answer, not a sign the feature is missing on that dialect.
+
+### 2026-08-18: file scope gained the body's list, and the noise floor was measured
+
+File scope used to return keywords and snippets and nothing else — a `!insideFunction` early return
+sat above every store query — so completion outside a function body cost almost nothing and answered
+almost nothing. Removing it puts the macros, the functions in scope, the classes and the builtins at
+that position too, which is a real quantity of new work on a path with no debounce.
+
+Measured as a BEFORE/AFTER PAIR in one session on one machine, sampler change in both halves so the
+request sets are identical (7,361 bo3, 7,838 cod4):
+
+| | median | p90 | p99 |
+|---|---:|---:|---:|
+| bo3 before | 0.363 ms | 2.059 ms | 4.228 ms |
+| bo3 after | **0.473 ms** | 2.094 ms | 4.207 ms |
+| cod4 before | 0.195 ms | 0.342 ms | 1.008 ms |
+| cod4 after | 0.203 ms | 0.337 ms | 1.096 ms |
+
+**The median moves and the tail does not**, which is the shape to expect: file-scope requests were
+the cheap half of the sample and are now ordinary ones, while the p99 is set by the per-namespace
+store walk that this did not touch.
+
+**Read the median here with the noise floor in hand, because it is the same size as the effect.**
+Two later runs of IDENTICAL code — both with the function-pointer arm below in place, taken back to
+back — gave bo3 medians of 0.556 and 0.499 ms and p99s of 5.12 and 4.45 ms. So bo3 run-to-run spread
+is about ±0.06 ms at the median and ±0.7 ms at p99: the 0.11 ms above is real but only about twice
+the spread, and any future single-run comparison claiming less than that has measured the machine.
+CoD4 is the steadier of the two and its ±0.008 ms here says nothing either way.
+
+That pair is also the whole measurement of the function-pointer arm, which is why it has no row: at
+one to three token lookbacks per request it sits well under the floor, and the two runs bracket the
+before-figure in both directions.
 
 ### 2026-08-19: the namespace index, built for a lint and paid off in completion
 
@@ -809,6 +852,12 @@ precedent.
 Findings unchanged: the bo3 `Category=Corpus` sweep prints byte-identical output, which also settles
 the one behavioural risk. The query returns records in index order now rather than store order, and
 nothing downstream depends on that order.
+
+Both halves of this pair were taken with file scope still on the early return, so the absolute
+figures belong to the smaller list of the section above it rather than to the one shipping now. The
+2x is a ratio between two runs of the same tree and survives that; the millisecond values do not
+carry across to the section above, which is the same one-session-one-machine rule the rest of this
+file is read under.
 
 ## Measured: COLD INDEXING, the first-run path
 

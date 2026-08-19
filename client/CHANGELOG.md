@@ -66,6 +66,13 @@ A complete ground-up rewrite of the language server and VS Code extension.
 
 ### Changed
 - Requires the .NET 10 runtime.
+- Completion outside a function body offers the same names it offers inside one — the macros an
+  `#insert`ed header supplies, the functions and classes in scope — rather than keywords and
+  snippets alone. A `REGISTER_SYSTEM` line and the function pointers and `undefined`s inside its
+  arguments are all completable now, and nothing completed at file scope carries a trailing
+  semicolon.
+- A function pointer completes as `&foo`, without the parentheses a call gets. Applies to
+  `&namespace::foo` too, and only on Black Ops III, where `&` is what makes a pointer.
 - Dialect-specific snippets moved from the extension to the server. A contributed snippet is
   registered per language id and one id covers five games, so `foreach`, `class`, `new`, the
   function declaration, `#precache`, the import directives and the ScriptDoc forms used to be

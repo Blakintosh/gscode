@@ -53,11 +53,13 @@ heaviest rules stand down without a finished index — timing them against a par
 cheap half as the total. CoD4 and BO3 only, since each game measured pays a full index.
 
 `Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced call sites per
-file — one report row per REQUEST, since the question is whether a keystroke is answered in time and
-a per-file sum answers nothing anybody waits for. It also prints how many ENTRIES came back, and
-that line is what makes the timings admissible: `Complete` has ~10 arms and only the statement-scope
-one queries the store, so a sample that quietly hit the cheap arms would report fast completions and
-have measured nothing. Adds BO1 to the usual CoD4/BO3 pair, because every query on this path reads
+file, plus one FILE-SCOPE position — one report row per REQUEST, since the question is whether a
+keystroke is answered in time and a per-file sum answers nothing anybody waits for. The call sites
+come from the extraction's call references and every one of those is inside a body, so until the
+file-scope sample was added this sweep could not see the other arm at all. It also prints how many
+ENTRIES came back, and that line is what makes the timings admissible: `Complete` has ~10 arms and
+only the statement-scope one queries the store, so a sample that quietly hit the cheap arms would
+report fast completions and have measured nothing. Adds BO1 to the usual CoD4/BO3 pair, because every query on this path reads
 the record store and BO1 is the only corpus large enough to show whether store size drives the cost.
 It does not — see PERF.md, which also records why the quadratic found here was left alone.
 
@@ -159,8 +161,15 @@ to CSC — covering both how BO3 marks them (a `client` prefix) and how WaW/BO1 
 `ClassMethodCompletionTests` inherited and overriding methods · `ArrowSignatureTests` signatures
 for unknown-receiver method calls · `DialectCompletionTests` that a dialect is offered only its
 own keywords, global objects, snippets and DIRECTIVES — including the reported case end to end, a
-`#` at file scope under CoD4 returning exactly `#include` and `#using_animtree`, and that
-`#animtree` is a body position in every game.
+`#` at file scope under CoD4 returning exactly `#include` and `#using_animtree`, that `#animtree` is
+a body position in every game, and that a CoD4 file-scope list carries no macro rows for a
+preprocessor that game does not have.
+
+`LocalScopeCompletionTests` also holds the FILE-SCOPE cases: the macros an `#insert`ed header
+supplies offered outside a body, the functions in scope and the expression atoms a macro
+invocation's arguments need, and the engine globals still withheld there. The punctuation pair
+(no terminator at file scope, no parentheses on a function pointer) lives with the other call
+punctuation cases in `CompletionEngineTests`.
 
 **Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order ·
 `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·

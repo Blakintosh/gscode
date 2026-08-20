@@ -1,3 +1,4 @@
+using GSCode.Core.Instrumentation;
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -295,6 +296,19 @@ public sealed partial class Parser
 
     private FunctionNode ParseFunction()
     {
+        PerfTracker.Begin("parse.function");
+        try
+        {
+            return ParseFunctionCore();
+        }
+        finally
+        {
+            PerfTracker.End();
+        }
+    }
+
+    private FunctionNode ParseFunctionCore()
+    {
         // The declaration begins at the `function` keyword where the dialect has one, otherwise at
         // the name itself. `private`/`autoexec` and the keyword are BO3 features, so a dialect
         // without the keyword has neither.
@@ -415,6 +429,19 @@ public sealed partial class Parser
     }
 
     private ClassNode ParseClass()
+    {
+        PerfTracker.Begin("parse.class");
+        try
+        {
+            return ParseClassCore();
+        }
+        finally
+        {
+            PerfTracker.End();
+        }
+    }
+
+    private ClassNode ParseClassCore()
     {
         PToken classKeyword = Advance();
         PToken nameToken = Expect(TokenKind.Identifier, "class name");

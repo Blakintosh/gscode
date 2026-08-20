@@ -108,6 +108,51 @@ sources covering each changed path plus 4,000 seeded-random strings over a GSC a
 after, 182,821 lines byte-identical. The corpus sweep then reported the same counts on both sides —
 2 of 894 on cod4, 2 of 980 on bo3, 6 of 2,960 on bo1, with the formatter's gates clean.
 
+## Sub-phases: inside `parse`
+
+`parse` has been the largest analysis phase since the lex work landed, and until 2026-08-19 nothing
+measured inside it — `extract` had five scopes and the parser had none, so "parse is a third of
+analysis" was the end of the story rather than the start of one.
+
+Three scopes, all in instrumented builds only:
+
+| scope | covers | reads as |
+|---|---|---|
+| `parse.function` | one function declaration, parameters and body | the bulk of parsing; declarations do not nest |
+| `parse.class` | one class, its members included | rare on bo3 — 38 of them — and nested `parse.function` scopes are inside it |
+| `parse.expression` | one OUTERMOST expression, entered from a statement | the share of parsing that is expressions rather than structure |
+
+`parse.expression` counts only the outermost entry, by a depth counter that exists in instrumented
+builds alone. A scope at every level would nest inside itself, and the report sums nested scopes, so
+`a + b * c` would be charged once per level of its own depth.
+
+Two instrumented runs on bo3, 980 files:
+
+| | run 1 | run 2 |
+|---|---:|---:|
+| analysis total | 1,608 ms | 1,276 ms |
+| `parse` share of phases | 26% | 29% |
+| `parse.function` (15,601 calls) | 395 ms | 357 ms |
+| `parse.expression` (151,568 calls) | 294 ms | 228 ms |
+| `parse.class` (38 calls) | 23 ms | 11 ms |
+
+**Parsing is function bodies, and two thirds of a body is expressions.** `parse.function` accounts
+for essentially the whole phase, and `parse.expression` is 62–74% of that, over 151,568 outermost
+expressions — about 155 per file. The call counts are identical between runs, which is what makes
+the two comparable at all.
+
+Nothing here is superlinear, so there is no repeat of the doc-lookup find. The candidate the numbers
+DO name is the precedence chain: `ParseExpression` descends `ParseTernary`, ten levels of
+`ParseBinary`, `ParseUnary`, `ParsePostfix` and `ParsePrimary` before it can return, so a bare
+identifier still pays for the full descent — around fifteen frames to parse one token. A
+fast path there is the next thing to try in this phase, and it is a change to the parser's core, so
+it wants the token-stream pinning the lexer work used rather than a corpus sweep alone.
+
+The scope timings are inflated by their own instrumentation more than most: `parse.expression` runs
+151,568 times per sweep, so its `Begin`/`End` pair is a larger fraction of what it reports than for
+a scope that runs once per file. Read the SHARE, and do not compare these milliseconds with an
+uninstrumented total.
+
 ## Measured: the CROSS-FILE LINTS, which cost more than the parse
 
 The table above times `ScriptAnalysis.Analyze` only. Everything the editor runs ON TOP of that

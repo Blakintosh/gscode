@@ -1,3 +1,4 @@
+using GSCode.Core.Instrumentation;
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -19,6 +20,47 @@ public sealed partial class Parser
     /// </remarks>
     private ExprNode ParseExpression()
     {
+#if GSCODE_INSTRUMENTATION
+        // Only the OUTERMOST expression is timed. A scope at every level would nest inside itself —
+        // `a + b * c` is several calls deep — and the report sums nested scopes, so the figure would
+        // count the same microseconds once per level. One scope per expression entered from a
+        // statement gives a share that can be subtracted from `parse.function` to leave the
+        // statement and declaration structure behind.
+        //
+        // Guarded with #if rather than [Conditional] because a depth counter is not a call: the
+        // increment would survive into a normal build, and this is the parser's hottest method.
+        if ( _expressionDepth > 0 )
+        {
+            return ParseExpressionTracked();
+        }
+
+        PerfTracker.Begin("parse.expression");
+        try
+        {
+            return ParseExpressionTracked();
+        }
+        finally
+        {
+            PerfTracker.End();
+        }
+    }
+
+    private ExprNode ParseExpressionTracked()
+    {
+        _expressionDepth++;
+        try
+        {
+            return ParseExpressionInner();
+        }
+        finally
+        {
+            _expressionDepth--;
+        }
+    }
+
+    private ExprNode ParseExpressionInner()
+    {
+#endif
         if ( !EnterNesting() )
         {
             return AbandonNesting();

@@ -50,6 +50,20 @@ public static class TypeMismatchLint
 
     private static void Walk(AstNode node, ScriptTypes types, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
+        InspectNode(node, types, diagnostics);
+
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+        {
+            Walk(child, types, diagnostics);
+        }
+    }
+
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ScriptTypes types, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
         switch ( node )
         {
             case ForeachNode foreachNode:
@@ -59,11 +73,6 @@ public static class TypeMismatchLint
             case VectorNode vector:
                 InspectVectorComponents(vector, types, diagnostics);
                 break;
-        }
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, types, diagnostics);
         }
     }
 

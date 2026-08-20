@@ -334,6 +334,61 @@ where `PreferBooleanLiteralLint` cost 279 ms without recording and 340 ms with i
 means `TypeMismatchLint` getting its values without a whole-file map — which is the same shape as
 fusing rule work into one walk, and belongs with that change rather than here.
 
+### 2026-08-19: nine rules, one walk
+
+Nine lints each descended the whole file on their own to ask one question per node, so a
+thousand-node tree was traversed nine times to answer nine independent questions about each node.
+They qualified because each one's walk was PURE PASS-THROUGH — look at the node, recurse into every
+child unconditionally — which is what makes fusing them a rearrangement rather than a rewrite.
+`NodeLintPass` now visits each node once and asks all nine.
+
+Three A/B pairs, order alternated, instrumented, bo3:
+
+| pair | the nine rules | control (the other rules) | lint total |
+|---|---|---|---|
+| 1 | 1,151 → **703** ms | 1,115 → 1,476 ms | 2,299 → 2,199 ms |
+| 2 | 1,212 → **702** ms | 1,274 → 1,381 ms | 2,515 → 2,106 ms |
+| 3 | 1,176 → **719** ms | 1,237 → 1,472 ms | 2,448 → 2,224 ms |
+
+**−40% on the nine, and the after side is stable to 2%** — 703, 702, 719 — which is the tightest
+band anything in this file has produced. The lint total falls in all three pairs, median −10%.
+
+The after side splits into the flow typer's inference walk, which the pass carries because
+`TypeMismatchLint` needs it, and the nine rules' own per-node work:
+
+| | before | after |
+|---|---|---|
+| nine walks + inference | 1,151–1,212 ms | — |
+| `lint.NodeLintPass` (inference + nine judgements, one walk) | — | 578 ms |
+| `ConstDeclarationLint`'s declaration-level pass | inside its 184 ms | 132 ms |
+| `PreferBooleanLiteralLint`'s field writes | inside its 443 ms | 0.5 ms |
+
+Inference is roughly 400 ms of that 578, so the nine rules' walking and predicates together fell
+from about 750 ms to about 180 ms. That is the shape the bare-walk probe predicted: the traversal
+was nearly all of what these rules cost.
+
+**The control rose 8–32%, which is the second time that has happened** — the same pattern as the
+struct-enumerable change, in the same direction, on rules that were not touched either time. Two
+sightings make it a real property of this sweep rather than a coincidence, and it is still
+unexplained; a plausible reading is that rules running later meet a different cache and GC state
+once the rules ahead of them stop allocating and stop walking. It works against the measured win in
+both cases, so the target figures are floors.
+
+**What was left out, and why.** `ThreadedResultLint` threads a "value is consumed" flag down its
+descent. `UnusedLocalLint`, `UnusedBindingLint` and `UnassignedVariableLint` build per-function
+state, so their walk is scoped to a declaration rather than to the file. `ArgumentCountLint` and
+`DevBlockCallLint` carry a lookup cache and a namespace set, and the second reads reference entries
+rather than the tree. None of those is pass-through, so none of them is a rearrangement.
+
+Each rule keeps its own `Analyze`, which still walks on its own — that is what its unit tests
+exercise and what an offline caller with a single file uses — and the shared pass calls the same
+per-node methods, so there is one copy of each judgement rather than two that can drift.
+
+This change is what the sort in `WorkspaceLints.InReadingOrder` was for: fusing the walks
+interleaves the rules' findings, and without a sort the corpus sweep would have reported that as a
+difference. With it, the bo3 `Category=Corpus` sweep prints byte-identical output across 31 tests
+and 980 scripts.
+
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced

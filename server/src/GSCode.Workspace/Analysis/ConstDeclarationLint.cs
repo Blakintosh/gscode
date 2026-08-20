@@ -35,11 +35,7 @@ public static class ConstDeclarationLint
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
         Walk(result.Tree.Root, diagnostics);
-
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            InspectDeclaration(element, diagnostics);
-        }
+        InspectRest(result, diagnostics);
 
         return diagnostics.ToImmutable();
     }
@@ -47,6 +43,21 @@ public static class ConstDeclarationLint
     // --- 5029: the value has to be known at compile time ---
 
     private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        InspectNode(node, diagnostics);
+
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+        {
+            Walk(child, diagnostics);
+        }
+    }
+
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. The declaration-level and
+    /// body-level passes below are separate and are invoked by <see cref="InspectRest"/>.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         if ( node is ConstDeclNode constDecl && !IsConstantExpression(constDecl.Value) )
         {
@@ -56,10 +67,14 @@ public static class ConstDeclarationLint
                 GscDiagnosticCode.ExpectedConstantExpression,
                 constDecl.NameToken.Text));
         }
+    }
 
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+    /// <summary>Everything this rule does that is not per-node: the declaration-level checks.</summary>
+    internal static void InspectRest(ParseResult result, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            Walk(child, diagnostics);
+            InspectDeclaration(element, diagnostics);
         }
     }
 

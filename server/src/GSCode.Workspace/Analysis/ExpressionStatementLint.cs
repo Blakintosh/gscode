@@ -36,7 +36,7 @@ public static class ExpressionStatementLint
         // The rule's premise is that the statement is what the author wrote. After a parse error the
         // tree is a recovery guess, so the premise does not hold and neither does the finding —
         // which would also be a second diagnostic on a line that already has one.
-        if ( HasParseError(result) )
+        if ( !Applies(result) )
         {
             return [];
         }
@@ -63,6 +63,21 @@ public static class ExpressionStatementLint
 
     private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
+        InspectNode(node, diagnostics);
+
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+        {
+            Walk(child, diagnostics);
+        }
+    }
+
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. The caller is responsible for
+    /// the parse-error gate — see <see cref="Applies"/>.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
         // A for-loop's initializer and increment are ExprStatementNodes too, and the same rule
         // applies to them: `for ( i = 0; i < 3; i )` increments nothing.
         if ( node is ExprStatementNode statement && !HasEffect(statement.Expression) )
@@ -72,11 +87,12 @@ public static class ExpressionStatementLint
                 DiagnosticSeverity.Warning,
                 GscDiagnosticCode.InvalidExpressionStatement));
         }
+    }
 
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, diagnostics);
-        }
+    /// <summary>Whether this rule speaks about this file at all. See the gate in <c>Analyze</c>.</summary>
+    internal static bool Applies(ParseResult result)
+    {
+        return !HasParseError(result);
     }
 
     /// <summary>

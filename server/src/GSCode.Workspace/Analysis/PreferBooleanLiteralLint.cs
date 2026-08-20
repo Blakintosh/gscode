@@ -105,15 +105,35 @@ public static class PreferBooleanLiteralLint
 
     private static void Inspect(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        if ( node is CallNode call )
-        {
-            InspectCall(call, builtins, diagnostics);
-        }
+        InspectNode(node, builtins, diagnostics);
 
         foreach ( AstNode child in AstSearch.ChildrenOf(node) )
         {
             Inspect(child, builtins, diagnostics);
         }
+    }
+
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. The field-write half is a
+    /// separate pass over the flow typer's output — see <see cref="InspectRest"/>.
+    /// </summary>
+    internal static void InspectNode(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        if ( node is CallNode call )
+        {
+            InspectCall(call, builtins, diagnostics);
+        }
+    }
+
+    /// <summary>Everything this rule does that is not per-node: the field writes the typer found.</summary>
+    internal static void InspectRest(
+        ParseResult result,
+        ObjectFields objectFields,
+        FlowTyper typer,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        InspectFieldWrites(result, objectFields, typer, diagnostics);
     }
 
     private static void InspectCall(CallNode call, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)

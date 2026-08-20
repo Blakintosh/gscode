@@ -62,14 +62,24 @@ public static class UnreachableCodeLint
             return;
         }
 
-        if ( node is BlockNode block )
-        {
-            ReportAfterTerminator(block, diagnostics);
-        }
+        InspectNode(node, diagnostics);
 
         foreach ( AstNode child in AstSearch.ChildrenOf(node) )
         {
             Walk(child, diagnostics);
+        }
+    }
+
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. Only ever called for a node that
+    /// is not an <c>ExprNode</c>, which is the same restriction the walk above applies.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        if ( node is BlockNode block )
+        {
+            ReportAfterTerminator(block, diagnostics);
         }
     }
 

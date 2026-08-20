@@ -32,6 +32,20 @@ public static class ArithmeticLint
 
     private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
+        InspectNode(node, diagnostics);
+
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+        {
+            Walk(child, diagnostics);
+        }
+    }
+
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
         switch ( node )
         {
             case BinaryNode { Operator: TokenKind.Slash or TokenKind.Percent } binary
@@ -44,11 +58,6 @@ public static class ArithmeticLint
                 when IsLiteralZero(assignment.Value):
                 Report(assignment.Value, diagnostics);
                 break;
-        }
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, diagnostics);
         }
     }
 

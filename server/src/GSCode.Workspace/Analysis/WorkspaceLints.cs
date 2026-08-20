@@ -126,26 +126,8 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.UnusedLocalLint");
         lints.AddRange(UnusedLocalLint.Analyze(result));
         PerfTracker.End();
-        PerfTracker.Begin("lint.CaseLabelLint");
-        lints.AddRange(CaseLabelLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.UnreachableCodeLint");
-        lints.AddRange(UnreachableCodeLint.Analyze(result));
-        PerfTracker.End();
         PerfTracker.Begin("lint.ThreadedResultLint");
         lints.AddRange(ThreadedResultLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ConstDeclarationLint");
-        lints.AddRange(ConstDeclarationLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.GlobalObjectWriteLint");
-        lints.AddRange(GlobalObjectWriteLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ArithmeticLint");
-        lints.AddRange(ArithmeticLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ExpressionStatementLint");
-        lints.AddRange(ExpressionStatementLint.Analyze(result));
         PerfTracker.End();
         PerfTracker.Begin("lint.UnassignedVariableLint");
         lints.AddRange(UnassignedVariableLint.Analyze(result));
@@ -155,9 +137,6 @@ public static class WorkspaceLints
         PerfTracker.End();
         PerfTracker.Begin("lint.UnusedBindingLint");
         lints.AddRange(UnusedBindingLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.VoidResultLint");
-        lints.AddRange(VoidResultLint.Analyze(result, languageBuiltins));
         PerfTracker.End();
         PerfTracker.Begin("lint.ClassCycleLint");
         lints.AddRange(ClassCycleLint.Analyze(result, store, contextId));
@@ -173,11 +152,20 @@ public static class WorkspaceLints
         FlowTyper typer = new(languageBuiltins, objectFields);
         PerfTracker.End();
 
-        PerfTracker.Begin("lint.PreferBooleanLiteralLint");
-        lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins, objectFields, typer));
+        // The nine rules whose judgement is about one node, in ONE descent of the tree rather than
+        // nine. Run here because two of them read the flow typer, whose answer has to exist first;
+        // everything else in the pass is order-independent now that the result is sorted.
+        PerfTracker.Begin("lint.NodeLintPass");
+        NodeLintPass.Run(result, languageBuiltins, typer.InferValues(result), lints);
         PerfTracker.End();
-        PerfTracker.Begin("lint.TypeMismatchLint");
-        lints.AddRange(TypeMismatchLint.Analyze(result, typer));
+
+        // What those rules do that is NOT per-node, and so has no place in the shared walk: the
+        // field writes the typer collected, and the declaration-level constant checks.
+        PerfTracker.Begin("lint.PreferBooleanLiteralLint.FieldWrites");
+        PreferBooleanLiteralLint.InspectRest(result, objectFields, typer, lints);
+        PerfTracker.End();
+        PerfTracker.Begin("lint.ConstDeclarationLint.Declarations");
+        ConstDeclarationLint.InspectRest(result, lints);
         PerfTracker.End();
         PerfTracker.Begin("lint.PrivateAccessLint");
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));

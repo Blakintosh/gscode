@@ -14,6 +14,7 @@ public sealed class LanguageStore
     private readonly ConcurrentDictionary<string, ScriptRecord> _records = new(StringComparer.Ordinal);
     private readonly ReferenceIndex _referenceIndex = new();
     private readonly DeclarationIndex _declarationIndex = new();
+    private readonly NamespaceIndex _namespaceIndex = new();
     private readonly ClassGraph _classGraph = new();
 
     /// <summary>
@@ -55,6 +56,7 @@ public sealed class LanguageStore
         // parallelism. The gate now covers only the swap and the dictionary mutations it orders.
         HashSet<SymbolKey> newKeys = ReferenceIndex.KeysOf(record.References);
         HashSet<string> newNames = DeclarationIndex.NamesOf(record.Functions);
+        HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
 
         lock ( _writeGate )
         {
@@ -66,6 +68,7 @@ public sealed class LanguageStore
             // version. On a cold index it is always null and these are empty.
             _referenceIndex.Apply(record.Path, ReferenceIndex.KeysOf(previous?.References ?? []), newKeys);
             _declarationIndex.Apply(record.Path, DeclarationIndex.NamesOf(previous?.Functions ?? []), newNames);
+            _namespaceIndex.Apply(record.Path, NamespaceIndex.NamespacesOf(previous?.Functions ?? []), newNamespaces);
             _classGraph.Apply(record.Path, record.Classes);
         }
     }
@@ -79,6 +82,7 @@ public sealed class LanguageStore
             {
                 _referenceIndex.Apply(normalizedPath, ReferenceIndex.KeysOf(previous.References), []);
                 _declarationIndex.Apply(normalizedPath, DeclarationIndex.NamesOf(previous.Functions), []);
+                _namespaceIndex.Apply(normalizedPath, NamespaceIndex.NamespacesOf(previous.Functions), []);
                 _classGraph.Remove(normalizedPath);
             }
         }
@@ -88,6 +92,14 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesDeclaring(string keyName)
     {
         return _declarationIndex.FilesDeclaring(keyName);
+    }
+
+    /// <summary>
+    /// Paths of the files declaring a function INTO a namespace — see <see cref="NamespaceIndex"/>.
+    /// </summary>
+    public ImmutableArray<string> FilesDeclaringInto(string namespaceName)
+    {
+        return _namespaceIndex.FilesDeclaringInto(namespaceName);
     }
 
     /// <summary>Paths of every file that mentions the key (definition sites included).</summary>

@@ -485,6 +485,10 @@ the three queries that scan every record to find the ~20 a `#using` list names. 
 first; the reason it exists is that the same reasoning predicted a problem here and was wrong about
 the size of it.
 
+**The `NamespaceIndex` half was built on 2026-08-19** — for `ArgumentCountLint`, which asks the same
+question on a path that is not completion — and completion got a 2x out of it anyway. See the
+section below; the `RelativePathIndex` half is still unbuilt and still unmeasured.
+
 ### Reading the entry-count line
 
 The sweep also reports how many entries came back, and that line is what makes the timings
@@ -520,6 +524,51 @@ the macro half is empty, and its scripts assign through `level.` rather than to 
 sampled functions in `animscripts\battlechatter.gsc` declare 12, 15 and 7 assignments and only 1, 1
 and 2 of them are locals. Two entries per request is not a measurement. That the numbers barely
 moved there is the expected answer, not a sign the feature is missing on that dialect.
+
+### 2026-08-19: the namespace index, built for a lint and paid off in completion
+
+`DatabaseQueries.FunctionsInNamespace` walked every record and every function in each — about 30,000
+symbols on BO3 — keeping the few dozen in one namespace, and it is asked once per namespace a file
+can see. `NamespaceIndex` maps a namespace to the files declaring into it, maintained in
+`LanguageStore.Upsert` beside the declaration and reference indexes, so the query reads a few dozen
+records instead of the store.
+
+It was built for `ArgumentCountLint`, the most expensive rule left in the lint pass after the shared
+walk landed. Three A/B pairs, order alternated:
+
+| | base | with the index |
+|---|---|---|
+| `ArgumentCountLint` | 209–241 ms | **162–205 ms** (median −20%) |
+| lint pass total | 1,513–1,547 ms | 1,419–1,534 ms |
+
+That is a real but noisy win: the three pairs read −33%, −11% and −11%, so the median is worth more
+than any one of them.
+
+**Completion is the result that matters, and it was not the target.** Same three pairs, bo3, 6,381
+requests each side with the count identical to the digit:
+
+| | base | with the index |
+|---|---|---|
+| median | 0.45–0.46 ms | **0.35–0.36 ms** |
+| p90 | 2.09–2.25 ms | **1.11–1.19 ms** |
+| p99 | 5.03–5.23 ms | **2.46–2.57 ms** |
+| total | 5,633–5,794 ms | **2,996–3,030 ms** |
+
+**A 2x, with non-overlapping bands on every statistic** — the cleanest measurement in this file. It
+is exactly the quadratic the completion section above predicted and declined to fix: statement-scope
+completion on the namespace dialect calls `FunctionsInNamespace` once per own namespace plus once per
+imported namespace, and each of those calls used to read the whole store.
+
+The reasoning that declined it still stands, and is worth keeping straight: a p99 of 5 ms was fifty
+times inside the debounce, so fixing it for completion's sake would have bought the user nothing. The
+index is here because a second caller asked the same question, and the completion improvement is a
+side effect of a change that had its own justification. That is the distinction to preserve when the
+`RelativePathIndex` comes up — it needs its own caller and its own measurement, not this result as a
+precedent.
+
+Findings unchanged: the bo3 `Category=Corpus` sweep prints byte-identical output, which also settles
+the one behavioural risk. The query returns records in index order now rather than store order, and
+nothing downstream depends on that order.
 
 ## Measured: COLD INDEXING, the first-run path
 

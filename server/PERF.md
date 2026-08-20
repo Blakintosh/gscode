@@ -242,6 +242,57 @@ the two field-write rules keep the cheap walk they had. That leaves `TypeMismatc
 with recording on, so the file is walked twice — about 470 ms against the 467–570 ms measured above,
 which buys nothing and adds a second cache state. One memo on the richer answer is the shape.
 
+### 2026-08-19: the child walk allocated once per node visited
+
+`AstSearch.ChildrenOf` was a `yield return` iterator, so every node VISITED allocated a state
+machine — and the tree is walked once per rule by fifteen lints, plus the reference, rename,
+inlay-hint and parameter-typing passes. bo3's 980 scripts are 1,049,221 nodes.
+
+Priced first with three probes in one run, each a bare full-tree walk that visits and does nothing:
+
+| bare walk of every script | bo3, 862 files |
+|---|---|
+| through the iterator | 128–145 ms |
+| direct recursion, same switch, no enumerable | 35–47 ms |
+| direct recursion with leaves short-circuited BEFORE the switch | same as the row above |
+
+The last row is what named the cause. Short-circuiting identifiers and literals — most of the nodes
+in any tree — ahead of the thirty-case type switch changed nothing, so the switch was not the cost
+and the allocation was. The probe order was then reversed and the ratio held, which rules out the
+first walk simply paying to warm the tree into cache for the others.
+
+`ChildrenOf` now returns a STRUCT enumerable that each caller's `foreach` binds to by shape, so the
+walk allocates nothing and all 22 call sites are unchanged. Measured as four A/B pairs with the
+ORDER ALTERNATED between pairs — three pairs run orig-then-mine had every untouched rule reading
+about 25% slower in the second half, which is an ordering artefact and not an effect:
+
+| | orig | after |
+|---|---|---|
+| the 14 rules that walk the AST | 1,783 ms | **1,423 ms (−20%)** |
+| the 7 rules that do not | 287 ms | 338 ms (+18%, unexplained) |
+| lint pass total | 2,328–2,598 ms | **2,081–2,335 ms** |
+
+The total falls in all four pairs — 3%, 6%, 10%, 20% — for a median of 9%, and twelve of the
+fourteen walking rules fall individually, by 11% to 40%. **The non-walking rules rising 18% is not
+explained.** It works against the change rather than for it, so the walking-rule figure is a floor.
+
+**The remaining 2x is the enumerator, not a copy.** With the struct in place the same bare walk
+costs 80–93 ms against 43–58 ms for direct recursion. A second variant carrying only the node, with
+the shape switch moved into the enumerator's constructor so that a 56-byte struct is not copied per
+node, measured the same ratio — 1.6–1.9x against 1.7–2.0x — so the copy was not the cost, and the
+more readable version was kept. Closing that gap means fusing the switch into each walk, which is
+what "one shared walk instead of fifteen" would do and this change deliberately does not.
+
+Behaviour was pinned before any timing was taken: every node's child sequence over all 980 bo3
+scripts, 1,049,221 nodes, dumped with type and position and byte-identical on both sides. The
+`Category=Corpus` sweep then printed identical output, and `ChildEnumerationTests` pins the child
+order per shape — including the two that a position-counting walk would get wrong, a `for` with
+omitted clauses and a `default:` label that contributes no child — plus one test asserting that a
+whole-tree walk allocates zero bytes, which is the property the struct exists for.
+
+This is NOT an index-path change. Outside the lints, `ChildrenOf` serves rename, references, inlay
+hints and the parameter typer, all per-request; indexing does not call it.
+
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced

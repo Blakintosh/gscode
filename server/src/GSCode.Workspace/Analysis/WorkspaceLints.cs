@@ -221,6 +221,41 @@ public static class WorkspaceLints
             result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));
         PerfTracker.End();
 
+        return InReadingOrder(lints);
+    }
+
+    /// <summary>
+    /// The lints sorted by position, then by code.
+    ///
+    /// They came out in RULE order, which made the published order an accident of the order the
+    /// calls above happen to be written in — and made every corpus comparison sensitive to it. The
+    /// sweep that arbitrates a diagnostic change compares output text, so restructuring which rule
+    /// walks when would have shown up as a difference with no change in what was reported.
+    ///
+    /// Position then code, so the order is a property of the FILE rather than of this method: two
+    /// rules reporting the same position sort by their code, which is stable however they are
+    /// invoked. It also happens to be the order a reader wants, since a client that does not sort
+    /// shows them as given.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> InReadingOrder(ImmutableArray<Diagnostic>.Builder lints)
+    {
+        lints.Sort(static (left, right) =>
+        {
+            int line = left.Range.Start.Line.CompareTo(right.Range.Start.Line);
+            if ( line != 0 )
+            {
+                return line;
+            }
+
+            int character = left.Range.Start.Character.CompareTo(right.Range.Start.Character);
+            if ( character != 0 )
+            {
+                return character;
+            }
+
+            return ((int)left.Code).CompareTo((int)right.Code);
+        });
+
         return lints.ToImmutable();
     }
 }

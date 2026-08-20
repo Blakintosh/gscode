@@ -33,6 +33,31 @@ Their corpus roots are read from `GSCODE_CORPUS_<GAME>`. Those variables are usu
 USER level, so a child process inherits every game whether you want it or not — clear the three you
 are not sweeping, or `GameCorpusFixture.Available()` will pick them up.
 
+## Where bo3 stands after the 2026-08-19 pass
+
+One uninstrumented run of the whole perf category at the end of that day's work, so the sections
+below — which are each a before/after pair of one change — have a single reading to be read against.
+Compared with the last figures recorded for the same quantities:
+
+| | recorded before | 2026-08-19 |
+|---|---:|---:|
+| lint pass, 980 files | 2,191 ms | **1,332 ms** |
+| lint median / p99 / max | 0.61 / 23.1 / 95.1 ms | **0.31 / 19.0 / 47.0 ms** |
+| completion, 6,381 requests | p99 4.22–4.26 ms | **p99 2.12 ms**, median 0.30 |
+| analysis, 980 files | 612 ms | 685 ms |
+| cold index, 1,085 files | 1,714–1,732 ms | 1,620 ms |
+
+The lint pass and completion are the two that moved, and both are the sum of the changes below
+rather than of any one of them: the typer memo, the allocation-free child walk, the nine-into-one
+per-node pass, and the namespace index. Analysis and the cold index are unchanged within noise,
+which is what they should be — nothing in that pass touched the lex, preprocess or parse phases, and
+the parse work of that day added measurement only.
+
+**Single run, so read the shares and the distributions.** The entry-count line is what makes the
+completion row admissible: 4,211 of 6,381 requests returned over 500 entries, median 1,930, so the
+sample is still landing on the statement-scope arm that queries the store rather than on the cheap
+arms.
+
 ## Measured: where analysis time goes
 
 `--filter "Category=Perf"` times every script in a game individually and splits each into the four

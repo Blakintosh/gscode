@@ -1,4 +1,4 @@
-using GSCode.Core;
+﻿using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -226,13 +226,34 @@ public class ScriptTypesTests
     {
         // The hint and hover passes ask about one name or one position, and must not pay for a whole
         // file's map to answer it. Two passes on one instance must not interfere either.
+        //
+        // The two InferValues calls are given SEPARATE parses of the same source deliberately: one
+        // parse twice would be answered from the memo, and the property under test is that a real
+        // second recording pass is unaffected by the InferAssignments that ran between them.
+        FlowTyper typer = NewTyper();
+
+        ScriptTypes first = typer.InferValues(Parse("    x = 1;"));
+        typer.InferAssignments(Parse("    x = 1;"));
+        ScriptTypes second = typer.InferValues(Parse("    x = 1;"));
+
+        Assert.Equal(first.Count, second.Count);
+    }
+
+    [Fact]
+    public void OneParseIsTypedOnce()
+    {
+        // Three lints ask this typer for the same file's types. Asking twice for one parse must hand
+        // back the SAME object rather than walking again, and a different parse must not be answered
+        // from the first one's memo — reference identity is the whole of the invalidation rule.
         FlowTyper typer = NewTyper();
         ParseResult result = Parse("    x = 1;");
 
         ScriptTypes first = typer.InferValues(result);
-        typer.InferAssignments(result);
-        ScriptTypes second = typer.InferValues(result);
+        ScriptTypes again = typer.InferValues(result);
+        Assert.Same(first, again);
 
-        Assert.Equal(first.Count, second.Count);
+        ScriptTypes other = typer.InferValues(Parse("    x = 1;"));
+        Assert.NotSame(first, other);
+        Assert.Equal(first.Count, other.Count);
     }
 }

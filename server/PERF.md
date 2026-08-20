@@ -198,6 +198,50 @@ builds. It is also why one corpus cannot stand in for the other here.
 bo3's 95 ms worst file — a single-shot measurement at that — is the closest anything comes. Do not
 optimise on these numbers. They are here so that the next 2x has something to be a 2x *of*.
 
+### 2026-08-19: the three type rules now share one inference walk
+
+They had three walks between them over the same tree — `TypeMismatchLint` called `InferValues`,
+`PreferBooleanLiteralLint` and `ReadOnlyWriteLint` each called `InferAssignments` — with a `FlowTyper`
+shared between them that memoised nothing. `InferValues` was already a superset, since a
+`ScriptTypes` carries the assignments and the field writes alongside the per-expression map, so it
+now memoises per `ParseResult` and all three read one answer. Keyed by REFERENCE: a `ParseResult` is
+a record, so structural equality would compare two whole trees to settle what identity settles
+exactly, and a keystroke produces a new one, so a stale answer cannot be served.
+
+Measured as three INTERLEAVED A/B pairs in one session, instrumented, bo3 only. Interleaved because
+the first attempt ran three of each back to back and the twenty-one untouched rules drifted 29%
+between the halves — larger than the effect being measured, and a reminder that "same session, same
+machine" is not the same claim as "same conditions".
+
+| pair | the three rules | control (21 other rules) | their share of the pass |
+|---|---|---|---|
+| 1 | 851 → **467** ms | 1,888 → 2,083 ms | 31.1% → **18.3%** |
+| 2 | 798 → **512** ms | 1,878 → 1,893 ms | 29.8% → **21.3%** |
+| 3 | 832 → **570** ms | 1,832 → 2,048 ms | 31.2% → **21.8%** |
+
+**Read the share: 30% → 20%, in three pairs, with non-overlapping bands.** Normalised against the
+control the three rules fall 36–50% (median 39%); unnormalised, 31–45%. The control still drifts
++1% to +12% within a pair, which is why the share is the admissible number and not the milliseconds.
+
+Per rule, medians of three: `ReadOnlyWriteLint` 191 → 0.8 ms, since it now reads a memo and does
+nothing else; `TypeMismatchLint` 352 → 179 ms, the residue being its own AST walk rather than
+inference; `PreferBooleanLiteralLint` 279 → **340** ms, because it runs first and therefore pays for
+the whole walk, including the per-expression recording it does not read. Net about −295 ms.
+
+The lint total falls in all three pairs, 2,689–2,763 → 2,430–2,642 ms, and that is NOT claimed: the
+bands touch and the 700 ms band above says what a single total is worth. Nothing moved at the tail —
+median 0.62–0.68 → 0.57–0.65 ms, p99 35.9–39.4 → 34.8–38.9 ms. It was never a latency fix; the p99
+was already ten times inside the debounce.
+
+Findings are unchanged, which is the bar rather than a bonus: the bo3 `Category=Corpus` sweep printed
+byte-identical output on both sides — 31 tests over 980 scripts, every count and every reported line
+the same, only the xUnit timestamps differing.
+
+**Rejected, by reasoning rather than measurement:** memoising the *assignment* pass separately, so
+the two field-write rules keep the cheap walk they had. That leaves `TypeMismatchLint` walking again
+with recording on, so the file is walked twice — about 470 ms against the 467–570 ms measured above,
+which buys nothing and adds a second cache state. One memo on the richer answer is the shape.
+
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced

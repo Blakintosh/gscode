@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
@@ -46,7 +46,7 @@ public static class PreferBooleanLiteralLint
         FlowTyper typer,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        typer.InferAssignments(result, out ImmutableArray<FieldWrite> writes);
+        ImmutableArray<FieldWrite> writes = typer.InferValues(result).FieldWrites;
 
         foreach ( FieldWrite write in writes )
         {

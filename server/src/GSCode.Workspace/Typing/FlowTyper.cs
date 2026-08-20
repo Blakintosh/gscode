@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using GSCode.Parser.Preprocessing;
 using System.Collections.Immutable;
 using GSCode.Core;
@@ -111,6 +111,20 @@ public sealed class FlowTyper
     /// for a whole file's map to answer it.
     /// </summary>
     private Dictionary<ExprNode, ScrValue>? _recorded;
+
+    /// <summary>
+    /// The last <see cref="InferValues"/> answer, and the parse it was computed from, so the three
+    /// lints that all want a file's types share one walk instead of taking one each.
+    ///
+    /// Keyed by REFERENCE, like <see cref="ScriptTypes"/>'s own keys and for the same reason: a
+    /// <c>ParseResult</c> is a record, so structural equality would compare two whole trees to
+    /// settle what reference identity settles exactly. A keystroke produces a new
+    /// <c>ParseResult</c>, so a stale answer can never be served, and every instance of this class
+    /// is a local in one request or one lint pass — the memo dies with the pass rather than
+    /// retaining a tree.
+    /// </summary>
+    private ParseResult? _typedParse;
+    private ScriptTypes? _typed;
 
     /// <summary>
     /// <paramref name="profile"/> defaults to the active one, matching how every <c>Analyze</c>
@@ -270,15 +284,29 @@ public sealed class FlowTyper
     /// The transpiler entry point. Unlike <see cref="InferAssignments(ParseResult)"/>, which reports
     /// the sites an editor wants to decorate, this keeps the value of EVERY expression walked —
     /// including the ones nothing is reported about, which is most of them.
+    ///
+    /// The answer is memoised per <c>ParseResult</c>, which is what makes it the entry point for the
+    /// FIELD-WRITE lints as well: a <see cref="ScriptTypes"/> already carries the assignments and
+    /// the writes, so three rules asking three different questions of one file pay for one walk
+    /// between them. Asking <see cref="InferAssignments(ParseResult, out ImmutableArray{FieldWrite})"/>
+    /// instead is still right for the hover and hint surfaces, which want one name or one position
+    /// and should not pay to record a whole file.
     /// </summary>
     public ScriptTypes InferValues(ParseResult result)
     {
+        if ( _typed is not null && ReferenceEquals(_typedParse, result) )
+        {
+            return _typed;
+        }
+
         _recorded = new Dictionary<ExprNode, ScrValue>(ReferenceEqualityComparer.Instance);
 
         try
         {
             ImmutableArray<InferredAssignment> assignments = InferAssignments(result, out ImmutableArray<FieldWrite> writes);
-            return new ScriptTypes(_recorded, assignments, writes);
+            _typed = new ScriptTypes(_recorded, assignments, writes);
+            _typedParse = result;
+            return _typed;
         }
         finally
         {

@@ -293,6 +293,47 @@ whole-tree walk allocates zero bytes, which is the property the struct exists fo
 This is NOT an index-path change. Outside the lints, `ChildrenOf` serves rename, references, inlay
 hints and the parameter typer, all per-request; indexing does not call it.
 
+### 2026-08-19: the flow typer's environment cloning is NOT worth attacking
+
+`FlowTyper` clones the whole local environment at nine sites — both arms of an `if`, both
+`isdefined` narrowings, a dev block, each loop body, each `switch` case, and the no-default path —
+so the obvious guess is that a function with branchy control flow pays O(branches × locals) copies
+on every keystroke. It is now the most expensive single rule in the lint pass, since
+`PreferBooleanLiteralLint` runs first and therefore carries the shared inference walk.
+
+**Measured, and the guess was wrong.** A counting probe around `Clone`:
+
+| | bo3, 862 files |
+|---|---|
+| clones per sweep | 71,862 (about 83 per file) |
+| of those, an EMPTY environment | 7,727 |
+| fewer than 8 entries | 49,713 |
+| 8 or more | 14,422 |
+
+Nine tenths of the clones copy fewer than eight entries. The scope reported 62–93 ms, and most of
+that is the probe's own `Begin`/`End` pair on a path that runs 72,000 times — a sub-hundred-nanosecond
+copy cannot be measured by a mechanism that costs more than the thing it measures. There is no
+structural cost here to remove, so no persistent map, copy-on-write scope chain or undo journal was
+built: each would add real complexity to buy a slice of something too small to see.
+
+Two other things this settled, both worth not retrying:
+
+- **The walk types each expression once.** `TypeExpressionForEffects` and `TypeOf` were suspected of
+  typing an assignment's value twice — they do not, and a double-typing would have been the find.
+  What remains is genuine per-expression work: the type switch, the environment lookups, and the
+  `_recorded` insert.
+- **Case-insensitive hashing is not the lever either.** GSC names are case-insensitive so every
+  environment is `StringComparer.OrdinalIgnoreCase`, which hashes far more slowly than `Ordinal`, and
+  interning names to a canonical form would allow the cheap comparer. Swapping the comparer as a
+  measurement (semantically wrong, so measurement only) reported 399 and 481 ms against a clean
+  order-balanced baseline of 340–395 ms — noise, in the wrong direction, and no signal to justify a
+  cross-cutting change to `NameTable` and every environment.
+
+What is left in the inference walk is `_recorded`: about 60 ms of it, from the before/after pair
+where `PreferBooleanLiteralLint` cost 279 ms without recording and 340 ms with it. Removing that
+means `TypeMismatchLint` getting its values without a whole-file map — which is the same shape as
+fusing rule work into one walk, and belongs with that change rather than here.
+
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced

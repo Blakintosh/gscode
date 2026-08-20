@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using GSCode.Parser.Preprocessing;
 using System.Collections.Immutable;
 using GSCode.Core;

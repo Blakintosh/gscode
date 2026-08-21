@@ -42,19 +42,32 @@ lints, `Completion/` and `Typing/` the information surfaces.
   One gate for the store serialised every index diff in the workspace against every other one and
   made `commit.upsert` 28.6% of CoD4's cold-index thread-time. See `PERF.md`.
 
+## Database/PackedInvertedIndex.cs
+
+- `internal sealed class PackedInvertedIndex<TKey>` — key→files storage plus the per-file diff,
+  shared by `ReferenceIndex` and `DeclarationIndex`. They were the same class twice: same packing,
+  same remove-then-add diff, same snapshot read, differing only in what a key is. Keeping them apart
+  meant a change to the diff had to land in both, and they had already drifted.
+- Packed: a bare `string` while exactly one file carries a key, promoted to a `HashSet<string>` only
+  once a second appears. Most keys are carried by one file and a HashSet holding one reference costs
+  ~150 bytes to carry 8 — on BO1 that is the declaration index costing 5.1 MB against well under
+  one. The union never escapes the class.
+- Sharded 64 ways by key hash, each shard its own dictionary and lock, taking a shard lock per key
+  rather than one lock per diff. Sound only because no invariant spans two keys. This took
+  `commit.upsert` from 28.6% of CoD4's cold-index thread-time to 8.4%; see `PERF.md`.
+- `NamespaceIndex` is deliberately NOT built on this — see its entry.
+
 ## Database/ReferenceIndex.cs
 
-- `sealed class ReferenceIndex` — the inverted key→files index. SHARDED 64 ways by key, each
-  shard its own dictionary and lock, so a diff of one file meets a diff of another only on the keys
-  they share; exact ranges come from scanning the named files' reference lists. Reads shard the same
-  way, which matters for the lint pass rather than for indexing — `FilesFor` is on the hot path of
-  the reference rules and used to contend with whatever was being committed.
+- `sealed class ReferenceIndex` — the inverted key→files index. `KeysOf` turns a record's
+  reference list into keys outside the caller's write gate; the storage and the diff come from
+  `PackedInvertedIndex<SymbolKey>`. Exact ranges come from scanning the named files' reference lists.
 
 ## Database/DeclarationIndex.cs
 
 - `sealed class DeclarationIndex` — the name→declaring-files index, the counterpart to
-  `ReferenceIndex`. Maintained by the same Apply-on-upsert diff under that path's write gate, and
-  holds PATHS rather than records for the same reason: a record is swapped wholesale on every edit,
+  `ReferenceIndex`, and literally so — both are wrappers over `PackedInvertedIndex<TKey>`. Holds
+  PATHS rather than records for the same reason: a record is swapped wholesale on every edit,
   so holding one would pin a stale version. Keyed on `FunctionSymbol.KeyName` and compared ordinally
   — exactly the comparison `LookupFunctions` performs, so the candidate set is identical.
 - It exists because `LookupFunctions` used to walk every record and every function in each (~30,000
@@ -68,9 +81,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
   inverted indexes and built for the same reason as the other two: a question that used to be
   answered by walking the whole store is answered by a lookup. `FilesDeclaringInto` narrows the
   candidate set for a namespace before anything reads a record.
-- Holds a plain `HashSet<string>` per namespace rather than the string-or-HashSet packing
-  `DeclarationIndex` and `ReferenceIndex` use, because a namespace is declared into by many files
-  by nature, where a function name usually is not — the packing saves nothing here.
+- Holds a plain `HashSet<string>` per namespace rather than sharing `PackedInvertedIndex<TKey>`
+  with the other two, because a namespace is declared into by many files by nature, where a function
+  name usually is not: the packing saves nothing here and the diff it needs is genuinely simpler.
+  Unifying all three would take a flag to tell the two shapes apart, which is the sign they are not
+  one shape.
 
 ## Database/FunctionLookupCache.cs
 

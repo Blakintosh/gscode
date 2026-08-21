@@ -447,7 +447,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Analysis/PreferBooleanLiteralLint.cs
 
-- `static PreferBooleanLiteralLint.Analyze(result, builtins)` — hints that a literal `0`/`1`
+- `PreferBooleanLiteralLint.InspectNode(node, builtins, …)` + `InspectRest(…)` — hints that a literal `0`/`1`
   passed to a builtin parameter declared `bool` should be `false`/`true`. Scoped to
   declared-bool parameters ONLY: an int parameter legitimately takes 0 and 1, and flagging
   those was the v1 bug this rule's original test existed to pin. Every overload must agree the
@@ -472,7 +472,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Analysis/GlobalObjectWriteLint.cs
 
-- `static GlobalObjectWriteLint.Analyze(result)` — reports an assignment to one of the engine's
+- `GlobalObjectWriteLint.InspectNode(node, globals, …)` + `GlobalNames()` — reports an assignment to one of the engine's
   global objects (5035, Error): `level = 1`, `anim = 1`. The names come from
   `GameProfile.GlobalObjectNames`, never a table here, so `world` is a global on BO3 and an ordinary
   local name on CoD4. Only a BARE name counts — `level.things = []` and `game[ "k" ] = 1` write
@@ -496,9 +496,16 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Analysis/ — the remaining lints
 
-Each is a `static Analyze(...)` returning diagnostics, run per open document and merged by the
-server's `TextSyncHandler`. Severity is chosen by MEASUREMENT over the corpus, not by taste: a rule
-reported as an Error must never land on code that ships and works.
+Each is run per open document by `WorkspaceLints` and merged by the server's `TextSyncHandler`.
+Severity is chosen by MEASUREMENT over the corpus, not by taste: a rule reported as an Error must
+never land on code that ships and works.
+
+Two entry shapes. A rule that needs its own traversal — per-function state, a flag threaded down the
+descent, a cache carried along — exposes `static Analyze(...)` and walks the tree itself. A rule
+whose judgement is about a single node exposes `InspectNode` instead and is driven by
+`NodeLintPass`'s one shared walk; it has no `Analyze`, because a second walker that nothing but a
+test called is how the two silently drift. `NodeLintPass` names which rules are in and why the rest
+are out.
 
 - `FunctionResolutionLint` (5013/5014/5025) — a call resolving to no script function and no builtin.
   Splits script from builtin so a corpus sweep of 5014 yields the candidate list for curating the

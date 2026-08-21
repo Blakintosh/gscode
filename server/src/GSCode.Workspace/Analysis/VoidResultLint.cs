@@ -1,8 +1,6 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
-using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Api;
 
@@ -24,33 +22,6 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class VoidResultLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, BuiltinApi builtins)
-    {
-        if ( !Applies(builtins) )
-        {
-            return [];
-        }
-
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            Walk(element, builtins, diagnostics);
-        }
-
-        return diagnostics.ToImmutable();
-    }
-
-    private static void Walk(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
-    {
-        InspectNode(node, builtins, diagnostics);
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, builtins, diagnostics);
-        }
-    }
-
     /// <summary>
     /// This rule's whole judgement about ONE node, with no descent of its own, so
     /// <see cref="NodeLintPass"/> can run it from the shared walk. The caller is responsible for

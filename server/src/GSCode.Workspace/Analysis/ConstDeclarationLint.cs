@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
@@ -30,27 +30,7 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class ConstDeclarationLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        Walk(result.Tree.Root, diagnostics);
-        InspectRest(result, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
     // --- 5029: the value has to be known at compile time ---
-
-    private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
-    {
-        InspectNode(node, diagnostics);
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, diagnostics);
-        }
-    }
 
     /// <summary>
     /// This rule's whole judgement about ONE node, with no descent of its own, so

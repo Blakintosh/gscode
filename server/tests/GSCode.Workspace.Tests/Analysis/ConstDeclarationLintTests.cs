@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -20,6 +20,18 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class ConstDeclarationLintTests
 {
+    /// <summary>
+    /// Both halves the server runs for this rule: the per-node judgement over the shared walk, and
+    /// `InspectRest`, which `WorkspaceLints` calls once per file outside that walk.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> RunRule(ParseResult result)
+    {
+        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        diagnostics.AddRange(NodeLintHarness.Run(result, ConstDeclarationLint.InspectNode));
+        ConstDeclarationLint.InspectRest(result, diagnostics);
+        return diagnostics.ToImmutable();
+    }
+
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         string source = "function f( a )\n{\n" + body + "\n}\n";
@@ -31,7 +43,7 @@ public class ConstDeclarationLintTests
         // and every Assert.Empty passes. `const` is Black Ops III's, which is the test default.
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
 
-        return ConstDeclarationLint.Analyze(result);
+        return RunRule(result);
     }
 
     // --- 5029 ---
@@ -91,7 +103,7 @@ public class ConstDeclarationLintTests
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.DoesNotContain(
-            ConstDeclarationLint.Analyze(result),
+            RunRule(result),
             d => d.Code == GscDiagnosticCode.ExpectedConstantExpression);
     }
 
@@ -159,7 +171,7 @@ public class ConstDeclarationLintTests
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.DoesNotContain(
-            ConstDeclarationLint.Analyze(result),
+            RunRule(result),
             d => d.Code == GscDiagnosticCode.CannotAssignToConstant);
     }
 
@@ -175,7 +187,7 @@ public class ConstDeclarationLintTests
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Diagnostic reported = Assert.Single(
-            ConstDeclarationLint.Analyze(result),
+            RunRule(result),
             d => d.Code == GscDiagnosticCode.CannotAssignToConstant);
 
         // Line 3 (zero-based) is `duration = 1;` in function a, not the write in function b.

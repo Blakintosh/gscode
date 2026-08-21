@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -30,7 +30,7 @@ public class ArithmeticLintTests
         // below passes while proving nothing.
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
 
-        return ArithmeticLint.Analyze(result);
+        return NodeLintHarness.Run(result, ArithmeticLint.InspectNode);
     }
 
     [Theory]

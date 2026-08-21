@@ -1,8 +1,6 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Parser;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Analysis;
@@ -44,27 +42,6 @@ public static class GlobalObjectWriteLint
         }
 
         return globals;
-    }
-
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result)
-    {
-        HashSet<string> globals = GlobalNames();
-
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        Inspect(result.Tree.Root, globals, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
-    private static void Inspect(
-        AstNode node, HashSet<string> globals, ImmutableArray<Diagnostic>.Builder diagnostics)
-    {
-        InspectNode(node, globals, diagnostics);
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Inspect(child, globals, diagnostics);
-        }
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -29,7 +29,9 @@ public class GlobalObjectWriteLintTests
             NullInsertProvider.Instance,
             new NameTable());
 
-        return GlobalObjectWriteLint.Analyze(result);
+        return NodeLintHarness.Run(
+            result,
+            (node, diagnostics) => GlobalObjectWriteLint.InspectNode(node, GlobalObjectWriteLint.GlobalNames(), diagnostics));
     }
 
     [Fact]

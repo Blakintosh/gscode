@@ -24,6 +24,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The lint tests drive the per-node rules through NodeLintPass's own entry points, which is
+         the walk the server actually runs. Each rule used to keep a public Analyze that walked the
+         tree itself, and nothing outside the tests called it. -->
+    <InternalsVisibleTo Include="GSCode.Workspace.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Every bundled game data file, by pattern rather than by name. Listing them individually
          meant a new game's data silently failed to reach the output while everything still built
          and most tests still passed, because the loaders treat a missing file as "this game ships

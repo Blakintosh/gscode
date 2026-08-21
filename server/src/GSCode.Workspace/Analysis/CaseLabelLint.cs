@@ -1,6 +1,5 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
-using GSCode.Parser;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
@@ -28,41 +27,6 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class CaseLabelLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        Walk(result.Tree.Root, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
-    /// <summary>
-    /// Finds every switch in the file. Only <see cref="SwitchNode"/> is interesting, so everything
-    /// else descends through <see cref="AstSearch.ChildrenOf"/> rather than being enumerated here —
-    /// a statement form added later is walked without this rule having to learn about it.
-    ///
-    /// The walk stops at an expression. A switch is a STATEMENT and cannot appear inside one, and
-    /// the labels are read from the node itself rather than reached by descent, so there is nothing
-    /// below an <see cref="ExprNode"/> for this rule to find. Descending anyway walked every operand
-    /// of every expression in the file, which expressions outnumber statements by enough to make it
-    /// most of the rule's cost.
-    /// </summary>
-    private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
-    {
-        if ( node is ExprNode )
-        {
-            return;
-        }
-
-        InspectNode(node, diagnostics);
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, diagnostics);
-        }
-    }
-
     /// <summary>
     /// This rule's whole judgement about ONE node, with no descent of its own, so
     /// <see cref="NodeLintPass"/> can run it from the shared walk. Only ever called for a node that

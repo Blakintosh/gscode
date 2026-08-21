@@ -1,8 +1,7 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
@@ -30,16 +29,6 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class PreferBooleanLiteralLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(
-        ParseResult result, BuiltinApi builtins, ObjectFields objectFields, FlowTyper typer)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        Inspect(result.Tree.Root, builtins, diagnostics);
-        InspectFieldWrites(result, objectFields, typer, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
     private static void InspectFieldWrites(
         ParseResult result,
         ObjectFields objectFields,
@@ -101,16 +90,6 @@ public static class PreferBooleanLiteralLint
         }
 
         return sawEntityKind;
-    }
-
-    private static void Inspect(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
-    {
-        InspectNode(node, builtins, diagnostics);
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Inspect(child, builtins, diagnostics);
-        }
     }
 
     /// <summary>

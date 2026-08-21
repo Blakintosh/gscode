@@ -7,7 +7,8 @@ namespace GSCode.Workspace.Database;
 /// <summary>
 /// All knowledge for ONE language world (GSC or CSC): the path-keyed record map and its
 /// reference index. GSC/CSC isolation is structural — two instances, never a filter.
-/// Record swaps are atomic; the only lock guards the per-file reference-index diff.
+/// Record swaps are atomic; writes to one path are serialised against each other and against
+/// nothing else.
 /// </summary>
 public sealed class LanguageStore
 {
@@ -18,16 +19,55 @@ public sealed class LanguageStore
     private readonly ClassGraph _classGraph = new();
 
     /// <summary>
-    /// Serialises WRITES so a record swap and the two index diffs that describe it land together.
-    /// Indexing runs <c>Parallel.ForEachAsync</c>, so without this the read-previous and the swap
-    /// below were separate steps: two upserts of the same file could each read the same previous
-    /// record and diff against it, leaving the indexes describing a version neither of them wrote.
+    /// Serialises writes TO ONE PATH so a record swap and the index diffs that describe it land
+    /// together. Indexing runs <c>Parallel.ForEachAsync</c>, so without this the read-previous and
+    /// the swap below are separate steps: two upserts of the same file could each read the same
+    /// previous record and diff against it, leaving the indexes describing a version neither of them
+    /// wrote.
     ///
-    /// Reads do not take this — the record map is concurrent, and each index snapshots under its
-    /// own lock. That is also why the ordering is safe: this gate is only ever taken on the way IN
+    /// One gate for the whole store used to do that, and it was the wrong shape. The race it exists
+    /// to stop is between two writers of the SAME file; two writers of different files share
+    /// nothing here, because each index below serialises its own dictionary under its own lock. So a
+    /// process-wide gate serialised every index diff in the workspace against every other one, and
+    /// on CoD4 that made <c>commit.upsert</c> 28.6% of cold-index thread-time at 20x parallelism.
+    ///
+    /// Striped by path instead. Two upserts of one file still collide, which is the entire contract;
+    /// two upserts of different files collide only on a hash coincidence, at which point they are
+    /// still correct and merely serialised.
+    ///
+    /// Reads take none of these — the record map is concurrent and each index snapshots under its
+    /// own lock. That is also why the ordering is safe: a gate here is only ever taken on the way IN
     /// to an index, never from one.
     /// </summary>
-    private readonly Lock _writeGate = new();
+    private readonly Lock[] _writeGates = CreateGates();
+
+    /// <summary>
+    /// Enough stripes that a hash collision between two files being committed at once is rare at
+    /// any realistic core count, and small enough to stay a fixed cost. 64 locks is a few kilobytes.
+    /// </summary>
+    private const int WriteGateCount = 64;
+
+    private static Lock[] CreateGates()
+    {
+        Lock[] gates = new Lock[WriteGateCount];
+        for ( int index = 0; index < gates.Length; index++ )
+        {
+            gates[index] = new Lock();
+        }
+
+        return gates;
+    }
+
+    /// <summary>
+    /// The gate covering one path. Ordinal, because every path reaching this store has already been
+    /// normalised and the record map is keyed the same way — two spellings of one file would be two
+    /// records long before they were two gates.
+    /// </summary>
+    private Lock GateFor(string path)
+    {
+        int hash = StringComparer.Ordinal.GetHashCode(path);
+        return _writeGates[(hash & int.MaxValue) % WriteGateCount];
+    }
 
     /// <summary>Number of files currently held.</summary>
     public int Count
@@ -58,7 +98,7 @@ public sealed class LanguageStore
         HashSet<string> newNames = DeclarationIndex.NamesOf(record.Functions);
         HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
 
-        lock ( _writeGate )
+        lock ( GateFor(record.Path) )
         {
             _records.TryGetValue(record.Path, out ScriptRecord? previous);
             _records[record.Path] = record;
@@ -76,7 +116,7 @@ public sealed class LanguageStore
     /// <summary>Removes a file entirely (deleted from disk).</summary>
     public void Remove(string normalizedPath)
     {
-        lock ( _writeGate )
+        lock ( GateFor(normalizedPath) )
         {
             if ( _records.TryRemove(normalizedPath, out ScriptRecord? previous) )
             {

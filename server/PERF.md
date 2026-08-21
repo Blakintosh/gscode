@@ -684,7 +684,9 @@ Achieved parallelism is 20.6–21.0x against a ceiling of 23. Three things this 
 - **`index.commit` is the one worth attention**, and much more so on CoD4 — a fifth to a quarter of
   thread-time against BO3's tenth. That is `BuildRecord` plus `LanguageStore.Upsert`, which takes one
   process-wide write gate and holds it across per-file hashing in three index diffs. A global lock is
-  exactly what inflates thread-time at 21x parallelism.
+  exactly what inflates thread-time at 21x parallelism. **Both gates were removed 2026-08-20 — see
+  the COMMIT GATE section — and the wall-clock did not move, which is the more useful half of that
+  finding.**
 - **`index.enqueue` is free** — but this measurement attaches no cache, so it says nothing about the
   SQLite writer. Measuring that needs a run with `UseCache`.
 
@@ -714,7 +716,8 @@ The stage shares moved, in opposite directions:
 - **`index.commit` improved and is no longer the headline.** cod4 fell from a fifth-to-a-quarter of
   thread-time to an eighth. It is still 99% `commit.upsert` — 1,334 of 1,392 ms on cod4, 5,099 of
   5,191 on bo1 — so the process-wide write gate is still the shape of it, and bo1's 19.7x is the
-  lowest parallelism of the three, which is what a contended global lock looks like.
+  lowest parallelism of the three, which is what a contended global lock looks like. *(Both gates
+  are gone as of 2026-08-20; parallelism did not respond, and the COMMIT GATE section says why.)*
 - **`index.read` is the new one to watch.** Its share roughly tripled on both games and is 18.3% on
   bo1 — 1.4–2.2 ms per file, and this sweep runs fourth, so every file was already in the OS cache.
   Instrumentation inflates `analyse`, which would push read's share *down*, so the figure is
@@ -1137,6 +1140,77 @@ timeline reconstruction.
 more when cold, since it is directories not visited at all, but no cold measurement is recorded here
 — dropping the Windows file cache is not something this harness does.
 
+## Measured: the COMMIT gate, where the contention was real and the wall-clock was not
+
+`index.commit` has been called "the one worth attention" in this file since the first cold-index
+breakdown, and it kept coming back. Re-measured 2026-08-20, instrumented, one run:
+
+| | `index.commit` | of which `commit.upsert` |
+|---|---:|---:|
+| bo3 | 1,473 ms, 10.2% of thread-time | 1,269 ms, 8.7% |
+| **cod4** | **2,069 ms, 29.3%** | **2,019 ms, 28.6%** |
+| bo1 | — | 13.5% |
+
+CoD4 was back at its worst recorded level. Two process-wide locks were behind it, one inside the
+other.
+
+**`LanguageStore`'s write gate was the wrong shape.** One `Lock` for the whole store, held across
+the record swap and all four index diffs. The race it exists to stop is between two writers of the
+SAME file — read-previous and swap are separate steps, so two upserts of one path could diff against
+one version. Two writers of DIFFERENT files share nothing there, because every index below
+serialises its own dictionary under its own lock. So the gate was serialising every index diff in
+the workspace against every other one to protect a per-path invariant. It is now striped across 64
+locks by path hash: same file still collides, different files collide only on a hash coincidence,
+and correctness is unchanged either way.
+
+**`ReferenceIndex` was one dictionary under one lock.** With the store gate striped, that became the
+next bottleneck immediately — cod4 only fell 28.6% → 24.9%. A file's diff is thousands of keys and
+it held that lock for all of them. Sharded 64 ways by key hash, taking a shard lock per key instead:
+an uncontended `Lock` is a few nanoseconds and a file has thousands of keys, so the acquisitions
+cost microseconds against the milliseconds the single gate spent waiting. The trade is sound only
+because no invariant spans two keys — each key's entry is complete on its own and nothing reads a
+group of them expecting one instant.
+
+| `commit.upsert`, thread-time | before | store gate striped | + index sharded |
+|---|---:|---:|---:|
+| bo3 | 1,269 ms (8.7%) | 623 ms (4.8%) | 1,015 ms (7.3%) |
+| **cod4** | **2,019 ms (28.6%)** | 1,630 ms (24.9%) | **469 ms (8.4%)** |
+| bo1 | 2,631 ms (13.5%) | 2,631 ms (13.5%) | **1,411 ms (7.2%)** |
+
+**4.3x on CoD4.** The bo3 column moves around because it is one run per cell and bo3 was never the
+contended case; read cod4 and bo1, where the direction is unambiguous and large.
+
+### And the wall-clock did not move, which is the part worth writing down
+
+Three cold-index runs each side, uninstrumented:
+
+| | before | after |
+|---|---|---|
+| bo3 | 644 / 627 / 628 ms | 642 / 570 / 632 ms |
+| cod4 | 361 / 318 / 315 ms | 391 / 295 / 321 ms |
+| bo1 | 1,041 / 1,067 / 1,014 ms | 1,007 / 1,178 / 965 ms |
+
+Achieved parallelism is 20.3–20.8x on both sides against a ceiling of 23. The lint sweep does not
+move either, and should not: it is sequential, so it has no contention to remove.
+
+**A thread waiting on a lock spends thread-time without spending wall-clock.** The waits were real
+and are gone, but they were not on the critical path: at twenty-three cores there was enough other
+analysis to run while a thread queued for the gate, so removing the queue freed CPU that nothing was
+short of. This is the reason `index.commit`'s share kept reading as alarming while the totals never
+responded to it, and it is worth remembering the next time a thread-time share is used to pick a
+target.
+
+What it does buy is not visible to any harness here. The gate it removes was taken by
+`FilesFor` as well as by the committing threads — so during a workspace index, a keystroke's lint
+was queueing behind every file being committed. Both sweeps that could measure that are sequential
+and run against a finished index, so neither has ever had the two happening at once. The change is
+kept on that argument and on the scaling one — a process-wide write gate at 20x parallelism is a
+limit whatever this machine's slack happens to hide — and not on a wall-clock number, because there
+is not one.
+
+Verified rather than assumed: 2,269 unit tests and the `Category=Corpus` gates over five games, all
+passing, with the sweep taking 49 s of real work.
+
 ## Measured: the WARM start, which was never timed and was slower than no cache at all
 
 Every figure above this line is a cold index. The warm path — the one a user takes on every start
@@ -1372,7 +1446,7 @@ in-process, while the server indexes cold at `ProcessorCount - 1`:
    packaged extension).
 3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and
    read the "indexing complete" line each time. That line now splits out `cache`, so a warm start is
-   readable without a second measurement - and note `Ready` on the line after it, which includes the
+   readable without a second measurement — and note `Ready` on the line after it, which includes the
    startup the STARTUP section is about and which indexing is only the last part of.
 
    The harness answers the same question without the editor: `WarmIndex_WhereTheTimeGoes` populates a
@@ -1427,18 +1501,18 @@ Measured on the local BO3-tools machine (corpus not committed):
 | Warm start *(stale; see the warm-start section)* | 1,105 files | 2.6 s | < 5 s | yes |
 | Warm start, harness, 2026-08-20 | 1,085 files (bo3) | 477 ms | < 5 s | yes |
 
-Driving the published server over stdio, BO3 as the workspace, 2026-08-20 - the same shape a user's
+Driving the published server over stdio, BO3 as the workspace, 2026-08-20 — the same shape a user's
 session has, and the only place `Ready` can be read:
 
 | | cold | warm |
 |---|---|---|
 | `Workspace indexing complete` | 0.5 s (cache 0.1, find 0.0, analyse 0.3 at 21.3x) | 0.6 s (1,085 from cache) |
-| `Ready ... after start` | 1.2 s | 1.3 s |
+| `Ready … after start` | 1.2 s | 1.3 s |
 
 Two things to read off that pair rather than off either number. **A warm start is not faster than a
-cold one** - the WARM START section explains why and what the remaining lever is. And **half of
+cold one** — the WARM START section explains why and what the remaining lever is. And **half of
 `Ready` is not indexing at all**; the STARTUP section measures what the other half is, and takes
-0.3-0.4 s off it with a RID-specific publish that is not the default.
+0.3–0.4 s off it with a RID-specific publish that is not the default.
 | Steady-state memory (cold, before compaction) | 1,105 files | 390.3 MB | < 400 MB | just inside |
 | Steady-state memory (warm) | 1,105 files | 212.2 MB | < 400 MB | yes |
 | Live managed set (either path) | 1,105 files | ~115 MB | — | — |

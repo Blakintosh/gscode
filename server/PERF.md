@@ -167,16 +167,65 @@ expressions — about 155 per file. The call counts are identical between runs, 
 the two comparable at all.
 
 Nothing here is superlinear, so there is no repeat of the doc-lookup find. The candidate the numbers
-DO name is the precedence chain: `ParseExpression` descends `ParseTernary`, ten levels of
-`ParseBinary`, `ParseUnary`, `ParsePostfix` and `ParsePrimary` before it can return, so a bare
-identifier still pays for the full descent — around fifteen frames to parse one token. A
-fast path there is the next thing to try in this phase, and it is a change to the parser's core, so
-it wants the token-stream pinning the lexer work used rather than a corpus sweep alone.
+DO name is the descent: `ParseExpression` reaches `ParsePrimary` through `ParseExpressionCore`,
+`ParseTernary`, `ParseTernaryCore`, `ParseBinary`, `ParseCallChain`, `ParseUnary`, `ParseUnaryCore`
+and `ParsePostfix`, so a bare identifier pays eight calls and three `EnterNesting`/`ExitNesting`
+pairs to produce one node. A fast path there was the next thing to try in this phase, and being a
+change to the parser's core it wanted the token-stream pinning the lexer work used rather than a
+corpus sweep alone. It is done, below.
+
+**Corrected 2026-08-20.** That paragraph used to say "ten levels of `ParseBinary` … around fifteen
+frames". It was wrong for as long as it stood: `ParseBinary` is precedence CLIMBING — one method
+with a loop and a `ParseBinary(precedence + 1)` back edge — not ten nested methods, and the back
+edge only fires when an operator is actually there. Nothing was decided on the strength of the wrong
+number, but it overstated the prize by roughly half, which is what a figure nobody re-derives does
+over time.
 
 The scope timings are inflated by their own instrumentation more than most: `parse.expression` runs
 151,568 times per sweep, so its `Begin`/`End` pair is a larger fraction of what it reports than for
 a scope that runs once per file. Read the SHARE, and do not compare these milliseconds with an
 uninstrumented total.
+
+### 2026-08-20: the leaf fast path, which the sweep cannot see and a repetition bench can
+
+Most expressions in a script are one token. `foo( a, 1, "x" )` is three expressions and not one of
+them has an operator in it; nor does an array index, nor the right side of a field assignment. Each
+took the whole descent above.
+
+`ParseExpressionInner` now takes the nesting claim, and then — when the NEXT token is `,` `)` `]` or
+`;` and the current one is a name or a literal — builds the node directly. The follower set is the
+whole argument, and it was checked one skipped level at a time rather than assumed: none of those
+four is an assignment operator, none is `?`, none has a binary precedence, none begins a method call
+(that needs `thread`, `childthread`, `call`, an identifier or `[[`), and none is a postfix operator,
+so `.` `[` `(` `++` `--` `->` are all excluded. The two lookahead forms `ParsePrimary` would check
+for, `name::name` and an inline `path
+ame`, both need a token these four are not. `:` is left out
+deliberately: a ternary's arms and a `case` label go through `ParseTernary`, not through here.
+
+**The corpus sweep cannot measure this, and that is as much the finding as the change is.** Three
+instrumented baseline runs put `parse.expression` at 220, 211 and 97 ms, with call counts identical
+to the digit; four runs of the changed build gave 96, 193, 223 and 215. The two distributions sit on
+top of each other. This is the warning further down — the harness finds structural problems and does
+not settle constant factors — arriving in practice rather than in principle.
+
+What settles it is repetition, which the sweep deliberately does not do: preprocess BO3's 60 largest
+files once, then parse those token streams 20 times per trial, five trials, with a forced collection
+between them. Two sessions each side, first trial dropped as tiered-JIT warm-up:
+
+| | trials |
+|---|---|
+| before | 441 / 433 / 438 / 447 / 454 / 457 / 445 / 452 / 435 ms |
+| after | **412 / 399 / 407 / 406 / 398 / 396 / 397 / 399 / 399 / 398 ms** |
+
+**Roughly 11% off the parse phase, and the two ranges do not overlap.** Read it as a parse-phase
+number and not an analysis one: parse is 26–29% of analysis, so this is about 3% of a file's
+analysis and invisible in anything downstream of it.
+
+Behaviour was pinned the way the lexer work was, since a parser that is faster and wrong is worth
+nothing. Every node of every parse tree — its type and its start and end position — plus every
+parser diagnostic was dumped for all five game corpora on both sides: **11,122,507 lines, byte
+identical.** The `Category=Corpus` gates then passed in 1 m 14 s, and the 779 parser unit tests with
+them.
 
 ## Measured: the CROSS-FILE LINTS, which cost more than the parse
 

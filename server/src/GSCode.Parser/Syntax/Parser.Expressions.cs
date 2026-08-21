@@ -1,5 +1,6 @@
 using GSCode.Core.Instrumentation;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
@@ -66,9 +67,93 @@ public sealed partial class Parser
             return AbandonNesting();
         }
 
+        // Most expressions in a script are one token. An argument, an array index, the right-hand
+        // side of a field assignment — `foo( a, 1, "x" )` is three expressions and not one of them
+        // has an operator in it. Reaching ParsePrimary for those costs ParseExpressionCore,
+        // ParseTernary, ParseTernaryCore, ParseBinary, ParseCallChain, ParseUnary, ParseUnaryCore
+        // and ParsePostfix — eight calls that each look at one token, decide it is not theirs, and
+        // descend — plus two more EnterNesting/ExitNesting pairs on the way down and a postfix loop,
+        // a method-callee test, a precedence lookup, a `?` test and an assignment test on the way
+        // back up.
+        //
+        // The nesting claim above is taken first and released either way, so the depth limit still
+        // behaves exactly as it did: this is a shortcut through the descent, not around the guard.
+        if ( TryParseLeafExpression(out ExprNode? leaf) )
+        {
+            ExitNesting();
+            return leaf;
+        }
+
         ExprNode expression = ParseExpressionCore();
         ExitNesting();
         return expression;
+    }
+
+    /// <summary>
+    /// Parses a one-token expression directly, when the token AFTER it proves that every level of
+    /// the descent would have been a pass-through.
+    ///
+    /// The follower set is the whole argument. Each of the four tokens below fails every test the
+    /// skipped levels apply, and they were checked one level at a time rather than assumed:
+    /// none is an assignment operator (<c>ParseExpressionCore</c>), none is <c>?</c>
+    /// (<c>ParseTernaryCore</c>), none has a binary precedence (<c>ParseBinary</c>), none begins a
+    /// method call — that needs <c>thread</c>, <c>childthread</c>, <c>call</c>, an identifier, or
+    /// <c>[[</c> (<c>ParseCallChain</c>) — and none is a postfix operator, so <c>.</c>, <c>[</c>,
+    /// <c>(</c>, <c>++</c>, <c>--</c> and <c>-&gt;</c> are all excluded
+    /// (<c>ParsePostfixChainCore</c>). The token itself is one <c>ParsePrimary</c> builds from a
+    /// single <c>Advance</c>, and the two lookahead forms it would otherwise check for —
+    /// <c>name::name</c> and an inline <c>path\name</c> — both need a token these four are not.
+    ///
+    /// <c>:</c> is deliberately NOT in the set. A ternary's arms and a <c>case</c> label are parsed
+    /// by <see cref="ParseTernary"/> rather than by this method, so admitting it would buy nothing
+    /// and would put the shortcut a lookahead away from the one place a colon is structural.
+    /// </summary>
+    private bool TryParseLeafExpression([NotNullWhen(true)] out ExprNode? leaf)
+    {
+        leaf = null;
+
+        switch ( Peek(1).Kind )
+        {
+            case TokenKind.Comma:
+            case TokenKind.CloseParen:
+            case TokenKind.CloseBracket:
+            case TokenKind.Semicolon:
+                break;
+            default:
+                return false;
+        }
+
+        // Exactly the single-Advance cases of ParsePrimary, split the way it splits them: the ones
+        // that become a literal, and the ones that become a name.
+        switch ( Kind )
+        {
+            case TokenKind.Integer:
+            case TokenKind.Float:
+            case TokenKind.Hex:
+            case TokenKind.String:
+            case TokenKind.LocalizedString:
+            case TokenKind.HashString:
+            case TokenKind.AnimReference:
+            case TokenKind.True:
+            case TokenKind.False:
+            case TokenKind.Undefined:
+            case TokenKind.AnimTreeDirective:
+            {
+                PToken token = Advance();
+                leaf = new LiteralNode(token.RootRange, token);
+                return true;
+            }
+            case TokenKind.Identifier:
+            case TokenKind.Vararg:
+            case TokenKind.ThisThread:
+            {
+                PToken token = Advance();
+                leaf = new IdentifierNode(token.RootRange, token);
+                return true;
+            }
+            default:
+                return false;
+        }
     }
 
     private ExprNode ParseExpressionCore()

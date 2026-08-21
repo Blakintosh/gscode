@@ -954,16 +954,84 @@ once per index, unconditionally, on a thread nobody is waiting on.
 
 Two things this measurement also settled:
 
-- **Do not switch to Server GC.** Per-core heaps would multiply the fragmentation, and
-  Workstation GC is the right choice for a language server. The 2026-08-05 `ArrayPool` result
-  is the same lesson from another angle: anything that keeps per-core state across the indexing
-  threads trades holes for retention.
+- **Do not switch to Server GC** — **REVERSED 2026-08-19, see below.** The reasoning was that
+  per-core heaps would multiply the fragmentation, and it is correct as far as it goes: unbounded
+  Server GC on a 24-thread machine does leave 35 MB of large-object holes where Workstation leaves
+  0.1. What it missed is that the heap count is a DIAL rather than a switch, and that nothing had
+  measured what the single heap was costing in throughput. The 2026-08-05 `ArrayPool` result is
+  still the lesson it was: that one traded holes for RETENTION, which this does not.
 - **Cache restore is not skipping `NameTable` interning.** That worry predicted a warm start
   carrying duplicate strings, which would show up as a *higher* warm live set. It came in 3.9
   MB *lower*, so the concern is closed.
 
 If cold ever climbs again without fragmentation climbing with it, that is the leak-hunt
 signal — a genuinely higher live set means the analysis path is retaining something.
+
+## Measured: the GC, which was three quarters of the cold index
+
+The cold-index sections above all say the same thing — `index.analyse` is 86–93% of thread-time —
+and none of them asked whether that time is the analysis. It was not. The same analysis measured
+per-file by the sequential sweep costs about 0.7 ms; inside the parallel index it was costing about
+39 ms of thread-time per file. A fifty-fold gap between the same code measured two ways is not a
+property of the code.
+
+It was the garbage collector. Indexing runs at `ProcessorCount - 1` and allocates a token array, a
+`PToken` stream, an AST and extraction builders for every file, and under Workstation GC all of
+those threads collect against one heap.
+
+Measured on bo3, 1,085 files, uninstrumented, two runs per configuration:
+
+| configuration | cold index |
+|---|---:|
+| Workstation, as shipped since the beginning | 2,177 / 2,182 ms |
+| Workstation, `GCConserveMemory` off | 2,156 / 2,238 ms |
+| Workstation, gen0 budget raised to 16 MB | 2,016 / 2,112 ms |
+| Workstation, gen0 budget raised to 64 MB | 1,553 / 1,526 ms |
+| Workstation, gen0 budget raised to 256 MB | 1,336 / 1,406 ms |
+| **Server GC, 8 heaps** | **601 / 602 / 702 ms** |
+| Server GC, 12 heaps | 722 / 632 ms |
+| Server GC, unbounded (24) | 768 / 733 ms |
+| Server GC, 4 heaps | 1,315 / 1,237 ms |
+| Server GC, 2 heaps | 1,051 / 1,333 ms |
+
+**Roughly 3.4x, and the gen0 rows are what identify the cause.** Raising the collection budget by
+16x on Workstation recovers only a third of the gap, so the problem is that the threads share one
+heap rather than that they collect too often. `ConserveMemory` costs nothing here and stays.
+
+### Why eight heaps and not one per core
+
+Unbounded is not faster — 733–768 ms against 601–702 — and it costs memory, because each heap keeps
+its own large-object heap:
+
+| | live | fragmented | LOH free/size | working set |
+|---|---:|---:|---:|---:|
+| Workstation (before) | 51.1 MB | 0.1 MB | 0.0 / 9.8 MB | 127 MB |
+| **Server, 8 heaps** | **51.1 MB** | **0.7 MB** | **0.0 / 9.8 MB** | **281 MB** |
+| Server, 12 heaps | 51.0 MB | 48.6 MB | 47.9 / 57.7 MB | 396–413 MB |
+| Server, unbounded | 51.1 MB | 34.9 MB | 34.3 / 44.1 MB | 247 MB |
+
+**Retained memory does not move at any setting** — 51.0–51.1 MB live, identical to Workstation, with
+the same 641 GSC and 325 CSC records held. That was the constraint the `ArrayPool` attempt failed and
+this one meets: nothing is being retained that was not retained before.
+
+**The cost is working set: 127 MB → 281 MB.** That is pages the runtime has not returned rather than
+objects being held, and it is the honest price of this change. Two things to know about the figure:
+the probe never runs the post-index LOH compaction that `Program.cs` performs at the indexing →
+serving transition, which is exactly the mechanism that returned 446 MB on bo1 above; and eight heaps
+is the setting where fragmentation stays at Workstation levels, so there is nothing for a compaction
+to reclaim beyond the pages themselves. Confirm the served number from the status-bar tooltip rather
+than from this table.
+
+`System.GC.HeapCount` is set in both `runtimeconfig.template.json` files — the server's and the test
+project's — so the probe keeps measuring what ships. **Unverified on a machine with fewer than eight
+cores**: the runtime is expected to clamp the count to the processor count, and that has not been
+tested here.
+
+### What this does NOT change
+
+The phase shares, the lint pass and completion are all measured by sequential sweeps, so none of
+them moves: this is a change to what happens when 23 threads allocate at once. The keystroke path
+allocates on one thread and was never contended.
 
 ## Reading the reports
 

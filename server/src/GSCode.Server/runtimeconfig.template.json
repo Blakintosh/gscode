@@ -1,5 +1,11 @@
 {
   "configProperties": {
-    "System.GC.ConserveMemory": 5
+    "System.GC.ConserveMemory": 5,
+
+    "_comment_Server": "Server GC with a BOUNDED heap count. Indexing runs at ProcessorCount - 1 and allocates a token array, a PToken stream, an AST and extraction builders per file, and under Workstation GC those threads serialise on one heap: measured on bo3, a cold index of 1,085 files takes 2,091-2,182 ms with Workstation and 601-702 ms with this. Raising the Workstation gen0 budget to 256 MB only reaches ~1,350 ms, so the contention is the heap count and not the collection frequency.",
+    "System.GC.Server": true,
+
+    "_comment_HeapCount": "Eight, not one per core. Unbounded on a 24-thread machine is no faster (733-768 ms) and leaves 35 MB of large-object holes and a larger working set, because each heap keeps its own LOH; at eight, fragmentation measures 0.7 MB. Retained memory is identical either way - 51.0-51.1 MB live on bo3, the same as Workstation - so this trades working set for throughput and nothing else.",
+    "System.GC.HeapCount": 8
   }
 }

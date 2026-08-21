@@ -2,10 +2,10 @@
   "configProperties": {
     "System.GC.ConserveMemory": 5,
 
-    "_comment_Server": "Server GC with a BOUNDED heap count. Indexing runs at ProcessorCount - 1 and allocates a token array, a PToken stream, an AST and extraction builders per file, and under Workstation GC those threads serialise on one heap: measured on bo3, a cold index of 1,085 files takes 2,091-2,182 ms with Workstation and 601-702 ms with this. Raising the Workstation gen0 budget to 256 MB only reaches ~1,350 ms, so the contention is the heap count and not the collection frequency.",
+    "_comment_Server": "Server GC with a BOUNDED heap count. Indexing runs at ProcessorCount - 1 and allocates a token array, a PToken stream, an AST and extraction builders per file, and under Workstation GC those threads serialise on one heap: measured on bo3, a cold index of 1,085 files takes 2,177-2,182 ms with Workstation and 768 ms with this. Raising the Workstation gen0 budget to 256 MB only reaches ~1,350 ms, so the contention is the heap count and not the collection frequency.",
     "System.GC.Server": true,
 
-    "_comment_HeapCount": "Eight, not one per core. Unbounded on a 24-thread machine is no faster (733-768 ms) and leaves 35 MB of large-object holes and a larger working set, because each heap keeps its own LOH; at eight, fragmentation measures 0.7 MB. Retained memory is identical either way - 51.0-51.1 MB live on bo3, the same as Workstation - so this trades working set for throughput and nothing else.",
-    "System.GC.HeapCount": 8
+    "_comment_HeapCount": "Four. This is a resident language server, so the number to protect is the memory it sits at between edits, and the heap count buys throughput with exactly that: measured on bo3, four heaps rest at 200 MB and eight at 281, against Workstation's 127. Four is 768 ms against eight's 564-638 and Workstation's 2,177, so it keeps most of the speedup for half the extra footprint. Retained memory and fragmentation are identical at every setting - 51.0-51.1 MB live, 0.6-0.7 MB fragmented - and so is the PEAK right after indexing, around 450 MB; only the resting set differs.",
+    "System.GC.HeapCount": 4
   }
 }

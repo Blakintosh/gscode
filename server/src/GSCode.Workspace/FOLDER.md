@@ -376,7 +376,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Resolution/IFileSystem.cs
 
 - `interface IFileSystem` — the thin disk seam (FileExists/DirectoryExists/ReadAllText/
-  EnumerateFiles) so resolver and indexer tests run on fake in-memory trees.
+  GetLastWriteTimeUtc/EnumerateFilesWithExtensions) so resolver and indexer tests run on fake
+  in-memory trees. `EnumerateFilesWithExtensions` is the only enumeration on it: a single-pattern
+  form was carried for a while after its last caller went and cost every implementer a method
+  nothing called.
 - `sealed class PhysicalFileSystem` — the real one.
 
 ## Resolution/RootConfig.cs

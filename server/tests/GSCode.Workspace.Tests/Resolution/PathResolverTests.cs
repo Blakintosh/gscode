@@ -1,4 +1,4 @@
-using GSCode.Core.Paths;
+﻿using GSCode.Core.Paths;
 using GSCode.Workspace.Resolution;
 using Xunit;
 
@@ -336,12 +336,6 @@ public class PathResolverTests
         public DateTime GetLastWriteTimeUtc(string absolutePath)
         {
             return _inner.GetLastWriteTimeUtc(absolutePath);
-        }
-
-        public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
-        {
-            EnumerationCount++;
-            return _inner.EnumerateFiles(directory, searchPattern);
         }
 
         public IEnumerable<string> EnumerateFilesWithExtensions(

@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using System.IO.Enumeration;
 using System.Text;
@@ -24,17 +24,14 @@ public interface IFileSystem
     /// </summary>
     DateTime GetLastWriteTimeUtc(string absolutePath);
 
-    /// <summary>Recursively enumerates files under <paramref name="directory"/> matching the pattern (e.g. "*.gsc").</summary>
-    IEnumerable<string> EnumerateFiles(string directory, string searchPattern);
-
     /// <summary>
     /// Recursively enumerates files under <paramref name="directory"/> whose extension is one of
     /// <paramref name="extensions"/> (each including the dot, compared case-insensitively).
     ///
-    /// Separate from <see cref="EnumerateFiles"/> because the indexer wants several extensions at
-    /// once and neither obvious spelling is good enough: one call per pattern walks the whole tree
-    /// once per extension, while a single "*" walk hands back every file on disk to be filtered in
-    /// managed code. Black Ops 1's raw folder holds 160,382 files of which 2,960 are scripts, so
+    /// The one enumeration this seam offers, because neither obvious single-pattern spelling is
+    /// good enough for what the indexer wants: one call per pattern walks the whole tree once per
+    /// extension, while a single "*" walk hands back every file on disk to be filtered in managed
+    /// code. Black Ops 1's raw folder holds 160,382 files of which 2,960 are scripts, so
     /// that second spelling would allocate 157,422 strings to throw them all away.
     /// </summary>
     IEnumerable<string> EnumerateFilesWithExtensions(string directory, ImmutableArray<string> extensions);
@@ -132,20 +129,6 @@ public sealed class PhysicalFileSystem : IFileSystem
         }
     }
 
-    public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
-    {
-        return Directory.EnumerateFiles(directory, searchPattern, SearchOption.AllDirectories);
-    }
-
-    /// <summary>
-    /// One walk of the tree, with the extension test applied to the entry's name in place.
-    ///
-    /// <see cref="FileSystemEnumerable{TResult}"/> rather than <see cref="Directory.EnumerateFiles(string, string)"/>
-    /// because its predicate sees a <see cref="FileSystemEntry"/> whose FileName is a span over the
-    /// buffer the OS already filled. A file that is not a script is rejected without a string ever
-    /// existing for it, so the 157,422 non-scripts in a Black Ops 1 install cost a comparison each
-    /// and nothing else.
-    /// </summary>
     /// <summary>
     /// Every script under a root, walked ONCE per subtree and in parallel across them.
     ///
@@ -210,6 +193,15 @@ public sealed class PhysicalFileSystem : IFileSystem
         return false;
     }
 
+    /// <summary>
+    /// One walk of the tree, with the extension test applied to the entry's name in place.
+    ///
+    /// <see cref="FileSystemEnumerable{TResult}"/> rather than <c>Directory.EnumerateFiles</c>
+    /// because its predicate sees a <see cref="FileSystemEntry"/> whose FileName is a span over the
+    /// buffer the OS already filled. A file that is not a script is rejected without a string ever
+    /// existing for it, so the 157,422 non-scripts in a Black Ops 1 install cost a comparison each
+    /// and nothing else.
+    /// </summary>
     private static IEnumerable<string> WalkOne(
         string directory, ImmutableArray<string> extensions, bool recurse = true)
     {

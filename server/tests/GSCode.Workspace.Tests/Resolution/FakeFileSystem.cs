@@ -1,4 +1,4 @@
-using GSCode.Core.Paths;
+﻿using GSCode.Core.Paths;
 using GSCode.Workspace.Resolution;
 
 namespace GSCode.Workspace.Tests.Resolution;
@@ -45,11 +45,6 @@ public sealed class FakeFileSystem : IFileSystem
     public DateTime GetLastWriteTimeUtc(string absolutePath)
     {
         return FileExists(absolutePath) ? DateTime.UnixEpoch : DateTime.MinValue;
-    }
-
-    public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
-    {
-        return EnumerateFilesWithExtensions(directory, [searchPattern.TrimStart('*')]);
     }
 
     public IEnumerable<string> EnumerateFilesWithExtensions(

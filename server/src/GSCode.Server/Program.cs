@@ -1,4 +1,5 @@
 ﻿using CommandLine;
+using System.Runtime;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
@@ -33,6 +34,18 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 
 Log.Information("GSCode {Version} language server starting", ServerVersion());
+
+// The GC configuration this process actually got, which is not the same question as what the
+// repository's runtimeconfig template says. The template is baked into runtimeconfig.json at
+// PUBLISH time, so an extension running a bundle from before a template change runs the old
+// settings however recently the server project itself was rebuilt — and the difference between
+// Workstation and four-heap Server GC is a cold index of 2.2 s against 0.8 on bo3. That took a
+// while to spot from timings alone; it is one line to state.
+Log.Information(
+    "GC: {Mode}, {Heaps} heap(s), {Processors} processors",
+    GCSettings.IsServerGC ? "server" : "workstation",
+    AppContext.GetData("System.GC.HeapCount") ?? "one per core",
+    Environment.ProcessorCount);
 
 TransportOptions transportOptions = new();
 CommandLine.Parser.Default.ParseArguments<TransportOptions>(args).WithParsed(parsed => transportOptions = parsed);

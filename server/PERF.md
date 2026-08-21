@@ -628,9 +628,10 @@ and are listed but never added to the total.
 
 Achieved parallelism is 20.6–21.0x against a ceiling of 23. Three things this settles:
 
-- **Enumeration is not the bottleneck.** The `roots × globs` duplicate walk in
-  `PathResolver.EnumerateIndexTargets` costs 121–130 ms on BO3 and 30 ms on CoD4. Removing the
-  duplication entirely would save perhaps 85 ms of a 2,100 ms run.
+- **Enumeration is not the bottleneck** — **true only of the corpus fixture; see the section on
+  FINDING the files.** The `roots × globs` duplicate walk in `PathResolver.EnumerateIndexTargets`
+  costs 121–130 ms on BO3 and 30 ms on CoD4 when the root is a `raw` folder. A real workspace folder
+  is often the game INSTALL, and then enumeration is the largest single cost in a cold index.
 - **`index.commit` is the one worth attention**, and much more so on CoD4 — a fifth to a quarter of
   thread-time against BO3's tenth. That is `BuildRecord` plus `LanguageStore.Upsert`, which takes one
   process-wide write gate and holds it across per-file hashing in three index diffs. A global lock is
@@ -1033,6 +1034,59 @@ probe's table.
 The phase shares, the lint pass and completion are all measured by sequential sweeps, so none of
 them moves: this is a change to what happens when 23 threads allocate at once. The keystroke path
 allocates on one thread and was never contended.
+
+## Measured: FINDING the files, which a corpus fixture cannot see
+
+Every enumeration figure in this file was taken with a `raw` folder as the root, because that is
+what `GSCODE_CORPUS_<GAME>` points at. A user's workspace folder is whatever they opened in the
+editor, and for a modder that is routinely the game install — at which point `OutermostRoots` drops
+the derived `raw` and `mods` roots as contained by it, correctly, and the walk covers everything:
+
+| | files | directories |
+|---|---:|---:|
+| bo3 `share\\raw` | 6,831 | 426 |
+| bo3 `mods` | 787 | 309 |
+| **the whole install** | **295,640** | **12,776** |
+| of which `share\\assetconvert` | 170,328 | |
+| of which `texture_assets` | 4,329 | |
+
+**295,640 files walked to find 1,105 scripts.** It was reported as part of "indexing", so it read as
+slow analysis; the log line said 2.8 s and the analysis was under half a second of it.
+
+Two changes, measured on that install, warm, two runs each — all four variants return the same 1,105
+files:
+
+| | enumeration |
+|---|---:|
+| as it was | 741–792 ms |
+| fanned out across top-level subtrees | 483–504 ms |
+| skipping the two tool-output trees | 277–281 ms |
+| **both, as shipped** | **231–233 ms** |
+
+The pruning is what does it, and `assetconvert` plus `texture_assets` is the whole list:
+`GameProfile.ToolOutputDirectories`. `zone`, `sound` and `video` were measured too and are NOT
+skipped — they cost nothing on top of these two, and each is a name a mod could plausibly give a
+scripts folder. A directory wrongly skipped is a file that silently never gets indexed, which is a
+worse failure than a slow walk. The fan-out stays because it is free and helps a wide tree, but it
+is the smaller half: one subtree can hold most of the files, and here one does.
+
+End to end, driving the bundled server over stdio with the install as the workspace folder, the same
+shape the user's session has:
+
+```
+Workspace indexing complete: 1105 files in 0.7s (find 0.3s, analyse 0.4s at 22.1x, 0 from cache)
+Ready 1.4s after start
+```
+
+against 2.8 s before. **The split is now in the log**, which is the durable part of this: enumeration
+is serial and scales with the WORKSPACE, analysis is parallel and scales with the SCRIPTS, and the
+parallelism figure separates "each file is slow" from "the workers are not running". None of that
+was visible in a single "indexing complete" number, and working it out took a log file and a
+timeline reconstruction.
+
+**These are warm-cache figures.** The user's 2.8 s was a first walk of that tree; the pruning helps
+more when cold, since it is directories not visited at all, but no cold measurement is recorded here
+— dropping the Windows file cache is not something this harness does.
 
 ## Reading the reports
 

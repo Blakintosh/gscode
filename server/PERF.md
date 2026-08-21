@@ -1182,6 +1182,64 @@ machine with fewer cores the cold column moves and the conclusion with it.
 The cold index, the phase shares, the lint pass and completion are all untouched — this is the other
 arm of the fork. The keystroke path never reads the cache at all.
 
+## Measured: STARTUP, which is not indexing and had never been separated from it
+
+`Ready Ns after start` has been in the log for a while and every reading of it was attributed to
+indexing. It is not. Driving the published server over stdio against BO3's 1,105 scripts, warm
+cache, the two numbers in that log pair are:
+
+```
+Workspace indexing complete: 1085 files in 0.6s (cache 0.1s, find 0.0s, analyse 0.5s at 20.9x, 1,085 from cache)
+Ready 1.3s after start
+```
+
+**Half of a start is not indexing.** It is process creation, assembly loading, host construction and
+the JIT compiling the lex/preprocess/parse/extract pipeline on the way to its first file. Nothing in
+this document had ever looked at it, because every harness in `CorpusPerfTests` runs inside a process
+that is already up.
+
+### ReadyToRun
+
+`PublishReadyToRun` precompiles the IL, so the pipeline arrives already native. Five alternating
+runs of each build, warm cache, same machine and session:
+
+| | Ready | index inside it |
+|---|---|---|
+| framework-dependent, no RID (as shipped) | 1.3 / 1.3 / 1.3 / 1.3 / 1.3 s | 0.6 s |
+| `-r win-x64`, ReadyToRun | **1.0 / 0.9 / 0.9 / 1.0 / 1.0 s** | 0.5–0.6 s |
+
+**0.3–0.4 s, about a quarter of the start, and it does not vary.** The index inside is unchanged on
+both sides, which is what makes this attributable: the change cannot have made analysis faster, and
+it did not. The same gap appears whether the host is the apphost or `dotnet GSCode.Server.dll`,
+which is the form the extension actually launches.
+
+The first run of a freshly published R2R build reads 2.0 s rather than 1.0 — a bigger file, cold in
+the OS cache. Every reading here is warm, and the first-ever start on a user's machine pays that
+once either way.
+
+It also makes the bundle smaller, which precompiled native code does not obviously suggest:
+**48 MB → 29 MB.** A RID-less publish carries `runtimes/` for all 22 platforms the SQLite package
+supports; naming one keeps that platform's native library and drops the other 21.
+
+### Why it is not on by default
+
+A RID-specific bundle runs on one platform, and `npm run bundle-server` produces one cross-platform
+`service/` folder for one `.vsix`. Switching the default means shipping a `.vsix` per target
+platform through VS Code's `targetPlatform`, which is a packaging and CI change rather than a server
+one.
+
+So the csproj enables it only when a `RuntimeIdentifier` is given, and `bundle-server-win`,
+`bundle-server-linux` and `bundle-server-osx` opt in. `bundle-server` is byte-for-byte what it was —
+verified by publishing both: the default still writes `runtimes/` for 22 platforms and all 23 `Api/`
+data files.
+
+### What is left in startup after that
+
+About 0.9 s, of which the index is 0.5–0.6. Roughly 0.3 s is runtime start and host construction
+before the first log line appears. Nothing has been attributed inside that yet, and it wants a
+different tool than this file's harness — an ETW trace or `DOTNET_JitTimeLogFile`, not a stopwatch
+in a test.
+
 ## Reading the reports
 
 Each game writes `temp/gscode-perf-<game>.html`; `GSCODE_PERF_REPORT` overrides the directory.
@@ -1265,7 +1323,8 @@ in-process, while the server indexes cold at `ProcessorCount - 1`:
    packaged extension).
 3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and
    read the "indexing complete" line each time. That line now splits out `cache`, so a warm start is
-   readable without a second measurement.
+   readable without a second measurement - and note `Ready` on the line after it, which includes the
+   startup the STARTUP section is about and which indexing is only the last part of.
 
    The harness answers the same question without the editor: `WarmIndex_WhereTheTimeGoes` populates a
    database, drains the writer and indexes again, reporting the cache read and the index separately.
@@ -1318,6 +1377,19 @@ Measured on the local BO3-tools machine (corpus not committed):
 | Cold index | 1,105 files | 5.5 s | < 60 s | yes |
 | Warm start *(stale; see the warm-start section)* | 1,105 files | 2.6 s | < 5 s | yes |
 | Warm start, harness, 2026-08-20 | 1,085 files (bo3) | 477 ms | < 5 s | yes |
+
+Driving the published server over stdio, BO3 as the workspace, 2026-08-20 - the same shape a user's
+session has, and the only place `Ready` can be read:
+
+| | cold | warm |
+|---|---|---|
+| `Workspace indexing complete` | 0.5 s (cache 0.1, find 0.0, analyse 0.3 at 21.3x) | 0.6 s (1,085 from cache) |
+| `Ready ... after start` | 1.2 s | 1.3 s |
+
+Two things to read off that pair rather than off either number. **A warm start is not faster than a
+cold one** - the WARM START section explains why and what the remaining lever is. And **half of
+`Ready` is not indexing at all**; the STARTUP section measures what the other half is, and takes
+0.3-0.4 s off it with a RID-specific publish that is not the default.
 | Steady-state memory (cold, before compaction) | 1,105 files | 390.3 MB | < 400 MB | just inside |
 | Steady-state memory (warm) | 1,105 files | 212.2 MB | < 400 MB | yes |
 | Live managed set (either path) | 1,105 files | ~115 MB | — | — |

@@ -464,6 +464,9 @@
 		"watch": "tsc -watch -p ./",
 		"lint": "eslint src",
 		"bundle-server": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -o ./service",
+		"bundle-server-win": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r win-x64 -o ./service",
+		"bundle-server-linux": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r linux-x64 -o ./service",
+		"bundle-server-osx": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r osx-arm64 -o ./service",
 		"package": "npm run compile && npm run bundle-server && npx --yes @vscode/vsce package"
 	},
 	"devDependencies": {

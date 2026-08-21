@@ -34,18 +34,26 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Database/LanguageStore.cs
 
 - `sealed class LanguageStore` — ONE language world: path-keyed record map + its
-  ReferenceIndex, DeclarationIndex and ClassGraph. Upsert swaps records atomically and diffs all
-  three under one write gate; GSC/CSC isolation is two instances of this class, never a filter.
+  ReferenceIndex, DeclarationIndex, NamespaceIndex and ClassGraph. Upsert swaps records atomically
+  and diffs all four; GSC/CSC isolation is two instances of this class, never a filter.
+- The write gates are STRIPED by path, 64 of them, not one for the store. The race they stop is
+  between two writers of the SAME file — read-previous and swap are separate steps — and two writers
+  of different files share nothing here, because each index below serialises its own dictionary.
+  One gate for the store serialised every index diff in the workspace against every other one and
+  made `commit.upsert` 28.6% of CoD4's cold-index thread-time. See `PERF.md`.
 
 ## Database/ReferenceIndex.cs
 
-- `sealed class ReferenceIndex` — the inverted key→files index. One lock, held per
-  file-diff; exact ranges come from scanning the named files' reference lists.
+- `sealed class ReferenceIndex` — the inverted key→files index. SHARDED 64 ways by key, each
+  shard its own dictionary and lock, so a diff of one file meets a diff of another only on the keys
+  they share; exact ranges come from scanning the named files' reference lists. Reads shard the same
+  way, which matters for the lint pass rather than for indexing — `FilesFor` is on the hot path of
+  the reference rules and used to contend with whatever was being committed.
 
 ## Database/DeclarationIndex.cs
 
 - `sealed class DeclarationIndex` — the name→declaring-files index, the counterpart to
-  `ReferenceIndex`. Maintained by the same Apply-on-upsert diff under the store's write gate, and
+  `ReferenceIndex`. Maintained by the same Apply-on-upsert diff under that path's write gate, and
   holds PATHS rather than records for the same reason: a record is swapped wholesale on every edit,
   so holding one would pin a stale version. Keyed on `FunctionSymbol.KeyName` and compared ordinally
   — exactly the comparison `LookupFunctions` performs, so the candidate set is identical.
@@ -53,6 +61,16 @@ lints, `Completion/` and `Typing/` the information surfaces.
   symbols on BO3) once per CALL SITE, which made four lints 97% of the cross-file lint cost. It
   narrows WHERE to look and decides nothing: visibility, namespace, privacy and overlay shadowing
   all still apply after it. See `PERF.md`.
+
+## Database/NamespaceIndex.cs
+
+- `sealed class NamespaceIndex` — the namespace→declaring-files index, the third of the
+  inverted indexes and built for the same reason as the other two: a question that used to be
+  answered by walking the whole store is answered by a lookup. `FilesDeclaringInto` narrows the
+  candidate set for a namespace before anything reads a record.
+- Holds a plain `HashSet<string>` per namespace rather than the string-or-HashSet packing
+  `DeclarationIndex` and `ReferenceIndex` use, because a namespace is declared into by many files
+  by nature, where a function name usually is not — the packing saves nothing here.
 
 ## Database/FunctionLookupCache.cs
 
@@ -252,9 +270,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   a caller holding a profile must override: indexing under the wrong dialect does not fail, it
   parses declarations away and leaves the store EMPTY. A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH
   exactly once no matter how many scripts insert it; `InvalidateGsh` drops one on change.
-  `IndexFile` is the single-file path the watcher reuses. `UseCache` enables cold-restore:
+  `IndexFile` is the single-file path the watcher reuses. `UseCache` enables warm-restore:
   the two-pass `IndexAsync` restores files whose on-disk content hash matches the cached
-  record (skipping the parse), then re-parses restored files that #insert a header which
+  `CachedEntry`, deserializing the blob only once that check passes and skipping the parse, then
+  re-parses restored files that #insert a header which
   itself changed (phase two), and write-throughs every fresh analysis to the cache. Phase
   two closes the changed-header set over the insert graph first, since a restored `.gsh`
   that inserts a changed one contributes something new despite its own bytes matching.
@@ -281,12 +300,24 @@ lints, `Completion/` and `Typing/` the information surfaces.
   ScriptRecord to/from a gzipped JSON blob (no runtime reflection). Deserialize returns
   null on a corrupt blob so one bad row never fails the restore.
 
+## Cache/CachedEntry.cs
+
+- `sealed record CachedEntry(ulong ContentHash, byte[] Blob)` + `Materialize()` — one cached
+  record still in its stored form. The deserialize is deliberately NOT done when the cache is read:
+  `LoadAll` runs before the indexer knows which files are current, so materialising everything there
+  paid gzip inflation and a JSON parse for files about to be re-analysed anyway — on ONE thread, in
+  front of an index that runs on all of them. That made a warm start slower than having no cache at
+  all (bo3 1,509 ms of restore against a 390 ms cold index). Handing the indexer the blob moves both
+  halves into its parallel per-file loop, behind the content-hash check. The hash is stored beside
+  the blob rather than inside it for exactly that reason. See `PERF.md`.
+
 ## Cache/SqliteCache.cs
 
 - `sealed class SqliteCache : IAsyncDisposable` — the per-workspace cache.
   `ResolveDatabasePath` (→ %APPDATA%/gscode/cache/&lt;hash&gt;.db), `CleanUpLegacyCache`
   (deletes the old single-file gzip-JSON cache), `Open` (WAL + busy_timeout, creates
-  tables, wipes on version/identity mismatch), `LoadAll` (cold-restore input),
+  tables, wipes on version/identity mismatch), `LoadAll` (warm-restore input, as `CachedEntry`
+  rows rather than records — see below),
   `Enqueue`/`EnqueueDelete` (never block — a single background writer drains a bounded
   channel, coalescing batches into transactions; dirty records are skipped), and
   `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing).
@@ -433,6 +464,20 @@ lints, `Completion/` and `Typing/` the information surfaces.
   THROUGH the object and are how every script in every corpus uses one. `classes` is excluded even
   where the profile lists it: nothing establishes what the compiler does with an assignment to it,
   and an Error has to be certain. Swept clean over 8,289 scripts across all five games.
+
+## Analysis/NodeLintPass.cs
+
+- `internal static NodeLintPass.Run(result, builtins, types, diagnostics)` — ONE walk of the tree
+  shared by the nine rules whose judgement is about a single node. Each of those descended the whole
+  file on its own, visiting the same million corpus nodes nine times to ask nine independent
+  questions; a bare walk that does nothing else is about 85 ms of a 2.1 s bo3 lint pass, so the
+  traversal was nearly all of what those rules cost.
+- A rule qualifies only when its own walk was PURE PASS-THROUGH. The six left out are named in the
+  type's doc comment with the reason each one cannot join — a threaded flag, per-function state, or
+  a cache carried down the descent. Read that list before adding a tenth.
+- Each rule exposes `InspectNode`, its whole judgement about one node with no descent, so there is
+  one copy of each judgement. Diagnostics land in one builder and `WorkspaceLints` sorts by position
+  before returning, so merging the walks cannot change what is published.
 
 ## Analysis/ — the remaining lints
 

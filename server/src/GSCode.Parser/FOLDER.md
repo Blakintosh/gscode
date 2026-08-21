@@ -68,6 +68,13 @@ LSP types anywhere.
 - `static AstSearch` — `ChainAt(root, position)` (containing-node chain, outermost →
   innermost; the basis of selection ranges) and `ChildrenOf(node)` (full structural
   child enumeration).
+- `ChildrenOf` returns `ChildEnumerable`, a STRUCT enumerable, and every caller is a `foreach` that
+  binds to it by shape, so the walk allocates nothing. It was a `yield return` iterator, which
+  allocated one state machine per node VISITED — and the tree is walked once per rule, by fifteen
+  lints plus the reference, hint and typing passes, over corpus trees of a million nodes. Measured
+  on bo3: a bare full-tree walk cost 128–145 ms through the iterator against 35–47 ms without it.
+  A variant short-circuiting leaves before the type switch measured the same as the plain one, so
+  the allocation was the cost and the thirty-case switch was not.
 
 ## Syntax/Ast/AstNode.cs
 

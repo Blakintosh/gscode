@@ -2,10 +2,10 @@
   "configProperties": {
     "System.GC.ConserveMemory": 5,
 
-    "_comment_Server": "Server GC with a BOUNDED heap count. Indexing runs at ProcessorCount - 1 and allocates a token array, a PToken stream, an AST and extraction builders per file, and under Workstation GC those threads serialise on one heap: measured on bo3, a cold index of 1,085 files takes 2,177-2,182 ms with Workstation and 768 ms with this. Raising the Workstation gen0 budget to 256 MB only reaches ~1,350 ms, so the contention is the heap count and not the collection frequency.",
+    "_comment_Server": "Server GC with a BOUNDED heap count. Indexing runs at ProcessorCount - 1 and allocates a token array, a PToken stream, an AST and extraction builders per file, and under Workstation GC those threads serialise on one heap. Measured end to end on the real server, bo3, 1,085 files: 2.6-2.7 s with Workstation against 0.4-0.5 s with this. Raising the Workstation gen0 budget to 256 MB only reaches ~1,350 ms in the harness, so the contention is the heap count and not the collection frequency.",
     "System.GC.Server": true,
 
-    "_comment_HeapCount": "Four. This is a resident language server, so the number to protect is the memory it sits at between edits, and the heap count buys throughput with exactly that: measured on bo3, four heaps rest at 200 MB and eight at 281, against Workstation's 127. Four is 768 ms against eight's 564-638 and Workstation's 2,177, so it keeps most of the speedup for half the extra footprint. Retained memory and fragmentation are identical at every setting - 51.0-51.1 MB live, 0.6-0.7 MB fragmented - and so is the PEAK right after indexing, around 450 MB; only the resting set differs.",
-    "System.GC.HeapCount": 4
+    "_comment_HeapCount": "Eight. The heap count changes the PEAK while indexing and not the memory the server rests at, because Program.cs compacts the large-object heap once at the indexing to serving transition and that returns the pages: measured on the real server, four heaps rest at 125.4-125.9 MB, eight at 125.0-126.8 and one per core at 128.3-128.9, against Workstation's 127. Eight indexes in 0.4-0.5 s against four's 0.5-0.6 with a peak within a few MB of it; one per core is no faster and peaks at 392-453 MB. Retained memory is 55 MB at every setting.",
+    "System.GC.HeapCount": 8
   }
 }

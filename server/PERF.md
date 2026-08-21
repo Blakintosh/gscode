@@ -988,8 +988,8 @@ Measured on bo3, 1,085 files, uninstrumented, two runs per configuration:
 | Workstation, gen0 budget raised to 16 MB | 2,016 / 2,112 ms |
 | Workstation, gen0 budget raised to 64 MB | 1,553 / 1,526 ms |
 | Workstation, gen0 budget raised to 256 MB | 1,336 / 1,406 ms |
-| **Server GC, 4 heaps (shipped)** | **768 / 768 ms** |
-| Server GC, 8 heaps | 564 / 638 / 601 / 602 / 702 ms |
+| Server GC, 4 heaps | 768 / 768 ms |
+| **Server GC, 8 heaps (shipped)** | **564 / 638 / 601 / 602 / 702 ms** |
 | Server GC, 12 heaps | 722 / 632 ms |
 | Server GC, unbounded (24) | 768 / 733 ms |
 | Server GC, 2 heaps | 1,051 / 1,333 ms |
@@ -1003,44 +1003,30 @@ and because the memory table below was taken alongside it.
 16x on Workstation recovers only a third of the gap, so the problem is that the threads share one
 heap rather than that they collect too often. `ConserveMemory` costs nothing here and stays.
 
-### Why four heaps and not one per core
+### Why eight heaps and not one per core
 
-Unbounded is not faster — 733–768 ms against 601–702 for eight — and above eight each heap's own
-large-object heap starts showing up as fragmentation. The heap count buys throughput with the memory
-the server RESTS at, which for a process that sits open all day is the number worth protecting:
+**Measured on the real server, not on the probe.** The earlier version of this section chose four
+heaps to protect a working set that turned out not to exist: `MemoryProbeTests` never runs the
+post-index LOH compaction that `Program.cs` performs at the indexing → serving transition, and that
+compaction returns the pages the heap count was appearing to cost. Driving the bundled server over
+stdio and reading its own log lines, bo3, 1,085 files:
 
-| | cold index | live | fragmented | resting working set |
-|---|---:|---:|---:|---:|
-| Workstation (before) | 2,177 / 2,182 ms | 51.1 MB | 0.1 MB | 127 MB |
-| **Server, 4 heaps** | **768 / 768 ms** | **51.0–51.1 MB** | **0.6–0.7 MB** | **200–201 MB** |
-| Server, 8 heaps | 564 / 638 ms | 51.0–51.1 MB | 0.6–0.7 MB | 281 MB |
-| Server, 12 heaps | 632 / 722 ms | 51.0 MB | 48.6 MB | 396–413 MB |
-| Server, unbounded (24) | 733 / 768 ms | 51.1 MB | 34.9 MB | 247 MB |
+| heaps | indexing | peak while indexing | **resting, after compaction** |
+|---|---|---:|---:|
+| Workstation (before) | 2.6–2.7 s | — | 127 MB |
+| 4 | 0.5 / 0.6 / 0.6 s | 309–334 MB | 125.4–125.9 MB |
+| **8 (shipped)** | **0.4 / 0.5 s** | 320–342 MB | **125.0–126.8 MB** |
+| one per core (24) | 0.4 / 0.5 s | 392–453 MB | 128.3–128.9 MB |
 
-**Four is the setting that ships.** It keeps most of the speedup — 2.8x against eight's 3.5x — for
-half the extra footprint, and the difference between them is 150–200 ms on a path that runs once at
-startup against 80 MB the process holds for as long as it is open. Eight is the right answer if a
-cold index is ever the thing being waited on; the resting set is what a user actually lives with.
+**Every setting rests at the same place**, 125–129 MB, and so does Workstation. Retained memory is
+55.1–55.2 MB live at all of them, fragmentation 0.0 after the compaction. What the heap count moves
+is the PEAK during indexing and the time it takes: one per core peaks 60–130 MB higher for no gain,
+four is a tenth of a second slower than eight for a peak within a few MB of it.
 
-**Retained memory does not move at any setting** — 51.0–51.1 MB live, identical to Workstation, the
-same 641 GSC and 325 CSC records held. That was the constraint the `ArrayPool` attempt failed and this
-one meets: nothing is retained that was not retained before. Fragmentation does not move either, at
-four or eight.
-
-**Neither does the PEAK.** Both settings measure 436–464 MB immediately after indexing and drain to
-their resting figure within about five seconds, so the difference is entirely in what the runtime
-gives back, not in what the index costs to run.
-
-Two caveats on the working-set column: the probe never runs the post-index LOH compaction that
-`Program.cs` performs at the indexing → serving transition, which is the mechanism that returned 446
-MB on bo1 above; and at four or eight heaps fragmentation is already at Workstation levels, so there
-is nothing for a compaction to reclaim beyond the pages themselves. Confirm the served number from
-the status-bar tooltip rather than from this table.
-
-`System.GC.HeapCount` is 4, set in both `runtimeconfig.template.json` files — the server's and the test
-project's — so the probe keeps measuring what ships. **Unverified on a machine with fewer than eight
-cores**: the runtime is expected to clamp the count to the processor count, and that has not been
-tested here.
+So the memory column that argued for four does not survive contact with the shipping path. This is
+the same lesson as the fragmentation gate two sections up — measuring the right quantity in the
+wrong process — and the correction here is the same shape: read the server's own log, not the
+probe's table.
 
 ### What this does NOT change
 

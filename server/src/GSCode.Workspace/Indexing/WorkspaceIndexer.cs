@@ -30,7 +30,32 @@ public enum IndexingMode
 /// <param name="Restored">Files served from the cache without re-analysis.</param>
 /// <param name="Analysed">Files taken through the full lex/preprocess/parse/extract pipeline.</param>
 /// <param name="SkippedOversized">Files past the size limit, left unanalysed.</param>
-public readonly record struct IndexOutcome(int Total, int Restored, int Analysed, int SkippedOversized = 0);
+/// <param name="Enumerate">
+/// How long it took to find the files. SERIAL, and it blocks every worker — a workspace folder
+/// that contains the whole game install is 295,640 files to find 1,105 scripts, and that showed up
+/// as slow "indexing" with no way to tell it from the analysis.
+/// </param>
+/// <param name="Analyse">Wall-clock for the parallel pass: reading, analysing and committing.</param>
+/// <param name="ThreadTime">
+/// The per-file elapsed times summed. Against <paramref name="Analyse"/> it gives the parallel
+/// speedup actually achieved, which is the number that separates "each file is slow" from "the
+/// threads are not running".
+/// </param>
+public readonly record struct IndexOutcome(
+    int Total,
+    int Restored,
+    int Analysed,
+    int SkippedOversized = 0,
+    TimeSpan Enumerate = default,
+    TimeSpan Analyse = default,
+    TimeSpan ThreadTime = default)
+{
+    /// <summary>Thread-time over analysis wall-clock: 1x means the parallelism bought nothing.</summary>
+    public double Parallelism
+    {
+        get { return Analyse.TotalMilliseconds <= 0 ? 0 : ThreadTime.TotalMilliseconds / Analyse.TotalMilliseconds; }
+    }
+}
 
 /// <summary>Receives indexing lifecycle events (the server maps these to notifications).</summary>
 public interface IIndexProgressListener
@@ -159,6 +184,7 @@ public sealed class WorkspaceIndexer
         PerfTracker.Begin("index.enumerate");
         List<string> targets = [.. Resolver.EnumerateIndexTargets()];
         PerfTracker.End();
+        TimeSpan enumerate = stopwatch.Elapsed;
 
         progress.Started(targets.Count);
 
@@ -176,13 +202,20 @@ public sealed class WorkspaceIndexer
         ConcurrentBag<ScriptRecord> restoredRecords = [];
         int reparsedAfterHeaderChange = 0;
 
+        // Summed across the workers, so it is thread-time rather than wall-clock. The listener is
+        // handed the same figure per file, but only for logging — this is the total the outcome
+        // reports, so a caller gets the parallelism without having to add up a thousand log lines.
+        long threadTicks = 0;
+
         await Parallel.ForEachAsync(targets, options, (path, token) =>
         {
             token.ThrowIfCancellationRequested();
 
             long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
             FileOutcome outcome = ProcessFile(path, allowRestore: true);
-            progress.FileIndexed(path, System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks), outcome.Restored);
+            TimeSpan fileElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks);
+            Interlocked.Add(ref threadTicks, fileElapsed.Ticks);
+            progress.FileIndexed(path, fileElapsed, outcome.Restored);
 
             if ( outcome.Restored && outcome.Record is not null )
             {
@@ -262,7 +295,14 @@ public sealed class WorkspaceIndexer
         // the workspace looks nonexistent.
         _database.MarkIndexComplete();
 
-        return new IndexOutcome(completed, restored, completed - restored, _skippedOversized);
+        return new IndexOutcome(
+            completed,
+            restored,
+            completed - restored,
+            _skippedOversized,
+            Enumerate: enumerate,
+            Analyse: stopwatch.Elapsed - enumerate,
+            ThreadTime: TimeSpan.FromTicks(Interlocked.Read(ref threadTicks)));
     }
 
     /// <summary>Outcome of processing one file: whether it came from cache, and the resulting record.</summary>

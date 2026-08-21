@@ -1,4 +1,5 @@
 ﻿using CommandLine;
+using System.Diagnostics;
 using System.Runtime;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
@@ -330,11 +331,30 @@ LanguageServer server = await LanguageServer.From(options =>
                         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
                         IndexOutcome outcome = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
                         stopwatch.Stop();
+                        // Split, because "indexing took 2.8s" hid which half was slow and the two
+                        // have nothing to do with each other. Enumeration is serial and depends on
+                        // how big the WORKSPACE is; analysis is parallel and depends on how many
+                        // SCRIPTS there are. A workspace folder holding a whole game install is
+                        // 295,640 files to find 1,105 scripts, and it read as slow analysis.
+                        //
+                        // The parallelism figure is thread-time over analysis wall-clock. Well below
+                        // the core count means the workers are not running — contention, or a lock —
+                        // rather than each file being expensive.
                         Log.Information(
-                            "Workspace indexing complete: {Count} files in {Seconds:F1}s ({Restored:N0} from cache)",
+                            "Workspace indexing complete: {Count} files in {Seconds:F1}s "
+                            + "(find {Enumerate:F1}s, analyse {Analyse:F1}s at {Parallelism:F1}x, {Restored:N0} from cache)",
                             outcome.Total,
                             stopwatch.Elapsed.TotalSeconds,
+                            outcome.Enumerate.TotalSeconds,
+                            outcome.Analyse.TotalSeconds,
+                            outcome.Parallelism,
                             outcome.Restored);
+
+                        // What the user actually waited: the process has been up since before the
+                        // client connected, and indexing is only the last part of it.
+                        Log.Information(
+                            "Ready {Seconds:F1}s after start",
+                            (DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds);
                         // A dropped cache write is not an error the user can act on, but it is the
                         // difference between the next start being warm and it silently re-analysing
                         // part of the workspace. It used to be invisible.

@@ -98,9 +98,16 @@ public class SqliteCacheTests : IDisposable
 
         await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-a") )
         {
-            IReadOnlyDictionary<string, ScriptRecord> restored = reopened.LoadAll();
+            IReadOnlyDictionary<string, CachedEntry> restored = reopened.LoadAll();
 
-            ScriptRecord loaded = Assert.Single(restored).Value;
+            CachedEntry entry = Assert.Single(restored).Value;
+
+            // The hash comes off its own COLUMN now, not out of the blob, and that is the whole
+            // reason a warm start can decide a file is stale without deserializing it.
+            Assert.Equal(record.ContentHash, entry.ContentHash);
+
+            ScriptRecord? loaded = entry.Materialize();
+            Assert.NotNull(loaded);
             Assert.Equal(record.Path, loaded.Path);
             Assert.Equal(record.ContentHash, loaded.ContentHash);
             Assert.Equal("Sample", Assert.Single(loaded.Functions).Name);
@@ -186,12 +193,19 @@ public class SqliteCacheTests : IDisposable
 
         await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "id") )
         {
-            IReadOnlyDictionary<string, ScriptRecord> restored = reopened.LoadAll();
+            IReadOnlyDictionary<string, CachedEntry> restored = reopened.LoadAll();
 
             Assert.Equal(8, restored.Count);
             for ( int index = 0; index < 8; index++ )
             {
-                ScriptRecord loaded = restored[PathUtil.NormalizeAbsolute(@$"c:\ws\scripts\keep{index}.gsc")];
+                CachedEntry entry = restored[PathUtil.NormalizeAbsolute(@$"c:\ws\scripts\keep{index}.gsc")];
+
+                // Both sides of the row, because leakage between records is what this test is for:
+                // the column the freshness check reads, and the blob behind it.
+                Assert.Equal((ulong)(100 + index), entry.ContentHash);
+
+                ScriptRecord? loaded = entry.Materialize();
+                Assert.NotNull(loaded);
                 Assert.Equal((ulong)(100 + index), loaded.ContentHash);
             }
         }
@@ -245,7 +259,7 @@ public class ColdRestoreTests : IDisposable
         (ScriptDatabase db2, WorkspaceIndexer indexer2, _) = Build(files);
         await using ( SqliteCache cache2 = SqliteCache.Open(_dbPath, "id") )
         {
-            IReadOnlyDictionary<string, ScriptRecord> restored = cache2.LoadAll();
+            IReadOnlyDictionary<string, CachedEntry> restored = cache2.LoadAll();
             Assert.Single(restored);
             indexer2.UseCache(cache2, restored);
             await indexer2.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);

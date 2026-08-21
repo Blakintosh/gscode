@@ -286,9 +286,20 @@ LanguageServer server = await LanguageServer.From(options =>
                 WorkspaceIndexer indexer = languageServer.Services.GetRequiredService<WorkspaceIndexer>();
                 IndexProgressNotifier notifier = new(languageServer.Services.GetRequiredService<ILanguageServerFacade>());
 
-                // Open the persistent cache and prime the indexer with its restored records.
+                // Open the persistent cache and prime the indexer with its restored entries.
+                //
+                // Timed, because this is where a warm start used to disappear. `LoadAll` is an
+                // ARGUMENT to UseCache, so it ran to completion before the stopwatch below was even
+                // started, and every warm figure on record was the index alone. It was reading and
+                // deserializing every cached record on this one thread while the parallel index it
+                // was feeding sat idle behind it — 1,509 ms on BO3 in front of a cold index that
+                // does the whole job in 390. Now it reads blobs only and the deserialize happens on
+                // the indexing threads, but the number stays in the log either way: an untimed
+                // stage is one that can regress without anybody noticing.
+                TimeSpan restoreElapsed = TimeSpan.Zero;
                 if ( settings.EnableWorkspaceCache )
                 {
+                    System.Diagnostics.Stopwatch restoreWatch = System.Diagnostics.Stopwatch.StartNew();
                     try
                     {
                         SqliteCache.CleanUpLegacyCache();
@@ -315,6 +326,11 @@ LanguageServer server = await LanguageServer.From(options =>
                     {
                         Log.Error(exception, "Failed to open the workspace cache; continuing without it");
                     }
+
+                    // Outside the catch, so a cache that failed to open still reports what the
+                    // attempt cost rather than reporting zero.
+                    restoreWatch.Stop();
+                    restoreElapsed = restoreWatch.Elapsed;
                 }
 
                 _ = Task.Run(async () =>
@@ -342,9 +358,11 @@ LanguageServer server = await LanguageServer.From(options =>
                         // rather than each file being expensive.
                         Log.Information(
                             "Workspace indexing complete: {Count} files in {Seconds:F1}s "
-                            + "(find {Enumerate:F1}s, analyse {Analyse:F1}s at {Parallelism:F1}x, {Restored:N0} from cache)",
+                            + "(cache {Restore:F1}s, find {Enumerate:F1}s, analyse {Analyse:F1}s at {Parallelism:F1}x, "
+                            + "{Restored:N0} from cache)",
                             outcome.Total,
-                            stopwatch.Elapsed.TotalSeconds,
+                            restoreElapsed.TotalSeconds + stopwatch.Elapsed.TotalSeconds,
+                            restoreElapsed.TotalSeconds,
                             outcome.Enumerate.TotalSeconds,
                             outcome.Analyse.TotalSeconds,
                             outcome.Parallelism,

@@ -1088,6 +1088,100 @@ timeline reconstruction.
 more when cold, since it is directories not visited at all, but no cold measurement is recorded here
 — dropping the Windows file cache is not something this harness does.
 
+## Measured: the WARM start, which was never timed and was slower than no cache at all
+
+Every figure above this line is a cold index. The warm path — the one a user takes on every start
+after their first — had one recorded number, 2.6 s, read off the server's log by hand before the
+server GC, the pruned enumeration and the one-pass reader landed. Nothing re-measured it, and
+`ColdIndex_WhereTheTimeGoes` says why in its own comment: it attaches no cache on purpose, because
+"a warm run measures the restore path instead, which is a different question with a different
+answer". The question was then never asked.
+
+It could not have been answered from the server either. `Program.cs` called
+
+```csharp
+indexer.UseCache(workspaceCache, workspaceCache.LoadAll());
+```
+
+and `LoadAll` is an ARGUMENT, so it ran to completion before the stopwatch that times indexing was
+started. The whole restore was outside every measurement the server takes and outside the
+`(find …, analyse …)` split that was added to make indexing legible.
+
+`WarmIndex_WhereTheTimeGoes` now times it. Each game indexes once into a fresh database, drains the
+writer, then throws everything away except the file and indexes again with a new resolver, NameTable
+and store — so only the database crosses between the two runs. Uninstrumented, one run, cold control
+taken in the same process minutes apart:
+
+| | files | cache read | index | **warm start** | cold index |
+|---|---:|---:|---:|---:|---:|
+| bo3 | 1,085 | 1,509 ms | 150 ms | **1,659 ms** | 390 ms |
+| cod4 | 904 | 720 ms | 242 ms | **962 ms** | 236 ms |
+| bo1 | 2,963 | 2,747 ms | 473 ms | **3,220 ms** | 718 ms |
+
+**The cache made startup four times slower than not having one.** The restore was 85–91% of a warm
+start, all of it on one thread — gzip inflation and a JSON parse per record — in front of a parallel
+index that does the entire job from source in 390 ms. The two arms of the fork had diverged: every
+optimisation of the last month landed on the cold one, and the warm one was still doing 2016's work
+on a single core.
+
+### What changed, and what it was worth
+
+Two changes, in that order. The first is obvious and the second is the one that matters.
+
+**Deserializing in parallel.** `RecordSerializer.Deserialize` touches no shared state, so the rows
+come off the connection serially — `SqliteDataReader` is not thread-safe and a blob is valid only
+until the next `Read` — and the expensive half fans out at `ProcessorCount - 1`. Restore fell to
+410 / 554 / 599 ms. That is 3.7x on bo3 and 4.6x on bo1, and it still did not beat the cold index on
+any of the three.
+
+**Not deserializing at all until the file is known to be current.** The freshness check is a content
+hash, `content_hash` has been its own column since the schema was written, and the indexer already
+had the file's text in hand on a parallel worker. So `LoadAll` now returns `CachedEntry` — the hash
+and the blob, unopened — and the inflate and parse happen inside the indexer's per-file loop, behind
+the check. A file that changed costs one hash and never touches its blob.
+
+| | files | cache read | index | **warm start** | cold index |
+|---|---:|---:|---:|---:|---:|
+| bo3 | 1,085 | 13 ms | 464 ms | **477 ms** | 369 ms |
+| cod4 | 904 | 27 ms | 510 ms | **537 ms** | 210 ms |
+| bo1 | 2,963 | 54 ms | 847 ms | **902 ms** | 813 ms |
+
+**3.5x, 1.8x and 3.6x on the warm start**, and the serial stage is gone: 13–54 ms to read the blobs,
+against 720–2,747 ms to read and materialise them.
+
+### The cache still does not pay for itself on this machine, and the reason is the format
+
+Read the last two columns rather than the improvement. A warm start is still no faster than a cold
+one on a 24-core box — 477 against 369 on bo3, 537 against 210 on cod4, 902 against 813 on bo1.
+
+The instrumented breakdown says why. `index.restore` is now 90–98% of warm thread-time: 9,086 ms on
+bo3 across 1,085 files, which is the same order as the analysis it replaces. **Inflating and parsing
+a record costs about what lexing, preprocessing, parsing and extracting the source costs.** The cache
+is not saving work so much as trading one parse for another.
+
+That leaves it earning its place only on the machines where total CPU matters more than wall-clock —
+restore is roughly 5x less thread-time than analysis, so a four-core laptop still wins where a
+twenty-four-core desktop breaks even. Which is a reason to keep it, not a reason to be pleased with
+it.
+
+**Gzip is not the cost, and was measured rather than assumed.** Storing the JSON uncompressed:
+
+| | warm start, gzipped | uncompressed | cache file |
+|---|---:|---:|---|
+| bo3 | 477 ms | 489 ms | 21.0 → 106.0 MB |
+| cod4 | 537 ms | 654 ms | 23.0 → 132.5 MB |
+| bo1 | 902 ms | 913 ms | 63.6 → 328.4 MB |
+
+Flat to worse, for five times the disk. The compression was reverted. The remaining lever, if the
+cache is ever to beat a cold index outright, is the JSON itself — a compact binary record, not a
+different compressor. Nobody should reach for that without re-running the table above first: on a
+machine with fewer cores the cold column moves and the conclusion with it.
+
+### What this does NOT change
+
+The cold index, the phase shares, the lint pass and completion are all untouched — this is the other
+arm of the fork. The keystroke path never reads the cache at all.
+
 ## Reading the reports
 
 Each game writes `temp/gscode-perf-<game>.html`; `GSCODE_PERF_REPORT` overrides the directory.
@@ -1170,7 +1264,11 @@ in-process, while the server indexes cold at `ProcessorCount - 1`:
 2. Launch the extension against the tools root (see the client `.env` debug flow, or install the
    packaged extension).
 3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and
-   read the "indexing complete" line each time.
+   read the "indexing complete" line each time. That line now splits out `cache`, so a warm start is
+   readable without a second measurement.
+
+   The harness answers the same question without the editor: `WarmIndex_WhereTheTimeGoes` populates a
+   database, drains the writer and indexes again, reporting the cache read and the index separately.
 4. For the steady-state working set, hover the status bar once the process settles. That is the only
    readout — it is pushed as a notification, not logged.
 
@@ -1218,7 +1316,8 @@ Measured on the local BO3-tools machine (corpus not committed):
 | Scenario | Corpus size | Measured | Budget | Within budget |
 |---|---|---|---|---|
 | Cold index | 1,105 files | 5.5 s | < 60 s | yes |
-| Warm start | 1,105 files | 2.6 s | < 5 s | yes |
+| Warm start *(stale; see the warm-start section)* | 1,105 files | 2.6 s | < 5 s | yes |
+| Warm start, harness, 2026-08-20 | 1,085 files (bo3) | 477 ms | < 5 s | yes |
 | Steady-state memory (cold, before compaction) | 1,105 files | 390.3 MB | < 400 MB | just inside |
 | Steady-state memory (warm) | 1,105 files | 212.2 MB | < 400 MB | yes |
 | Live managed set (either path) | 1,105 files | ~115 MB | — | — |

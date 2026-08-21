@@ -10,6 +10,7 @@ using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
+using GSCode.Workspace.Cache;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
@@ -35,6 +36,13 @@ namespace GSCode.Server.Tests.Corpus;
 [Collection(GameProfileCollection.Name)]
 public class CorpusPerfTests
 {
+    /// <summary>
+    /// Stands in for <c>ServerBuildIdentity.Compute</c>, which keys the real cache on the bundled
+    /// data files. Any constant works here as long as both opens agree: a mismatch makes
+    /// <c>SqliteCache.Open</c> discard the database, and the "warm" run would silently be a cold one.
+    /// </summary>
+    private const string WarmCacheIdentity = "warm-perf-identity";
+
     private readonly ITestOutputHelper _output;
 
     public CorpusPerfTests(ITestOutputHelper output)
@@ -219,6 +227,211 @@ public class CorpusPerfTests
         {
             GameProfile.Select(previous.ShortName);
         }
+    }
+
+    /// <summary>
+    /// Where a WARM start spends its time — the path a user takes on every start after their
+    /// first, and the one nothing in this class has ever timed.
+    ///
+    /// <see cref="ColdIndex_WhereTheTimeGoes"/> attaches no cache on purpose, and its comment says
+    /// why: "a warm run measures the restore path instead, which is a different question with a
+    /// different answer". That question was then never asked. Everything measured since has landed
+    /// on the cold arm — the server GC, the pruned enumeration, the one-pass reader — which took a
+    /// BO3 cold index from 2.6 s to under one. The arm that got none of it is now the one worth
+    /// looking at, and the last warm figure on record (2.6 s) predates all three.
+    ///
+    /// The cache read is timed SEPARATELY from the index, because they are not the same shape and
+    /// one number cannot say which to attack. It is what found the problem: <c>LoadAll</c> was a
+    /// single thread gzip-inflating and JSON-parsing every record to completion before
+    /// <c>IndexAsync</c> was called at all, and in the server it was not merely unsplit but
+    /// entirely OUTSIDE the stopwatch, being an argument to the <c>UseCache</c> call that precedes
+    /// the timed block. Measured here for the first time it was 91% of a warm start.
+    ///
+    /// It now reads blobs only, so this stage is the SQLite read and the deserialize shows up under
+    /// <c>index.restore</c> on the indexing threads. Keep both numbers: the point of the split is
+    /// that either half can regress on its own.
+    ///
+    /// Two indexes per game. The first exists only to leave a populated database behind, and its
+    /// drain is not optional: the writer serializes and gzips on its own thread well after
+    /// <c>IndexAsync</c> returns, so without <c>WaitForIdleAsync</c> the measured run restores
+    /// whatever happened to have been flushed and reports a warm start that is half cold.
+    /// </summary>
+    [Fact]
+    public async Task WarmIndex_WhereTheTimeGoes()
+    {
+        bool measured = false;
+
+        if ( CorpusFixture.Available )
+        {
+            await MeasureWarmIndexAsync(GameProfile.BlackOps3, CorpusFixture.Resolver);
+            measured = true;
+        }
+
+        // The same two as the cold sweep, and for the same reasons: CoD4 is the #include dialect,
+        // and BO1 is the only corpus large enough for a per-record cost to be visible.
+        foreach ( GameProfile profile in new[] { GameProfile.Cod4, GameProfile.BlackOps } )
+        {
+            GameCorpus? corpus = GameCorpusFixture.For(profile);
+            if ( corpus is null )
+            {
+                continue;
+            }
+
+            GameCorpus captured = corpus;
+            await MeasureWarmIndexAsync(captured.Profile, () => GameCorpusFixture.Resolver(captured));
+            measured = true;
+        }
+
+        if ( !measured )
+        {
+            _output.WriteLine("SKIPPED: no %GSCODE_CORPUS_BO3%, %GSCODE_CORPUS_COD4% or %GSCODE_CORPUS_BO1% found.");
+        }
+    }
+
+    private async Task MeasureWarmIndexAsync(GameProfile profile, Func<PathResolver> resolverFactory)
+    {
+        GameProfile previous = GameProfile.Active;
+        string databasePath = Path.Combine(Path.GetTempPath(), $"gscode-warm-{Guid.NewGuid():N}.db");
+
+        try
+        {
+            GameProfile.Select(profile.ShortName);
+
+            int dropped = await PopulateCacheAsync(databasePath, resolverFactory);
+
+            // Fresh everything, so nothing the populating run interned, resolved or committed is
+            // available to the measured one. Only the database file crosses between them.
+            PathResolver resolver = resolverFactory();
+            NameTable names = new();
+            ScriptDatabase database = new();
+            WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+
+            await using SqliteCache cache = SqliteCache.Open(databasePath, WarmCacheIdentity);
+
+            PerfTracker.Reset();
+
+            Stopwatch restoreWatch = Stopwatch.StartNew();
+            IReadOnlyDictionary<string, CachedEntry> restored = cache.LoadAll();
+            restoreWatch.Stop();
+
+            indexer.UseCache(cache, restored);
+
+            Stopwatch indexWatch = Stopwatch.StartNew();
+            IndexOutcome outcome = await indexer.IndexAsync(
+                IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+            indexWatch.Stop();
+
+            double restoreMs = restoreWatch.Elapsed.TotalMilliseconds;
+            double indexMs = indexWatch.Elapsed.TotalMilliseconds;
+            double startMs = restoreMs + indexMs;
+            long databaseBytes = DatabaseBytes(databasePath);
+
+            _output.WriteLine("");
+            _output.WriteLine(
+                $"########## {profile.ShortName} warm start: {outcome.Total} files in {startMs:F0} ms "
+                + $"({outcome.Restored} restored, {outcome.Total - outcome.Restored} re-analysed)");
+
+            // Two stages, and the split moved once the deserialize did. This first one is now the
+            // SQLite read alone — blobs off the connection, nothing inflated — so a large figure
+            // here means the database itself is slow, not that the records are expensive. The
+            // records became expensive inside the index instead, under `index.restore`.
+            _output.WriteLine(
+                $"     cache read (serial) {restoreMs,8:F0} ms  {restored.Count,7:N0} records  "
+                + $"{restoreMs / startMs * 100,5:F1}% of warm start");
+            _output.WriteLine(
+                $"     index               {indexMs,8:F0} ms  {outcome.Total,7:N0} files    "
+                + $"{indexMs / startMs * 100,5:F1}% of warm start");
+            _output.WriteLine(
+                $"     per record          {(restored.Count == 0 ? 0 : restoreMs / restored.Count * 1000),8:F0} us  "
+                + $"cache file {databaseBytes / 1048576.0:F1} MB");
+
+            // Not fatal, but it makes every number above a mixture: a dropped write is a file the
+            // populating run never persisted, so the measured run re-analysed it and charged the
+            // time to the index rather than to the restore.
+            if ( dropped > 0 || outcome.Restored != outcome.Total )
+            {
+                _output.WriteLine(
+                    $"     WARNING: not fully warm - {dropped:N0} write(s) dropped while populating, "
+                    + $"{outcome.Total - outcome.Restored:N0} file(s) re-analysed. Read the split with that in mind.");
+            }
+
+            Dictionary<string, (double Milliseconds, long Count)> scopes = [];
+            PerfTracker.Snapshot(scopes);
+
+            if ( scopes.Count == 0 )
+            {
+                _output.WriteLine("     scopes: not instrumented (rebuild with -p:GscodeInstrumentation=true)");
+            }
+            else
+            {
+                // Same two denominators as the cold sweep, and the same reason. index.restore is
+                // the per-file hash-and-commit inside IndexAsync, which is NOT the LoadAll above:
+                // one is the deserialize, the other is the freshness check that decides whether the
+                // deserialized record may be used at all.
+                string[] topLevel = ["index.read", "index.analyse", "index.commit", "index.enqueue", "index.restore"];
+                double threadTime = scopes.Where(s => topLevel.Contains(s.Key)).Sum(s => s.Value.Milliseconds);
+
+                foreach ( KeyValuePair<string, (double Milliseconds, long Count)> scope in scopes
+                    .Where(s => s.Key != "index.total")
+                    .OrderByDescending(s => s.Value.Milliseconds) )
+                {
+                    bool nested = !topLevel.Contains(scope.Key) && scope.Key != "index.enumerate";
+                    string share = scope.Key == "index.enumerate"
+                        ? $"{scope.Value.Milliseconds / indexMs * 100,5:F1}% of INDEX WALL (serial)"
+                        : $"{scope.Value.Milliseconds / threadTime * 100,5:F1}% of thread-time{(nested ? " (nested)" : "")}";
+
+                    _output.WriteLine(
+                        $"     {scope.Key,-20} {scope.Value.Milliseconds,8:F0} ms  {scope.Value.Count,7:N0} calls  {share}");
+                }
+            }
+
+            PerfReport.Memory memory = PerfReport.Sample();
+            _output.WriteLine(
+                $"     memory: live {memory.ManagedLive / 1048576.0:F0} MB | heap {memory.HeapSize / 1048576.0:F0} MB | "
+                + $"fragmented {memory.Fragmented / 1048576.0:F0} MB | working set {memory.WorkingSet / 1048576.0:F0} MB");
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
+            SqliteCache.DeleteDatabase(databasePath);
+        }
+    }
+
+    /// <summary>
+    /// Indexes once into a fresh cache and waits for the writer to drain, so the database is
+    /// complete before anything reads it. Returns the writes the channel refused, which is the
+    /// difference between a warm start and a warm start that quietly re-analyses part of the tree.
+    /// </summary>
+    private static async Task<int> PopulateCacheAsync(string databasePath, Func<PathResolver> resolverFactory)
+    {
+        PathResolver resolver = resolverFactory();
+        NameTable names = new();
+        ScriptDatabase database = new();
+        WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+
+        await using SqliteCache cache = SqliteCache.Open(databasePath, WarmCacheIdentity);
+        indexer.UseCache(cache, cache.LoadAll());
+
+        await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+        await cache.WaitForIdleAsync(CancellationToken.None);
+
+        return cache.DroppedWrites;
+    }
+
+    /// <summary>The cache and its two SQLite side files, which is what a user's disk actually holds.</summary>
+    private static long DatabaseBytes(string databasePath)
+    {
+        long total = 0;
+        foreach ( string suffix in new[] { "", "-wal", "-shm" } )
+        {
+            FileInfo file = new(databasePath + suffix);
+            if ( file.Exists )
+            {
+                total += file.Length;
+            }
+        }
+
+        return total;
     }
 
     /// <summary>

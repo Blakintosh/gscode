@@ -124,9 +124,10 @@ public sealed class WorkspaceIndexer
     // path → lazily lexed insert target, shared by every file that inserts it.
     private readonly ConcurrentDictionary<string, Lazy<InsertedFile?>> _gshCache = new(StringComparer.Ordinal);
 
-    // Optional persistent cache and its cold-restore snapshot (set via UseCache).
+    // Optional persistent cache and its warm-restore snapshot (set via UseCache). The snapshot
+    // holds blobs rather than records: see CachedEntry for why the deserialize belongs down here.
     private SqliteCache? _cache;
-    private IReadOnlyDictionary<string, ScriptRecord> _restored = new Dictionary<string, ScriptRecord>();
+    private IReadOnlyDictionary<string, CachedEntry> _restored = new Dictionary<string, CachedEntry>();
 
     /// <summary>Reads the current resolver each call, so resolver swaps take effect immediately.</summary>
     private readonly IHeaderMacroCache? _headerCache;
@@ -156,7 +157,7 @@ public sealed class WorkspaceIndexer
     }
 
     /// <summary>Enables persistent caching: unchanged files restore from <paramref name="restored"/>, fresh analyses are written to <paramref name="cache"/>.</summary>
-    public void UseCache(SqliteCache cache, IReadOnlyDictionary<string, ScriptRecord> restored)
+    public void UseCache(SqliteCache cache, IReadOnlyDictionary<string, CachedEntry> restored)
     {
         _cache = cache;
         _restored = restored;
@@ -352,20 +353,33 @@ public sealed class WorkspaceIndexer
         }
 
         // Restore from cache when the on-disk content matches what was analysed before.
-        if ( allowRestore && _restored.TryGetValue(normalized, out ScriptRecord? cached) )
+        //
+        // The hash is checked BEFORE the record is materialised, which is the whole point of
+        // holding blobs rather than records: a file that has changed costs one hash here and never
+        // pays the gzip inflation or the JSON parse behind it. On a genuinely warm start that saves
+        // nothing, since every file matches — what it saves is doing all of that work serially at
+        // startup, ahead of this loop, instead of on the loop's own threads.
+        if ( allowRestore && _restored.TryGetValue(normalized, out CachedEntry? cached) )
         {
             PerfTracker.Begin("index.restore");
-            bool matches = cached.ContentHash == ScriptDatabase.ComputeContentHash(content);
-            if ( matches )
+
+            ScriptRecord? restored = null;
+            if ( cached.ContentHash == ScriptDatabase.ComputeContentHash(content) )
             {
-                _database.CommitRecord(cached);
+                // Null when the blob is corrupt, which falls through to a normal analysis below
+                // rather than failing the file — the same outcome a missing cache entry has.
+                restored = cached.Materialize();
+                if ( restored is not null )
+                {
+                    _database.CommitRecord(restored);
+                }
             }
 
             PerfTracker.End();
 
-            if ( matches )
+            if ( restored is not null )
             {
-                return new FileOutcome(Restored: true, Record: cached);
+                return new FileOutcome(Restored: true, Record: restored);
             }
         }
 

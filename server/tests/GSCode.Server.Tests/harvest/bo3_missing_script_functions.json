@@ -1,6 +1,6 @@
 {
   "game": "bo3",
-  "scriptsSwept": 980,
+  "scriptsSwept": 986,
   "distinct": 6,
   "functions": [
     {
@@ -17,11 +17,11 @@
         "Gsc"
       ],
       "sites": [
-        "scripts\\shared\\vehicles\\_quadtank.gsc(110)",
-        "scripts\\shared\\vehicles\\_quadtank.gsc(366)",
-        "scripts\\shared\\vehicles\\_quadtank.gsc(447)",
-        "scripts\\shared\\vehicles\\_quadtank.gsc(603)",
-        "scripts\\shared\\vehicles\\_quadtank.gsc(668)"
+        "scripts/shared/vehicles/_quadtank.gsc(110)",
+        "scripts/shared/vehicles/_quadtank.gsc(366)",
+        "scripts/shared/vehicles/_quadtank.gsc(447)",
+        "scripts/shared/vehicles/_quadtank.gsc(603)",
+        "scripts/shared/vehicles/_quadtank.gsc(668)"
       ],
       "argumentShapes": [
         {
@@ -54,7 +54,7 @@
         "Gsc"
       ],
       "sites": [
-        "scripts\\shared\\vehicles\\_quadtank.gsc(109)"
+        "scripts/shared/vehicles/_quadtank.gsc(109)"
       ],
       "argumentShapes": [
         {
@@ -87,7 +87,7 @@
         "Gsc"
       ],
       "sites": [
-        "scripts\\shared\\vehicles\\_quadtank.gsc(599)"
+        "scripts/shared/vehicles/_quadtank.gsc(599)"
       ],
       "argumentShapes": [
         {
@@ -120,7 +120,7 @@
         "Gsc"
       ],
       "sites": [
-        "scripts\\shared\\vehicles\\_quadtank.gsc(1741)"
+        "scripts/shared/vehicles/_quadtank.gsc(1741)"
       ],
       "argumentShapes": [
         {
@@ -146,7 +146,7 @@
         "Gsc"
       ],
       "sites": [
-        "scripts\\shared\\vehicles\\_quadtank.gsc(1754)"
+        "scripts/shared/vehicles/_quadtank.gsc(1754)"
       ],
       "argumentShapes": [
         {
@@ -172,7 +172,7 @@
         "Gsc"
       ],
       "sites": [
-        "scripts\\shared\\vehicles\\_quadtank.gsc(1761)"
+        "scripts/shared/vehicles/_quadtank.gsc(1761)"
       ],
       "argumentShapes": [
         {

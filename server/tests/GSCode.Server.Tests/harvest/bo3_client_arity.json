@@ -1,6 +1,6 @@
 {
   "game": "bo3",
-  "clientScriptsSwept": 316,
+  "clientScriptsSwept": 318,
   "distinct": 52,
   "predictedLocalClientNum": 31,
   "scoring": "predicted 31: 31 correct, 0 wrong (precision 100.0%); 2 known localClientNum names not predicted.",
@@ -29,11 +29,11 @@
         "undefined"
       ],
       "sites": [
-        "scripts\\mp\\gametypes\\_globallogic.csc(153)",
-        "scripts\\mp\\killstreaks\\_airsupport.csc(17)",
-        "scripts\\mp\\killstreaks\\_airsupport.csc(19)",
-        "scripts\\mp\\killstreaks\\_ai_tank.csc(158)",
-        "scripts\\mp\\killstreaks\\_dogs.csc(267)"
+        "scripts/mp/gametypes/_globallogic.csc(153)",
+        "scripts/mp/killstreaks/_airsupport.csc(17)",
+        "scripts/mp/killstreaks/_airsupport.csc(19)",
+        "scripts/mp/killstreaks/_ai_tank.csc(158)",
+        "scripts/mp/killstreaks/_dogs.csc(267)"
       ]
     },
     {
@@ -56,11 +56,11 @@
         "n_local_client"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_qrdrone.csc(337)",
-        "scripts\\mp\\killstreaks\\_qrdrone.csc(341)",
-        "scripts\\mp\\killstreaks\\_qrdrone.csc(361)",
-        "scripts\\mp\\killstreaks\\_rcbomb.csc(271)",
-        "scripts\\mp\\killstreaks\\_rcbomb.csc(294)"
+        "scripts/mp/killstreaks/_qrdrone.csc(337)",
+        "scripts/mp/killstreaks/_qrdrone.csc(341)",
+        "scripts/mp/killstreaks/_qrdrone.csc(361)",
+        "scripts/mp/killstreaks/_rcbomb.csc(271)",
+        "scripts/mp/killstreaks/_rcbomb.csc(294)"
       ]
     },
     {
@@ -97,11 +97,11 @@
         "\"J_SpineUpper\""
       ],
       "sites": [
-        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(134)",
-        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(138)",
-        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(142)",
-        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(146)",
-        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(154)"
+        "scripts/shared/ai/archetype_apothicon_fury.csc(134)",
+        "scripts/shared/ai/archetype_apothicon_fury.csc(138)",
+        "scripts/shared/ai/archetype_apothicon_fury.csc(142)",
+        "scripts/shared/ai/archetype_apothicon_fury.csc(146)",
+        "scripts/shared/ai/archetype_apothicon_fury.csc(154)"
       ]
     },
     {
@@ -122,11 +122,11 @@
         "local_client_num"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_killstreak_detect.csc(58)",
-        "scripts\\mp\\killstreaks\\_killstreak_detect.csc(137)",
-        "scripts\\mp\\killstreaks\\_killstreak_detect.csc(179)",
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(41)",
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(87)"
+        "scripts/mp/killstreaks/_killstreak_detect.csc(58)",
+        "scripts/mp/killstreaks/_killstreak_detect.csc(137)",
+        "scripts/mp/killstreaks/_killstreak_detect.csc(179)",
+        "scripts/mp/killstreaks/_remotemissile.csc(41)",
+        "scripts/mp/killstreaks/_remotemissile.csc(87)"
       ]
     },
     {
@@ -149,11 +149,11 @@
         "self.localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\callbacks_shared.csc(868)",
-        "scripts\\shared\\debug_menu_shared.csc(35)",
-        "scripts\\shared\\enemy_highlight.csc(63)",
-        "scripts\\shared\\enemy_highlight.csc(192)",
-        "scripts\\shared\\enemy_highlight.csc(210)"
+        "scripts/shared/callbacks_shared.csc(868)",
+        "scripts/shared/debug_menu_shared.csc(35)",
+        "scripts/shared/enemy_highlight.csc(63)",
+        "scripts/shared/enemy_highlight.csc(192)",
+        "scripts/shared/enemy_highlight.csc(210)"
       ]
     },
     {
@@ -176,11 +176,11 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\exploder_shared.csc(642)",
-        "scripts\\shared\\exploder_shared.csc(649)",
-        "scripts\\shared\\fx_shared.csc(252)",
-        "scripts\\shared\\fx_shared.csc(267)",
-        "scripts\\shared\\fx_shared.csc(275)"
+        "scripts/shared/exploder_shared.csc(642)",
+        "scripts/shared/exploder_shared.csc(649)",
+        "scripts/shared/fx_shared.csc(252)",
+        "scripts/shared/fx_shared.csc(267)",
+        "scripts/shared/fx_shared.csc(275)"
       ]
     },
     {
@@ -201,11 +201,11 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_raps.csc(120)",
-        "scripts\\mp\\_destructible.csc(20)",
-        "scripts\\shared\\ai\\archetype_apothicon_fury.csc(302)",
-        "scripts\\shared\\vehicle_shared.csc(364)",
-        "scripts\\zm\\_destructible.csc(20)"
+        "scripts/mp/killstreaks/_raps.csc(120)",
+        "scripts/mp/_destructible.csc(20)",
+        "scripts/shared/ai/archetype_apothicon_fury.csc(302)",
+        "scripts/shared/vehicle_shared.csc(364)",
+        "scripts/zm/_destructible.csc(20)"
       ]
     },
     {
@@ -226,11 +226,11 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\abilities\\gadgets\\_gadget_armor.csc(178)",
-        "scripts\\shared\\abilities\\gadgets\\_gadget_armor.csc(184)",
-        "scripts\\shared\\visionset_mgr_shared.csc(616)",
-        "scripts\\shared\\visionset_mgr_shared.csc(1007)",
-        "scripts\\zm\\zm_giant_teleporter.csc(53)"
+        "scripts/shared/abilities/gadgets/_gadget_armor.csc(178)",
+        "scripts/shared/abilities/gadgets/_gadget_armor.csc(184)",
+        "scripts/shared/visionset_mgr_shared.csc(616)",
+        "scripts/shared/visionset_mgr_shared.csc(1007)",
+        "scripts/zm/zm_giant_teleporter.csc(53)"
       ]
     },
     {
@@ -252,11 +252,11 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\ai\\systems\\gib.csc(487)",
-        "scripts\\shared\\end_game_taunts.csc(1215)",
-        "scripts\\shared\\vehicle_shared.csc(1325)",
-        "scripts\\shared\\vehicle_shared.csc(1329)",
-        "scripts\\shared\\vehicle_shared.csc(1399)"
+        "scripts/shared/ai/systems/gib.csc(487)",
+        "scripts/shared/end_game_taunts.csc(1215)",
+        "scripts/shared/vehicle_shared.csc(1325)",
+        "scripts/shared/vehicle_shared.csc(1329)",
+        "scripts/shared/vehicle_shared.csc(1399)"
       ]
     },
     {
@@ -279,10 +279,10 @@
         "%o_turret_sentry_close"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_emp.csc(110)",
-        "scripts\\mp\\killstreaks\\_microwave_turret.csc(135)",
-        "scripts\\mp\\killstreaks\\_turret.csc(33)",
-        "scripts\\shared\\weapons\\_riotshield.csc(65)"
+        "scripts/mp/killstreaks/_emp.csc(110)",
+        "scripts/mp/killstreaks/_microwave_turret.csc(135)",
+        "scripts/mp/killstreaks/_turret.csc(33)",
+        "scripts/shared/weapons/_riotshield.csc(65)"
       ]
     },
     {
@@ -305,10 +305,10 @@
         "self.sndWidowsWine"
       ],
       "sites": [
-        "scripts\\shared\\ai\\archetype_thrasher.csc(382)",
-        "scripts\\shared\\audio_shared.csc(1425)",
-        "scripts\\shared\\_burnplayer.csc(203)",
-        "scripts\\zm\\_zm_perk_widows_wine.csc(93)"
+        "scripts/shared/ai/archetype_thrasher.csc(382)",
+        "scripts/shared/audio_shared.csc(1425)",
+        "scripts/shared/_burnplayer.csc(203)",
+        "scripts/zm/_zm_perk_widows_wine.csc(93)"
       ]
     },
     {
@@ -330,11 +330,11 @@
         "self.localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\enemy_highlight.csc(164)",
-        "scripts\\shared\\enemy_highlight.csc(165)",
-        "scripts\\shared\\enemy_highlight.csc(166)",
-        "scripts\\shared\\enemy_highlight.csc(170)",
-        "scripts\\shared\\enemy_highlight.csc(171)"
+        "scripts/shared/enemy_highlight.csc(164)",
+        "scripts/shared/enemy_highlight.csc(165)",
+        "scripts/shared/enemy_highlight.csc(166)",
+        "scripts/shared/enemy_highlight.csc(170)",
+        "scripts/shared/enemy_highlight.csc(171)"
       ]
     },
     {
@@ -354,11 +354,11 @@
         "true"
       ],
       "sites": [
-        "scripts\\shared\\custom_class.csc(331)",
-        "scripts\\shared\\end_game_taunts.csc(857)",
-        "scripts\\shared\\end_game_taunts.csc(889)",
-        "scripts\\shared\\end_game_taunts.csc(1045)",
-        "scripts\\shared\\_character_customization.csc(144)"
+        "scripts/shared/custom_class.csc(331)",
+        "scripts/shared/end_game_taunts.csc(857)",
+        "scripts/shared/end_game_taunts.csc(889)",
+        "scripts/shared/end_game_taunts.csc(1045)",
+        "scripts/shared/_character_customization.csc(144)"
       ]
     },
     {
@@ -381,11 +381,11 @@
         "tempModel.modeRenderOptions"
       ],
       "sites": [
-        "scripts\\mp\\_end_game_flow.csc(99)",
-        "scripts\\shared\\end_game_taunts.csc(220)",
-        "scripts\\shared\\end_game_taunts.csc(1236)",
-        "scripts\\shared\\end_game_taunts.csc(1280)",
-        "scripts\\shared\\_character_customization.csc(296)"
+        "scripts/mp/_end_game_flow.csc(99)",
+        "scripts/shared/end_game_taunts.csc(220)",
+        "scripts/shared/end_game_taunts.csc(1236)",
+        "scripts/shared/end_game_taunts.csc(1280)",
+        "scripts/shared/_character_customization.csc(296)"
       ]
     },
     {
@@ -405,11 +405,11 @@
         "localclientnum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_missile_drone.csc(97)",
-        "scripts\\mp\\killstreaks\\_missile_drone.csc(139)",
-        "scripts\\zm\\_zm_audio.csc(223)",
-        "scripts\\zm\\_zm_weap_tesla.csc(81)",
-        "scripts\\zm\\_zm_weap_tesla.csc(123)"
+        "scripts/mp/killstreaks/_missile_drone.csc(97)",
+        "scripts/mp/killstreaks/_missile_drone.csc(139)",
+        "scripts/zm/_zm_audio.csc(223)",
+        "scripts/zm/_zm_weap_tesla.csc(81)",
+        "scripts/zm/_zm_weap_tesla.csc(123)"
       ]
     },
     {
@@ -429,11 +429,11 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_dart.csc(50)",
-        "scripts\\mp\\killstreaks\\_dart.csc(54)",
-        "scripts\\zm\\zm_giant_fx.csc(170)",
-        "scripts\\zm\\zm_giant_fx.csc(178)",
-        "scripts\\zm\\_zm_ai_wasp.csc(49)"
+        "scripts/mp/killstreaks/_dart.csc(50)",
+        "scripts/mp/killstreaks/_dart.csc(54)",
+        "scripts/zm/zm_giant_fx.csc(170)",
+        "scripts/zm/zm_giant_fx.csc(178)",
+        "scripts/zm/_zm_ai_wasp.csc(49)"
       ]
     },
     {
@@ -453,11 +453,11 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\ai\\archetype_secondary_animations.csc(119)",
-        "scripts\\shared\\ai\\archetype_secondary_animations.csc(141)",
-        "scripts\\shared\\ai\\archetype_secondary_animations.csc(281)",
-        "scripts\\shared\\clientfaceanim_shared.csc(123)",
-        "scripts\\shared\\scene_shared.csc(39)"
+        "scripts/shared/ai/archetype_secondary_animations.csc(119)",
+        "scripts/shared/ai/archetype_secondary_animations.csc(141)",
+        "scripts/shared/ai/archetype_secondary_animations.csc(281)",
+        "scripts/shared/clientfaceanim_shared.csc(123)",
+        "scripts/shared/scene_shared.csc(39)"
       ]
     },
     {
@@ -477,10 +477,10 @@
         "localclientnum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_missile_drone.csc(111)",
-        "scripts\\zm\\_zm_weap_tesla.csc(92)",
-        "scripts\\zm\\_zm_weap_tesla.csc(134)",
-        "scripts\\zm\\_zm_weap_thundergun.csc(71)"
+        "scripts/mp/killstreaks/_missile_drone.csc(111)",
+        "scripts/zm/_zm_weap_tesla.csc(92)",
+        "scripts/zm/_zm_weap_tesla.csc(134)",
+        "scripts/zm/_zm_weap_thundergun.csc(71)"
       ]
     },
     {
@@ -500,9 +500,9 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\_vehicle.csc(101)",
-        "scripts\\shared\\vehicle_shared.csc(164)",
-        "scripts\\shared\\weapons\\_hive_gun.csc(110)"
+        "scripts/mp/_vehicle.csc(101)",
+        "scripts/shared/vehicle_shared.csc(164)",
+        "scripts/shared/weapons/_hive_gun.csc(110)"
       ]
     },
     {
@@ -522,9 +522,9 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\_vehicle.csc(93)",
-        "scripts\\shared\\vehicle_shared.csc(149)",
-        "scripts\\shared\\weapons\\_hive_gun.csc(94)"
+        "scripts/mp/_vehicle.csc(93)",
+        "scripts/shared/vehicle_shared.csc(149)",
+        "scripts/shared/weapons/_hive_gun.csc(94)"
       ]
     },
     {
@@ -546,10 +546,10 @@
         "data_struct.characterIndex"
       ],
       "sites": [
-        "scripts\\shared\\end_game_taunts.csc(217)",
-        "scripts\\shared\\_character_customization.csc(125)",
-        "scripts\\shared\\_character_customization.csc(334)",
-        "scripts\\shared\\_character_customization.csc(350)"
+        "scripts/shared/end_game_taunts.csc(217)",
+        "scripts/shared/_character_customization.csc(125)",
+        "scripts/shared/_character_customization.csc(334)",
+        "scripts/shared/_character_customization.csc(350)"
       ]
     },
     {
@@ -569,9 +569,9 @@
         "localclientnum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_missile_drone.csc(105)",
-        "scripts\\zm\\_zm_weap_tesla.csc(87)",
-        "scripts\\zm\\_zm_weap_tesla.csc(129)"
+        "scripts/mp/killstreaks/_missile_drone.csc(105)",
+        "scripts/zm/_zm_weap_tesla.csc(87)",
+        "scripts/zm/_zm_weap_tesla.csc(129)"
       ]
     },
     {
@@ -591,9 +591,9 @@
         "localclientnum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_missile_drone.csc(105)",
-        "scripts\\zm\\_zm_weap_tesla.csc(87)",
-        "scripts\\zm\\_zm_weap_tesla.csc(129)"
+        "scripts/mp/killstreaks/_missile_drone.csc(105)",
+        "scripts/zm/_zm_weap_tesla.csc(87)",
+        "scripts/zm/_zm_weap_tesla.csc(129)"
       ]
     },
     {
@@ -613,8 +613,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\_destructible.csc(44)",
-        "scripts\\zm\\_destructible.csc(44)"
+        "scripts/mp/_destructible.csc(44)",
+        "scripts/zm/_destructible.csc(44)"
       ]
     },
     {
@@ -635,8 +635,8 @@
         "str_pool_name"
       ],
       "sites": [
-        "scripts\\shared\\clientfield_shared.csc(22)",
-        "scripts\\zm\\craftables\\_zm_craftables.csc(90)"
+        "scripts/shared/clientfield_shared.csc(22)",
+        "scripts/zm/craftables/_zm_craftables.csc(90)"
       ]
     },
     {
@@ -658,8 +658,8 @@
         "self.start"
       ],
       "sites": [
-        "scripts\\shared\\audio_shared.csc(863)",
-        "scripts\\shared\\util_shared.csc(1488)"
+        "scripts/shared/audio_shared.csc(863)",
+        "scripts/shared/util_shared.csc(1488)"
       ]
     },
     {
@@ -679,8 +679,8 @@
         "characterIndex"
       ],
       "sites": [
-        "scripts\\shared\\end_game_taunts.csc(210)",
-        "scripts\\shared\\_character_customization.csc(366)"
+        "scripts/shared/end_game_taunts.csc(210)",
+        "scripts/shared/_character_customization.csc(366)"
       ]
     },
     {
@@ -700,8 +700,8 @@
         "characterIndex"
       ],
       "sites": [
-        "scripts\\shared\\end_game_taunts.csc(209)",
-        "scripts\\shared\\_character_customization.csc(322)"
+        "scripts/shared/end_game_taunts.csc(209)",
+        "scripts/shared/_character_customization.csc(322)"
       ]
     },
     {
@@ -722,8 +722,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\mpdialog.csc(119)",
-        "scripts\\zm\\_zm_equipment.csc(82)"
+        "scripts/mp/mpdialog.csc(119)",
+        "scripts/zm/_zm_equipment.csc(82)"
       ]
     },
     {
@@ -743,8 +743,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(35)",
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(82)"
+        "scripts/mp/killstreaks/_remotemissile.csc(35)",
+        "scripts/mp/killstreaks/_remotemissile.csc(82)"
       ]
     },
     {
@@ -764,8 +764,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\visionset_mgr_shared.csc(737)",
-        "scripts\\shared\\visionset_mgr_shared.csc(798)"
+        "scripts/shared/visionset_mgr_shared.csc(737)",
+        "scripts/shared/visionset_mgr_shared.csc(798)"
       ]
     },
     {
@@ -785,8 +785,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\visionset_mgr_shared.csc(740)",
-        "scripts\\shared\\visionset_mgr_shared.csc(804)"
+        "scripts/shared/visionset_mgr_shared.csc(740)",
+        "scripts/shared/visionset_mgr_shared.csc(804)"
       ]
     },
     {
@@ -806,8 +806,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(40)",
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(86)"
+        "scripts/mp/killstreaks/_remotemissile.csc(40)",
+        "scripts/mp/killstreaks/_remotemissile.csc(86)"
       ]
     },
     {
@@ -827,8 +827,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\enemy_highlight.csc(32)",
-        "scripts\\shared\\enemy_highlight.csc(89)"
+        "scripts/shared/enemy_highlight.csc(32)",
+        "scripts/shared/enemy_highlight.csc(89)"
       ]
     },
     {
@@ -848,8 +848,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(54)",
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(104)"
+        "scripts/mp/killstreaks/_remotemissile.csc(54)",
+        "scripts/mp/killstreaks/_remotemissile.csc(104)"
       ]
     },
     {
@@ -870,8 +870,8 @@
         "trace[ \"position\" ]"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_microwave_turret.csc(179)",
-        "scripts\\mp\\killstreaks\\_microwave_turret.csc(377)"
+        "scripts/mp/killstreaks/_microwave_turret.csc(179)",
+        "scripts/mp/killstreaks/_microwave_turret.csc(377)"
       ]
     },
     {
@@ -891,8 +891,8 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(34)",
-        "scripts\\mp\\killstreaks\\_remotemissile.csc(81)"
+        "scripts/mp/killstreaks/_remotemissile.csc(34)",
+        "scripts/mp/killstreaks/_remotemissile.csc(81)"
       ]
     },
     {
@@ -912,7 +912,7 @@
         "\"helmet\""
       ],
       "sites": [
-        "scripts\\shared\\_character_customization.csc(58)"
+        "scripts/shared/_character_customization.csc(58)"
       ]
     },
     {
@@ -932,7 +932,7 @@
         "headIndex"
       ],
       "sites": [
-        "scripts\\shared\\_character_customization.csc(357)"
+        "scripts/shared/_character_customization.csc(357)"
       ]
     },
     {
@@ -952,7 +952,7 @@
         "anim_name"
       ],
       "sites": [
-        "scripts\\shared\\scene_shared.csc(43)"
+        "scripts/shared/scene_shared.csc(43)"
       ]
     },
     {
@@ -972,7 +972,7 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\ai\\archetype_secondary_animations.csc(231)"
+        "scripts/shared/ai/archetype_secondary_animations.csc(231)"
       ]
     },
     {
@@ -992,7 +992,7 @@
         "ent_1"
       ],
       "sites": [
-        "scripts\\shared\\beam_shared.csc(57)"
+        "scripts/shared/beam_shared.csc(57)"
       ]
     },
     {
@@ -1012,7 +1012,7 @@
         "ent_1"
       ],
       "sites": [
-        "scripts\\shared\\beam_shared.csc(28)"
+        "scripts/shared/beam_shared.csc(28)"
       ]
     },
     {
@@ -1032,7 +1032,7 @@
         "yaw_bits"
       ],
       "sites": [
-        "scripts\\shared\\ai\\systems\\gib.csc(265)"
+        "scripts/shared/ai/systems/gib.csc(265)"
       ]
     },
     {
@@ -1052,7 +1052,7 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\ai\\archetype_secondary_animations.csc(257)"
+        "scripts/shared/ai/archetype_secondary_animations.csc(257)"
       ]
     },
     {
@@ -1072,7 +1072,7 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\ai\\archetype_secondary_animations.csc(253)"
+        "scripts/shared/ai/archetype_secondary_animations.csc(253)"
       ]
     },
     {
@@ -1092,7 +1092,7 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\ai\\archetype_secondary_animations.csc(237)"
+        "scripts/shared/ai/archetype_secondary_animations.csc(237)"
       ]
     },
     {
@@ -1112,7 +1112,7 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\_character_customization.csc(437)"
+        "scripts/shared/_character_customization.csc(437)"
       ]
     },
     {
@@ -1132,7 +1132,7 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\shared\\ai\\archetype_secondary_animations.csc(178)"
+        "scripts/shared/ai/archetype_secondary_animations.csc(178)"
       ]
     },
     {
@@ -1152,7 +1152,7 @@
         "localClientNum"
       ],
       "sites": [
-        "scripts\\mp\\killstreaks\\_ai_tank.csc(180)"
+        "scripts/mp/killstreaks/_ai_tank.csc(180)"
       ]
     },
     {
@@ -1172,7 +1172,7 @@
         "model.origin"
       ],
       "sites": [
-        "scripts\\shared\\end_game_taunts.csc(198)"
+        "scripts/shared/end_game_taunts.csc(198)"
       ]
     },
     {
@@ -1192,7 +1192,7 @@
         "int( weapon_options[0] )"
       ],
       "sites": [
-        "scripts\\shared\\_weapon_customization_icon.csc(137)"
+        "scripts/shared/_weapon_customization_icon.csc(137)"
       ]
     }
   ]

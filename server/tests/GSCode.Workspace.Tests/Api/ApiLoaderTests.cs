@@ -58,7 +58,7 @@ public class ApiLoaderTests
 
         Assert.Contains("Parameters:", markdown, StringComparison.Ordinal);
         Assert.Contains("`value`", markdown, StringComparison.Ordinal);
-        Assert.Contains("float or integer", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("absolute value of", markdown, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

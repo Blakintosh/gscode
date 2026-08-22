@@ -21,6 +21,12 @@
 
 	let mobileOpen = $state(false);
 
+	/** Repository stars, fetched and cached by the root server load; null until known. */
+	const stars = $derived((page.data.githubStars as number | null | undefined) ?? null);
+	const starsLabel = $derived(
+		stars === null ? null : stars >= 1000 ? `${(stars / 1000).toFixed(1).replace(/\.0$/, '')}k` : `${stars}`
+	);
+
 	/** Where the site is inside the ecosystem: the wordmark carries the property name. */
 	const property = $derived(
 		page.url.pathname.startsWith('/library')
@@ -112,11 +118,14 @@
 				target="_blank"
 				rel="noopener noreferrer"
 				variant="ghost"
-				size="icon"
-				aria-label="GSCode on GitHub"
+				size={starsLabel ? 'sm' : 'icon'}
+				aria-label={starsLabel ? `GSCode on GitHub, ${stars} stars` : 'GSCode on GitHub'}
 				class="hidden sm:inline-flex"
 			>
 				<GithubIcon class="size-4.5" />
+				{#if starsLabel}
+					<span class="type-data text-2xs tracking-wider">{starsLabel}</span>
+				{/if}
 			</Button>
 			<ThemeToggle />
 			<Button
@@ -187,6 +196,9 @@
 						>
 							<GithubIcon class="size-4" />
 							GitHub
+							{#if starsLabel}
+								<span class="type-data text-dim ml-auto text-2xs tracking-wider">{starsLabel} stars</span>
+							{/if}
 						</a>
 						<div class="px-4 pt-4">
 							<Button

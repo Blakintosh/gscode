@@ -26,15 +26,15 @@
 		"A language server for Call of Duty's GSC and CSC: diagnostics, completions, navigation and a function library, before you build.";
 
 	const spec = [
-		['Diagnostics', 'Syntax, references, types, unused symbols', 'resolved across the whole mod folder, as you type'],
-		['Navigation', 'Definition · references · rename', 'call and type hierarchy, workspace symbols, document links'],
-		['Inference', 'Type-flow inlay hints', 'seeded with the engine’s object-field types'],
-		['Formatting', 'Whitespace-only', 'refuses syntax errors and re-checks its own output'],
-		['Code actions', 'Add / remove #using', 'backed by a namespace-usage lint'],
-		['Mod tools', 'share/raw + mods/<name>', 'indexed in isolation with overlay resolution; workspace-only mode too'],
+		['Diagnostics', 'Syntax, references, types, unused symbols', 'Catches mistakes across your whole mod as you type, before you ever build.'],
+		['Navigation', 'Definition · references · rename', 'Jump to where anything is defined, see everywhere it is used, and rename it safely.'],
+		['Inference', 'Type-flow inlay hints', 'Shows what type your variables hold, worked out from how the engine defines its data.'],
+		['Formatting', 'Whitespace-only', 'Tidies spacing and alignment without ever changing what your code does.'],
+		['Code actions', 'Add / remove #using', 'One-click fixes that keep a file importing exactly what it uses.'],
+		['Mod tools', 'share/raw + mods/<name>', 'Understands the mod tools layout, so your mod overrides stock scripts the same way the game sees them.'],
 		['Cache', 'Workspace cache', 'Pick up quickly from where you left off after a restart.'],
-		['Suppression', '#pragma warning disable', 'Suppress diagnostics per line, per code, or all.'],
-		['Open in Library', 'shift + F1', 'Shortcut to open the API library page for any built-in function.']
+		['Suppression', '#pragma warning disable', 'Silence a warning on one line, one rule, or everywhere.'],
+		['Open in Library', 'shift + F1', 'Press it on any built-in function to open its library page.']
 	] as const;
 </script>
 
@@ -125,7 +125,7 @@
 			{@render titleBlock(
 				'01',
 				'Diagnostics',
-				'3 err',
+				'2 err · 1 warn',
 				'Don\'t wait for Linker to tell you',
 				'Syntax errors, missing files, mismatched types, unused variables — analysed as you type and resolved across the whole mod folder, not just the open file. Errors show up where they are, in the same words the compiler would use.'
 			)}

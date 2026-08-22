@@ -56,14 +56,14 @@
 			</p>
 			<hr class="border-border my-2.5" />
 			<p class="text-muted-foreground text-sm leading-normal">
-				Get the requested weapon object based on the game-mode-agnostic weapon name string.
+				Get the requested weapon object based on game mode agnostic weapon name string.
 			</p>
 			<p class="type-label text-dim mt-3 mb-1.5">Parameters</p>
 			<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
 				<dt class="text-foreground font-mono">weaponName</dt>
-				<dd class="text-muted-foreground">The base weapon to return.</dd>
+				<dd class="text-muted-foreground">The name of the base weapon to return.</dd>
 				<dt class="text-foreground font-mono">attachmentName1</dt>
-				<dd class="text-muted-foreground">The first attachment name.</dd>
+				<dd class="text-muted-foreground">The first attachment name for the weapon.</dd>
 			</dl>
 		</Brush>
 	</div>
@@ -75,8 +75,7 @@
 	>
 		<Brush surface="popover" behind="background" cut={7} rim="edge" shadow="overlay" bodyClass="flex items-center gap-2.5 px-3 py-2 font-mono text-sm">
 			<i class="bg-primary marker"></i>
-			<span class="text-primary">/@ weapon @/</span>
-			<span class="text-foreground">w_weapon</span>
+			<span><span class="text-foreground">w_weapon</span><span class="text-primary">: entity</span></span>
 			<span class="text-dim">· inferred</span>
 		</Brush>
 	</div>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * The diagnostics story: a GSC file whose three problems are underlined one after
-	 * another as the widget scrolls into view, each error row landing just after its
+	 * another as the widget scrolls into view, each problem row landing just after its
 	 * squiggle. The underlines are shaku annotations in the code block; their staggered
 	 * reveal is CSS keyed off `data-in` on this element.
 	 */
@@ -11,31 +11,42 @@
 	let { active = false }: { active?: boolean } = $props();
 
 	const source = `#insert scripts\\shared\\shrd.gsh;
-//      ~~~~~~~~~~~~~~~~~~~~~~~~
+//      ~~~~~~~~~~~~~~~~~~~~~~~
 function write_some_code( weapon_name )
 {
  w_weapon = GetWeapon( weapon_name );
- ammo = w_weapon.clipsize * "2";
-//                           ~~~~~
- current_health = self.health;
-
- if ( current_health > 20 )
-    {
- self.health = current_health * 0.8;
-    }
-
+ ammo = 30;
+ foreach ( bullet in ammo )
+//                   ~~~~
+ {
+  self GiveMaxAmmo( w_weapon );
+ }
  return ammo
-//             ~
+//         ~
 }`;
 
+	// Codes and wording are the server's own — see DiagnosticMessages.cs; the editor
+	// shows them as `gscode-NNNN`, and 5033 is a warning there, not an error.
 	const errors = [
-		{ line: 1, code: 'GSC1010', text: "Unable to locate file 'scripts\\shared\\shrd.gsh' for insert directive." },
-		{ line: 5, code: 'GSC3021', text: "The operator '*' is not supported on types 'int' and 'string'." },
-		{ line: 11, code: 'GSC2004', text: "';' expected to end return statement." }
+		{
+			line: 1,
+			code: 'gscode-2006',
+			severity: 'error',
+			text: "Cannot find insert file 'scripts\\shared\\shrd.gsh'."
+		},
+		{
+			line: 6,
+			code: 'gscode-5033',
+			severity: 'warning',
+			text: "'foreach' needs an array or a struct, but this is int."
+		},
+		{ line: 10, code: 'gscode-3014', severity: 'error', text: "Expected ';' at the end of this statement." }
 	];
 
-	// Number of error rows shown so far; steps up in time with the underlines.
+	// Number of problem rows shown so far; steps up in time with the underlines.
 	let shown = $state(0);
+	const shownErrors = $derived(errors.slice(0, shown).filter((e) => e.severity === 'error').length);
+	const shownWarnings = $derived(shown - shownErrors);
 	$effect(() => {
 		if (!active) return;
 		if (reducedMotion()) {
@@ -53,15 +64,22 @@ function write_some_code( weapon_name )
 		<Code.Example value="1"><Code.Block code={source} /></Code.Example>
 	</Code.Root>
 
-	<!-- The Problems panel: mono rows on the recess, 2px Clip rule — error is the one meaning Clip carries. -->
+	<!-- The Problems panel: mono rows on the recess, a 2px severity rule — Clip red for errors, amber for the warning. -->
 	<div class="flex flex-col gap-2 self-start">
 		<p class="type-label text-dim flex items-center justify-between">
 			<span>Problems</span>
-			<span class="text-destructive tabular-nums">{shown} err</span>
+			<span class="tabular-nums"
+				><span class="text-destructive">{shownErrors} err</span>
+				<span aria-hidden="true">·</span>
+				<span class="text-warning">{shownWarnings} warn</span></span
+			>
 		</p>
 		{#each errors as err, i (err.code)}
 			<div
-				class="reveal bg-recess border-destructive inset-edge border-l-2 px-3.5 py-2.5 font-mono text-sm leading-normal"
+				class="reveal bg-recess inset-edge border-l-2 px-3.5 py-2.5 font-mono text-sm leading-normal {err.severity ===
+				'warning'
+					? 'border-warning'
+					: 'border-destructive'}"
 				data-in={i < shown ? '' : undefined}
 				aria-hidden={i < shown ? undefined : 'true'}
 			>

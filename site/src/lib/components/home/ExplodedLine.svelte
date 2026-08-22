@@ -33,7 +33,7 @@
 		{
 			game: 'bo3',
 			segments: [
-				{ text: 'self', callout: { kind: 'Entity', value: 'self · player', note: 'from the function’s call sites' } },
+				{ text: 'self', callout: { kind: 'Entity', value: 'self · entity', note: 'the engine object the function runs on' } },
 				{ text: ' ' },
 				{ text: 'thread', tone: 'keyword' },
 				{ text: ' ' },
@@ -56,7 +56,7 @@
 		{
 			game: 'cod4',
 			segments: [
-				{ text: 'self', callout: { kind: 'Entity', value: 'self · entity', note: 'from the function’s call sites' } },
+				{ text: 'self', callout: { kind: 'Entity', value: 'self · entity', note: 'the engine object the function runs on' } },
 				{ text: ' ' },
 				{ text: 'thread', tone: 'keyword' },
 				{ text: ' ' },
@@ -79,14 +79,14 @@
 		{
 			game: 'waw',
 			segments: [
-				{ text: 'self', callout: { kind: 'Entity', value: 'self · player', note: 'from the function’s call sites' } },
+				{ text: 'self', callout: { kind: 'Entity', value: 'self · entity', note: 'the engine object the function runs on' } },
 				{ text: ' ' },
 				{
 					text: 'setclientdvar',
 					callout: { kind: 'Builtin', value: '( dvar, value )', note: 'WaW wordfile · signature from CoD4' }
 				},
 				{ text: '( ', tone: 'punct' },
-				{ text: '"ui_hud_hardcore"', tone: 'string', callout: { kind: 'String', value: 'dvar name', note: 'completion from known dvars' } },
+				{ text: '"ui_hud_hardcore"', tone: 'string', callout: { kind: 'String', value: 'dvar name', note: '' } },
 				{ text: ', ', tone: 'punct' },
 				{ text: '1', callout: { kind: 'Literal', value: 'int', note: '' } },
 				{ text: ' );', tone: 'punct' }
@@ -95,7 +95,7 @@
 		{
 			game: 'mw2',
 			segments: [
-				{ text: 'self', callout: { kind: 'Entity', value: 'self · player', note: 'from the function’s call sites' } },
+				{ text: 'self', callout: { kind: 'Entity', value: 'self · entity', note: 'the engine object the function runs on' } },
 				{ text: ' ' },
 				{
 					text: 'iprintlnbold',
@@ -105,7 +105,7 @@
 				{
 					text: '&"PLATFORM_HOLD_TO_ACTIVATE"',
 					tone: 'string',
-					callout: { kind: 'Localised', value: 'localized string', note: 'looked up in the string tables' }
+					callout: { kind: 'Localised', value: 'localized string', note: '&"…" read as its own kind of literal' }
 				},
 				{ text: ' );', tone: 'punct' }
 			]
@@ -113,7 +113,7 @@
 		{
 			game: 'bo1',
 			segments: [
-				{ text: 'zombies', callout: { kind: 'Local', value: 'array of entity', note: 'inferred from the assignment' } },
+				{ text: 'zombies', callout: { kind: 'Local', value: 'array', note: 'inferred from the assignment' } },
 				{ text: ' = ', tone: 'punct' },
 				{
 					text: 'getaiarray',
@@ -247,7 +247,7 @@
 		>
 			<!-- The line. -->
 			<p
-				class="font-mono text-foreground overflow-x-auto py-1 text-lg leading-tight whitespace-nowrap sm:text-xl lg:text-2xl xl:text-3xl"
+				class="font-mono text-foreground overflow-x-auto py-1 text-[clamp(0.9375rem,1.85vw,1.5rem)] leading-tight whitespace-nowrap"
 				aria-label="Example line of {game?.name} script"
 			>
 				{#each line.segments as segment, i (index + ':' + i)}

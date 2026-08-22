@@ -78,6 +78,36 @@ median is dominated by whichever GC pause lands inside it. Deriving the total fr
 them agree by construction, but it also means anything `ScriptAnalysis.Analyze` does AROUND the four
 phases is no longer measured.
 
+### 2026-08-16: lex is half what it was, and is no longer the largest phase
+
+Three changes to the scan, all of them shape rather than algorithm — the position lookup resuming
+from the last token's line instead of binary-searching per token, the character runs read through
+`SearchValues<char>` instead of one character per iteration, and the dialect's keyword set answered
+by hash instead of by reading all two dozen entries. Uninstrumented, one run each, before and after
+in the same session on the same machine:
+
+| | files | total | lex | lex share | parse share |
+|---|---:|---:|---:|---:|---:|
+| cod4 before | 894 | 825 ms | 284 ms | 34.4% | 42.5% |
+| cod4 after | 894 | 764 ms | **144 ms** | **18.8%** | 49.3% |
+| bo3 before | 980 | 944 ms | 303 ms | 32.1% | 31.6% |
+| bo3 after | 980 | 612 ms | **121 ms** | **19.8%** | 30.3% |
+| bo1 before | 2,960 | 3,018 ms | 1,034 ms | 34.3% | 40.7% |
+| bo1 after | 2,960 | 2,306 ms | **443 ms** | **19.2%** | 47.6% |
+
+**Read the share, not the total.** Lex falls by 49%, 60% and 57% and its share drops about fifteen
+points on all three corpora, in the same direction and by nearly the same amount — that is the
+result. The totals are not admissible on their own at this sample size, and the intended control
+proves it rather than confirming anything: `parse` moved +7% on cod4 and −38% on bo3 between the
+same two runs, which is the quarter-sized swing this file warns about further down and not an
+effect of a change that never touched the parser.
+
+Behaviour was pinned before the timings were taken, since a scanner that is faster and wrong is
+worth nothing: every token's kind, offset, length and range was dumped for eleven hand-written
+sources covering each changed path plus 4,000 seeded-random strings over a GSC alphabet, before and
+after, 182,821 lines byte-identical. The corpus sweep then reported the same counts on both sides —
+2 of 894 on cod4, 2 of 980 on bo3, 6 of 2,960 on bo1, with the formatter's gates clean.
+
 ## Measured: the CROSS-FILE LINTS, which cost more than the parse
 
 The table above times `ScriptAnalysis.Analyze` only. Everything the editor runs ON TOP of that
@@ -329,7 +359,7 @@ The stage shares moved, in opposite directions:
   bo1 — 1.4–2.2 ms per file, and this sweep runs fourth, so every file was already in the OS cache.
   Instrumentation inflates `analyse`, which would push read's share *down*, so the figure is
   understated rather than the reverse. Unexplained; measure `File.ReadAllText` and its encoding
-  detection before assuming it is I/O.
+  detection before assuming it is I/O. **Answered 2026-08-16, below.**
 - **Enumeration is still not the bottleneck**, and bo1 confirms it from the other end: its
   160,382-file raw tree costs 162 ms, which is 9.7% of wall — the largest share of the three and
   still not worth attacking.
@@ -339,6 +369,33 @@ cod4 now measures 0 MB fragmented against 58 MB live. `System.GC.ConserveMemory`
 What remains is a 441 MB working set on cod4 and 847 MB on bo1 against ~0 fragmentation — pages not
 yet returned, which the compaction handles and which this sweep never runs. See the section after
 next.
+
+### 2026-08-16: `index.read` was the reader, not the disk
+
+The question above was whether `File.ReadAllText` or the disk owned that share. It was neither the
+disk nor the encoding detection: `File.ReadAllText` pulls the file through a 4 KB decode buffer and
+grows a builder as it goes, which is what an arbitrary stream needs and not what a script is. A
+script is read whole or not at all, so its byte count is known before a character is decoded and one
+`GetString` produces the final string. `PhysicalFileSystem.ReadAllText` now reads the bytes and
+decodes them once, recognising the byte-order marks longest-first so a UTF-32 mark is not read as
+the UTF-16 one it starts with, and replacing invalid bytes rather than throwing — which is what the
+framework method did, asserted against it directly in `PhysicalFileSystemTests`.
+
+Instrumented, one run each side:
+
+| | `index.read` before | after | cold index wall-clock |
+|---|---:|---:|---|
+| bo3 | 1,648 ms (3.7%) | **1,034 ms (2.4%)** | 2,092 → 1,976 ms |
+| cod4 | 723 ms (4.7%) | **413 ms (2.9%)** | 747 → 690 ms |
+| bo1 | 5,109 ms (11.7%) | **3,483 ms (8.5%)** | 2,219 → 2,062 ms |
+
+Roughly a third off the read stage on all three. Wall-clock moves far less, as it must — read is a
+small share of a run that is 78–93% analysis.
+
+Two caveats on this pair, both of which understate rather than flatter it: the baseline run's build
+compiled in only the `index.*` scopes while the after run also carried the nested `extract.*` and
+`commit.*` ones, so the *after* side paid more instrumentation overhead; and no memory figure is
+quoted from either, per the CAUTION above.
 
 ### How much to trust a single run
 
@@ -575,6 +632,11 @@ once per index, unconditionally, on a thread nobody is waiting on.
   *worse*, 486 → 596 MB of holes. One ratio cannot fit every file (bo1 spans 2.86 characters per
   token at p10 to 5.87 at p90), so sparse files over-allocated by nearly double and borderline
   arrays that had been *under* the threshold were pushed over it.
+- **Turning on the Performance analyzer category** (`dotnet_analyzer_diagnostic.category-Performance`)
+  found nothing on a hot path, 2026-08-16: three CA1859 interface-return suggestions on cold paths, one
+  CA1827 `Count()`-for-`Any()` on a folder-change notification, and thirty-eight CA1822 "could be
+  static" notes. The CA1827 was applied; the setting was not kept, since `TreatWarningsAsErrors`
+  would make every future note of that kind a build break for no measured gain.
 - **Renting the lexer's buffer from `ArrayPool<Token>.Shared`** fixed the fragmentation but
   **doubled retained memory** (bo1 146 → 279, cod4 51 → 126). The shared pool holds buffers per
   thread and per core across 23 indexing threads and does not release them under a forced gen2.

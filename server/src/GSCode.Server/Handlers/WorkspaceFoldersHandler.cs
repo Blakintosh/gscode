@@ -64,7 +64,7 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
             dropped);
 
         // Only worth re-indexing when a folder was added; a pure removal has nothing new.
-        if ( request.Event.Added.Count() > 0 )
+        if ( request.Event.Added.Any() )
         {
             IndexOutcome outcome = await _indexer
                 .IndexAsync(IndexingModeFor(_settings), NullIndexProgressListener.Instance, cancellationToken)

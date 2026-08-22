@@ -64,8 +64,8 @@ body{background:#07080C;color:#E2EAEC;font-family:'Sora',sans-serif;position:rel
 <div class="handle" style="left:28px;bottom:28px"></div>
 <div class="wrap">
   <div class="word"><img src="data:image/svg+xml;base64,${markB64}" alt="">gscode</div>
-  <div class="strap">The reference<br><em>everything else</em><br>is measured from</div>
-  <div class="lede">A language server for Black Ops III&rsquo;s GSC and CSC &mdash; diagnostics, completions and a function library, before you build.</div>
+  <div class="strap">IDE tooling for<br>Call of Duty<br><em>scripting</em></div>
+  <div class="lede">A language server for Call of Duty GSC and CSC, compatible with all VS Code-based IDEs.</div>
 </div>
 <div class="readout">gscode.net · <b>vs code</b></div>
 </body></html>`;

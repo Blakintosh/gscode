@@ -23,6 +23,7 @@
 			"label": "watch",
 			"type": "npm",
 			"script": "watch",
+			"path": "client",
 			"problemMatcher": "$tsc-watch",
 			"isBackground": true,
 			"presentation": {
@@ -45,7 +46,7 @@
 				"--nologo"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/../server"
+				"cwd": "${workspaceFolder}/server"
 			},
 			"problemMatcher": "$msCompile",
 			"presentation": {

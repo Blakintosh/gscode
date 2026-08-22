@@ -32,7 +32,7 @@ public class KeywordHoverTests
     private static async Task<Hover?> HoverAtAsync(string source, int line, int character, GameProfile? profile = null)
     {
         GameProfile game = profile ?? GameProfile.BlackOps3;
-        string path = @"C:\bo3\share\raw\scripts\main.gsc";
+        string path = @"c:\bo3\share\raw\scripts\main.gsc";
 
         DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
         OpenDocument document = documents.Open(path, source, 1);

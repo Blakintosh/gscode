@@ -20,7 +20,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class DocumentSymbolNamelessTests
 {
-    private static readonly string Path = @"C:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string Path = @"c:\bo3\share\raw\scripts\main.gsc";
 
     private static async Task<List<DocumentSymbol>> OutlineAsync(string text)
     {

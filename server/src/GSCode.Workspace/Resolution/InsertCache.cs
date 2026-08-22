@@ -65,6 +65,28 @@ public sealed class InsertCache : IHeaderMacroCache
     }
 
     /// <summary>
+    /// Offers a header the caller has already read and lexed, if nothing holds one yet.
+    ///
+    /// A <c>.gsh</c> is an index target in its own right AND an insert source, and those two paths
+    /// each read and lexed it independently. The indexer's analysis of the header produces exactly
+    /// what <see cref="GetOrAdd"/> would go on to build from scratch, so it is offered here instead.
+    ///
+    /// Offered rather than assigned, because the race is real and unordered: a <c>.gsc</c> that
+    /// inserts this header may be processed first and fill the entry itself. Whoever arrives first
+    /// wins, and the two would produce identical content anyway - same file, same lexer, same
+    /// profile. So this halves the header work rather than eliminating it, and it never discards a
+    /// contribution already walked against an entry that is equally current.
+    ///
+    /// <paramref name="lastWriteUtc"/> must be read BEFORE the content it describes. Taken after,
+    /// a write landing between the two would be stamped as already seen, and the entry would stay
+    /// stale until the file changed again.
+    /// </summary>
+    public void SeedIfAbsent(string resolvedPath, InsertedFile file, DateTime lastWriteUtc)
+    {
+        _entries.TryAdd(resolvedPath, new Entry(file, lastWriteUtc));
+    }
+
+    /// <summary>
     /// What a header CONTRIBUTES once walked - the macros it defines and the insert edges it
     /// carries - so the next file inserting it need not walk it again. Kept beside the lexed
     /// tokens because it is the same header, the same key and the same lifetime; a header whose

@@ -283,8 +283,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   effect immediately. Takes an optional `GameProfile`, null meaning `GameProfile.Active` at
   analysis time — which is what the server wants, selecting the game once at startup, and what
   a caller holding a profile must override: indexing under the wrong dialect does not fail, it
-  parses declarations away and leaves the store EMPTY. A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH
-  exactly once no matter how many scripts insert it; `InvalidateGsh` drops one on change.
+  parses declarations away and leaves the store EMPTY. Inserts go through the shared `InsertCache`
+  and a `ResolverInsertProvider`, the same two the document path uses, so each GSH is lexed once no
+  matter how many scripts insert it; `InvalidateGsh` drops one on change. The argument is optional
+  and the field is not — a caller supplying none gets its own cache rather than no cache.
   `IndexFile` is the single-file path the watcher reuses. `UseCache` enables warm-restore:
   the two-pass `IndexAsync` restores files whose on-disk content hash matches the cached
   `CachedEntry`, deserializing the blob only once that check passes and skipping the parse, then
@@ -374,9 +376,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Resolution/ResolverInsertProvider.cs
 
-- `sealed class ResolverInsertProvider` — the real #insert provider: resolves the raw
-  path through the asking file's ResolutionContext, reads and lexes the target. The
-  shared lexed-GSH cache arrives with the indexer (P5).
+- `sealed class ResolverInsertProvider` — the ONLY #insert provider: resolves the raw
+  path through the asking file's ResolutionContext, then takes the target from `InsertCache` or
+  reads and lexes it. Both the document path and `WorkspaceIndexer` use it; the indexer had a
+  private one of its own over a second cache of the same headers until they were merged.
 
 ## Resolution/IFileSystem.cs
 
@@ -599,6 +602,10 @@ are out.
 - Validated by last-write time rather than by an invalidation message, because a watcher that drops
   an event leaves a stale header — and a stale header changes what macros expand to with no error to
   trace back. A failed read is not cached. See `PERF.md` for what the two caches were worth.
+- `SeedIfAbsent` takes a header the indexer has already read and lexed as one of its own targets,
+  rather than letting the insert path build it a second time. `TryAdd`, not an assignment: a `.gsc`
+  inserting the header may get there first, and its entry is equally current and may already carry a
+  walked contribution. The stamp must be read BEFORE the content it describes.
 
 ## Resolution/RawWriteGuard.cs
 

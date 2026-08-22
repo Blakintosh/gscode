@@ -314,4 +314,35 @@ public class LocalReferencesTests
 
         Assert.False(LocalReferences.BindsName(Analyze(source), new Position(2, 1), "total"));
     }
+
+    [Fact]
+    public void BindsNameSeesAClassMemberTheMethodCanReach()
+    {
+        // The collision from OUTSIDE the function. Renaming `x` to `id` here would capture the
+        // method's `use( id )` — a read of the member — into the local, exactly the silent merge
+        // BindsName exists to refuse, just arriving from the enclosing class instead of the body.
+        string source =
+            "class Foo\n{\n\tvar id;\n\n\tfunction play()\n\t{\n\t\tx = 1;\n\t\tuse( id );\n\t}\n}\n";
+
+        Assert.True(LocalReferences.BindsName(Analyze(source), new Position(6, 2), "id"));
+    }
+
+    [Fact]
+    public void BindsNameSeesAnInfinityWardFileScopeConstant()
+    {
+        string source = "SPEED = 1.0;\nrun()\n{\n\tx = 1;\n\tuse( SPEED );\n}\n";
+
+        Assert.True(LocalReferences.BindsName(
+            Analyze(source, GameProfile.ModernWarfare2), new Position(3, 1), "SPEED", GameProfile.ModernWarfare2));
+    }
+
+    [Fact]
+    public void BindsNameSeesAGlobalObjectName()
+    {
+        // `level` is not the function's to bind, but renaming a local onto it would still capture
+        // every `level.` read in the body.
+        string source = "function f()\n{\n\tx = 1;\n\tlevel.time = x;\n}\n";
+
+        Assert.True(LocalReferences.BindsName(Analyze(source), new Position(2, 1), "level"));
+    }
 }

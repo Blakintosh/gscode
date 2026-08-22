@@ -125,9 +125,11 @@ public static class SemanticTokenBuilder
                 // function, a macro or a field is a question about the workspace, not about the
                 // characters, and that is the whole reason semantic tokens exist.
                 //
-                // Parameters and locals are NOT among them, though the legend has slots for both:
-                // SymbolKind has no member for either, so ClassifyReference has nothing to answer
-                // with and they fall through to TextMate's default variable styling.
+                // Parameters and locals are NOT among them: SymbolKind has no member for either,
+                // so ClassifyReference has nothing to answer with. Their slots in the legend are
+                // filled by the WORKSPACE layer instead — LocalReferences.SemanticTokens, merged
+                // in by the handler — because a local's identity is (function, name) in the AST,
+                // which is knowledge this extraction-level pass does not have.
                 return null;
         }
     }

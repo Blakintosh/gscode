@@ -1275,9 +1275,24 @@ public sealed class FlowTyper
         // The arguments are expressions in their own right and were never typed — the old code read
         // only the callee's name. A per-node map with holes wherever an argument sits is no use to a
         // rewriter, and inferring a parameter from its call sites needs exactly these values.
-        foreach ( ExprNode argument in call.Arguments )
+        //
+        // Except `self waittill( "damage", attacker, amount );`, which BINDS its trailing
+        // arguments — outputs the engine fills in, not reads (the same convention
+        // UnassignedVariableLint and LocalReferences honour). They must be REBOUND here, not
+        // typed through: reusing a name across a wait is ordinary GSC, and letting the old
+        // type survive the rebind is what made 5033 warn on `x = "s"; self waittill( "e", x );
+        // foreach ( i in x )`. The first argument is the event name, a genuine read.
+        bool bindsOutputs = AstSearch.IsWaittill(call.Callee);
+
+        for ( int index = 0; index < call.Arguments.Length; index++ )
         {
-            TypeOf(argument, environment);
+            if ( bindsOutputs && index > 0 && call.Arguments[index] is IdentifierNode bound )
+            {
+                environment[bound.Token.Text] = ScrValue.EngineBound;
+                continue;
+            }
+
+            TypeOf(call.Arguments[index], environment);
         }
 
         if ( call.Target is not null )

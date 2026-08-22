@@ -54,9 +54,11 @@ public class SemanticTokenBuilderTests
         //
         // The set below is exactly what ClassifyReference can return, not the whole legend. It
         // listed the legend once, which made this assertion vacuous in the direction that mattered:
-        // Parameter, Variable and Namespace are slots nothing produces — SymbolKind has no member
-        // for a parameter or a local — so naming them here asserted a superset that could never
-        // fail. If a new kind starts being emitted, this line should fail until it is considered.
+        // Parameter, Variable and Namespace are slots THIS pass never produces — SymbolKind has no
+        // member for a parameter or a local. The first two are filled by the workspace layer
+        // (LocalReferences.SemanticTokens) and merged in the handler, which is why they must stay
+        // out of this list: the builder emitting one would mean the layers' duties blurred. If a
+        // new kind starts being emitted here, this line should fail until it is considered.
         ImmutableArray<SemanticToken> tokens = Build(
             "#define CAP 5\nfunction f( p )\n{\n    wait 0.05;\n    x = self.health;\n    y = CAP;\n    g( p );\n}\n");
 

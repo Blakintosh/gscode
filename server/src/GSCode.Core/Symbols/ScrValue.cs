@@ -138,6 +138,13 @@ public enum ScrImprecision
 
     /// <summary>A global the selected dialect does not have, e.g. <c>world</c> before Black Ops III.</summary>
     DialectGlobalAbsent,
+
+    /// <summary>
+    /// An output the engine fills in — a <c>waittill</c>/<c>waittillmatch</c> bound argument. The
+    /// notify site decides the value, and may send fewer values than are bound, so undefined is
+    /// always among the possibilities.
+    /// </summary>
+    EngineBound,
 }
 
 /// <summary>
@@ -331,6 +338,16 @@ public readonly record struct ScrValue
 
     /// <summary>The empty set: a value that cannot exist. What a void call yields.</summary>
     public static ScrValue Nothing { get; } = new() { Types = ScrTypeSet.None };
+
+    /// <summary>
+    /// An output the engine fills in — a <c>waittill</c> bound argument. Every type is possible,
+    /// undefined included, because the notify site decides and may send fewer values than are bound.
+    /// </summary>
+    public static ScrValue EngineBound { get; } = new()
+    {
+        Types = ScrTypeSet.Universe,
+        Imprecision = ScrImprecision.EngineBound,
+    };
 
     public ScrTypeSet Types { get; init; }
 

@@ -3,6 +3,7 @@ using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
+using GSCode.Parser.Extraction;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax;
@@ -64,7 +65,7 @@ public static class LocalReferences
         }
 
         string name = token.Text;
-        ImmutableArray<LocalOccurrence>.Builder occurrences = ImmutableArray.CreateBuilder<LocalOccurrence>();
+        ImmutableArray<LocalUse>.Builder uses = ImmutableArray.CreateBuilder<LocalUse>();
 
         // The parameter list is part of the function, but not part of its body, so it is walked
         // separately. A parameter is where the name is introduced — the caller supplied the value —
@@ -73,29 +74,47 @@ public static class LocalReferences
         {
             if ( Matches(parameter.NameToken, name) )
             {
-                Add(parameter.NameToken, isWrite: true, occurrences);
+                Add(parameter.NameToken, isWrite: true, uses);
             }
         }
 
-        Collect(function.Body, name, occurrences);
+        Collect(function.Body, name, uses);
+
+        ImmutableArray<LocalOccurrence>.Builder occurrences =
+            ImmutableArray.CreateBuilder<LocalOccurrence>(uses.Count);
+        foreach ( LocalUse use in uses )
+        {
+            occurrences.Add(new LocalOccurrence(use.Token.RootRange, use.IsWrite, IsDeclaration: false));
+        }
 
         return MarkDeclaration(occurrences);
     }
 
     /// <summary>
-    /// Whether the function enclosing <paramref name="position"/> already binds
-    /// <paramref name="name"/> — a parameter, or anything written anywhere in the body.
+    /// Whether <paramref name="name"/> is already taken where <paramref name="position"/>'s
+    /// enclosing function can see it — a parameter, anything written anywhere in the body, or a
+    /// name that arrives from OUTSIDE the function: a global object, an Infinity Ward file-scope
+    /// constant, a class member.
     ///
     /// The collision test a rename has to make. Renaming `i` to a name the function already uses
     /// does not fail, it MERGES two variables into one, and the script keeps running while meaning
     /// something different — the worst shape a refactor can take in a language where an undefined
-    /// read is not an error.
+    /// read is not an error. The outside-in names are the same hazard in the other direction:
+    /// renaming a local onto a member the method reads captures every one of those reads, which is
+    /// why this applies the same list <see cref="IsFunctionScoped"/> does, spelled against the new
+    /// name rather than a token.
     /// </summary>
-    public static bool BindsName(ParseResult result, Position position, string name)
+    public static bool BindsName(ParseResult result, Position position, string name, GameProfile? profile = null)
     {
         if ( !TryFindLocal(result.Tree.Root, position, out PToken _, out FunctionNode function) )
         {
             return false;
+        }
+
+        GameProfile game = profile ?? GameProfile.Active;
+        if ( NameArrivesFromOutside(result, position, name, game) )
+        {
+            return true;
         }
 
         foreach ( ParameterNode parameter in function.Parameters )
@@ -106,18 +125,127 @@ public static class LocalReferences
             }
         }
 
-        ImmutableArray<LocalOccurrence>.Builder occurrences = ImmutableArray.CreateBuilder<LocalOccurrence>();
-        Collect(function.Body, name, occurrences);
+        ImmutableArray<LocalUse>.Builder uses = ImmutableArray.CreateBuilder<LocalUse>();
+        Collect(function.Body, name, uses);
 
-        foreach ( LocalOccurrence occurrence in occurrences )
+        foreach ( LocalUse use in uses )
         {
-            if ( occurrence.IsWrite )
+            if ( use.IsWrite )
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Semantic-token classification for every parameter and local in the file — the workspace
+    /// half of highlighting. <see cref="SemanticTokenBuilder"/> classifies what the reference
+    /// index knows (functions, classes, macros, fields) and lets everything else fall through,
+    /// because <see cref="SymbolKind"/> has no member for a parameter or a local; this walk
+    /// supplies those two from the AST, which is where a local's identity lives.
+    ///
+    /// A name is emitted only when the function BINDS it — a parameter, or written somewhere in
+    /// the body — and it does not arrive from outside. A bare read of a name nothing binds stays
+    /// uncoloured on purpose: it is undefined, and painting it like a variable would dress up
+    /// exactly the mistake the unassigned-variable lint exists to report.
+    /// </summary>
+    public static ImmutableArray<SemanticToken> SemanticTokens(
+        ParseResult result, GameProfile? profile = null)
+    {
+        GameProfile game = profile ?? GameProfile.Active;
+        ImmutableArray<SemanticToken>.Builder tokens = ImmutableArray.CreateBuilder<SemanticToken>();
+
+        foreach ( FunctionNode function in Functions(result.Tree.Root) )
+        {
+            ImmutableArray<LocalUse>.Builder uses = ImmutableArray.CreateBuilder<LocalUse>();
+            HashSet<string> parameters = new(StringComparer.OrdinalIgnoreCase);
+
+            foreach ( ParameterNode parameter in function.Parameters )
+            {
+                parameters.Add(parameter.NameToken.Text);
+                Add(parameter.NameToken, isWrite: true, uses);
+            }
+
+            Collect(function.Body, name: null, uses);
+
+            HashSet<string> written = new(StringComparer.OrdinalIgnoreCase);
+            foreach ( LocalUse use in uses )
+            {
+                if ( use.IsWrite )
+                {
+                    written.Add(use.Token.Text);
+                }
+            }
+
+            // Decided once per function rather than once per occurrence: the outside-in checks
+            // scan classes and file-scope declarations, and `i` does not change meaning between
+            // its uses.
+            Dictionary<string, bool> ownedByFunction = new(StringComparer.OrdinalIgnoreCase);
+
+            foreach ( LocalUse use in uses )
+            {
+                PToken token = use.Token;
+
+                // The characters at a macro invocation are the macro's, not a variable's, and the
+                // engine-supplied tokens are nobody's to colour — the same per-token guards
+                // IsFunctionScoped applies.
+                if ( token.Provenance.DefinitionSite is not null
+                    || token.Kind is TokenKind.Vararg or TokenKind.ThisThread )
+                {
+                    continue;
+                }
+
+                string name = token.Text;
+                bool isParameter = parameters.Contains(name);
+                if ( !isParameter && !written.Contains(name) )
+                {
+                    continue;
+                }
+
+                if ( !ownedByFunction.TryGetValue(name, out bool owned) )
+                {
+                    owned = !NameArrivesFromOutside(result, token.RootRange.Start, name, game);
+                    ownedByFunction[name] = owned;
+                }
+
+                if ( !owned )
+                {
+                    continue;
+                }
+
+                tokens.Add(new SemanticToken(
+                    token.RootRange.Start.Line,
+                    token.RootRange.Start.Character,
+                    name.Length,
+                    isParameter ? SemanticTokenType.Parameter : SemanticTokenType.Variable));
+            }
+        }
+
+        return tokens.ToImmutable();
+    }
+
+    /// <summary>
+    /// Every function in the file — top-level, class methods, dev-block wrapped — without
+    /// descending into their bodies, since GSC has no nested functions.
+    /// </summary>
+    private static IEnumerable<FunctionNode> Functions(AstNode node)
+    {
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+        {
+            if ( child is FunctionNode function )
+            {
+                yield return function;
+            }
+            else
+            {
+                foreach ( FunctionNode nested in Functions(child) )
+                {
+                    yield return nested;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -210,31 +338,43 @@ public static class LocalReferences
             return false;
         }
 
+        return !NameArrivesFromOutside(result, position, token.Text, game);
+    }
+
+    /// <summary>
+    /// The ways a bare name legitimately arrives from outside the enclosing function, shared by
+    /// every caller that has to draw the local/not-local line: <see cref="IsFunctionScoped"/> for
+    /// the name under the cursor, <see cref="BindsName"/> for a rename's new name, and
+    /// <see cref="SemanticTokens"/> for every candidate in a file.
+    /// </summary>
+    private static bool NameArrivesFromOutside(
+        ParseResult result, Position position, string name, GameProfile game)
+    {
         // level / self / world / anim / game, from the profile so a dialect gets exactly its own.
         foreach ( string global in game.GlobalObjectNames )
         {
-            if ( string.Equals(global, token.Text, StringComparison.OrdinalIgnoreCase) )
+            if ( string.Equals(global, name, StringComparison.OrdinalIgnoreCase) )
             {
-                return false;
+                return true;
             }
         }
 
         // The Infinity Ward dialects allow a constant at FILE scope — `BRIDGE_COLLAPSE_SPEED = 1.0;`
         // between two functions, readable from all of them. Its references are not this function's
         // to list, and answering with only this function's would hide every other reader.
-        if ( game.HasFileScopeConstants && IsFileScopeConstant(result.Tree.Root.Elements, token.Text) )
+        if ( game.HasFileScopeConstants && IsFileScopeConstant(result.Tree.Root.Elements, name) )
         {
-            return false;
+            return true;
         }
 
         // Inside a class method a bare name may be a `var` member, whose readers are other methods
         // and potentially other files entirely.
-        if ( IsClassMember(result, position, token.Text) )
+        if ( IsClassMember(result, position, name) )
         {
-            return false;
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     /// <summary>Whether a name is declared at file scope, including inside a dev block at that level.</summary>
@@ -336,7 +476,7 @@ public static class LocalReferences
     /// learn about it.
     /// </summary>
     private static void Collect(
-        AstNode node, string name, ImmutableArray<LocalOccurrence>.Builder occurrences)
+        AstNode node, string? name, ImmutableArray<LocalUse>.Builder occurrences)
     {
         switch ( node )
         {
@@ -445,7 +585,7 @@ public static class LocalReferences
     /// expression along the way is read.
     /// </summary>
     private static void CollectAssignmentTarget(
-        ExprNode target, string name, ImmutableArray<LocalOccurrence>.Builder occurrences)
+        ExprNode target, string? name, ImmutableArray<LocalUse>.Builder occurrences)
     {
         switch ( target )
         {
@@ -500,14 +640,22 @@ public static class LocalReferences
         return occurrences.ToImmutable();
     }
 
-    private static bool Matches(PToken token, string name)
+    /// <summary>A null name matches every token: the all-names walk semantic tokens make.</summary>
+    private static bool Matches(PToken token, string? name)
     {
-        return string.Equals(token.Text, name, StringComparison.OrdinalIgnoreCase);
+        return name is null || string.Equals(token.Text, name, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void Add(
-        PToken token, bool isWrite, ImmutableArray<LocalOccurrence>.Builder occurrences)
+        PToken token, bool isWrite, ImmutableArray<LocalUse>.Builder uses)
     {
-        occurrences.Add(new LocalOccurrence(token.RootRange, isWrite, IsDeclaration: false));
+        uses.Add(new LocalUse(token, isWrite));
     }
+
+    /// <summary>
+    /// One use the body walk found: the token itself and whether it is written there. The token is
+    /// kept (rather than only its range) because the all-names walk needs the spelling back to
+    /// decide which names the function actually binds.
+    /// </summary>
+    private readonly record struct LocalUse(PToken Token, bool IsWrite);
 }

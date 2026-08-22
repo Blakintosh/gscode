@@ -142,7 +142,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/SemanticTokensHandler.cs
 
 - Full-document (and delta/range via the base class) semantic highlighting; the legend
-  order mirrors `SemanticTokenType`. Pushes `SemanticTokenBuilder.Build` output in order.
+  order mirrors `SemanticTokenType`. Merges two producers before pushing in order:
+  `SemanticTokenBuilder.Build` (what the reference index knows — functions, classes, macros,
+  fields) and `LocalReferences.SemanticTokens` (parameters and locals, from the same per-function
+  walk rename and find-references use). The reference classification wins any position both claim.
 
 ## Handlers/CompletionHandler.cs
 

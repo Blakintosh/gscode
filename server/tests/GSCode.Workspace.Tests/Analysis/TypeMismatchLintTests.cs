@@ -89,6 +89,27 @@ public class TypeMismatchLintTests
     }
 
     [Fact]
+    public void AWaittillReboundNameLosesItsOldType()
+    {
+        // `self waittill( "evt", x )` BINDS x — an output the engine fills in, the same convention
+        // UnassignedVariableLint honours. Reusing a name across a wait is ordinary GSC, so the
+        // string assigned before the wait must not survive it; holding x to its old type made this
+        // exact shape a false-positive 5033.
+        Assert.Empty(Lint(
+            "    x = \"hello\";\n    self waittill( \"evt\", x );\n    foreach ( i in x )\n    {\n    }"));
+    }
+
+    [Fact]
+    public void TheWaittillEventNameIsStillARead()
+    {
+        // Only the TRAILING arguments are bound. The first is the event name, a genuine read, so a
+        // scalar used there keeps its type and enumerating it afterwards is still reported.
+        Assert.Single(
+            Lint("    e = 5;\n    self waittill( e );\n    foreach ( i in e )\n    {\n    }"),
+            d => d.Code == GscDiagnosticCode.CannotEnumerateType);
+    }
+
+    [Fact]
     public void AnUnassignedNameIsTheOtherRulesFinding()
     {
         // The case the rule above must NOT swallow. Assigned on one branch only is `array|undefined`

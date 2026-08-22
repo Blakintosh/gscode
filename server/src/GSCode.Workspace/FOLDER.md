@@ -184,7 +184,14 @@ lints, `Completion/` and `Typing/` the information surfaces.
   a global from the profile, an Infinity Ward file-scope constant (readable from every function), a
   class `var` member or an ancestor's (same file), a macro-expanded token, `vararg`/`thisthread`.
 - `BindsName` is the collision test a rename needs. Renaming onto a name the function already binds
-  does not fail — it MERGES two variables and the script keeps running meaning something else.
+  does not fail — it MERGES two variables and the script keeps running meaning something else. The
+  same refusal covers names arriving from OUTSIDE the function (a global object, an IW file-scope
+  constant, a class member): renaming a local onto one captures every read that reached the outer
+  name.
+- `SemanticTokens` classifies every parameter and local in a file for highlighting — the two legend
+  slots `SemanticTokenBuilder` cannot fill, produced from the same walk and the same exclusions so
+  what is coloured as a local and what rename/references answer on cannot drift apart. A name
+  nothing binds stays uncoloured: it is undefined, which is the unassigned-variable lint's to say.
 - Finds the name token itself rather than calling `AstSearch.TryFindLocalContext`, which reports an
   `IdentifierNode`: a parameter, a `foreach` key/value and a `const` name are bare tokens on their
   declaring node, so clicking the binding — the occurrence a user is most likely to click — found

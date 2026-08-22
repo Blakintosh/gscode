@@ -94,7 +94,20 @@ lints, `Completion/` and `Typing/` the information surfaces.
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
   (+ `.size`), and statement/top-level scope (keywords, the dialect's global objects and snippets,
-  file macros, namespace functions, visible classes, namespace-less builtins as call snippets).
+  the enclosing function's parameters and locals, every macro in scope, namespace functions,
+  visible classes, namespace-less builtins as call snippets).
+- `CollectLocalScope(function, position, entries)` — the names bound INSIDE the function being
+  edited, and the only per-function list here. Parameters, then the locals introduced by an
+  assignment AT OR ABOVE the cursor; an owner (`self.count = 1`) makes it a field rather than a
+  local, the same exclusion `LocalDefinition` makes. Below the cursor is left out because nothing
+  is bound there yet and reading it earns a 5016 — the rule `vararg` is held to. These were
+  missing entirely, and the editor's own word-based suggestions covered for them until the
+  server's lists (a median of ~1,900 entries) began out-scoring those.
+- Macros come from `Preprocessed.Macros.All` WHOLE. That table is built per parse from the root
+  file plus the headers it `#insert`s, so it already is "what this file can expand"; filtering it
+  to `SourceFile is null` kept the root file's own and dropped every constant a shared `.gsh`
+  exists to supply. A function-like macro takes the call punctuation a function does, since at the
+  use site it is a call; the detail names the defining header.
 - A `#` INSIDE a body has two readings and gets both: `GscKeywords.BodyDirectives`, plus the
   `#"..."` literals where `GameProfile.HasHashStrings`. Reading it as a hash string alone lost the
   `#if` family everywhere and left the three dialects without hash strings an empty list.
@@ -106,8 +119,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   past every scanning helper in between. Same convention as `Parser.cs (+ .Declarations /
   .Statements / .Expressions)`, and the same reason.
   - `.Context.cs` — WHERE the cursor is. All static, and reads only tokens, source text and the
-    parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `IsInsideFunctionBody`,
-    `EnclosingFunction`, `PreviousSignificant`, `TryPrecacheContext` and the rest. Nothing here
+    parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `EnclosingFunction`,
+    `PreviousSignificant`, `TryPrecacheContext` and the rest. `EnclosingFunction` is carried by the
+    dispatcher as a symbol rather than reduced to a bool, since the same walk answers which keyword
+    set is legal, whether `vararg` binds, and which parameters and locals are in scope. Nothing here
     touches the database, which is the property that makes the boundary hold.
   - `.Producers.cs` — the lists themselves, one producer per context. This is the file that reaches
     `ScriptDatabase`, `BuiltinApiSet` and `ObjectFields`, so its cost is a function of the
@@ -152,6 +167,28 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `static LocalDefinition` — resolves a local variable or parameter to its introducing declaration
   within the enclosing function. Locals stay outside the shared reference index, so this AST-based
   lookup prevents same-named variables in unrelated functions from colliding.
+
+## Database/LocalReferences.cs
+
+- `readonly record struct LocalOccurrence(Range, IsWrite, IsDeclaration)` + `static LocalReferences`
+  — the occurrence list for a local, the companion to `LocalDefinition` and outside the shared index
+  for the same reason. Backs find-references, document highlight and rename on variables.
+- `Find` walks the enclosing function's body with the classification the lints already proved: an
+  assignment target is a WRITE down to the name it is rooted at (`a[ 0 ] = x` creates `a`) while its
+  subscript is a read, `foreach` bindings and `waittill` outputs are writes, and a bare identifier
+  callee or `&foo` names a function rather than a variable.
+- `IsDeclaration` marks the parameter, or the first write when there is none — the same "where the
+  name is introduced" rule `UnusedLocalLint` reports against. Only that one is dropped when a
+  request excludes the declaration; a later `x = 2` is a reference to something already existing.
+- Answers EMPTY rather than a wrong per-function answer when the name is not the function's to own:
+  a global from the profile, an Infinity Ward file-scope constant (readable from every function), a
+  class `var` member or an ancestor's (same file), a macro-expanded token, `vararg`/`thisthread`.
+- `BindsName` is the collision test a rename needs. Renaming onto a name the function already binds
+  does not fail — it MERGES two variables and the script keeps running meaning something else.
+- Finds the name token itself rather than calling `AstSearch.TryFindLocalContext`, which reports an
+  `IdentifierNode`: a parameter, a `foreach` key/value and a `const` name are bare tokens on their
+  declaring node, so clicking the binding — the occurrence a user is most likely to click — found
+  nothing at all.
 
 ## Database/DatabaseQueries.cs
 
@@ -272,6 +309,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `Open`/`Close`/`TryGet`, `ApplyChange` (LSP incremental splice or full replace), and
   `Analyze` (runs ScriptAnalysis with an insert provider bound to the file's context
   via the injected factory, and hands back whichever snapshot stands afterwards).
+- `TryGetAnalyzed(path, out document, out result)` — the document AND its latest completed
+  analysis, false when either is missing. The cheap resolve: it answers only what the store knows,
+  where the server's `NavigationSupport.Resolve` also builds the store, context id and declared
+  namespaces. Five handlers wrote the lookup-then-null-check by hand before this existed.
 
 ## Resolution/ResolverInsertProvider.cs
 
@@ -370,11 +411,21 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Analysis/ReadOnlyWriteLint.cs
 
-- `static ReadOnlyWriteLint.Analyze(result, objectFields)` — reports writes to `.size` (Error;
+- `static ReadOnlyWriteLint.Analyze(result, objectFields, typer)` — reports writes to `.size` (Error;
   a language-spec fact) and to engine fields the curated data marks read-only (Warning, since
   that data can carry mistakes). Assignments including compound forms and `++`/`--` all count
   as writes. A field is only flagged when EVERY entity kind declaring the name agrees it is
   read-only, because the owner's kind isn't inferred at this layer.
+
+## Analysis/GlobalObjectWriteLint.cs
+
+- `static GlobalObjectWriteLint.Analyze(result)` — reports an assignment to one of the engine's
+  global objects (5035, Error): `level = 1`, `anim = 1`. The names come from
+  `GameProfile.GlobalObjectNames`, never a table here, so `world` is a global on BO3 and an ordinary
+  local name on CoD4. Only a BARE name counts — `level.things = []` and `game[ "k" ] = 1` write
+  THROUGH the object and are how every script in every corpus uses one. `classes` is excluded even
+  where the profile lists it: nothing establishes what the compiler does with an assignment to it,
+  and an Error has to be certain. Swept clean over 8,289 scripts across all five games.
 
 ## Analysis/ — the remaining lints
 
@@ -428,7 +479,9 @@ reported as an Error must never land on code that ships and works.
   parameters, loop bindings, `waittill` outputs, profile globals, file-scope constants, macro-supplied
   names, and the `...` parameter pack; reports 5024 instead when the pack is read in a function that
   does not declare `...`. An unresolved import stands the whole rule down.
-- `UnreachableCodeLint` (5015) — statements after a `return`/`break`/`continue`.
+- `UnreachableCodeLint` (5015) — statements after a `return`/`break`/`continue`. **Information**, not
+  a Hint: it carries no `Unnecessary` tag, so a Hint produced no visible output at all, and the
+  corpora afford the panel — 48 findings in 42 files across all five games.
 - `UnusedBindingLint` (5020) — a parameter or `waittill` output nothing reads. A **Hint**, so it
   never reaches the Problems panel and the fade is the entire output: at any panel-visible severity
   it would report 5,277 findings on BO3's own scripts, most of them engine-fixed callback signatures.
@@ -492,28 +545,48 @@ reported as an Error must never land on code that ships and works.
 
 ## Typing/FlowTyper.cs
 
-- `readonly record struct InferredAssignment(NameRange, Type, Name)` — the inferred `ScrType`
-  of a local at its assignment site (with its display-case name), consumed by the inlay-hint
-  handler and the hover lookup.
-- `readonly record struct LocalTypeHover(Name, Range, Type)` — the inferred type of the local
-  identifier under a cursor, consumed by hover.
+- `readonly record struct InferredAssignment(NameRange, Value, Name, IsFirstForName, IsField)` — the
+  inferred value of a local or field at ONE assignment site. Every typed assignment is recorded
+  and each consumer filters: inlay hints take `IsFirstForName` only, hover takes them all so it can
+  report the type as of the cursor. `IsField` separates `self.count = 1` from a local of the same
+  name.
+
+  Carries the whole `ScrValue`, with `Type` (the projection) and `Display` (the label) as computed
+  properties. Storing the projection instead threw away the two facts only display wants: a
+  `new Foo()` reached the editor as `struct` and a `#"str"` as `int`, both computed correctly and
+  both discarded at this boundary. A consumer judging a type still reads `Type`.
+- `readonly record struct LocalTypeHover(Name, Range, Value)` — the value of the local identifier
+  under a cursor, consumed by hover. Same `Type`/`Display` split, for the same reason.
+- `readonly record struct FieldWrite(NameRange, FieldName, OwnerType, Value)` — one `owner.field = …`
+  write with the owner's inferred type at that point, consumed by `ReadOnlyWriteLint` and
+  `PreferBooleanLiteralLint`. `Value` is null for a compound write or `++`/`--`, which have no single
+  assigned value.
 - `sealed class FlowTyper` — a deliberately-small forward type-flow pass, per function.
   `InferAssignments(ParseResult)` walks each function/method body with a per-function
-  local environment (`name → ScrType`), recording the FIRST assignment of each local that
-  resolves to a concrete type; later assignments update the environment but never add a
-  second hint. `TryGetLocalTypeAt(result, position)` finds the innermost identifier under a
-  cursor and its enclosing function (via `AstSearch.ChainAt`) and returns the local's inferred
-  type when one exists — so a hover always agrees with the inlay hint at the assignment.
+  local environment (`name → ScrValue`), recording every assignment that resolves to a concrete
+  type. `TryGetLocalTypeAt(result, position)` finds the innermost identifier under a
+  cursor and its enclosing function (via `AstSearch.TryFindLocalContext`) and returns the local's
+  inferred type when one exists — so a hover always agrees with the inlay hint at the assignment.
   `TypeOf` types literals, parenthesised/vector/array/`new` expressions,
   identifiers (earlier locals, then the globals `self`/`level`/`world`/`anim`/`game`),
-  prefix ops (`!`→bool, `&`→function, `~`→int, `-`→numeric), binary ops (comparisons and
-  logicals→bool, `+` string-concatenation vs numeric widening, shifts/bitwise→int),
-  builtin call return types via `MapReturnType`, and field access `owner.field` (`.size`→int;
-  else the engine object-field data seeds a type, but only when every entity kind declaring
-  the field name agrees — the owner's kind isn't inferred). Anything uncertain stays `Unknown`
-  and produces no hint — the zero-false-positive rule. Script-function return inference is out
-  of scope (their bodies aren't re-typed here). Constructed with the per-language `BuiltinApi`
-  and the shared `ObjectFields`.
+  `&foo` and `[[ ptr ]]` (which carry a `ScrFunctionRef` naming the function, so a call through a
+  pointer can be connected to the declaration behind it) and an arrow call's object,
+  prefix and binary operators via `ScrOperators`, builtin call return types unioned across every
+  overload, and field access `owner.field` (`.size`→int; else the engine object-field data seeds a
+  type, but only when every entity kind declaring the field name agrees — the owner's kind isn't
+  inferred). Anything uncertain stays unknown and produces no hint — the zero-false-positive rule.
+  Script-function return inference is out of scope (their bodies aren't re-typed here). Constructed
+  with the per-language `BuiltinApi` and the shared `ObjectFields`.
+- **The environment holds `ScrValue`, not `ScrType`.** Everything above describes what the editor
+  sees, which is the coarse `ScrType` projection at the public boundary. Underneath, the walk carries
+  unions (`int|string` where the projection says Unknown), folded constants, entity kinds and a
+  REASON for every imprecision. That exists for a future dialect-to-dialect transpiler, which unlike
+  a lint must emit something for every expression and so needs to know WHY a type is unknown.
+- `ScriptTypes` + `FlowTyper.InferValues(result)` — the transpiler-facing surface: the value of every
+  expression the walk touched, keyed by node REFERENCE (AST nodes are records, so structural equality
+  would make the three zeroes in `( 0, 0, 0 )` one key). `TryGetValueAt` is the position query that
+  returns the union rather than the label. `ImprecisionHistogram()` counts expressions by reason,
+  which is the coverage number a rewriter is budgeted against.
 
 ## Api/
 

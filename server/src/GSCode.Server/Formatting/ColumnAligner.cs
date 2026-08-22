@@ -36,7 +36,7 @@ public static class ColumnAligner
         string[] lines = formatted.Split('\n');
         ImmutableArray<Token> tokens = Lexer.Lex(SourceText.From(formatted)).Tokens;
 
-        List<Token>[] byLine = BucketByLine(lines.Length, tokens);
+        List<Token>[] byLine = LineFacts.BucketByLine(lines.Length, tokens);
         Row[] rows = new Row[lines.Length];
         for ( int i = 0; i < lines.Length; i++ )
         {
@@ -157,31 +157,6 @@ public static class ColumnAligner
         public static readonly Row CommentOnly = new(RowRole.Comment, "", "", []);
     }
 
-    private static List<Token>[] BucketByLine(int lineCount, ImmutableArray<Token> tokens)
-    {
-        List<Token>[] byLine = new List<Token>[lineCount];
-        for ( int i = 0; i < lineCount; i++ )
-        {
-            byLine[i] = [];
-        }
-
-        foreach ( Token token in tokens )
-        {
-            if ( token.Kind is TokenKind.EndOfFile or TokenKind.Whitespace or TokenKind.Newline )
-            {
-                continue;
-            }
-
-            int line = token.Range.Start.Line;
-            if ( line >= 0 && line < lineCount )
-            {
-                byLine[line].Add(token);
-            }
-        }
-
-        return byLine;
-    }
-
     private static Row Classify(List<Token> lineTokens, string lineText)
     {
         if ( lineTokens.Count == 0 )
@@ -189,13 +164,13 @@ public static class ColumnAligner
             return Row.Other;
         }
 
-        if ( lineTokens.All(static token => LineFacts.IsComment(token.Kind)) )
+        if ( LineFacts.AllComments(lineTokens) )
         {
             return Row.CommentOnly;
         }
 
         // A statement ending in ';', ignoring a trailing line comment. Anything else breaks a run.
-        List<Token> code = [.. lineTokens.Where(static token => !LineFacts.IsComment(token.Kind))];
+        List<Token> code = LineFacts.CodeOnly(lineTokens);
         if ( code.Count == 0 || code[^1].Kind != TokenKind.Semicolon )
         {
             return Row.Other;

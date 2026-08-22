@@ -100,7 +100,9 @@ on half-typed text.
 
 **Extraction.** `ExtractionTests` symbols and references · `ClassExtractionTests` class members,
 methods, and constructors · `DuplicateFunctionTests` ·
-`LoopVariableTests` induction variables · `MacroDefaultParameterTests`, `MacroExpansionReferenceTests`
+`LoopVariableTests` induction variables · `WaittillBindingTests` that `waittill`'s trailing arguments
+are BOUND, not read — the only place those names come into existence ·
+`MacroDefaultParameterTests`, `MacroExpansionReferenceTests`
 macro provenance · `SemanticTokenBuilderTests`, which pins what is deliberately NOT emitted (comments, keywords,
 strings and numbers all belong to the grammar) · `TripleSlashScriptDocTests` ScriptDoc on the pre-BO3
 games · `DialectResolutionTests` per-dialect symbol keys.
@@ -129,7 +131,9 @@ including the differently-SPELLED case that must not shadow · `UsingNotFoundLin
 import spellings, since an unresolvable `#include` reported nothing at all and silenced 5026 with it ·
 `NamespaceUsageLintTests` 5000, including the merge dialect where the rule is unsatisfiable and says nothing ·
 `UnusedUsingLintTests` 5001 · `UnusedIncludeLintTests` 5012 · `PreferBooleanLiteralLintTests` 5002 ·
-`PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests` 5004/5005 · `DevBlockCallLintTests` 5006,
+`PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests` 5004/5005 ·
+`GlobalObjectWriteLintTests` 5035, bare name versus write-THROUGH, and the dialect where `world` is
+an ordinary local name · `DevBlockCallLintTests` 5006,
 including which dev-only builtin candidates the stock corpus contradicts · `AmbiguousFunctionLintTests`
 5007 · `UnusedLocalLintTests` 5008 · `CaseLabelLintTests` 5010/5011 ·
 `FunctionResolutionLintTests` 5013/5014/5025, the split between a script miss and a builtin miss,
@@ -168,12 +172,17 @@ qualified method lookup · `MethodReferenceTests` class-method reference unions 
 `ReferenceScopingTests` the same narrowing for reference COUNTS, including that a file declaring the
 name in another namespace does not claim the reference ·
 `LocalDefinitionTests` go-to-definition on a local, which the shared reference index deliberately
-does not carry · `RootDerivationTests` finding the game when nothing is configured ·
+does not carry · `LocalReferencesTests` the occurrence list behind find-references, highlight and
+rename on a variable — what counts as a WRITE, and the names a per-function answer must refuse
+(globals, IW file-scope constants, class members) · `RootDerivationTests` finding the game when
+nothing is configured ·
 `ServerBuildIdentityTests` that two games can never share a cache.
 
 **Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` · `StaleAnalysisTests` edits
 racing analysis · `WatchedFileUpdaterTests` · `FlowTyperTests`, `TypeFlowConvergenceTests` local type
-inference and that the walk terminates.
+inference and that the walk terminates · `ValueIdentityTests` the two facts the `ScrType` projection
+cannot hold — which class an instance is, which function a pointer holds — including the guard that
+no OTHER label moved when display stopped going through the projection.
 
 ---
 
@@ -207,7 +216,10 @@ line means "suppressed on this game" rather than "run twice".
 - `GameCorpusTests` — the same three properties per game, and the evidence behind
   `GameProfile.Verified`.
 - `ClassResolutionCorpusTests` — class inheritance and method calls across the shipped corpus,
-  including cases where a receiver's concrete class is unknown.
+  including cases where a receiver's concrete class is unknown. Every lookup passes the context of
+  the record the symbol came from, never the literal `"raw"`: the fixture indexes the mods folder
+  beside the raw one, so a class declared in an installed mod is only findable in that mod's
+  context.
 - `BuiltinHarvestTests` — sweeps for calls resolving to neither a script function nor a known engine
   function and writes `harvest/<game>_missing_builtins.json` and `_missing_script_functions.json`.
   This is the curation input for the builtin libraries, ranked by how many files want a name.

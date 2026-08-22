@@ -35,6 +35,12 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.InsertNotAHeader] = "'{0}' is not a header; '#insert' expects a '{1}' file.",
         [GscDiagnosticCode.WrongMacroArgumentCount] = "Macro '{0}' takes {1} argument(s) but {2} were passed.",
 
+        // Names WHERE the earlier definition is, because the reader's question is never "is this a
+        // duplicate" but "which body does my call site expand to" -- and the answer is order, which
+        // the source does not show when the two definitions are in different files.
+        [GscDiagnosticCode.DuplicateMacroDefinition] = "'{0}' is already defined in {1}; this definition is seen later and replaces it.",
+        [GscDiagnosticCode.DuplicateMacroParameter] = "Macro '{1}' already has a parameter named '{0}'; arguments passed for this one are discarded.",
+
         // Names the game, because the fix is either "use a file-scope constant" or "you picked the
         // wrong game", and which one it is depends on something the message cannot see.
         [GscDiagnosticCode.MacrosNotInDialect] =
@@ -117,6 +123,29 @@ public static class DiagnosticMessages
         // Names the file that HAS it, which is the whole difference between this and 5014: the
         // reader's fix is one '#include' line, and the message carries the argument for it.
         [GscDiagnosticCode.FunctionNotIncluded] = "'{0}' is declared in '{1}', but this file has no '#include' bringing it into scope.",
+        // Says which one runs, because "duplicate" alone leaves the reader to guess whether the
+        // engine takes the first or the last -- and the answer decides whether this is a typo or
+        // dead code they can delete.
+        [GscDiagnosticCode.MultipleDefaultLabels] = "This switch already has a 'default' label; only the first one can ever be reached.",
+        // Says WHEN it breaks, not just that it is unreliable: a threaded call with no wait in it
+        // returns the right value today, so a reader told only "this is undefined" checks, sees a
+        // correct value, and dismisses the rule.
+        [GscDiagnosticCode.ConsumedThreadedCallResult] =
+            "A 'thread' call returns at the function's first 'wait', not at its 'return' — so this reads 'undefined' as soon as the thread waits.",
+        // Names what IS allowed, because "not constant" leaves the reader guessing whether
+        // arithmetic counts -- and the stock scripts are full of `const AREA = 64 * 64;`.
+        [GscDiagnosticCode.ExpectedConstantExpression] =
+            "'{0}' is declared 'const', so its value must be known at compile time — a literal, or arithmetic over literals.",
+        [GscDiagnosticCode.CannotAssignToConstant] = "'{0}' is declared 'const' and cannot be assigned to.",
+        [GscDiagnosticCode.DivisionByZero] = "The divisor here is zero.",
+        // Names the two things it is usually a symptom of, since the reader can see for themselves
+        // that the line does nothing -- what they need is the reason it ended up that way.
+        [GscDiagnosticCode.InvalidExpressionStatement] =
+            "This statement computes a value and discards it, so it has no effect — a missing '=' or a call missing its '()'.",
+        [GscDiagnosticCode.CannotEnumerateType] = "'foreach' needs an array or a struct, but this is {0}.",
+        [GscDiagnosticCode.InvalidVectorComponent] = "A vector component must be a number, but this is {0}.",
+        [GscDiagnosticCode.CannotAssignToGlobalObject] =
+            "'{0}' is an engine global and cannot be assigned to; write to a field on it instead, as in '{0}.field = value'.",
     }.ToFrozenDictionary();
 
     /// <summary>Formats the template for a code with its arguments.</summary>

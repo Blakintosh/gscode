@@ -34,6 +34,26 @@ There is no declaration step. `a[ 0 ] = x` on an `a` that does not exist builds 
 is how every array in the stock scripts is made. The base of an assignment target is therefore a
 WRITE, however deeply subscripted — while the subscript expression itself is still a read.
 
+## Structs and entities alias in EVERY game; only arrays fork
+
+| kind | passed as | differs by dialect? |
+|---|---|---|
+| entity — a player, `ent = Spawn( "script_model" )` | reference | no |
+| struct — `spawnstruct()`, BO3's `new Foo()` | reference | no |
+| **array** | **reference on BO3, copied on every earlier game** | **yes** |
+| int, float, bool, string, istring, hash, vector, undefined | value | no |
+
+The trap is assuming the `ArraysPassedByReference` flag means references arrived in BO3. They did
+not: structs and entities have always aliased, and `spawnstruct` appears in all five corpora (cod4
+117 files, waw 173, mw2 190, bo1 363, bo3 177), so both kinds are everywhere in the same code.
+
+What that means for a rule or a rewriter: a struct or entity parameter behaves the same in every
+dialect and needs no thought, while an array parameter a callee MUTATES behaves differently after
+translation in either direction. So the only question worth answering precisely is "is this an
+array", and it has three answers rather than two — certainly, certainly not, and cannot tell. The
+third is the one to escalate rather than guess, which is why `ScrValue` distinguishes `MustBe` from
+`MayBe` instead of carrying a single confidence flag.
+
 ## The Infinity Ward dialects have FILE-SCOPE constants
 
 ```gsc

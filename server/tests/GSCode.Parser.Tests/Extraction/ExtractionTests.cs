@@ -327,6 +327,20 @@ public class ExtractionTests
     }
 
     [Fact]
+    public void References_SpacedAnimReferenceKeysTheSameAsAJoinedOne()
+    {
+        // `%run` and `% run` name one animation, so find-all-references has to see one symbol with
+        // two sites rather than 'run' and ' run'.
+        ParseResult result = Analyze("function f()\n{\nx = %run;\ny = % run;\n}");
+
+        List<ReferenceEntry> animations =
+            [.. result.Extraction.References.Where(entry => entry.Key.Kind == SymbolKind.AnimReference)];
+
+        Assert.Equal(2, animations.Count);
+        Assert.All(animations, entry => Assert.Equal(new SymbolKey(null, "run", SymbolKind.AnimReference), entry.Key));
+    }
+
+    [Fact]
     public void References_FieldsAndDefinitions()
     {
         ParseResult result = Analyze("function f()\n{\nx = self.owner;\n}");

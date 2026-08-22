@@ -54,7 +54,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             // name, but still reports a namespace (the file stem), so using it here looked up a
             // key nothing is stored under and every lens read "0 references".
             SymbolKey key = new(GSCode.Core.GameProfile.Active.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
-            lenses.Add(MakeLens(request.TextDocument.Uri, function.NameRange, key, target));
+            lenses.Add(MakeLens(request.TextDocument.Uri, function.NameRange, key, target, function.IsAutoexec));
         }
 
         foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
@@ -104,7 +104,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         return Task.FromResult(request);
     }
 
-    private CodeLens MakeLens(DocumentUri uri, GSCode.Core.Text.TextRange nameRange, SymbolKey key, NavigationTarget target)
+    private CodeLens MakeLens(DocumentUri uri, GSCode.Core.Text.TextRange nameRange, SymbolKey key, NavigationTarget target, bool isAutoexec = false)
     {
         // The same query the peek list uses, so the number and the list cannot disagree. A
         // single-store count under-reported a function called from CSC or a macro used from a
@@ -119,6 +119,14 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         }
 
         string title = count == 1 ? "1 reference" : $"{count} references";
+
+        // An autoexec function is called by the engine on load, so its call sites are not in any
+        // script and the count is legitimately zero. Left unqualified that reads as dead code —
+        // which is the one thing an autoexec entry point is not.
+        if ( isAutoexec )
+        {
+            title = count == 0 ? "autoexec entry point" : $"{title} · autoexec";
+        }
 
         return new CodeLens
         {

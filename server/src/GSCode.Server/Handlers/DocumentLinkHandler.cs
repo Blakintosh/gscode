@@ -1,5 +1,6 @@
-using GSCode.Core;
 using GSCode.Core.Text;
+using GSCode.Parser.Preprocessing;
+using GSCode.Parser.Syntax.Ast;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -36,7 +37,7 @@ public sealed class DocumentLinkHandler : DocumentLinkHandlerBase
         List<DocumentLink> links = [];
 
         // #insert edges carry their resolved path directly.
-        foreach ( GSCode.Parser.Preprocessing.InsertEdge insert in target.Result.Preprocessed.Inserts )
+        foreach ( InsertEdge insert in target.Result.Preprocessed.Inserts )
         {
             if ( insert.ContainingFile is null && insert.ResolvedPath is not null )
             {
@@ -49,12 +50,12 @@ public sealed class DocumentLinkHandler : DocumentLinkHandlerBase
         }
 
         // #using / #include targets resolve through the file's context.
-        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in target.Result.Tree.Root.Elements )
+        foreach ( AstNode element in target.Result.Tree.Root.Elements )
         {
             (string Path, TextRange Range)? directive = element switch
             {
-                GSCode.Parser.Syntax.Ast.UsingNode usingNode => (usingNode.Path, usingNode.PathRange),
-                GSCode.Parser.Syntax.Ast.IncludeNode includeNode => (includeNode.Path, includeNode.PathRange),
+                UsingNode usingNode => (usingNode.Path, usingNode.PathRange),
+                IncludeNode includeNode => (includeNode.Path, includeNode.PathRange),
                 _ => null,
             };
 
@@ -63,10 +64,7 @@ public sealed class DocumentLinkHandler : DocumentLinkHandlerBase
                 continue;
             }
 
-            string extension = target.Language == GSCode.Core.Symbols.ScriptLanguage.Csc
-                ? GameProfile.Active.ClientScriptExtension
-                : GameProfile.Active.ServerScriptExtension;
-            string? resolved = _support.Resolver.Resolve(_support.Resolver.GetContext(target.Path), directive.Value.Path + extension);
+            string? resolved = _support.ResolveDirectivePath(target, directive.Value.Path);
             if ( resolved is not null )
             {
                 links.Add(new DocumentLink

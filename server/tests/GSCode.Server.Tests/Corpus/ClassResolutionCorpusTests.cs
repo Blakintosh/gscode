@@ -19,6 +19,15 @@ namespace GSCode.Server.Tests.Corpus;
 /// what the game actually contains — 37 classes, an inheritance chain up to two deep, 4 classes whose
 /// parent lives in another file, and <c>scene_shared.gsc</c>, which alone holds 4 classes and 110
 /// methods and was the file that made the gap obvious.
+///
+/// Every lookup below passes the context of the record the symbol came FROM, never a literal.
+/// Resolution is scoped by context because that is what makes a mod's copy of a file shadow raw's,
+/// and the corpus fixture indexes the mods folder beside the raw one — deliberately, since
+/// <c>RootConfig</c> finds mods above a configured raw root so that setting one path does not
+/// silently cost mod shadowing. Every query here asked for <c>"raw"</c> while the walk above it
+/// collected from every context, so a class declared in ANY installed mod was looked for in raw,
+/// not found, and reported as our defect. It read as correct on a machine with no BO3 mods
+/// installed, which is every machine this had run on.
 /// </summary>
 [Trait("Category", "Corpus")]
 [Collection(GameProfileCollection.Name)]
@@ -48,17 +57,20 @@ public class ClassResolutionCorpusTests
         return (database, resolver, names);
     }
 
-    /// <summary>Every class the corpus declares, across both language worlds.</summary>
-    private static List<(LanguageStore Store, ClassSymbol Class)> AllClasses(ScriptDatabase database)
+    /// <summary>
+    /// Every class the corpus declares, across both language worlds, each carrying the context of
+    /// the record that declared it — which is the only context a lookup for it can succeed in.
+    /// </summary>
+    private static List<(LanguageStore Store, string ContextId, ClassSymbol Class)> AllClasses(ScriptDatabase database)
     {
-        List<(LanguageStore, ClassSymbol)> classes = [];
+        List<(LanguageStore, string, ClassSymbol)> classes = [];
         foreach ( LanguageStore store in (LanguageStore[])[database.Gsc, database.Csc] )
         {
             foreach ( ScriptRecord record in store.AllRecords )
             {
                 foreach ( ClassSymbol classSymbol in record.Classes )
                 {
-                    classes.Add((store, classSymbol));
+                    classes.Add((store, record.ContextId, classSymbol));
                 }
             }
         }
@@ -79,14 +91,14 @@ public class ClassResolutionCorpusTests
         }
 
         List<string> unresolved = [];
-        foreach ( (LanguageStore store, ClassSymbol classSymbol) in AllClasses(world.Value.Database) )
+        foreach ( (LanguageStore store, string contextId, ClassSymbol classSymbol) in AllClasses(world.Value.Database) )
         {
             if ( classSymbol.ParentKeyName is null )
             {
                 continue;
             }
 
-            if ( DatabaseQueries.LookupClasses(store, "raw", namespaceName: null, classSymbol.ParentKeyName).Length == 0 )
+            if ( DatabaseQueries.LookupClasses(store, contextId, namespaceName: null, classSymbol.ParentKeyName).Length == 0 )
             {
                 unresolved.Add($"{classSymbol.Name} : {classSymbol.ParentKeyName}");
             }
@@ -135,7 +147,7 @@ public class ClassResolutionCorpusTests
                         continue;
                     }
 
-                    if ( MethodResolution.FindDeclaringClass(store, "raw", entry.Key.OwnerClass, entry.Key.Name) is not null )
+                    if ( MethodResolution.FindDeclaringClass(store, record.ContextId, entry.Key.OwnerClass, entry.Key.Name) is not null )
                     {
                         asMethod++;
                         continue;
@@ -151,7 +163,7 @@ public class ClassResolutionCorpusTests
                     foreach ( string declared in record.DeclaredNamespaces )
                     {
                         if ( DatabaseQueries.LookupFunctions(
-                            store, "raw", record.Path, declared, entry.Key.Name, includePrivate: true).Length > 0 )
+                            store, record.ContextId, record.Path, declared, entry.Key.Name, includePrivate: true).Length > 0 )
                         {
                             inOwnNamespace = true;
                             break;
@@ -229,7 +241,7 @@ public class ClassResolutionCorpusTests
                         continue;
                     }
 
-                    SymbolKey canonical = MethodResolution.Canonicalize(store, "raw", entry.Key, entry.Kind);
+                    SymbolKey canonical = MethodResolution.Canonicalize(store, record.ContextId, entry.Key, entry.Kind);
                     if ( canonical.OwnerClass is not null )
                     {
                         asMethod++;
@@ -237,7 +249,7 @@ public class ClassResolutionCorpusTests
                     }
 
                     if ( DatabaseQueries.LookupFunctions(
-                        store, "raw", record.Path, entry.Key.Namespace, entry.Key.Name, includePrivate: true).Length > 0 )
+                        store, record.ContextId, record.Path, entry.Key.Namespace, entry.Key.Name, includePrivate: true).Length > 0 )
                     {
                         asNamespace++;
                         continue;
@@ -282,18 +294,18 @@ public class ClassResolutionCorpusTests
             return;
         }
 
+        // Walked off the declaring records rather than the store's class-name index, which is what
+        // gives each class the context to ask in. A name declared in two contexts is simply asked
+        // about twice; there are forty classes, so nothing is saved by de-duplicating.
         List<string> collisions = [];
-        foreach ( LanguageStore store in (LanguageStore[])[world.Value.Database.Gsc, world.Value.Database.Csc] )
+        foreach ( (LanguageStore store, string contextId, ClassSymbol classSymbol) in AllClasses(world.Value.Database) )
         {
-            foreach ( string className in store.Classes.AllClassNames() )
+            foreach ( ClassMethod method in MethodResolution.MethodsOf(store, contextId, classSymbol.KeyName) )
             {
-                foreach ( ClassMethod method in MethodResolution.MethodsOf(store, "raw", className) )
+                if ( DatabaseQueries.LookupFunctions(
+                    store, contextId, askingPath: "", classSymbol.KeyName, method.Method.KeyName, includePrivate: true).Length > 0 )
                 {
-                    if ( DatabaseQueries.LookupFunctions(
-                        store, "raw", askingPath: "", className, method.Method.KeyName, includePrivate: true).Length > 0 )
-                    {
-                        collisions.Add($"{className}::{method.Method.KeyName}");
-                    }
+                    collisions.Add($"{classSymbol.KeyName}::{method.Method.KeyName}");
                 }
             }
         }
@@ -323,13 +335,13 @@ public class ClassResolutionCorpusTests
         int methods = 0;
         List<string> unreachable = [];
 
-        foreach ( (LanguageStore store, ClassSymbol classSymbol) in AllClasses(world.Value.Database) )
+        foreach ( (LanguageStore store, string contextId, ClassSymbol classSymbol) in AllClasses(world.Value.Database) )
         {
             foreach ( FunctionSymbol method in classSymbol.Methods )
             {
                 methods++;
                 ImmutableArray<ResolvedFunction> found = MethodResolution.LookupMethods(
-                    store, "raw", classSymbol.KeyName, method.KeyName);
+                    store, contextId, classSymbol.KeyName, method.KeyName);
 
                 if ( found.Length == 0 )
                 {
@@ -383,7 +395,7 @@ public class ClassResolutionCorpusTests
                     arrows++;
 
                     bool isMethod = entry.Key.OwnerClass is not null
-                        ? MethodResolution.FindDeclaringClass(store, "raw", entry.Key.OwnerClass, entry.Key.Name) is not null
+                        ? MethodResolution.FindDeclaringClass(store, record.ContextId, entry.Key.OwnerClass, entry.Key.Name) is not null
                         : store.Classes.ClassesDeclaringMethod(entry.Key.Name).Length > 0;
 
                     if ( isMethod )
@@ -393,7 +405,7 @@ public class ClassResolutionCorpusTests
                     }
 
                     if ( DatabaseQueries.LookupFunctions(
-                        store, "raw", record.Path, namespaceName: null, entry.Key.Name, includePrivate: true).Length > 0 )
+                        store, record.ContextId, record.Path, namespaceName: null, entry.Key.Name, includePrivate: true).Length > 0 )
                     {
                         asFunctionPointer++;
                         continue;

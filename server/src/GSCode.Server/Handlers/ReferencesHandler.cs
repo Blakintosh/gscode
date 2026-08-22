@@ -39,12 +39,18 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         }
 
         PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
-        if ( hit.Kind != HitKind.Reference )
-        {
-            return Task.FromResult<LocationContainer?>(null);
-        }
 
         bool includeDeclaration = request.Context?.IncludeDeclaration ?? true;
+
+        if ( hit.Kind != HitKind.Reference )
+        {
+            // Not something the reference index knows, which is every LOCAL: the index is keyed by
+            // SymbolKey and shared workspace-wide, so an `i` in one function would collide with an
+            // `i` in every other. Locals are walked from the AST instead, per function, which is
+            // the scope they actually have — the same fallthrough DefinitionHandler takes.
+            return Task.FromResult(LocalReferencesAt(target, request.Position.ToCore(), includeDeclaration));
+        }
+
         List<Location> locations = [];
 
         // On the merge dialects (#include) a function and its calls are keyed (null, name), so
@@ -61,13 +67,38 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
                 continue;
             }
 
-            locations.Add(new Location
-            {
-                Uri = DocumentUri.FromFileSystemPath(record.Path),
-                Range = entry.Range.ToLsp(),
-            });
+            locations.Add(LspMapping.LocationAt(record.Path, entry.Range));
         }
 
         return Task.FromResult<LocationContainer?>(new LocationContainer(locations));
+    }
+
+    /// <summary>
+    /// Every occurrence of the local under the cursor, all of them in this one file.
+    ///
+    /// Only the DECLARATION is dropped when the request asks to exclude it — the parameter, or the
+    /// first write. A later `x = 2` is a reference to a variable that already exists, so dropping
+    /// every write would hide most of what was asked for.
+    /// </summary>
+    private LocationContainer? LocalReferencesAt(
+        NavigationTarget target, GSCode.Core.Text.Position position, bool includeDeclaration)
+    {
+        List<Location> locations = [];
+        foreach ( LocalOccurrence occurrence in _support.LocalOccurrencesAt(target, position) )
+        {
+            if ( !includeDeclaration && occurrence.IsDeclaration )
+            {
+                continue;
+            }
+
+            locations.Add(LspMapping.LocationAt(target.Path, occurrence.Range));
+        }
+
+        if ( locations.Count == 0 )
+        {
+            return null;
+        }
+
+        return new LocationContainer(locations);
     }
 }

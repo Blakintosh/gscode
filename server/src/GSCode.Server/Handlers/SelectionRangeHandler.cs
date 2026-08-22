@@ -1,3 +1,4 @@
+using GSCode.Parser;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Server.Mapping;
@@ -31,13 +32,13 @@ public sealed class SelectionRangeHandler : SelectionRangeHandlerBase
 
     public override Task<Container<SelectionRange>?> Handle(SelectionRangeParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document)
-            || document.LatestResult is null )
+        if ( !_documents.TryGetAnalyzed(
+            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
         {
             return Task.FromResult<Container<SelectionRange>?>(null);
         }
 
-        ScriptNode root = document.LatestResult.Tree.Root;
+        ScriptNode root = result.Tree.Root;
         List<SelectionRange> results = [];
 
         foreach ( Position position in request.Positions )

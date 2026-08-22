@@ -74,7 +74,7 @@ public sealed class HoverHandler : HoverHandlerBase
         FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
         if ( typer.TryGetLocalTypeAt(target.Result, request.Position.ToCore(), out LocalTypeHover local) )
         {
-            string markdown = $"```gsc\n(local) {local.Name}: {local.Type.DisplayName()}\n```";
+            string markdown = $"```gsc\n(local) {local.Name}: {local.Display}\n```";
             return Task.FromResult<Hover?>(new Hover
             {
                 Range = local.Range.ToLsp(),
@@ -296,10 +296,11 @@ public sealed class HoverHandler : HoverHandlerBase
     /// <c>self.state = 3</c> in another means the field genuinely holds both, and picking whichever
     /// came last would report a type that is wrong half the places it is read.
     /// </summary>
-    private ScrType InferredFieldType(NavigationTarget target, string name)
+    private ScrType InferredFieldType(NavigationTarget target, string name, out string display)
     {
         FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
         ScrType agreed = ScrType.Unknown;
+        display = "";
         bool seen = false;
 
         foreach ( InferredAssignment assignment in typer.InferAssignments(target.Result) )
@@ -313,11 +314,20 @@ public sealed class HoverHandler : HoverHandlerBase
             if ( !seen )
             {
                 agreed = assignment.Type;
+                display = assignment.Display;
                 seen = true;
             }
             else if ( agreed != assignment.Type )
             {
+                display = "";
                 return ScrType.Unknown;
+            }
+            else if ( !string.Equals(display, assignment.Display, StringComparison.Ordinal) )
+            {
+                // The coarse types agree while the labels do not — two different classes, both
+                // instances. The type is still knowable, so it is still reported; the finer label
+                // is not, so it falls back rather than picking whichever was written first.
+                display = agreed.DisplayName();
             }
         }
 
@@ -348,9 +358,9 @@ public sealed class HoverHandler : HoverHandlerBase
             // there is, so it is used, but only when every write agrees. That is the rule the
             // engine data already follows for a name several entity kinds declare: disagreement
             // means the answer is not knowable from here, and a guess is worse than a blank.
-            ScrType inferred = InferredFieldType(target, name);
+            ScrType inferred = InferredFieldType(target, name, out string display);
             return inferred.IsKnown()
-                ? $"```gsc\n(field) {name}: {inferred.DisplayName()}\n```"
+                ? $"```gsc\n(field) {name}: {display}\n```"
                 : $"```gsc\n(field) {name}\n```";
         }
 

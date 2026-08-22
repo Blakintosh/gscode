@@ -49,8 +49,12 @@ the same list the editor runs, so a rule audited there is the rule users get.
 - **Error** — the script will not link or load. It has to be certain: an Error on working code
   trains people to ignore the panel.
 - **Warning** — probably wrong, still runs.
-- **Hint** + the Unnecessary tag — dead or redundant code. Greys out rather than nags. This is the
-  right choice for anything whose fix is optional (see `5015 UnreachableCode`).
+- **Information** — optional to fix, but worth seeing in the panel. Only affordable when the corpus
+  sweep says the count is small: `5015 UnreachableCode` is Information at 48 findings across all
+  five games.
+- **Hint** + the Unnecessary tag — dead or redundant code, in volume. Greys out rather than nags,
+  and never reaches the Problems panel at all (see `5020 UnusedBinding`, 5,277 findings on BO3
+  alone). A Hint WITHOUT the tag produces no visible output, so pair them or pick Information.
 
 ## 5. Gate it on what it actually needs
 

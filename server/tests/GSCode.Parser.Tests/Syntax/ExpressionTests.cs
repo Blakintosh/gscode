@@ -1,3 +1,4 @@
+using GSCode.Core.Diagnostics;
 using GSCode.Parser.Syntax;
 using Xunit;
 
@@ -137,6 +138,39 @@ public class ExpressionTests
 
         // A plain (non-method) call result stays indexable too.
         Assert.Equal("(index (call getangles) 1)", ParserTestHelper.PrintExpr("getangles()[ 1 ]"));
+    }
+
+    [Fact]
+    public void MethodNotation_ChainsOnOneLine()
+    {
+        // BO1's maps\_anim.gsc line 802 — the entity a call returns is the object of the next call.
+        Assert.Equal(
+            "(call on:(call on:(index (index guyPackets i) \"guy\") get_anim_ent) waittillmatch anim_string \"end\")",
+            ParserTestHelper.PrintExpr("guyPackets[ i ][ \"guy\" ] get_anim_ent() waittillmatch( anim_string, \"end\" )"));
+
+        // BO1's frontend\maps\frontend.gsc, the same shape starting from a plain call.
+        Assert.Equal(
+            "(call on:(call GetEnt \"monitor_06\" \"targetname\") setclientflagasval 48)",
+            ParserTestHelper.PrintExpr("GetEnt( \"monitor_06\", \"targetname\" ) setclientflagasval( 48 )"));
+
+        // A modifier keyword works at any link of the chain.
+        Assert.Equal(
+            "(call thread on:(call on:self getturretowner) stopuseturret)",
+            ParserTestHelper.PrintExpr("self getturretowner() thread stopuseturret()"));
+    }
+
+    [Fact]
+    public void MethodNotation_DoesNotChainAcrossALineBreak()
+    {
+        // CoD4's animscripts\traverse\stairs_down.gsc: a call, no semicolon, and a callable keyword
+        // opening the next line. Chaining across the break would weld the two statements together
+        // and swallow the missing semicolon; the diagnostic is the point of the line gate.
+        ParseTree tree = ParserTestHelper.Parse(
+            "function f()\n{\n\tendnode = self getnegotiationendnode()\n\tassert( isdefined( endnode ) );\n}\n");
+
+        Diagnostic diagnostic = Assert.Single(tree.Diagnostics);
+        Assert.Equal(GscDiagnosticCode.MissingSemicolon, diagnostic.Code);
+        Assert.Equal(2, diagnostic.Range.Start.Line);
     }
 
     [Fact]

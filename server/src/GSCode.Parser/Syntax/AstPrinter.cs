@@ -248,16 +248,16 @@ public static class AstPrinter
             case CaseGroupNode caseGroup:
             {
                 builder.Append("(case");
-                foreach ( ExprNode? label in caseGroup.Labels )
+                foreach ( CaseLabel label in caseGroup.Labels )
                 {
                     builder.Append(' ');
-                    if ( label is null )
+                    if ( label.Value is null )
                     {
                         builder.Append("default");
                     }
                     else
                     {
-                        Write(label, builder, depth + 1);
+                        Write(label.Value, builder, depth + 1);
                     }
                 }
 

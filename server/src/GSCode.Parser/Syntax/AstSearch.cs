@@ -152,9 +152,9 @@ public static class AstSearch
                 foreach ( CaseGroupNode caseGroup in switchNode.Cases ) { yield return caseGroup; }
                 yield break;
             case CaseGroupNode caseGroup:
-                foreach ( ExprNode? label in caseGroup.Labels )
+                foreach ( CaseLabel label in caseGroup.Labels )
                 {
-                    if ( label is not null ) { yield return label; }
+                    if ( label.Value is not null ) { yield return label.Value; }
                 }
 
                 foreach ( AstNode statement in caseGroup.Statements ) { yield return statement; }

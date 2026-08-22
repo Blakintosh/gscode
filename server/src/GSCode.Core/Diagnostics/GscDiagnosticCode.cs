@@ -44,6 +44,24 @@ public enum GscDiagnosticCode
     /// </summary>
     MacrosNotInDialect = 2016,
 
+    /// <summary>
+    /// A <c>#define</c> of a name something has already defined — twice in one file, or once in an
+    /// inserted header and again in the script that inserts it.
+    ///
+    /// Reported at the LATER definition, because that is the one that takes effect: the macro table
+    /// is order-based and the last definition seen wins. Which body a call site expands to therefore
+    /// depends on insert order, and nothing at the call site shows it, so the message names the file
+    /// holding the definition being replaced.
+    /// </summary>
+    DuplicateMacroDefinition = 2017,
+
+    /// <summary>
+    /// A parameter name repeated on one <c>#define</c>. The counterpart of
+    /// <see cref="DuplicateParameter"/> for macros, and unambiguous for the same reason: only one of
+    /// the two can ever be substituted, so every argument passed for the other is discarded.
+    /// </summary>
+    DuplicateMacroParameter = 2018,
+
     // Parsing (3xxx)
     ExpectedToken = 3000,
     ExpectedDeclaration = 3001,
@@ -198,4 +216,72 @@ public enum GscDiagnosticCode
     /// reports.
     /// </summary>
     FunctionNotIncluded = 5026,
+
+    /// <summary>
+    /// A second <c>default:</c> in one switch. Only the first can be reached, so the later one is
+    /// dead in exactly the way <see cref="DuplicateCaseLabel"/> describes for a value label — and
+    /// this rule sits beside it for that reason.
+    ///
+    /// Raised by 1.5 from its CFG builder, which is why it went out with the type-derived family it
+    /// has nothing to do with. It needs no types: a count per switch answers it.
+    /// </summary>
+    MultipleDefaultLabels = 5027,
+
+    /// <summary>
+    /// The value of a <c>thread</c> call used for something. A threaded call returns at the callee's
+    /// first <c>wait</c>, not at its <c>return</c>, so what the caller receives is whatever had been
+    /// reached by then — <c>undefined</c> for anything that waits at all.
+    ///
+    /// Worth a Warning rather than an Error precisely because it is not always wrong today: a
+    /// threaded function containing no wait runs to completion first, so the value is correct until
+    /// someone adds a wait to it and every caller starts reading undefined at once.
+    ///
+    /// 1.5 raised this and <c>AssignOnThreadedFunction</c> as two codes for one mistake; an
+    /// assignment satisfied both. This is the general question — an argument, a condition and a
+    /// return value all consume a value without being an assignment.
+    /// </summary>
+    ConsumedThreadedCallResult = 5028,
+
+    /// <summary>
+    /// A <c>const</c> whose value is not known at compile time. What counts as known was measured
+    /// over Black Ops III's 117 stock declarations: literals, and arithmetic over them.
+    /// </summary>
+    ExpectedConstantExpression = 5029,
+
+    /// <summary>
+    /// An assignment to a name bound by <c>const</c>. Black Ops III only — the Infinity Ward
+    /// dialects' file-scope constants are our modelling of a bare assignment between two functions,
+    /// and nothing establishes the engine refuses a later write to one.
+    /// </summary>
+    CannotAssignToConstant = 5030,
+
+    /// <summary>
+    /// Division, or modulo, by a divisor written as literal zero. Narrower than 1.5's, which tracked
+    /// constant VALUES and so caught <c>d = 0; x = n / d;</c> — this tree has no constant
+    /// propagation, and the literal case needs none.
+    /// </summary>
+    DivisionByZero = 5031,
+
+    /// <summary>
+    /// A statement whose expression cannot do anything, so the line has no effect: <c>a + b;</c>,
+    /// <c>x == 1;</c>. Usually a missing <c>=</c> or a call that lost its parentheses.
+    /// </summary>
+    InvalidExpressionStatement = 5032,
+
+    /// <summary>
+    /// <c>foreach</c> over a value that is certainly a scalar. Structs are excluded — the engine
+    /// enumerates one — so this is only the int/float/bool/string/vector case.
+    /// </summary>
+    CannotEnumerateType = 5033,
+
+    /// <summary>A vector component that cannot be a number.</summary>
+    InvalidVectorComponent = 5034,
+
+    /// <summary>
+    /// An assignment to one of the engine's global objects — <c>level</c>, <c>self</c>,
+    /// <c>game</c>, <c>anim</c>, <c>world</c>. The names come from the active
+    /// <c>GameProfile</c>, so a dialect without <c>world</c> keeps <c>world</c> as an ordinary
+    /// local and is not reported.
+    /// </summary>
+    CannotAssignToGlobalObject = 5035,
 }

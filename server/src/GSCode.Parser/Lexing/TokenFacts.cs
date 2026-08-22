@@ -59,6 +59,17 @@ public static class TokenFacts
             or TokenKind.ShiftRightAssign;
     }
 
+    /// <summary>
+    /// The animation name inside a <see cref="TokenKind.AnimReference"/> token: everything past the
+    /// <c>%</c>, with the whitespace the author may have left after it removed. <c>%run</c> and
+    /// <c>% run</c> name the same animation, so both have to reduce to the same key — slicing at
+    /// index 1 gave the second one a leading space and a symbol nothing else could match.
+    /// </summary>
+    public static ReadOnlySpan<char> AnimReferenceName(ReadOnlySpan<char> text)
+    {
+        return text.Length == 0 ? text : text[1..].TrimStart();
+    }
+
     /// <summary>The canonical lexeme for a fixed-text kind, or null when the source must be sliced.</summary>
     public static string? GetStaticText(TokenKind kind)
     {

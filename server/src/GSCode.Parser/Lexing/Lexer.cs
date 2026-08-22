@@ -536,20 +536,47 @@ public sealed class Lexer
     {
         // %word is an animation reference only where no operand can sit to the left:
         // after = ( , : ? return, or at the very start. Everywhere else % is modulo.
-        if ( IsWordStart(Peek(1)) && IsAnimReferenceContext() )
+        int nameStart = AnimReferenceNameStart();
+
+        if ( nameStart < _source.Length && IsWordStart(_source[nameStart]) && IsAnimReferenceContext() )
         {
             int start = _offset;
-            _offset++;
+            _offset = nameStart;
             while ( _offset < _source.Length && IsWordChar(_source[_offset]) )
             {
                 _offset++;
             }
 
+            // One token covering the % AND the name, spaces included, so the reference has a single
+            // range to hover, rename and report at. Consumers take the name with
+            // <see cref="TokenFacts.AnimReferenceName"/> rather than slicing past the % themselves.
             AddToken(TokenKind.AnimReference, start, _offset - start);
             return;
         }
 
         AddOperator1(TokenKind.Percent, '=', TokenKind.PercentAssign);
+    }
+
+    /// <summary>
+    /// Where the name of a <c>%</c> reference starts: past the <c>%</c> and past any spaces or tabs
+    /// after it. The engine does not require the name to be joined to the sigil, and BO1's own
+    /// maps\fullahead_anim.gsc writes <c>= % o_full_interstitial_01_camera;</c>, so the space is
+    /// skipped here rather than turning that line into modulo and a stray identifier.
+    ///
+    /// Horizontal whitespace only. A <c>%</c> at the end of one line and a word at the start of the
+    /// next is far more likely to be a modulo whose right operand was wrapped than an anim reference
+    /// split across lines, and reading it as one token would swallow the line break with it.
+    /// </summary>
+    private int AnimReferenceNameStart()
+    {
+        int index = _offset + 1;
+
+        while ( index < _source.Length && (_source[index] == ' ' || _source[index] == '\t') )
+        {
+            index++;
+        }
+
+        return index;
     }
 
     /// <summary>

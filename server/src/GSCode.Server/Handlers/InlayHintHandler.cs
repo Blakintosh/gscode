@@ -62,10 +62,32 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         TextRange window = request.Range.ToCore();
         List<InlayHint> hints = [];
 
+        if ( !_settings.InlayInferredTypes && !_settings.InlayParameterNames )
+        {
+            return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
+        }
+
+        FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
+
+        // Per-expression values are needed only by the parameter-name pass, which has to ask what a
+        // `[[ ptr ]]` holds to know whose parameters to name. The type-hint pass wants assignment
+        // sites alone, so it runs the cheaper walk that records nothing else.
+        ScriptTypes types = ScriptTypes.Empty;
+        ImmutableArray<InferredAssignment> assignments;
+
+        if ( _settings.InlayParameterNames )
+        {
+            types = typer.InferValues(target.Result);
+            assignments = types.Assignments;
+        }
+        else
+        {
+            assignments = typer.InferAssignments(target.Result);
+        }
+
         if ( _settings.InlayInferredTypes )
         {
-            FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
-            foreach ( InferredAssignment inferred in typer.InferAssignments(target.Result) )
+            foreach ( InferredAssignment inferred in assignments )
             {
                 // First assignment only: a `: int` label repeated at every reassignment is noise.
                 // The list itself carries them all, because hover needs the later ones.
@@ -74,7 +96,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
                     hints.Add(new InlayHint
                     {
                         Position = inferred.NameRange.End.ToLsp(),
-                        Label = ": " + inferred.Type.DisplayName(),
+                        Label = ": " + inferred.Display,
                         Kind = InlayHintKind.Type,
                         PaddingLeft = false,
                     });
@@ -84,54 +106,65 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
 
         if ( _settings.InlayParameterNames )
         {
-            AddParameterNameHints(target, window, hints);
+            AddParameterNameHints(target, types, window, hints);
         }
 
         return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
     }
 
     /// <summary>True when the call's callee token was produced by expanding a macro body.</summary>
-    private static bool IsFromMacroExpansion(CallNode call)
+    private static bool IsFromMacroExpansion(ExprNode node)
     {
-        switch ( call.Callee )
+        switch ( node )
         {
-            case IdentifierNode identifier:
+            case ArrowCallNode arrowCall:
+                return arrowCall.MethodToken.Provenance.DefinitionSite is not null;
+            case CallNode { Callee: IdentifierNode identifier }:
                 return identifier.Token.Provenance.DefinitionSite is not null;
-            case QualifiedNode qualified:
+            case CallNode { Callee: QualifiedNode qualified }:
                 return qualified.NameToken.Provenance.DefinitionSite is not null;
+            case CallNode { Callee: PointerDerefNode { Pointer: IdentifierNode pointer } }:
+                return pointer.Token.Provenance.DefinitionSite is not null;
             default:
                 return false;
         }
     }
 
-    private void AddParameterNameHints(NavigationTarget target, TextRange window, List<InlayHint> hints)
+    private void AddParameterNameHints(NavigationTarget target, ScriptTypes types, TextRange window, List<InlayHint> hints)
     {
-        foreach ( CallNode call in CollectCalls(target.Result.Tree.Root) )
+        foreach ( ExprNode node in CollectCalls(target.Result.Tree.Root) )
         {
-            if ( call.Arguments.Length == 0 || !window.Contains(call.Range.Start) )
+            ImmutableArray<ExprNode> arguments = node switch
+            {
+                CallNode call => call.Arguments,
+                ArrowCallNode arrowCall => arrowCall.Arguments,
+                _ => [],
+            };
+
+            if ( arguments.Length == 0 || !window.Contains(node.Range.Start) )
             {
                 continue;
             }
 
             // A call inside a macro body reports the INVOCATION's range, so hinting it would
             // stamp the whole expansion's parameter names onto the one call site.
-            if ( IsFromMacroExpansion(call) )
+            if ( IsFromMacroExpansion(node) )
             {
                 continue;
             }
 
-            ImmutableArray<string> parameters = ResolveParameterNames(target, call);
+            ImmutableArray<string> parameters = ResolveParameterNames(target, types, node);
             if ( parameters.IsDefaultOrEmpty )
             {
                 continue;
             }
 
-            int count = Math.Min(parameters.Length, call.Arguments.Length);
+            int count = Math.Min(parameters.Length, arguments.Length);
             for ( int index = 0; index < count; index++ )
             {
                 hints.Add(new InlayHint
                 {
-                    Position = call.Arguments[index].Range.Start.ToLsp(),
+                    Position = arguments[index].Range.Start.ToLsp(),
                     Label = parameters[index] + ":",
                     Kind = InlayHintKind.Parameter,
                     PaddingRight = true,
@@ -140,7 +173,54 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         }
     }
 
-    private ImmutableArray<string> ResolveParameterNames(NavigationTarget target, CallNode call)
+    /// <summary>
+    /// Parameter names for one call site, whichever of the four callee forms it uses.
+    ///
+    /// The two indirect forms — <c>[[ ptr ]]( ... )</c> and <c>[[ obj ]]-&gt;method( ... )</c> — are
+    /// answered from the flow pass rather than from the syntax, because the callee is a VALUE there
+    /// and the syntax names a local. Both were silent before: a pointer call is how most of a Black
+    /// Ops III script's dispatch is written, so that was the majority of calls in some files.
+    /// </summary>
+    private ImmutableArray<string> ResolveParameterNames(NavigationTarget target, ScriptTypes types, ExprNode node)
+    {
+        if ( node is ArrowCallNode arrowCall )
+        {
+            // The class comes from what the object HOLDS. A method name alone resolves to nothing:
+            // methods are keyed by their declaring class, and several classes can declare one name.
+            string? instanceClass = types.ValueOf(arrowCall.Object.Pointer).InstanceClass;
+            if ( instanceClass is null )
+            {
+                return default;
+            }
+
+            return MethodParameterNames(
+                target,
+                new SymbolKey(null, arrowCall.MethodToken.Text.ToLowerInvariant(), GSCode.Core.Symbols.SymbolKind.Function, instanceClass.ToLowerInvariant()),
+                ReferenceKind.Call);
+        }
+
+        if ( node is not CallNode call )
+        {
+            return default;
+        }
+
+        if ( call.Callee is PointerDerefNode deref )
+        {
+            ScrFunctionRef? pointer = types.ValueOf(deref).FunctionTarget;
+            if ( pointer is not { } reference )
+            {
+                return default;
+            }
+
+            return reference.Namespace is null
+                ? UnqualifiedParameterNames(target, reference.Name)
+                : QualifiedParameterNames(target, reference.Namespace, reference.Name);
+        }
+
+        return ResolveNamedParameterNames(target, call);
+    }
+
+    private ImmutableArray<string> ResolveNamedParameterNames(NavigationTarget target, CallNode call)
     {
         if ( call.Callee is IdentifierNode identifier )
         {
@@ -160,50 +240,59 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
                 }
             }
 
-            // A script function in one of the file's namespaces, else a builtin. The declared set,
-            // not the spans — a phantom span cost a full store scan here on every hint.
-            foreach ( string declared in target.Result.Extraction.DeclaredNamespaces )
-            {
-                ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                    target.Store, target.ContextId, target.Path, declared, identifier.Token.Text.ToLowerInvariant(), askingNamespaces: target.Namespaces);
-                if ( found.Length > 0 )
-                {
-                    return [.. found[0].Function.Parameters.Select(static p => p.Name)];
-                }
-            }
-
-            BuiltinFunction? builtin = _builtins.For(target.Language).Find(identifier.Token.Text);
-            if ( builtin is not null && builtin.Overloads.Length > 0 )
-            {
-                return [.. builtin.Overloads[0].Parameters.Select(static p => p.Name)];
-            }
-
-            return default;
+            return UnqualifiedParameterNames(target, identifier.Token.Text);
         }
 
         if ( call.Callee is QualifiedNode qualified )
         {
+            return QualifiedParameterNames(
+                target, qualified.NamespaceToken.Text, qualified.NameToken.Text);
+        }
+
+        return default;
+    }
+
+    /// <summary>A bare name: a script function in one of the file's namespaces, else a builtin.</summary>
+    private ImmutableArray<string> UnqualifiedParameterNames(NavigationTarget target, string name)
+    {
+        // The DECLARED namespace set, not the spans — a phantom span cost a full store scan here on
+        // every hint.
+        foreach ( string declared in target.Result.Extraction.DeclaredNamespaces )
+        {
             ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                target.Store, target.ContextId, target.Path,
-                qualified.NamespaceToken.Text.ToLowerInvariant(),
-                qualified.NameToken.Text.ToLowerInvariant(), askingNamespaces: target.Namespaces);
+                target.Store, target.ContextId, target.Path, declared, name.ToLowerInvariant(), askingNamespaces: target.Namespaces);
             if ( found.Length > 0 )
             {
                 return [.. found[0].Function.Parameters.Select(static p => p.Name)];
             }
+        }
 
-            // The qualifier may name a CLASS rather than a namespace — Class::method(). Tried second
-            // so a name that is both, which BO3 ships, keeps meaning the namespace.
-            return MethodParameterNames(
-                target,
-                new SymbolKey(
-                    qualified.NamespaceToken.Text.ToLowerInvariant(),
-                    qualified.NameToken.Text.ToLowerInvariant(),
-                    GSCode.Core.Symbols.SymbolKind.Function),
-                ReferenceKind.Call);
+        BuiltinFunction? builtin = _builtins.For(target.Language).Find(name);
+        if ( builtin is not null && builtin.Overloads.Length > 0 )
+        {
+            return [.. builtin.Overloads[0].Parameters.Select(static p => p.Name)];
         }
 
         return default;
+    }
+
+    /// <summary>A <c>ns::name</c> reference, where the qualifier may name a namespace or a class.</summary>
+    private ImmutableArray<string> QualifiedParameterNames(NavigationTarget target, string qualifier, string name)
+    {
+        ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
+            target.Store, target.ContextId, target.Path,
+            qualifier.ToLowerInvariant(), name.ToLowerInvariant(), askingNamespaces: target.Namespaces);
+        if ( found.Length > 0 )
+        {
+            return [.. found[0].Function.Parameters.Select(static p => p.Name)];
+        }
+
+        // The qualifier may name a CLASS rather than a namespace — Class::method(). Tried second
+        // so a name that is both, which BO3 ships, keeps meaning the namespace.
+        return MethodParameterNames(
+            target,
+            new SymbolKey(qualifier.ToLowerInvariant(), name.ToLowerInvariant(), GSCode.Core.Symbols.SymbolKind.Function),
+            ReferenceKind.Call);
     }
 
     /// <summary>
@@ -247,7 +336,8 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         return null;
     }
 
-    private static IEnumerable<CallNode> CollectCalls(AstNode root)
+    /// <summary>Every call site in the tree — the four <c>CallNode</c> forms and arrow method calls.</summary>
+    private static IEnumerable<ExprNode> CollectCalls(AstNode root)
     {
         Stack<AstNode> stack = new();
         stack.Push(root);
@@ -255,9 +345,9 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         while ( stack.Count > 0 )
         {
             AstNode node = stack.Pop();
-            if ( node is CallNode call )
+            if ( node is CallNode or ArrowCallNode )
             {
-                yield return call;
+                yield return (ExprNode)node;
             }
 
             foreach ( AstNode child in AstSearch.ChildrenOf(node) )

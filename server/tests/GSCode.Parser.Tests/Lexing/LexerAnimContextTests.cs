@@ -34,6 +34,26 @@ public class LexerAnimContextTests
     }
 
     [Theory]
+    [InlineData("x = % anim_run;")]
+    [InlineData("x = %\tanim_run;")]
+    [InlineData("play( a, %  anim_run )")]
+    public void Lex_AnimReference_ToleratesSpaceAfterThePercent(string source)
+    {
+        // BO1's maps\fullahead_anim.gsc writes `= % o_full_interstitial_01_camera;` — the engine does
+        // not require the name to be joined to the sigil.
+        Assert.Contains(TokenKind.AnimReference, LexTestHelper.SignificantKinds(source));
+    }
+
+    [Fact]
+    public void Lex_AnimReference_DoesNotSpanALineBreak()
+    {
+        // A % ending one line is a wrapped modulo far more often than an anim reference split in two.
+        List<TokenKind> kinds = LexTestHelper.SignificantKinds("x = %\nanim_run;");
+        Assert.Contains(TokenKind.Percent, kinds);
+        Assert.DoesNotContain(TokenKind.AnimReference, kinds);
+    }
+
+    [Theory]
     [InlineData("a % b")]
     [InlineData("10 % 3")]
     [InlineData("(x) % y")]

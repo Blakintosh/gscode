@@ -188,6 +188,11 @@ public static class UnassignedVariableLint
                 continue;
             }
 
+            // CAUTION for whoever restores v1.5's `StoreFunctionAsPointer`, which reports a bare
+            // identifier that names a FUNCTION being used as a value: it fires on exactly this
+            // range, and this diagnostic reaches the name first. It has to REPLACE this one rather
+            // than stack a second squiggle on the same identifier — two diagnostics for one
+            // mistake, and the less useful of them arriving first. See FOLLOWUPS.md.
             diagnostics.Add(Diagnostic.Create(
                 read.RootRange,
                 DiagnosticSeverity.Warning,

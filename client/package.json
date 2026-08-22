@@ -5,15 +5,29 @@
 	"icon": "icons/gscode.png",
 	"version": "2.0.0",
 	"publisher": "blakintosh",
+	"license": "GPL-3.0-or-later",
+	"homepage": "https://www.gscode.net",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/Blakintosh/gscode"
+	},
+	"bugs": {
+		"url": "https://github.com/Blakintosh/gscode/issues"
 	},
 	"engines": {
 		"vscode": "^1.85.0"
 	},
 	"categories": [
-		"Programming Languages"
+		"Programming Languages",
+		"Linters",
+		"Formatters"
+	],
+	"keywords": [
+		"gsc",
+		"csc",
+		"gsh",
+		"call of duty",
+		"black ops 3"
 	],
 	"activationEvents": [
 		"workspaceContains:**/*.gsc",

@@ -1,6 +1,6 @@
-using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
+using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 using GSCode.Server.Mapping;
@@ -8,6 +8,10 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
+using PathCallReference = GSCode.Parser.Extraction.PathCallReference;
+using Position = GSCode.Core.Text.Position;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -52,7 +56,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             Location fileStart = new()
             {
                 Uri = DocumentUri.FromFileSystemPath(path),
-                Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(0, 0, 0, 0),
+                Range = new LspRange(0, 0, 0, 0),
             };
             return Task.FromResult<LocationOrLocationLinks?>(new LocationOrLocationLinks(fileStart));
         }
@@ -72,11 +76,8 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         sources = ScopeToIncludes(target, hit, sources);
 
-        List<Location> definitions = [.. sources.Select(static source => new Location
-        {
-            Uri = DocumentUri.FromFileSystemPath(source.Record.Path),
-            Range = source.Entry.Range.ToLsp(),
-        })];
+        List<Location> definitions =
+            [.. sources.Select(static source => LspMapping.LocationAt(source.Record.Path, source.Entry.Range))];
 
         if ( definitions.Count == 0 )
         {
@@ -89,19 +90,15 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
     /// <summary>The parameter or assignment that introduced the local under the cursor, if any.</summary>
     private static LocationOrLocationLinks? LocalDefinitionAt(
-        NavigationTarget target, GSCode.Core.Text.Position position)
+        NavigationTarget target, Position position)
     {
-        GSCode.Core.Text.TextRange? range = LocalDefinition.Find(target.Result, position);
+        TextRange? range = LocalDefinition.Find(target.Result, position);
         if ( range is null )
         {
             return null;
         }
 
-        return new LocationOrLocationLinks(new Location
-        {
-            Uri = DocumentUri.FromFileSystemPath(target.Path),
-            Range = range.Value.ToLsp(),
-        });
+        return new LocationOrLocationLinks(LspMapping.LocationAt(target.Path, range.Value));
     }
 
     /// <summary>
@@ -143,7 +140,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     {
         // A path call names its target file explicitly — pin to it (as its own single-file scope).
         // Empty on BO3, which has no inline path calls, so the loop costs nothing there.
-        foreach ( GSCode.Parser.Extraction.PathCallReference pathCall in target.Result.Extraction.PathCalls )
+        foreach ( PathCallReference pathCall in target.Result.Extraction.PathCalls )
         {
             if ( pathCall.NameRange == hit.Range )
             {
@@ -165,22 +162,18 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         }
 
         // A #using / #include with no pre-resolved path: resolve it now against this file's context.
-        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in target.Result.Tree.Root.Elements )
+        foreach ( AstNode element in target.Result.Tree.Root.Elements )
         {
             string? directivePath = element switch
             {
-                GSCode.Parser.Syntax.Ast.UsingNode usingNode when usingNode.PathRange == hit.Range => usingNode.Path,
-                GSCode.Parser.Syntax.Ast.IncludeNode includeNode when includeNode.PathRange == hit.Range => includeNode.Path,
+                UsingNode usingNode when usingNode.PathRange == hit.Range => usingNode.Path,
+                IncludeNode includeNode when includeNode.PathRange == hit.Range => includeNode.Path,
                 _ => null,
             };
 
             if ( directivePath is not null )
             {
-                ResolutionContext context = _support.Resolver.GetContext(target.Path);
-                string extension = target.Language == ScriptLanguage.Csc
-                    ? GameProfile.Active.ClientScriptExtension
-                    : GameProfile.Active.ServerScriptExtension;
-                return _support.Resolver.Resolve(context, directivePath + extension);
+                return _support.ResolveDirectivePath(target, directivePath);
             }
         }
 

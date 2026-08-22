@@ -1,9 +1,6 @@
-using System.Collections.Immutable;
-using GSCode.Parser;
 using GSCode.Workspace.Documents;
 using GSCode.Server.Configuration;
 using GSCode.Server.Formatting;
-using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -36,47 +33,17 @@ public sealed class DocumentFormattingHandler : DocumentFormattingHandlerBase
 
     public override Task<TextEditContainer?> Handle(DocumentFormattingParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document)
-            || document.LatestResult is null )
+        // The whole document, so every edit the formatter produced is kept as-is.
+        FormatOptions options = FormatOptions.From(
+            (int)request.Options.TabSize, request.Options.InsertSpaces, _settings);
+
+        if ( FormattingSupport.Prepare(_documents, request.TextDocument.Uri, options) is not FormatRequest prepared
+            || prepared.Edits.IsEmpty )
         {
             return Task.FromResult<TextEditContainer?>(null);
         }
 
-        // Analyse fresh. FormatMinimal diffs the formatted output against the analysed text and
-        // returns a MINIMAL edit, so its range indexes into that text — applying it to a document
-        // that has since changed points the range at unrelated characters and corrupts the file.
-        // Every other stale read shows something wrong; this one writes something wrong.
-        ParseResult analysis = _documents.AnalyzeIfStale(document);
-
-        // Per-region edits rather than one document-spanning replacement, so the editor can keep
-        // the caret on whatever unchanged line it started on instead of dropping it at the end of
-        // a whole-file edit.
-        ImmutableArray<GscFormatter.FormatEdit> edits =
-            GscFormatter.FormatMinimalEdits(analysis, OptionsFrom(request.Options));
-        if ( edits.IsEmpty )
-        {
-            return Task.FromResult<TextEditContainer?>(null);
-        }
-
-        List<TextEdit> textEdits = [.. edits.Select(static edit => new TextEdit
-        {
-            Range = edit.Range.ToLsp(),
-            NewText = edit.NewText,
-        })];
-
-        return Task.FromResult<TextEditContainer?>(new TextEditContainer(textEdits));
-    }
-
-    /// <summary>
-    /// Combines the editor's per-request indentation with the configured GSC knobs.
-    ///
-    /// tabSize/insertSpaces arrive in the LSP payload on EVERY formatting request, because the
-    /// editor resolves them per document (language overrides, .editorconfig, detected indentation).
-    /// They were being dropped entirely, so the formatter reindented every file to four spaces no
-    /// matter what the editor had been told.
-    /// </summary>
-    private FormatOptions OptionsFrom(FormattingOptions requested)
-    {
-        return FormatOptions.From((int)requested.TabSize, requested.InsertSpaces, _settings);
+        return Task.FromResult<TextEditContainer?>(
+            new TextEditContainer(FormattingSupport.ToLspEdits(prepared.Edits)));
     }
 }

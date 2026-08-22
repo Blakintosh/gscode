@@ -144,6 +144,39 @@ public sealed class DocumentStore
     }
 
     /// <summary>
+    /// An open document together with its latest completed analysis, or false when the path is not
+    /// open or nothing has finished analysing it yet.
+    ///
+    /// The pair rather than two steps, because no caller wants one without the other: five handlers
+    /// each wrote the lookup and the null check out by hand, which is five spellings of one
+    /// question. Reads <see cref="OpenDocument.Analysis"/> once, for the reason that property
+    /// exists — a separate <see cref="OpenDocument.LatestResult"/> read can straddle a publish and
+    /// hand back a parse from a different version than the one just found.
+    ///
+    /// This is the CHEAP resolve, deliberately. It answers only what the store knows; anything
+    /// needing the database, the resolution context or a fresh parse goes through the server's
+    /// navigation support instead.
+    /// </summary>
+    public bool TryGetAnalyzed(string path, out OpenDocument document, out ParseResult result)
+    {
+        if ( !TryGet(path, out document) )
+        {
+            result = null!;
+            return false;
+        }
+
+        AnalysisSnapshot? analysis = document.Analysis;
+        if ( analysis is null )
+        {
+            result = null!;
+            return false;
+        }
+
+        result = analysis.Result;
+        return true;
+    }
+
+    /// <summary>
     /// Every document the user currently has open, for the cross-file lints: a file's diagnostics
     /// depend on its neighbours, so editing one can invalidate another's. A snapshot rather than a
     /// live view, since the caller re-analyses each one and a document may be closed meanwhile.

@@ -127,7 +127,24 @@ public sealed class WorkspaceIndexer
     // Optional persistent cache and its warm-restore snapshot (set via UseCache). The snapshot
     // holds blobs rather than records: see CachedEntry for why the deserialize belongs down here.
     private SqliteCache? _cache;
-    private IReadOnlyDictionary<string, CachedEntry> _restored = new Dictionary<string, CachedEntry>();
+
+    /// <summary>
+    /// The blobs a warm start may restore from, held only for the duration of an indexing pass.
+    ///
+    /// It used to be set once and kept for the session, and this class is a singleton in the
+    /// server — so a bo3 workspace carried 21 MB of gzipped blobs, and a bo1 one 64 MB, for the
+    /// whole run after the last file that could use them was indexed. Against a 400 MB
+    /// steady-state budget that is worth reclaiming.
+    ///
+    /// <see cref="IndexAsync"/> releases it on the way out and <see cref="ReloadRestoreSnapshot"/>
+    /// puts it back for the one caller that indexes twice. Paying a second 13-54 ms read on a
+    /// workspace-folder change is the cheaper side of that trade: the snapshot is live for
+    /// milliseconds and dead for hours.
+    /// </summary>
+    private IReadOnlyDictionary<string, CachedEntry> _restored = EmptyRestore;
+
+    private static readonly IReadOnlyDictionary<string, CachedEntry> EmptyRestore =
+        new Dictionary<string, CachedEntry>(StringComparer.Ordinal);
 
     /// <summary>Reads the current resolver each call, so resolver swaps take effect immediately.</summary>
     private readonly IHeaderMacroCache? _headerCache;
@@ -156,11 +173,39 @@ public sealed class WorkspaceIndexer
         _profile = profile;
     }
 
-    /// <summary>Enables persistent caching: unchanged files restore from <paramref name="restored"/>, fresh analyses are written to <paramref name="cache"/>.</summary>
+    /// <summary>
+    /// Enables persistent caching: unchanged files restore from <paramref name="restored"/>, fresh
+    /// analyses are written to <paramref name="cache"/>.
+    ///
+    /// The snapshot is consumed by the NEXT indexing pass and released when it finishes. A caller
+    /// that indexes again wants <see cref="ReloadRestoreSnapshot"/> first; the cache itself stays
+    /// attached either way, so writes continue regardless.
+    /// </summary>
     public void UseCache(SqliteCache cache, IReadOnlyDictionary<string, CachedEntry> restored)
     {
         _cache = cache;
         _restored = restored;
+    }
+
+    /// <summary>
+    /// Re-reads the restore snapshot from the attached cache, for a second indexing pass in the
+    /// same session.
+    ///
+    /// A failed read leaves the snapshot empty rather than throwing: the cache may have been closed
+    /// and deleted by <c>gscode/clearCache</c> since it was attached, and the right answer to that
+    /// is the cold index the user asked for. It is not silent — the pass that follows reports zero
+    /// files restored, which is the same thing the log would say.
+    /// </summary>
+    public void ReloadRestoreSnapshot()
+    {
+        try
+        {
+            _restored = _cache?.LoadAll() ?? EmptyRestore;
+        }
+        catch ( Exception exception ) when ( exception is not OutOfMemoryException )
+        {
+            _restored = EmptyRestore;
+        }
     }
 
     private PathResolver Resolver
@@ -170,6 +215,22 @@ public sealed class WorkspaceIndexer
 
     /// <summary>Indexes everything the resolver can reach. Returns the number of files indexed.</summary>
     public async Task<IndexOutcome> IndexAsync(IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await IndexCoreAsync(mode, progress, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            // In a finally rather than after the return, so a cancelled pass releases it too. The
+            // folder-change caller passes a real token, and a cancellation there would otherwise
+            // pin the whole snapshot for the rest of the session — which is the case this exists
+            // to remove.
+            _restored = EmptyRestore;
+        }
+    }
+
+    private async Task<IndexOutcome> IndexCoreAsync(IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken)
     {
         if ( mode == IndexingMode.Off )
         {

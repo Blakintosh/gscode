@@ -293,6 +293,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
   two closes the changed-header set over the insert graph first, since a restored `.gsh`
   that inserts a changed one contributes something new despite its own bytes matching.
   `RemoveFile` drops a deleted file from the database, the cache, and the GSH lex cache.
+  The restore snapshot is held for one pass only: `IndexAsync` releases it in a `finally`, so a
+  server-lifetime singleton does not carry 21 MB (bo3) or 64 MB (bo1) of gzipped blobs for the
+  session. `ReloadRestoreSnapshot` re-reads it for the one caller that indexes twice — the
+  workspace-folder handler — and swallows a read failure, since a cache closed by
+  `gscode/clearCache` should give a cold index rather than an exception.
 
 ## Cache/CacheSchema.cs
 

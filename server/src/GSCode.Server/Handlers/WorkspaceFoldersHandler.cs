@@ -19,8 +19,13 @@ namespace GSCode.Server.Handlers;
 /// Three things have to happen in order: the resolver is swapped first, since every later
 /// query classifies paths through it; records under removed folders are dropped, because
 /// their files are no longer visible; and the added folders are indexed last. Re-indexing is
-/// a full pass — unchanged files restore from the in-memory cache snapshot, so the cost is a
-/// warm start rather than a cold one.
+/// a full pass — unchanged files restore from the cache snapshot, so the cost is a warm start
+/// rather than a cold one.
+///
+/// This is the only place that indexes twice in one session, and the snapshot is released when a
+/// pass finishes rather than kept for the run — a bo3 workspace's blobs are 21 MB and a bo1 one's
+/// 64, against a 400 MB steady-state budget. So it is re-read here, which is the 13–54 ms this
+/// path pays to keep the other case free.
 /// </summary>
 public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBase
 {
@@ -66,6 +71,8 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
         // Only worth re-indexing when a folder was added; a pure removal has nothing new.
         if ( request.Event.Added.Any() )
         {
+            _indexer.ReloadRestoreSnapshot();
+
             IndexOutcome outcome = await _indexer
                 .IndexAsync(IndexingModeFor(_settings), NullIndexProgressListener.Instance, cancellationToken)
                 .ConfigureAwait(false);

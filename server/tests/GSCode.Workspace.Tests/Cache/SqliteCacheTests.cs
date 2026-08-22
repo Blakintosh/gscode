@@ -269,6 +269,56 @@ public class ColdRestoreTests : IDisposable
     }
 
     /// <summary>
+    /// The restore snapshot is released when a pass finishes, and re-read by the one caller that
+    /// indexes twice.
+    ///
+    /// It used to be held for the life of the indexer, which is a singleton in the server: a bo3
+    /// workspace kept 21 MB of gzipped blobs and a bo1 one 64 MB, long after the last file that
+    /// could restore from them was indexed. Both halves are pinned here because either alone is a
+    /// bug — never releasing wastes the memory, and releasing without a way back makes every
+    /// workspace-folder change a cold index.
+    /// </summary>
+    [Fact]
+    public async Task RestoreSnapshot_IsReleasedAfterAPassAndReReadOnDemand()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\a.gsc", "function alpha()\n{\n}\n")
+            .AddFile(@$"{Raw}\scripts\b.gsc", "function beta()\n{\n}\n");
+
+        // First cold start populates the cache.
+        (ScriptDatabase _, WorkspaceIndexer indexer1, _) = Build(files);
+        await using ( SqliteCache cache1 = SqliteCache.Open(_dbPath, "id") )
+        {
+            indexer1.UseCache(cache1, cache1.LoadAll());
+            await indexer1.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+        }
+
+        (ScriptDatabase _, WorkspaceIndexer indexer2, _) = Build(files);
+        await using ( SqliteCache cache2 = SqliteCache.Open(_dbPath, "id") )
+        {
+            indexer2.UseCache(cache2, cache2.LoadAll());
+
+            IndexOutcome warm = await indexer2.IndexAsync(
+                IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+            Assert.Equal(2, warm.Restored);
+
+            // Same indexer, same attached cache, no reload: the snapshot is gone, so this pass has
+            // nothing to restore from and analyses both files afresh.
+            IndexOutcome released = await indexer2.IndexAsync(
+                IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+            Assert.Equal(0, released.Restored);
+            Assert.Equal(2, released.Analysed);
+
+            // What the workspace-folder handler does before its second pass.
+            indexer2.ReloadRestoreSnapshot();
+
+            IndexOutcome reloaded = await indexer2.IndexAsync(
+                IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+            Assert.Equal(2, reloaded.Restored);
+        }
+    }
+
+    /// <summary>
     /// The restored/analysed split is what labels a run cold or warm in the memory report, and
     /// the two have very different allocation profiles, so the counts have to be truthful.
     /// </summary>

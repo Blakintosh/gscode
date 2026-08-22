@@ -42,7 +42,7 @@ async function font(rel) {
 	return (await readFile(join(site, 'node_modules', rel))).toString('base64');
 }
 const chakra = await font('@fontsource/chakra-petch/files/chakra-petch-latin-700-normal.woff2');
-const mono = await font('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2');
+const mono = await font('@fontsource-variable/cascadia-code/files/cascadia-code-latin-wght-normal.woff2');
 
 const src = (name) => readFile(join(here, 'src', name), 'utf8');
 
@@ -52,7 +52,7 @@ const src = (name) => readFile(join(here, 'src', name), 'utf8');
 function page(svg) {
 	return `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{font-family:'Chakra Petch';font-weight:700;src:url(data:font/woff2;base64,${chakra}) format('woff2')}
-@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(data:font/woff2;base64,${mono}) format('woff2')}
+@font-face{font-family:'Cascadia Code';font-weight:400;src:url(data:font/woff2;base64,${mono}) format('woff2')}
 html,body{margin:0;padding:0;background:transparent}
 body{width:${SIZE}px;height:${SIZE}px;overflow:hidden}
 svg{display:block;width:${SIZE}px;height:${SIZE}px}

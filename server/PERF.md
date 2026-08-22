@@ -1305,6 +1305,48 @@ machine with fewer cores the cold column moves and the conclusion with it.
 The cold index, the phase shares, the lint pass and completion are all untouched — this is the other
 arm of the fork. The keystroke path never reads the cache at all.
 
+### 2026-08-22: the warm arm was holding its own blobs for the session
+
+Every memory figure in this file is a COLD index. `MemoryProbeTests` has two probes and neither
+could see the warm arm: one attaches no cache at all, and the one that does opens a fresh
+`gscode-probe-<guid>.db` per run, so `LoadAll` returns nothing and every file is analysed. It
+measures the cache being WRITTEN. The restore snapshot only exists where the database already has
+rows, and until `EachGame_WarmIndexWithCache_ThenWatchRetainedMemory` was added, the bytes it costs
+had never been on a scale.
+
+`WorkspaceIndexer` held that snapshot in a field set once by `UseCache` and never cleared, and the
+server registers the indexer as a singleton — so every gzipped blob `LoadAll` read stayed reachable
+for the session, long after the last file that could restore from one was indexed. `ProcessFile`
+consults it only under `allowRestore`; phase two and the watcher's `IndexFile` both pass false. It
+is dead the moment `IndexAsync` returns.
+
+Populate, drain, throw everything away except the database file, index again warm, then one sample
+after a forced blocking collection with the indexer kept alive:
+
+| retained after a warm index | before | after |
+|---|---:|---:|
+| bo3, 1,085 files | 82.2 MB | **68.8 MB** |
+| cod4, 904 files | 74.4 MB | **61.0 MB** |
+
+**13.4 MB on both, 16% and 18% of what the workspace costs to keep.** The figure is smaller than
+the database on disk — 21.0 MB for bo3, 23.0 for cod4 — and should be: the file carries the schema,
+the `deps` table and SQLite's own indices, while what was pinned is the record column alone.
+
+`GC.KeepAlive(indexer)` is what makes the probe answer the question asked. The server's indexer
+outlives every index it runs; a probe that lets it be collected measures the database only and reads
+clean whatever the indexer is keeping.
+
+Releasing it alone would have made a workspace-folder change a cold index, since that handler is the
+only caller that indexes twice in a session. `ReloadRestoreSnapshot` re-reads it there instead —
+16–21 ms on these two corpora, on a path taken by hand, to keep the other case free.
+
+**The header-cache merge in the same pass freed nothing measurable, and the probe says so.** The
+indexer kept a private `ConcurrentDictionary<path, Lazy<InsertedFile?>>` beside the `InsertCache` it
+was already handed for macros, so BO3's 114 distinct headers were held twice. Merging them reads
+68.8 and 61.0 — the same two numbers to the decimal. A hundred small files is not 13 MB, and the
+merge is kept for the duplicate it removes and for three defects the surviving cache does not have
+(ordinal path comparison, no revalidation, a failed read cached for good), not for memory.
+
 ## Measured: STARTUP, which is not indexing and had never been separated from it
 
 `Ready Ns after start` has been in the log for a while and every reading of it was attributed to
@@ -1515,6 +1557,8 @@ cold one** — the WARM START section explains why and what the remaining lever 
 0.3–0.4 s off it with a RID-specific publish that is not the default.
 | Steady-state memory (cold, before compaction) | 1,105 files | 390.3 MB | < 400 MB | just inside |
 | Steady-state memory (warm) | 1,105 files | 212.2 MB | < 400 MB | yes |
+| Retained after a warm index, harness, 2026-08-22 | 1,085 files (bo3) | 68.8 MB | < 400 MB | yes |
+| Retained after a warm index, harness, 2026-08-22 | 904 files (cod4) | 61.0 MB | < 400 MB | yes |
 | Live managed set (either path) | 1,105 files | ~115 MB | — | — |
 
 From the test harness rather than the server, 2026-08-12 — a different question, as the section on

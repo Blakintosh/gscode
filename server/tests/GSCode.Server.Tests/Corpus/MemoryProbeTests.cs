@@ -151,6 +151,106 @@ public class MemoryProbeTests
         }
     }
 
+
+    /// <summary>
+    /// What a WARM index retains, which neither probe above can see.
+    ///
+    /// The one with a cache attached opens a fresh database per run, so `LoadAll` returns nothing
+    /// and every file is analysed: it measures the cache being WRITTEN. The restore snapshot only
+    /// exists on the arm where the database already has rows in it, and until this ran, the bytes
+    /// that snapshot costs had never been on a scale.
+    ///
+    /// They were worth putting there. The snapshot is a `byte[]` per cached file - the gzipped
+    /// record, held unopened so the freshness check can be answered without inflating it - and the
+    /// indexer used to keep the whole dictionary in a field for the life of the process. In the
+    /// server that is a DI singleton, so "the life of the process" is the session.
+    /// </summary>
+    [Fact]
+    public async Task EachGame_WarmIndexWithCache_ThenWatchRetainedMemory()
+    {
+        if ( !GameCorpusFixture.Available().Any() && !CorpusFixture.Available )
+        {
+            _output.WriteLine("SKIPPED: no %GSCODE_CORPUS_<GAME>% found.");
+            return;
+        }
+
+        if ( CorpusFixture.Available )
+        {
+            await ProbeWarmAsync(GameProfile.BlackOps3, CorpusFixture.Resolver);
+        }
+
+        foreach ( GameCorpus corpus in GameCorpusFixture.Available() )
+        {
+            GameCorpus captured = corpus;
+            await ProbeWarmAsync(captured.Profile, () => GameCorpusFixture.Resolver(captured));
+        }
+    }
+
+    private async Task ProbeWarmAsync(GameProfile profile, Func<PathResolver> resolverFactory)
+    {
+        GameProfile previous = GameProfile.Active;
+        string databasePath = Path.Combine(Path.GetTempPath(), $"gscode-warmprobe-{Guid.NewGuid():N}.db");
+        const string Identity = "warm-probe-identity";
+
+        try
+        {
+            GameProfile.Select(profile.ShortName);
+
+            // Populate, then DRAIN. The writer serializes and gzips on its own thread well after
+            // IndexAsync returns, so without the wait the measured run restores whatever happened
+            // to have been flushed and reports a warm start that is half cold.
+            {
+                PathResolver seedResolver = resolverFactory();
+                ScriptDatabase seedDatabase = new();
+                WorkspaceIndexer seedIndexer = new(
+                    seedDatabase, () => seedResolver, new PhysicalFileSystem(), new NameTable());
+
+                await using SqliteCache seedCache = SqliteCache.Open(databasePath, Identity);
+                seedIndexer.UseCache(seedCache, seedCache.LoadAll());
+                await seedIndexer.IndexAsync(
+                    IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+                await seedCache.WaitForIdleAsync(CancellationToken.None);
+            }
+
+            // Fresh everything, so nothing the populating run interned, resolved or committed is
+            // available to the measured one. Only the database file crosses between them.
+            PathResolver resolver = resolverFactory();
+            ScriptDatabase database = new();
+            WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), new NameTable());
+
+            await using SqliteCache cache = SqliteCache.Open(databasePath, Identity);
+            indexer.UseCache(cache, cache.LoadAll());
+
+            IndexOutcome outcome = await indexer.IndexAsync(
+                IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+
+            await cache.WaitForIdleAsync(CancellationToken.None);
+
+            _output.WriteLine("");
+            _output.WriteLine(
+                $"########## {profile.ShortName} WARM: {outcome.Total} files, {outcome.Restored} restored");
+            _output.WriteLine(RowHeader);
+            _output.WriteLine(Row("wrm", Sample()));
+
+            // The indexer, not just the database. What is being asked is what the SERVER holds, and
+            // there the indexer outlives every index it runs - so a probe that lets it be collected
+            // measures the wrong object and reads clean whatever the indexer is keeping.
+            GC.KeepAlive(indexer);
+            GC.KeepAlive(database);
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
+            try
+            {
+                File.Delete(databasePath);
+            }
+            catch ( IOException )
+            {
+            }
+        }
+    }
+
     [Fact]
     public async Task EachGame_IndexThenWatchRetainedMemory()
     {

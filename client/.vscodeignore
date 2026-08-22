@@ -11,6 +11,8 @@ eslint.config.mjs
 **/*.ts
 .env
 .env.example
+icons/src/**
+icons/build-icons.mjs
 
 # The published server. `dotnet publish -c Release` emits debug symbols and XML doc files beside
 # the assemblies; both are build output for us and dead weight in every install. The DLLs, the
@@ -19,9 +21,7 @@ eslint.config.mjs
 service/**/*.pdb
 service/**/*.xml
 
-# Unused artwork. `icon` in package.json points at icons/gscode.png; the rest are older marks kept
-# in the repo, and a 2.0 install has no reason to carry a beta logo.
-logo.png
-logo_beta.png
+# Unused artwork. `icon` in package.json points at icons/gscode.png; the alpha and beta marks are
+# older ones kept in the repo, and a 2.0 install has no reason to carry them.
 icons/gscode-alpha.png
 icons/gscode-beta.png

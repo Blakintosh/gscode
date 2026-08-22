@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { DropdownMenu as DropdownMenuPrimitive, type WithoutChild } from "bits-ui";
-	import Circle from "lucide-svelte/icons/circle";
-	import { cn } from "$lib/utils.js";
+	import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
+	import { cn, type WithoutChild } from "$lib/utils.js";
 
 	let {
 		ref = $bindable(null),
@@ -13,16 +12,24 @@
 
 <DropdownMenuPrimitive.RadioItem
 	bind:ref
+	data-slot="dropdown-menu-radio-item"
 	class={cn(
-		"data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+		"text-muted-foreground relative flex cursor-pointer items-center gap-2 border-l-2 border-transparent py-2 pr-9 pl-4 transition-colors outline-hidden select-none",
+		"data-highlighted:text-foreground data-highlighted:bg-[var(--wash-hover)] focus:text-foreground focus:bg-[var(--wash-hover)]",
+		"data-[state=checked]:text-primary data-[state=checked]:border-primary data-[state=checked]:bg-[var(--wash-active)]",
+		"data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+		"[&_svg]:pointer-events-none [&_svg]:shrink-0",
 		className
 	)}
 	{...restProps}
 >
 	{#snippet children({ checked })}
-		<span class="absolute left-2 flex size-3.5 items-center justify-center">
+		<span
+			class="pointer-events-none absolute right-4 flex items-center justify-center"
+			data-slot="dropdown-menu-radio-item-indicator"
+		>
 			{#if checked}
-				<Circle class="size-2 fill-current" />
+				<i class="bg-primary block size-[6px]"></i>
 			{/if}
 		</span>
 		{@render childrenProp?.({ checked })}

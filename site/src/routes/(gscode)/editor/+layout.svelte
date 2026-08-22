@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { sineIn } from 'svelte/easing';
 	import * as Sidebar from '$components/ui/sidebar/index.js';
-	// @ts-ignore
-	import PanelLeftOpen from 'lucide-svelte/icons/panel-left-open';
-	// @ts-ignore
-	import PanelLeftClose from 'lucide-svelte/icons/panel-left-close';
+	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
+	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 
 	import EditorSidebar from '$components/app/pages/editor/EditorSidebar.svelte';
 	import type { Snippet } from 'svelte';
@@ -94,16 +92,18 @@
 	<meta property="og:image" content="/favicon.png" />
 </svelte:head>
 
-<div class="relative grow flex w-full items-stretch overflow-hidden h-full min-h-0">
+<!-- An app frame: fixed to the viewport under the header; panes scroll, the page does not. -->
+<div class="relative flex h-[calc(100svh-3.5rem)] w-full items-stretch overflow-hidden">
 	<Sidebar.Provider
 		bind:open={sidebarOpen}
+		class="h-full min-h-0"
 		style="--sidebar-width: 18rem; --sidebar-width-mobile: 20rem;"
 	>
 		<EditorSidebar />
 		<article
-			class="grow overflow-auto bg-article-background/30 pt-12 pb-4 lg:pt-8 lg:pb-8 grid relative"
+			class="bg-background relative grid grow overflow-auto pt-12 pb-4 lg:pt-8 lg:pb-8"
 		>
-			<Sidebar.Trigger class="absolute top-4 left-4">
+			<Sidebar.Trigger class="absolute top-4 left-4 z-10">
 				{#if sidebarOpen}
 					<PanelLeftClose />
 					<span class="sr-only">Close sidebar</span>

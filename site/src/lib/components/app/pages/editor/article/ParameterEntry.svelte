@@ -1,32 +1,28 @@
 <script lang="ts">
-	import type { ScrFunctionParameter } from "$lib/models/library";
-	import { typeToString } from "$lib/util/scriptApi";
+	import type { ScrFunctionParameter } from '$lib/models/library';
+	import { typeToString } from '$lib/util/scriptApi';
 
-    let { name, description, mandatory, type }: ScrFunctionParameter = $props();
+	let { name, description, mandatory, type }: ScrFunctionParameter = $props();
 </script>
 
-<div class="py-2">
-    <div class="font-medium text-sm inline-flex justify-between w-full">
-        <span>
-            {#if mandatory}
-                {name}<span class="text-red-600 dark:text-red-500 font-medium">*</span>
-            {:else}
-                {name}
-            {/if}
-            <span class="text-muted-foreground font-normal text-xs">
-                {#if type && type.dataType !== "undefined"}
-                    {typeToString(type)}
-                {/if}
-            </span>
-        </span>
+<div class="flex flex-col gap-1">
+	<div class="flex w-full items-baseline justify-between gap-3 font-mono text-sm">
+		<span class="flex items-baseline gap-2">
+			<span class="text-foreground">
+				{name}{#if mandatory}<span class="text-destructive">*</span>{/if}
+			</span>
+			{#if type && type.dataType !== 'undefined'}
+				<span class="text-primary text-xs">{typeToString(type)}</span>
+			{/if}
+		</span>
 
-        {#if mandatory}
-            <span class="text-red-600 dark:text-red-500 font-medium text-xs lg:text-sm">required</span>
-        {:else if mandatory !== undefined}
-            <span class="font-normal text-muted-foreground text-xs lg:text-sm">optional</span>
-        {/if}
-    </div>
-    <div class="text-xs lg:text-sm">
-        {description ?? "No description."}
-    </div>
+		{#if mandatory}
+			<span class="text-destructive text-2xs tracking-label uppercase">required</span>
+		{:else if mandatory !== undefined}
+			<span class="text-dim text-2xs tracking-label uppercase">optional</span>
+		{/if}
+	</div>
+	<div class="text-muted-foreground text-xs lg:text-sm">
+		{description ?? 'No description.'}
+	</div>
 </div>

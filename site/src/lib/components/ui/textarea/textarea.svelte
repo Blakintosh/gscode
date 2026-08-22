@@ -1,22 +1,29 @@
 <script lang="ts">
-	import type { WithElementRef, WithoutChildren } from "bits-ui";
 	import type { HTMLTextareaAttributes } from "svelte/elements";
-	import { cn } from "$lib/utils.js";
+	import { cn, type WithElementRef } from "$lib/utils.js";
 
 	let {
 		ref = $bindable(null),
 		value = $bindable(),
 		class: className,
 		...restProps
-	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> = $props();
+	}: WithElementRef<HTMLTextareaAttributes, HTMLTextAreaElement> = $props();
 </script>
 
-<textarea
-	bind:this={ref}
+<!-- Datum: the same recess as Input (rim wrapper follows the chamfer), but Sora — mono
+ never runs multi-line prose. Sizing classes land on the wrapper. -->
+<span
+	data-slot="textarea-rim"
 	class={cn(
-		"border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[80px] w-full rounded-md border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+		"chamfer chamfer-sm rimmed rimmed-recess flex min-h-24 w-full text-foreground has-disabled:opacity-50",
 		className
 	)}
-	bind:value
-	{...restProps}
-></textarea>
+>
+	<textarea
+		bind:this={ref}
+		data-slot="textarea"
+		class="placeholder:text-dim block min-h-0 w-full min-w-0 flex-1 self-stretch border-0 bg-transparent p-4 font-sans text-sm leading-relaxed outline-none disabled:cursor-not-allowed"
+		bind:value
+		{...restProps}
+	></textarea>
+</span>

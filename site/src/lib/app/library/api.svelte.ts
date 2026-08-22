@@ -1,88 +1,69 @@
-import { ScrLibrarySchema, type ScrLibrary } from "$lib/models/library";
-import { onMount } from "svelte";
-import { z } from "zod";
-import { getLibrary } from "../../../routes/(gscode)/library/library";
+import { ScrLibrarySchema, type ScrLibrary } from '$lib/models/library';
 
 type LoadApiParams = {
-    fetch: any;
-    gameId: string;
-    languageId: string;
+	fetch: typeof globalThis.fetch;
+	gameId: string;
+	languageId: string;
+};
+
+function libraryUrl(gameId: string, languageId: string) {
+	return `/api/getLibrary?gameId=${encodeURIComponent(gameId)}&languageId=${encodeURIComponent(languageId)}`;
 }
 
-export async function useApi(params: LoadApiParams) {
-    let gameId = $state(params.gameId);
-    let languageId = $state(params.languageId);
-    let fetcher = $state(params.fetch);
-
-    let _library: ScrLibrary | null = null;
-    async function loadLibrary({ fetch, gameId, languageId }: LoadApiParams) {
-        // Already loaded
-        if(_library?.gameId == gameId && _library?.languageId == languageId) {
-            return _library;
-        }
-
-        const res = await fetch(`/api/getLibrary?gameId=${gameId}&languageId=${languageId}`);
-
-        _library = await res.json() as ScrLibrary;
-        return _library;
-    }
-
-    let library: Promise<ScrLibrary> = $derived(loadLibrary({ fetch: fetcher, gameId, languageId}));
-    return {
-        get library() { return library },
-        set gameId(newValue: string) {
-            fetcher = fetch;
-            gameId = newValue
-        },
-        set languageId(newValue: string) {
-            fetcher = fetch;
-            languageId = newValue
-        }
-    }
-}
-
+/**
+ * Holds one game/language library, refetching when either changes.
+ *
+ * The cache is keyed on what was REQUESTED, not on what came back. Those differ: the URL and the
+ * `gscode.game` setting spell Black Ops III `bo3`, while its artifacts — and therefore the payload's
+ * own `gameId` — say `t7`. Comparing against the payload made every hit a miss and refetched 2.9 MB
+ * on each read.
+ */
 export class ApiLibrarian {
-    gameId: string = $state("");
-    languageId: string = $state("");
+	gameId: string = $state('');
+	languageId: string = $state('');
 
-    library: Promise<ScrLibrary> = $derived(this.loadLibrary());
+	library: Promise<ScrLibrary> = $derived(this.loadLibrary(this.gameId, this.languageId));
 
-    private _cachedLibrary: ScrLibrary;
+	private _cachedKey: string;
+	private _cachedLibrary: ScrLibrary;
 
-    /**
-     * Instantiates the API librarian, loading the API server-side.
-     * @param gameId The initial game ID
-     * @param languageId The initial language ID
-     * @param fetcher The server-side fetch function
-     */
-    private constructor(gameId: string, languageId: string, initialData: ScrLibrary) {
-        this.gameId = gameId;
-        this.languageId = languageId;
-        this._cachedLibrary = initialData;
-    }
+	private constructor(gameId: string, languageId: string, initialData: ScrLibrary) {
+		this.gameId = gameId;
+		this.languageId = languageId;
+		this._cachedKey = ApiLibrarian.key(gameId, languageId);
+		this._cachedLibrary = initialData;
+	}
 
-    /**
-     * Creates an API librarian.
-     * @param param0 Game ID, language ID, and desired fetch function (allows for server-side fetching)
-     * @returns The initialised API librarian
-     */
-    static async initialise({ fetch, gameId, languageId }: LoadApiParams) {
-        const library = await ApiLibrarian.getLibrary({ fetch, gameId, languageId });
-        return new ApiLibrarian(gameId, languageId, library);
-    }
+	/**
+	 * Creates an API librarian, loading the first library through the caller's fetch — the server's
+	 * during SSR, so the first paint does not wait on a round trip from the browser.
+	 */
+	static async initialise({ fetch, gameId, languageId }: LoadApiParams) {
+		const library = await ApiLibrarian.getLibrary({ fetch, gameId, languageId });
+		return new ApiLibrarian(gameId, languageId, library);
+	}
 
-    private async loadLibrary(): Promise<ScrLibrary> {
-        // Already loaded, return the cached library
-        if(this._cachedLibrary?.gameId == this.gameId && this._cachedLibrary?.languageId == this.languageId) {
-            return this._cachedLibrary;
-        }
+	private static key(gameId: string, languageId: string) {
+		return `${gameId}/${languageId}`;
+	}
 
-        this._cachedLibrary = await ApiLibrarian.getLibrary({ fetch: fetch, gameId: this.gameId, languageId: this.languageId });
-        return this._cachedLibrary;
-    }
+	private async loadLibrary(gameId: string, languageId: string): Promise<ScrLibrary> {
+		const key = ApiLibrarian.key(gameId, languageId);
+		if (this._cachedKey === key) {
+			return this._cachedLibrary;
+		}
 
-    private static async getLibrary({ fetch, gameId, languageId }: LoadApiParams) {
-        const res = await fetch(`/api/getLibrary?gameId=${gameId}&languageId=${languageId}`);
-        return ScrLibrarySchema.parseAsync(await res.json());
-    }
+		const library = await ApiLibrarian.getLibrary({ fetch, gameId, languageId });
+		this._cachedKey = key;
+		this._cachedLibrary = library;
+		return library;
+	}
+
+	private static async getLibrary({ fetch, gameId, languageId }: LoadApiParams) {
+		const res = await fetch(libraryUrl(gameId, languageId));
+		if (!res.ok) {
+			throw new Error(`Could not load the ${gameId} ${languageId.toUpperCase()} library.`);
+		}
+		return ScrLibrarySchema.parseAsync(await res.json());
+	}
 }

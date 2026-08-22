@@ -1,14 +1,13 @@
-import fs from 'fs';
-import gsc from "./gsc.tmGrammar.json";
-import { createHighlighter } from 'shiki';
+import gsc from './gsc.tmGrammar.json';
+import { createHighlighter, type ThemeRegistration } from 'shiki';
+import { datumDark, datumLight } from './datum-theme';
 
-// Wrap the highlighter creation in an async function
 async function initHighlighter() {
-    return await createHighlighter({
-        langs: [gsc as any],
-        themes: ["light-plus", "dark-plus"],
-    });
+	return await createHighlighter({
+		langs: [gsc as any],
+		themes: [datumDark as ThemeRegistration, datumLight as ThemeRegistration]
+	});
 }
 
-// Export the promise
+/** Shared highlighter promise — one instance per server/client. */
 export default initHighlighter();

@@ -1,305 +1,249 @@
-<script>
-	import { onMount } from 'svelte';
-	import * as Code from '$lib/components/ui/code';
-	// @ts-ignore
-	import Download from 'lucide-svelte/icons/download';
-	// @ts-ignore
-	import Bug from 'lucide-svelte/icons/bug';
-	// @ts-ignore
-	import BookOpen from 'lucide-svelte/icons/book-open';
-	// @ts-ignore
-	import Sparkles from 'lucide-svelte/icons/sparkles';
-	// @ts-ignore
-	import Navigation from 'lucide-svelte/icons/navigation';
-	// @ts-ignore
-	import FolderSearch from 'lucide-svelte/icons/folder-search';
-	// @ts-ignore
-	import Palette from 'lucide-svelte/icons/palette';
+<script lang="ts">
+	import ArrowUpRightIcon from '@lucide/svelte/icons/arrow-up-right';
+	import DownloadIcon from '@lucide/svelte/icons/download';
+	import { Button } from '$lib/components/ui/button';
+	import DiscordIcon from '$lib/components/site/DiscordIcon.svelte';
+	import ExplodedLine from '$lib/components/home/ExplodedLine.svelte';
+	import DiagnosticsWidget from '$lib/components/home/DiagnosticsWidget.svelte';
+	import HoverWidget from '$lib/components/home/HoverWidget.svelte';
+	import CompletionsWidget from '$lib/components/home/CompletionsWidget.svelte';
+	import GamesWidget from '$lib/components/home/GamesWidget.svelte';
+	import { reveal } from '$lib/actions/reveal';
+	import {
+		assetplaceUrl,
+		discordInviteUrl,
+		extensionVersion,
+		marketplaceUrl,
+		siteUrl,
+		wikiUrl
+	} from '$lib/data/site';
+
+	// Each spread's widget starts its sequence when the spread scrolls in.
+	let live = $state({ line: false, diagnostics: false, hover: false, completions: false, games: false });
+
+	const title = 'GSCode — IDE tooling for Call of Duty scripting';
+	const description =
+		"A language server for Call of Duty's GSC and CSC: diagnostics, completions, navigation and a function library, before you build.";
+
+	const spec = [
+		['Diagnostics', 'Syntax, references, types, unused symbols', 'Catches mistakes across your whole mod as you type, before you ever build.'],
+		['Navigation', 'Definition · references · rename', 'Jump to where anything is defined, see everywhere it is used, and rename it safely.'],
+		['Inference', 'Type-flow inlay hints', 'Shows what type your variables hold, worked out from how the engine defines its data.'],
+		['Formatting', 'Whitespace-only', 'Tidies spacing and alignment without ever changing what your code does.'],
+		['Code actions', 'Add / remove #using', 'One-click fixes that keep a file importing exactly what it uses.'],
+		['Mod tools', 'share/raw + mods/<name>', 'Understands the mod tools layout, so your mod overrides stock scripts the same way the game sees them.'],
+		['Cache', 'Workspace cache', 'Pick up quickly from where you left off after a restart.'],
+		['Suppression', '#pragma warning disable', 'Silence a warning on one line, one rule, or everywhere.'],
+		['Open in Library', 'shift + F1', 'Press it on any built-in function to open its library page.']
+	] as const;
 </script>
 
 <svelte:head>
-	<title>GSCode</title>
-	<meta name="description" content="A better way to write scripts for Call of Duty" />
+	<title>{title}</title>
+	<meta name="description" content={description} />
 	<meta property="og:title" content="GSCode" />
 	<meta property="og:site_name" content="gscode" />
-	<meta property="og:description" content="A better way to write scripts for Call of Duty" />
-	<meta property="og:image" content="/favicon.png" />
+	<meta property="og:description" content={description} />
+	<meta property="og:image" content="{siteUrl}/og.png" />
+	<meta property="og:url" content={siteUrl} />
+	<meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
 
-<section
-	class="flex w-full items-center justify-center flex-col bg-[radial-gradient(ellipse_at_center,var(--background)_0%,var(--background)/80_50%,var(--background)_100%)]"
->
-	<div class="flex items-center flex-col pt-8 pb-4 text-foreground">
-		<div class="my-4">
-			<!-- <img src="/images/gscode.png" alt="GSCode Logo" class="w-64 md:w-72 lg:w-96"/> -->
-			<div class="w-56 md:w-64 lg:w-80 aspect-[2/1] bg-gscodeLight dark:bg-gscode bg-cover"></div>
-		</div>
-		<div class="inline-flex gap-1 mb-2">
-			<h2 id="gscode-summary" class="text-base lg:text-2xl">
-				A better way to write scripts for Call of Duty.
-			</h2>
-		</div>
-		<h3 class="text-muted-foreground lg:text-xl my-2 inline-flex items-center gap-1">
-			Available for
-			<img src="/images/code-stable.png" alt="Visual Studio Code" class="h-4 lg:h-6 inline mx-2" />
-			VS Code based IDEs
-		</h3>
+<!-- ── Hero: the whole viewport is the frame. One light source, top-right. ─────────── -->
+<section class="bg-popover relative overflow-hidden" aria-labelledby="hero-title">
+	<div class="lit-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
+	<div class="lit-grid-glow pointer-events-none absolute inset-0" aria-hidden="true"></div>
+	<div
+		class="pointer-events-none absolute inset-0"
+		aria-hidden="true"
+		style="background:radial-gradient(44% 52% at 78% -6%, color-mix(in oklab, var(--bright) 20%, transparent), color-mix(in oklab, var(--violet) 9%, transparent) 52%, transparent 74%)"
+	></div>
+	<!-- The light entering: sweeps in once on load, then rests. -->
+	<div
+		class="light-enter pointer-events-none absolute top-0 bottom-0 left-[62%] w-[140px] [transform:skewX(-13deg)]"
+		aria-hidden="true"
+		style="background:linear-gradient(90deg, transparent, color-mix(in oklab, var(--bright) 5%, transparent) 44%, color-mix(in oklab, var(--bright) 17%, transparent) 50%, color-mix(in oklab, var(--violet) 8%, transparent) 58%, transparent);mask-image:linear-gradient(180deg, #000 0, #000 55%, transparent 100%)"
+	></div>
 
-		<a
-			href="https://marketplace.visualstudio.com/items?itemName=blakintosh.gscode"
-			class="preview-button my-8 text-white lg:text-xl text-base"
-			target="_blank"
-			rel="noopener noreferrer"
+	<!-- The frame declares itself: handles on the square corners. -->
+	<i aria-hidden="true" class="border-primary bg-background absolute top-3 right-3 z-10 block size-[7px] border-[1.5px]"></i>
+	<i aria-hidden="true" class="border-steel bg-background absolute bottom-3 left-3 z-10 block size-[7px] border-[1.5px]"></i>
+
+	<div class="relative mx-auto max-w-7xl px-4 pt-20 pb-24 sm:px-6 lg:pt-28 lg:pb-32">
+		<!-- Origin crosshair -->
+		<div class="text-primary pointer-events-none absolute top-8 left-4 font-mono text-2xs tracking-widest sm:left-6" aria-hidden="true">
+			<i class="bg-primary absolute block h-px w-8"></i>
+			<i class="bg-primary absolute block h-8 w-px"></i>
+			<span class="absolute top-[-6px] left-9 whitespace-nowrap">0, 0</span>
+		</div>
+
+		<h1
+			id="hero-title"
+			class="font-display text-foreground max-w-[16ch] text-hero font-bold tracking-normal uppercase"
 		>
-			<Download class="w-5 h-5" />
-			<span>v1.5.0</span>
-		</a>
+			IDE tooling for<br />
+			Call of Duty
+			<span class="grad-text">scripting</span><br />
+		</h1>
+		<p class="text-muted-foreground mt-7 max-w-[52ch] text-lg leading-relaxed font-light sm:text-xl">
+			A language server for Call of Duty GSC and CSC, compatible with all VS Code-based IDEs.
+		</p>
+		<div class="mt-9 flex flex-wrap items-center gap-3">
+			<Button href={marketplaceUrl} target="_blank" rel="noopener noreferrer" size="lg">
+				<DownloadIcon class="size-4" />
+				Install for VS Code
+			</Button>
+			<Button href="/library" variant="secondary" size="lg">Function library</Button>
+		</div>
+		<p class="type-label text-dim mt-6">
+			free and open source · vs code and vs code-based ides
+		</p>
 	</div>
 </section>
 
-<section class="flex w-full justify-center bg-background">
-	<div class="max-w-6xl w-full px-6 lg:px-16 py-16 lg:py-24 flex flex-col gap-20 lg:gap-28">
-		<div class="text-center space-y-3">
-			<h2 class="text-3xl lg:text-4xl font-display">Script more intelligently</h2>
-			<p class="text-muted-foreground lg:text-lg max-w-2xl mx-auto">
-				A full-featured language server that understands your GSC and CSC scripts.
+<!-- One line, exploded: how much of it the server understands, one game at a time. -->
+<div use:reveal={{ onIn: () => (live.line = true), threshold: 0.2 }}>
+	<ExplodedLine active={live.line} />
+</div>
+
+<!-- ── Spreads: full-width, title block on one side, the live widget on the other. ─── -->
+{#snippet titleBlock(no: string, name: string, readout: string, heading: string, copy: string)}
+	<div class="reveal" use:reveal>
+		<p class="type-label text-primary">
+			{no} / {name} <span class="text-dim">· {readout}</span>
+		</p>
+		<h2 class="text-foreground mt-4 max-w-[16ch] text-heading font-semibold tracking-heading sm:text-heading">
+			{heading}
+		</h2>
+		<p class="text-muted-foreground mt-5 max-w-[46ch] text-body leading-relaxed font-light">{copy}</p>
+	</div>
+{/snippet}
+
+<section class="border-border border-b" use:reveal={{ onIn: () => (live.diagnostics = true), threshold: 0.25 }}>
+	<div class="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-12 lg:gap-14 lg:py-28">
+		<div class="min-w-0 lg:col-span-4">
+			{@render titleBlock(
+				'01',
+				'Diagnostics',
+				'2 err · 1 warn',
+				'Don\'t wait for Linker to tell you',
+				'Syntax errors, missing files, mismatched types, unused variables — analysed as you type and resolved across the whole mod folder, not just the open file. Errors show up where they are, in the same words the compiler would use.'
+			)}
+		</div>
+		<div class="min-w-0 lg:col-span-8"><DiagnosticsWidget active={live.diagnostics} /></div>
+	</div>
+</section>
+
+<section class="border-border border-b" use:reveal={{ onIn: () => (live.hover = true), threshold: 0.25 }}>
+	<div class="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-12 lg:gap-14 lg:py-28">
+		<div class="order-2 min-w-0 lg:order-1 lg:col-span-7"><HoverWidget active={live.hover} /></div>
+		<div class="order-1 min-w-0 lg:order-2 lg:col-span-5">
+			{@render titleBlock(
+				'02',
+				'Documentation',
+				'1 sym',
+				'See what a symbol actually does',
+				'Hover any function, variable or property for its type, parameters and description — drawn from a community-maintained library of the built-in API, and from type-flow inference for your own locals.'
+			)}
+		</div>
+	</div>
+</section>
+
+<section class="border-border border-b" use:reveal={{ onIn: () => (live.completions = true), threshold: 0.25 }}>
+	<div class="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-12 lg:gap-14 lg:py-28">
+		<div class="min-w-0 lg:col-span-4">
+			{@render titleBlock(
+				'03',
+				'Completions',
+				'4 items',
+				'Completions that read the namespace',
+				'Functions, variables, keywords, macros and file paths, filtered by what you have typed and where you are — with signature help attached and namespaces resolved the way the engine resolves them.'
+			)}
+		</div>
+		<div class="min-w-0 lg:col-span-8"><CompletionsWidget active={live.completions} /></div>
+	</div>
+</section>
+
+<section class="border-border border-b" use:reveal={{ onIn: () => (live.games = true), threshold: 0.25 }}>
+	<div class="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-12 lg:gap-14 lg:py-28">
+		<div class="min-w-0 lg:col-span-4">
+			{@render titleBlock(
+				'04',
+				'Every game',
+				'5 versions',
+				'One extension. Five dialects.',
+				'Developed first for Black Ops III; the extension now supports a range of GSC dialects. GSCode also includes support for Call of Duty 4, World at War, Modern Warfare 2 and Black Ops. Set the game once; the status bar shows what is active.'
+			)}
+		</div>
+		<div class="min-w-0 lg:col-span-8"><GamesWidget active={live.games} /></div>
+	</div>
+</section>
+
+<!-- ── Spec sheet: what else is in the instrument. ────────────────────────────────── -->
+<section class="border-border border-b">
+	<div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:py-28">
+		<div class="reveal mb-10 flex flex-wrap items-end justify-between gap-4" use:reveal>
+			<div>
+				<p class="type-label text-primary">05 / Specification <span class="text-dim">· v{extensionVersion}</span></p>
+				<h2 class="text-foreground mt-4 text-heading font-semibold tracking-heading sm:text-heading">
+					Some more on features
+				</h2>
+			</div>
+			<p class="text-muted-foreground max-w-[44ch] text-base leading-relaxed font-light">
+				GSCode includes various IntelliSense features to make scripting easier and faster. The extension is free, open source and maintained by the community.
 			</p>
 		</div>
-
-		<!-- Feature 1: Real-Time Diagnostics -->
-		<div class="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start">
-			<div class="lg:w-5/12 space-y-4">
-				<div class="inline-flex items-center gap-2 text-red-500">
-					<Bug class="w-5 h-5" />
-					<span class="text-sm font-medium uppercase tracking-wide">Diagnostics</span>
+		<dl class="border-border reveal border-t" use:reveal>
+			{#each spec as [label, value, note] (label)}
+				<div class="border-border grid gap-x-8 gap-y-1 border-b py-4 sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[200px_320px_minmax(0,1fr)]">
+					<dt class="type-label text-dim self-center">{label}</dt>
+					<dd class="text-foreground text-base font-medium">{value}</dd>
+					<dd class="text-muted-foreground text-sm leading-normal font-light lg:self-center">{note}</dd>
 				</div>
-				<h3 class="text-2xl lg:text-3xl font-display">Catch errors before you compile</h3>
-				<p class="text-muted-foreground lg:text-lg">
-					GSCode analyses your scripts as you type — catching syntax errors, missing references, type mismatches, unused variables, and more.
-				</p>
-				<div class="space-y-2 pt-2">
-					<div class="border-l-4 border-l-red-500 bg-red-500/5 rounded-r-md px-4 py-2 text-sm font-mono">
-						<span class="text-muted-foreground">Ln 1:</span> Unable to locate file 'scripts\shared\shrd.gsh' for insert directive.
-					</div>
-					<div class="border-l-4 border-l-red-500 bg-red-500/5 rounded-r-md px-4 py-2 text-sm font-mono">
-						<span class="text-muted-foreground">Ln 5:</span> The operator '*' is not supported on types 'int' and 'string'.
-					</div>
-					<div class="border-l-4 border-l-red-500 bg-red-500/5 rounded-r-md px-4 py-2 text-sm font-mono">
-						<span class="text-muted-foreground">Ln 11:</span> ';' expected to end return statement.
-					</div>
-				</div>
-			</div>
-			<div class="lg:w-7/12 w-full">
-				<Code.Root value={"1"}>
-					<Code.Tabs>
-						<Code.Tab value={"1"}>_weapon_utils.gsc</Code.Tab>
-					</Code.Tabs>
-					<Code.Example value={"1"}>
-						<Code.Block code={
-`#insert scripts\\shared\\shrd.gsh;
-//      ~~~~~~~~~~~~~~~~~~~~~~~~
-function write_some_code( weapon_name )
-{
-    w_weapon = GetWeapon(weapon_name);
-    ammo = w_weapon.clipsize * "2";
-//                           ~~~~~
-    current_health = self.health;
-
-    if(current_health > 20)
-    {
-        self.health = current_health * 0.8;
-    }
-
-    return ammo
-//             ~
-}`
-						}/>
-					</Code.Example>
-				</Code.Root>
-			</div>
-		</div>
-
-		<!-- Feature 2: Hover Documentation -->
-		<div class="flex flex-col lg:flex-row-reverse gap-8 lg:gap-12 items-start">
-			<div class="lg:w-5/12 space-y-4">
-				<div class="inline-flex items-center gap-2 text-sky-500">
-					<BookOpen class="w-5 h-5" />
-					<span class="text-sm font-medium uppercase tracking-wide">Documentation</span>
-				</div>
-				<h3 class="text-2xl lg:text-3xl font-display">See what your code does</h3>
-				<p class="text-muted-foreground lg:text-lg">
-					Hover over any function, variable, or property to see its type, parameters, and description — including documentation from a community-led database of built-in functions.
-				</p>
-			</div>
-			<div class="lg:w-7/12 w-full space-y-4">
-				<Code.Root value={"1"}>
-					<Code.Tabs>
-						<Code.Tab value={"1"}>_weapon_utils.gsc</Code.Tab>
-					</Code.Tabs>
-					<Code.Example value={"1"}>
-						<Code.Block code={`w_weapon = GetWeapon(weapon_name);`}/>
-					</Code.Example>
-				</Code.Root>
-				<div class="hover-tooltip">
-					<div class="font-mono text-sm">
-						<span class="text-foreground">GetWeapon</span><span class="text-muted-foreground">(weaponName, attachmentName1, attachmentName2, ...)</span>
-					</div>
-					<hr class="border-t my-2" />
-					<p class="text-sm text-muted-foreground">Get the requested weapon object based on game mode agnostic weapon name string.</p>
-					<div class="mt-2 text-sm">
-						<span class="text-muted-foreground">Parameters:</span>
-						<div class="ml-2 mt-1 space-y-1">
-							<div>
-								<span class="font-mono text-foreground">weaponName</span>
-								<span class="text-muted-foreground ml-2">The name of the base weapon to return.</span>
-							</div>
-							<div>
-								<span class="font-mono text-foreground">attachmentName1</span>
-								<span class="text-muted-foreground ml-2">The first attachment name for the weapon.</span>
-							</div>
-						</div>
-					</div>
-				</div>
-				<div class="hover-tooltip max-w-xs">
-					<div class="font-mono text-sm">
-						<span class="text-sky-400">/@ weapon @/</span>
-						<span class="text-foreground ml-1">w_weapon</span>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Feature 3: Intelligent Completions -->
-		<div class="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start">
-			<div class="lg:w-5/12 space-y-4">
-				<div class="inline-flex items-center gap-2 text-violet-500">
-					<Sparkles class="w-5 h-5" />
-					<span class="text-sm font-medium uppercase tracking-wide">Completions</span>
-				</div>
-				<h3 class="text-2xl lg:text-3xl font-display">Completions that understand your code</h3>
-				<p class="text-muted-foreground lg:text-lg">
-					Context-aware suggestions for functions, variables, keywords, macros, and file paths — with full signature information and namespace support.
-				</p>
-			</div>
-			<div class="lg:w-7/12 w-full space-y-0">
-				<Code.Root value={"1"}>
-					<Code.Tabs>
-						<Code.Tab value={"1"}>_init.gsc</Code.Tab>
-					</Code.Tabs>
-					<Code.Example value={"1"}>
-						<Code.Block code={
-`#using scripts\\shared\\util_shared;
-
-function init()
-{
-    util::d
-}`
-						}/>
-					</Code.Example>
-				</Code.Root>
-				<div class="completion-dropdown">
-					<div class="completion-item completion-item-selected">
-						<span class="completion-icon">f</span>
-						<span class="font-mono text-sm text-foreground">damage_notify_wrapper</span>
-						<span class="text-xs text-muted-foreground ml-auto">function(damage, attacker, ...)</span>
-					</div>
-					<div class="completion-item">
-						<span class="completion-icon">f</span>
-						<span class="font-mono text-sm text-foreground">death_notify_wrapper</span>
-						<span class="text-xs text-muted-foreground ml-auto">function(attacker, damageType)</span>
-					</div>
-					<div class="completion-item">
-						<span class="completion-icon">f</span>
-						<span class="font-mono text-sm text-foreground">debug_line</span>
-						<span class="text-xs text-muted-foreground ml-auto">function(start, end, ...)</span>
-					</div>
-					<div class="completion-item">
-						<span class="completion-icon">...</span>
-						<span class="font-mono text-sm text-foreground">...</span>
-						<span class="text-xs text-muted-foreground ml-auto">...</span>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Feature Cards -->
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-			<div class="border rounded-lg p-6 space-y-3 bg-background">
-				<Navigation class="w-8 h-8 text-emerald-500" />
-				<h4 class="text-lg font-display font-medium">Code Navigation</h4>
-				<p class="text-sm text-muted-foreground">
-					Jump to any definition, find every reference, and browse symbols across your entire workspace — with full namespace-qualified lookup support.
-				</p>
-			</div>
-			<div class="border rounded-lg p-6 space-y-3 bg-background">
-				<FolderSearch class="w-8 h-8 text-amber-500" />
-				<h4 class="text-lg font-display font-medium">Workspace Indexing</h4>
-				<p class="text-sm text-muted-foreground">
-					Index your project for cross-file completions and diagnostics. Choose between partial (fast, signatures only) or full (complete semantic analysis) modes.
-				</p>
-			</div>
-			<div class="border rounded-lg p-6 space-y-3 bg-background">
-				<Palette class="w-8 h-8 text-pink-500" />
-				<h4 class="text-lg font-display font-medium">Semantic Highlighting</h4>
-				<p class="text-sm text-muted-foreground">
-					Rich syntax coloring that distinguishes functions, variables, parameters, namespaces, classes, properties, macros, and more.
-				</p>
-			</div>
-		</div>
+			{/each}
+		</dl>
 	</div>
 </section>
 
-<style>
-	.preview-button {
-		display: inline-flex;
-		gap: 1rem;
-		align-items: center;
-		padding: 12px 36px;
-		border-radius: 24px;
-		font-weight: 400;
-		text-decoration: none;
-		color: #fff;
-		background: linear-gradient(45deg, #4813ba, #182af2);
-		background-size: 200% 200%;
-		animation: gradient 3s ease infinite;
-		box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-		transition: transform 0.2s;
-	}
-
-	.preview-button:hover {
-		transform: translateY(-3px);
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-	}
-
-	@keyframes gradient {
-		0% {
-			background-position: 0% 50%;
-		}
-		50% {
-			background-position: 100% 50%;
-		}
-		100% {
-			background-position: 0% 50%;
-		}
-	}
-
-	.hover-tooltip {
-		@apply border rounded-lg bg-background shadow-lg p-4;
-	}
-
-	.completion-dropdown {
-		@apply border rounded-b-lg bg-background shadow-lg py-1 -mt-1;
-	}
-
-	.completion-item {
-		@apply px-3 py-1.5 flex items-center gap-3;
-	}
-
-	.completion-item-selected {
-		@apply bg-accent;
-	}
-
-	.completion-icon {
-		@apply w-5 h-5 rounded-sm bg-violet-500 flex items-center justify-center text-xs text-white font-bold;
-	}
-</style>
+<!-- ── Closing band: measure from here, and the rest of the ecosystem. ────────────── -->
+<section class="bg-popover relative overflow-hidden">
+	<div class="lit-grid pointer-events-none absolute inset-0 opacity-60" aria-hidden="true"></div>
+	<div class="relative mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-12 lg:gap-14 lg:py-24">
+		<div class="reveal lg:col-span-6" use:reveal>
+			<h2 class="font-display text-foreground text-display font-bold tracking-normal uppercase">
+				Try it for<br /><span class="grad-text">yourself</span>
+			</h2>
+			<p class="text-muted-foreground mt-5 max-w-[42ch] text-body leading-relaxed font-light">
+				Install the extension, open your mod folder, and experience
+				a streamlined scripting workflow today.
+			</p>
+			<div class="mt-7 flex flex-wrap items-center gap-3">
+				<Button href={marketplaceUrl} target="_blank" rel="noopener noreferrer" size="lg">
+					<DownloadIcon class="size-4" />
+					Install
+					<span class="type-data text-2xs tracking-wider">v{extensionVersion}</span>
+				</Button>
+				<Button href={discordInviteUrl} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">
+					<DiscordIcon class="size-4" />
+					Discord
+				</Button>
+			</div>
+		</div>
+		<div class="reveal grid gap-px sm:grid-cols-3 lg:col-span-6 [transition-delay:80ms]" use:reveal>
+			{#each [{ href: wikiUrl, label: 'Wiki', copy: 'Guides and reference for BO3 modding — from first map to shipped mod.' }, { href: assetplaceUrl, label: 'Assetplace', copy: 'Community-built weapons, prefabs, scripts and tools, versioned and credited.' }, { href: discordInviteUrl, label: 'Discord', copy: 'The BO3 Mod Tools server: help, releases and the people behind them.' }] as item (item.href)}
+				<a
+					href={item.href}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="group bg-card inset-edge flex flex-col gap-3 p-5 transition-colors hover:bg-[var(--wash-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] outline-none"
+				>
+					<span class="type-label text-primary flex items-center justify-between">
+						{item.label}
+						<ArrowUpRightIcon class="text-dim group-hover:text-primary size-3.5 transition-colors" />
+					</span>
+					<span class="text-muted-foreground group-hover:text-foreground text-sm leading-normal font-light transition-colors">{item.copy}</span>
+				</a>
+			{/each}
+		</div>
+	</div>
+</section>

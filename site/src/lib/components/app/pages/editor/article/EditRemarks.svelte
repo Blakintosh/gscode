@@ -2,19 +2,13 @@
 	import type { FunctionEditor } from '$lib/api-editor/function-editor.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
-	import { Separator } from '$lib/components/ui/separator/index.js';
-	// @ts-ignore
-	import Plus from 'lucide-svelte/icons/plus';
-	// @ts-ignore
-	import Trash2 from 'lucide-svelte/icons/trash-2';
-	// @ts-ignore
-	import Pencil from 'lucide-svelte/icons/pencil';
-	// @ts-ignore
-	import X from 'lucide-svelte/icons/x';
-	// @ts-ignore
-	import ChevronUp from 'lucide-svelte/icons/chevron-up';
-	// @ts-ignore
-	import ChevronDown from 'lucide-svelte/icons/chevron-down';
+	import Brush from '$lib/components/site/Brush.svelte';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import X from '@lucide/svelte/icons/x';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 
 	interface Props {
 		functionEditor: FunctionEditor;
@@ -36,54 +30,62 @@
 
 <div class="flex flex-col gap-4">
 	{#if remarks.length > 0}
-		<div class="divide-y border-b mb-2">
+		<div class="border-border divide-border mb-1 divide-y border-b">
 			{#each remarks as remark, i}
 				<div class="group relative">
 					{#if editingIndex === i}
-						<div class="flex flex-col gap-4 p-4 border rounded-lg bg-muted/30 my-2">
-							<div class="flex items-center justify-between">
-								<span class="font-medium text-sm">Edit Remark {i + 1}</span>
-								<div class="flex gap-2">
-									<div class="flex items-center border rounded-md px-1 bg-background">
-										<Button
-											variant="ghost"
-											size="icon"
-											class="h-7 w-7"
-											disabled={i === 0}
-											onclick={() => {
-												functionEditor.moveRemark(i, 'up');
-												editingIndex = i - 1;
-											}}
-										>
-											<ChevronUp class="w-4 h-4" />
-										</Button>
-										<Separator orientation="vertical" class="h-4" />
-										<Button
-											variant="ghost"
-											size="icon"
-											class="h-7 w-7"
-											disabled={i === remarks.length - 1}
-											onclick={() => {
-												functionEditor.moveRemark(i, 'down');
-												editingIndex = i + 1;
-											}}
-										>
-											<ChevronDown class="w-4 h-4" />
-										</Button>
-									</div>
+						<Brush
+							surface="popover"
+							cut={10}
+							rim="edge"
+							class="my-2"
+							bodyClass="flex flex-col gap-4 px-4 py-4"
+						>
+							<div class="flex items-center justify-between gap-2">
+								<span class="type-label text-dim">Remark {i + 1}</span>
+								<div class="flex items-center gap-1">
 									<Button
 										variant="ghost"
-										size="sm"
+										size="icon-xs"
+										title="Move up"
+										disabled={i === 0}
+										onclick={() => {
+											functionEditor.moveRemark(i, 'up');
+											editingIndex = i - 1;
+										}}
+									>
+										<ChevronUp />
+										<span class="sr-only">Move up</span>
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										title="Move down"
+										disabled={i === remarks.length - 1}
+										onclick={() => {
+											functionEditor.moveRemark(i, 'down');
+											editingIndex = i + 1;
+										}}
+									>
+										<ChevronDown />
+										<span class="sr-only">Move down</span>
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										title="Remove remark"
+										class="hover:text-destructive"
 										onclick={() => {
 											functionEditor.removeRemark(i);
 											stopEditing();
 										}}
-										class="text-destructive hover:text-destructive hover:bg-destructive/10"
 									>
-										<Trash2 class="w-4 h-4" />
+										<Trash2 />
+										<span class="sr-only">Remove remark</span>
 									</Button>
-									<Button variant="ghost" size="sm" onclick={stopEditing}>
-										<X class="w-4 h-4" />
+									<Button variant="ghost" size="icon-xs" title="Done" onclick={stopEditing}>
+										<X />
+										<span class="sr-only">Done</span>
 									</Button>
 								</div>
 							</div>
@@ -96,20 +98,22 @@
 									rows={2}
 									class="resize-none"
 								/>
-								<p class="text-xs text-muted-foreground">Statement sentence in American English, ending with a period.</p>
+								<p class="text-dim font-mono text-2xs tracking-wider">
+									Statement sentence in American English, ending with a period.
+								</p>
 							</div>
-						</div>
+						</Brush>
 					{:else}
 						<button
 							type="button"
 							onclick={() => startEditing(i)}
-							class="group/item flex items-start gap-2 text-left cursor-pointer hover:bg-muted/50 rounded-md px-3 py-2 -mx-3 transition-colors w-full"
+							class="group/item -mx-3 flex w-full cursor-pointer items-start gap-2 px-3 py-2 text-left transition-colors hover:bg-[var(--wash-hover)]"
 						>
 							<div class="flex-1 text-sm">
 								{remark || '<empty>'}
 							</div>
 							<Pencil
-								class="w-4 h-4 opacity-0 group-hover/item:opacity-50 transition-opacity mt-0.5 shrink-0"
+								class="text-dim mt-0.5 size-4 shrink-0 opacity-0 transition-opacity group-hover/item:opacity-100"
 							/>
 						</button>
 					{/if}
@@ -117,19 +121,19 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="text-sm text-muted-foreground italic mb-2">No remarks.</div>
+		<div class="text-dim mb-1 text-sm">No remarks.</div>
 	{/if}
 
 	<Button
 		variant="outline"
 		size="sm"
-		class="w-full gap-2 border-dashed"
+		class="w-full"
 		onclick={() => {
 			functionEditor.addRemark();
 			startEditing(remarks.length);
 		}}
 	>
-		<Plus class="w-4 h-4" />
-		Add Remark
+		<Plus />
+		Add remark
 	</Button>
 </div>

@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { Checkbox as CheckboxPrimitive, type WithoutChildrenOrChild } from "bits-ui";
-	import Check from "@lucide/svelte/icons/check";
-	import Minus from "@lucide/svelte/icons/minus";
-	import { cn } from "$lib/utils.js";
+	import { Checkbox as CheckboxPrimitive } from "bits-ui";
+	import CheckIcon from '@lucide/svelte/icons/check';
+	import { cn, type WithoutChildrenOrChild } from "$lib/utils.js";
 
 	let {
 		ref = $bindable(null),
@@ -13,10 +12,16 @@
 	}: WithoutChildrenOrChild<CheckboxPrimitive.RootProps> = $props();
 </script>
 
+<!-- Datum: a 15px chamfered square. Unchecked = steel edge over the recess; checked =
+ teal fill with an ink tick; indeterminate = a 7px ink square. Nothing is round. -->
 <CheckboxPrimitive.Root
 	bind:ref
+	data-slot="checkbox"
 	class={cn(
-		"border-primary ring-offset-background focus-visible:ring-ring data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground peer box-content size-4 shrink-0 rounded-sm border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50",
+		"chamfer chamfer-2xs bg-recess text-ink peer size-[15px] shrink-0 cursor-pointer border-0 outline-none transition-colors",
+		"shadow-[inset_0_0_0_1px_var(--steel)] focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] aria-invalid:shadow-[inset_0_0_0_1px_var(--destructive)]",
+		"data-[state=checked]:bg-primary data-[state=checked]:shadow-none data-[state=indeterminate]:bg-primary data-[state=indeterminate]:shadow-none",
+		"disabled:cursor-not-allowed disabled:opacity-50",
 		className
 	)}
 	bind:checked
@@ -24,12 +29,15 @@
 	{...restProps}
 >
 	{#snippet children({ checked, indeterminate })}
-		<div class="flex size-4 items-center justify-center text-current">
-			{#if indeterminate}
-				<Minus class="size-3.5" />
-			{:else}
-				<Check class={cn("size-3.5", !checked && "text-transparent")} />
+		<span
+			data-slot="checkbox-indicator"
+			class="flex size-full items-center justify-center text-current"
+		>
+			{#if checked}
+				<CheckIcon class="size-2.5 stroke-[3]" />
+			{:else if indeterminate}
+				<span class="block size-[7px] bg-current"></span>
 			{/if}
-		</div>
+		</span>
 	{/snippet}
 </CheckboxPrimitive.Root>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26" width="104" height="104">
+  <defs>
+    <linearGradient id="datum-rim" x1="0" y1="0" x2="0.62" y2="0.79">
+      <stop offset="0" stop-color="#7BEFDD"></stop>
+      <stop offset="0.58" stop-color="#3ED1BD"></stop>
+      <stop offset="1" stop-color="#8B7BFF"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#datum-rim)" d="
+    M8 0 H26 V11.44 H0 V8 Z
+    M0 14.56 H26 V18 L18 26 H0 Z"></path>
+</svg>

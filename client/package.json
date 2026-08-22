@@ -160,6 +160,10 @@
 				"title": "GSCode: Restart Language Server"
 			},
 			{
+				"command": "gscode.selectGame",
+				"title": "GSCode: Select Game"
+			},
+			{
 				"command": "gscode.clearCacheAndReindex",
 				"title": "GSCode: Clear Cache and Reindex"
 			},

@@ -24,16 +24,13 @@ namespace GSCode.Server.Handlers;
 /// <summary>Payload for gscode/rawFolderWriteWarning.</summary>
 public sealed record RawFolderWriteWarningParams(string Path, string RelativePath, bool IsStockScript);
 
-/// <summary>One game the extension can be switched to, as offered in the mismatch picker.</summary>
-public sealed record SupportedGame(string Id, string Label);
-
 /// <summary>
 /// Payload for gscode/gameMismatch: the selected game does not match what the file looks like.
 ///
-/// Carries the roster rather than letting the client keep its own. Only the server knows which
-/// profiles are <see cref="GameProfile.Supported"/>, and the client's hardcoded list had drifted to
-/// nine games — four of them cores with no dialect filled in, so picking one wrote a value the
-/// gscode.game enum does not accept and the server then resolved back to BO3.
+/// Carries the roster rather than letting the client keep its own, and carries it HERE rather than
+/// making the client ask: the offer to switch is one notification and should not need a round trip
+/// to be able to list anything. It is the same list <see cref="GameRoster"/> gives the picker
+/// command, so the two offers can never disagree about which games exist.
 /// </summary>
 public sealed record GameMismatchParams(
     string SelectedGame,
@@ -148,29 +145,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
                 active.ShortName,
                 active.DisplayName,
                 shape == GameShape.BlackOps3,
-                SupportedGames()));
-    }
-
-    /// <summary>
-    /// The games the picker may offer, in release order. Exactly the supported profiles, which is
-    /// also exactly what the gscode.game enum accepts — the two lists are the same list now, so a
-    /// pick can no longer write a setting the schema rejects.
-    ///
-    /// Labelled with the release year, since the display names alone do not separate the two Modern
-    /// Warfare 2s or the two Modern Warfare 3s once the cores are ever promoted.
-    /// </summary>
-    private static List<SupportedGame> SupportedGames()
-    {
-        List<SupportedGame> games = [];
-        foreach ( GameProfile profile in GameProfile.All )
-        {
-            if ( profile.Supported )
-            {
-                games.Add(new SupportedGame(profile.ShortName, profile.DisplayName + " (" + profile.ReleaseYear + ")"));
-            }
-        }
-
-        return games;
+                GameRoster.Supported()));
     }
 
     public override Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken cancellationToken)

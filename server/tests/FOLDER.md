@@ -266,4 +266,8 @@ request · `OnTypeBlockScopeTests` · `UntitledDocumentTests` documents with no 
 request · `RenameScopeTests` what may be renamed, drawn on ownership rather than kind.
 
 **Configuration and mapping.** `SettingsReachTheServerTests` that a setting actually arrives ·
+`SupportedGamesHandlerTests` the game picker's roster — exactly the supported profiles, the tick on
+what the server SELECTED rather than what was asked for, and the two cross-file checks that close
+the gap the original bug lived in: that the roster and the `gscode.game` enum are the same list,
+and that `gscode.selectGame` is both declared in the manifest and registered in `extension.ts` ·
 `EffectiveSummaryTests` · `DiagnosticMappingTests` our diagnostics to LSP.

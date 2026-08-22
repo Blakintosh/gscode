@@ -1,6 +1,6 @@
 # client/src
 
-The VSCode extension sources. Four small files; the heavy lifting lives in the server.
+The VSCode extension sources. Five small files; the heavy lifting lives in the server.
 
 ## extension.ts
 
@@ -11,7 +11,8 @@ The VSCode extension sources. Four small files; the heavy lifting lives in the s
   channel), `gscode.restartServer` (restarts the language client),
   `gscode.clearCacheAndReindex` (stops the server, removes only this workspace's hashed SQLite
   database and its `-wal`/`-shm` sidecars, then reloads the window for a fresh cold index — behind
-  a modal confirm), `gscode.openApiLibrary` (opens the gscode.net library for the active editor's
+  a modal confirm), `gscode.selectGame` (the game picker, see `gamePicker.ts`),
+  `gscode.openApiLibrary` (opens the gscode.net library for the active editor's
   language; bound to `shift+f1` in gsc/csc/gsh files), and the `gscode.showReferences` bridge for
   code-lens clicks.
 - `registerIndexingStatusBar(context, client)` — the live indexing counter: a spinner whose
@@ -38,7 +39,27 @@ The VSCode extension sources. Four small files; the heavy lifting lives in the s
   completion, completion punctuation, diagnostics scope, formatter knobs).
 - `readSettings()` — reads the current `gscode.*` configuration into that shape.
 
+## gamePicker.ts
+
+- `pickGame(client, log, options)` — the `gscode.selectGame` command. Asks the server for the
+  roster over `gscode/supportedGames`, shows it with the RUNNING game ticked, writes
+  `gscode.game`, and offers the reload that applies it.
+- `pickGameFrom(games, selected, log, title)` — the same picker for a roster already in hand,
+  which is what `gscode/gameMismatch` carries.
+- The roster is never held here. The client used to own that list and it drifted to nine games,
+  four of them cores with no dialect, so picking one wrote a value the setting's own enum rejects
+  and the server resolved it back to BO3. A request that fails is reported rather than falling
+  back to a list — a fallback list IS the failure mode.
+- The tick follows `GameProfile.Active`, not `gscode.game`. The two differ exactly when something
+  is wrong, and ticking a game that is not in use rules out the thing being looked for.
+- A window reload, not `gscode.restartServer`: the game is a command-line argument and the launch
+  arguments are captured when the client is constructed, so a restart relaunches with the game the
+  session started with.
+
 ## reloadPrompt.ts
 
 - `registerReloadPrompt(...)` — offers a window reload when a change needs one to take effect,
   rather than leaving the editor in a state the server can no longer describe.
+- `suppressReloadPromptOnce()` — skips the next prompt, for a command that writes one of those
+  settings and prompts about it itself. The game picker is the only caller; without it, picking a
+  game produces two notifications about one edit.

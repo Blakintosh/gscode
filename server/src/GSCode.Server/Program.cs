@@ -164,6 +164,7 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<WorkspaceFoldersHandler>()
         .AddHandler<PlanRenameHandler>()
         .AddHandler<ClearCacheHandler>()
+        .AddHandler<SupportedGamesHandler>()
         .AddHandler<BuiltinAtHandler>()
         .AddHandler<HoverHandler>()
         .AddHandler<DefinitionHandler>()

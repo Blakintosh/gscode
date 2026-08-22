@@ -20,6 +20,21 @@ const RESTART_REQUIRED: ReadonlyArray<{ section: string; label: string }> = [
 ];
 
 /**
+ * Set by a command that writes one of the above and prompts about it ITSELF.
+ *
+ * The game picker is the case: it writes gscode.game and immediately asks to reload, so the generic
+ * prompt below would be a second notification saying the same thing about the same edit. One shot
+ * rather than a scope, because the write and the change event are one turn apart and anything
+ * longer-lived would swallow a real edit made while it was open.
+ */
+let suppressNext = false;
+
+/** Skips the next restart-required prompt. See {@link suppressNext}. */
+export function suppressReloadPromptOnce(): void {
+    suppressNext = true;
+}
+
+/**
  * Prompts to reload the window when one of the above changes.
  *
  * A window reload rather than `gscode.restartServer`, which is NOT sufficient here: the server's
@@ -43,6 +58,12 @@ export function registerReloadPrompt(
                 .map((setting) => setting.label);
 
             if (changed.length === 0 || prompting) {
+                return;
+            }
+
+            if (suppressNext) {
+                suppressNext = false;
+                log.info(`Restart-required setting changed by a command that prompts itself: ${changed.join(", ")}`);
                 return;
             }
 

@@ -85,9 +85,10 @@ GSC/CSC/GSH language registrations, TextMate grammar, semantic-token scope mappi
 quick-suggestion defaults. Two log channels: "GSCode" (`LogOutputChannel`, extension-host
 lifecycle) and "GSCode Server" (the server's stderr/Serilog). A status-bar item shows the live
 indexing counter driven by `gscode/indexingStarted|Progress|Complete` notifications. Commands:
-`gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`,
-`gscode.openApiLibrary` (`shift+f1` in GSC, CSC, and GSH files), and the
-`gscode.showReferences` bridge for code-lens clicks. Settings flow to the server via
+`gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, `gscode.selectGame`
+(the game picker, whose roster comes from the server over `gscode/supportedGames` so the client
+never keeps its own list of which dialects exist), `gscode.openApiLibrary` (`shift+f1` in GSC,
+CSC, and GSH files), and the `gscode.showReferences` bridge for code-lens clicks. Settings flow to the server via
 `initializationOptions.gscode` and `workspace/didChangeConfiguration`.
 
 ## Dev-time tooling

@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { createLanguageClient } from "./server";
 import { registerReloadPrompt } from "./reloadPrompt";
+import { pickGame, pickGameFrom } from "./gamePicker";
 
 let client: LanguageClient | undefined;
 
@@ -94,6 +95,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 log.error(`Failed to clear cache: ${String(error)}`);
             }
             await vscode.commands.executeCommand("workbench.action.reloadWindow");
+        }),
+    );
+
+    // Pick the game this workspace targets.
+    //
+    // The setting has always existed and the picker has always existed; what was missing was a way
+    // to REACH the picker on purpose. It only appeared when the server happened to notice a file
+    // that did not look like the selected game, and then only once per session — so someone who
+    // dismissed it, or whose scripts are ambiguous, had to go and find gscode.game in settings.
+    //
+    // Sits beside Clear Cache and Reindex because it ends the same way: the game is a launch
+    // argument, so applying it is a window reload rather than anything the running server can do.
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.selectGame", async () => {
+            await pickGame(created, log, { title: "Select the game this workspace targets" });
         }),
     );
 
@@ -467,17 +483,12 @@ function registerIndexingStatusBar(
                 return;
             }
 
-            const picked = await vscode.window.showQuickPick(
-                games.map((g) => ({ label: g.label, id: g.id, picked: g.id === params.selectedGame })),
-                { title: "Select the game this workspace targets", placeHolder: "Call of Duty game" },
-            );
-
-            if (picked) {
-                await vscode.workspace
-                    .getConfiguration("gscode")
-                    .update("game", picked.id, vscode.ConfigurationTarget.Workspace);
-                log.info(`Game version set to ${picked.id}.`);
-            }
+            // The same picker the gscode.selectGame command opens, given the roster this
+            // notification already carries. It was a second copy of the pick-and-write here, and
+            // the copies had already diverged: this one wrote to Workspace unconditionally, which
+            // throws when no folder is open, and neither offered the reload that makes the write
+            // do anything.
+            await pickGameFrom(games, params.selectedGame, log, "Select the game this workspace targets");
         },
     );
 

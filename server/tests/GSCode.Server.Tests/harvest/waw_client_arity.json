@@ -1,0 +1,385 @@
+{
+  "game": "waw",
+  "clientScriptsSwept": 226,
+  "distinct": 16,
+  "predictedLocalClientNum": 12,
+  "scoring": "predicted 12: 12 correct, 0 wrong (precision 100.0%); 0 known localClientNum names not predicted.",
+  "functions": [
+    {
+      "name": "playLoopSound",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        3,
+        4
+      ],
+      "calls": 15,
+      "fileCount": 11,
+      "numericFirstArgCalls": 9,
+      "namedFirstArgCalls": 6,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0",
+        "clientNum",
+        "client_num",
+        "localClientNum",
+        "self.localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_ambientpackage.csc(665)",
+        "clientscripts\\mp\\_audio.csc(100)",
+        "clientscripts\\mp\\_music.csc(259)",
+        "clientscripts\\mp\\_utility.csc(188)",
+        "clientscripts\\nazi_zombie_factory_fx.csc(277)"
+      ]
+    },
+    {
+      "name": "GetEntArray",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 23,
+      "fileCount": 9,
+      "numericFirstArgCalls": 14,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0.609,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "0",
+        "p"
+      ],
+      "sites": [
+        "clientscripts\\ber2_fx.csc(534)",
+        "clientscripts\\mp\\_mortar.csc(506)",
+        "clientscripts\\mp\\_mortar.csc(529)",
+        "clientscripts\\nazi_zombie_asylum_amb.csc(189)",
+        "clientscripts\\nazi_zombie_asylum_amb.csc(194)"
+      ]
+    },
+    {
+      "name": "stopLoopSound",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 9,
+      "fileCount": 6,
+      "numericFirstArgCalls": 9,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_ambientpackage.csc(627)",
+        "clientscripts\\mp\\_music.csc(156)",
+        "clientscripts\\_ambientpackage.csc(643)",
+        "clientscripts\\_audio.csc(308)",
+        "clientscripts\\_collectibles.csc(91)"
+      ]
+    },
+    {
+      "name": "SpawnFx",
+      "declaredMax": 4,
+      "observedArgCounts": [
+        5,
+        6
+      ],
+      "calls": 16,
+      "fileCount": 5,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 0.125,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "clientNum",
+        "i",
+        "p"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_fx.csc(207)",
+        "clientscripts\\nazi_zombie_asylum_fx.csc(84)",
+        "clientscripts\\nazi_zombie_asylum_fx.csc(218)",
+        "clientscripts\\nazi_zombie_asylum_fx.csc(221)",
+        "clientscripts\\nazi_zombie_factory_fx.csc(97)"
+      ]
+    },
+    {
+      "name": "getent",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 12,
+      "fileCount": 5,
+      "numericFirstArgCalls": 12,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0"
+      ],
+      "sites": [
+        "clientscripts\\ber2_fx.csc(168)",
+        "clientscripts\\ber3b_amb.csc(197)",
+        "clientscripts\\ber3b_amb.csc(217)",
+        "clientscripts\\ber3b_amb.csc(237)",
+        "clientscripts\\ber3b_amb.csc(260)"
+      ]
+    },
+    {
+      "name": "playfxontag",
+      "declaredMax": 3,
+      "observedArgCounts": [
+        4
+      ],
+      "calls": 12,
+      "fileCount": 3,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 12,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "clientnum",
+        "client_num",
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_vehicle.csc(307)",
+        "clientscripts\\mp\\_vehicle.csc(314)",
+        "clientscripts\\mp\\_vehicle.csc(322)",
+        "clientscripts\\mp\\_vehicle.csc(326)",
+        "clientscripts\\mp\\_vehicle.csc(334)"
+      ]
+    },
+    {
+      "name": "playFX",
+      "declaredMax": 4,
+      "observedArgCounts": [
+        5
+      ],
+      "calls": 4,
+      "fileCount": 3,
+      "numericFirstArgCalls": 1,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0.25,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "0",
+        "i",
+        "player"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_ambient.csc(60)",
+        "clientscripts\\_fx.csc(83)",
+        "clientscripts\\_fx.csc(212)",
+        "clientscripts\\_utility.csc(537)"
+      ]
+    },
+    {
+      "name": "VisionSetNaked",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 16,
+      "fileCount": 2,
+      "numericFirstArgCalls": 3,
+      "namedFirstArgCalls": 13,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0",
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\nazi_zombie_factory_teleporter.csc(42)",
+        "clientscripts\\nazi_zombie_factory_teleporter.csc(47)",
+        "clientscripts\\nazi_zombie_factory_teleporter.csc(97)",
+        "clientscripts\\nazi_zombie_factory_teleporter.csc(99)",
+        "clientscripts\\nazi_zombie_factory_teleporter.csc(106)"
+      ]
+    },
+    {
+      "name": "PlayRumbleLoopOnEntity",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 3,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 3,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_vehicle.csc(123)",
+        "clientscripts\\mp\\_vehicle.csc(127)",
+        "clientscripts\\_vehicle.csc(145)"
+      ]
+    },
+    {
+      "name": "playLoopedFx",
+      "declaredMax": 6,
+      "observedArgCounts": [
+        8
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "clientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_fx.csc(66)",
+        "clientscripts\\_fx.csc(465)"
+      ]
+    },
+    {
+      "name": "StopRumble",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 2,
+      "fileCount": 2,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localClientNum"
+      ],
+      "sites": [
+        "clientscripts\\mp\\_vehicle.csc(137)",
+        "clientscripts\\_vehicle.csc(154)"
+      ]
+    },
+    {
+      "name": "GetCurrentWeapon",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 7,
+      "fileCount": 1,
+      "numericFirstArgCalls": 1,
+      "namedFirstArgCalls": 6,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "0",
+        "localclientnum"
+      ],
+      "sites": [
+        "clientscripts\\_zombiemode_tesla.csc(60)",
+        "clientscripts\\_zombiemode_tesla.csc(60)",
+        "clientscripts\\_zombiemode_tesla.csc(66)",
+        "clientscripts\\_zombiemode_tesla.csc(105)",
+        "clientscripts\\_zombiemode_tesla.csc(105)"
+      ]
+    },
+    {
+      "name": "IsThrowingGrenade",
+      "declaredMax": 0,
+      "observedArgCounts": [
+        1
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "clientscripts\\_zombiemode_tesla.csc(69)",
+        "clientscripts\\_zombiemode_tesla.csc(114)"
+      ]
+    },
+    {
+      "name": "GetWeaponAmmoClip",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 2,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 2,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "localclientnum"
+      ],
+      "sites": [
+        "clientscripts\\_zombiemode_tesla.csc(74)",
+        "clientscripts\\_zombiemode_tesla.csc(119)"
+      ]
+    },
+    {
+      "name": "GiveAchievement",
+      "declaredMax": 1,
+      "observedArgCounts": [
+        2
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 1,
+      "clientIndexConfidence": 1,
+      "predictedLocalClientNum": true,
+      "controlAnswer": "localClientNum",
+      "firstArgSamples": [
+        "clientNum"
+      ],
+      "sites": [
+        "clientscripts\\_collectibles.csc(36)"
+      ]
+    },
+    {
+      "name": "PlayRumbleOnPosition",
+      "declaredMax": 2,
+      "observedArgCounts": [
+        3
+      ],
+      "calls": 1,
+      "fileCount": 1,
+      "numericFirstArgCalls": 0,
+      "namedFirstArgCalls": 0,
+      "clientIndexConfidence": 0,
+      "predictedLocalClientNum": false,
+      "controlAnswer": "no",
+      "firstArgSamples": [
+        "i"
+      ],
+      "sites": [
+        "clientscripts\\_vehicle.csc(623)"
+      ]
+    }
+  ]
+}

@@ -8,6 +8,7 @@
     "foldingStopMarker": "^\\s*\\}",
     "patterns": [
         { "include": "#function" },
+        { "include": "#iw-function" },
         { "include": "#class" },
         { "include": "#block-comment" },
         { "include": "#expression" },
@@ -27,7 +28,7 @@
         },
         {
             "name": "meta.preprocessor.file-directives.gsc",
-            "match": "(#(?:using|insert))\\s([^ ;]*)(;)?",
+            "match": "(#(?:using|insert|include))\\s([^ ;]*)(;)?",
             "captures": {
                 "1": { "name": "keyword.control.directive.using.gsc" },
                 "2": { "name": "string.quoted.other.blank.using.gsc" },
@@ -149,7 +150,7 @@
         },
         "language-reserved-variables": {
             "name": "variable.language.gsc",
-            "match": "\\b(self|level|game|world|vararg|anim)\\b"
+            "match": "\\b(self|level|game|world|vararg|thisthread|anim)\\b"
         },
 		"storage-types": {
 			"name": "storage.type.gsc",
@@ -195,8 +196,8 @@
         },
         "control": {
             "name": "keyword.control.gsc",
-            "comment": "Reserved control keywords in GSC/CSC",
-            "match": "(?i)\\b(class|return|wait|thread|classes|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|isdefined|vectorscale)\\b"
+            "comment": "Reserved control keywords across the GSC/CSC dialects. A TextMate grammar cannot see the active game — it runs before the server is asked — so this is the UNION of every dialect's keywords rather than one game's. Under-highlighting is the worse failure, and is what left #include and the profiler pair plain in the Infinity Ward games, so the union stands. The cost is real though: `foreach` is coloured as a keyword while editing CoD4, which has none. Nothing here can fix that — semantic tokens can add or override a colour but never remove one, and the server stopped emitting Keyword tokens anyway (see SemanticTokensHandler's legend note). What the server DOES own is the verdict once the word is used: gscode-5025 says which game a keyword belongs to, and gscode-1004 covers the directives. Per-dialect grammars are the only real fix; see FOLLOWUPS.md.",
+            "match": "(?i)\\b(class|return|wait|thread|childthread|call|classes|if|else|do|while|for|foreach|in|new|waittill|waittillmatch|waittillframeend|switch|case|default|break|continue|notify|endon|waitrealtime|profilestart|profilestop|prof_begin|prof_end|isdefined|vectorscale)\\b"
         },
         "escape": {
             "name": "constant.character.escape",
@@ -255,8 +256,32 @@
                 "2": { "name": "entity.name.scope-resolution.gsc" }
             }
         },
+        "path-call": {
+            "name": "meta.path-call.gsc",
+            "comment": "match Infinity Ward path-qualified calls like: maps\\mp\\_utility::foo(); Listed BEFORE namespace-call, which starts its match at the LAST path segment and therefore left the maps\\mp\\ prefix uncoloured — the reported symptom. Both forms are covered by one rule because the pointer form is the same text without an argument list. The path is scoped like a namespace on purpose: what it qualifies the name WITH differs (a file rather than a namespace), but what it does for the reader is identical, and giving it a colour of its own would say the two are unrelated. BO3 has no path form, and a grammar cannot see the active game, so this runs everywhere; the spelling itself is the guard, since a backslash before :: is not valid in a namespace dialect.",
+            "match": "\\b((?:(?:[[:alpha:]]|_)\\w*\\\\)+(?:[[:alpha:]]|_)\\w*)(::)((?:[[:alnum:]]|_)\\w*)\\b",
+            "captures": {
+                "1": {
+                    "name": "entity.name.scope-resolution.gsc",
+                    "patterns": [
+                        { "include": "#path-separator" }
+                    ]
+                },
+                "3": {
+                    "name": "entity.name.function.gsc",
+                    "patterns": [
+                        { "include": "#control" }
+                    ]
+                }
+            }
+        },
+        "path-separator": {
+            "name": "punctuation.separator.path.gsc",
+            "match": "\\\\"
+        },
         "function-call": {
             "patterns": [
+                { "include": "#path-call" },
                 { "include": "#namespace-call" },
                 { "include": "#other-function" }
             ]
@@ -274,7 +299,28 @@
                 { "include": "#line-continuation-character" }
             ]
         },
-        "function": {	
+        "iw-function": {
+            "name": "meta.function.gsc",
+            "comment": "A function declaration in the Infinity Ward line and the pre-BO3 Treyarch games, which have no 'function' keyword: main( arg ) written at column 0. Anchored to the line start because that is the only thing telling a declaration from a call - a call always sits indented inside a body. Without this rule those four games got no function-name and no parameter scopes at all, since both live inside the keyword rule below, so a CoD4 declaration rendered as plain text.",
+            "begin": "^([a-zA-Z_$]\\w*)\\s*(\\()",
+            "end": "(?!\\G)(?<=\\))",
+            "beginCaptures": {
+                "1": { "name": "entity.name.function.gsc" },
+                "2": { "name": "punctuation.definition.parameters.begin.gsc" }
+            },
+            "endCaptures": {
+                "1": { "name": "punctuation.definition.parameters.end.gsc" }
+            },
+            "patterns": [
+                { "include": "#function-parameter-defaults" },
+                { "include": "#function-vararg" },
+                { "include": "#function-parameter" },
+                { "name": "keyword.operator.parameter-comma.gsc", "match": "," },
+                { "include": "#block-comment" },
+                { "include": "#line-comment" }
+            ]
+        },
+        "function": {
             "name": "meta.function.gsc",
 			"comment": "match regular function like: function myFunc(arg) { É }",
 			"begin": "\\b(function)(\\s[a-zA-Z_$]\\w*)?\\s+([a-zA-Z_$]\\w*)?\\s*(\\()",

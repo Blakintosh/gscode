@@ -1,0 +1,177 @@
+[
+  { "name": "isdog", "type": "int" },
+  { "name": "missinglegs", "type": "int" },
+  { "name": "accuracy", "type": "float" },
+
+  { "name": "perfectaim", "type": "bool" },
+  { "name": "blindaim", "type": "bool" },
+  { "name": "holdfire", "type": "bool" },
+  { "name": "forcefire", "type": "bool" },
+
+  { "name": "damagetaken", "type": "int" },
+  { "name": "damagedir", "type": "vector" },
+  { "name": "damageyaw", "type": "int" },
+  { "name": "damagelocation", "type": "string" },
+  { "name": "damageweapon", "type": "weapon" },
+  { "name": "damagemod", "type": "string" },
+
+  { "name": "proneok", "type": "int" },
+
+  { "name": "walkdist", "type": "float" },
+
+  { "name": "dontavoidplayer", "type": "int" },
+
+  { "name": "desiredangle", "type": "float" },
+
+  { "name": "newenemyreactionpos", "type": "vector" },
+  { "name": "newenemyreaction", "type": "bool" },
+  { "name": "newenemyreactiondistsq", "type": "float" },
+
+  { "name": "ignoresuppression", "type": "int" },
+  { "name": "suppressionwait", "type": "float" },
+  { "name": "suppressionduration", "type": "float" },
+  { "name": "suppressionstarttime", "type": "int" },
+  { "name": "suppressionmeter", "type": "float" },
+
+  { "name": "weapon", "type": "weapon" },
+  { "name": "secondaryweapon", "type": "weapon" },
+  { "name": "primaryweapon", "type": "weapon" },
+  { "name": "sidearm", "type": "weapon" },
+  { "name": "meleeweapon", "type": "weapon" },
+  { "name": "ammopouch", "type": "weapon" },
+
+  { "name": "grenadeawareness", "type": "float" },
+  { "name": "grenade", "type": "enthandle" },
+  { "name": "grenadeweapon", "type": "weapon" },
+  { "name": "grenadeammo", "type": "float" },
+  { "name": "grenadethrowback", "type": "int" },
+
+  { "name": "allowpain", "type": "bool" },
+  { "name": "blockingpain", "type": "bool" },
+  { "name": "diequietly", "type": "bool" },
+  { "name": "skipDeath", "type": "bool" },
+
+  { "name": "doingambush", "type": "bool" },
+  { "name": "combatmode", "type": "int" },
+  { "name": "alertlevel", "type": "int" },
+  { "name": "alertlevelint", "type": "float" },
+
+  { "name": "awarenesslevelcurrent", "type": "int" },
+  { "name": "awarenesslevelprevious", "type": "int" },
+
+  { "name": "ignoretriggers", "type": "int" },
+  { "name": "pushable", "type": "int" },
+  { "name": "enableterrainik", "type": "int" },
+  { "name": "noplayermeleeblood", "type": "int" },
+  { "name": "clamptonavmesh", "type": "int" },
+  { "name": "gibbed", "type": "int" },
+  { "name": "groundrelativepose", "type": "int" },
+
+  { "name": "dropweapon", "type": "int" },
+
+  { "name": "groundtype", "type": "string" },
+
+  { "name": "properName", "type": "string" },
+  { "name": "scriptstate", "type": "string" },
+  { "name": "lastscriptstate", "type": "string" },
+  { "name": "statechangereason", "type": "string" },
+
+  { "name": "nodeoffsetpos", "type": "vector" },
+  { "name": "pathstartpos", "type": "vector" },
+  { "name": "pathgoalpos", "type": "vector" },
+
+  { "name": "pathrandompercent", "type": "int" },
+
+  { "name": "usechokepoints", "type": "bool" },
+
+  { "name": "lastenemysightpos", "type": "vector" },
+
+  { "name": "pathenemylookahead", "type": "float" },
+  { "name": "pathenemyfightdist", "type": "float" },
+  { "name": "ignorepathenemyfightdist", "type": "bool" },
+  { "name": "ignorerunandgundist", "type": "bool" },
+  { "name": "runandgundist", "type": "float" },
+  { "name": "meleeattackdist", "type": "float" },
+
+  { "name": "movemode", "type": "string" },
+  { "name": "usecombatscriptatcover", "type": "bool" },
+  { "name": "safetochangescript", "type": "bool" },
+  { "name": "usegoalanimweight", "type": "bool" },
+
+  { "name": "keepclaimednode", "type": "bool" },
+  { "name": "keepclaimednodeifvalid", "type": "bool" },
+
+  { "name": "coversearchinterval", "type": "float" },
+  { "name": "nextFindBestCoverTime", "type": "float" },
+
+  { "name": "badplaceawareness", "type": "float" },
+
+  { "name": "nogrenadereturnthrow", "type": "bool" },
+
+  { "name": "goodshootpos", "type": "vector" },
+  { "name": "goodshootposvalid", "type": "bool" },
+
+  { "name": "flashbangimmunity", "type": "int" },
+
+  { "name": "lookaheaddir", "type": "vector" },
+  { "name": "lookaheaddist", "type": "float" },
+
+  { "name": "prevanimdelta", "type": "vector" },
+
+  { "name": "exposedduration", "type": "float" },
+  { "name": "pathwaittime", "type": "float" },
+  { "name": "lastpathtime", "type": "float" },
+
+  { "name": "isarriving", "type": "int" },
+  { "name": "isarrivalpending", "type": "bool" },
+
+  { "name": "engagemindist", "type": "float" },
+  { "name": "engageminfalloffdist", "type": "float" },
+  { "name": "engagemaxdist", "type": "float" },
+  { "name": "engagemaxfalloffdist", "type": "float" },
+
+  { "name": "finalaccuracy", "type": "float" },
+
+  { "name": "noattackeraccuracymod", "type": "bool" },
+  { "name": "maxfaceenemydist", "type": "float" },
+
+  { "name": "prevrelativedir", "type": "bool" },
+  { "name": "relativedir", "type": "bool" },
+  { "name": "gunblockedbywall", "type": "bool" },
+
+  { "name": "fixedlinkyawonly", "type": "int" },
+
+  { "name": "weaponaccuracy", "type": "float" },
+
+  { "name": "movementtype", "type": "string" },
+
+  { "name": "arrivalfinalpos", "type": "vector" },
+  { "name": "exitPos", "type": "vector" },
+  { "name": "predictedExitPos", "type": "vector" },
+  { "name": "predictedArrivalDirectionValid", "type": "bool" },
+  { "name": "arrivalfinalyaw", "type": "float" },
+
+  { "name": "firemode", "type": "int" },
+
+  { "name": "traversestartnode", "type": "pathnode" },
+  { "name": "traverseendnode", "type": "pathnode" },
+  { "name": "traversalstartpos", "type": "vector" },
+  { "name": "traversalendpos", "type": "vector" },
+
+  { "name": "manualtraversemode", "type": "bool" },
+
+  { "name": "script_accuracy", "type": "float" },
+
+  { "name": "bulletsinclip", "type": "float" },
+
+  { "name": "actor_id", "type": "int" },
+
+  { "name": "animtranslationscale", "type": "float" },
+
+  { "name": "pathablematerial", "type": "int" },
+
+  { "name": "hero", "type": "bool" },
+  { "name": "canflank", "type": "bool" },
+  { "name": "accuratefire", "type": "bool" },
+  { "name": "aggressivemode", "type": "bool" }
+]

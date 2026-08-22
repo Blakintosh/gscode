@@ -1,0 +1,21 @@
+# Line-ending policy: LF everywhere, in the repository AND in the working tree.
+#
+# The repository has always stored LF-normalized blobs; what changed is the checkout side. The
+# previous `eol=crlf` converted on checkout, which meant every tool that writes LF -- and most
+# do -- left files disagreeing with the declared policy, and git warned about each one on every
+# commit. Conversion is the thing generating the noise, so there is no conversion now.
+#
+# Nothing here needs CRLF: there are no .bat, .cmd or .ps1 files, and the .NET and Node
+# toolchains read LF happily on Windows. `text=auto` still lets git detect and leave binaries
+# alone. Being explicit also means the result no longer depends on each contributor's
+# core.autocrlf, which is the point of committing a policy at all.
+* text=auto eol=lf
+
+# Binary assets — never apply line-ending conversion.
+*.png    binary
+*.ico    binary
+*.webp   binary
+*.xlsx   binary
+*.ttf    binary
+*.otf    binary
+*.lockb  binary

@@ -1,0 +1,13 @@
+{
+  "enablewatersheetfx": "EnableWaterSheetFX",
+  "getbuscount": "GetBusCount",
+  "getbusname": "GetBusName",
+  "getlefttreadhealth": "GetLeftTreadHealth",
+  "getpersistentprofilevar": "GetPersistentProfileVar",
+  "getrighttreadhealth": "GetRightTreadHealth",
+  "setbusfadetime": "SetBusFadeTime",
+  "setbusvolume": "SetBusVolume",
+  "setdvarbool": "SetDvarBool",
+  "setfakeentorg": "SetFakeEntOrg",
+  "setpersistentprofilevar": "SetPersistentProfileVar"
+}

@@ -1,23 +1,12 @@
 <script lang="ts">
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
-	// @ts-ignore
-	import Flag from 'lucide-svelte/icons/flag';
-	// @ts-ignore
-	import Link from 'lucide-svelte/icons/link';
-	// @ts-ignore
-	import Check from 'lucide-svelte/icons/check';
-	// @ts-ignore
-	import FileJson from 'lucide-svelte/icons/file-json';
-	// @ts-ignore
-	import Trash2 from 'lucide-svelte/icons/trash-2';
-	// @ts-ignore
-	import Plus from 'lucide-svelte/icons/plus';
-	// @ts-ignore
-	import Copy from 'lucide-svelte/icons/copy';
-	// @ts-ignore
-	import X from 'lucide-svelte/icons/x';
+	import FileJson from '@lucide/svelte/icons/file-json';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Copy from '@lucide/svelte/icons/copy';
+	import X from '@lucide/svelte/icons/x';
 	import Button from '$components/ui/button/button.svelte';
-	import CopyButton from '$components/ui/copy-button/copy-button.svelte';
+	import Brush from '$lib/components/site/Brush.svelte';
 	import ValidationStatus from '$components/app/pages/editor/article/ValidationStatus.svelte';
 	import FlagEditor from '$components/app/pages/editor/article/FlagEditor.svelte';
 	import EditName from '$components/app/pages/editor/article/EditName.svelte';
@@ -74,49 +63,51 @@
 			}
 		});
 	});
+
+	/** Section heading — Sora 600, sentence case, sat on a hairline. */
+	const sectionHeading =
+		'border-border flex items-center justify-between border-b pb-2 text-base font-semibold tracking-heading lg:text-lg';
 </script>
 
 {#if !editor.hasLibrary}
 	<!-- Empty state - no library loaded -->
-	<div class="flex flex-col items-center justify-center h-full gap-6 text-center px-8">
-		<div class="flex flex-col items-center gap-4">
-			<div class="p-4 rounded-full bg-muted">
-				<FileJson class="w-12 h-12 text-muted-foreground" />
-			</div>
-			<h1 class="text-2xl font-semibold">No Library Loaded</h1>
-			<p class="text-muted-foreground max-w-md">
+	<div class="flex h-full flex-col items-center justify-center gap-7 px-8 text-center">
+		<Brush surface="card" cut={12} handles bodyClass="p-5">
+			<FileJson class="text-primary size-10" />
+		</Brush>
+		<div class="flex max-w-md flex-col items-center gap-3">
+			<h1 class="text-xl font-semibold tracking-heading">No library loaded</h1>
+			<p class="text-muted-foreground">
 				Load a library JSON file to start editing function definitions. You can load from a file or
 				pull from the latest API version.
 			</p>
 		</div>
-		<div class="flex flex-col gap-2 text-sm text-muted-foreground">
-			<p>Use the sidebar to load a library.</p>
-		</div>
+		<p class="type-label text-dim">Use the sidebar to load a library</p>
 	</div>
 {:else if !functionEditor}
 	<!-- Library loaded but no function selected -->
-	<div class="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
-		<h2 class="text-xl font-medium">Select a Function</h2>
-		<p class="text-muted-foreground">
-			Choose a function from the sidebar to start editing.
-		</p>
+	<div class="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+		<h2 class="text-lg font-semibold tracking-heading">Select a function</h2>
+		<p class="text-muted-foreground">Choose a function from the sidebar to start editing.</p>
 	</div>
 {:else}
 	<!-- Function editor view -->
 	<div
-		class="flex flex-col-reverse lg:flex-row gap-4 items-stretch min-w-0 w-full lg:w-auto lg:h-full lg:min-h-0 text-sm lg:text-base"
+		class="flex w-full min-w-0 flex-col-reverse items-stretch gap-4 text-sm lg:h-full lg:min-h-0 lg:w-auto lg:flex-row lg:text-base"
 	>
-		<div class="grow px-6 lg:px-16 overflow-y-auto">
+		<div class="grow overflow-y-auto px-6 lg:px-16">
 			<Breadcrumb.Root>
-				<Breadcrumb.List class="text-xs lg:text-sm">
+				<Breadcrumb.List class="font-mono text-2xs tracking-wider uppercase">
 					<Breadcrumb.Item>
-						<Breadcrumb.Link class="hover:text-foreground-muted"
-							>{editor.library?.gameId === 't7' ? 'Black Ops III' : editor.library?.gameId}</Breadcrumb.Link
+						<Breadcrumb.Link class="hover:text-primary"
+							>{editor.library?.gameId === 't7'
+								? 'Black Ops III'
+								: editor.library?.gameId}</Breadcrumb.Link
 						>
 					</Breadcrumb.Item>
 					<Breadcrumb.Separator />
 					<Breadcrumb.Item>
-						<Breadcrumb.Link class="hover:text-foreground-muted">{languageName}</Breadcrumb.Link>
+						<Breadcrumb.Link class="hover:text-primary">{languageName}</Breadcrumb.Link>
 					</Breadcrumb.Item>
 					<Breadcrumb.Separator />
 					<Breadcrumb.Item>
@@ -125,122 +116,120 @@
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
 
-			<div class="py-4">
-				<div class="mb-1">
+			<div class="py-5">
+				<div class="mb-2">
 					<EditName {functionEditor} />
 				</div>
 
 				<EditDescription {functionEditor} />
 
-				<div class="grid grid-cols-1 3xl:grid-cols-5 3xl:gap-8 gap-16 py-8 min-h-0">
-					<div class="3xl:col-span-3 flex flex-col gap-8 min-h-0">
-						<div class="flex items-center justify-between">
-							<h2 class="font-medium text-lg lg:text-xl">
+				<div class="3xl:grid-cols-5 3xl:gap-8 grid min-h-0 grid-cols-1 gap-14 py-8">
+					<div class="3xl:col-span-3 flex min-h-0 flex-col gap-6">
+						<div class={sectionHeading}>
+							<h2>
 								{#if overloads.length === 1}
 									Overload
 								{:else}
 									Overloads ({overloads.length})
 								{/if}
 							</h2>
-							<Button
-								variant="outline"
-								size="sm"
-								onclick={() => functionEditor?.addOverload()}
-							>
-								<Plus class="h-4 w-4 mr-2" />
-								Add Overload
+							<Button variant="secondary" size="xs" onclick={() => functionEditor?.addOverload()}>
+								<Plus />
+								Add overload
 							</Button>
 						</div>
 
 						{#each overloads as overload, index}
-							<div class="flex flex-col gap-4">
-								<div class="flex items-center justify-between border-b py-2">
-									<h2 class="font-medium text-lg lg:text-xl">
-										{#if overloads.length === 1}
-											Specification
-										{:else}
-											Specification (Overload {index + 1})
-										{/if}
-									</h2>
-									<div class="flex items-center gap-1">
+							<Brush
+								surface="card"
+								cut={12}
+								tab={overloads.length === 1 ? 'Spec' : `Spec ${index + 1}`}
+								bodyClass="flex flex-col gap-6 px-6 pt-9 pb-6"
+							>
+								<div class="flex items-start justify-between gap-3">
+									<code
+										class="bg-recess inset-edge chamfer chamfer-sm grow px-4 py-3 font-mono text-xs leading-relaxed break-all lg:text-sm"
+									>
+										{overloadToSyntacticString(name, overload)}
+									</code>
+									<div class="flex shrink-0 items-center gap-1">
 										<Button
 											variant="ghost"
-											size="sm"
-											class="h-7 w-7 p-0"
+											size="icon-sm"
 											title="Duplicate overload"
 											onclick={() => functionEditor?.duplicateOverload(index)}
 										>
-											<Copy class="h-4 w-4" />
+											<Copy />
+											<span class="sr-only">Duplicate overload</span>
 										</Button>
 										{#if overloads.length > 1}
 											<Button
 												variant="ghost"
-												size="sm"
-												class="h-7 w-7 p-0 text-destructive hover:text-destructive"
+												size="icon-sm"
+												class="hover:text-destructive"
 												title="Remove overload"
 												onclick={() => functionEditor?.removeOverload(index)}
 											>
-												<X class="h-4 w-4" />
+												<X />
+												<span class="sr-only">Remove overload</span>
 											</Button>
 										{/if}
 									</div>
 								</div>
-								<code class="font-mono bg-background border rounded-lg px-4 py-3 text-sm lg:text-lg">
-									{overloadToSyntacticString(name, overload)}
-								</code>
-							</div>
 
-							<div class="flex flex-col gap-4">
-								<h3 class="font-medium text-base lg:text-lg border-b py-2">Called on Entity</h3>
-								<EditCalledOn {functionEditor} overloadIndex={index} />
-							</div>
+								<div class="flex flex-col gap-3">
+									<h3 class="type-label text-dim">Called on entity</h3>
+									<EditCalledOn {functionEditor} overloadIndex={index} />
+								</div>
 
-							<div class="flex flex-col gap-4">
-								<h3 class="font-medium text-base lg:text-lg border-b py-2">Parameters</h3>
-								<EditParameters {functionEditor} overloadIndex={index} />
-							</div>
+								<div class="flex flex-col gap-3">
+									<h3 class="type-label text-dim">Parameters</h3>
+									<EditParameters {functionEditor} overloadIndex={index} />
+								</div>
 
-							<div class="flex flex-col gap-4">
-								<h3 class="font-medium text-base lg:text-lg border-b py-2">Returns</h3>
-								<EditReturns {functionEditor} overloadIndex={index} />
-							</div>
-
-							{#if index < overloads.length - 1}
-								<Separator class="my-4" />
-							{/if}
+								<div class="flex flex-col gap-3">
+									<h3 class="type-label text-dim">Returns</h3>
+									<EditReturns {functionEditor} overloadIndex={index} />
+								</div>
+							</Brush>
 						{/each}
 					</div>
 
-					<div class="flex flex-col gap-4 3xl:col-span-2">
-						<h2 class="font-medium text-lg lg:text-xl border-b py-2">Usage</h2>
+					<div class="3xl:col-span-2 flex flex-col gap-4">
+						<h2 class={sectionHeading}>Usage</h2>
 						<EditExample {functionEditor} />
 
-						<h2 class="font-medium text-xl border-b py-2">Remarks</h2>
+						<h2 class="{sectionHeading} mt-4">Remarks</h2>
 						<EditRemarks {functionEditor} />
 					</div>
 				</div>
 			</div>
 		</div>
 
-		<div class="flex flex-col shrink-0 px-4 border-l lg:w-80 gap-6">
+		<div class="border-border bg-card flex shrink-0 flex-col gap-6 px-5 py-6 lg:w-80 lg:border-l">
 			<ValidationStatus {functionEditor} />
 			<Separator />
 			<FlagEditor {functionEditor} />
 			<Separator />
-			<div class="flex flex-col gap-2">
-				<h3 class="font-medium text-sm">Actions</h3>
+			<div class="flex flex-col gap-2.5">
+				<h3 class="type-label text-dim">Actions</h3>
 				<Button
 					variant="destructive"
 					size="sm"
 					class="w-full"
 					onclick={() => {
-						if (name && confirm(`Are you sure you want to delete "${name}"? This can be undone before saving.`)) {
+						if (
+							name &&
+							confirm(
+								`Are you sure you want to delete "${name}"? This can be undone before saving.`
+							)
+						) {
 							editor.deleteFunction(name);
 						}
 					}}
 				>
-					<Trash2 class="w-4 h-4 mr-2" />
-					Delete Function
+					<Trash2 />
+					Delete function
 				</Button>
 			</div>
 		</div>

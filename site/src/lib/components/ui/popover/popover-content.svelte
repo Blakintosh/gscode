@@ -1,25 +1,46 @@
 <script lang="ts">
-	import { cn } from "$lib/utils.js";
 	import { Popover as PopoverPrimitive } from "bits-ui";
+	import { cn, type WithoutChildrenOrChild } from "$lib/utils.js";
+	import PopoverPortal from "./popover-portal.svelte";
+	import type { ComponentProps } from "svelte";
 
 	let {
 		ref = $bindable(null),
 		class: className,
+		bodyClass,
 		sideOffset = 4,
 		align = "center",
+		portalProps,
+		children,
 		...restProps
-	}: PopoverPrimitive.ContentProps = $props();
+	}: PopoverPrimitive.ContentProps & {
+		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof PopoverPortal>>;
+		/** Classes for the chamfered body wrapper, e.g. to drop its padding for list content. */
+		bodyClass?: string;
+	} = $props();
 </script>
 
-<PopoverPrimitive.Portal>
+<PopoverPortal {...portalProps}>
 	<PopoverPrimitive.Content
 		bind:ref
+		data-slot="popover-content"
 		{sideOffset}
 		{align}
 		class={cn(
-			"bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-72 rounded-md border p-4 shadow-md outline-none",
+			"data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 z-50 w-72 origin-(--transform-origin) duration-150 outline-hidden [filter:drop-shadow(var(--shadow-overlay))]",
 			className
 		)}
 		{...restProps}
-	/>
-</PopoverPrimitive.Portal>
+	>
+		<!-- Overlays float on the raise colour with a real shadow; the wrapper carries it. -->
+		<div
+			data-slot="popover-content-body"
+			class={cn(
+				"chamfer chamfer-sm rim-edge text-popover-foreground relative z-0 flex flex-col gap-2.5 p-4 text-sm before:absolute before:inset-px before:-z-10 before:bg-popover before:content-[''] before:[clip-path:inherit]",
+				bodyClass
+			)}
+		>
+			{@render children?.()}
+		</div>
+	</PopoverPrimitive.Content>
+</PopoverPortal>

@@ -1,19 +1,37 @@
 {
 	"name": "gscode",
 	"displayName": "GSCode",
-	"description": "IntelliSense for Call of Duty: Black Ops III's GSC & CSC languages.",
+	"description": "IntelliSense for Call of Duty's GSC, CSC and GSH languages, across five games.",
 	"icon": "icons/gscode.png",
-	"version": "1.5.0",
+	"galleryBanner": {
+		"color": "#07080C",
+		"theme": "dark"
+	},
+	"version": "2.0.0",
 	"publisher": "blakintosh",
+	"license": "GPL-3.0-or-later",
+	"homepage": "https://www.gscode.net",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/Blakintosh/gscode"
+	},
+	"bugs": {
+		"url": "https://github.com/Blakintosh/gscode/issues"
 	},
 	"engines": {
 		"vscode": "^1.85.0"
 	},
 	"categories": [
-		"Other"
+		"Programming Languages",
+		"Linters",
+		"Formatters"
+	],
+	"keywords": [
+		"gsc",
+		"csc",
+		"gsh",
+		"call of duty",
+		"black ops 3"
 	],
 	"activationEvents": [
 		"workspaceContains:**/*.gsc",
@@ -36,6 +54,17 @@
 			},
 			{
 				"language": "csc",
+				"scopes": {
+					"parameter.defaultLibrary": [
+						"variable.language"
+					],
+					"variable.defaultLibrary": [
+						"variable.language"
+					]
+				}
+			},
+			{
+				"language": "gsh",
 				"scopes": {
 					"parameter.defaultLibrary": [
 						"variable.language"
@@ -90,7 +119,6 @@
 				}
 			}
 		],
-		"commands": [],
 		"grammars": [
 			{
 				"language": "gsc",
@@ -108,99 +136,325 @@
 				"path": "./syntaxes/gsc.tmGrammar.json"
 			}
 		],
-		"configuration": {
-			"title": "GSCode",
-			"properties": {
-				"gscode.serverLogLevel": {
-					"type": "string",
-					"default": "off",
-					"enum": [
-						"off",
-						"messages",
-						"verbose"
-					],
-					"description": "Controls the verbosity of logging from the GSCode language server. Set to 'off' to disable logging, 'messages' for basic information, or 'verbose' for detailed debug output.",
-					"scope": "window"
-				},
-				"gscode.customRawPath": {
-					"type": "string",
-					"default": null,
-					"description": "Custom path to the 'raw' folder for script path completions. Overrides automatic detection via TA_GAME_PATH.",
-					"scope": "window"
-				},
-				"gscode.allowRawFolderWrites": {
-					"type": "boolean",
-					"default": false,
-					"description": "Allow saving/modifying files in raw folders (default or custom). When disabled, you'll be warned when editing files in protected raw folders to prevent accidental modifications to vanilla game files.",
-					"deprecationMessage": "Use 'gscode.rawFileWarningMode' instead. Setting this to true behaves like rawFileWarningMode: 'off'.",
-					"scope": "window"
-				},
-				"gscode.rawFileWarningMode": {
-					"type": "string",
-					"default": "stock",
-					"enum": [
-						"off",
-						"stock",
-						"all"
-					],
-					"enumDescriptions": [
-						"Never warn when saving files inside a raw folder.",
-						"Warn only when saving stock scripts that shipped with the mod tools. Your own scripts kept in share/raw stay quiet.",
-						"Warn when saving any file inside a protected raw folder."
-					],
-					"description": "Controls when a warning is shown for saving files inside a protected raw folder (share/raw or the custom raw path).",
-					"scope": "window"
-				},
-				"gscode.indexGameScripts": {
-					"type": "boolean",
-					"default": true,
-					"description": "Index every script in the workspace and the game's shared raw folder at startup (signatures only, no diagnostics). Powers namespace autocompletion, cross-script function completion with automatic #using insertion, and #using quick fixes for all scripts available to the map.",
-					"scope": "window"
-				},
-				"gscode.workspaceIndexingMode": {
-					"type": "string",
-					"default": "off",
-					"enum": [
-						"off",
-						"partial",
-						"full"
-					],
-					"enumDescriptions": [
-						"Workspace indexing disabled. Only open files are analyzed.",
-						"Fast indexing with signature analysis only. Provides symbol navigation and completions without diagnostics for unopened files. Recommended for large workspaces.",
-						"Complete semantic analysis with diagnostics. Slower but provides full language features including diagnostics for all indexed files."
-					],
-					"description": "Controls workspace indexing. 'off' disables indexing, 'partial' performs fast signature analysis (recommended), 'full' runs complete semantic analysis with diagnostics.",
-					"scope": "window"
-				},
-				"gscode.warnLanguageMismatch": {
-					"type": "boolean",
-					"default": true,
-					"description": "Warn when a .csc file is opened as GSC or a .gsc file is opened as CSC.",
-					"scope": "window"
-				},
-				"gscode.enableWorkspaceCache": {
-					"type": "boolean",
-					"default": false,
-					"description": "Enable the persistent workspace parse cache. When enabled, previously indexed files are restored from cache on startup, significantly reducing indexing time. Disable if you experience stale analysis results.",
-					"scope": "window"
+		"snippets": [
+			{
+				"language": "gsc",
+				"path": "./snippets/common.json"
+			},
+			{
+				"language": "csc",
+				"path": "./snippets/common.json"
+			},
+			{
+				"language": "gsh",
+				"path": "./snippets/common.json"
+			}
+		],
+		"commands": [
+			{
+				"command": "gscode.showOutput",
+				"title": "GSCode: Show Server Output"
+			},
+			{
+				"command": "gscode.restartServer",
+				"title": "GSCode: Restart Language Server"
+			},
+			{
+				"command": "gscode.clearCacheAndReindex",
+				"title": "GSCode: Clear Cache and Reindex"
+			},
+			{
+				"command": "gscode.openApiLibrary",
+				"title": "GSCode: Open Documentation for Symbol"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "gscode.openApiLibrary",
+				"key": "shift+f1",
+				"when": "editorTextFocus && (editorLangId == gsc || editorLangId == csc || editorLangId == gsh)"
+			}
+		],
+		"configuration": [
+			{
+				"title": "Game",
+				"order": 1,
+				"properties": {
+					"gscode.game": {
+						"type": "string",
+						"default": "bo3",
+						"enum": [
+							"cod4",
+							"waw",
+							"mw2",
+							"bo1",
+							"bo3"
+						],
+						"enumDescriptions": [
+							"Call of Duty 4: Modern Warfare (2007)",
+							"Call of Duty: World at War (2008)",
+							"Call of Duty: Modern Warfare 2 (2009)",
+							"Call of Duty: Black Ops (2010)",
+							"Call of Duty: Black Ops III (2015)"
+						],
+						"description": "Which Call of Duty game's GSC dialect this workspace targets. All five are verified against the game's own scripts. Only games with an implemented dialect are listed: naming any other resolves to Black Ops III, which used to happen silently and is now reported in the server log. If a file does not look like the selected game, the extension offers to switch.",
+						"scope": "window"
+					},
+					"gscode.raw.enabled": {
+						"type": "boolean",
+						"default": true,
+						"description": "Master switch for reading the game's raw files. When disabled, gscode.rawPath and gscode.modsPath are ignored entirely and resolution uses the open workspace folders alone.",
+						"scope": "window"
+					},
+					"gscode.rawPath": {
+						"type": "string",
+						"default": "",
+						"description": "Absolute path to the game's raw script folder. Set this when the folder you have open is a mod or a loose set of scripts, so its includes and path calls resolve against the game's own scripts. Left empty, the raw folder is looked for above the open workspace folders — so a mod inside the game install needs no setting at all — and if none is found, only those folders are indexed.",
+						"scope": "window"
+					},
+					"gscode.modsPath": {
+						"type": "string",
+						"default": "",
+						"description": "Absolute path to the folder holding your mods, one subfolder per mod. A script inside a mod resolves against that mod first and the raw folder second, so a mod copy shadows the stock file it replaces.",
+						"scope": "window"
+					},
+					"gscode.rawFileWarningMode": {
+						"type": "string",
+						"default": "stock",
+						"enum": [
+							"off",
+							"stock",
+							"all"
+						],
+						"enumDescriptions": [
+							"Never warn when saving files inside a raw folder.",
+							"Warn only when saving stock scripts that shipped with the mod tools.",
+							"Warn when saving any file inside a protected raw folder."
+						],
+						"description": "When to warn about saving files inside the protected raw folder.",
+						"scope": "window"
+					}
+				}
+			},
+			{
+				"title": "Workspace",
+				"order": 2,
+				"properties": {
+					"gscode.workspaceIndexingMode": {
+						"type": "string",
+						"default": "partial",
+						"enum": [
+							"off",
+							"partial",
+							"full"
+						],
+						"enumDescriptions": [
+							"No background indexing; only open files are analyzed.",
+							"Fast signature pass: symbols, navigation, and references work across the workspace.",
+							"Partial plus full semantic analysis and diagnostics across the whole index."
+						],
+						"description": "How much of the workspace (and game raw/mods folders) to index at startup.",
+						"scope": "window"
+					},
+					"gscode.enableWorkspaceCache": {
+						"type": "boolean",
+						"default": true,
+						"description": "Persist analysed scripts to a per-workspace cache so cold starts restore unchanged files instead of re-parsing them.",
+						"scope": "window"
+					},
+					"gscode.diagnostics.scope": {
+						"type": "string",
+						"default": "workspace",
+						"enum": [
+							"open",
+							"workspace",
+							"all"
+						],
+						"enumDescriptions": [
+							"Only files you have open.",
+							"Every indexed file of your own -- your mod and workspace folders, but not the stock scripts.",
+							"Everything indexed, including the game's stock scripts. Noisy, and you cannot edit them."
+						],
+						"description": "Which files report problems. Files that are not open report the errors found when they were indexed; open files additionally get the cross-file lints.",
+						"scope": "window"
+					}
+				}
+			},
+			{
+				"title": "Editor",
+				"order": 3,
+				"properties": {
+					"gscode.outline.showAssignments": {
+						"type": "boolean",
+						"default": true,
+						"description": "Show variable and field assignments as children of their function in the document outline.",
+						"scope": "window"
+					},
+					"gscode.codeLens.enabled": {
+						"type": "boolean",
+						"default": true,
+						"description": "Show a 'N references' code lens above each function and class declaration.",
+						"scope": "window"
+					},
+					"gscode.inlayHints.parameterNames": {
+						"type": "boolean",
+						"default": true,
+						"description": "Show parameter-name hints before arguments at call sites.",
+						"scope": "window"
+					},
+					"gscode.inlayHints.inferredTypes": {
+						"type": "boolean",
+						"default": true,
+						"description": "Show inferred-type hints on local variable assignments.",
+						"scope": "window"
+					},
+					"gscode.completion.literals": {
+						"type": "boolean",
+						"default": true,
+						"description": "Offer known strings, localized strings, and hash strings while typing inside a \"...\" / &\"...\" / #\"...\" literal (great for notify/waittill names).",
+						"scope": "window"
+					},
+					"gscode.completion.fieldScope": {
+						"type": "string",
+						"default": "owner",
+						"enum": [
+							"owner",
+							"all"
+						],
+						"enumDescriptions": [
+							"After 'level.', offer only fields seen assigned on level.",
+							"Offer every field name assigned on any owner, everywhere. Broader, and noisier."
+						],
+						"description": "How widely field names gathered from assignments are offered after a '.'.",
+						"scope": "window"
+					},
+					"gscode.completion.callPunctuation": {
+						"type": "string",
+						"default": "parensAndSemicolon",
+						"enum": [
+							"off",
+							"parens",
+							"parensAndSemicolon"
+						],
+						"enumDescriptions": [
+							"Insert just the name.",
+							"Insert 'name()' with the cursor between the parentheses.",
+							"Also close a statement with a semicolon: 'name(<cursor>);'. Expressions such as 'x = f()' never gain one."
+						],
+						"description": "How much punctuation completing a function call brings with it.",
+						"scope": "window"
+					},
+					"gscode.completion.parameterHints": {
+						"type": "boolean",
+						"default": true,
+						"description": "Show a function's parameter names inline in the suggestion list: 'get_players( team )' rather than 'get_players'. Filtering and insertion still use the name alone.",
+						"scope": "window"
+					}
+				}
+			},
+			{
+				"title": "Formatting",
+				"order": 4,
+				"properties": {
+					"gscode.format.padParens": {
+						"type": "boolean",
+						"default": true,
+						"description": "Pad the inside of control-flow parentheses: 'if ( x )' rather than 'if (x)'. Both appear in stock scripts, which are about 88% padded.",
+						"scope": "window"
+					},
+					"gscode.format.maxBlankLines": {
+						"type": "integer",
+						"default": 2,
+						"minimum": 0,
+						"maximum": 10,
+						"description": "The longest run of blank lines the formatter preserves. Longer runs are collapsed to this many.",
+						"scope": "window"
+					},
+					"gscode.format.sortDirectives": {
+						"type": "boolean",
+						"default": true,
+						"description": "Group and sort the directive block at the top of a file: #using, then #insert, then #namespace, then #define, then #precache, separated by blank lines. #using and #precache are sorted alphabetically; #insert and #define keep their relative order because they are order-sensitive. Applies to Format Document only, never to range or on-type formatting.",
+						"scope": "window"
+					},
+					"gscode.format.alignConsecutive": {
+						"type": "boolean",
+						"default": true,
+						"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. The same setting also aligns subscript and call-argument columns for same-shaped lines. Applies to Format Document, and to format-on-type within the block you are editing.",
+						"scope": "window"
+					}
+				}
+			},
+			{
+				"title": "Advanced",
+				"order": 5,
+				"properties": {
+					"gscode.serverLogLevel": {
+						"type": "string",
+						"default": "off",
+						"enum": [
+							"off",
+							"error",
+							"warning",
+							"info",
+							"verbose"
+						],
+						"enumDescriptions": [
+							"No server logging.",
+							"Errors only.",
+							"Warnings and errors.",
+							"General progress information (indexing, cache, lifecycle).",
+							"Detailed debug output, including per-request logging."
+						],
+						"description": "Verbosity of the GSCode language server's log output (the 'GSCode Server' channel). Applies live, no restart needed.",
+						"scope": "window"
+					},
+					"gscode.trace.server": {
+						"type": "string",
+						"default": "off",
+						"enum": [
+							"off",
+							"messages",
+							"verbose"
+						],
+						"description": "Trace the LSP protocol traffic between VSCode and the GSCode language server.",
+						"scope": "window"
+					}
 				}
 			}
-		},
+		],
 		"configurationDefaults": {
 			"[gsc]": {
 				"editor.quickSuggestions": {
 					"other": "on",
 					"comments": "off",
 					"strings": "off"
-				}
+				},
+				"editor.insertSpaces": false,
+				"editor.tabSize": 4,
+				"editor.autoClosingOvertype": "always",
+				"editor.formatOnType": true
 			},
 			"[csc]": {
 				"editor.quickSuggestions": {
 					"other": "on",
 					"comments": "off",
 					"strings": "off"
-				}
+				},
+				"editor.insertSpaces": false,
+				"editor.tabSize": 4,
+				"editor.autoClosingOvertype": "always",
+				"editor.formatOnType": true
+			},
+			"[gsh]": {
+				"editor.quickSuggestions": {
+					"other": "on",
+					"comments": "off",
+					"strings": "off"
+				},
+				"editor.insertSpaces": false,
+				"editor.tabSize": 4,
+				"editor.autoClosingOvertype": "always",
+				"editor.formatOnType": true
 			}
 		}
 	},
@@ -208,15 +462,14 @@
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
 		"watch": "tsc -watch -p ./",
-		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src",
-		"test": "node ./out/test/runTest.js"
+		"bundle-server": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -o ./service",
+		"package": "npm run compile && npm run bundle-server && npx --yes @vscode/vsce package"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.15.0",
 		"@types/node": "^20.17.0",
 		"@types/vscode": "^1.85.0",
-		"@vscode/test-electron": "^2.3.3",
 		"eslint": "^9.15.0",
 		"typescript": "^5.6.3",
 		"typescript-eslint": "^8.15.0"

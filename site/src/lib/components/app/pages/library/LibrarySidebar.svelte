@@ -1,38 +1,79 @@
 <script lang="ts">
-	import { Separator } from '$components/ui/separator/index.js';
-	import { ScrollArea } from '$components/ui/scroll-area/index.js';
-	import { Button } from '$components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
-	import * as Sidebar from '$components/ui/sidebar/index.js';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 
-	// @ts-ignore
-	import Command from 'lucide-svelte/icons/command';
-	// @ts-ignore
-	import LoaderCircle from 'lucide-svelte/icons/loader-circle';
-	// @ts-ignore
-	import Search from 'lucide-svelte/icons/search';
+	import Search from '@lucide/svelte/icons/search';
 
 	import LanguageRadio from './drawer/LanguageRadio.svelte';
+	import GamePicker from './drawer/GamePicker.svelte';
 	import type { ScrFunction, ScrLibrary } from '$lib/models/library';
-	import { page } from '$app/stores';
-	import { getLibrary } from '../../../../../routes/(gscode)/library/library';
+	import { page } from '$app/state';
 	import { ApiLibrarian } from '$lib/app/library/api.svelte';
+	import { games, languagesFor, type GameEntry } from '$lib/data/games';
 	import { goto } from '$app/navigation';
+	import { cn } from '$lib/utils.js';
+
+	type Props = {
+		/** Called after a row is picked — lets the mobile sheet close itself. */
+		onNavigate?: () => void;
+	};
+
+	let { onNavigate }: Props = $props();
+
+	const skeletonRows = Array.from({ length: 12 }, (_, i) => i);
 
 	const truncateString = (string = '', maxLength = 20) =>
 		string.length > maxLength ? `${string.substring(0, maxLength)}…` : string;
 
-	let librarian: ApiLibrarian = $state($page.data.librarian);
+	let librarian: ApiLibrarian = $state(page.data.librarian);
 
 	let library: Promise<ScrLibrary> = $derived(librarian.library);
 
+	const game = $derived(page.data.game as GameEntry);
+
+	// Call of Duty 4 and Modern Warfare 2 have no client scripts, so GSC is the only library there.
+	// A one-option control is not a choice — it just reads as a second option being missing.
+	const hasLanguageChoice = $derived(languagesFor(game).length > 1);
+
 	async function onLanguageChange(value: string | undefined) {
-		if (!value) {
+		if (!value || value === librarian.languageId) {
+			return;
+		}
+
+		// The macro reference is its own route with its own artifact; the librarian only serves
+		// the function libraries, so don't point it at a language it can't load.
+		if (value === 'gsh') {
+			await goto(`/library/${game.slug}/gsh`);
+			onNavigate?.();
 			return;
 		}
 
 		librarian.languageId = value;
-		await goto(`/library/${value}`);
+		await goto(`/library/${game.slug}/${value}`);
+		onNavigate?.();
+	}
+
+	async function onGameChange(slug: string | undefined) {
+		if (!slug || slug === game.slug) {
+			return;
+		}
+
+		const next = games.find((entry) => entry.slug === slug);
+		if (!next) {
+			return;
+		}
+
+		// A game may not have the language currently shown — only three of the five ship client
+		// scripts — so fall back to its first rather than navigating somewhere that 404s.
+		const languages = languagesFor(next);
+		const languageId = languages.includes(librarian.languageId as never)
+			? librarian.languageId
+			: languages[0];
+
+		librarian.gameId = slug;
+		librarian.languageId = languageId;
+		await goto(`/library/${slug}/${languageId}`);
+		onNavigate?.();
 	}
 
 	let searchTerm = $state('');
@@ -53,6 +94,11 @@
 		};
 	});
 
+	/** The article shows the first function when the URL has no `func` segment. */
+	const activeFunction = $derived(
+		((page.data.func as ScrFunction | undefined)?.name ?? page.params.func ?? '').toLowerCase()
+	);
+
 	let inputElement: HTMLInputElement | null = $state(null);
 	function handleKeyDown(event: KeyboardEvent) {
 		if (event.key === 'k' && (event.ctrlKey || event.metaKey) && inputElement) {
@@ -62,82 +108,89 @@
 	}
 </script>
 
-<Sidebar.Root side="left" collapsible="offcanvas" variant="sidebar" class="absolute h-full">
-	<Sidebar.Header class="px-4 py-4">
-		<div class="flex flex-col gap-2 shrink-0">
-			<div class="font-medium text-sm">Language</div>
-			<LanguageRadio {onLanguageChange} />
+<div class="flex h-full min-h-0 flex-col">
+	<div class="border-border flex shrink-0 flex-col gap-4 border-b px-4 py-5">
+		<div class="flex flex-col gap-2">
+			<p class="type-label text-dim">Game</p>
+			<GamePicker {onGameChange} />
 		</div>
-	</Sidebar.Header>
-	<Sidebar.Content class="flex flex-col gap-2 min-h-0 items-stretch grow px-4 py-4">
-		<div class="font-medium text-sm">Functions</div>
 
-		{#await filteredData}
-			<div
-				class="flex items-center justify-center w-full h-full grow text-sm text-muted-foreground gap-2"
-			>
-				<LoaderCircle class="animate-spin w-4 h-4" />
-				Loading...
+		{#if hasLanguageChoice}
+			<div class="flex flex-col gap-2">
+				<p class="type-label text-dim">Language</p>
+				<LanguageRadio {onLanguageChange} />
 			</div>
-		{:then data}
-			<ScrollArea class="w-full max-w-full min-h-0 grow">
-				<div class="grid grid-flow-row auto-rows-max w-full">
-					{#each data.entries as apiFunction}
-						<Button
-							variant="link"
-							size={'sm'}
-							class="justify-start font-normal text-muted-foreground"
-							href={`/library/${data.languageId}/${apiFunction.name.toLowerCase()}`}
-						>
-							{truncateString(apiFunction.name, 25)}
-						</Button>
-					{/each}
-				</div>
-			</ScrollArea>
-		{:catch}
-			<div
-				class="flex items-center justify-center w-full h-full grow text-center text-sm text-muted-foreground"
-			>
-				Something went wrong. Try reloading the page.
-			</div>
-		{/await}
+		{/if}
 
-		<div class="relative w-full shrink-0">
-			<Search
-				class="absolute left-2.5 top-[50%] -translate-y-[50%] h-4 w-4 text-muted-foreground pointer-events-none"
-			/>
+		<div class="relative w-full">
 			<Input
 				type="search"
-				placeholder="Search..."
-				class="w-full rounded-lg bg-background pl-8 pr-12"
+				placeholder="Search functions"
+				class="h-10 pr-14 pl-10 text-sm"
 				bind:value={searchTerm}
 				bind:ref={inputElement}
 			/>
-			<div
-				class="absolute right-2.5 top-[50%] -translate-y-[50%] flex items-center gap-1 rounded-md px-1 py-0.5 text-muted-foreground bg-muted text-xs pointer-events-none"
+			<Search
+				class="text-dim pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2"
+			/>
+			<span
+				class="text-dim pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-2xs tracking-widest"
 			>
-				<Command class="w-3.5 h-3.5" />
-				K
-			</div>
+				CTRL K
+			</span>
 		</div>
-	</Sidebar.Content>
+	</div>
 
-	<Sidebar.Footer
-		class="text-muted-foreground text-xs inline-flex justify-between shrink-0 px-4 py-4"
+	{#await filteredData}
+		<div class="flex min-h-0 grow flex-col gap-1 px-4 py-4">
+			<Skeleton class="mb-2 h-[10px] w-24 [--cut:0px]" />
+			{#each skeletonRows as i (i)}
+				<Skeleton class="h-6 w-full [--cut:0px]" style={`opacity:${1 - i * 0.06}`} />
+			{/each}
+		</div>
+	{:then data}
+		<div class="flex shrink-0 items-baseline justify-between px-4 pt-4 pb-2">
+			<p class="type-label text-dim">Functions</p>
+			<span class="type-data text-dim text-2xs">{data.entries.length}</span>
+		</div>
+		<nav class="min-h-0 grow overflow-y-auto pb-4" aria-label="Script API functions">
+			{#each data.entries as apiFunction (apiFunction.name)}
+				{@const slug = apiFunction.name.toLowerCase()}
+				<a
+					href={`/library/${game.slug}/${data.languageId}/${slug}`}
+					aria-current={slug === activeFunction ? 'page' : undefined}
+					onclick={() => onNavigate?.()}
+					class={cn(
+						'nav-item block truncate px-4 py-1.5 font-mono text-sm outline-none',
+						slug === activeFunction ? 'nav-item-active' : 'hover:nav-item-hover',
+						'focus-visible:nav-item-hover'
+					)}
+				>
+					{truncateString(apiFunction.name, 28)}
+				</a>
+			{:else}
+				<p class="text-dim px-4 py-6 text-sm font-light">No functions match that search.</p>
+			{/each}
+		</nav>
+	{:catch}
+		<div class="text-muted-foreground min-h-0 grow px-4 py-6 text-sm font-light">
+			Something went wrong. Try reloading the page.
+		</div>
+	{/await}
+
+	<div
+		class="border-border text-dim flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3.5 font-mono text-2xs tracking-widest uppercase"
 	>
-		<!-- &copy; Blakintosh 2024 -->
-		A part of the GSCode project.
+		<span>Part of GSCode</span>
 		<a
 			href="https://ko-fi.com/blakintosh"
 			target="_blank"
 			rel="noreferrer"
-			class="text-primary hover:underline"
+			class="hover:text-bright text-primary transition-colors"
 		>
 			Donate
 		</a>
-	</Sidebar.Footer>
-
-	<Sidebar.Rail />
-</Sidebar.Root>
+	</div>
+</div>
 
 <svelte:window onkeydown={handleKeyDown} />

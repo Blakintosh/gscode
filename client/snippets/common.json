@@ -1,0 +1,107 @@
+// Snippets valid in EVERY dialect - contributed to .gsc, .csc and .gsh alike.
+//
+// A contributed snippet is registered against a language id, and one language id covers five
+// games. VS Code merges these into the completion list unconditionally and nothing can withdraw
+// one, so a snippet here MUST be valid in all five. That is the whole entry rule for this file.
+//
+// Anything dialect-specific - foreach, class, new, the function declaration, the ScriptDoc forms,
+// #precache, and every import directive - is served by the SERVER instead, which is the only side
+// that knows the active game. See GscSnippets in GSCode.Workspace/Completion. Those used to live
+// here and were offered while editing CoD4, which has none of them.
+//
+// Bodies are copied from the shape the stock scripts use rather than invented - the brace and
+// spacing style matches the formatter's defaults.
+//
+// A snippet must also not take a name the LANGUAGE already owns. `assert` was here and shadowed
+// the real keyword: the snippet won the completion list, so the keyword's own documentation - and
+// the hover that reads from it - lost to a one-line body. Where a construct is a keyword, the
+// server already offers it with its docs attached; a snippet of the same name only competes.
+//
+// #precache was the last exception here, split across two files because its asset types differ by
+// world. It broke the rule above in the other direction: the directive is BO3's alone, so four of
+// the five games were offered it. The server now serves it, and hands the asset type to the same
+// completion the typed `#` route uses - which is what makes the world split one answer rather than
+// two files. See PrecacheAssetTypes.IsAvailableIn.
+{
+	"if": {
+		"prefix": "if",
+		"body": ["if ( ${1:condition} )", "{", "\t$0", "}"],
+		"description": "if statement"
+	},
+	"if else": {
+		"prefix": "ifelse",
+		"body": ["if ( ${1:condition} )", "{", "\t$2", "}", "else", "{", "\t$0", "}"],
+		"description": "if/else statement"
+	},
+	"if defined": {
+		"prefix": "ifdef",
+		"body": ["if ( isdefined( ${1:value} ) )", "{", "\t$0", "}"],
+		"description": "Guard on isdefined - the standard GSC null check"
+	},
+	"for": {
+		"prefix": "for",
+		"body": ["for ( ${1:i} = 0; ${1:i} < ${2:array}.size; ${1:i}++ )", "{", "\t$0", "}"],
+		"description": "for loop over an array by index"
+	},
+	"for reverse": {
+		"prefix": "forr",
+		"body": ["for ( ${1:i} = ${2:array}.size - 1; ${1:i} >= 0; ${1:i}-- )", "{", "\t$0", "}"],
+		"description": "Reverse for loop - the safe way to remove entries while iterating"
+	},
+	"while": {
+		"prefix": "while",
+		"body": ["while ( ${1:condition} )", "{", "\t$0", "}"],
+		"description": "while loop"
+	},
+	"switch": {
+		"prefix": "switch",
+		"body": ["switch ( ${1:value} )", "{", "\tcase ${2:label}:", "\t\t$0", "\t\tbreak;", "\tdefault:", "\t\tbreak;", "}"],
+		"description": "switch statement"
+	},
+	"case": {
+		"prefix": "case",
+		"body": ["case ${1:label}:", "\t$0", "\tbreak;"],
+		"description": "switch case with its break"
+	},
+
+	"waittill": {
+		"prefix": "waittill",
+		"body": ["${1:self} waittill( \"${2:event}\" );"],
+		"description": "Wait for a notify"
+	},
+	"waittill with outputs": {
+		"prefix": "waittillargs",
+		"body": ["${1:self} waittill( \"${2:event}\", ${3:attacker} );"],
+		"description": "Wait for a notify and bind the values it carries"
+	},
+	"notify": {
+		"prefix": "notify",
+		"body": ["${1:self} notify( \"${2:event}\" );"],
+		"description": "Send a notify"
+	},
+	"endon": {
+		"prefix": "endon",
+		"body": ["${1:self} endon( \"${2:event}\" );"],
+		"description": "End this thread when the notify fires"
+	},
+	"thread": {
+		"prefix": "thread",
+		"body": ["${1:self} thread ${2:function}();"],
+		"description": "Run a function on its own thread"
+	},
+	"wait": {
+		"prefix": "wait",
+		"body": ["wait ${1:0.05};"],
+		"description": "Wait for a number of seconds"
+	},
+	"dev block": {
+		"prefix": "devblock",
+		"body": ["/#", "\t$0", "#/"],
+		"description": "Development-only block, stripped from a release build"
+	},
+	"define": {
+		"prefix": "define",
+		"body": ["#define ${1:NAME} ${2:value}"],
+		"description": "Preprocessor macro"
+	}
+}

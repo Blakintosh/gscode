@@ -1,0 +1,58 @@
+// See https://go.microsoft.com/fwlink/?LinkId=733558
+// for the documentation about the tasks.json format
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			// The default build task, so F5's ${defaultBuildTask} compiles both
+			// halves of the extension: the TypeScript client and the .NET server
+			// it spawns. Parallel — the watch task never "finishes", it just
+			// reports its first clean compile through $tsc-watch.
+			"label": "build",
+			"dependsOn": [
+				"watch",
+				"dotnet: build server"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "watch",
+			"type": "npm",
+			"script": "watch",
+			"path": "client",
+			"problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never"
+			}
+		},
+		{
+			// Debug config, to match DEBUG_SERVER_LOCATION in client/.env. If you
+			// flip SHOULD_TEST_IN_RELEASE=true, add "-c", "Release" here too.
+			//
+			// Per project rather than the solution: a running language server
+			// holds the Debug DLLs open, and a solution-wide build fails with
+			// MSB3027 partway through. Incremental, so a no-op when nothing changed.
+			"label": "dotnet: build server",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"src/GSCode.Server/GSCode.Server.csproj",
+				"--nologo"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/server"
+			},
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "silent",
+				"clear": true
+			}
+		}
+	]
+}

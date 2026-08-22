@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { FunctionEditor } from '$lib/api-editor/function-editor.svelte';
-	// @ts-ignore
-	import TriangleAlert from 'lucide-svelte/icons/triangle-alert';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
 	interface Props {
 		functionEditor: FunctionEditor;
@@ -11,50 +10,47 @@
 </script>
 
 <div>
-	<div class="font-medium text-sm mb-2">Auto-Validation Status</div>
+	<div class="type-label text-dim mb-2.5">Auto-validation</div>
 	<div class="flex flex-col gap-2">
-		<div class="flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
+		<div class="flex items-center gap-2 font-mono text-2xs tracking-widest uppercase">
 			{#if functionEditor.isValid && !functionEditor.isUnverified}
-				<div class="size-3 rounded-full bg-green-500"></div>
-				<span>Valid</span>
+				<i aria-hidden="true" class="bg-primary marker"></i>
+				<span class="text-primary">Valid</span>
 			{:else if functionEditor.isValid && functionEditor.isUnverified}
-				<div class="size-3 rounded-full bg-yellow-400"></div>
-				<span>Unverified</span>
+				<i aria-hidden="true" class="bg-dim marker"></i>
+				<span class="text-dim">Unverified</span>
 			{:else if functionEditor.isVerified && !functionEditor.isValid}
-				<div
-					class="size-3 rounded-full {functionEditor.isVerified ? 'bg-red-600' : 'bg-amber-700'}"
-				></div>
-				<span class="text-foreground font-medium">Bad Verification</span>
+				<i aria-hidden="true" class="bg-destructive marker"></i>
+				<span class="text-destructive">Bad verification</span>
 			{:else}
-				<div class="size-3 rounded-full bg-red-500"></div>
-				<span class="text-foreground font-medium">Problems Detected</span>
+				<i aria-hidden="true" class="bg-destructive marker"></i>
+				<span class="text-destructive">Problems detected</span>
 			{/if}
 		</div>
 		{#if !functionEditor.isValid}
-			<ul class="flex flex-col gap-2 mt-1 mb-2">
+			<ul class="mt-1 mb-2 flex flex-col gap-2">
 				{#each functionEditor.validationErrors as error}
-					<li class="text-sm text-muted-foreground leading-tight flex gap-2 items-center">
-						<TriangleAlert class="size-3 shrink-0 text-red-500" />
+					<li class="text-muted-foreground flex items-center gap-2 text-xs leading-tight">
+						<TriangleAlert class="text-destructive size-3.5 shrink-0" />
 						<span>{error}</span>
 					</li>
 				{/each}
 			</ul>
 		{/if}
 		{#if functionEditor.isUnverified && !functionEditor.isValid}
-			<p class="text-sm text-muted-foreground">
+			<p class="text-muted-foreground text-xs">
 				Manual review required to fix incorrect documentation.
 			</p>
 		{/if}
 		{#if functionEditor.isUnverified && functionEditor.isValid}
-			<p class="text-sm text-muted-foreground">
+			<p class="text-muted-foreground text-xs">
 				Auto-validation pass does not guarantee documentation is correct. Manual review recommended.
 			</p>
 		{/if}
 		{#if functionEditor.isVerified && !functionEditor.isValid}
-			<p class="text-sm text-muted-foreground">
+			<p class="text-muted-foreground text-xs">
 				Function does not pass requirements for verified status.
 			</p>
 		{/if}
 	</div>
 </div>
-

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Workspace layer: script database, path/mod-overlay resolution, indexing, cache,
+       and the bundled game data. LSP-free — GSCode.Server is the only protocol host. -->
+
+  <PropertyGroup>
+    <!-- NU1903: the SQLite native bundle carries an advisory with no fixed 2.x release.
+         It requires opening a malicious database file; our cache DB is created and read
+         only by us under %APPDATA%, so the risk does not apply. Suppressed narrowly here
+         (and in the projects that reference this one), not globally. -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GSCode.Core\GSCode.Core.csproj" />
+    <ProjectReference Include="..\GSCode.Parser\GSCode.Parser.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Hashing" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <!-- Override the transitive 2.1.10 native bundle (GHSA-2m69-gcr7-jv3q) with the patched build. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Every bundled game data file, by pattern rather than by name. Listing them individually
+         meant a new game's data silently failed to reach the output while everything still built
+         and most tests still passed, because the loaders treat a missing file as "this game ships
+         none". -->
+    <None Update="Api\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Api\*.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

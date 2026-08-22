@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GSCode.Core/GSCode.Core.csproj" />
+    <Project Path="src/GSCode.Parser/GSCode.Parser.csproj" />
+    <Project Path="src/GSCode.Server/GSCode.Server.csproj" />
+    <Project Path="src/GSCode.Workspace/GSCode.Workspace.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GSCode.Parser.Tests/GSCode.Parser.Tests.csproj" />
+    <Project Path="tests/GSCode.Server.Tests/GSCode.Server.Tests.csproj" />
+    <Project Path="tests/GSCode.Workspace.Tests/GSCode.Workspace.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/field-data/GSCode.FieldData.csproj" />
+  </Folder>
+  <Folder Name="/docs/">
+    <File Path="ARCHITECTURE.md" />
+    <File Path="FORMATTING.md" />
+    <File Path="FOLLOWUPS.md" />
+    <File Path="GAME_PROFILES.md" />
+    <File Path="PERF.md" />
+  </Folder>
+</Solution>

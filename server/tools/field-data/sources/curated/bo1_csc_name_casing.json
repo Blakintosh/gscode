@@ -1,0 +1,12 @@
+{
+  "animateui": "AnimateUI",
+  "entgetsweaponfirenotification": "EntGetsWeaponFireNotification",
+  "getlefttreadhealth": "GetLeftTreadHealth",
+  "getrighttreadhealth": "GetRightTreadHealth",
+  "isburning": "IsBurning",
+  "isps3": "IsPS3",
+  "setcollectible": "SetCollectible",
+  "setfakeentorg": "SetFakeEntOrg",
+  "setwatchstyle": "SetWatchStyle",
+  "ui3dsetwindow": "UI3DSetWindow"
+}

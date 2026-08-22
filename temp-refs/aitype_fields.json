@@ -1,6 +1,0 @@
-[
-    { "name": "hero", "type": "bool", "readonly": true },
-    { "name": "canflank", "type": "bool", "readonly": true },
-    { "name": "accuratefire", "type": "bool", "readonly": true },
-    { "name": "aggressivemode", "type": "bool", "readonly": true }
-]

@@ -1,0 +1,884 @@
+{
+  "note": "The functions kept in this game's derived client library. Its server library is the starting point, because most engine functions exist on both VMs under the same name — but most of it is NOT client-side, and shipping the whole thing offers completions for functions the client VM does not have.",
+  "unverified": "NONE OF THIS IS DOCUMENTATION-VERIFIED, and it cannot be: this game ships no documentation for its client VM, which is the reason the library is derived at all. Every name here is kept on circumstantial evidence, and a name being absent is not proof the client VM lacks it. Black Ops 3 is the only game whose client library is hand-documented — t7_api_csc.json is a real source and is never generated or pruned by this tool.",
+  "rule": "Two independent kinds of evidence, either sufficient. called: this game's own shipped .csc scripts call the name, which is direct proof the client VM has it. t7: Black Ops 3's hand-documented client library lists it, which is a later engine in the same Treyarch line saying the function is client-side. Neither subsumes the other — see the counts below — so the union is used. Measured on BO3, where the true answer is known, keeping only corpus-called names would have discarded 28.6% of functions that are certainly client-side, which is what the second criterion is there to recover.",
+  "counts": {
+    "serverLibrary": 751,
+    "kept": 156,
+    "calledOnly": 37,
+    "t7Only": 33,
+    "both": 86
+  },
+  "functions": [
+    {
+      "name": "ACos",
+      "evidence": "t7"
+    },
+    {
+      "name": "AnglesToForward",
+      "evidence": "both",
+      "calls": 80,
+      "files": 35
+    },
+    {
+      "name": "AnglesToRight",
+      "evidence": "both",
+      "calls": 6,
+      "files": 5
+    },
+    {
+      "name": "AnglesToUp",
+      "evidence": "both",
+      "calls": 26,
+      "files": 15
+    },
+    {
+      "name": "AnimScripted",
+      "evidence": "t7"
+    },
+    {
+      "name": "ASin",
+      "evidence": "t7"
+    },
+    {
+      "name": "Assert",
+      "evidence": "both",
+      "calls": 72,
+      "files": 27
+    },
+    {
+      "name": "AssertEx",
+      "evidence": "called",
+      "calls": 22,
+      "files": 11
+    },
+    {
+      "name": "AssertMsg",
+      "evidence": "both",
+      "calls": 48,
+      "files": 10
+    },
+    {
+      "name": "ATan",
+      "evidence": "t7"
+    },
+    {
+      "name": "Attach",
+      "evidence": "both",
+      "calls": 7,
+      "files": 3
+    },
+    {
+      "name": "BulletTrace",
+      "evidence": "both",
+      "calls": 19,
+      "files": 18
+    },
+    {
+      "name": "BulletTracer",
+      "evidence": "both",
+      "calls": 1,
+      "files": 1
+    },
+    {
+      "name": "ClearAnim",
+      "evidence": "both",
+      "calls": 11,
+      "files": 7
+    },
+    {
+      "name": "CloseFile",
+      "evidence": "t7"
+    },
+    {
+      "name": "Closer",
+      "evidence": "t7"
+    },
+    {
+      "name": "CombineAngles",
+      "evidence": "t7"
+    },
+    {
+      "name": "Cos",
+      "evidence": "both",
+      "calls": 21,
+      "files": 4
+    },
+    {
+      "name": "DeactivateReverb",
+      "evidence": "called",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "Delete",
+      "evidence": "both",
+      "calls": 213,
+      "files": 62
+    },
+    {
+      "name": "Detach",
+      "evidence": "t7"
+    },
+    {
+      "name": "Distance",
+      "evidence": "both",
+      "calls": 28,
+      "files": 22
+    },
+    {
+      "name": "Distance2D",
+      "evidence": "both",
+      "calls": 2,
+      "files": 1
+    },
+    {
+      "name": "DistanceSquared",
+      "evidence": "both",
+      "calls": 37,
+      "files": 21
+    },
+    {
+      "name": "Earthquake",
+      "evidence": "both",
+      "calls": 31,
+      "files": 14
+    },
+    {
+      "name": "FGetArg",
+      "evidence": "t7"
+    },
+    {
+      "name": "FPrintFields",
+      "evidence": "t7"
+    },
+    {
+      "name": "FPrintLn",
+      "evidence": "t7"
+    },
+    {
+      "name": "FReadLn",
+      "evidence": "t7"
+    },
+    {
+      "name": "GetAnimLength",
+      "evidence": "both",
+      "calls": 5,
+      "files": 4
+    },
+    {
+      "name": "GetArrayKeys",
+      "evidence": "both",
+      "calls": 45,
+      "files": 18
+    },
+    {
+      "name": "GetCurrentWeapon",
+      "evidence": "both",
+      "calls": 9,
+      "files": 4
+    },
+    {
+      "name": "GetDvar",
+      "evidence": "called",
+      "calls": 43,
+      "files": 29
+    },
+    {
+      "name": "GetDvarFloat",
+      "evidence": "both",
+      "calls": 10,
+      "files": 9
+    },
+    {
+      "name": "GetDvarInt",
+      "evidence": "both",
+      "calls": 133,
+      "files": 76
+    },
+    {
+      "name": "GetEnt",
+      "evidence": "both",
+      "calls": 52,
+      "files": 17
+    },
+    {
+      "name": "GetEntArray",
+      "evidence": "both",
+      "calls": 153,
+      "files": 48
+    },
+    {
+      "name": "GetEntByNum",
+      "evidence": "t7"
+    },
+    {
+      "name": "GetEntityNumber",
+      "evidence": "both",
+      "calls": 70,
+      "files": 16
+    },
+    {
+      "name": "GetEntNum",
+      "evidence": "called",
+      "calls": 4,
+      "files": 1
+    },
+    {
+      "name": "GetEye",
+      "evidence": "both",
+      "calls": 4,
+      "files": 4
+    },
+    {
+      "name": "GetLightColor",
+      "evidence": "called",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "GetLightExponent",
+      "evidence": "called",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "GetLightFovInner",
+      "evidence": "called",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "GetLightFovOuter",
+      "evidence": "called",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "GetLightIntensity",
+      "evidence": "called",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "GetLightRadius",
+      "evidence": "called",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "GetNormalizedMovement",
+      "evidence": "called",
+      "calls": 1,
+      "files": 1
+    },
+    {
+      "name": "GetOrigin",
+      "evidence": "called",
+      "calls": 4,
+      "files": 4
+    },
+    {
+      "name": "GetPlayerAngles",
+      "evidence": "called",
+      "calls": 3,
+      "files": 3
+    },
+    {
+      "name": "GetSpeed",
+      "evidence": "both",
+      "calls": 23,
+      "files": 11
+    },
+    {
+      "name": "GetSubStr",
+      "evidence": "both",
+      "calls": 6,
+      "files": 3
+    },
+    {
+      "name": "GetTagAngles",
+      "evidence": "both",
+      "calls": 22,
+      "files": 9
+    },
+    {
+      "name": "GetTagOrigin",
+      "evidence": "both",
+      "calls": 51,
+      "files": 18
+    },
+    {
+      "name": "GetTime",
+      "evidence": "t7"
+    },
+    {
+      "name": "GetVelocity",
+      "evidence": "t7"
+    },
+    {
+      "name": "GetWeaponAmmoClip",
+      "evidence": "both",
+      "calls": 3,
+      "files": 2
+    },
+    {
+      "name": "GetWeaponModel",
+      "evidence": "called",
+      "calls": 13,
+      "files": 4
+    },
+    {
+      "name": "GetWheelSurface",
+      "evidence": "both",
+      "calls": 12,
+      "files": 4
+    },
+    {
+      "name": "HasPerk",
+      "evidence": "both",
+      "calls": 8,
+      "files": 2
+    },
+    {
+      "name": "Hide",
+      "evidence": "both",
+      "calls": 16,
+      "files": 7
+    },
+    {
+      "name": "HidePart",
+      "evidence": "t7"
+    },
+    {
+      "name": "Int",
+      "evidence": "both",
+      "calls": 31,
+      "files": 24
+    },
+    {
+      "name": "IPrintLnBold",
+      "evidence": "both",
+      "calls": 22,
+      "files": 10
+    },
+    {
+      "name": "IsAI",
+      "evidence": "t7"
+    },
+    {
+      "name": "IsAlive",
+      "evidence": "both",
+      "calls": 4,
+      "files": 3
+    },
+    {
+      "name": "IsArray",
+      "evidence": "both",
+      "calls": 6,
+      "files": 4
+    },
+    {
+      "name": "IsDefined",
+      "evidence": "called",
+      "calls": 2386,
+      "files": 300
+    },
+    {
+      "name": "IsMeleeing",
+      "evidence": "both",
+      "calls": 4,
+      "files": 3
+    },
+    {
+      "name": "IsPlayer",
+      "evidence": "both",
+      "calls": 11,
+      "files": 9
+    },
+    {
+      "name": "IsRagdoll",
+      "evidence": "t7"
+    },
+    {
+      "name": "IsSplitScreen",
+      "evidence": "both",
+      "calls": 12,
+      "files": 7
+    },
+    {
+      "name": "IsString",
+      "evidence": "t7"
+    },
+    {
+      "name": "IsSubStr",
+      "evidence": "both",
+      "calls": 1,
+      "files": 1
+    },
+    {
+      "name": "IsThrowingGrenade",
+      "evidence": "both",
+      "calls": 4,
+      "files": 3
+    },
+    {
+      "name": "IsTouching",
+      "evidence": "both",
+      "calls": 3,
+      "files": 3
+    },
+    {
+      "name": "Length",
+      "evidence": "both",
+      "calls": 11,
+      "files": 6
+    },
+    {
+      "name": "LengthSquared",
+      "evidence": "both",
+      "calls": 5,
+      "files": 5
+    },
+    {
+      "name": "Line",
+      "evidence": "both",
+      "calls": 12,
+      "files": 6
+    },
+    {
+      "name": "LinkTo",
+      "evidence": "both",
+      "calls": 36,
+      "files": 15
+    },
+    {
+      "name": "LoadFX",
+      "evidence": "called",
+      "calls": 3014,
+      "files": 91
+    },
+    {
+      "name": "MagicBullet",
+      "evidence": "t7"
+    },
+    {
+      "name": "MoveGravity",
+      "evidence": "called",
+      "calls": 1,
+      "files": 1
+    },
+    {
+      "name": "MoveX",
+      "evidence": "called",
+      "calls": 1,
+      "files": 1
+    },
+    {
+      "name": "MoveY",
+      "evidence": "called",
+      "calls": 1,
+      "files": 1
+    },
+    {
+      "name": "MoveZ",
+      "evidence": "called",
+      "calls": 2,
+      "files": 1
+    },
+    {
+      "name": "Objective_Add",
+      "evidence": "t7"
+    },
+    {
+      "name": "Objective_Delete",
+      "evidence": "t7"
+    },
+    {
+      "name": "Objective_OnEntity",
+      "evidence": "t7"
+    },
+    {
+      "name": "Objective_State",
+      "evidence": "t7"
+    },
+    {
+      "name": "OpenFile",
+      "evidence": "t7"
+    },
+    {
+      "name": "PhysicsExplosionSphere",
+      "evidence": "t7"
+    },
+    {
+      "name": "PlayFX",
+      "evidence": "both",
+      "calls": 96,
+      "files": 39
+    },
+    {
+      "name": "PlayFXOnTag",
+      "evidence": "both",
+      "calls": 264,
+      "files": 53
+    },
+    {
+      "name": "PlayLoopSound",
+      "evidence": "both",
+      "calls": 192,
+      "files": 59
+    },
+    {
+      "name": "PlayRumbleLoopOnEntity",
+      "evidence": "both",
+      "calls": 3,
+      "files": 2
+    },
+    {
+      "name": "PlayRumbleOnEntity",
+      "evidence": "both",
+      "calls": 39,
+      "files": 19
+    },
+    {
+      "name": "PlayRumbleOnPosition",
+      "evidence": "both",
+      "calls": 5,
+      "files": 4
+    },
+    {
+      "name": "PlaySound",
+      "evidence": "both",
+      "calls": 490,
+      "files": 86
+    },
+    {
+      "name": "PointOnSegmentNearestToPoint",
+      "evidence": "both",
+      "calls": 2,
+      "files": 1
+    },
+    {
+      "name": "PreCacheRumble",
+      "evidence": "called",
+      "calls": 7,
+      "files": 5
+    },
+    {
+      "name": "Print",
+      "evidence": "called",
+      "calls": 2,
+      "files": 1
+    },
+    {
+      "name": "Print3d",
+      "evidence": "both",
+      "calls": 18,
+      "files": 11
+    },
+    {
+      "name": "PrintLn",
+      "evidence": "both",
+      "calls": 606,
+      "files": 109
+    },
+    {
+      "name": "RandomFloat",
+      "evidence": "both",
+      "calls": 23,
+      "files": 12
+    },
+    {
+      "name": "RandomFloatRange",
+      "evidence": "both",
+      "calls": 198,
+      "files": 58
+    },
+    {
+      "name": "RandomInt",
+      "evidence": "both",
+      "calls": 44,
+      "files": 19
+    },
+    {
+      "name": "RandomIntRange",
+      "evidence": "both",
+      "calls": 89,
+      "files": 31
+    },
+    {
+      "name": "ResetSunLight",
+      "evidence": "called",
+      "calls": 4,
+      "files": 3
+    },
+    {
+      "name": "RotatePitch",
+      "evidence": "both",
+      "calls": 13,
+      "files": 5
+    },
+    {
+      "name": "RotateRoll",
+      "evidence": "both",
+      "calls": 6,
+      "files": 3
+    },
+    {
+      "name": "RotateTo",
+      "evidence": "both",
+      "calls": 11,
+      "files": 5
+    },
+    {
+      "name": "RotateYaw",
+      "evidence": "both",
+      "calls": 18,
+      "files": 9
+    },
+    {
+      "name": "SetAnim",
+      "evidence": "both",
+      "calls": 38,
+      "files": 17
+    },
+    {
+      "name": "SetAnimKnob",
+      "evidence": "called",
+      "calls": 10,
+      "files": 4
+    },
+    {
+      "name": "SetAnimLimited",
+      "evidence": "both",
+      "calls": 4,
+      "files": 1
+    },
+    {
+      "name": "SetAnimLimitedRestart",
+      "evidence": "t7"
+    },
+    {
+      "name": "SetAnimRestart",
+      "evidence": "both",
+      "calls": 3,
+      "files": 2
+    },
+    {
+      "name": "SetAnimTime",
+      "evidence": "t7"
+    },
+    {
+      "name": "SetBlur",
+      "evidence": "called",
+      "calls": 4,
+      "files": 2
+    },
+    {
+      "name": "SetClientDvar",
+      "evidence": "called",
+      "calls": 22,
+      "files": 9
+    },
+    {
+      "name": "SetDvar",
+      "evidence": "both",
+      "calls": 16,
+      "files": 8
+    },
+    {
+      "name": "SetFlaggedAnim",
+      "evidence": "called",
+      "calls": 3,
+      "files": 3
+    },
+    {
+      "name": "SetFlaggedAnimKnob",
+      "evidence": "both",
+      "calls": 1,
+      "files": 1
+    },
+    {
+      "name": "SetFlaggedAnimKnobRestart",
+      "evidence": "called",
+      "calls": 1,
+      "files": 1
+    },
+    {
+      "name": "SetLightColor",
+      "evidence": "called",
+      "calls": 4,
+      "files": 2
+    },
+    {
+      "name": "SetLightExponent",
+      "evidence": "called",
+      "calls": 4,
+      "files": 2
+    },
+    {
+      "name": "SetLightFovRange",
+      "evidence": "called",
+      "calls": 6,
+      "files": 2
+    },
+    {
+      "name": "SetLightIntensity",
+      "evidence": "called",
+      "calls": 6,
+      "files": 2
+    },
+    {
+      "name": "SetLightRadius",
+      "evidence": "called",
+      "calls": 4,
+      "files": 2
+    },
+    {
+      "name": "SetModel",
+      "evidence": "both",
+      "calls": 118,
+      "files": 36
+    },
+    {
+      "name": "SetReverb",
+      "evidence": "called",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "SetSavedDvar",
+      "evidence": "both",
+      "calls": 74,
+      "files": 8
+    },
+    {
+      "name": "SetSunLight",
+      "evidence": "called",
+      "calls": 32,
+      "files": 5
+    },
+    {
+      "name": "ShellShock",
+      "evidence": "both",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "Show",
+      "evidence": "both",
+      "calls": 9,
+      "files": 5
+    },
+    {
+      "name": "Sin",
+      "evidence": "both",
+      "calls": 20,
+      "files": 3
+    },
+    {
+      "name": "Spawn",
+      "evidence": "both",
+      "calls": 201,
+      "files": 69
+    },
+    {
+      "name": "SpawnFx",
+      "evidence": "called",
+      "calls": 28,
+      "files": 12
+    },
+    {
+      "name": "SpawnStruct",
+      "evidence": "both",
+      "calls": 167,
+      "files": 137
+    },
+    {
+      "name": "StopLoopSound",
+      "evidence": "both",
+      "calls": 122,
+      "files": 37
+    },
+    {
+      "name": "StopRumble",
+      "evidence": "both",
+      "calls": 7,
+      "files": 5
+    },
+    {
+      "name": "StopSounds",
+      "evidence": "t7"
+    },
+    {
+      "name": "StrTok",
+      "evidence": "both",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "TableLookup",
+      "evidence": "t7"
+    },
+    {
+      "name": "Tan",
+      "evidence": "t7"
+    },
+    {
+      "name": "ToLower",
+      "evidence": "both",
+      "calls": 2,
+      "files": 2
+    },
+    {
+      "name": "TriggerFX",
+      "evidence": "called",
+      "calls": 24,
+      "files": 11
+    },
+    {
+      "name": "Unlink",
+      "evidence": "both",
+      "calls": 4,
+      "files": 3
+    },
+    {
+      "name": "UseAnimTree",
+      "evidence": "both",
+      "calls": 32,
+      "files": 20
+    },
+    {
+      "name": "VectorDot",
+      "evidence": "both",
+      "calls": 6,
+      "files": 5
+    },
+    {
+      "name": "VectorFromLineToPoint",
+      "evidence": "t7"
+    },
+    {
+      "name": "VectorLerp",
+      "evidence": "t7"
+    },
+    {
+      "name": "VectorNormalize",
+      "evidence": "both",
+      "calls": 23,
+      "files": 10
+    },
+    {
+      "name": "VectorToAngles",
+      "evidence": "both",
+      "calls": 8,
+      "files": 7
+    },
+    {
+      "name": "VisionSetNaked",
+      "evidence": "both",
+      "calls": 56,
+      "files": 8
+    }
+  ]
+}

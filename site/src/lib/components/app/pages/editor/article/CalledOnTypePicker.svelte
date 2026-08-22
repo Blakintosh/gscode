@@ -28,15 +28,15 @@
 	}
 </script>
 
-<div class="flex items-center gap-2">
-	<div class="flex flex-col gap-1">
-		<span class="text-xs text-muted-foreground">Entity Type</span>
+<div class="flex items-end gap-2">
+	<div class="flex flex-col gap-1.5">
+		<span class="type-label text-dim">Entity type</span>
 		<Select.Root type="single" value={subType} onValueChange={handleSubTypeChange}>
-			<Select.Trigger class="w-40">
+			<Select.Trigger size="sm" class="w-40">
 				{#if subType}
 					<span>{subType}</span>
 				{:else}
-					<span class="text-muted-foreground">any</span>
+					<span class="text-dim">any</span>
 				{/if}
 			</Select.Trigger>
 			<Select.Content>

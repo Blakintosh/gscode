@@ -1,22 +1,26 @@
 <script lang="ts">
 	import * as HoverCard from '$components/ui/hover-card';
-    import { Badge } from "$lib/components/ui/badge/index.js";
+	import { Badge } from '$lib/components/ui/badge/index.js';
 
-    export let name: string;
-    export let description: string;
-    export let version: number;
-    export let revisedOn: string;
+	type Props = {
+		name: string;
+		description: string;
+		version: number;
+		revisedOn: string;
+	};
 
+	let { name, description, version, revisedOn }: Props = $props();
 </script>
 
-<HoverCard.Content>
-    <span class="flex gap-2 items-center">
-        {name} <Badge color="green">API v{version}</Badge>
-    </span>
-    <p>
-        {description}
-    </p>
-    <p class="text-sm text-muted-foreground">
-        API last revised on {revisedOn}
-    </p>
+<HoverCard.Content class="w-72">
+	<div class="flex items-center gap-2">
+		<span class="text-foreground font-mono text-sm">{name}</span>
+		<Badge variant="outline">API v{version}</Badge>
+	</div>
+	<p class="text-muted-foreground mt-2 text-sm font-light">
+		{description}
+	</p>
+	<p class="text-dim mt-3 font-mono text-2xs tracking-label uppercase">
+		Revised {revisedOn}
+	</p>
 </HoverCard.Content>

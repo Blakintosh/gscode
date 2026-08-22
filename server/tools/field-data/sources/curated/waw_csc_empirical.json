@@ -1,0 +1,742 @@
+[
+  {
+    "name": "GetLocalPlayers",
+    "description": "Get an array of all the local players.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "any",
+            "isArray": true
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "players = GetLocalPlayers()",
+    "confidence": "high"
+  },
+  {
+    "name": "SoundPlaying",
+    "description": "Returns true if the sound given by sound id is playing.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound  id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "while( soundplaying( soundId ) )",
+    "confidence": "high"
+  },
+  {
+    "name": "StopSound",
+    "description": "Stops the given sound on an entity. Remark: Wait between StopSound() and delete() or the sound will not stop.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": "The entity to stop the sound on.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false
+          }
+        },
+        "parameters": [
+          {
+            "name": "aliasName",
+            "description": "The sound to stop on the entity.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": null,
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "beatBox StopSound(\"alias\");"
+  },
+  {
+    "name": "SetSoundVolume",
+    "description": "Set the sound volume.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "attenuation",
+            "description": "The attenuation of the sound.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "getsoundvolume",
+    "description": "Observed in the waw shipped script corpus (7 calls across 7 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 7 call(s) across 7 waw script file(s), observed argument counts 1, access mp. First sites: clientscripts\\ber3b.csc(93), clientscripts\\mp\\_music.csc(92), clientscripts\\nazi_zombie_asylum_amb.csc(103), clientscripts\\nazi_zombie_factory_amb.csc(122), clientscripts\\nazi_zombie_prototype_amb.csc(66). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetSoundVolumeRate",
+    "description": "Set the sound volume rate.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "attenuationRate",
+            "description": "The new volume rate.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "GetLocalClientPos",
+    "description": "Returns pos of localclient.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "client",
+            "description": "the client to get position.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "origin = GetLocalClientPos( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetRealTime",
+    "description": "Get the real system time in milliseconds.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "time = GetRealTime()",
+    "confidence": "high"
+  },
+  {
+    "name": "GetLocalClientAngles",
+    "description": "Get the local client angles.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "client",
+            "description": "the client to get angles for.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "client_angles = GetLocalClientAngles()",
+    "confidence": "high"
+  },
+  {
+    "name": "GetLocalClientEyePos",
+    "description": "Gets the local client eye pos.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "client",
+            "description": "the client to get eye pos for.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "eye_pos = GetLocalClientEyePos( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "getbusname",
+    "description": "Observed in the waw shipped script corpus (8 calls across 2 files; argument counts 1, 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 8 call(s) across 2 waw script file(s), observed argument counts 1, 2, access mp. First sites: clientscripts\\mp\\_busing.csc(93), clientscripts\\mp\\_busing.csc(156), clientscripts\\mp\\_busing.csc(197), clientscripts\\mp\\_busing.csc(198), clientscripts\\_busing.csc(146). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getvisionsetnaked",
+    "description": "Observed in the waw shipped script corpus (8 calls across 2 files; argument counts 0, 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 8 call(s) across 2 waw script file(s), observed argument counts 0, 1, access unknown. It is called on a target. First sites: clientscripts\\nazi_zombie_factory_teleporter.csc(41), clientscripts\\nazi_zombie_factory_teleporter.csc(96), clientscripts\\nazi_zombie_factory_teleporter.csc(105), clientscripts\\nazi_zombie_factory_teleporter.csc(114), clientscripts\\nazi_zombie_factory_teleporter.csc(129). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getpersistentprofilevar",
+    "description": "Observed in the waw shipped script corpus (7 calls across 2 files; argument counts 1, 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 7 call(s) across 2 waw script file(s), observed argument counts 1, 2, access unknown. First sites: animscripts\\banzai.gsc(1403), clientscripts\\_russian_diary.csc(121), clientscripts\\_russian_diary.csc(123), clientscripts\\_russian_diary.csc(125), clientscripts\\_russian_diary.csc(147). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getbuscount",
+    "description": "Observed in the waw shipped script corpus (6 calls across 2 files; argument counts 0; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 6 call(s) across 2 waw script file(s), observed argument counts 0, access mp. First sites: clientscripts\\mp\\_busing.csc(91), clientscripts\\mp\\_busing.csc(154), clientscripts\\mp\\_busing.csc(195), clientscripts\\_busing.csc(144), clientscripts\\_busing.csc(207). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setbusvolume",
+    "description": "Observed in the waw shipped script corpus (4 calls across 2 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 4 call(s) across 2 waw script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_busing.csc(82), clientscripts\\mp\\_busing.csc(93), clientscripts\\_busing.csc(133), clientscripts\\_busing.csc(146). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setbusfadetime",
+    "description": "Observed in the waw shipped script corpus (4 calls across 2 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 4 call(s) across 2 waw script file(s), observed argument counts 1, access mp. First sites: clientscripts\\mp\\_busing.csc(74), clientscripts\\mp\\_busing.csc(89), clientscripts\\_busing.csc(125), clientscripts\\_busing.csc(142). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setpersistentprofilevar",
+    "description": "Observed in the waw shipped script corpus (3 calls across 2 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 2 waw script file(s), observed argument counts 2, access unknown. First sites: animscripts\\banzai.gsc(1410), clientscripts\\_russian_diary.csc(93), clientscripts\\_russian_diary.csc(102). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetPlaybackTime",
+    "description": "Get the playback time for the sound given by playbackId.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "time = GetPlaybackTime( level.mySnd )",
+    "confidence": "high"
+  },
+  {
+    "name": "ClientHasSnapshot",
+    "description": "Returns true if client has recieved a snapshot from the server.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClient",
+            "description": "the desired Local Client number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "MakeLight",
+    "description": "Create a light.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "primaryLightIndex",
+            "description": "The Primary Light Index.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self MakeLight(1)",
+    "confidence": "medium"
+  },
+  {
+    "name": "enablewatersheetfx",
+    "description": "Observed in the waw shipped script corpus (3 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\pby_fly.csc(34), clientscripts\\pby_fly.csc(44), clientscripts\\pby_fly.csc(53). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "PlayViewmodelFx",
+    "description": "Plays an FX on the local client's viewmodel.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "fxName",
+            "description": "The FX name (i.e. `level._effect[\"path\"]`) that should be played.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "tag",
+            "description": "The viewmodel tag to play the FX on.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": "fxId",
+          "description": "A handle to the playing effect that can be used to stop it later.",
+          "type": {
+            "dataType": "int",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false,
+            "unionOf": null
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "self.missile_drone_fx = PlayViewmodelFx( localClientNum, level._effect[\"missile_drone_enemy_light\"], \"tag_target\" );",
+    "remarks": [
+      "When playing effects from the viewmodel, you should check `Draw with View Model` in the FX editor settings. This ensures correct rendering.",
+      "Regardless of the above setting, FX models always render behind the viewmodel."
+    ]
+  },
+  {
+    "name": "GetAnimStateCategory",
+    "description": "Returns the current anim state category for an Actor.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "category = GetAnimStateCategory( )",
+    "confidence": "high"
+  },
+  {
+    "name": "getlefttreadhealth",
+    "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 waw script file(s), observed argument counts 0, access mp. It is called on a target. First sites: clientscripts\\mp\\_vehicle.csc(119), clientscripts\\mp\\_vehicle.csc(287). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getrighttreadhealth",
+    "description": "Observed in the waw shipped script corpus (2 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 waw script file(s), observed argument counts 0, access mp. It is called on a target. First sites: clientscripts\\mp\\_vehicle.csc(120), clientscripts\\mp\\_vehicle.csc(288). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetKnownLength",
+    "description": "Get the known length of the sound.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "length = GetKnownLength( level.mySnd )",
+    "confidence": "high"
+  },
+  {
+    "name": "updatedvarsfromprofile",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_utility.csc(648). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "haseyes",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 0, access unknown. It is called on a target. First sites: clientscripts\\_zombie_mode.csc(65). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsADS",
+    "description": "Returns true if this local client is in ADS, false otherwise.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "IsADS( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "setdvarbool",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\mp_stalingrad.csc(12). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getvehiclehealth",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 0, access mp. It is called on a target. First sites: clientscripts\\mp\\_vehicle.csc(284). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetInKillcam",
+    "description": "returns if the client is in killcam or not.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "local_client_num",
+            "description": "The local client to check.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "medium"
+  },
+  {
+    "name": "getlocalclientmaxhealth",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_collectibles.csc(71). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getlocalclienthealth",
+    "description": "Observed in the waw shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 waw script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_collectibles.csc(86). The name is known to exist; its signature remains undocumented."
+    ]
+  }
+]

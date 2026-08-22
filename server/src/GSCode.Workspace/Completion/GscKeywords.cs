@@ -1,0 +1,172 @@
+using System.Collections.Immutable;
+using GSCode.Core;
+
+namespace GSCode.Workspace.Completion;
+
+/// <summary>What punctuation a keyword takes when it is completed.</summary>
+public enum KeywordShape
+{
+    /// <summary>A plain word: `else`, `true`. Completes to itself.</summary>
+    Word,
+
+    /// <summary>
+    /// Call-shaped and a statement in its own right: `self notify( "x" );`. Takes a semicolon on
+    /// the same terms a function call does.
+    /// </summary>
+    StatementCall,
+
+    /// <summary>A statement taking nothing at all: `waittillframeend;`, `break;`, `continue;`.</summary>
+    BareStatement,
+
+    /// <summary>
+    /// A statement that MAY carry a value: `return;` and `return 5;` are both whole statements.
+    ///
+    /// Distinct from <see cref="BareStatement"/> only because of where the cursor lands. Completing
+    /// to a bare `return;` would be right half the time and cost a cursor move the other half; this
+    /// leaves the caret before the terminator, so typing nothing gives `return;` and typing a value
+    /// gives `return 5;` without either case needing a correction.
+    /// </summary>
+    ValueStatement,
+}
+
+/// <summary>The language keywords offered in statement-scope completion.</summary>
+public static class GscKeywords
+{
+    /// <summary>
+    /// How each call-shaped keyword completes; anything absent is a plain <see cref="KeywordShape.Word"/>.
+    ///
+    /// All of these are written as calls, so all of them take parentheses and then follow the
+    /// same statement rule a function call does. `isdefined` needs no special case: `x = isdefined( f )`
+    /// is an assignment statement and takes a semicolon, while `if ( isdefined( f ) )` is not a
+    /// statement position at all and does not.
+    ///
+    /// `wait` accepts both `wait 0.5;` and `wait( 0.5 );`; the parenthesised form is used, being
+    /// the one that reads the same as everything around it.
+    ///
+    /// The BRANCHING control-flow keywords are deliberately absent: `if` needs a body as well as a
+    /// header, so completing it usefully is a different job from punctuating a call. The JUMPS are
+    /// not in that category — `break`, `continue` and `return` end a statement and nothing follows
+    /// them on the line, so their semicolon is never in doubt the way a call's is.
+    /// </summary>
+    private static readonly Dictionary<string, KeywordShape> s_shapes = new(StringComparer.Ordinal)
+    {
+        ["isdefined"] = KeywordShape.StatementCall,
+        ["notify"] = KeywordShape.StatementCall,
+        ["endon"] = KeywordShape.StatementCall,
+        ["waittill"] = KeywordShape.StatementCall,
+        ["waittillmatch"] = KeywordShape.StatementCall,
+        ["wait"] = KeywordShape.StatementCall,
+        ["waitrealtime"] = KeywordShape.StatementCall,
+        ["waittillframeend"] = KeywordShape.BareStatement,
+        ["break"] = KeywordShape.BareStatement,
+        ["continue"] = KeywordShape.BareStatement,
+        ["return"] = KeywordShape.ValueStatement,
+    };
+
+    /// <summary>The shape of a keyword, defaulting to a plain word.</summary>
+    public static KeywordShape ShapeOf(string keyword)
+    {
+        return s_shapes.GetValueOrDefault(keyword, KeywordShape.Word);
+    }
+
+    /// <summary>
+    /// Statement and expression keywords a user might type in a function body. Global objects
+    /// (<c>self</c>, <c>level</c>, …) are NOT here — they come from the active profile
+    /// (<see cref="GameProfile.GlobalObjectNames"/>) so a dialect offers exactly its own.
+    /// </summary>
+    public static ImmutableArray<string> StatementKeywords { get; } =
+    [
+        "if", "else", "for", "foreach", "while", "do", "switch", "case", "default",
+        "return", "break", "continue", "wait", "waitrealtime", "waittill", "waittillmatch",
+        "waittillframeend", "thread", "notify", "endon", "isdefined",
+        "true", "false", "undefined", "const", "new",
+        // Reads as a value rather than opening a statement, but a user types it in a body like any
+        // other name. IsAvailable gates it to the dialects whose keyword set lists it — MW2 alone.
+        "thisthread",
+    ];
+
+    /// <summary>
+    /// Top-level keywords/directives offered outside a function body.
+    ///
+    /// <c>#animtree</c> is deliberately NOT here. It is a directive by spelling and an expression
+    /// atom by grammar — the argument to <c>UseAnimTree( #animtree )</c>, which is a call, and calls
+    /// live in bodies. Across the five corpora it appears in 415 files and not once at the start of
+    /// a line, so file scope is a position it can never occupy. It lives in
+    /// <see cref="BodyDirectives"/> instead.
+    /// </summary>
+    public static ImmutableArray<string> TopLevelKeywords { get; } =
+    [
+        "function", "class", "var", "autoexec", "private", "constructor", "destructor",
+        "#using", "#include", "#insert", "#namespace", "#precache", "#define", "#using_animtree",
+        "#if", "#elif", "#else", "#endif",
+    ];
+
+    /// <summary>
+    /// The directives that are legal INSIDE a function body as well as at top level.
+    ///
+    /// Preprocessing runs over a flat token stream with no notion of where a body starts:
+    /// <c>Preprocessor.ProcessRange</c> dispatches <c>#define</c>, <c>#insert</c> and the
+    /// <c>#if</c> chain from the same walk at any depth, which is what makes the conditional
+    /// wrapping of a single argument or statement work. The rest of the family — the imports,
+    /// <c>#namespace</c>, <c>#precache</c>, the animtree pair — is consumed by the PARSER at file
+    /// scope, so those stay out.
+    ///
+    /// <c>#animtree</c> is here for a different reason, and is the only entry the paragraph above
+    /// does not describe: the preprocessor never sees it. It is the argument to
+    /// <c>UseAnimTree( #animtree )</c> — an expression atom wearing a directive's spelling — so a
+    /// body is the only place it can be written, and it is the one directive on this list every
+    /// dialect has.
+    ///
+    /// Still filtered through <see cref="IsAvailable"/> by the caller, so a dialect without headers
+    /// is not offered <c>#insert</c> and one without macros is offered neither <c>#define</c> nor
+    /// the <c>#if</c> chain — which, for the four games before BO3, leaves <c>#animtree</c> alone.
+    /// </summary>
+    public static ImmutableArray<string> BodyDirectives { get; } =
+        ["#if", "#elif", "#else", "#endif", "#define", "#insert", "#animtree"];
+
+    /// <summary>
+    /// Whether a keyword/directive exists in the given dialect, so completion offers only what the
+    /// game has. Directives are gated by their own capability flags (import style, headers, precache);
+    /// every plain keyword is gated by the profile's keyword SET — the same data the lexer gates on
+    /// (<see cref="GameProfile.IsKeyword"/>), so completion and lexing can never disagree about which
+    /// words a game treats as keywords.
+    /// </summary>
+    public static bool IsAvailable(string keyword, GameProfile profile)
+    {
+        switch ( keyword )
+        {
+            case "#using":
+                return profile.ImportStyle == ImportStyle.Namespace;
+            case "#include":
+                return profile.ImportStyle == ImportStyle.Include;
+            case "#namespace":
+                return profile.HasNamespaceDirective;
+            case "#insert":
+                return profile.HasHeaders;
+            case "#precache":
+                return profile.HasPrecacheDirective;
+            case "#define":
+            case "#if":
+            case "#elif":
+            case "#else":
+            case "#endif":
+                return profile.HasMacros;
+        }
+
+        // What is genuinely universal, and all that is left: the animtree pair. #using_animtree
+        // declares the tree at file scope and #animtree names it in a UseAnimTree call, and both
+        // appear in every one of the five corpora.
+        //
+        // This used to be a blanket "any directive exists everywhere", with a comment listing
+        // #define and the #if family among them. It is where CoD4 came to be offered a preprocessor
+        // it does not have — the same failure as the contributed #precache snippet, one layer down,
+        // and the reason each directive above now names the flag it depends on.
+        if ( keyword.StartsWith('#') )
+        {
+            return true;
+        }
+
+        // Everything else is a keyword iff the dialect's keyword set lists it.
+        return profile.IsKeyword(keyword);
+    }
+}

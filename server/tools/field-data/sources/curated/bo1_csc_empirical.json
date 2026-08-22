@@ -1,0 +1,4604 @@
+[
+  {
+    "name": "MoveTo",
+    "description": "Move this entity to the given point.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "self",
+          "description": "script_model, script_origin or script_brushmodel"
+        },
+        "parameters": [
+          {
+            "name": "point",
+            "description": "The point to move the entity to",
+            "mandatory": true
+          },
+          {
+            "name": "time",
+            "description": "The time to move the entity in seconds",
+            "mandatory": true
+          },
+          {
+            "name": "time",
+            "description": "The time spent accelerating"
+          },
+          {
+            "name": "time",
+            "description": "The time spent decelerating"
+          }
+        ]
+      }
+    ],
+    "example": "dummy MoveTo( dest_org, .5, .05, .05 );",
+    "module": "Motion",
+    "flags": [
+      "documented"
+    ]
+  },
+  {
+    "name": "GetLocalPlayers",
+    "description": "Get an array of all the local players.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "any",
+            "isArray": true
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "players = GetLocalPlayers()",
+    "confidence": "high"
+  },
+  {
+    "name": "SetVolFog",
+    "description": "Creates an exponential fog.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "startDist",
+            "description": "The start distance of the fog.",
+            "mandatory": true
+          },
+          {
+            "name": "halfwayDist",
+            "description": "The halfway distance of the fog.",
+            "mandatory": true
+          },
+          {
+            "name": "halfwayHeight",
+            "description": "The halfway height of the fog.",
+            "mandatory": true
+          },
+          {
+            "name": "baseHeight",
+            "description": "The base height of the fog.",
+            "mandatory": true
+          },
+          {
+            "name": "colorR",
+            "description": "The red component of the fog color.",
+            "mandatory": true
+          },
+          {
+            "name": "colorG",
+            "description": "The green component of the fog color.",
+            "mandatory": true
+          },
+          {
+            "name": "colorB",
+            "description": "The blue component of the fog color.",
+            "mandatory": true
+          },
+          {
+            "name": "maxOpacity",
+            "description": "The maximum opacity of the fog.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetVolFog(0.0001144, 0.01, 131/255, 116/255, 71/255, 0)",
+    "confidence": "medium"
+  },
+  {
+    "name": "LaunchRagdoll",
+    "description": "Launch this ragdoll.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "force",
+            "description": "launch force.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "bonename",
+            "description": "bone name to apply the force to.",
+            "mandatory": false
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self LaunchRagdoll( (0,0,100) )",
+    "confidence": "medium"
+  },
+  {
+    "name": "AngleClamp180",
+    "description": "Returns angle value clamped between [-180,180].",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "angles",
+            "description": "Angle to be clamped.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "deltaAngle = AngleClamp180( currentAngle )",
+    "confidence": "high"
+  },
+  {
+    "name": "UseWeaponHideTags",
+    "description": "Hides tags on this entity based on the hidetags value of the provided weaponname.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "weaponName",
+            "description": "The name of the weapon to base the tags to hide on.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "wall_weapon_model UseWeaponHideTags()",
+    "confidence": "medium"
+  },
+  {
+    "name": "Min",
+    "description": "Returns whichever of <a> or <b> is smallest.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "a",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          },
+          {
+            "name": "b",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "float"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "Max",
+    "description": "Returns whichever of <a> or <b> is larger.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "a",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          },
+          {
+            "name": "b",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "float"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "DeleteFX",
+    "description": "Delete a spawned effect.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "client on which to spawn effect.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "effectId",
+            "description": "The effect id returned by spawnfx.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "deleteImmediate",
+            "description": "whether effect will be deleted immediately. Default is 1.",
+            "mandatory": false,
+            "type": {
+              "dataType": "bool",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "deletefx (0, fxRef)",
+    "confidence": "high"
+  },
+  {
+    "name": "GetLocalPlayer",
+    "description": "Get the local player predicted centity.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "local client.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "entity",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "GetLocalPlayer( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "spawnfakeent",
+    "description": "Observed in the bo1 shipped script corpus (36 calls across 19 files; argument counts 1; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 36 call(s) across 19 bo1 script file(s), observed argument counts 1, access mp. First sites: clientscripts\\mp\\mp_berlinwall2_amb.csc(162), clientscripts\\mp\\mp_discovery_amb.csc(109), clientscripts\\mp\\mp_kowloon_amb.csc(159), clientscripts\\mp\\mp_stadium_amb.csc(106), clientscripts\\mp\\_airsupport.csc(10). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "MapShaderConstant",
+    "description": "Maps a shader constant to an index. Returns 1 if success, 0 on failure.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Local client for which to map the shader constant.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "index",
+            "description": "the index you want this shader constant to map to.",
+            "mandatory": true
+          },
+          {
+            "name": "constantName",
+            "description": "a string that's the name of the shader constant.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "x",
+            "description": "initial value of x component.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "y",
+            "description": "initial value of y component.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "z",
+            "description": "initial value of z component.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "w",
+            "description": "initial value of w component.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "ent mapshaderconstant( 0, \"shaderColor\" ); ent mapshaderconstant( 0, \"shaderColor\", 1, 0, 1, 1 )",
+    "confidence": "medium"
+  },
+  {
+    "name": "Setshaderconstant",
+    "description": "Set the value of a previously-mapped shader constant.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Local client for which to set the shader constant.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "index",
+            "description": "An 0-based index that refers to a previously-mapped shader constant(see MapShaderConstant).",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "x",
+            "description": "A float value, x component of the shader constant.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "y",
+            "description": "A float value, y component of the shader constant.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "z",
+            "description": "A float value, z component of the shader constant.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "w",
+            "description": "A float value, w component of the shader constant.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "ent setshaderconstant( 0, \"shaderColor\" , 0, 0, 0, 0)",
+    "confidence": "high"
+  },
+  {
+    "name": "GetRealTime",
+    "description": "Get the real system time in milliseconds.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "time = GetRealTime()",
+    "confidence": "high"
+  },
+  {
+    "name": "setfakeentorg",
+    "description": "Observed in the bo1 shipped script corpus (26 calls across 16 files; argument counts 3; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 26 call(s) across 16 bo1 script file(s), observed argument counts 3, access mp. First sites: clientscripts\\mp\\mp_berlinwall2_amb.csc(200), clientscripts\\mp\\mp_discovery_amb.csc(147), clientscripts\\mp\\mp_kowloon_amb.csc(197), clientscripts\\mp\\mp_stadium_amb.csc(144), clientscripts\\mp\\_airsupport.csc(29). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "Float",
+    "description": "Casts a string or an integer to a float.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "value",
+            "description": "A string or integer number to cast to a float.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int | number | string",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "x = Float( floatValString )",
+    "confidence": "high"
+  },
+  {
+    "name": "Sqrt",
+    "description": "Returns the square-root of floating point value <a>.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "a",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "float"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "IsInVehicle",
+    "description": "Returns whether or not this player is currently occupying a vehicle.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self IsInVehicle()",
+    "confidence": "high"
+  },
+  {
+    "name": "ClientHasSnapshot",
+    "description": "Returns true if client has recieved a snapshot from the server.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClient",
+            "description": "the desired Local Client number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "GetWaterHeight",
+    "description": "Returns the height of the water at this position.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "pos",
+            "description": "Query position.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "height = getwaterheight( self.origin )",
+    "confidence": "high"
+  },
+  {
+    "name": "StopFX",
+    "description": "Stops a given fx.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client the effect is playing on.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "effectId",
+            "description": "The effect id returned by playFx.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "StopFX ( fxId )",
+    "confidence": "high"
+  },
+  {
+    "name": "DebugStar",
+    "description": "Draw a star on screen",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "vector",
+            "description": "location vector position of the debugstar",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "duration",
+            "description": "How many server frames the line should persist through. Defaults to 10",
+            "mandatory": false,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "color",
+            "description": "color of star. Defaults to white",
+            "mandatory": false,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "DebugStar( self.origin, 20, (0.9, 0.7, 0.6) );",
+    "verifiedInRevision": null,
+    "remarks": [
+      "`DebugStar` must be called from the context of a devblock. *"
+    ],
+    "devOnly": true
+  },
+  {
+    "name": "GetLocalClientNumber",
+    "description": "Returns the local client number.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "clientNum = self GetLocalClientNumber()",
+    "confidence": "high"
+  },
+  {
+    "name": "ui3dsetwindow",
+    "description": "Observed in the bo1 shipped script corpus (60 calls across 10 files; argument counts 5; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 60 call(s) across 10 bo1 script file(s), observed argument counts 5, access mp. First sites: clientscripts\\cuba.csc(29), clientscripts\\cuba.csc(30), clientscripts\\cuba.csc(31), clientscripts\\cuba.csc(32), clientscripts\\cuba.csc(33). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getvisionsetnaked",
+    "description": "Observed in the bo1 shipped script corpus (25 calls across 10 files; argument counts 0, 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 25 call(s) across 10 bo1 script file(s), observed argument counts 0, 1, access unknown. It is called on a target. First sites: clientscripts\\zombie_cod5_factory_teleporter.csc(41), clientscripts\\zombie_cod5_factory_teleporter.csc(96), clientscripts\\zombie_cod5_factory_teleporter.csc(105), clientscripts\\zombie_cod5_factory_teleporter.csc(114), clientscripts\\zombie_cod5_factory_teleporter.csc(129). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "Abs",
+    "description": "Returns the absolute value of a float.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "value",
+            "description": "A float or integer value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "x = Abs( x )",
+    "confidence": "high"
+  },
+  {
+    "name": "showui",
+    "description": "Observed in the bo1 shipped script corpus (13 calls across 10 files; argument counts 3; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 13 call(s) across 10 bo1 script file(s), observed argument counts 3, access unknown. First sites: clientscripts\\cuba.csc(35), clientscripts\\flashpoint.csc(163), clientscripts\\int_escape.csc(195), clientscripts\\kowloon.csc(244), clientscripts\\rebirth.csc(52). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "deletefakeent",
+    "description": "Observed in the bo1 shipped script corpus (11 calls across 10 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 11 call(s) across 10 bo1 script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_airsupport.csc(68), clientscripts\\mp\\_fx.csc(118), clientscripts\\mp\\_utility.csc(316), clientscripts\\underwaterbase_amb.csc(255), clientscripts\\zombie_cod5_factory_fx.csc(306). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsSpectating",
+    "description": "Returns 1 if the local client is spectating.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Number of the local client to check.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "checkFistPerson",
+            "description": "Check if we want first person spectating to be not considered as spectate.",
+            "mandatory": false,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( IsSpectating( localClientNum, false ) )",
+    "confidence": "high"
+  },
+  {
+    "name": "SoundPlaying",
+    "description": "Returns true if the sound given by sound id is playing.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound  id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "while( soundplaying( soundId ) )",
+    "confidence": "high"
+  },
+  {
+    "name": "CreateDynEntAndLaunch",
+    "description": "Creates and launches a dynent.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "pos",
+            "description": "position to spawn at.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "angles",
+            "description": "angles to spawn at.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "hitpos",
+            "description": "the hit position.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "force",
+            "description": "The force of the launch.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "fx",
+            "description": "particle effects to play on this dynent.",
+            "mandatory": false,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "CreateDynEntAndLaunch( spawn_models[i], origin, angles, origin, velocity, anim._effect[\"animscript_gibtrail_fx\"] )",
+    "confidence": "medium"
+  },
+  {
+    "name": "HasDObj",
+    "description": "Returns 1 if the entity currently has a dobj.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "localClientNumber",
+            "description": "number of the local client on the machine.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if(ent HasDObj(0))",
+    "confidence": "high"
+  },
+  {
+    "name": "SetSoundVolume",
+    "description": "Set the sound volume.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "attenuation",
+            "description": "The attenuation of the sound.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "SetClientVolumetricFog",
+    "description": "Set the client volumetric fog properties.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "startDist",
+            "description": "The start distance of the volume.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "halfwayDist",
+            "description": "The halfway distance of the volume.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "halfwayHeight",
+            "description": "The halfway height of the volume.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "baseHeight",
+            "description": "The base height of the volume.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "red",
+            "description": "The red value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "green",
+            "description": "The green value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "blue",
+            "description": "The blue value.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "fogColorScale",
+            "description": "The color scale of the fog.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "sunFogColorR",
+            "description": "The sun fog red value.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "sunFogColorG",
+            "description": "The sun fog green value.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "sunFogColorB",
+            "description": "The sun fog blue value.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "sunFogDirX",
+            "description": "The sun direction X value.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "sunFogDirY",
+            "description": "The sun direction Y value.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "sunFogDirZ",
+            "description": "The sun direction Z value.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "sunFogStartAng",
+            "description": "Angle from the sun position where the sun fades in.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "sunFogEndAng",
+            "description": "Angle from the sun position where the sun has faded out.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {},
+          {
+            "name": "fogMaxOpacity",
+            "description": "The maximum opacity of the fog as a value between 0 and 1.",
+            "mandatory": false,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "medium"
+  },
+  {
+    "name": "animateui",
+    "description": "Observed in the bo1 shipped script corpus (49 calls across 7 files; argument counts 5; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 49 call(s) across 7 bo1 script file(s), observed argument counts 5, access mp. First sites: clientscripts\\mp\\_cameraspike.csc(81), clientscripts\\mp\\_cameraspike.csc(82), clientscripts\\mp\\_cameraspike.csc(83), clientscripts\\mp\\_cameraspike.csc(84), clientscripts\\mp\\_cameraspike.csc(85). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetOwner",
+    "description": "Get an entity's owner.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Local client to check.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "entity",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "ent GetOwner( localClientNum )",
+    "confidence": "high"
+  },
+  {
+    "name": "StopSound",
+    "description": "Stops the given sound on an entity. Remark: Wait between StopSound() and delete() or the sound will not stop.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": "The entity to stop the sound on.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false
+          }
+        },
+        "parameters": [
+          {
+            "name": "aliasName",
+            "description": "The sound to stop on the entity.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": null,
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "beatBox StopSound(\"alias\");"
+  },
+  {
+    "name": "setwatchstyle",
+    "description": "Observed in the bo1 shipped script corpus (7 calls across 7 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 7 call(s) across 7 bo1 script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: clientscripts\\cuba.csc(36), clientscripts\\flashpoint.csc(164), clientscripts\\kowloon.csc(245), clientscripts\\rebirth.csc(53), clientscripts\\underwaterbase.csc(147). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsLocalPlayer",
+    "description": "Returns true if the ent it's called on is a local player.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "PlayViewmodelFx",
+    "description": "Plays an FX on the local client's viewmodel.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "fxName",
+            "description": "The FX name (i.e. `level._effect[\"path\"]`) that should be played.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          },
+          {
+            "name": "tag",
+            "description": "The viewmodel tag to play the FX on.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": "fxId",
+          "description": "A handle to the playing effect that can be used to stop it later.",
+          "type": {
+            "dataType": "int",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false,
+            "unionOf": null
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "self.missile_drone_fx = PlayViewmodelFx( localClientNum, level._effect[\"missile_drone_enemy_light\"], \"tag_target\" );",
+    "remarks": [
+      "When playing effects from the viewmodel, you should check `Draw with View Model` in the FX editor settings. This ensures correct rendering.",
+      "Regardless of the above setting, FX models always render behind the viewmodel."
+    ]
+  },
+  {
+    "name": "VectorCross",
+    "description": "Returns the cross product of two vectors.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "vectorA",
+            "description": "The first vector.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "vectorB",
+            "description": "The second vector.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "IsSplitScreenHost",
+    "description": "Gets whether the local player is the split-screen host.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": "isSplitScreenHost",
+          "description": "Whether the local client is the split-screen host.",
+          "type": {
+            "dataType": "bool",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false,
+            "unionOf": null
+          },
+          "void": false
+        }
+      },
+      {
+        "calledOn": {
+          "name": "localPlayer",
+          "description": "The local player to check.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": "player",
+            "subType": "player",
+            "isArray": false
+          }
+        },
+        "parameters": [],
+        "returns": {
+          "name": "isSplitScreenHost",
+          "description": "Whether the local player is the split-screen host.",
+          "type": {
+            "dataType": "bool",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false,
+            "unionOf": null
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "if ( player IsSplitScreenHost() ) { }"
+  },
+  {
+    "name": "SoundLoopEmitter",
+    "description": "Play a sound loop at the position.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "alias",
+            "description": "The sound alias name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "position",
+            "description": "The position to play sound at.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SoundLoopEmitter(\"evt_beacon_loop_red\", self.origin)",
+    "confidence": "high"
+  },
+  {
+    "name": "Box",
+    "description": "Debug instrument.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "args",
+            "description": "The arguments.",
+            "mandatory": false,
+            "type": {
+              "dataType": "vararg",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "void": true
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ]
+  },
+  {
+    "name": "SpawnPlane",
+    "description": "Spawns a plane at the origin.",
+    "overloads": [
+      {
+        "parameters": [
+          {
+            "name": "player",
+            "description": "the owner.",
+            "mandatory": true
+          },
+          {
+            "name": "classname",
+            "description": "class of entity.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "description": "location to spawn at.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector"
+            }
+          },
+          {
+            "name": "spawnflags",
+            "description": "optional spawn flags.",
+            "mandatory": false,
+            "type": {
+              "dataType": "int"
+            }
+          }
+        ],
+        "returns": {
+          "type": {
+            "dataType": "entity"
+          }
+        }
+      }
+    ],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Signature carried over from the Black Ops III library, where this function is documented; not confirmed against Call of Duty 4 documentation."
+    ]
+  },
+  {
+    "name": "GetLinkedEnt",
+    "description": "Get the entity that the calling entity is linked to.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "entity",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "linked_ent = self GetLinkedEnt()",
+    "confidence": "high"
+  },
+  {
+    "name": "UpdateGamerProfile",
+    "description": "Saves the player's gamer profile. Does nothing on PC.",
+    "overloads": [],
+    "example": "UpdateGamerProfile();",
+    "module": "System",
+    "spmp": "SP",
+    "flags": [
+      "documented"
+    ]
+  },
+  {
+    "name": "LerpFloat",
+    "description": "Returns a lerped value between <from> and <to> based on <time>.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "from",
+            "description": "Floating point value, start of the range.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "to",
+            "description": "Floating point value, end of the range.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "time",
+            "description": "Floating point value in the range of 0 - 1.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "val = LerpFloat( 0, 10, 0.5);\t// would return 5.0",
+    "confidence": "high"
+  },
+  {
+    "name": "haseyes",
+    "description": "Observed in the bo1 shipped script corpus (7 calls across 5 files; argument counts 0, 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 7 call(s) across 5 bo1 script file(s), observed argument counts 0, 1, access unknown. It is called on a target. First sites: clientscripts\\_waw_zombie_mode.csc(65), clientscripts\\_zombiemode.csc(477), clientscripts\\_zombietron.csc(959), maps\\_zombiemode_spawner.gsc(3659), maps\\_zombiemode_spawner.gsc(3670). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "Getdynent",
+    "description": "Get the dynent with the specified targetname.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "entity",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "twig = getdynent(\"twig\")",
+    "confidence": "medium"
+  },
+  {
+    "name": "setdvarfloat",
+    "description": "Observed in the bo1 shipped script corpus (27 calls across 4 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 27 call(s) across 4 bo1 script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_scrambler.csc(268), clientscripts\\zombie_coast_amb.csc(140), clientscripts\\zombie_coast_amb.csc(148), clientscripts\\zombie_moon_sq.csc(79), clientscripts\\zombie_moon_sq.csc(81). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setvolfogforclient",
+    "description": "Observed in the bo1 shipped script corpus (13 calls across 4 files; argument counts 19; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 13 call(s) across 4 bo1 script file(s), observed argument counts 19, access unknown. First sites: clientscripts\\zombie_coast_fx.csc(249), clientscripts\\zombie_coast_fx.csc(287), clientscripts\\zombie_coast_fx.csc(324), clientscripts\\zombie_coast_fx.csc(362), clientscripts\\zombie_coast_fx.csc(400). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetDvarVector",
+    "description": "Gets the value of a dvar.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "dvar",
+            "description": "The dvar name as a string or hash.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int | string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "default_value",
+            "description": "The value to be returned if the dvar doesn't exist, must be an vector.",
+            "mandatory": false,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "GetDvarVector( \"r_eyesAdjust\", (1,0,0) )",
+    "confidence": "high"
+  },
+  {
+    "name": "isextracam",
+    "description": "Observed in the bo1 shipped script corpus (10 calls across 4 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 10 call(s) across 4 bo1 script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: clientscripts\\wmd.csc(76), clientscripts\\wmd_sr71.csc(123), clientscripts\\zombie_theater_teleporter.csc(163), frontend\\clientscripts\\frontend.csc(60), frontend\\clientscripts\\frontend.csc(74). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "stopextracam",
+    "description": "Observed in the bo1 shipped script corpus (9 calls across 4 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 9 call(s) across 4 bo1 script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\wmd.csc(75), clientscripts\\wmd.csc(81), clientscripts\\wmd_sr71.csc(122), clientscripts\\wmd_sr71.csc(136), clientscripts\\zombie_theater_teleporter.csc(185). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "isps3",
+    "description": "Observed in the bo1 shipped script corpus (6 calls across 4 files; argument counts 0; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 6 call(s) across 4 bo1 script file(s), observed argument counts 0, access mp. First sites: clientscripts\\mp\\mp_berlinwall2.csc(26), clientscripts\\mp\\_load.csc(104), clientscripts\\_filter.csc(532), clientscripts\\_filter.csc(548), frontend\\clientscripts\\frontend.csc(184). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "ClearAlternateAimParams",
+    "description": "Forces the local player to use default values for aim assist.  Only works in zombie/campaign mode. Can only be called on players.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self ClearAlternateAimParams()",
+    "confidence": "high"
+  },
+  {
+    "name": "GetLocalClientAngles",
+    "description": "Get the local client angles.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "client",
+            "description": "the client to get angles for.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "client_angles = GetLocalClientAngles()",
+    "confidence": "high"
+  },
+  {
+    "name": "setextracamfov",
+    "description": "Observed in the bo1 shipped script corpus (16 calls across 3 files; argument counts 2; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 16 call(s) across 3 bo1 script file(s), observed argument counts 2, access unknown. First sites: clientscripts\\wmd.csc(77), clientscripts\\wmd.csc(387), clientscripts\\wmd.csc(412), clientscripts\\wmd_sr71.csc(126), clientscripts\\wmd_sr71.csc(130). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "LocalClientActive",
+    "description": "Return whether local client is active.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "client",
+            "description": "the client to check if it is active.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "active = LocalClientActive( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "IsLocalClientDriver",
+    "description": "Returns the driver of the vehicle.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The localClientNum of the caller.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "driver = self IsLocalClientDriver(0)",
+    "confidence": "high"
+  },
+  {
+    "name": "GetSystemTime",
+    "description": "Returns the time of the system in a vector where the 0 index is hours (in 24hr time), 1 is minutes, and 2 is seconds.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "ignoreTimezone",
+            "description": "Set to non-zero to ignore the timezone information.",
+            "mandatory": false,
+            "type": {
+              "dataType": "bool",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "GetSystemTime(1)",
+    "confidence": "high"
+  },
+  {
+    "name": "setwaterfog",
+    "description": "Observed in the bo1 shipped script corpus (8 calls across 3 files; argument counts 17; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 8 call(s) across 3 bo1 script file(s), observed argument counts 17, access unknown. First sites: clientscripts\\creek_1.csc(396), clientscripts\\creek_1.csc(420), clientscripts\\creek_1.csc(443), clientscripts\\creek_1.csc(466), clientscripts\\creek_1.csc(493). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetSoundPitch",
+    "description": "Set the sound pitch.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "pitch",
+            "description": "The new pitch.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "ForceGameModeMappings",
+    "description": "Forces the users controller mappings for a specific game mode (or resets to user defaults).",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Client number to play the animation on.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "modeName",
+            "description": "Name of the mode to switch to or \"default\" for user defaults.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "ForceGameModeMappings( localClientNum, \"default\" )",
+    "confidence": "high"
+  },
+  {
+    "name": "PlayFXOnDynEnt",
+    "description": "Play this effect and return the internal handle.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "effectId",
+            "description": "The effect id returned by loadfx.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "dynent",
+            "description": "The dyn entity to play the effect on.",
+            "mandatory": true
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "handle = PlayFXOnDynEnt( spark, lamp )",
+    "confidence": "medium"
+  },
+  {
+    "name": "LerpVector",
+    "description": "Returns a lerped vector value between <from> and <to> based on <time>.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "from",
+            "description": "Vector, start of the range.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "to",
+            "description": "Vector, end of the range.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "time",
+            "description": "Floating point value in the range of 0 - 1.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "val = LerpVector( (0,0,0), (5,5,5), 0.5);\t// would return (2.5, 2.5, 2.5)",
+    "confidence": "high"
+  },
+  {
+    "name": "IsOnTurret",
+    "description": "Gets whether the player is currently on a turret.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "instanceType": null,
+              "subType": null,
+              "isArray": false,
+              "unionOf": null
+            }
+          }
+        ],
+        "returns": {
+          "name": "onTurret",
+          "description": "Whether the player is currently on a turret.",
+          "type": {
+            "dataType": "bool",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false,
+            "unionOf": null
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "if( IsOnTurret( 0 ) )"
+  },
+  {
+    "name": "GetLocalPlayerTeam",
+    "description": "Gets the team of the local player.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Number of the local client to check.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "team = GetLocalPlayerTeam( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetThrottle",
+    "description": "Returns the throttle factor of the vehicle.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self GetThrottle()",
+    "confidence": "high"
+  },
+  {
+    "name": "SetSoundVolumeRate",
+    "description": "Set the sound volume rate.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "attenuationRate",
+            "description": "The new volume rate.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "IsDriving",
+    "description": "Returns true if the player is driving a vehicle.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The localClientNum of the caller.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( self IsDriving( <localClientNum> ) )",
+    "confidence": "high"
+  },
+  {
+    "name": "TracePoint",
+    "description": "Traces a poitn throught the world with MASK_SHOT. Returns hit position, hit surface normal.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "start",
+            "description": "Start point.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "end",
+            "description": "End point.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "any",
+            "isArray": true
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "trace = TracePoint( p0, p1 )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetLocalClientEyePos",
+    "description": "Gets the local client eye pos.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "client",
+            "description": "the client to get eye pos for.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "eye_pos = GetLocalClientEyePos( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "IsFXPlaying",
+    "description": "Return true if effect is still playing.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client the effect is playing on.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "effectId",
+            "description": "The effect id returned by playFx.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "IsFXPlaying ( fxId )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetMaxLocalClients",
+    "description": "Get the max number of local clients.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "max_clients = GetMaxLocalClients()",
+    "confidence": "high"
+  },
+  {
+    "name": "set_filter_pass_enabled",
+    "description": "Observed in the bo1 shipped script corpus (34 calls across 2 files; argument counts 3; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 34 call(s) across 2 bo1 script file(s), observed argument counts 3, access unknown. It is called on a target. First sites: clientscripts\\_filter.csc(69), clientscripts\\_filter.csc(74), clientscripts\\_filter.csc(97), clientscripts\\_filter.csc(106), clientscripts\\_filter.csc(129). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "set_filter_pass_constant",
+    "description": "Observed in the bo1 shipped script corpus (22 calls across 2 files; argument counts 4; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 22 call(s) across 2 bo1 script file(s), observed argument counts 4, access unknown. It is called on a target. First sites: clientscripts\\_filter.csc(91), clientscripts\\_filter.csc(123), clientscripts\\_filter.csc(155), clientscripts\\_filter.csc(187), clientscripts\\_filter.csc(219). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "set_filter_pass_material",
+    "description": "Observed in the bo1 shipped script corpus (17 calls across 2 files; argument counts 6; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 17 call(s) across 2 bo1 script file(s), observed argument counts 6, access unknown. It is called on a target. First sites: clientscripts\\_filter.csc(68), clientscripts\\_filter.csc(96), clientscripts\\_filter.csc(128), clientscripts\\_filter.csc(160), clientscripts\\_filter.csc(192). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "map_material",
+    "description": "Observed in the bo1 shipped script corpus (8 calls across 2 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 8 call(s) across 2 bo1 script file(s), observed argument counts 2, access unknown. It is called on a target. First sites: clientscripts\\_filter.csc(42), clientscripts\\_filter.csc(47), clientscripts\\_filter.csc(533), clientscripts\\_filter.csc(549), clientscripts\\_filter.csc(561). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsWheelColliding",
+    "description": "Returns if the given wheel is on the ground.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "wheel",
+            "description": "The wheel position, can be 'front_left', 'front_right', 'back_left', 'back_right', 'middle_left', 'middle_right'.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "colliding = self IsWheelColliding( front_left )",
+    "confidence": "high"
+  },
+  {
+    "name": "set_overlay_enabled",
+    "description": "Observed in the bo1 shipped script corpus (6 calls across 2 files; argument counts 2; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 6 call(s) across 2 bo1 script file(s), observed argument counts 2, access unknown. It is called on a target. First sites: clientscripts\\_filter.csc(359), clientscripts\\_filter.csc(369), clientscripts\\_filter.csc(391), clientscripts\\_filter.csc(397), clientscripts\\_zombiemode_equip_gasmask.csc(76). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "set_overlay_material",
+    "description": "Observed in the bo1 shipped script corpus (6 calls across 2 files; argument counts 3; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 6 call(s) across 2 bo1 script file(s), observed argument counts 3, access unknown. It is called on a target. First sites: clientscripts\\_filter.csc(351), clientscripts\\_filter.csc(353), clientscripts\\_filter.csc(355), clientscripts\\_filter.csc(357), clientscripts\\_filter.csc(390). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetGroupSnapshot",
+    "description": "Sets the group snapshot.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "name",
+            "description": "Name of the snapshot.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetGroupSnapshot( level._sndActiveSnapshot )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetLocalClientPos",
+    "description": "Returns pos of localclient.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "client",
+            "description": "the client to get position.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "origin = GetLocalClientPos( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "SplitArgs",
+    "description": "Splits a space seperated string, returning an array of each word in the string.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "argString",
+            "description": "space seperated string.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "any",
+            "isArray": true
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "args = SplitArgs(\"First second third fourth\")",
+    "confidence": "high"
+  },
+  {
+    "name": "SoundLineEmitter",
+    "description": "Play a sound from start point to end point.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "alias",
+            "description": "The sound alias name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "origin1",
+            "description": "start point.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "origin2",
+            "description": "end point.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SoundLineEmitter( \"wpn_micro_turret_loop\", start, end )",
+    "confidence": "high"
+  },
+  {
+    "name": "SetSoundContext",
+    "description": "Set the sound context.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "type",
+            "description": "The type of context.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "value",
+            "description": "The value for that type.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetSoundContext (\"ringoff_plr\", \"outdoor\"); //for weapon decay's",
+    "confidence": "high"
+  },
+  {
+    "name": "IsDemoPlaying",
+    "description": "Returns true if a demo is currently playing back.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( IsDemoPlaying() )",
+    "confidence": "high"
+  },
+  {
+    "name": "setcollectible",
+    "description": "Observed in the bo1 shipped script corpus (4 calls across 2 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 4 call(s) across 2 bo1 script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_zombiemode.csc(1129), clientscripts\\_zombiemode.csc(1139), clientscripts\\_zombiemode.csc(1140), maps\\_collectibles.gsc(141). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetServerTime",
+    "description": "Returns the time according to the server.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "includeFrameTime",
+            "description": "Whether to include frame time.",
+            "mandatory": false
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "GetServerTime(localClientNum)",
+    "confidence": "medium"
+  },
+  {
+    "name": "SetCompassIcon",
+    "description": "Sets the icon to be shown on the minimap.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "iconName",
+            "description": "Name of compass material.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "plane setCompassIcon(iconName)",
+    "confidence": "high"
+  },
+  {
+    "name": "GetLocalClientDriver",
+    "description": "Returns the local client index of the driver of the vehicle if the driver is a local client or undefined.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "driver = self GetLocalClientDriver( )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetMaxReverseSpeed",
+    "description": "Get maximum reverse speed of a vehicle.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "float",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "speed = vehicle GetMaxReverseSpeed()",
+    "confidence": "high"
+  },
+  {
+    "name": "GetMaxSpeed",
+    "description": "Gets the vehicle's maximum speed in inches per second.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": "The vehicle to get the maximum speed of.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": "vehicle",
+            "subType": "vehicle",
+            "isArray": false
+          }
+        },
+        "parameters": [],
+        "returns": {
+          "name": "maxSpeed",
+          "description": "The maximum speed of the vehicle in inches per second.",
+          "type": {
+            "dataType": "int",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false,
+            "unionOf": null
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "vr = Abs( self GetSpeed() / self GetMaxSpeed() );",
+    "verifiedInRevision": null,
+    "remarks": null
+  },
+  {
+    "name": "GetPlaybackTime",
+    "description": "Get the playback time for the sound given by playbackId.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "time = GetPlaybackTime( level.mySnd )",
+    "confidence": "high"
+  },
+  {
+    "name": "SoundStopLineEmitter",
+    "description": "Stops the sound playing from start point to end point.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "alias",
+            "description": "The sound alias name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "origin1",
+            "description": "start point.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          },
+          {
+            "name": "origin2",
+            "description": "end point.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SoundStopLineEmitter( \"wpn_micro_turret_loop\", start, end )",
+    "confidence": "high"
+  },
+  {
+    "name": "SetAmbientSnapshot",
+    "description": "Sets the ambient snapshot.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "name",
+            "description": "Name of the snapshot.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetAmbientSnapshot( level._sndActiveSnapshot )",
+    "confidence": "high"
+  },
+  {
+    "name": "SoundStopLoopEmitter",
+    "description": "Stop the sound loop emitter at the position.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "alias",
+            "description": "The sound alias name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "position",
+            "description": "The position.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SoundStopLoopEmitter(\"evt_beacon_loop_green\", self.origin)",
+    "confidence": "high"
+  },
+  {
+    "name": "MakeLight",
+    "description": "Create a light.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "primaryLightIndex",
+            "description": "The Primary Light Index.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self MakeLight(1)",
+    "confidence": "medium"
+  },
+  {
+    "name": "SetSoundPitchRate",
+    "description": "Set the sound pitch rate.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "pitchRate",
+            "description": "The new pitch rate.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "IsPlayingLoopSound",
+    "description": "Returns true if the entity is playing a loop sound.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "alias",
+            "description": "specific alias to check for.",
+            "mandatory": false
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "car IsPlayingLoopSound()",
+    "confidence": "medium"
+  },
+  {
+    "name": "SetInfraredVisionSet",
+    "description": "Set the vision when using infrared.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "visionNameInfrared",
+            "description": "name of the vision set.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "entity SetInfraredVisionSet(\"visionName\")",
+    "confidence": "high"
+  },
+  {
+    "name": "set_overlay_constant",
+    "description": "Observed in the bo1 shipped script corpus (2 calls across 2 files; argument counts 3; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 2 bo1 script file(s), observed argument counts 3, access unknown. It is called on a target. First sites: clientscripts\\_filter.csc(340), clientscripts\\_zombiemode_equip_gasmask.csc(68). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetParentEntity",
+    "description": "Gets the parent entity.  Requires client-side linking to be set up on the entity.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "entity",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "parent = self GetParentEntity( )",
+    "confidence": "high"
+  },
+  {
+    "name": "getlocalclienthealth",
+    "description": "Observed in the bo1 shipped script corpus (2 calls across 2 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 2 bo1 script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_audio.csc(518), clientscripts\\_load.csc(162). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetInKillcam",
+    "description": "returns if the client is in killcam or not.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "local_client_num",
+            "description": "The local client to check.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "medium"
+  },
+  {
+    "name": "AnimGetChildAt",
+    "description": "Gets the child animation name at the given index.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": "The entity to query.",
+          "type": {
+            "dataType": "entity",
+            "isArray": false
+          }
+        },
+        "parameters": [
+          {
+            "name": "parentAnim",
+            "description": "The parent animation name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "childIndex",
+            "description": "The child animation index.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": "childAnim",
+          "description": "The child animation name.",
+          "type": {
+            "dataType": "string",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "childAnim = self AnimGetChildAt( \"idle\", 0 );",
+    "confidence": "high"
+  },
+  {
+    "name": "IsWheelSliding",
+    "description": "Returns if the given wheel is sliding.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "wheel",
+            "description": "The wheel position, can be 'front_left', 'front_right', 'back_left', 'back_right', 'middle_left', 'middle_right'.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "sliding = self IsWheelSliding( front_left )",
+    "confidence": "high"
+  },
+  {
+    "name": "GetHeliDamageState",
+    "description": "Returns the damage state of the heli.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "vehicle GetHeliDamageState( )",
+    "confidence": "high"
+  },
+  {
+    "name": "IsPeelingOut",
+    "description": "Returns true if the vehicle is currently peeling out.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( self IsPeelingOut() ) { }",
+    "confidence": "high"
+  },
+  {
+    "name": "swimming",
+    "description": "Observed in the bo1 shipped script corpus (3 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 1 bo1 script file(s), observed argument counts 0, access unknown. It is called on a target. First sites: clientscripts\\_swimming.csc(154), clientscripts\\_swimming.csc(170), clientscripts\\_swimming.csc(234). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetLevelFadeSnapshot",
+    "description": "Sets the level fade snapshot.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "name",
+            "description": "The snapshot name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "amount",
+            "description": "The level fade amount.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetLevelFadeSnapshot( sn_name, sn_amount )",
+    "confidence": "high"
+  },
+  {
+    "name": "visionsetunderwater",
+    "description": "Observed in the bo1 shipped script corpus (3 calls across 1 files; argument counts 2, 3; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 1 bo1 script file(s), observed argument counts 2, 3, access unknown. First sites: clientscripts\\_swimming.csc(72), clientscripts\\_swimming.csc(569), clientscripts\\_swimming.csc(585). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "gettagforwardvector",
+    "description": "Observed in the bo1 shipped script corpus (3 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 1 bo1 script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: clientscripts\\_vehicle.csc(245), clientscripts\\_vehicle.csc(288), clientscripts\\_vehicle.csc(390). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "RemoveFriendlyScrambler",
+    "description": "removes new friendly scrambler from the compass using the same handle you gave when creating it.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "handle",
+            "description": "will be used to remove the scrambler.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player RemoveFriendlyScrambler( scrambler.handle )",
+    "confidence": "high"
+  },
+  {
+    "name": "setextracamstatic",
+    "description": "Observed in the bo1 shipped script corpus (3 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 3 call(s) across 1 bo1 script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_cameraspike.csc(27), clientscripts\\mp\\_cameraspike.csc(183), clientscripts\\mp\\_cameraspike.csc(193). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "GetAnimStateCategory",
+    "description": "Returns the current anim state category for an Actor.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "category = GetAnimStateCategory( )",
+    "confidence": "high"
+  },
+  {
+    "name": "entgetsweaponfirenotification",
+    "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 bo1 script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: clientscripts\\zombie_coast_player_zipline.csc(166), clientscripts\\zombie_coast_player_zipline.csc(222). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "entyawoverrideslinkyaw",
+    "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 bo1 script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: clientscripts\\zombie_coast_player_zipline.csc(165), clientscripts\\zombie_coast_player_zipline.csc(221). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getrighttreadhealth",
+    "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 bo1 script file(s), observed argument counts 0, access mp. It is called on a target. First sites: clientscripts\\mp\\_vehicle.csc(74), clientscripts\\mp\\_vehicle.csc(204). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getlefttreadhealth",
+    "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 bo1 script file(s), observed argument counts 0, access mp. It is called on a target. First sites: clientscripts\\mp\\_vehicle.csc(73), clientscripts\\mp\\_vehicle.csc(203). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetHealthSnapshot",
+    "description": "Sets the health snapshot.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "name",
+            "description": "The snapshot name.",
+            "mandatory": true,
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          },
+          {
+            "name": "amount",
+            "description": "The amount.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetHealthSnapshot( sn_name, sn_amount )",
+    "confidence": "high"
+  },
+  {
+    "name": "SetEnemyGlobalScrambler",
+    "description": "Set to true if there is a global enemy scrambler active.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "bool",
+            "description": "true if there is a scrabler active, false otherwise.",
+            "mandatory": true,
+            "type": {
+              "dataType": "bool",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player SetEnemyGlobalScrambler( 1 )",
+    "confidence": "high"
+  },
+  {
+    "name": "visionsetdamage",
+    "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 4; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 bo1 script file(s), observed argument counts 4, access unknown. First sites: clientscripts\\_load.csc(168), clientscripts\\_load.csc(177). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setextracamentity",
+    "description": "Observed in the bo1 shipped script corpus (2 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 2 call(s) across 1 bo1 script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_cameraspike.csc(152), clientscripts\\mp\\_cameraspike.csc(161). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "AddFriendlyScrambler",
+    "description": "Adds new friendly scrambler to the compass.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "x",
+            "description": "X coord (float).",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "y",
+            "description": "Y coord (float).",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          },
+          {
+            "name": "handle",
+            "description": "will be used to remove the scrambler (integer).",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player AddFriendlyScrambler( scrambler.origin[0], scrambler.origin[1], scrambler.handle )",
+    "confidence": "high"
+  },
+  {
+    "name": "SwitchToServerVolumetricFog",
+    "description": "Switch to the server volumetric fog.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "SetLocalRadarEnabled",
+    "description": "Sets whether a client's local radar is enabled.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Client number to set local radar on.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "enabled",
+            "description": "0 if disabled, 1 if enabled.",
+            "mandatory": true,
+            "type": {
+              "dataType": "bool",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetLocalRadarEnabled( localClientNum, 1 )",
+    "confidence": "high"
+  },
+  {
+    "name": "SetStunned",
+    "description": "Puts the vehicle or takes the vehicle out of stun mode.  Only works for nitrous vehicles.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "stunned",
+            "description": "True/false stun state.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "vehicle SetStunned( 0, true )",
+    "confidence": "high"
+  },
+  {
+    "name": "showscores",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_zombietron.csc(186). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "ForceDelete",
+    "description": "Forces Removal of a  entity. Does not wait till next snapshot to remove it.  Will cause crash if called on animated entity.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "thing forcedelete()",
+    "confidence": "high"
+  },
+  {
+    "name": "GetTotalAmmo",
+    "description": "Returns the total amount of ammo the client has for the currently equipped weapon.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Client number of the player.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "weaponName",
+            "description": "Name of the desired weapon to check.",
+            "mandatory": true
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "ammoCount = GetTotalAmmo( localClientNum, \"ak47_mp\" )",
+    "confidence": "medium"
+  },
+  {
+    "name": "HasAnimTree",
+    "description": "Returns true if the entity has an anim tree.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "entity",
+          "description": "The entity to check.",
+          "type": {
+            "dataType": "entity",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false
+          }
+        },
+        "parameters": [],
+        "returns": {
+          "name": "hasAnimTree",
+          "description": "Whether the entity has an anim tree.",
+          "type": {
+            "dataType": "bool",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false,
+            "unionOf": null
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "self HasAnimTree()"
+  },
+  {
+    "name": "GetLocalGunnerAngles",
+    "description": "Returns the angles of the specified gunner, local to the vehicle itself.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "vehicle",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "gunnerIndex",
+            "description": "The index of the gunner seat.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "vector",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "localAngles = self GetLocalGunnerAngles( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "SwitchToClientVolumetricFog",
+    "description": "Switch to the client volumetric fog.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "IsInHelicopter",
+    "description": "Returns true if the client is in a helicopter.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Client number to check.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if( IsInHelicopter( 0 ) )",
+    "confidence": "high"
+  },
+  {
+    "name": "RemoveAllFriendlyScramblers",
+    "description": "removes all friendly scramblers.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player RemoveAllFriendlyScramblers( )",
+    "confidence": "high"
+  },
+  {
+    "name": "SetFlagAsAway",
+    "description": "Sets a flag as away/home.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "flag",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Local client number.",
+            "mandatory": true
+          },
+          {
+            "name": "team",
+            "description": "The team identifier.",
+            "mandatory": true
+          },
+          {
+            "name": "away",
+            "description": "1 sets away, 0 sets home.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "flag SetFlagAsAway( localClientNum, 1 )",
+    "confidence": "medium"
+  },
+  {
+    "name": "setextracamorigin",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_cameraspike.csc(165). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "IsCameraSpikeToggled",
+    "description": "Returns 1 if the camera spike is toggled to be active, 0 otherwise.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Client number of the camera spike owner.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "if ( IsCameraSpikeToggled( 0 ) )",
+    "confidence": "high"
+  },
+  {
+    "name": "setextracamactive",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_cameraspike.csc(73). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "isburning",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 0, access mp. It is called on a target. First sites: clientscripts\\mp\\_callbacks.csc(351). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetLocalRadarPosition",
+    "description": "Sets the position of a client's local radar.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "Client number to set local radar position on.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "position",
+            "description": "New position of the local radar.",
+            "mandatory": true,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetLocalRadarPosition( localClientNum, self.origin )",
+    "confidence": "high"
+  },
+  {
+    "name": "setextracamangles",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_cameraspike.csc(166). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetFriendlyScramblerAmount",
+    "description": "Sets the amount alpha of the friendly scrambler applied.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "float",
+            "description": "Between 0.0 and 1.0.",
+            "mandatory": true,
+            "type": {
+              "dataType": "number",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player SetFriendlyScramblerAmount( 1.0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "SetNearestEnemyScrambler",
+    "description": "Set the nearest enemy scrambler.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": [
+          {
+            "name": "cent",
+            "description": "scrambler centity.",
+            "mandatory": true
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player AddEnemyScrambler( scrambler )",
+    "confidence": "medium"
+  },
+  {
+    "name": "ClearNearestEnemyScrambler",
+    "description": "clears closest enemy scrambler from the compass.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "player ClearNearestEnemyScrambler( )",
+    "confidence": "high"
+  },
+  {
+    "name": "IsPc",
+    "description": "Gets whether the game platform is on PC.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [],
+        "returns": {
+          "name": "isPc",
+          "description": "Whether the game is being played on PC.",
+          "type": {
+            "dataType": "bool",
+            "instanceType": null,
+            "subType": null,
+            "isArray": false,
+            "unionOf": null
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "verified"
+    ],
+    "example": "// Always true, because we're modders\ninPc = IsPc();",
+    "verifiedInRevision": null,
+    "remarks": null
+  },
+  {
+    "name": "IsADS",
+    "description": "Returns true if this local client is in ADS, false otherwise.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "localClientNum",
+            "description": "The local client number.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "bool",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "IsADS( 0 )",
+    "confidence": "high"
+  },
+  {
+    "name": "UseAlternateAimParams",
+    "description": "Forces the local player to use alternate values for aim assist. Only works in zombie/campaign mode. Can only be called on players.",
+    "overloads": [
+      {
+        "calledOn": {
+          "name": "player",
+          "description": null
+        },
+        "parameters": []
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "self UseAlternateAimParams( )",
+    "confidence": "high"
+  },
+  {
+    "name": "updatedvarsfromprofile",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_utility.csc(1489). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "LinkToCamera",
+    "description": "Links an entity directly to the camera.  Good for scripted player arms.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "linkType",
+            "description": ", 0 - pitch only, 1 - yaw only, 2 - roll only, 3 - swimming, 4 - full, 5 - 3d compass.  Full is the default if not specified.\".",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          },
+          {
+            "name": "offset",
+            "description": "Vector of the offset.",
+            "mandatory": false,
+            "type": {
+              "dataType": "vector",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "swimming_arms LinkToCamera()",
+    "confidence": "high"
+  },
+  {
+    "name": "GetKnownLength",
+    "description": "Get the known length of the sound.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "name": "playbackId",
+            "description": "The sound id.",
+            "mandatory": true,
+            "type": {
+              "dataType": "int",
+              "isArray": false
+            }
+          }
+        ],
+        "returns": {
+          "name": null,
+          "description": null,
+          "type": {
+            "dataType": "int",
+            "isArray": false
+          },
+          "void": false
+        }
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "length = GetKnownLength( level.mySnd )",
+    "confidence": "high"
+  },
+  {
+    "name": "set_filter_pass_quads",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 3; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 3, access unknown. It is called on a target. First sites: clientscripts\\_filter.csc(455). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "getlocalclientmaxhealth",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_audio.csc(501). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "clearphysicsgravity",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 0; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 0, access unknown. It is called on a target. First sites: clientscripts\\zombie_moon_gravity.csc(27). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "setphysicsgravity",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 1, access unknown. It is called on a target. First sites: clientscripts\\zombie_moon_gravity.csc(22). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "SetDynEntEnabled",
+    "description": "Set this dyn ent to enabled or disabled.  Disabled stops the physics and hides the dyn ent.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {},
+          {
+            "name": "enabled",
+            "description": "1 if dynent is enabled, 0 otherwise.",
+            "mandatory": false,
+            "type": {
+              "dataType": "bool",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "SetDynEntEnabled( brick, 1 )",
+    "confidence": "medium"
+  },
+  {
+    "name": "Getdynentarray",
+    "description": "Get a dynent array with the specified targetname.",
+    "overloads": [
+      {
+        "calledOn": null,
+        "parameters": [
+          {
+            "type": {
+              "dataType": "string",
+              "isArray": false
+            }
+          }
+        ]
+      }
+    ],
+    "flags": [
+      "processed"
+    ],
+    "example": "twigs = getdynentarray(\"twig\")",
+    "confidence": "medium"
+  },
+  {
+    "name": "getvehiclehealth",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 0, access mp. It is called on a target. First sites: clientscripts\\mp\\_vehicle.csc(200). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "edisable_filter_tacticalmask",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 2; access mp); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 2, access mp. First sites: clientscripts\\mp\\_tacticalmask.csc(28). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "hastacticalmaskoverlay",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 0; access mp; called as a method); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 0, access mp. It is called on a target. First sites: clientscripts\\mp\\_tacticalmask.csc(18). The name is known to exist; its signature remains undocumented."
+    ]
+  },
+  {
+    "name": "hidescores",
+    "description": "Observed in the bo1 shipped script corpus (1 calls across 1 files; argument counts 1; access unknown); no documented CoD4 or Black Ops III signature was available.",
+    "overloads": [],
+    "flags": [
+      "aiGenerated"
+    ],
+    "remarks": [
+      "Empirical builtin: 1 call(s) across 1 bo1 script file(s), observed argument counts 1, access unknown. First sites: clientscripts\\_zombietron.csc(190). The name is known to exist; its signature remains undocumented."
+    ]
+  }
+]

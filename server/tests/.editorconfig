@@ -1,0 +1,5 @@
+# Test projects: no ConfigureAwait requirement (xUnit has no SynchronizationContext),
+# and fixture-heavy test code may relax a few style rules the product code enforces.
+
+[*.cs]
+dotnet_diagnostic.CA2007.severity = none

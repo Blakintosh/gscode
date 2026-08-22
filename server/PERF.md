@@ -303,13 +303,16 @@ numbers directly:
   run self-identifying as cold or warm.
 - `Memory after indexing:` — a one-shot breakdown at the indexing → serving transition (below).
   **Verbose only.**
-- `Server memory: N MB` — the working set, sampled every 3 s but logged only when it moves by
-  >= 1 MB, and only AFTER indexing completes (so it never spams while memory is climbing).
-  **Verbose only.**
 
-Both are gated by the log level rather than an environment variable, so `gscode.serverLogLevel =
-verbose` is all it takes. The same sample feeds the status-bar tooltip, which shows the working
-set without any log level at all — usually enough, and the reason the log lines can be quiet by
+The steady-state working set is **not** logged at all. `ServerStatusNotifier` samples it every 3 s
+and pushes a `gscode/serverStatus` notification when it moves by >= 1 MB, and only AFTER indexing
+completes (so it never spams while memory is climbing). The status bar is the readout; there is no
+line to grep for. This section described a `Server memory: N MB` log line for some time, and no
+such line has ever been written.
+
+The breakdown is gated by the log level rather than an environment variable, so
+`gscode.serverLogLevel = verbose` is all it takes. The status-bar tooltip shows the working set
+without any log level at all — usually enough, and the reason the log lines can be quiet by
 default.
 
 ### Reading the memory breakdown
@@ -355,7 +358,7 @@ of scripts allocate their token arrays straight onto a heap that is never compac
 default. Nineteen gen2 collections still left 183 MB fragmented, because ordinary collections
 reclaim LOH memory without moving anything.
 
-**Fix in place:** `CompactIfFragmented` in `Program.cs` runs one `CompactOnce` gen2 collect at
+**Fix in place:** `Compact` in `Program.cs` runs one `CompactOnce` gen2 collect at
 the indexing → serving transition, gated on measured fragmentation (32 MB) so a warm start
 skips the pause. The report is logged again afterwards as "Memory after compaction", so any
 run shows its own before/after. v1 reached the same conclusion in `cfccd26`, "Force aggressive
@@ -401,8 +404,8 @@ allocation-shape changes, so a live set that moves means something else changed.
 
 ### The compaction is unconditional, and the fragmentation gate was wrong
 
-`CompactIfFragmented` used to skip the post-index compaction below 32 MB of measured
-fragmentation. Once (3) took fragmentation to roughly zero, that gate meant the compaction
+`Compact` — then named `CompactIfFragmented` — used to skip the post-index compaction below 32 MB
+of measured fragmentation. Once (3) took fragmentation to roughly zero, that gate meant the compaction
 **never ran** — and that turned out to cost 446 MB.
 
 Measured on bo1, cache attached, immediately after indexing:
@@ -525,8 +528,8 @@ in-process, while the server indexes cold at `ProcessorCount - 1`:
    packaged extension).
 3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and
    read the "indexing complete" line each time.
-4. Read the steady-state "Server memory" line once the process settles — or just hover the status
-   bar, which shows the same number live.
+4. For the steady-state working set, hover the status bar once the process settles. That is the only
+   readout — it is pushed as a notification, not logged.
 
 ## Results
 

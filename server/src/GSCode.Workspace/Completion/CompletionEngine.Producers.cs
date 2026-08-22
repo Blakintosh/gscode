@@ -661,7 +661,8 @@ public sealed partial class CompletionEngine
                 CompletionKind.Snippet,
                 "snippet",
                 snippet.Body,
-                snippet.Documentation));
+                snippet.Documentation,
+                RetriggerCompletion: snippet.Retrigger));
         }
 
         foreach ( string keyword in words )

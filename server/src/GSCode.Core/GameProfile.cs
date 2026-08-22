@@ -372,6 +372,25 @@ public sealed partial record GameProfile
     /// </summary>
     public bool HasPrecacheDirective { get; init; }
 
+    /// <summary>
+    /// Whether the dialect has a PREPROCESSOR: <c>#define</c> and the <c>#if</c>/<c>#elif</c>/
+    /// <c>#else</c>/<c>#endif</c> chain. BO3 only — it arrived with the compiler that also brought
+    /// <c>#insert</c>, which is why headers are a thing there and nowhere else.
+    ///
+    /// Kept separate from <see cref="HasHeaders"/> rather than derived from it. A header IS macros,
+    /// so the two coincide today, but they are different claims: a dialect could define macros
+    /// in-file without having anywhere to put them, and reading one flag as the other would make
+    /// that game's support a rewrite rather than a value.
+    ///
+    /// Measured, because the ALL_CAPS constants in the earlier games look convincingly like macros
+    /// and are not: across the four IW-line and pre-BO3 Treyarch corpora — 895, 1,977, 1,488 and
+    /// 3,125 shipped scripts — <c>#define</c> appears in exactly one file per game, always the same
+    /// <c>maps/mp/gametypes/_hud.gsc</c>, inside a <c>/* … */</c> block holding C source somebody
+    /// pasted in. The <c>#if</c> family appears in none of them at all. What those games have
+    /// instead is <see cref="HasFileScopeConstants"/>.
+    /// </summary>
+    public bool HasMacros { get; init; }
+
     // --- Install layout ---
     //
     // gscode.rawPath and gscode.modsPath say WHERE the game is, and nothing is read from the
@@ -545,7 +564,7 @@ public sealed partial record GameProfile
 
     /// <summary>
     /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. Five are SUPPORTED
-    /// with capabilities verified against real scripts (CoD4, WaW, MW2, BO1, BO3 — only BO3 is also
+    /// with capabilities established from real scripts (CoD4, WaW, MW2, BO1, BO3 — all five are also
     /// <see cref="Verified"/>); the rest are CORES (see <see cref="Core"/>) — nameable identities over
     /// the shared base dialect, left for a contributor to fill in. All live in
     /// <c>Profiles/SupportedProfiles.cs</c>.

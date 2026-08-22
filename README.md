@@ -18,9 +18,9 @@ their capabilities checked against their own shipped scripts:
 |---|---|
 | Call of Duty 4 (2007) | `#include` merge, `maps\x::foo()` path calls, `///` ScriptDoc |
 | World at War (2008) | as CoD4, plus client scripts (`.csc`) |
-| Modern Warfare 2 (2009) | adds `foreach`, `childthread`, `call`, file-scope constants |
+| Modern Warfare 2 (2009) | adds `foreach`, `childthread`, `call`, file-scope constants (`CONST = 4;` — not macros; no game before BO3 has a preprocessor) |
 | Black Ops (2010) | as WaW, plus `#"hash strings"` |
-| **Black Ops III (2015)** | `#using` namespaces, classes, `function`, `&` pointers, `/@ @/` ScriptDoc, headers |
+| **Black Ops III (2015)** | `#using` namespaces, classes, `function`, `&` pointers, `/@ @/` ScriptDoc, headers, the preprocessor (`#define`, `#if`) |
 
 Every other mainline game up to Black Ops 6 is present as a *core* — a nameable identity over the
 shared base dialect, with its specifics left for a contributor to fill in. See
@@ -128,12 +128,14 @@ The language server requires the .NET 10 Runtime, available at
 ## Building
 
 ```
-cd server && dotnet build GSCode.slnx && dotnet test --filter "Category!=Corpus"
+cd server && dotnet build GSCode.slnx && dotnet test --filter "Category!=Corpus&Category!=Perf"
 cd client && npm ci && npm run compile
 ```
 
-Warnings are errors. The corpus tests are excluded above because they read real game installs
-through `GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}`; without those set they silently sweep nothing.
+Warnings are errors. Two categories are excluded above, and both for the same reason: the corpus
+sweep reads real game installs through `GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}` and, without those
+set, silently sweeps nothing; the perf sweep needs the same installs and makes a second pass over
+every script. This is the filter CI uses.
 [server/ARCHITECTURE.md](server/ARCHITECTURE.md) is the map of the server, and each project carries a
 `FOLDER.md` describing its own contents.
 
@@ -142,7 +144,7 @@ through `GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}`; without those set they silently 
 GSCode is open-source software licenced under the GNU General Public License v3.0.
 
 ```
-GSCode - Black Ops III GSC Language Extension
+GSCode - Call of Duty GSC Language Extension
 Copyright (C) 2026 Blakintosh
 
 This program is free software: you can redistribute it and/or modify

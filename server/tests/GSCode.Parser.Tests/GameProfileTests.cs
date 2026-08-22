@@ -186,6 +186,33 @@ public class GameProfileTests
     }
 
     [Fact]
+    public void OnlyBlackOps3HasAPreprocessor()
+    {
+        // Recorded as a profile invariant rather than left to the completion tests, because the
+        // claim is about the LANGUAGE and two layers read it — GscKeywords for what is offered, and
+        // the Preprocessor for gscode-2016. Measured over the shipped scripts: #define appears in
+        // one file per pre-BO3 game, always the same commented-out block of C in _hud.gsc, and the
+        // #if family in none of the four.
+        Assert.Equal(
+            new[] { "bo3" },
+            GameProfile.All.Where(static profile => profile.HasMacros).Select(static profile => profile.ShortName).ToArray());
+    }
+
+    [Fact]
+    public void MacrosAndHeadersAreSeparateClaimsThatHappenToAgree()
+    {
+        // A header IS macros, so the two coincide today and the flag could look derivable. It is
+        // not: a dialect could define macros in-file with nowhere to put them, and collapsing the
+        // two would make that game's support a rewrite rather than a value. Same shape as the
+        // ImportStyle/ResolvesByNamespace pair above — recorded so the day they diverge is a
+        // deliberate change to a profile and not a silent drift.
+        foreach ( GameProfile profile in GameProfile.All )
+        {
+            Assert.Equal(profile.HasHeaders, profile.HasMacros);
+        }
+    }
+
+    [Fact]
     public void CoresMatchTheBaseDialect()
     {
         // A core sets no capabilities: it is the base IW-style shape (base keywords, #include merge,

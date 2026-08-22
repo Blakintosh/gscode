@@ -19,8 +19,21 @@ public sealed class Preprocessor
     private readonly IInsertProvider _insertProvider;
     private readonly NameTable _names;
 
-    /// <summary>Only for the header-extension rule; everything else here is dialect-independent.</summary>
+    /// <summary>
+    /// For the header-extension rule and the no-preprocessor rule (<see cref="ReportIfNoPreprocessor"/>).
+    /// Everything else here is dialect-independent, which is the point: the walk is one algorithm and
+    /// only the two questions that genuinely differ by game are asked of the profile.
+    /// </summary>
     private readonly GameProfile _profile;
+
+    /// <summary>
+    /// Whether <see cref="GscDiagnosticCode.MacrosNotInDialect"/> has already been raised for this
+    /// run. The mistake is a property of the FILE — someone is writing BO3 syntax against an earlier
+    /// game, or has the wrong game selected — so one report says everything a second would, and a
+    /// file of forty <c>#define</c>s should not produce forty Errors. Same reasoning as
+    /// <c>UsingNotFound</c>'s first-site reporting.
+    /// </summary>
+    private bool _reportedNoPreprocessor;
 
     private readonly MacroTable _macros = new();
 
@@ -156,18 +169,31 @@ public sealed class Preprocessor
             switch ( token.Kind )
             {
                 case TokenKind.DefineDirective:
+                    ReportIfNoPreprocessor(frame, token);
                     index = ParseDefine(frame, index);
                     continue;
                 case TokenKind.InsertDirective:
                     index = HandleInsert(frame, index, sink);
                     continue;
                 case TokenKind.IfDirective:
+                    ReportIfNoPreprocessor(frame, token);
                     index = HandleConditionalChain(frame, index, endExclusive, sink);
                     continue;
                 case TokenKind.ElifDirective:
                 case TokenKind.ElseDirective:
                 case TokenKind.EndifDirective:
-                    AddDiagnostic(frame, token.Range, GscDiagnosticCode.UnexpectedConditionalDirective, KindText(frame, token));
+                    // Only ORPHANS reach here — a chain opened by #if consumes its own branches.
+                    // Where the dialect has no preprocessor at all, "unexpected" is true but beside
+                    // the point, so the dialect answer replaces it rather than joining it.
+                    if ( _profile.HasMacros )
+                    {
+                        AddDiagnostic(frame, token.Range, GscDiagnosticCode.UnexpectedConditionalDirective, KindText(frame, token));
+                    }
+                    else
+                    {
+                        ReportIfNoPreprocessor(frame, token);
+                    }
+
                     index = SkipToEndOfLine(frame, index);
                     continue;
                 default:
@@ -1102,6 +1128,32 @@ public sealed class Preprocessor
     private string KindText(FileFrame frame, Token token)
     {
         return TokenFacts.GetStaticText(token.Kind) ?? token.GetText(frame.Text).ToString();
+    }
+
+    /// <summary>
+    /// Reports a preprocessor directive written against a dialect that has none, once per run.
+    ///
+    /// The caller then goes on to PROCESS it anyway. That is deliberate and is the whole design of
+    /// this rule: the reading most likely to be wrong is a custom compiler that does accept macros,
+    /// and under reporting-and-expanding the answer to being wrong is to suppress 2016 and keep
+    /// working IntelliSense. Reporting-and-skipping would leave a suppressed file with its macros
+    /// quietly unexpanded — every name they define unresolved, and nothing on screen to connect
+    /// that to the suppression.
+    /// </summary>
+    private void ReportIfNoPreprocessor(FileFrame frame, Token directive)
+    {
+        if ( _profile.HasMacros || _reportedNoPreprocessor )
+        {
+            return;
+        }
+
+        _reportedNoPreprocessor = true;
+        AddDiagnostic(
+            frame,
+            directive.Range,
+            GscDiagnosticCode.MacrosNotInDialect,
+            KindText(frame, directive),
+            _profile.DisplayName);
     }
 
     /// <summary>Index of the next non-trivia token at or after <paramref name="start"/>, or -1.</summary>

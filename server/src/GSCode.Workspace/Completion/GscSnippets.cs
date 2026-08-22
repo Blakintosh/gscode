@@ -33,12 +33,20 @@ public static class GscSnippets
     /// word it writes can never disagree about which games have it. Empty when the gate is not a
     /// word at all — see <see cref="ScriptDoc"/>.
     /// </param>
+    /// <param name="Retrigger">
+    /// Whether accepting this snippet should reopen the suggestion list, because the tab stop it
+    /// leaves the cursor on has a CLOSED VOCABULARY the engine can answer for. Only `precache` sets
+    /// it: its first argument is an asset type, and the list of those is per-world, so carrying the
+    /// names in the body here would be a second copy of <c>PrecacheAssetTypes</c> that the .gsc/.csc
+    /// split would then have to be applied to twice.
+    /// </param>
     public sealed record Entry(
         string Label,
         string Body,
         string Documentation,
         string GatedOn,
-        bool InsideFunction);
+        bool InsideFunction,
+        bool Retrigger = false);
 
     /// <summary>
     /// Bodies are the ones the client contributed, unchanged: they were copied from the shape the
@@ -107,6 +115,20 @@ public static class GscSnippets
             "Merge a file's functions into this scope.",
             "#include",
             InsideFunction: false),
+
+        // The client contributed this one until it became the last snippet file that broke the rule
+        // the other move established: #precache is BO3's alone (HasPrecacheDirective), and a
+        // contributed snippet cannot be withdrawn per game, so a CoD4 file was offered a directive
+        // its game does not have. The body is the same one DirectiveSnippet writes for a typed '#',
+        // and Retrigger hands the asset type to the same completion arm — so the two routes to a
+        // #precache produce identical text and identical vocabulary.
+        new Entry(
+            "precache",
+            "#precache( \"$1\", \"${2:asset}\" );",
+            "Precache an asset at load.",
+            "#precache",
+            InsideFunction: false,
+            Retrigger: true),
     ];
 
     /// <summary>

@@ -127,9 +127,17 @@ public static class Keywords
     /// <summary>
     /// Matches a directive, but only those the game has: <c>#include</c> is the Infinity Ward import
     /// and <c>#using</c> / <c>#namespace</c> / <c>#insert</c> / <c>#precache</c> are BO3, so a
-    /// directive from the wrong family is left unmatched (and reported as unknown). The shared ones
-    /// — <c>#define</c>, animtree, and the <c>#if</c> family — are never gated. BO3 has all of its
-    /// own, so its lexing is unchanged.
+    /// directive from the wrong family is left unmatched (and reported as unknown). BO3 has all of
+    /// its own, so its lexing is unchanged.
+    ///
+    /// The animtree pair is ungated because it genuinely is universal. <c>#define</c> and the
+    /// <c>#if</c> family are ungated for the opposite reason — they are BO3's alone, and are lexed
+    /// anyway so the PREPROCESSOR can answer for them. Unmatching them here would report
+    /// <c>1004 UnknownDirective</c>, which names the symptom, and would stop expansion, which is the
+    /// outcome <see cref="GSCode.Core.Diagnostics.GscDiagnosticCode.MacrosNotInDialect"/> exists to avoid: someone on a
+    /// custom compiler that does accept macros can suppress 2016 and keep working IntelliSense,
+    /// where an unlexed <c>#define</c> would leave every name it defines unresolved with nothing
+    /// connecting that to the suppression.
     /// </summary>
     public static bool TryMatchDirective(ReadOnlySpan<char> word, GameProfile profile, out TokenKind kind)
     {
@@ -151,7 +159,9 @@ public static class Keywords
             case TokenKind.PrecacheDirective:
                 return profile.HasPrecacheDirective;
             default:
-                // #define, #using_animtree, #animtree, and the #if family exist across the lineage.
+                // The animtree pair exists across the lineage; #define and the #if family are lexed
+                // everywhere on purpose, so the preprocessor reports them rather than the lexer. See
+                // the summary above.
                 return true;
         }
     }

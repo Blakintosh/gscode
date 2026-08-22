@@ -21,11 +21,14 @@ LSP types anywhere.
 ## Extraction/PragmaDirectives.cs
 
 - `PragmaTarget` / `PragmaScope` / `PragmaDirective` — the parsed target, reach, and source line
-  of an in-comment `#pragma warning disable|restore` directive.
+  of an in-comment `#pragma disable|restore` directive.
 - `static PragmaDirectives` — scans line, block, and documentation comments; accepts one
   diagnostic code, `gscode-<code>`, `all`, or `format`; and answers whether a diagnostic or the
   formatter is suppressed at a given line. State is source-ordered, so a later directive replaces
   the earlier state.
+- Suppression is keyed on the CODE and never on a severity, so an Error is as suppressible as a
+  Hint — wider than the C# pragma the spelling comes from, and why `warning` is not part of it.
+  The C# form is still scanned as an undocumented alias, as is 1.5's `// gscode ignore`.
 - 1.5's `// gscode ignore` / `/* gsc ignore */` is scanned as an alias, not a parallel mechanism:
   an `AllCodes` disable with `PragmaScope.OneLine` over the line below the comment's END line. A
   one-line directive neither reads nor writes the running disable/restore state.
@@ -137,7 +140,11 @@ LSP types anywhere.
   between them every cycle in the grammar — and once per pass of the `ParseBinary` and
   `ParsePostfixChain` loops, because `1 + 1 + …` and `a.b.c…` cost the parser nothing but
   build a tree every walker then recurses down. The cap is therefore on TREE DEPTH, which is
-  what makes SymbolExtractor, FoldingRegions, AstPrinter and AstSearch safe by construction.
+  what makes SymbolExtractor, FoldingRegions and AstSearch safe by construction. AstPrinter is
+  the exception and carries its own lower ceiling (`MaxPrintDepth = 128`, truncating to `(...)`):
+  a bound in tree levels only transfers to a walker whose frames are no fatter than the ones it
+  was measured against, and that one's are — at 512 it cleared a 1 MB stack in Release and died
+  at 242 levels in Debug.
 - Declarations: #using path joining (+ using-after-declaration diagnostic), #namespace,
   #precache (raw args for P4 validation), #using_animtree, functions (private/autoexec,
   defaults, &byRef, ... varargs), classes (single inheritance, var members, ctor/dtor,
@@ -175,7 +182,11 @@ LSP types anywhere.
 ## Syntax/AstPrinter.cs
 
 - `static class AstPrinter.Print(node)` — deterministic S-expression rendering; the
-  golden format for parser tests and a debugging aid.
+  golden format for parser tests and a debugging aid. Not test-only: `CaseLabelLint` prints a
+  case label to compare it, and `SymbolExtractor` prints a parameter's default value, so its
+  recursion runs inside the server on whatever the parser produced.
+- Descends at most `MaxPrintDepth = 128` levels and renders anything deeper as `(...)`. See the
+  nesting note above for why the parser's own cap is not enough here.
 
 ## Preprocessing/PToken.cs
 
@@ -230,6 +241,11 @@ LSP types anywhere.
 
 - `sealed class Preprocessor` — `static Process(rootFilePath, tokens, text, insertProvider, names)`.
   One linear pass per file; inserts recurse (depth cap 16 + active-path cycle set).
+  - The dialect is asked exactly twice, and everything else here is game-independent: the
+    header-extension rule on `#insert`, and `ReportIfNoPreprocessor`, which raises `2016
+    MacrosNotInDialect` when a `#define` or an `#if` member appears in a game without
+    `GameProfile.HasMacros` — everything before BO3. Once per file, and the directive is then
+    processed anyway so suppressing the code leaves a working file; the reasoning is on the code.
   - `#define`: keyword-or-identifier names; parameter list only when `(` is ADJACENT to
     the name; `\` continuation must immediately precede the line break (else diagnostic,
     backslash excluded); trailing comment captured as documentation.

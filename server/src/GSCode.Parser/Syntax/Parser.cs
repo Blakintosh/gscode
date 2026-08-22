@@ -33,8 +33,13 @@ public sealed partial class Parser
     /// left-nested chain. The chain is the reason this counts TREE levels and not parser frames:
     /// the parser builds it with a loop and costs nothing, and it is
     /// <c>SymbolExtractor.WalkExpression</c> that then recurses one frame per link. Both shapes
-    /// work out at ~0.7 KB of stack per entry, so 512 reaches about a third of the way to the cliff
-    /// and every walker over the resulting tree inherits the same bound.
+    /// work out at ~0.7 KB of stack per entry, so 512 reaches about a third of the way to the cliff.
+    ///
+    /// A walker over the resulting tree inherits that bound only if its frames are no fatter than
+    /// the ones measured here, and one is not: <see cref="AstPrinter"/> holds a switch over every
+    /// node shape, and at this cap it clears a 1 MB stack in Release but not in Debug. It carries
+    /// its own, lower ceiling for that reason — see <c>AstPrinter.MaxPrintDepth</c>. Anything else
+    /// that recurses per level and is reachable from a lint should be measured, not assumed.
     ///
     /// Nothing hand-written comes near it: 512 entries is 170 nested parentheses, or 512 terms in
     /// one expression. What it prevents is a StackOverflowException, the one .NET failure that

@@ -78,14 +78,22 @@ internal static class PreprocessTestHelper
     /// <summary>The root file's stem — the namespace a file that declares none falls back to.</summary>
     public const string RootStem = "test";
 
+    /// <param name="profile">
+    /// The dialect. Defaults to the active profile, which is BO3 — the only game with a
+    /// preprocessor, and so the only one under which most of these tests mean anything. Pass one
+    /// explicitly to assert what an earlier game does with the same source.
+    /// </param>
     public static PreprocessResult Run(
-        string source, IInsertProvider? insertProvider = null, IHeaderMacroCache? headerCache = null)
+        string source,
+        IInsertProvider? insertProvider = null,
+        IHeaderMacroCache? headerCache = null,
+        GameProfile? profile = null)
     {
         SourceText text = SourceText.From(source);
-        LexResult lexed = Lexer.Lex(text);
+        LexResult lexed = Lexer.Lex(text, profile);
         return Preprocessor.Process(
             RootPath, lexed.Tokens, text, insertProvider ?? NullInsertProvider.Instance, new NameTable(),
-            headerCache: headerCache);
+            profile: profile, headerCache: headerCache);
     }
 
     /// <summary>Kinds of the parse stream, excluding the trailing EndOfFile.</summary>

@@ -5,8 +5,8 @@ resolution, background indexing, the SQLite cache, and the bundled game data. LS
 
 Everything below is built. The folders map to the layers: `Resolution/` turns a script path into a
 file, `Documents/` holds open-buffer state, `Database/` and `Indexing/` own the record store,
-`Api/` the bundled game data, `Analysis/` the lints, `Completion/` and `Typing/` the information
-surfaces.
+`Cache/` persists it to SQLite between sessions, `Api/` the bundled game data, `Analysis/` the
+lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Database/ScriptRecord.cs
 
@@ -118,13 +118,18 @@ surfaces.
 ## Completion/GscSnippets.cs
 
 - The snippets whose construct only SOME dialects have — `foreach`, `class`, `new`, the BO3
-  function modifiers, every import directive, and the two ScriptDoc forms. They cannot be
-  contributed by the extension: a contributed snippet is registered per language id, one id covers
-  five games, and VS Code merges them in unconditionally with no way to withdraw one. That is how
-  CoD4 came to be offered a `foreach` loop it cannot run.
+  function modifiers, every import directive, `#precache`, and the two ScriptDoc forms. They cannot
+  be contributed by the extension: a contributed snippet is registered per language id, one id
+  covers five games, and VS Code merges them in unconditionally with no way to withdraw one. That is
+  how CoD4 came to be offered a `foreach` loop it cannot run.
 - Each entry is gated on a keyword or directive passed to `GscKeywords.IsAvailable`, so a snippet
   and the word it writes cannot disagree about which games have it. The ScriptDoc pair is the
   exception, gated on `ScriptDocStyle` because neither form is a word.
+- `Entry.Retrigger` reopens the suggestion list after a snippet is accepted, and only `precache`
+  sets it. Its first argument is an asset type, the list of those is per-world, and carrying the
+  names in the body would be a second copy of `PrecacheAssetTypes` with the `.gsc`/`.csc` split
+  applied to it twice — so the body leaves a tab stop inside the quotes and `AssetTypeCompletions`
+  answers, which is the same arm a typed `#` retriggers into.
 - The UNIVERSAL snippets stay in `client/snippets/common.json`, where they cost nothing and work
   before the server has started. The function declaration is neither: `FunctionDeclarationSnippet`
   builds it per dialect, since the merge games declare with a bare name.

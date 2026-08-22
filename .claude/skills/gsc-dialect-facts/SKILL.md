@@ -50,9 +50,32 @@ collapsed_section_shakes()
 ```
 
 Readable from every function in the file. Modelled as `FileScopeConstantNode`, gated on
-`GameProfile.HasFileScopeConstants`. **These are not macros** — CoD4, WaW and MW2 have no `#define`
-in GSC — and their ALL_CAPS naming makes them look convincingly like one. A per-function rule that
-ignores them reported 755 in MW2's scripts alone.
+`GameProfile.HasFileScopeConstants`. **These are not macros** — and their ALL_CAPS naming makes them
+look convincingly like one. A per-function rule that ignores them reported 755 in MW2's scripts alone.
+
+## No game before BO3 has a preprocessor
+
+`#define` and the `#if`/`#elif`/`#else`/`#endif` chain arrived with the compiler that also brought
+`#insert`. Gated on `GameProfile.HasMacros`, which only BO3 sets; writing one against an earlier
+game is `gscode-2016 MacrosNotInDialect`.
+
+Measured over the shipped scripts, because the file-scope constants above make the opposite easy to
+believe: `#define` appears in exactly one file per pre-BO3 game — always
+`maps/mp/gametypes/_hud.gsc`, inside a `/* */` block holding C source somebody pasted in — and the
+`#if` family in none of the four at all. BO3 has 369 and 4.
+
+The rule REPORTS and then expands anyway, and the lexer is deliberately left ungated so it can:
+skipping would model the game's compiler more faithfully but would punish the case this is most
+likely to be wrong about, a custom compiler that does accept macros. As it stands, suppressing 2016
+leaves a working file.
+
+## `#animtree` is an expression, not a file-scope directive
+
+`#using_animtree( "generic" );` declares the tree at file scope; `#animtree` NAMES it, and only ever
+as an argument — `self UseAnimTree( #animtree );`. Both exist in all five games. Across the five
+corpora `#animtree` appears in 415 files and **not once at the start of a line**, which is why it
+belongs in `GscKeywords.BodyDirectives` and not `TopLevelKeywords`. It was in the latter, and a
+line-anchored grep is what made it look unused everywhere — measure this one without `^`.
 
 ## Under `#include`, every same-named function shares one key
 

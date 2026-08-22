@@ -13,7 +13,7 @@
   </g>
   <g>
     <rect x="0.4" y="0.4" width="14.6" height="7.0" fill="#07080C" stroke="#27333F" stroke-width="0.8"/>
-    <text x="7.7" y="3.9" fill="#3ED1BD" font-family="IBM Plex Mono" font-size="3.4"
+    <text x="7.7" y="3.9" fill="#3ED1BD" font-family="Cascadia Code" font-size="3.4"
           letter-spacing="0.30" text-anchor="middle" dominant-baseline="central"
           dx="0.15">ALPHA</text>
   </g>

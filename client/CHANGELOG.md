@@ -4,7 +4,7 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
-## 2.0.0 - Unreleased
+## 2.0.0
 
 A complete ground-up rewrite of the language server and VS Code extension.
 

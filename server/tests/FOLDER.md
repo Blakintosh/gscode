@@ -230,6 +230,25 @@ line means "suppressed on this game" rather than "run twice".
   than gating on a count. It went 2,742 reports on CoD4 alone down to 17 across all 7,309 scripts
   as each dialect fact was learned, so a jump means a gap in the rule's exclusions.
 
+**Samples.** `SampleScriptTests` — the hand-written worked example per game per language world in
+`server/samples`, run through the whole diagnostic pipeline and checked against the `// expect`
+comments in the scripts themselves. Two halves: that every declared diagnostic is produced, and that
+NOTHING else is — the showcase files declare none, so a finding there is a false positive caught on
+code written to be correct. `EveryLanguageWorldTheGameHasIsSampled` reads `ScriptExtensions` off the
+profile, so a game that gains `.csc` fails until its showcase exists. Joins `GameProfileCollection`
+like the corpus classes; needs no game install, since each sample folder IS a raw root.
+`SampleExpectations` parses the comments, `SampleWorkspace` indexes and analyses one game.
+See `server/samples/FOLDER.md`.
+
+This suite is why `GSCode.Server.Tests` no longer runs its collections in parallel, and why
+`SampleWorkspace` puts `GameProfile.Active` back when it is done. It is the first class OUTSIDE
+`Corpus/` to move the active dialect, and three hundred classes here read that global without
+saying so: leaving it on CoD4 failed 132 of them in the formatter and the handlers, for reasons that
+looked like the thing under test. Serializing alone still left 121, since a class running after a
+sample run reads the leftover as happily as one running beside it — both halves are needed while a
+global decides what the parser and the lints do. The serialization costs about a second on 313
+tests, and nothing within a test: the corpus sweeps still parallelise their own file walk.
+
 **Formatting.** `GscFormatterTests` the formatter at large · `FormatMinimalEditsTests` minimal edits ·
 `StaleFormatEditTests` edits against a changed buffer · `UnbracedBodyFormattingTests`,
 `UnbracedBodyShapeTests` braceless bodies · `ElseIfChainTests` · `OperatorSpacingTests`,

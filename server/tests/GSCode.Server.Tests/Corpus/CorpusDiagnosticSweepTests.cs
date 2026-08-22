@@ -368,6 +368,33 @@ public class CorpusDiagnosticSweepTests
     }
 
     [Fact]
+    public async Task NoStockScriptWritesToAnEngineGlobal()
+    {
+        // 5035 is an Error, so the bar is zero across every corpus on the machine — not BO3 alone.
+        // The rule reads its names from the profile, which is exactly the part a sweep has to check:
+        // `world` is a global in BO3 and an ordinary local name in CoD4, and a rule that got that
+        // backwards would report working code in one game and nothing at all in the other.
+        List<Target> targets = Targets();
+        if ( targets.Count == 0 )
+        {
+            _output.WriteLine("SKIPPED: no corpus configured (see GSCODE_CORPUS_<GAME>).");
+            return;
+        }
+
+        List<Finding> reported = [];
+
+        foreach ( Target target in targets )
+        {
+            List<Finding> findings = await AsGameAsync(target.Profile, () => SweepAsync(target));
+
+            _output.WriteLine($"{target.Profile.ShortName}: {target.Scripts().Count} scripts swept");
+            reported.AddRange(findings.Where(f => f.Code == GscDiagnosticCode.CannotAssignToGlobalObject));
+        }
+
+        Assert.Empty(reported.Select(f => $"{Path.GetFileName(f.Path)}:{f.Line + 1}: {f.Message}"));
+    }
+
+    [Fact]
     public async Task NoStockCallIsReportedMissingAnInclude()
     {
         // The #include counterpart to NoNamespaceIsReportedUnimported, over every include game whose

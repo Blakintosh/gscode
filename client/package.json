@@ -1,7 +1,7 @@
 {
 	"name": "gscode",
 	"displayName": "GSCode",
-	"description": "IntelliSense for Call of Duty: Black Ops III's GSC & CSC languages.",
+	"description": "IntelliSense for Call of Duty's GSC, CSC and GSH languages, across five games.",
 	"icon": "icons/gscode.png",
 	"galleryBanner": {
 		"color": "#07080C",
@@ -9,15 +9,29 @@
 	},
 	"version": "2.0.0",
 	"publisher": "blakintosh",
+	"license": "GPL-3.0-or-later",
+	"homepage": "https://www.gscode.net",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/Blakintosh/gscode"
+	},
+	"bugs": {
+		"url": "https://github.com/Blakintosh/gscode/issues"
 	},
 	"engines": {
 		"vscode": "^1.85.0"
 	},
 	"categories": [
-		"Programming Languages"
+		"Programming Languages",
+		"Linters",
+		"Formatters"
+	],
+	"keywords": [
+		"gsc",
+		"csc",
+		"gsh",
+		"call of duty",
+		"black ops 3"
 	],
 	"activationEvents": [
 		"workspaceContains:**/*.gsc",
@@ -40,6 +54,17 @@
 			},
 			{
 				"language": "csc",
+				"scopes": {
+					"parameter.defaultLibrary": [
+						"variable.language"
+					],
+					"variable.defaultLibrary": [
+						"variable.language"
+					]
+				}
+			},
+			{
+				"language": "gsh",
 				"scopes": {
 					"parameter.defaultLibrary": [
 						"variable.language"
@@ -123,18 +148,6 @@
 			{
 				"language": "gsh",
 				"path": "./snippets/common.json"
-			},
-			{
-				"language": "gsc",
-				"path": "./snippets/precache-server.json"
-			},
-			{
-				"language": "csc",
-				"path": "./snippets/precache-client.json"
-			},
-			{
-				"language": "gsh",
-				"path": "./snippets/precache-client.json"
 			}
 		],
 		"commands": [

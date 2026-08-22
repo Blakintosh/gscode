@@ -6,8 +6,22 @@ src/**
 vsc-extension-quickstart.md
 **/tsconfig.json
 **/.eslintrc.json
+eslint.config.mjs
 **/*.map
 **/*.ts
 .env
+.env.example
 icons/src/**
 icons/build-icons.mjs
+
+# The published server. `dotnet publish -c Release` emits debug symbols and XML doc files beside
+# the assemblies; both are build output for us and dead weight in every install. The DLLs, the
+# bundled game data (api/object-field/radiant/stock-script files) and the runtime config are what
+# has to ship, so exclude by extension rather than by folder.
+service/**/*.pdb
+service/**/*.xml
+
+# Unused artwork. `icon` in package.json points at icons/gscode.png; the alpha and beta marks are
+# older ones kept in the repo, and a 2.0 install has no reason to carry them.
+icons/gscode-alpha.png
+icons/gscode-beta.png

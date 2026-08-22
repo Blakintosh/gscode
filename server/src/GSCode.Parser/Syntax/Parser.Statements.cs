@@ -426,18 +426,20 @@ public sealed partial class Parser
             }
 
             PToken groupStart = Current;
-            ImmutableArray<ExprNode?>.Builder labels = ImmutableArray.CreateBuilder<ExprNode?>();
+            ImmutableArray<CaseLabel>.Builder labels = ImmutableArray.CreateBuilder<CaseLabel>();
 
             // Consecutive labels stack onto one body (fallthrough grouping).
             while ( Kind == TokenKind.Case || Kind == TokenKind.Default )
             {
-                if ( Advance().Kind == TokenKind.Case )
+                PToken labelKeyword = Advance();
+
+                if ( labelKeyword.Kind == TokenKind.Case )
                 {
-                    labels.Add(ParseTernary());
+                    labels.Add(new CaseLabel(labelKeyword.RootRange, ParseTernary()));
                 }
                 else
                 {
-                    labels.Add(null);
+                    labels.Add(new CaseLabel(labelKeyword.RootRange, null));
                 }
 
                 Expect(TokenKind.Colon, ":");

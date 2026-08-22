@@ -139,28 +139,7 @@ public static class AssignmentAligner
 
     private static LineKind[] ClassifyLines(int lineCount, ImmutableArray<Token> tokens, string[] lines)
     {
-        // Bucket the significant tokens by their start line.
-        List<Token>[] byLine = new List<Token>[lineCount];
-        for ( int i = 0; i < lineCount; i++ )
-        {
-            byLine[i] = [];
-        }
-
-        foreach ( Token token in tokens )
-        {
-            // Whitespace and newlines are lexed as tokens; they carry no meaning for classifying a
-            // line, and keeping them would put the terminator behind a trailing Newline.
-            if ( token.Kind is TokenKind.EndOfFile or TokenKind.Whitespace or TokenKind.Newline )
-            {
-                continue;
-            }
-
-            int line = token.Range.Start.Line;
-            if ( line >= 0 && line < lineCount )
-            {
-                byLine[line].Add(token);
-            }
-        }
+        List<Token>[] byLine = LineFacts.BucketByLine(lineCount, tokens);
 
         LineKind[] kinds = new LineKind[lineCount];
         for ( int i = 0; i < lineCount; i++ )
@@ -176,17 +155,17 @@ public static class AssignmentAligner
         if ( lineTokens.Count == 0 )
         {
             // Blank, or a continuation line of a block comment: either way, breaks a run.
-            return new LineKind(lineText.Trim().Length == 0 ? LineRole.Other : LineRole.Other, "", 0, 0);
+            return new LineKind(LineRole.Other, "", 0, 0);
         }
 
         // A comment on its own line is transparent.
-        if ( lineTokens.All(static token => LineFacts.IsComment(token.Kind)) )
+        if ( LineFacts.AllComments(lineTokens) )
         {
             return new LineKind(LineRole.Comment, "", 0, 0);
         }
 
         // Drop a trailing line comment; `a = 1; // note` is still an assignment.
-        List<Token> code = [.. lineTokens.Where(static token => !LineFacts.IsComment(token.Kind))];
+        List<Token> code = LineFacts.CodeOnly(lineTokens);
         if ( code.Count < 3 || code[^1].Kind != TokenKind.Semicolon )
         {
             return new LineKind(LineRole.Other, "", 0, 0);

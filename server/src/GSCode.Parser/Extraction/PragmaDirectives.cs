@@ -43,23 +43,44 @@ public readonly record struct PragmaDirective(
 /// <summary>
 /// In-source pragmas, carried INSIDE COMMENTS.
 ///
-///     // #pragma warning disable 5014
+///     // #pragma disable 5014
 ///     doSomethingTheLintDoesNotUnderstand();
-///     // #pragma warning restore 5014
+///     // #pragma restore 5014
 ///
-///     // #pragma warning disable format
+///     // #pragma disable format
 ///     matrix = [ 1, 0, 0,
 ///                0, 1, 0 ];
-///     // #pragma warning restore format
+///     // #pragma restore format
 ///
 /// A comment is not a choice of style here but the only place they can live: GSC's linker reads
 /// the file itself, so anything outside a comment would have to be real syntax the language does
 /// not have, and every script carrying one would stop compiling.
 ///
-/// The spelling deliberately matches C#'s <c>#pragma warning disable</c> rather than inventing
-/// one. Anyone reaching for this already knows what it means, and the shape carries its own
-/// documentation — <c>disable</c> and <c>restore</c> say which way they go, which
-/// <c>on</c>/<c>off</c> does not once two of them are nested.
+/// <c>disable</c>/<c>restore</c> is C#'s pair and is kept for the reason it was chosen there: each
+/// word says which way it goes, which <c>on</c>/<c>off</c> stops doing once two of them are nested,
+/// and <c>enable</c> would claim something this cannot do — there is no diagnostic that is off by
+/// default and could be switched on.
+///
+/// <b>C#'s <c>warning</c> is NOT kept, because here it would be a lie.</b> Suppression is keyed on
+/// the CODE alone: <see cref="IsSuppressed"/> takes a code and a line and never sees a
+/// <see cref="DiagnosticSeverity"/>, and <c>WorkspaceLints.ApplyPragmas</c> runs it over the
+/// combined set — the file's own parse diagnostics as well as the lints. So every severity is
+/// suppressible, Errors and Hints alike, and every band with them: a 3xxx syntax error is turned
+/// off by its code the same way a 5xxx hint is. C# cannot suppress a compiler error at all, so
+/// borrowing its word would have imported the wrong expectation along with the familiarity.
+///
+/// The breadth is not a decision taken here — it follows from WHERE suppression is applied. One
+/// filter over one merged list cannot branch on a severity it is not given. If a band should ever
+/// become exempt, this is the summary that has to change with it.
+///
+/// The practical consequence, and the reason <c>all</c> carries a caution in the user
+/// documentation: a file whose parse errors are suppressed still fails to parse. Only the report
+/// goes away, so the features that need a good tree stay degraded with nothing on screen saying why.
+///
+/// <c>#pragma warning disable</c> is still SCANNED, undocumented, as an alias for the same thing.
+/// The word only ever cost a regex group, and it was the published spelling for the two weeks
+/// between the pragma landing and being renamed — long enough for files to exist, short enough that
+/// nothing outside this tree can carry one, which is why it is accepted rather than taught.
 ///
 /// <c>all</c> is accepted in place of a code, and codes may be written bare (<c>5014</c>) or
 /// prefixed the way the editor displays them (<c>gscode-5014</c>), because that is what is on
@@ -73,8 +94,12 @@ public readonly record struct PragmaDirective(
 /// </summary>
 public static class PragmaDirectives
 {
+    // `warning` is optional, and that one group is the whole of the compatibility with the earlier
+    // spelling. It is non-capturing because nothing downstream may branch on which form was
+    // written: the two mean exactly the same thing, and a difference the parser records is a
+    // difference somebody eventually acts on.
     private static readonly Regex s_pattern = new(
-        @"#pragma\s+warning\s+(?<action>disable|restore)\s+(?<target>[A-Za-z0-9\-]+)",
+        @"#pragma\s+(?:warning\s+)?(?<action>disable|restore)\s+(?<target>[A-Za-z0-9\-]+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>Every directive in the file, including the ignore alias, in source order.</summary>

@@ -27,7 +27,9 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 
 ## Symbols/ScriptLanguage.cs
 
-- `enum ScriptLanguage` — Gsc / Csc; picks which structurally-isolated store a file belongs to.
+- `enum ScriptLanguage` — Gsc / Csc / Gsh; picks which store a file belongs to. Gsc and Csc are the
+  two structurally-isolated worlds; Gsh is the shared header store, and is a live case wherever a
+  question has a per-world answer (`GameProfile.ExtensionFor`, `PrecacheAssetTypes.IsAvailableIn`).
 
 ## Symbols/SymbolKey.cs
 
@@ -70,6 +72,50 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 - `static class ScrTypes` — lattice helpers: `DisplayName` (lowercase name for hints/hovers),
   `IsKnown` (concrete and hint-worthy — excludes Unknown/Undefined), and `Join` (control-flow
   merge: equal survives, int+float widen to float, any other disagreement collapses to Unknown).
+
+## Symbols/ScrValue.cs
+
+The richer lattice underneath `ScrType`, for a future dialect-to-dialect transpiler. A lint may stay
+silent on Unknown; a rewriter must emit something for every expression, so it needs unions and it
+needs to know WHY a type is unknown.
+
+- `[Flags] enum ScrTypeSet : ulong` — the set of types a value may hold, as DISJOINT bits. The
+  reversal of v1.5's `ScrDataTypes`, which encoded coercions structurally (`Int = 1<<1 | Bool`) and
+  paid for it with a subset test that matched ints against bool, an `IsExactly` written to undo it,
+  and four rules suppressing wrong type names. Coercion is a relation in `ScrValues.IsAssignableTo`.
+  `Universe` is an explicit OR of the members, never `~0`.
+- `enum ScrImprecision` — why a value is not exact: an untyped parameter, a script function's return,
+  a library spelling the lattice cannot express, an array element, a macro expansion, a branch
+  disagreement. `None` with a single-bit set is the only state safe to rewrite blind.
+- `readonly record struct ScrConstant` / `Vec3` — a folded compile-time value. New here; v1.5 tracked
+  only `bool? BooleanValue` and folded nothing.
+- `readonly record struct ScrFunctionRef` — which function a pointer holds, namespace and name, in
+  the shape symbol keys use so a consumer can query the database without re-parsing a joined string.
+- `readonly record struct ScrValue` — types + constant + tri-state truthiness + entity kinds +
+  imprecision. `MustBe`/`MayBe` replace v1.5's single `Indeterminate` flag, which could say "do not
+  trust this" but not "it is one of exactly two things and one is unsafe" — the question array
+  pass-semantics turns on. `Union` never collapses; `ToScrType()` is the projection that keeps every
+  existing consumer unchanged. Structural equality with an agreeing order-independent hash, because
+  anything in a dataflow fixpoint needs it (v1.5's reference equality made worklists never converge).
+
+  Two fields carry a value's IDENTITY rather than its type, and neither survives the projection:
+  `InstanceClass` (the class of a `new Foo()`) and `FunctionTarget` (the function behind a `&foo`).
+  Both are dropped by `Union` when two branches disagree, and both take part in equality and the
+  hash. `DisplayName()` is the label surface — the class name, `hash` for a `#"str"`, and otherwise
+  `ToScrType().DisplayName()`; a caller JUDGING a type still asks `ToScrType`, which is what keeps
+  the typing lints comparing exactly what they always compared.
+- `static class ScrValues` — `IsAssignableTo`, `IsByReference(type, arraysByReference)` (the dialect
+  fork in one predicate), and `Describe` for rendering.
+
+## Symbols/ScrOperators.cs
+
+- `enum ScrBinaryOp` / `ScrUnaryOp` — operators as SEMANTICS, not `TokenKind`: that lives in
+  GSCode.Parser, and this table answers a question with no tokens in it.
+- `static class ScrOperators.Apply` — one table, one interpreter, replacing v1.5's 536 lines of
+  copy-pasted per-operator bodies. Vector rules are decided BEFORE the string-concat fallback (v1.5
+  typed `vector + float` as a string) and match on `MustBe`/`MayBe`, never exact set equality (v1.5's
+  rules stopped matching the moment a union flowed in). Folds constants; detects divide-by-zero from
+  the constant rather than from truthiness, which is what let `2 - 2` through and fired on `x / ""`.
 
 ## Text/Position.cs
 
@@ -168,4 +214,6 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   - `Begin(string scopeName)` / `End()` — open/close a scope on the current thread
     (thread-local stack; unmatched End is ignored).
   - `Report(Action<string> writeLine)` — per-scope call count, total ms, mean ms.
+  - `Snapshot(IDictionary<string, (double, long)>)` — the same statistics as data rather than
+    text, which is what the perf report reads to build its own tables (see `PERF.md`).
   - `Reset()` — clears recorded statistics between measurement runs.

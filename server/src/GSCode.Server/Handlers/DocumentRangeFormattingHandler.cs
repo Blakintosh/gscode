@@ -1,6 +1,4 @@
-using System.Collections.Immutable;
 using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Workspace.Documents;
 using GSCode.Server.Configuration;
 using GSCode.Server.Formatting;
@@ -37,57 +35,22 @@ public sealed class DocumentRangeFormattingHandler : DocumentRangeFormattingHand
 
     public override Task<TextEditContainer> Handle(DocumentRangeFormattingParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document)
-            || document.LatestResult is null )
-        {
-            return Task.FromResult<TextEditContainer>(new TextEditContainer());
-        }
-
-        // Analyse fresh. FormatMinimal diffs the formatted output against the analysed text and
-        // returns a MINIMAL edit, so its range indexes into that text — applying it to a document
-        // that has since changed points the range at unrelated characters and corrupts the file.
-        // Every other stale read shows something wrong; this one writes something wrong.
-        ParseResult analysis = _documents.AnalyzeIfStale(document);
-
-        // Per-region edits, keeping only those that touch the requested range. Multiple small
-        // edits also let the editor hold the caret on an unchanged line.
-        ImmutableArray<GscFormatter.FormatEdit> edits =
-            GscFormatter.FormatMinimalEdits(analysis, OptionsFrom(request.Options));
-        if ( edits.IsEmpty )
-        {
-            return Task.FromResult<TextEditContainer>(new TextEditContainer());
-        }
-
-        TextRange requested = request.Range.ToCore();
-        List<TextEdit> textEdits = [.. edits
-            .Where(edit => Overlaps(edit.Range, requested))
-            .Select(static edit => new TextEdit
-            {
-                Range = edit.Range.ToLsp(),
-                NewText = edit.NewText,
-            })];
-
-        return Task.FromResult<TextEditContainer>(new TextEditContainer(textEdits));
-    }
-
-    private static bool Overlaps(TextRange edit, TextRange requested)
-    {
-        return edit.Start <= requested.End && requested.Start <= edit.End;
-    }
-
-    /// <summary>
-    /// Combines the editor's per-request indentation with the configured GSC knobs.
-    ///
-    /// tabSize/insertSpaces arrive in the LSP payload on EVERY formatting request, because the
-    /// editor resolves them per document (language overrides, .editorconfig, detected indentation).
-    /// They were being dropped entirely, so the formatter reindented every file to four spaces no
-    /// matter what the editor had been told.
-    /// </summary>
-    private FormatOptions OptionsFrom(FormattingOptions requested)
-    {
         // Same reasoning as the on-type handler: a fragment format must not move the file's
         // directive block. Alignment is left to the setting.
-        return FormatOptions.From((int)requested.TabSize, requested.InsertSpaces, _settings)
-            with { SortDirectives = false };
+        FormatOptions options = FormatOptions.From(
+            (int)request.Options.TabSize, request.Options.InsertSpaces, _settings) with { SortDirectives = false };
+
+        if ( FormattingSupport.Prepare(_documents, request.TextDocument.Uri, options) is not FormatRequest prepared
+            || prepared.Edits.IsEmpty )
+        {
+            return Task.FromResult<TextEditContainer>(new TextEditContainer());
+        }
+
+        // Only the edits that touch the selection; a clean selection then does nothing.
+        TextRange requested = request.Range.ToCore();
+        List<TextEdit> textEdits = FormattingSupport.ToLspEdits(
+            prepared.Edits.Where(edit => edit.Range.Overlaps(requested)));
+
+        return Task.FromResult<TextEditContainer>(new TextEditContainer(textEdits));
     }
 }

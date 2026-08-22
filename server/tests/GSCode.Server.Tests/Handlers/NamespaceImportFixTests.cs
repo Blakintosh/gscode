@@ -29,8 +29,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class NamespaceImportFixTests
 {
-    private const string AskingPath = @"C:\bo3\share\raw\scripts\main.gsc";
-    private const string UtilPath = @"C:\bo3\share\raw\scripts\util.gsc";
+    private const string AskingPath = @"c:\bo3\share\raw\scripts\main.gsc";
+    private const string UtilPath = @"c:\bo3\share\raw\scripts\util.gsc";
 
     private static ParseResult AnalyzeAt(string source, string path)
     {
@@ -136,7 +136,7 @@ public class NamespaceImportFixTests
         foreach ( string path in new[] { "scripts\\util.gsc", "scripts\\util_extra.gsc" } )
         {
             ParseResult contributor = AnalyzeAt(
-                "#namespace util;\nfunction helper()\n{\n}\n", @"C:\bo3\share\raw\" + path);
+                "#namespace util;\nfunction helper()\n{\n}\n", @"c:\bo3\share\raw\" + path);
 
             database.Commit(contributor, ResolutionContext.RawContext, false, path);
         }

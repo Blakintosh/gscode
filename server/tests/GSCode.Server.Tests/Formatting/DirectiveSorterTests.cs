@@ -73,10 +73,58 @@ public class DirectiveSorterTests
     public void CommentsTravelWithTheDirectiveTheySitAbove()
     {
         string? sorted = DirectiveSorter.Sort(
-            "// zebra matters\n#using scripts\\zebra;\n// apple matters\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+            "#using scripts\\middle;\n// zebra matters\n#using scripts\\zebra;\n// apple matters\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
 
         Assert.Equal(
-            "// apple matters\n#using scripts\\apple;\n// zebra matters\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            "// apple matters\n#using scripts\\apple;\n#using scripts\\middle;\n// zebra matters\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    // --- the comment run above the FIRST directive is a banner ---
+
+    [Fact]
+    public void AHuggingBannerStaysAboveTheBlockInsteadOfSplittingIt()
+    {
+        // It used to travel with the directive it hugged, so sorting carried a section header into
+        // the middle of the very block it introduces.
+        string? sorted = DirectiveSorter.Sort(
+            "// ---------- directives ----------\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// ---------- directives ----------\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void AHuggingBannerIsNotPushedOffTheBlockByABlankLine()
+    {
+        // The author wrote it touching the block; a banner separated by a blank keeps its blank.
+        // Spacing is reproduced rather than normalised, so neither shape drifts into the other.
+        string? hugging = DirectiveSorter.Sort(
+            "// header\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// header\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            hugging);
+
+        string? separated = DirectiveSorter.Sort(
+            "// header\n\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// header\n\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
+            separated);
+    }
+
+    [Fact]
+    public void AFileHeaderAndASectionHeaderBothStayAboveTheBlock()
+    {
+        // Two runs, one blank-separated and one hugging. Both are banners, and the blank between
+        // them is where the author put it.
+        string? sorted = DirectiveSorter.Sort(
+            "// file header\n\n// section header\n#using scripts\\zebra;\n#using scripts\\apple;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "// file header\n\n// section header\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
             sorted);
     }
 
@@ -153,6 +201,168 @@ public class DirectiveSorterTests
         Assert.Equal(
             "// ============\n// t.gsc\n// ============\n\n#using scripts\\apple;\n#using scripts\\zebra;\n\nfunction f()\n{\n}\n",
             sorted);
+    }
+
+    // --- #include is the other dialect's #using ---
+
+    [Fact]
+    public void IncludesSortLikeUsings()
+    {
+        // Until #include was a group, `GroupOf` returned -1 for it and the block ended at the
+        // first line of the file — so this pass did nothing at all on CoD4, WaW, MW2 and BO1.
+        string? sorted = DirectiveSorter.Sort(
+            "#include maps\\_zebra;\n#include maps\\_apple;\n\nmain()\n{\n}\n");
+
+        Assert.Equal(
+            "#include maps\\_apple;\n#include maps\\_zebra;\n\nmain()\n{\n}\n",
+            sorted);
+    }
+
+    // --- the #insert / #define dependency chain ---
+
+    [Fact]
+    public void ADefineAboveAnInsertStandsTheWholePassDown()
+    {
+        // The one arrangement where regrouping could lift an insert above a macro it needs.
+        Assert.Null(DirectiveSorter.Sort(
+            "#define A 1\n#insert scripts\\x.gsh;\n\nfunction f()\n{\n}\n"));
+    }
+
+    [Fact]
+    public void ADefineAboveAnInsertStandsDownEvenWithDirectivesBetweenThem()
+    {
+        // The guard is sticky rather than adjacent, so an intervening directive cannot slip a
+        // define past it.
+        Assert.Null(DirectiveSorter.Sort(
+            "#define A 1\n#namespace foo;\n#precache( \"model\", \"m\" );\n#insert scripts\\x.gsh;\n\nfunction f()\n{\n}\n"));
+    }
+
+    [Fact]
+    public void AnInsertAboveADefineKeepsThatOrder()
+    {
+        // The safe direction, and it must stay safe: a macro defined by the inserted header has to
+        // still be defined before the #define that uses it.
+        string? sorted = DirectiveSorter.Sort(
+            "#namespace foo;\n#insert scripts\\x.gsh;\n#define A 1\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#insert scripts\\x.gsh;\n\n#namespace foo;\n\n#define A 1\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void ChainedDefinesKeepTheirOrder()
+    {
+        // `#define B A` depends on `#define A`. Group 3 is not sortable, so the chain survives
+        // even though B sorts before A alphabetically.
+        string? sorted = DirectiveSorter.Sort(
+            "#namespace foo;\n#define B_MACRO 1\n#define A_MACRO B_MACRO\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#namespace foo;\n\n#define B_MACRO 1\n#define A_MACRO B_MACRO\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void APrecacheUsingAMacroEndsUpBelowTheDefine()
+    {
+        // A precache can name a macro, and group order puts every define above every precache. So
+        // the one file this could rearrange is one where the macro was ALREADY used before it was
+        // defined: the pass moves it toward correct, never away from it.
+        string? sorted = DirectiveSorter.Sort(
+            "#precache( \"model\", MODEL );\n#define MODEL \"tag_origin\"\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#define MODEL \"tag_origin\"\n\n#precache( \"model\", MODEL );\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    // --- a comment run owned by nothing ends the block ---
+
+    [Fact]
+    public void ACommentRunFollowedByABlankLineEndsTheBlock()
+    {
+        // It annotates neither the directive above it nor the one below, so there is no owner to
+        // move it with. The imports above still sort; it and everything under it stay as written.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\zebra;\n#using scripts\\apple;\n// section header\n\n#namespace foo;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\apple;\n#using scripts\\zebra;\n\n// section header\n\n#namespace foo;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void ACommentedOutDirectiveIsNotGluedToTheNextRealOne()
+    {
+        // `_healthoverlay.gsc`'s shape: a disabled #precache written as a note under the imports.
+        // It used to arrive glued to `#namespace`, having lost the blank line the author left.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\zebra;\n#using scripts\\apple;\n//#precache( \"material\", \"overlay_low_health\" );\n\n#namespace foo;\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\apple;\n#using scripts\\zebra;\n\n//#precache( \"material\", \"overlay_low_health\" );\n\n#namespace foo;\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void ACommentRunAboveCodeRatherThanADirectiveIsUnaffected()
+    {
+        // The far commoner shape — 38 of the 55 BO3 files with an orphan run — where the block was
+        // already over. Ending at the blank has to leave these byte-identical to what they were.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\zebra;\n#using scripts\\apple;\n// ---- utility ----\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\apple;\n#using scripts\\zebra;\n\n// ---- utility ----\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    // --- #using_animtree is positional and ends the block ---
+
+    [Fact]
+    public void AnAnimtreeDirectiveIsNotHoistedIntoTheUsingBlock()
+    {
+        // `#using_animtree` binds every `%anim` reference BELOW it until the next one, so its
+        // position is its meaning. util_shared.gsc names "generic" at line 1530 and "all_player"
+        // at 1551 and 1995; hoisting or sorting those would silently rebind every animation
+        // between them.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\z;\n#using scripts\\a;\n\n#namespace foo;\n\n#using_animtree( \"generic\" );\n\nfunction f()\n{\n}\n");
+
+        // The usings still sort and the namespace still groups — the animtree simply stays below
+        // both, where it was written, instead of being lifted into the using block.
+        Assert.Equal(
+            "#using scripts\\a;\n#using scripts\\z;\n\n#namespace foo;\n\n#using_animtree( \"generic\" );\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void DirectivesBelowAnAnimtreeAreLeftAlone()
+    {
+        // The block ENDS at the animtree rather than skipping over it: a directive below one is
+        // below it for a reason this pass cannot check, and sorting the tail would step over the
+        // very line that makes position matter.
+        string? sorted = DirectiveSorter.Sort(
+            "#using scripts\\z;\n#using scripts\\a;\n\n#using_animtree( \"generic\" );\n\n"
+            + "#precache( \"model\", \"z\" );\n#precache( \"model\", \"a\" );\n\nfunction f()\n{\n}\n");
+
+        Assert.Equal(
+            "#using scripts\\a;\n#using scripts\\z;\n\n#using_animtree( \"generic\" );\n\n"
+            + "#precache( \"model\", \"z\" );\n#precache( \"model\", \"a\" );\n\nfunction f()\n{\n}\n",
+            sorted);
+    }
+
+    [Fact]
+    public void TwoAnimtreesKeepBothTheirNamesAndTheirOrder()
+    {
+        // The shape from util_shared.gsc, reduced. Two DIFFERENT tree names is what proves the
+        // directive is positional rather than declarative.
+        string source =
+            "#using scripts\\a;\n\n#using_animtree( \"generic\" );\n\nfunction f()\n{\n}\n\n"
+            + "#using_animtree( \"all_player\" );\n\nfunction g()\n{\n}\n";
+
+        Assert.Null(DirectiveSorter.Sort(source));
     }
 
     [Fact]

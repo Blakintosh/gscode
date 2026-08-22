@@ -76,7 +76,7 @@ group — they are function modifiers, so a dialect could have them without clas
 | waw    | `prof_begin` `prof_end` |
 | mw2    | `foreach` `in` · `childthread` `call` `thisthread` · `prof_begin` `prof_end` |
 | bo1    | `prof_begin` `prof_end` |
-| bo3    | `foreach` `in` · `.. ClassKeywords` · `do` `function` `autoexec` `private` `const` · `waitrealtime` `vectorscale` `profilestart` `profilestop` |
+| bo3    | `foreach` `in` · `.. ClassKeywords` · `do` `function` `autoexec` `private` `const` · `waitrealtime` `vectorscale` `profilestart` `profilestop` · `vararg` |
 | *cores*| *(none — base exactly)* |
 
 `childthread` and `call` are their own token kinds (`TokenKind.ChildThread` / `TokenKind.Call`), not
@@ -181,20 +181,58 @@ in the corpus are strings and comments).
 | headers `.gsh` / `#insert` (`HasHeaders`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | hash strings `#"…"` (`HasHashStrings`) | ✗ | ✗ | ✗ | ✓ | ✓ |
 | `#precache( "type", … )` directive (`HasPrecacheDirective`) | ✗ | ✗ | ✗ | ✗ | ✓ |
+| preprocessor: `#define`, `#if`/`#elif`/`#else`/`#endif` (`HasMacros`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | arrays passed by reference (`ArraysPassedByReference`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | ScriptDoc style (`ScriptDocStyle`) | `///` | `///` | `///` | `///` | `/@ @/` |
 
 `///` = the pre-BO3 form, `///ScriptDocBegin` / `///ScriptDocEnd` lines inside an ordinary `/* */`
 comment (not `/# #/`, which is a dev block). BO3 uses `/@ … @/`. Hash strings and `.csc` are Treyarch
-features — hence BO1 and BO3 have them and the Infinity Ward line has none. BO3 passes arrays **by
-reference only**; earlier games copy by value, which changes aliasing analysis, not syntax.
+features — hence BO1 and BO3 have them and the Infinity Ward line has none.
+
+**Arrays are the only kind whose pass semantics fork.** BO3 passes arrays by reference; earlier games
+copy them by value, so a callee that mutates an array parameter is doing something different after a
+translation in either direction. Everything else that aliases, aliases in *every* game:
+
+| kind | passed as | differs by dialect? |
+|---|---|---|
+| entity — a player, or `ent = Spawn( "script_model" )` | reference | no |
+| struct — `spawnstruct()`, and BO3's `new Foo()` | reference | no |
+| **array** | **reference on BO3, copy before it** | **yes — the only one** |
+| int, float, bool, string, istring, hash, vector, undefined | value | no |
+
+Worth stating both halves, because "arrays copy" invites the assumption that structs copy too, and
+they do not — `spawnstruct` is used in all five corpora (cod4 117 files, waw 173, mw2 190, bo1 363,
+bo3 177), so both kinds sit side by side in real code. This changes aliasing analysis, not syntax:
+telling an array from a struct is what a rewriter has to get right, and it is why
+`Workspace/Typing` grew a union lattice that can answer "must this be an array" separately from
+"might it be".
+
+`HasMacros` and `HasHeaders` coincide today and are still separate flags, because they are separate
+claims: a header IS macros, but a dialect could define them in-file with nowhere to put them. What
+the four earlier games have instead is `HasFileScopeConstants`, whose ALL_CAPS naming makes it look
+convincingly like a macro. Measured before the flag was added: `#define` appears in exactly one file
+per pre-BO3 game — always `maps/mp/gametypes/_hud.gsc`, inside a `/* */` block holding pasted C —
+and the `#if` family in none of the four. A directive written against a game without the flag is
+`gscode-2016`, raised by the preprocessor, which then processes it anyway; the reasoning for that is
+on the code.
+
+Note the animtree pair is genuinely universal and is not part of this: `#using_animtree` declares
+the tree at file scope and `#animtree` names it inside a `UseAnimTree( … )` call, in all five games.
 
 ### Directives
 
-Directives are gated by capability flags, **not** by the keyword set. `#include` is the IW import;
-`#using`/`#namespace`/`#insert`/`#precache` are BO3. `#define`, `#using_animtree`, `#animtree`, and
-the `#if`/`#elif`/`#else`/`#endif` preprocessor family exist across the whole lineage and are never
-gated.
+Directives are gated by capability flags, **not** by the keyword set, and each names the flag it
+depends on. `#include` is the IW import; `#using`/`#namespace`/`#insert`/`#precache` are BO3;
+`#define` and the `#if`/`#elif`/`#else`/`#endif` family are BO3's too, on `HasMacros`.
+
+**Only the animtree pair is ungated**, because only it is genuinely universal. Both
+`GscKeywords.IsAvailable` and `Keywords.IsDirectiveEnabled` used to end in "anything else beginning
+with `#` exists across the whole lineage", which is how CoD4 came to be offered a preprocessor it
+does not have. The default for a new directive is gated; universal has to be earned from the corpus.
+
+The two lists a directive can appear in are not interchangeable. `TopLevelKeywords` is file scope
+and `BodyDirectives` is inside a function — `#animtree` belongs to the second in every game, since
+it is the argument to a `UseAnimTree( … )` call and calls live in bodies.
 
 ---
 
@@ -240,12 +278,18 @@ game has `.csc`.
 
 | game | `DataFilePrefix` | complete? | ships |
 |------|:----------------:|:---------:|-------|
-| cod4 | `cod4` | ✓ | 819 functions (792 documented, 19 reconstructed), 297 radiant keys, 108 fields, 894 stock scripts |
-| bo3  | `t7`   | ✓ | the full T7 set, including `t7_api_csc.json` |
-| waw  | `waw`  | ✗ | 891 functions (781 inherited from CoD4, 110 its own) + 154 derived client functions, 360 radiant keys (11 client-only), 105 fields, 1,977 stock scripts |
-| bo1  | `bo1`  | ✗ | 751 functions (all inherited from CoD4) + 156 derived client functions, 466 radiant keys (126 client-only), 108 fields, 3,125 stock scripts |
-| mw2  | `mw2`  | ✗ | 1,112 functions (777 inherited from CoD4, 335 from its own corpus sweep), 367 radiant keys, 108 fields, 1,488 stock scripts |
+| cod4 | `cod4` | ✓ | 819 functions (791 documented, 20 reconstructed, 8 carrying neither flag), 297 radiant keys, 108 fields, 895 stock scripts |
+| bo3  | `t7`   | ✓ | 2,191 functions + 803 client, including `t7_api_csc.json` |
+| waw  | `waw`  | ✗ | 1,060 functions + 188 client functions, 360 radiant keys (11 client-only), 105 fields, 1,977 stock scripts |
+| bo1  | `bo1`  | ✗ | 1,377 functions + 320 client functions, 466 radiant keys (126 client-only), 108 fields, 3,125 stock scripts |
+| mw2  | `mw2`  | ✗ | 1,111 functions (CoD4's library plus 335 from its own corpus sweep), 367 radiant keys, 108 fields, 1,488 stock scripts |
 | all cores | *(null)* | — | nothing; a workspace on that game loads no builtin data rather than another game's |
+
+**These are the SHIPPED artifacts under `GSCode.Workspace/Api`, counted from them.** The curated
+inputs under `tools/field-data/sources/curated/` state smaller figures for the same games — WaW's
+client file records `serverLibrary: 891, kept: 154` and BO1's `751 / 156` — because the generator's
+inheritance layer runs after them. Reading a count off the curated source is how this table came to
+understate four of the five rows; count the artifact.
 
 **MW2 is the game with no source at all.** No mod tools shipped, so there is no wordfile and no
 documentation — only a `radiant/keys.txt`. Its names are CoD4's whole LIBRARY (not CoD4's wordfile:
@@ -256,7 +300,7 @@ Ward one, and MW2 (2009) sits inside it.
 
 That inference is then corrected by measurement. Sweeping MW2's own 1,479 shipped scripts found 335
 engine functions CoD4 never knew; 91 of them are documented in Black Ops III's library and take its
-entry, and the remaining 244 are RECONSTRUCTED from their call sites — parameter names are the
+entry, and the remaining 264 in the shipped file are RECONSTRUCTED from their call sites — parameter names are the
 callers' own words, mandatory stops at the narrowest call seen, and a type is claimed only where the
 spelling is the type. Those carry the `aiGenerated` flag. Reconstruction is safe here precisely
 because MW2 does not set `HasReliableBuiltinSignatures`: `ArgumentCountLint` never judges a call
@@ -289,9 +333,15 @@ condition was once spelled three ways across two assemblies, and two of the thre
 **`HasCompleteBuiltinLibrary` is a separate claim from `Verified`.** Verified is about the DIALECT —
 proven against the game's own scripts. Completeness is about the FUNCTION LIST, and WaW's and BO1's
 come from a mod-tools wordfile that is demonstrably partial: sweeping BO1's own scripts against it
-finds 620 names it lacks, because its wordfile is the CoD4-era list carried forward unchanged. Those
+found 529 names it lacked, because its wordfile is the CoD4-era list carried forward unchanged. Those
 libraries are therefore used for completion, hover and signature help, but never to claim a name is
 NOT an engine function — `BuiltinFunctionNotFound` stands down for them.
+
+**Do not quote that 529 as current.** It is the figure `GameProfile.HasCompleteBuiltinLibrary`'s own
+summary carries, and it was true when the flag was set; the library has grown since. The live count
+is `tests/GSCode.Server.Tests/harvest/<game>_missing_builtins.json`, regenerated by
+`BuiltinHarvestTests` on a corpus run — a number in prose here is a snapshot, and this paragraph
+carried two different ones (620 and 529) at the same time before anybody noticed.
 
 **`HasReliableBuiltinSignatures` is a third, narrower claim** — that the *parameters* on each entry
 can be judged against, which is not implied by the name list being complete. BO3's come from a data
@@ -299,7 +349,13 @@ set built for the purpose; CoD4's are reconstructed from a wordfile plus documen
 WaW's and BO1's largely *inherit* CoD4's, making them a plausible signature for a related function
 rather than a verified one for theirs. Measured rather than assumed: checking a call against the
 mandatory count reported 4 findings across BO3's shipped scripts and 141 / 280 / 157 across CoD4's,
-WaW's and BO1's, so only BO3 sets it and `WrongBuiltinArgumentCount` is gated on it.
+WaW's and BO1's, and `WrongBuiltinArgumentCount` is gated on it.
+
+**Two games set it: BO3 and CoD4.** CoD4 did not at first — the 141 above is why — and it was
+earned rather than granted: the 44 signatures behind those findings were corrected against the
+documentation pages, which took CoD4 to ZERO across its 894 scripts, and the flag followed the
+measurement. WaW's and BO1's still inherit, so they still do not set it. See the remark on
+`SupportedProfiles.cs`'s CoD4 entry, which records the correction.
 
 **A missing name is added on the inherited-sibling layer, cited both ways.** CoD4 lacked `Abs`;
 WaW and BO1 lacked that plus `AddSpawnPoints`, `LookAtEntity`, `SetTeam`, `SetInvisibleToAll`,
@@ -354,7 +410,8 @@ this game's own shipped `.csc` scripts call it, or when BO3's hand-documented cl
 call are absent from BO3's library; 66 BO3-backed names are never called in WaW's stock scripts). BO3
 measures the cost of the stricter rule: restricted to names certainly client-side, its stock client
 scripts exercise only 71.4% of them, so a corpus-only prune would discard about a third of the real
-ones. WaW keeps 154 of 891, BO1 156 of 751.
+ones. WaW keeps 154 of 891, BO1 156 of 751 — the curated server library as it stood at the PRUNE, not
+the shipped file, which the inheritance layer afterwards takes to 188 and 320.
 
 **Corrected for the leading `localClientNum`.** Client scripts run one VM per splitscreen client, so a
 client-side builtin acting on a particular screen takes the client index first — `VisionSetNaked( 0,

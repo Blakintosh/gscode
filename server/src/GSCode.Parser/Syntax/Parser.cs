@@ -33,8 +33,13 @@ public sealed partial class Parser
     /// left-nested chain. The chain is the reason this counts TREE levels and not parser frames:
     /// the parser builds it with a loop and costs nothing, and it is
     /// <c>SymbolExtractor.WalkExpression</c> that then recurses one frame per link. Both shapes
-    /// work out at ~0.7 KB of stack per entry, so 512 reaches about a third of the way to the cliff
-    /// and every walker over the resulting tree inherits the same bound.
+    /// work out at ~0.7 KB of stack per entry, so 512 reaches about a third of the way to the cliff.
+    ///
+    /// A walker over the resulting tree inherits that bound only if its frames are no fatter than
+    /// the ones measured here, and one is not: <see cref="AstPrinter"/> holds a switch over every
+    /// node shape, and at this cap it clears a 1 MB stack in Release but not in Debug. It carries
+    /// its own, lower ceiling for that reason — see <c>AstPrinter.MaxPrintDepth</c>. Anything else
+    /// that recurses per level and is reachable from a lint should be measured, not assumed.
     ///
     /// Nothing hand-written comes near it: 512 entries is 170 nested parentheses, or 512 terms in
     /// one expression. What it prevents is a StackOverflowException, the one .NET failure that
@@ -162,13 +167,25 @@ public sealed partial class Parser
         //
         // On a LATER LINE the statement really was left unterminated, and then naming the offender is
         // worse than useless — it sends the reader to a line that is correct.
-        if ( _index > 0 && Current.RootRange.Start.Line == _tokens[_index - 1].RootRange.End.Line )
+        if ( ContinuesPreviousLine() )
         {
             AddError(GscDiagnosticCode.ExpectedToken, Current.RootRange, ";", DescribeCurrent());
             return;
         }
 
         AddError(GscDiagnosticCode.MissingSemicolon, MissingSemicolonRange());
+    }
+
+    /// <summary>
+    /// Whether the current token was written on the same line as the one before it. Two rules turn on
+    /// this: which of two mistakes an unterminated statement is (see <see cref="ReportMissingSemicolon"/>),
+    /// and whether a second method call continues a chain or belongs to the next statement (see
+    /// <see cref="ParseCallChain"/>). Both ask the same question — did the author mean these to be one
+    /// thing — and a line break is the only evidence the grammar leaves behind.
+    /// </summary>
+    private bool ContinuesPreviousLine()
+    {
+        return _index > 0 && Current.RootRange.Start.Line == _tokens[_index - 1].RootRange.End.Line;
     }
 
     private TextRange MissingSemicolonRange()

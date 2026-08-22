@@ -22,6 +22,21 @@ public readonly record struct TextRange(Position Start, Position End)
         return position >= Start && position < End;
     }
 
+    /// <summary>
+    /// True when two ranges share any span, TOUCHING ENDPOINTS INCLUDED — unlike
+    /// <see cref="Contains"/>, whose end is exclusive.
+    /// </summary>
+    /// <remarks>
+    /// Inclusive because both callers ask about a user's selection, and a selection that ends
+    /// exactly where a directive begins is one the user means to have selected it. An empty
+    /// selection — a bare caret, which is what a lightbulb request carries — is a zero-width range,
+    /// and an exclusive test would match nothing at all for it.
+    /// </remarks>
+    public bool Overlaps(TextRange other)
+    {
+        return Start <= other.End && other.Start <= End;
+    }
+
     public override string ToString()
     {
         return $"[{Start}..{End})";

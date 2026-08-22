@@ -107,6 +107,42 @@ public sealed class NavigationSupport
     }
 
     /// <summary>
+    /// The file a <c>#using</c> or <c>#include</c> path names, or null when nothing resolves.
+    ///
+    /// The extension comes from the ASKING document, not the path: a <c>.csc</c> writing
+    /// <c>#using maps\mp\x</c> means the client script, whose server twin may not exist at all.
+    /// Written once because go-to-definition and ctrl-click ask the identical question — with a
+    /// copy each, a new directive form or a change to how the extension is chosen had to be found
+    /// twice, and finding one of the two is silent.
+    /// </summary>
+    public string? ResolveDirectivePath(NavigationTarget target, string directivePath)
+    {
+        string extension = target.Language == ScriptLanguage.Csc
+            ? GameProfile.Active.ClientScriptExtension
+            : GameProfile.Active.ServerScriptExtension;
+
+        PathResolver resolver = _resolver.Current;
+        return resolver.Resolve(resolver.GetContext(target.Path), directivePath + extension);
+    }
+
+    /// <summary>
+    /// Every occurrence of the LOCAL under a position, within the function that scopes it.
+    ///
+    /// The local counterpart of <see cref="FindAllReferences"/>, and shared for the same reason:
+    /// find-references, highlight and rename must agree about what a variable's occurrences are,
+    /// and three copies of the walk is how they stop agreeing.
+    ///
+    /// Empty when the position is not on a local — which is also the answer for everything the
+    /// reference index DOES know, so a caller can reach here unconditionally after a failed
+    /// <see cref="SymbolAtPosition"/> lookup.
+    /// </summary>
+    public ImmutableArray<LocalOccurrence> LocalOccurrencesAt(
+        NavigationTarget target, GSCode.Core.Text.Position position)
+    {
+        return LocalReferences.Find(target.Result, position);
+    }
+
+    /// <summary>
     /// Every reference to a key visible from this document, across both language worlds when the
     /// document is a header. The single entry point, so the count a CodeLens shows and the list a
     /// peek opens are computed the same way.
@@ -124,10 +160,6 @@ public sealed class NavigationSupport
         // its declaration's key first and then unions the ways a call site can spell it. Done HERE
         // for the same reason the narrowing below is: the CodeLens count and the peek list run this
         // one query, so they cannot disagree.
-        // A method is not reachable under one key the way a function is — inheritance, the
-        // Class::method form and untyped arrow calls each name it differently — so it gets its own
-        // query. Done HERE for the same reason the narrowing below is: the CodeLens count and the
-        // peek list run this one method, so they cannot disagree.
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> methodReferences =
             MethodResolution.FindReferencesForCall(
                 _database, target.Stores, target.Store, target.ContextId, key, referenceKind);

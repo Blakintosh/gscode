@@ -35,7 +35,10 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
         PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
         if ( hit.Kind != HitKind.Reference )
         {
-            return Task.FromResult<DocumentHighlightContainer?>(null);
+            // Every LOCAL lands here: the reference index is keyed by SymbolKey and shared
+            // workspace-wide, so locals are deliberately absent from it and are walked from the AST
+            // per function instead. Same fallthrough DefinitionHandler and ReferencesHandler take.
+            return Task.FromResult(LocalHighlightsAt(target, request.Position.ToCore()));
         }
 
         List<DocumentHighlight> highlights = [];
@@ -52,5 +55,31 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
         }
 
         return Task.FromResult<DocumentHighlightContainer?>(new DocumentHighlightContainer(highlights));
+    }
+
+    /// <summary>
+    /// The local under the cursor, highlighted across its function. Writes are marked as such —
+    /// an assignment, a loop binding, a <c>waittill</c> output and the parameter itself all place
+    /// a value in the name, and the editor colours those differently from a read.
+    /// </summary>
+    private DocumentHighlightContainer? LocalHighlightsAt(
+        NavigationTarget target, GSCode.Core.Text.Position position)
+    {
+        List<DocumentHighlight> highlights = [];
+        foreach ( LocalOccurrence occurrence in _support.LocalOccurrencesAt(target, position) )
+        {
+            highlights.Add(new DocumentHighlight
+            {
+                Range = occurrence.Range.ToLsp(),
+                Kind = occurrence.IsWrite ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
+            });
+        }
+
+        if ( highlights.Count == 0 )
+        {
+            return null;
+        }
+
+        return new DocumentHighlightContainer(highlights);
     }
 }

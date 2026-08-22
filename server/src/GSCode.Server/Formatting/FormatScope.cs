@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
 
@@ -31,7 +30,7 @@ public static class FormatScope
 
         int here = Math.Clamp(line, 0, lines.Length - 1);
 
-        List<Token>[] byLine = BucketByLine(lines.Length, Lexer.Lex(SourceText.From(text)).Tokens);
+        List<Token>[] byLine = LineFacts.BucketByLine(lines.Length, Lexer.Lex(SourceText.From(text)).Tokens);
         LineKind[] kinds = new LineKind[lines.Length];
         for ( int i = 0; i < lines.Length; i++ )
         {
@@ -97,12 +96,12 @@ public static class FormatScope
             return new LineKind(Role.Other, "", "");
         }
 
-        if ( lineTokens.All(static token => LineFacts.IsComment(token.Kind)) )
+        if ( LineFacts.AllComments(lineTokens) )
         {
             return new LineKind(Role.Comment, "", "");
         }
 
-        List<Token> code = [.. lineTokens.Where(static token => !LineFacts.IsComment(token.Kind))];
+        List<Token> code = LineFacts.CodeOnly(lineTokens);
         if ( code.Count == 0 || code[^1].Kind != TokenKind.Semicolon )
         {
             return new LineKind(Role.Other, "", "");
@@ -153,30 +152,5 @@ public static class FormatScope
         }
 
         return new LineKind(Role.Other, "", "");
-    }
-
-    private static List<Token>[] BucketByLine(int lineCount, ImmutableArray<Token> tokens)
-    {
-        List<Token>[] byLine = new List<Token>[lineCount];
-        for ( int i = 0; i < lineCount; i++ )
-        {
-            byLine[i] = [];
-        }
-
-        foreach ( Token token in tokens )
-        {
-            if ( token.Kind is TokenKind.EndOfFile or TokenKind.Whitespace or TokenKind.Newline )
-            {
-                continue;
-            }
-
-            int line = token.Range.Start.Line;
-            if ( line >= 0 && line < lineCount )
-            {
-                byLine[line].Add(token);
-            }
-        }
-
-        return byLine;
     }
 }

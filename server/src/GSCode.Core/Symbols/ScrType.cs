@@ -1,9 +1,19 @@
 namespace GSCode.Core.Symbols;
 
 /// <summary>
-/// The small abstract value lattice for GSC's typeless-but-typed values. Deliberately
-/// coarse: the flow typer only asserts a concrete type when it is certain, otherwise
-/// Unknown (which never produces a hint or diagnostic — the zero-false-positive rule).
+/// The coarse PROJECTION of a value's type, for the callers that want one name to show a user.
+///
+/// This is no longer the lattice, though it was and this summary said so for a while:
+/// <see cref="ScrValue"/> is, with disjoint bits, constant values and entity kinds.
+/// <c>FlowTyper</c> computes over that and projects to this enum at its public boundary, which is
+/// why hover, inlay hints and the two typing lints were untouched when the lattice landed. Named in
+/// plain text rather than a cref because it lives in <c>GSCode.Workspace</c>, which Core does not
+/// reference and must not.
+///
+/// So the coarseness is deliberate but its REASON moved: a hint is shown only when the underlying
+/// value names exactly one type. A union is not shown as a guess, it is shown as
+/// <see cref="Unknown"/> — which never produces a hint or diagnostic, the zero-false-positive rule.
+/// Anything that needs the union itself has to ask <see cref="ScrValue"/>, not this.
 /// </summary>
 public enum ScrType
 {

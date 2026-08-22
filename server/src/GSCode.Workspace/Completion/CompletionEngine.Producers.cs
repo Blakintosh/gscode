@@ -564,6 +564,82 @@ public sealed partial class CompletionEngine
         }
     }
 
+    /// <summary>
+    /// The names bound INSIDE this function: its parameters, then the locals assigned above the
+    /// cursor.
+    ///
+    /// These were never offered at all. Nothing in the workspace lists is per-function, so the one
+    /// category of name a script writes most — the variable three lines up — was the one category
+    /// completion could not produce, and the editor's own word-based suggestions were what filled
+    /// the gap until the server's lists (a median of 1,168 entries in statement scope) began
+    /// out-scoring them.
+    ///
+    /// A local's introduction is an ASSIGNMENT, since GSC has no declaration form: the same
+    /// definition <see cref="LocalDefinition"/> resolves go-to-definition against, so the two
+    /// surfaces agree about what a name means here. Fields are excluded for the same reason they
+    /// are there — `self.count = 1` writes to something that outlives the call, and a bare `count`
+    /// does not reach it.
+    /// </summary>
+    /// <param name="position">
+    /// The cursor. Assignments BELOW it are not offered: the value would not exist yet at the point
+    /// being written, and 5016 reports exactly that read as unassigned. A completion list that leads
+    /// to a diagnostic is worse than one entry short — the rule <c>vararg</c> is held to above.
+    ///
+    /// A loop variable passes on the same terms without a special case, since `foreach ( player in
+    /// players )` binds it in the header, above every use in the body.
+    /// </param>
+    /// <param name="seen">
+    /// Names already offered, and added to as this goes. Case-insensitive, like every other GSC
+    /// name: `Count` and `count` are one variable, and offering both would make the list disagree
+    /// with the language. Seeded with the enclosing class's members, whose declaration is the truer
+    /// reading of a bare name a constructor assigns.
+    /// </param>
+    private static void CollectLocalScope(
+        FunctionSymbol function,
+        Position position,
+        HashSet<string> seen,
+        ImmutableArray<CompletionEntry>.Builder entries)
+    {
+        foreach ( ParameterSymbol parameter in function.Parameters )
+        {
+            if ( seen.Add(parameter.Name) )
+            {
+                entries.Add(new CompletionEntry(
+                    parameter.Name, CompletionKind.Variable, parameter.ByRef ? "parameter (by ref)" : "parameter"));
+            }
+        }
+
+        foreach ( AssignmentSymbol assignment in function.Assignments )
+        {
+            // An owner makes it a field on something, not a local.
+            if ( assignment.OwnerName.Length > 0 )
+            {
+                continue;
+            }
+
+            if ( IsAfter(assignment.Range.Start, position) || !seen.Add(assignment.Name) )
+            {
+                continue;
+            }
+
+            entries.Add(new CompletionEntry(
+                assignment.Name,
+                CompletionKind.Variable,
+                assignment.IsLoopVariable ? "loop variable" : "local"));
+        }
+    }
+
+    /// <summary>Whether <paramref name="candidate"/> sits strictly after <paramref name="anchor"/>.</summary>
+    private static bool IsAfter(Position candidate, Position anchor)
+    {
+        if ( candidate.Line != anchor.Line )
+        {
+            return candidate.Line > anchor.Line;
+        }
+
+        return candidate.Character > anchor.Character;
+    }
+
     /// <summary>The shared type of a field name's declarations, or a bare "field" when they disagree.</summary>
     private static string DescribeField(ImmutableArray<ObjectField> declarations)
     {
@@ -584,11 +660,17 @@ public sealed partial class CompletionEngine
         return type;
     }
 
+    /// <param name="enclosingFunction">
+    /// The declaration the cursor is inside, or null at file scope. Null IS "not inside a function",
+    /// so the two never disagree — and where it is not null it also names the parameters and locals
+    /// that are in scope, which no other input to this method can answer.
+    /// </param>
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(
-        ParseResult result, string contextId, int offset, bool insideFunction, bool varargInScope, string callSuffix,
-        GameProfile game, bool parameterHints)
+        ParseResult result, string contextId, int offset, Position position, FunctionSymbol? enclosingFunction,
+        string callSuffix, GameProfile game, bool parameterHints)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+        bool insideFunction = enclosingFunction is not null;
 
         // A '#' has been typed at top level, so nothing but a directive can be meant. Returning
         // early also keeps functions and variables out of the list. Inside a function body the
@@ -615,7 +697,12 @@ public sealed partial class CompletionEngine
         // unlike every other keyword its availability depends on the declaration this cursor sits
         // in and not on the dialect alone. It is a Variable rather than a Keyword because that is
         // what it reads as at a use site: an array to index, count and iterate.
-        if ( varargInScope )
+        //
+        // Both halves matter. Offering it from the plain keyword list would suggest it in every
+        // function on the dialect, and in a function without `...` nothing binds it, so accepting
+        // the suggestion earns a 5024. A completion list that leads to a diagnostic is worse than
+        // one entry short.
+        if ( game.HasVarargBinding && enclosingFunction is not null && enclosingFunction.HasVarargs )
         {
             entries.Add(new CompletionEntry(
                 "vararg",
@@ -661,7 +748,8 @@ public sealed partial class CompletionEngine
                 CompletionKind.Snippet,
                 "snippet",
                 snippet.Body,
-                snippet.Documentation));
+                snippet.Documentation,
+                RetriggerCompletion: snippet.Retrigger));
         }
 
         foreach ( string keyword in words )
@@ -702,14 +790,40 @@ public sealed partial class CompletionEngine
 
         LanguageStore store = _database.StoreFor(result.Language);
 
-        // Methods of the class this cursor is inside, own and inherited, FIRST — a bare name written
-        // in a class body means a method: all 525 such calls in the stock BO3 scripts do. They are
-        // added ahead of the namespace functions and builtins so that when the editor's own ordering
-        // is a wash, the thing the call would actually reach is the thing offered.
-        //
-        // From the live extraction's class ranges rather than the store, so a method typed a moment
-        // ago is offered before the record is reindexed.
+        // The class this cursor is inside, read from the live extraction's ranges rather than the
+        // store, so a member or method typed a moment ago is offered before the record is
+        // reindexed.
         string? enclosingClass = EnclosingClassAt(result, offset);
+
+        // The names bound RIGHT HERE, nearest first and ahead of every workspace-wide list below:
+        // the enclosing class's `var` members, then this function's parameters and locals.
+        //
+        // Members come first because in a class body a bare name IS the member — BO3's
+        // AnimationAdjustmentInfoZ constructor writes `adjustMentStarted = false;`, and extraction
+        // records that write as a local like any other. Both readings produce the same name, so
+        // whichever runs first decides how the one row is labelled, and "member of
+        // AnimationAdjustmentInfoZ" is the true answer where a class declares it.
+        HashSet<string> boundNames = new(StringComparer.OrdinalIgnoreCase);
+
+        if ( enclosingClass is not null )
+        {
+            foreach ( ClassMember member in MethodResolution.MembersOf(
+                store, contextId, enclosingClass, result.Extraction.Classes) )
+            {
+                if ( boundNames.Add(member.Member.Name) )
+                {
+                    entries.Add(new CompletionEntry(
+                        member.Member.Name, CompletionKind.Field, "member of " + member.OwnerClass.Name));
+                }
+            }
+        }
+
+        CollectLocalScope(enclosingFunction!, position, boundNames, entries);
+
+        // Methods of the class this cursor is inside, own and inherited — a bare name written in a
+        // class body means a method: all 525 such calls in the stock BO3 scripts do. They are added
+        // ahead of the namespace functions and builtins so that when the editor's own ordering is a
+        // wash, the thing the call would actually reach is the thing offered.
         if ( enclosingClass is not null )
         {
             foreach ( ClassMethod method in MethodResolution.MethodsOf(
@@ -719,13 +833,17 @@ public sealed partial class CompletionEngine
             }
         }
 
-        // Macros defined in this file.
+        // Every macro the preprocessor has in scope for this file, WHEREVER it was defined.
+        //
+        // The table is built per parse, from the root file and the headers it #inserts — that is
+        // already the answer to "what can this file expand", so the file each definition came from
+        // does not narrow it. Filtering to `SourceFile is null` kept only the root file's own,
+        // which threw away the ones a header exists to supply: a script whose constants all live
+        // in a shared .gsh got none of them, which is the normal arrangement rather than an
+        // unusual one.
         foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )
         {
-            if ( macro.SourceFile is null )
-            {
-                entries.Add(new CompletionEntry(macro.Name, CompletionKind.Macro, "macro"));
-            }
+            entries.Add(MacroEntry(macro, callSuffix, parameterHints));
         }
 
         // The declared set rather than the namespace spans, which carry a leading region named after

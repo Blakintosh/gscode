@@ -38,11 +38,22 @@ public class NameTableTests
     }
 
     [Fact]
-    public void PathUtil_NormalizeAbsolute_LowercasesAndTrims()
+    public void PathUtil_NormalizeAbsolute_CanonicalizesCaseAndTrims()
     {
-        string normalized = PathUtil.NormalizeAbsolute(@"C:\Folders\Some\PATH\");
-
-        Assert.Equal(@"c:\folders\some\path", normalized);
+        // Case is folded only where the filesystem is case-insensitive. On Linux the cased
+        // path is the real one — lowercasing it would name a file that does not exist.
+        if ( OperatingSystem.IsWindows() )
+        {
+            Assert.Equal(@"c:\folders\some\path", PathUtil.NormalizeAbsolute(@"C:\Folders\Some\PATH\"));
+        }
+        else if ( OperatingSystem.IsMacOS() )
+        {
+            Assert.Equal("/folders/some/path", PathUtil.NormalizeAbsolute("/Folders/Some/PATH/"));
+        }
+        else
+        {
+            Assert.Equal("/Folders/Some/PATH", PathUtil.NormalizeAbsolute("/Folders/Some/PATH/"));
+        }
     }
 
     [Fact]
@@ -54,8 +65,12 @@ public class NameTableTests
     [Fact]
     public void PathUtil_IsUnder_RequiresSeparatorBoundary()
     {
-        Assert.True(PathUtil.IsUnder(@"c:\root\sub\file.gsc", @"c:\root"));
-        Assert.False(PathUtil.IsUnder(@"c:\rootother\file.gsc", @"c:\root"));
-        Assert.False(PathUtil.IsUnder(@"c:\root", @"c:\root"));
+        // IsUnder compares already-normalized paths, so it looks for the native separator.
+        char sep = Path.DirectorySeparatorChar;
+        string root = OperatingSystem.IsWindows() ? @"c:\root" : "/root";
+
+        Assert.True(PathUtil.IsUnder($"{root}{sep}sub{sep}file.gsc", root));
+        Assert.False(PathUtil.IsUnder($"{root}other{sep}file.gsc", root));
+        Assert.False(PathUtil.IsUnder(root, root));
     }
 }

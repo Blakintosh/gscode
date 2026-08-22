@@ -14,43 +14,68 @@ namespace GSCode.Server.Formatting;
 ///
 /// Ordering rules, and why they differ per kind:
 ///
-/// - <c>#using</c> and <c>#precache</c> are SORTED. A using is a namespace import resolved by the
-///   linker and a precache is a registration; neither can observe the other's position.
+/// - <c>#using</c>, <c>#include</c> and <c>#precache</c> are SORTED. An import is resolved by the
+///   linker and a precache is a registration; neither can observe the other's position. The two
+///   import spellings share a group because they are one idea per dialect, and where two imports
+///   declare the same name the call is AMBIGUOUS rather than won by whichever came first — which
+///   is what <c>AmbiguousFunctionLint</c> reports, and what makes sorting them safe.
 /// - <c>#insert</c> and <c>#define</c> keep their relative order. An insert is textual — the file's
 ///   contents are spliced in where it sits — so two inserts can disagree about a macro, and a
 ///   define can be what an insert or a later define depends on.
 /// - The whole pass BAILS if a <c>#define</c> appears before an <c>#insert</c>, which is the one
 ///   arrangement where regrouping could move an insert above a macro it needs. That does not occur
 ///   in any of the 980 stock scripts, but a mod is not the stock scripts.
+/// - <c>#using_animtree</c> ENDS the block. It is not a preamble directive at all: it binds every
+///   <c>%anim</c> reference below it until the next one, so its position is its meaning. The stock
+///   scripts settle it — <c>util_shared.gsc</c> names <c>"generic"</c> at line 1530 and
+///   <c>"all_player"</c> at 1551 and 1995, and <c>_civ_pickup.gsc</c> carries four, each sitting
+///   directly above the function whose animations it binds, a thousand lines below any import.
+///   Grouping it with <c>#using</c> hoisted it to the top of the file, which rebinds every
+///   animation between the old position and the new one and cannot be seen in a diff of names.
+///   The block ends rather than skipping over it, because a directive written BELOW one is below
+///   it for a reason this pass has no way to check.
 ///
 /// A directive continued with a trailing backslash owns every line of the continuation. That is
 /// load-bearing for <c>#define</c>: the preprocessor ends a macro body at the first newline not
 /// preceded by a backslash, so a blank line inserted between the <c>\</c> and the line it continues
 /// empties the macro and turns its body into top-level code.
 ///
-/// Comments travel with the directive beneath them, so an annotated import keeps its annotation.
-/// A comment run separated from the first directive by a blank line is a FILE banner rather than an
-/// annotation, and stays put above the block.
+/// Comments travel with the directive beneath them, so an annotated import keeps its annotation —
+/// except the run above the FIRST directive, which is a banner for the block and stays above it,
+/// blank line or no blank line. Whatever spacing the author left between a banner and the block is
+/// reproduced rather than normalised.
+///
+/// A run part-way down the block followed by a BLANK LINE is owned by nothing — the blank says it
+/// does not annotate what follows, and it is not the banner either — so the block ends there. That
+/// is the same answer <c>#using_animtree</c> gets and for the same reason: with nothing to move it
+/// with, the only defensible move is none.
 /// </summary>
 public static class DirectiveSorter
 {
-    /// <summary>Canonical group order. Lower sorts first.</summary>
+    /// <summary>
+    /// Canonical group order. Lower sorts first. A negative result ENDS the block, so the directive
+    /// and everything below it is reproduced exactly.
+    /// </summary>
     private static int GroupOf(string directive)
     {
         switch ( directive )
         {
+            // The two spellings of an import, one per dialect (GameProfile.ImportStyle). Sorting
+            // was a no-op on every Infinity Ward game until #include was here: the block ended at
+            // the first directive in the file, so four of the five dialects got nothing.
             case "#using":
-            case "#using_animtree":
+            case "#include":
                 return 0;
             case "#insert":
                 return 1;
             case "#namespace":
-            case "#animtree":
                 return 2;
             case "#define":
                 return 3;
             case "#precache":
                 return 4;
+
+            // Everything else, including #using_animtree — see the remark on the class.
             default:
                 return -1;
         }
@@ -102,11 +127,24 @@ public static class DirectiveSorter
                 // directive/comment checks below decide.
                 if ( entries.Count == 0 && pending.Count > 0 )
                 {
-                    // Comments above the FIRST directive with a blank line between them describe
-                    // the file, not the import under them. Sorting must not carry them into the
-                    // middle of the block.
+                    // A comment run above the block, ended by the author's own blank line. The
+                    // blank is carried into the banner rather than re-added at the end, so a file
+                    // header and a section header below it keep the gap the author put between
+                    // them, and a banner that hugged the block still hugs it.
                     banner.AddRange(pending);
+                    banner.Add("");
                     pending.Clear();
+                    continue;
+                }
+
+                if ( pending.Count > 0 )
+                {
+                    // A comment run PART-WAY DOWN the block, ended by a blank line, is owned by
+                    // nothing: it does not annotate the directive below it — the author's blank
+                    // says so — and it is not the banner either. With no owner there is no
+                    // defensible place to move it to, so the block ends here and everything from
+                    // the run down is reproduced as written.
+                    break;
                 }
 
                 continue;
@@ -136,7 +174,20 @@ public static class DirectiveSorter
                 return null;
             }
 
-            List<string> owned = [.. pending, line];
+            // Comments above the FIRST directive describe the BLOCK, not the import they happen to
+            // touch, so they stay above it rather than travelling with whichever directive sorting
+            // puts first. Whether a blank line separated them is not the signal it looks like: of
+            // the fourteen files across the BO3 and CoD4 corpora with a comment run hugging their
+            // first import, all fourteen are headers — `// COMMON AI SYSTEMS INCLUDES`,
+            // `// ARCHETYPE UTILITY SCRIPTS`, and a ruled banner in `_siegebot.gsc` whose text is
+            // literally `#using`. None annotates the one import beneath it. Carrying those into
+            // the middle of the block is what this rule exists to stop.
+            List<string> owned = entries.Count == 0 ? [line] : [.. pending, line];
+            if ( entries.Count == 0 )
+            {
+                banner.AddRange(pending);
+            }
+
             pending.Clear();
 
             // A trailing backslash binds the next PHYSICAL line, so the whole run is one entry.
@@ -186,11 +237,6 @@ public static class DirectiveSorter
         foreach ( string line in banner )
         {
             rebuilt.Append(line).Append('\n');
-        }
-
-        if ( banner.Count > 0 )
-        {
-            rebuilt.Append('\n');
         }
 
         int previousGroup = -1;

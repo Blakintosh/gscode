@@ -1,3 +1,4 @@
+using GSCode.Parser;
 using GSCode.Parser.Extraction;
 using GSCode.Workspace.Documents;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -29,37 +30,33 @@ public sealed class FoldingRangeHandler : FoldingRangeHandlerBase
 
     public override Task<Container<FoldingRange>?> Handle(FoldingRangeRequestParam request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document)
-            || document.LatestResult is null )
+        if ( !_documents.TryGetAnalyzed(
+            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
         {
             return Task.FromResult<Container<FoldingRange>?>(null);
         }
 
         List<FoldingRange> ranges = [];
-        foreach ( FoldingRegion region in FoldingRegions.Compute(document.LatestResult) )
+        foreach ( FoldingRegion region in FoldingRegions.Compute(result) )
         {
-            FoldingRange folding = region.Kind switch
+            // Only the kind varies. A declaration or block gets none at all, which the protocol
+            // reads as a plain collapsible range rather than one the client can fold by category.
+            // The cast is on the first arm rather than the declaration: a switch expression takes
+            // its natural type from the arms, and two non-null ones make that non-nullable, which
+            // rejects the third before the nullable local can accept it.
+            FoldingRangeKind? kind = region.Kind switch
             {
-                FoldingRegionKind.Comment => new FoldingRange
-                {
-                    StartLine = region.StartLine,
-                    EndLine = region.EndLine,
-                    Kind = FoldingRangeKind.Comment,
-                },
-                FoldingRegionKind.UserRegion => new FoldingRange
-                {
-                    StartLine = region.StartLine,
-                    EndLine = region.EndLine,
-                    Kind = FoldingRangeKind.Region,
-                },
-                _ => new FoldingRange
-                {
-                    StartLine = region.StartLine,
-                    EndLine = region.EndLine,
-                },
+                FoldingRegionKind.Comment => (FoldingRangeKind?)FoldingRangeKind.Comment,
+                FoldingRegionKind.UserRegion => FoldingRangeKind.Region,
+                _ => null,
             };
 
-            ranges.Add(folding);
+            ranges.Add(new FoldingRange
+            {
+                StartLine = region.StartLine,
+                EndLine = region.EndLine,
+                Kind = kind,
+            });
         }
 
         return Task.FromResult<Container<FoldingRange>?>(new Container<FoldingRange>(ranges));

@@ -96,7 +96,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// Two places, for two different costs. The first is the request that was cancelled before it
     /// was ever started, which is the common one under fast typing and costs nothing to skip. The
     /// second is the mapping loop, which is the part worth interrupting: statement scope returns a
-    /// median of 1,168 entries and up to 5,059 on the BO3 corpus, and <see cref="ToItem"/> allocates
+    /// median of 1,930 entries and up to 5,937 on the BO3 corpus, and <see cref="ToItem"/> allocates
     /// per entry.
     ///
     /// <c>Complete</c> itself is deliberately NOT made cancellable. That would mean threading a token
@@ -330,6 +330,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
                 : null,
             InsertText = insertText,
             FilterText = label.FilterText,
+            SortText = SortText(entry),
             InsertTextFormat = isSnippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
             Command = entry.RetriggerCompletion ? RetriggerCommand : null,
             Data = IsResolvable(entry.Kind) ? ResolveData(entry, uri) : null,
@@ -375,6 +376,67 @@ public sealed class CompletionHandler : CompletionHandlerBase
             // a bool would be one more thing with a serializer opinion about shape.
             ["builtin"] = entry.IsBuiltin ? "true" : "false",
         };
+    }
+
+    /// <summary>
+    /// What breaks a tie between two rows the editor scored the same — a tier by KIND, then the
+    /// name.
+    ///
+    /// The editor's own fuzzy score comes first and is not being overridden here; this decides what
+    /// happens when it is a wash, which in statement scope is constantly, because the list is a
+    /// median of 1,930 entries and up to 5,937 of which the great majority are engine builtins.
+    /// Without it the tie-break was the label alone, so typing a prefix of the variable two lines up
+    /// could put an engine function above it for no reason other than alphabetical order.
+    ///
+    /// The order is by DISTANCE from the cursor, which is the same principle the producers order on:
+    /// a name bound in this function, then one bound in this file, then one that had to be imported,
+    /// and the engine last because it is the largest set and the least likely to be what a
+    /// half-typed word meant.
+    ///
+    /// The digit is a PREFIX on the lowercased label rather than a replacement for it: within a tier
+    /// the ordering must stay stable and alphabetical, and sortText is compared as a plain string.
+    /// </summary>
+    internal static string SortText(CompletionEntry entry)
+    {
+        return SortTier(entry) + entry.Label.ToLowerInvariant();
+    }
+
+    private static char SortTier(CompletionEntry entry)
+    {
+        switch ( entry.Kind )
+        {
+            // Bound in this function or on this class: parameters, locals, `vararg`, the dialect's
+            // globals, and the members a class body names bare.
+            case CompletionKind.Variable:
+            case CompletionKind.Field:
+                return '0';
+
+            // Written in this file or reached through its imports. A builtin is the same LSP kind
+            // and is deliberately NOT in this tier — there are thousands of them.
+            case CompletionKind.Function when !entry.IsBuiltin:
+            case CompletionKind.Class:
+            case CompletionKind.Macro:
+                return '1';
+
+            // Syntax rather than a name: worth being findable, but a keyword is short and typed
+            // from memory, so it does not need to outrank the thing being called.
+            case CompletionKind.Keyword:
+            case CompletionKind.Snippet:
+            case CompletionKind.Namespace:
+                return '2';
+
+            // A closed vocabulary that is the WHOLE list wherever it appears (asset types, path
+            // segments, string literals), so its tier only ever competes with itself.
+            case CompletionKind.AssetType:
+            case CompletionKind.PathSegment:
+            case CompletionKind.PathFile:
+            case CompletionKind.Literal:
+                return '2';
+
+            // The engine API. Last on volume alone.
+            default:
+                return '3';
+        }
     }
 
     private static CompletionItemKind MapKind(CompletionKind kind)

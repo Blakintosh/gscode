@@ -132,6 +132,21 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.UnreachableCodeLint");
         lints.AddRange(UnreachableCodeLint.Analyze(result));
         PerfTracker.End();
+        PerfTracker.Begin("lint.ThreadedResultLint");
+        lints.AddRange(ThreadedResultLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.ConstDeclarationLint");
+        lints.AddRange(ConstDeclarationLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.GlobalObjectWriteLint");
+        lints.AddRange(GlobalObjectWriteLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.ArithmeticLint");
+        lints.AddRange(ArithmeticLint.Analyze(result));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.ExpressionStatementLint");
+        lints.AddRange(ExpressionStatementLint.Analyze(result));
+        PerfTracker.End();
         PerfTracker.Begin("lint.UnassignedVariableLint");
         lints.AddRange(UnassignedVariableLint.Analyze(result));
         PerfTracker.End();
@@ -158,6 +173,9 @@ public static class WorkspaceLints
 
         PerfTracker.Begin("lint.PreferBooleanLiteralLint");
         lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins, objectFields, typer));
+        PerfTracker.End();
+        PerfTracker.Begin("lint.TypeMismatchLint");
+        lints.AddRange(TypeMismatchLint.Analyze(result, typer));
         PerfTracker.End();
         PerfTracker.Begin("lint.PrivateAccessLint");
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));

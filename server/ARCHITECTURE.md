@@ -30,7 +30,7 @@ GSCode.Core  →  GSCode.Parser  →  GSCode.Workspace  →  GSCode.Server
 | `src/GSCode.Parser` | Pure per-file pipeline: lexer → preprocessor → parser → extraction. Deterministic; no I/O except injected providers. | Core |
 | `src/GSCode.Workspace` | Script database (separate GSC/CSC stores), path/mod-overlay resolution, indexing, SQLite cache, bundled game data (`Api/`). | Core, Parser |
 | `src/GSCode.Server` | The LSP host — the ONLY project referencing OmniSharp. Thin handlers over Workspace queries; protocol/domain mapping isolated in `Mapping/`. | Workspace (+ OmniSharp) |
-| `tests/*` | xUnit suites, one per layer. | their subject |
+| `tests/*` | Three xUnit suites, split by what they NEED rather than by layer: a string, a database, or the LSP layer. Core has no suite of its own — it is exercised from `GSCode.Parser.Tests`. | their subject |
 
 Build rules (in `Directory.Build.props`): nullable enabled, warnings-as-errors,
 `-p:GscodeInstrumentation=true` compiles in the `PerfTracker` timing scopes.
@@ -56,18 +56,25 @@ exception is a MACRO key: a header is inserted into both worlds, so its uses are
 whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.csc` use behind.
 
 - **Sync + diagnostics**: incremental text sync with debounced re-analysis (`TextSyncHandler`),
-  push-model `publishDiagnostics` merging parse diagnostics with cross-file lints
-  (`Analysis/NamespaceUsageLint`).
+  push-model `publishDiagnostics` merging parse diagnostics with the cross-file lints — all of them,
+  through `Analysis/WorkspaceLints.Analyze`, which is the one entry point and currently runs
+  twenty-five rules. Naming a single lint here read as if it were the whole merged set.
 - **Read**: hover (with inferred local types), definition, references (incl. literals),
   document highlight, document links, document/workspace symbols, folding, selection ranges,
   semantic tokens (full/delta/range).
 - **Assist**: completion + signature help, code lens (reference counts), rename (+prepareRename),
   call and type hierarchy, inlay hints (inferred types + parameter names).
-- **Edit**: formatting (whole/range/on-type) via `Formatting/GscFormatter`; code actions
-  (remove-duplicate and add-missing `#using`).
+- **Edit**: formatting (whole/range/on-type) via `Formatting/GscFormatter`; code actions —
+  remove-duplicate and add-missing `#using`, add-missing `#include` (5026), and the pair offered for
+  a call that resolved to nothing (5013/5014): declare the function here, or import and qualify it.
 
-Type inference is `Workspace/Typing/FlowTyper`, a small per-function forward type-flow pass over
-the `ScrType` lattice, seeded with engine object-field types; it feeds inlay hints and hovers.
+Type inference is `Workspace/Typing/FlowTyper`, a small per-function forward type-flow pass seeded
+with engine object-field types; it feeds inlay hints, hovers and two lints. It carries `ScrValue`
+(`Core/Symbols`) — a union lattice with constant folding, entity kinds and a reason attached to every
+imprecision — and projects onto the coarse `ScrType` at its public boundary, so those consumers see
+what they always saw. The richer value is reached through `InferValues`, and exists for a future
+dialect-to-dialect transpiler: a lint may stay silent on an unknown, a rewriter has to emit something
+anyway and needs to know why it does not know.
 
 ## The client (`client/`)
 

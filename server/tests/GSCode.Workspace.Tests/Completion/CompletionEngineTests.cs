@@ -1031,7 +1031,12 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = CompleteInsideFunction(line);
 
         Assert.DoesNotContain(entries, e => e.Label is "#using" or "#include" or "#namespace"
-            or "#precache" or "#using_animtree" or "#animtree");
+            or "#precache" or "#using_animtree");
+
+        // #animtree was in this list, on the same mistake that put it in TopLevelKeywords. It is the
+        // argument to UseAnimTree( #animtree ), so a body is the ONLY place it can be written — and
+        // `self notify(#` is an expression position, which is precisely where it belongs.
+        Assert.Contains(entries, e => e.Label == "#animtree");
     }
 
     [Theory]
@@ -1505,14 +1510,22 @@ public class CompletionEngineTests
 
     // --- Asset types inside #precache's first argument ---
 
-    /// <summary>Completes with the cursor between the quotes of the given line.</summary>
-    private static ImmutableArray<CompletionEntry> CompleteInsideQuotes(string line, int quoteIndex)
+    /// <summary>
+    /// Completes with the cursor between the quotes of the given line.
+    /// </summary>
+    /// <param name="extension">
+    /// The asking file's extension, which is what decides the WORLD: `Analyze` reads the language
+    /// from the path. It matters for the asset types, since the `client_*` family belongs to the
+    /// client world only.
+    /// </param>
+    private static ImmutableArray<CompletionEntry> CompleteInsideQuotes(
+        string line, int quoteIndex, string extension = "gsc")
     {
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n    s = \"some free text\";\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", line + "\n\nfunction run()\n{\n}\n");
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.{extension}", line + "\n\nfunction run()\n{\n}\n");
 
         return engine.Complete(result, "raw", new Position(0, quoteIndex + 1));
     }
@@ -1546,6 +1559,35 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = CompleteInsideQuotes("#precache( \"model\", \"\" );", 20);
 
         Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.AssetType);
+    }
+
+    [Fact]
+    public void TheAssetTypesOffered_AreTheAskingFilesOwnWorld()
+    {
+        // The `precache` SNIPPET carries no asset types of its own — it retriggers into this list —
+        // so this split is the only thing keeping a .gsc from being offered a client_* type that
+        // gscode-4006 would then report. It used to be enforced by shipping two contributed snippet
+        // files; it is enforced here now, and nowhere else.
+        ImmutableArray<CompletionEntry> server = CompleteInsideQuotes("#precache( \"\" );", 11);
+        ImmutableArray<CompletionEntry> client = CompleteInsideQuotes("#precache( \"\" );", 11, "csc");
+
+        Assert.True(HasLabel(server, "model"));
+        Assert.False(HasLabel(server, "client_fx"));
+
+        Assert.True(HasLabel(client, "client_fx"));
+        Assert.True(HasLabel(client, "model"));
+    }
+
+    [Fact]
+    public void AHeaderIsOfferedBothWorldsAssetTypes()
+    {
+        // A .gsh is inserted into whichever world includes it, so the language it ends up in is not
+        // knowable from the header. PrecacheAssetTypes.IsAvailableIn allows everything there, and
+        // the completion has to agree with the lint that will judge the result.
+        ImmutableArray<CompletionEntry> entries = CompleteInsideQuotes("#precache( \"\" );", 11, "gsh");
+
+        Assert.True(HasLabel(entries, "client_fx"));
+        Assert.True(HasLabel(entries, "model"));
     }
 
     [Fact]
@@ -1591,16 +1633,25 @@ public class CompletionEngineTests
     }
 
     [Theory]
-    [InlineData("#animtree")]
     [InlineData("#if")]
     [InlineData("#elif")]
     [InlineData("#else")]
     [InlineData("#endif")]
     public void PreviouslyUnofferedDirectives_AreNowOffered(string directive)
     {
-        // These five are documented in KeywordDocs and hover on them, but were absent from
-        // TopLevelKeywords, so they could never be completed.
+        // These are documented in KeywordDocs and hover on them, but were absent from
+        // TopLevelKeywords, so they could never be completed. (This world is BO3; on a dialect
+        // without a preprocessor the same four are gated out again — see DialectCompletionTests.)
         Assert.True(HasLabel(CompleteAfter("#"), directive));
+    }
+
+    [Fact]
+    public void Animtree_IsNotATopLevelDirective()
+    {
+        // It was added to TopLevelKeywords with these four and does not belong with them: #animtree
+        // is an expression atom wearing a directive's spelling, and across the five corpora it
+        // appears in 415 files without once starting a line.
+        Assert.False(HasLabel(CompleteAfter("#"), "#animtree"));
     }
 
     [Fact]

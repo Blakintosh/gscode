@@ -105,13 +105,44 @@ public class ParserDepthTests
     [Fact]
     public void AWalkerOverTheDeepestTreeTheCeilingAllowsSurvives()
     {
-        // The claim the ceiling rests on: capping the TREE is what makes every recursive consumer
-        // of it safe, since none of them adds levels of its own. SymbolExtractor is covered above
-        // (it is what the chain shapes used to overflow); AstPrinter is the other walker that lives
-        // in this project, and it is the deepest-recursing one — a node per frame, no loops.
+        // SymbolExtractor is covered above (it is what the chain shapes used to overflow).
+        // AstPrinter is the other walker in this project and the deepest-recursing one — a node per
+        // frame, no loops — and it is the one that showed capping the TREE does not by itself make
+        // every consumer safe: the cap is counted in grammar entries, and survival is counted in
+        // bytes of frame. At the cap this printer cleared a 1 MB stack in Release and died at 242
+        // levels in Debug, taking the whole test host with it. It now carries its own ceiling.
+        //
+        // Note what this asserts and what it does not: the walker RETURNS, and returns something
+        // well-formed. Past AstPrinter.MaxPrintDepth the subtree is a marker, which is the intended
+        // answer for a tree this deep — the same input is already reported as NestingTooDeep.
         ParseTree tree = ParserTestHelper.Parse(InFunction("x = a" + Repeat(".b", 5000) + ";"));
 
         Assert.Contains("(. ", AstPrinter.Print(tree.Root), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThePrintersOwnCeilingTruncatesRatherThanGrowingWithTheTree()
+    {
+        // Pins the guard, not just the survival: without it the printer's output tracks the tree's
+        // full depth, which is what a recursion-per-level walker has no budget for. Two chains an
+        // order of magnitude apart in length must print the same, because both are cut at the same
+        // ceiling — a length that still varied would mean the ceiling was not what stopped it.
+        string shallower = AstPrinter.Print(ParserTestHelper.Parse(InFunction("x = a" + Repeat(".b", 500) + ";")).Root);
+        string deeper = AstPrinter.Print(ParserTestHelper.Parse(InFunction("x = a" + Repeat(".b", 5000) + ";")).Root);
+
+        Assert.Equal(shallower, deeper);
+        Assert.Contains("(...)", deeper, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OrdinaryCodeNeverReachesThePrintersCeiling()
+    {
+        // The other half of the bar: a truncation marker in the golden format of hand-written code
+        // would be a silent wrong answer, since every parser test in this project reads that format.
+        string printed = ParserTestHelper.PrintScript(
+            InFunction("x = a.b.c.d; y = f( 1 + 2 * 3, g( h( 4 ) ) ); if ( x ) { switch ( y ) { case 1: break; } }"));
+
+        Assert.DoesNotContain("(...)", printed, StringComparison.Ordinal);
     }
 
     [Theory]

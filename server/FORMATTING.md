@@ -19,7 +19,7 @@ gate with a safety check of its own.
 | Rule | Corpus evidence |
 |---|---|
 | Lines end with **LF** | 396,131 LF, **0** CRLF |
-| Indent with **tabs** | 271,761 tab-indented lines vs 935 space-indented |
+| Indent with **tabs** | 247,613 tab-led indented lines vs 886 space-led |
 | **Allman** braces — `{` on its own line | 50,485 own-line vs 36 same-line |
 | `else` starts its own line, never `} else` | 7 cuddled in the entire corpus |
 | No blank line immediately after `{` | 50,734 code vs 314 blank |
@@ -189,8 +189,11 @@ width**. The base of a subscript is aligned too, so `foo[ … ]` and `bash[ … 
 even though the names differ. Subscript padding equalises the left-hand sides, so the operator then
 lines up on top of it.
 
-It applies to **Format Document only**, not range or on-type formatting — alignment is a property of
-a group, not of the one line being edited.
+It applies to **all three** formatting requests. Directive sorting is the one that is Format Document
+only, and the two are easy to confuse: both fragment handlers switch off `SortDirectives` and leave
+alignment on, because hoisting a file's directive block out from under a partial edit would be
+startling while re-aligning the group you are typing into is the point. On-type and range edits are
+then clipped to the alignment group around the cursor, so nothing outside it moves.
 
 ## 7. Worked example
 
@@ -281,7 +284,7 @@ function flop()
 | `gscode.format.padParens` | `true` | `if ( x )` against `if (x)` — the interior, not the keyword gap |
 | `gscode.format.maxBlankLines` | `2` | Longest run of blank lines preserved |
 | `gscode.format.sortDirectives` | `true` | Group and sort the leading directive block. Format Document only |
-| `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. Format Document only |
+| `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; range and on-type are clipped to the group around the cursor |
 
 ## 9. What the formatter will not do
 

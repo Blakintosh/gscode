@@ -2,16 +2,24 @@ name: CI
 
 on:
   push:
-    branches: [main, next, rewrite/v2]
+    # next-major is where 2.0 integrates; main is what it eventually lands on. A branch missing
+    # here is not silent - pull_request still covers it - but its direct pushes run nothing.
+    branches: [main, next, next-major]
   pull_request:
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      # Action majors are pinned at the LOWEST one that runs on Node 24, not the newest available:
+      # checkout and the two setups moved at v5, upload-artifact not until v6 (its v5 is still
+      # Node 20). Every earlier major declares `using: node20`, which the runners now force onto
+      # Node 24 with a deprecation warning and will eventually stop running at all. Taking the
+      # minimum keeps this a runtime bump rather than an unrelated behaviour change - checkout is
+      # four majors past v4 by now, and none of that is wanted here.
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -24,9 +32,15 @@ jobs:
         # point at local game or mod-tools installs CI does not have. They no-op when those are
         # unset, so excluding them is not what makes CI pass - it makes the omission EXPLICIT, since
         # a run that silently swept nothing looks exactly like one that swept 7,000 scripts.
+        #
+        # Read the per-assembly totals, not just the step's colour: a test host that dies takes its
+        # remaining tests with it and vstest still prints "Passed!" for the ones that finished, so a
+        # crashed run and a clean one differ by the word "Aborted" and by the count.
         run: dotnet test server/GSCode.slnx --nologo --no-build --filter "Category!=Corpus&Category!=Perf"
 
-      - uses: actions/setup-node@v4
+      # node-version is the Node the CLIENT BUILD runs on and is unrelated to the action's own
+      # runtime above. 20 is what the extension targets, so it stays.
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -37,3 +51,25 @@ jobs:
       - name: Compile client
         run: npm run compile
         working-directory: client
+
+      # The bar is zero ERRORS. The naming-convention warnings are pre-existing and expected - they
+      # are the gscode.* setting keys, which are dotted by contract and cannot be camelCase - so the
+      # count is deliberately not asserted anywhere.
+      - name: Lint client
+        run: npm run lint
+        working-directory: client
+
+      # Builds the artifact users actually install: publishes the server into client/service, then
+      # packs the VSIX. Nothing above touches either half, so without this step a broken
+      # bundle-server, a missing bundled game library or a .vscodeignore mistake is first discovered
+      # by hand on release day.
+      - name: Package extension
+        run: npm run package
+        working-directory: client
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v6
+        with:
+          name: gscode-vsix
+          path: client/*.vsix
+          if-no-files-found: error

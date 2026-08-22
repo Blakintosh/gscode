@@ -48,6 +48,28 @@ preprocess figure is the FLOOR — the cost of walking every token to find nothi
 | cod4 | 894 | 1,556 ms | 0.17 ms | 41% | 15% | 30% | 14% |
 | bo3 | 980 | 1,182 ms | 0.23 ms | 28% | 31% | 29% | 12% |
 
+Re-measured 2026-08-12, uninstrumented, with the instrumented run of the same code beside it so the
+flag's own cost is visible rather than folded in:
+
+| | files | total | median | lex | preprocess | parse | extract |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| cod4 | 894 | 816 ms | 0.05 ms | 36% | 11% | 37% | 17% |
+| cod4 *(instrumented)* | 894 | 899 ms | 0.04 ms | 32% | 10% | 41% | 16% |
+| bo3 | 980 | 991 ms | 0.20 ms | 29% | 23% | 28% | 20% |
+| bo3 *(instrumented)* | 980 | 980 ms | 0.19 ms | 27% | 20% | 35% | 18% |
+| bo1 | 2,960 | 3,111 ms | 0.05 ms | 34% | 9% | 41% | 16% |
+
+**Shares are stable to about a point only within a phase, not across a run.** The three-run cod4
+table further down establishes that for `extract` and it does not generalise: `lex` and `parse` move
+4–5 points between the two runs above, which are the same code minutes apart. So read a 4-point
+difference as nothing. Two moves here survive both runs and are therefore real:
+
+- **bo3 `extract` 12% → 18–20%**, against `preprocess` falling 31% → 20–23%. Extraction's share on
+  the `#insert` dialect has roughly doubled since the figure above it was taken.
+- cod4's total falling by half (1,556 → 816 ms) with its median falling 3x. The distribution is now
+  sharply bimodal — median 0.05 ms against a p99 of 15.3 ms — so the median says little and the
+  slowest 1% carry 24% of the total.
+
 **These are not comparable with figures recorded before 2026-07-30.** The total used to be a
 separate stopwatch around a second `Analyze()` call; it is now the SUM of the four phase timings.
 The two used to contradict each other outright — one file reported 13.0 ms total against 0.2 ms of
@@ -55,6 +77,36 @@ phases, another 64.0 ms total against 74.1 ms — because a single-shot measurem
 median is dominated by whichever GC pause lands inside it. Deriving the total from the phases makes
 them agree by construction, but it also means anything `ScriptAnalysis.Analyze` does AROUND the four
 phases is no longer measured.
+
+### 2026-08-16: lex is half what it was, and is no longer the largest phase
+
+Three changes to the scan, all of them shape rather than algorithm — the position lookup resuming
+from the last token's line instead of binary-searching per token, the character runs read through
+`SearchValues<char>` instead of one character per iteration, and the dialect's keyword set answered
+by hash instead of by reading all two dozen entries. Uninstrumented, one run each, before and after
+in the same session on the same machine:
+
+| | files | total | lex | lex share | parse share |
+|---|---:|---:|---:|---:|---:|
+| cod4 before | 894 | 825 ms | 284 ms | 34.4% | 42.5% |
+| cod4 after | 894 | 764 ms | **144 ms** | **18.8%** | 49.3% |
+| bo3 before | 980 | 944 ms | 303 ms | 32.1% | 31.6% |
+| bo3 after | 980 | 612 ms | **121 ms** | **19.8%** | 30.3% |
+| bo1 before | 2,960 | 3,018 ms | 1,034 ms | 34.3% | 40.7% |
+| bo1 after | 2,960 | 2,306 ms | **443 ms** | **19.2%** | 47.6% |
+
+**Read the share, not the total.** Lex falls by 49%, 60% and 57% and its share drops about fifteen
+points on all three corpora, in the same direction and by nearly the same amount — that is the
+result. The totals are not admissible on their own at this sample size, and the intended control
+proves it rather than confirming anything: `parse` moved +7% on cod4 and −38% on bo3 between the
+same two runs, which is the quarter-sized swing this file warns about further down and not an
+effect of a change that never touched the parser.
+
+Behaviour was pinned before the timings were taken, since a scanner that is faster and wrong is
+worth nothing: every token's kind, offset, length and range was dumped for eleven hand-written
+sources covering each changed path plus 4,000 seeded-random strings over a GSC alphabet, before and
+after, 182,821 lines byte-identical. The corpus sweep then reported the same counts on both sides —
+2 of 894 on cod4, 2 of 980 on bo3, 6 of 2,960 on bo1, with the formatter's gates clean.
 
 ## Measured: the CROSS-FILE LINTS, which cost more than the parse
 
@@ -101,6 +153,51 @@ Read the shares rather than the absolute milliseconds: the per-lint breakdown ne
 `-p:GscodeInstrumentation=true`, which costs something itself, and this sweep is sequential where
 the corpus one is parallel.
 
+### Re-measured 2026-08-12: the tail has doubled, and the type rules are why
+
+The bands above no longer hold. Measured uninstrumented, with the instrumented run beside it —
+which is *faster* on cod4, so the flag does not explain any of this:
+
+| | band above | instrumented | uninstrumented |
+|---|---:|---:|---:|
+| cod4 total | 1,162 – 1,381 ms | 2,220 ms | **2,181 ms** |
+| cod4 median / p99 / max | 0.56 / 10.6–12.3 / 45 ms | 0.72 / 24.2 / 64.7 ms | **0.75 / 23.5 / 40.4 ms** |
+| bo3 total | 1,398 – 2,098 ms | 2,017 ms | **2,191 ms** |
+| bo3 median / p99 / max | 0.50–0.53 / 21 / 57 ms | 0.56 / 19.8 / 54.0 ms | **0.61 / 23.1 / 95.1 ms** |
+
+**cod4's p99 is twice its band and its total is 58% over.** bo3's total clears the top of its band
+and its worst file reaches 95 ms against a previous 57. Medians are up about a quarter on both.
+
+The per-lint scopes say where it went. Five rules are new since the bands were taken, all of them
+reading the flow typer, and they are marked below:
+
+| rule | bo3 (862 files) | cod4 (894 files) |
+|---|---:|---:|
+| `ArgumentCountLint` | 256 ms | 236 ms |
+| `TypeMismatchLint` * | 243 ms | 225 ms |
+| `UnusedIncludeLint` | 0 ms | 225 ms |
+| `PreferBooleanLiteralLint` * | 192 ms | 142 ms |
+| `ConstDeclarationLint` * | 169 ms | 176 ms |
+| `DevBlockCallLint` | 138 ms | 179 ms |
+| `ArithmeticLint` * | 105 ms | 86 ms |
+| `ReadOnlyWriteLint` * | 105 ms | 58 ms |
+| `IncludeUsageLint` | 0 ms | 114 ms |
+| `FunctionResolutionLint` | 58 ms | 90 ms |
+| **starred five, together** | **814 ms (40%)** | **687 ms (31%)** |
+
+So a third to two fifths of all lint time is now the type rules. That is a cost, not a defect — they
+are five diagnostics that did not exist — but it is four times what the lattice measurement further
+down implies, and the reason is that the lattice was measured run-alone against a suite that warms
+the process first.
+
+`UnusedIncludeLint` and `IncludeUsageLint` costing 339 ms on cod4 and nothing on bo3 is the dialect
+split showing in the profile: the merge dialect walks an include closure the namespace dialect never
+builds. It is also why one corpus cannot stand in for the other here.
+
+**Nothing about this is user-visible.** A 23 ms p99 is ten times inside the 250 ms debounce, and
+bo3's 95 ms worst file — a single-shot measurement at that — is the closest anything comes. Do not
+optimise on these numbers. They are here so that the next 2x has something to be a 2x *of*.
+
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced
@@ -120,6 +217,11 @@ The shape is real and it is visible in the numbers. It does not matter.
 | bo3 (1,085 files, **namespace** dialect) | 6,381 | 0.42 ms | 2.03 ms | **4.22 ms** | 24.2 ms |
 | cod4 (904 files, merge dialect) | 6,944 | 0.20 ms | 0.34 ms | 1.03 ms | 16.4 ms |
 | bo1 (2,963 files, merge dialect) | 21,157 | 0.44 ms | 0.64 ms | 1.47 ms | 31.4 ms |
+
+Reconfirmed 2026-08-12 on all three, and it is the most stable measurement in this file: bo3
+p99 4.26 ms, cod4 1.09 ms, bo1 1.57 ms, with the entry-count line identical to the digit. Nothing
+here has moved while the lint sweep next door doubled its tail — worth knowing, since the two share
+a database and an index.
 
 **BO1 is the control, and it is the row that settles this.** Its store is 2.7x BO3's, and its p99 is
 a third of BO3's. Store size is not what drives the cost — the per-namespace multiplier is, and BO3
@@ -157,6 +259,31 @@ site. Only the statement-scope arm queries the store.
 At 66–74% of requests returning over 500 entries (median 847–1,404), the sample is landing on that
 arm. A sweep that quietly hit cheap arms would report fast completions and have measured nothing,
 which is the partial-index failure above arriving by a different route.
+
+### 2026-08-12: the list grew by two thirds and the timings did not move
+
+Statement scope gained the enclosing function's parameters and locals, the enclosing class's `var`
+members, and every macro an `#insert`ed header supplies — the last of which had been filtered out.
+Measured as a BEFORE/AFTER PAIR in one session on one machine, which is the only way this reads:
+the absolute numbers in the table above were taken elsewhere and are not comparable to these.
+
+| | entries median | entries max | p99 |
+|---|---:|---:|---:|
+| bo3 before | 1,168 | 5,059 | 6.01 ms |
+| bo3 after | **1,930** | **5,937** | 6.03 ms |
+| cod4 before | 847 | 2,580 | 1.28 ms |
+| cod4 after | 847 | 2,592 | 1.41 ms |
+
+**A 65% larger list for 0.02 ms at the tail.** The added work is per-request bounded — one walk of
+the enclosing declaration's parameters and assignments, one inheritance walk for members, and a
+table the preprocessor had already built — while the cost this path is made of is the per-namespace
+store walk above, which did not change.
+
+CoD4 is flat because the two dialects gain different things: a merge dialect has no `#insert`, so
+the macro half is empty, and its scripts assign through `level.` rather than to locals — three
+sampled functions in `animscripts\battlechatter.gsc` declare 12, 15 and 7 assignments and only 1, 1
+and 2 of them are locals. Two entries per request is not a measurement. That the numbers barely
+moved there is the expected answer, not a sign the feature is missing on that dialect.
 
 ## Measured: COLD INDEXING, the first-run path
 
@@ -201,9 +328,74 @@ Achieved parallelism is 20.6–21.0x against a ceiling of 23. Three things this 
 - **`index.enqueue` is free** — but this measurement attaches no cache, so it says nothing about the
   SQLite writer. Measuring that needs a run with `UseCache`.
 
-Memory after a cold index differs sharply between the two: CoD4 reports 163–231 MB fragmented
-against 57 MB live, BO3 essentially none. Not yet explained, and worth a look before trusting either
-number.
+### Re-measured 2026-08-12, with bo1
+
+Wall-clock, one instrumented run and one not:
+
+| | files | wall-clock |
+|---|---:|---|
+| bo3 | 1,085 | 1,732 / 1,714 ms |
+| cod4 | 904 | 506 / 600 ms |
+| bo1 | 2,963 | 1,667 / 1,909 ms |
+
+**All three beat the table above, and bo3 and cod4 do it while instrumented.** cod4 in particular
+runs at roughly 60% of its recorded 807–898 ms.
+
+The stage shares moved, in opposite directions:
+
+| stage | bo3 | cod4 | bo1 |
+|---|---|---|---|
+| `index.analyse` | 89.1% *(was 86–90)* | 73.8% *(was 70–78)* | 65.9% |
+| `index.read` | **6.5%** *(was 2.2–2.8)* | **12.6%** *(was 3.1–4.9)* | **18.3%** |
+| `index.commit` | 4.4% *(was 7.6–11.4)* | 13.6% *(was 18.9–25.9)* | 15.8% |
+| `index.enumerate` | 41 ms, 2.4% of WALL | 29 ms, 5.7% of WALL | 162 ms, 9.7% of WALL |
+| achieved parallelism | 21.6x | 20.2x | 19.7x *(ceiling 23x)* |
+
+- **`index.commit` improved and is no longer the headline.** cod4 fell from a fifth-to-a-quarter of
+  thread-time to an eighth. It is still 99% `commit.upsert` — 1,334 of 1,392 ms on cod4, 5,099 of
+  5,191 on bo1 — so the process-wide write gate is still the shape of it, and bo1's 19.7x is the
+  lowest parallelism of the three, which is what a contended global lock looks like.
+- **`index.read` is the new one to watch.** Its share roughly tripled on both games and is 18.3% on
+  bo1 — 1.4–2.2 ms per file, and this sweep runs fourth, so every file was already in the OS cache.
+  Instrumentation inflates `analyse`, which would push read's share *down*, so the figure is
+  understated rather than the reverse. Unexplained; measure `File.ReadAllText` and its encoding
+  detection before assuming it is I/O. **Answered 2026-08-16, below.**
+- **Enumeration is still not the bottleneck**, and bo1 confirms it from the other end: its
+  160,382-file raw tree costs 162 ms, which is 9.7% of wall — the largest share of the three and
+  still not worth attacking.
+
+The "CoD4 reports 163–231 MB fragmented against 57 MB live" left unexplained above is **resolved**:
+cod4 now measures 0 MB fragmented against 58 MB live. `System.GC.ConserveMemory` (below) did it.
+What remains is a 441 MB working set on cod4 and 847 MB on bo1 against ~0 fragmentation — pages not
+yet returned, which the compaction handles and which this sweep never runs. See the section after
+next.
+
+### 2026-08-16: `index.read` was the reader, not the disk
+
+The question above was whether `File.ReadAllText` or the disk owned that share. It was neither the
+disk nor the encoding detection: `File.ReadAllText` pulls the file through a 4 KB decode buffer and
+grows a builder as it goes, which is what an arbitrary stream needs and not what a script is. A
+script is read whole or not at all, so its byte count is known before a character is decoded and one
+`GetString` produces the final string. `PhysicalFileSystem.ReadAllText` now reads the bytes and
+decodes them once, recognising the byte-order marks longest-first so a UTF-32 mark is not read as
+the UTF-16 one it starts with, and replacing invalid bytes rather than throwing — which is what the
+framework method did, asserted against it directly in `PhysicalFileSystemTests`.
+
+Instrumented, one run each side:
+
+| | `index.read` before | after | cold index wall-clock |
+|---|---:|---:|---|
+| bo3 | 1,648 ms (3.7%) | **1,034 ms (2.4%)** | 2,092 → 1,976 ms |
+| cod4 | 723 ms (4.7%) | **413 ms (2.9%)** | 747 → 690 ms |
+| bo1 | 5,109 ms (11.7%) | **3,483 ms (8.5%)** | 2,219 → 2,062 ms |
+
+Roughly a third off the read stage on all three. Wall-clock moves far less, as it must — read is a
+small share of a run that is 78–93% analysis.
+
+Two caveats on this pair, both of which understate rather than flatter it: the baseline run's build
+compiled in only the `index.*` scopes while the after run also carried the nested `extract.*` and
+`commit.*` ones, so the *after* side paid more instrumentation overhead; and no memory figure is
+quoted from either, per the CAUTION above.
 
 ### How much to trust a single run
 
@@ -303,13 +495,16 @@ numbers directly:
   run self-identifying as cold or warm.
 - `Memory after indexing:` — a one-shot breakdown at the indexing → serving transition (below).
   **Verbose only.**
-- `Server memory: N MB` — the working set, sampled every 3 s but logged only when it moves by
-  >= 1 MB, and only AFTER indexing completes (so it never spams while memory is climbing).
-  **Verbose only.**
 
-Both are gated by the log level rather than an environment variable, so `gscode.serverLogLevel =
-verbose` is all it takes. The same sample feeds the status-bar tooltip, which shows the working
-set without any log level at all — usually enough, and the reason the log lines can be quiet by
+The steady-state working set is **not** logged at all. `ServerStatusNotifier` samples it every 3 s
+and pushes a `gscode/serverStatus` notification when it moves by >= 1 MB, and only AFTER indexing
+completes (so it never spams while memory is climbing). The status bar is the readout; there is no
+line to grep for. This section described a `Server memory: N MB` log line for some time, and no
+such line has ever been written.
+
+The breakdown is gated by the log level rather than an environment variable, so
+`gscode.serverLogLevel = verbose` is all it takes. The status-bar tooltip shows the working set
+without any log level at all — usually enough, and the reason the log lines can be quiet by
 default.
 
 ### Reading the memory breakdown
@@ -355,7 +550,7 @@ of scripts allocate their token arrays straight onto a heap that is never compac
 default. Nineteen gen2 collections still left 183 MB fragmented, because ordinary collections
 reclaim LOH memory without moving anything.
 
-**Fix in place:** `CompactIfFragmented` in `Program.cs` runs one `CompactOnce` gen2 collect at
+**Fix in place:** `Compact` in `Program.cs` runs one `CompactOnce` gen2 collect at
 the indexing → serving transition, gated on measured fragmentation (32 MB) so a warm start
 skips the pause. The report is logged again afterwards as "Memory after compaction", so any
 run shows its own before/after. v1 reached the same conclusion in `cfccd26`, "Force aggressive
@@ -399,10 +594,20 @@ allocation-shape changes, so a live set that moves means something else changed.
    *zero*: heap size now equals live. It costs bo1 about 9% on the cold index (2336 → 2547 ms)
    and nothing measurable on cod4 or bo3 — still faster than before the work started.
 
+Reconfirmed 2026-08-12: bo1 0.1 MB fragmented against 147.0 MB live, holding flat across all
+sixteen samples; cod4 and bo3 the same at 0.1–0.2 MB. The result stands.
+
+**CAUTION: never take a memory number from a `-p:GscodeInstrumentation=true` build.** The same
+probe on the same commit, instrumented, reported bo1 at **79 MB fragmented and 59.9 MB of LOH
+holes that never drained** — flat across all sixteen samples, exactly the shape a real regression
+would have, and read as one until the uninstrumented run came back at 0.1 MB. The flag changes
+allocation shape, not only timing: `PerfTracker` scopes allocate per call on a path that runs
+per file. Everything else in this file survives the flag; the memory tables do not.
+
 ### The compaction is unconditional, and the fragmentation gate was wrong
 
-`CompactIfFragmented` used to skip the post-index compaction below 32 MB of measured
-fragmentation. Once (3) took fragmentation to roughly zero, that gate meant the compaction
+`Compact` — then named `CompactIfFragmented` — used to skip the post-index compaction below 32 MB
+of measured fragmentation. Once (3) took fragmentation to roughly zero, that gate meant the compaction
 **never ran** — and that turned out to cost 446 MB.
 
 Measured on bo1, cache attached, immediately after indexing:
@@ -427,6 +632,11 @@ once per index, unconditionally, on a thread nobody is waiting on.
   *worse*, 486 → 596 MB of holes. One ratio cannot fit every file (bo1 spans 2.86 characters per
   token at p10 to 5.87 at p90), so sparse files over-allocated by nearly double and borderline
   arrays that had been *under* the threshold were pushed over it.
+- **Turning on the Performance analyzer category** (`dotnet_analyzer_diagnostic.category-Performance`)
+  found nothing on a hot path, 2026-08-16: three CA1859 interface-return suggestions on cold paths, one
+  CA1827 `Count()`-for-`Any()` on a folder-change notification, and thirty-eight CA1822 "could be
+  static" notes. The CA1827 was applied; the setting was not kept, since `TreatWarningsAsErrors`
+  would make every future note of that kind a build break for no measured gain.
 - **Renting the lexer's buffer from `ArrayPool<Token>.Shared`** fixed the fragmentation but
   **doubled retained memory** (bo1 146 → 279, cod4 51 → 126). The shared pool holds buffers per
   thread and per core across 23 indexing threads and does not release them under a forced gen2.
@@ -510,10 +720,13 @@ the suite.
 
 ## How to run the pass
 
-0. For the per-file sweep: set `GSCODE_CORPUS_COD4` and `GSCODE_CORPUS_BO3`, CLEAR
-   `GSCODE_CORPUS_{WAW,MW2,BO1}` (they are usually set at the user level and would otherwise be
-   inherited), then `dotnet test --filter "Category=Perf"`. Add
-   `-p:GscodeInstrumentation=true` to both the build and the test invocation for sub-phases.
+0. For the per-file sweep: set `GSCODE_CORPUS_COD4` and `GSCODE_CORPUS_BO3` — plus
+   `GSCODE_CORPUS_BO1` if you want the two facts that name it — and CLEAR the rest (they are
+   usually set at the user level and would otherwise be inherited), then
+   `dotnet test --filter "Category=Perf"`. Add `-p:GscodeInstrumentation=true` to both the build and
+   the test invocation for sub-phases. **Run it twice, once with the flag and once without**, and
+   take timing from either but memory only from the uninstrumented run — see the CAUTION under the
+   LOH section for what that flag does to a memory reading. Three corpora take about 2.7 minutes.
 
 The remaining steps measure the SERVER, which is a different question — the sweep is sequential and
 in-process, while the server indexes cold at `ProcessorCount - 1`:
@@ -525,8 +738,45 @@ in-process, while the server indexes cold at `ProcessorCount - 1`:
    packaged extension).
 3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and
    read the "indexing complete" line each time.
-4. Read the steady-state "Server memory" line once the process settles — or just hover the status
-   bar, which shows the same number live.
+4. For the steady-state working set, hover the status bar once the process settles. That is the only
+   readout — it is pushed as a notification, not logged.
+
+## Measured: the type lattice, and why its 112-byte value was left alone
+
+`ScrValue` replaced a 4-byte `ScrType` as the flow typer's environment value. Measured with
+`Unsafe.SizeOf`: **`ScrValue` is 112 bytes**, of which `ScrConstant` is 64 and the `Vec3` inside
+that is 24. Twenty-eight times the enum it replaced, in dictionaries that are CLONED per if-arm,
+per loop body, per switch case group and per dev block.
+
+That looks alarming and is not, which is the point of writing it down rather than acting on it.
+`WorkspaceLints_WhereTheTimeGoes` over BO3's 980 files, one test invocation each so the warm-up
+state matches:
+
+| | BO3, 980 files | median | P99 |
+|---|---:|---:|---:|
+| before the type work (`f5896493`) | 2,528 ms | 0.697 ms | 34.7 ms |
+| after it, with five more lint rules | 2,811 ms | 0.664 ms | 36.7 ms |
+
+**+11% in total for five additional rules AND the lattice, with the median slightly BETTER.** The
+environments are short-lived gen-0 garbage rather than anything retained, so the size shows up as
+allocation churn and not as the steady-state footprint the 400 MB budget covers.
+
+**That +11% is the right answer to the wrong question, and it reads as reassurance it cannot
+support.** It is a before/after on one game, run alone, in a process the suite has not warmed. The
+per-lint breakdown taken 2026-08-12 asks the other question — what share of lint time these rules
+now hold — and answers 31% on cod4 and 40% on bo3. Both figures are true. The delta is small
+because the rules replaced a sweep that was already walking the same trees; the share is large
+because five rules is a lot of rules. Quote the share when deciding whether to add a sixth, and the
+delta only when deciding whether the lattice itself was affordable.
+
+The obvious shrink is available if it is ever wanted — the payloads are mutually exclusive, so
+`long`, `double`, `bool` and `Vec3` could share one 24-byte union under an explicit layout and take
+`ScrConstant` from 64 to about 40. It is not done because explicit layout beside a GC reference is a
+known footgun and the measurement says there is nothing to buy. Re-measure before reaching for it.
+
+Note the invocation mode matters more than the change did: the same test reports 1,595 ms inside a
+full `Category=Perf` run and 2,811 ms run alone, because the suite warms the process first. Compare
+like with like or the noise swamps the signal.
 
 ## Results
 
@@ -539,3 +789,13 @@ Measured on the local BO3-tools machine (corpus not committed):
 | Steady-state memory (cold, before compaction) | 1,105 files | 390.3 MB | < 400 MB | just inside |
 | Steady-state memory (warm) | 1,105 files | 212.2 MB | < 400 MB | yes |
 | Live managed set (either path) | 1,105 files | ~115 MB | — | — |
+
+From the test harness rather than the server, 2026-08-12 — a different question, as the section on
+cold indexing explains, but the only figures that cover bo1:
+
+| Scenario | Corpus size | Measured | Budget | Within budget |
+|---|---|---|---|---|
+| Cold index, cache attached, after compaction | 904 files (cod4) | 913 ms, 125.8 MB | < 60 s, < 400 MB | yes |
+| Cold index, cache attached, after compaction | 2,963 files (bo1) | 2,122 ms, 228.7 MB | < 60 s, < 400 MB | yes |
+| Retained live set, 15 s after indexing | 2,963 files (bo1) | 147.0 MB, flat | — | — |
+| Dropped cache writes | either | 0 | 0 | yes |

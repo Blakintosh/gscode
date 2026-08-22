@@ -2,20 +2,31 @@ namespace GSCode.Core.Paths;
 
 /// <summary>
 /// THE path normalizer — nothing else in the codebase calls Path.GetFullPath or invents
-/// its own casing/separator rules. Both forms are lowercase-canonical and interned, so
-/// normalized paths compare by reference and never need ignore-case comparers.
+/// its own casing/separator rules. Both forms are canonical and interned, so normalized
+/// paths compare by reference and never need ignore-case comparers.
 /// </summary>
 public static class PathUtil
 {
     /// <summary>
+    /// Whether absolute paths are lowercased into their canonical form. True where the
+    /// filesystem is case-insensitive, so <c>C:\Raw</c> and <c>c:\raw</c> key identically.
+    /// On Linux case is identity: lowercasing a path that contains an uppercase letter
+    /// produces one that does not exist, so there the canonical form preserves case —
+    /// still unambiguous, because every key derives from a single real disk path.
+    /// </summary>
+    private static readonly bool LowercaseAbsolutePaths =
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+
+    /// <summary>
     /// Canonical form for an absolute on-disk path: full path, no trailing separator,
-    /// lowercase, interned. This is the ScriptDatabase key format.
+    /// lowercase on case-insensitive filesystems (exact case on Linux), interned. This
+    /// is the ScriptDatabase key format.
     /// </summary>
     public static string NormalizeAbsolute(string path)
     {
         string full = Path.GetFullPath(path);
         full = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return NameTable.Shared.InternLower(full);
+        return LowercaseAbsolutePaths ? NameTable.Shared.InternLower(full) : NameTable.Shared.Intern(full);
     }
 
     /// <summary>

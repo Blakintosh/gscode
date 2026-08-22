@@ -34,6 +34,26 @@ There is no declaration step. `a[ 0 ] = x` on an `a` that does not exist builds 
 is how every array in the stock scripts is made. The base of an assignment target is therefore a
 WRITE, however deeply subscripted — while the subscript expression itself is still a read.
 
+## Structs and entities alias in EVERY game; only arrays fork
+
+| kind | passed as | differs by dialect? |
+|---|---|---|
+| entity — a player, `ent = Spawn( "script_model" )` | reference | no |
+| struct — `spawnstruct()`, BO3's `new Foo()` | reference | no |
+| **array** | **reference on BO3, copied on every earlier game** | **yes** |
+| int, float, bool, string, istring, hash, vector, undefined | value | no |
+
+The trap is assuming the `ArraysPassedByReference` flag means references arrived in BO3. They did
+not: structs and entities have always aliased, and `spawnstruct` appears in all five corpora (cod4
+117 files, waw 173, mw2 190, bo1 363, bo3 177), so both kinds are everywhere in the same code.
+
+What that means for a rule or a rewriter: a struct or entity parameter behaves the same in every
+dialect and needs no thought, while an array parameter a callee MUTATES behaves differently after
+translation in either direction. So the only question worth answering precisely is "is this an
+array", and it has three answers rather than two — certainly, certainly not, and cannot tell. The
+third is the one to escalate rather than guess, which is why `ScrValue` distinguishes `MustBe` from
+`MayBe` instead of carrying a single confidence flag.
+
 ## The Infinity Ward dialects have FILE-SCOPE constants
 
 ```gsc
@@ -50,9 +70,32 @@ collapsed_section_shakes()
 ```
 
 Readable from every function in the file. Modelled as `FileScopeConstantNode`, gated on
-`GameProfile.HasFileScopeConstants`. **These are not macros** — CoD4, WaW and MW2 have no `#define`
-in GSC — and their ALL_CAPS naming makes them look convincingly like one. A per-function rule that
-ignores them reported 755 in MW2's scripts alone.
+`GameProfile.HasFileScopeConstants`. **These are not macros** — and their ALL_CAPS naming makes them
+look convincingly like one. A per-function rule that ignores them reported 755 in MW2's scripts alone.
+
+## No game before BO3 has a preprocessor
+
+`#define` and the `#if`/`#elif`/`#else`/`#endif` chain arrived with the compiler that also brought
+`#insert`. Gated on `GameProfile.HasMacros`, which only BO3 sets; writing one against an earlier
+game is `gscode-2016 MacrosNotInDialect`.
+
+Measured over the shipped scripts, because the file-scope constants above make the opposite easy to
+believe: `#define` appears in exactly one file per pre-BO3 game — always
+`maps/mp/gametypes/_hud.gsc`, inside a `/* */` block holding C source somebody pasted in — and the
+`#if` family in none of the four at all. BO3 has 369 and 4.
+
+The rule REPORTS and then expands anyway, and the lexer is deliberately left ungated so it can:
+skipping would model the game's compiler more faithfully but would punish the case this is most
+likely to be wrong about, a custom compiler that does accept macros. As it stands, suppressing 2016
+leaves a working file.
+
+## `#animtree` is an expression, not a file-scope directive
+
+`#using_animtree( "generic" );` declares the tree at file scope; `#animtree` NAMES it, and only ever
+as an argument — `self UseAnimTree( #animtree );`. Both exist in all five games. Across the five
+corpora `#animtree` appears in 415 files and **not once at the start of a line**, which is why it
+belongs in `GscKeywords.BodyDirectives` and not `TopLevelKeywords`. It was in the latter, and a
+line-anchored grep is what made it look unused everywhere — measure this one without `^`.
 
 ## Under `#include`, every same-named function shares one key
 

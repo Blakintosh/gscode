@@ -21,7 +21,11 @@ namespace GSCode.Workspace.Analysis;
 /// scripts alone, and 4,711 across the five games, all in code that ships and works. A list that
 /// long is one nobody reads. The tag is what carries the finding: the editor greys the name either
 /// way, so the signal survives and only the list entry goes. Every other rule of this kind here
-/// (5020, 5012, 5001, 5015, 5002) was already a Hint.
+/// (5020, 5012, 5001, 5002) was already a Hint.
+///
+/// 5015 is the exception that shows what the number decides rather than the category: unreachable
+/// code is the same kind of finding, and it is Information, because it fires 48 times across all
+/// five corpora rather than 4,711.
 ///
 /// Reads and writes are told apart structurally rather than by counting occurrences. A name is
 /// READ wherever it appears except as the direct target of a plain <c>=</c>; a compound assignment

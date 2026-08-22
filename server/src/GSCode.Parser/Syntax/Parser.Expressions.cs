@@ -188,41 +188,68 @@ public sealed partial class Parser
     private ExprNode ParseCallChain()
     {
         ExprNode expression = ParseUnary();
+        int levels = 0;
 
-        // At most ONE method call. Method notation names an object and a function to run on it, and
-        // the object is a VALUE — a name, a field, an element, a pointer deref — never another
-        // method call: GSC has no `a foo() bar()`.
+        // A call result IS a legal method object, and shipped code leans on it:
+        // `guyPackets[i]["guy"] get_anim_ent() waittillmatch(msg, "end");` and
+        // `GetEnt("monitor_06", "targetname") setclientflagasval(48);` are both BO1's own raw
+        // scripts. So the chain loops.
         //
-        // Looping here did allow it, and the cost was not an odd parse but a HIDDEN ERROR, because
-        // the second callee is free to sit on the next line. CoD4's
+        // What it must NOT do is loop across a line break, because a second callee on the next line
+        // is far more often a missing semicolon than a chain. CoD4's
         // animscripts\traverse\stairs_down.gsc is the case:
         //
         //     endnode = self getnegotiationendnode()      <- no semicolon
         //     assert( isdefined( endnode ) );
         //
-        // parsed as `assert(...)` called ON the result of getnegotiationendnode(), welding two
-        // statements into one and swallowing the missing semicolon entirely. The report then landed
-        // two lines further down, at the next statement that could not be absorbed the same way.
+        // Looping unconditionally read `assert(...)` as called ON the result of
+        // getnegotiationendnode(), welded two statements into one and swallowed the missing
+        // semicolon entirely; the report then landed two lines further down. The line break is the
+        // only thing that separates the two readings, so the chain continues only while the next
+        // callee sits on the line the previous call ended on.
         //
-        // The postfix level below still runs, so a call RESULT can be indexed or member-accessed as
-        // a temporary — `players[q] getplayerangles()[1]`, `ent getstruct().field`. Only using one
-        // call as the object of the next is refused.
-        //
-        // thread / childthread run the callee on a (child) thread; call invokes a function pointer
-        // synchronously. All three are method-notation modifiers over the target.
-        if ( Kind == TokenKind.Thread || Kind == TokenKind.ChildThread || Kind == TokenKind.Call )
+        // The FIRST call is not gated that way — it is the object's own statement either way, and
+        // `self\n    thread foo();` is a formatting choice, not an omission.
+        while ( StartsMethodCall() )
         {
-            bool isThread = Kind != TokenKind.Call;
-            Advance();
-            return ParsePostfixChain(ParseCallCore(expression, isThread));
+            if ( !EnterNesting() )
+            {
+                StopAtNestingLimit();
+                break;
+            }
+
+            levels++;
+
+            // thread / childthread run the callee on a (child) thread; call invokes a function
+            // pointer synchronously. All three are method-notation modifiers over the target.
+            bool isThread = false;
+            if ( Kind == TokenKind.Thread || Kind == TokenKind.ChildThread || Kind == TokenKind.Call )
+            {
+                isThread = Kind != TokenKind.Call;
+                Advance();
+            }
+
+            // The postfix level runs per link, so a call RESULT can be indexed or member-accessed as
+            // a temporary — `players[q] getplayerangles()[1]`, `ent getstruct().field`.
+            expression = ParsePostfixChain(ParseCallCore(expression, isThread));
+
+            if ( !ContinuesPreviousLine() )
+            {
+                break;
+            }
         }
 
-        if ( IsMethodCalleeAhead() )
-        {
-            return ParsePostfixChain(ParseCallCore(expression, isThread: false));
-        }
-
+        ExitNesting(levels);
         return expression;
+    }
+
+    /// <summary>True when a method-notation call begins here: a modifier keyword, or a bare callee.</summary>
+    private bool StartsMethodCall()
+    {
+        return Kind == TokenKind.Thread
+            || Kind == TokenKind.ChildThread
+            || Kind == TokenKind.Call
+            || IsMethodCalleeAhead();
     }
 
     /// <summary>

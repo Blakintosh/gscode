@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 
@@ -234,27 +235,53 @@ public sealed partial record GameProfile
     public static readonly ImmutableArray<string> ClassKeywords =
         ["class", "var", "new", "constructor", "destructor"];
 
+    /// <summary><see cref="Keywords"/> as a hashed set, plus the lookup that probes it with a span.</summary>
+    private sealed record KeywordIndex(
+        FrozenSet<string> Set,
+        FrozenSet<string>.AlternateLookup<ReadOnlySpan<char>> Lookup);
+
+    /// <summary>
+    /// Built on first use, because an init property is not readable from a field initializer.
+    ///
+    /// ONE reference is published rather than two fields, so a thread that races another sees a
+    /// complete index or none at all. Two threads may each build one — they are equivalent and the
+    /// loser's is garbage, which is the cheaper trade at indexing parallelism than a lock would be.
+    /// A <c>with</c> copy would carry this over and answer for the ORIGINAL keyword set; nothing
+    /// copies a profile today, and anything that starts to must clear it.
+    /// </summary>
+    private KeywordIndex? _keywordIndex;
+
+    private KeywordIndex GetKeywordIndex()
+    {
+        KeywordIndex? existing = _keywordIndex;
+        if ( existing is not null )
+        {
+            return existing;
+        }
+
+        FrozenSet<string> set = Keywords.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        KeywordIndex built = new(set, set.GetAlternateLookup<ReadOnlySpan<char>>());
+
+        _keywordIndex = built;
+        return built;
+    }
+
     private bool HasKeyword(string keyword)
     {
-        return Keywords.Contains(keyword, StringComparer.OrdinalIgnoreCase);
+        return GetKeywordIndex().Set.Contains(keyword);
     }
 
     /// <summary>
-    /// Whether the given word is a keyword in this dialect. Called only after the central table has
-    /// already recognised the word as a possible keyword, so the scan is over the profile's own set
-    /// (~two dozen entries) and allocation-free — no per-identifier cost on the lexer's hot path.
+    /// Whether the given word is a keyword in this dialect. Called once per word that the central
+    /// table has already matched — so the words that reach it are the most frequent ones a script
+    /// contains (<c>if</c>, <c>for</c>, <c>return</c>, <c>wait</c>), not the rarest.
+    ///
+    /// That is why it is a hashed probe rather than the scan it used to be: two dozen entries is
+    /// cheap per call and about twelve case-insensitive comparisons on the hottest path in the lexer.
     /// </summary>
     public bool IsKeyword(ReadOnlySpan<char> word)
     {
-        foreach ( string keyword in Keywords )
-        {
-            if ( word.Equals(keyword, StringComparison.OrdinalIgnoreCase) )
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return GetKeywordIndex().Lookup.Contains(word);
     }
 
     /// <summary>Whether the language has classes (<c>class</c>, <c>new</c>, <c>-&gt;</c>). T7 only. Derived from the keyword set.</summary>
@@ -371,6 +398,25 @@ public sealed partial record GameProfile
     /// <c>PrecacheItem( … )</c>), which is why the directive is absent from them.
     /// </summary>
     public bool HasPrecacheDirective { get; init; }
+
+    /// <summary>
+    /// Whether the dialect has a PREPROCESSOR: <c>#define</c> and the <c>#if</c>/<c>#elif</c>/
+    /// <c>#else</c>/<c>#endif</c> chain. BO3 only — it arrived with the compiler that also brought
+    /// <c>#insert</c>, which is why headers are a thing there and nowhere else.
+    ///
+    /// Kept separate from <see cref="HasHeaders"/> rather than derived from it. A header IS macros,
+    /// so the two coincide today, but they are different claims: a dialect could define macros
+    /// in-file without having anywhere to put them, and reading one flag as the other would make
+    /// that game's support a rewrite rather than a value.
+    ///
+    /// Measured, because the ALL_CAPS constants in the earlier games look convincingly like macros
+    /// and are not: across the four IW-line and pre-BO3 Treyarch corpora — 895, 1,977, 1,488 and
+    /// 3,125 shipped scripts — <c>#define</c> appears in exactly one file per game, always the same
+    /// <c>maps/mp/gametypes/_hud.gsc</c>, inside a <c>/* … */</c> block holding C source somebody
+    /// pasted in. The <c>#if</c> family appears in none of them at all. What those games have
+    /// instead is <see cref="HasFileScopeConstants"/>.
+    /// </summary>
+    public bool HasMacros { get; init; }
 
     // --- Install layout ---
     //
@@ -545,7 +591,7 @@ public sealed partial record GameProfile
 
     /// <summary>
     /// Every mainline game from Call of Duty 4 to Black Ops 6, in release order. Five are SUPPORTED
-    /// with capabilities verified against real scripts (CoD4, WaW, MW2, BO1, BO3 — only BO3 is also
+    /// with capabilities established from real scripts (CoD4, WaW, MW2, BO1, BO3 — all five are also
     /// <see cref="Verified"/>); the rest are CORES (see <see cref="Core"/>) — nameable identities over
     /// the shared base dialect, left for a contributor to fill in. All live in
     /// <c>Profiles/SupportedProfiles.cs</c>.

@@ -17,7 +17,7 @@ namespace GSCode.Workspace.Tests.Analysis;
 
 /// <summary>
 /// <c>// gscode ignore</c>, the suppression 1.5 shipped, kept as an alias of
-/// <c>#pragma warning disable all</c> over one line.
+/// <c>#pragma disable all</c> over one line.
 ///
 /// It is a compatibility surface, so the tests pin 1.5's semantics rather than what would be
 /// tidier: the comment suppresses the line BELOW it and nothing else, <c>gsc</c> is accepted for
@@ -94,7 +94,7 @@ public class IgnoreCommentTests
         // It carries its own answer rather than reading the running disable/restore state, so it
         // still works inside a region a restore has switched back on.
         ImmutableArray<PragmaDirective> directives = Scan(
-            "// #pragma warning disable all\n// #pragma warning restore all\n// gscode ignore\nfoo();\n");
+            "// #pragma disable all\n// #pragma restore all\n// gscode ignore\nfoo();\n");
 
         Assert.True(PragmaDirectives.IsSuppressed(directives, GscDiagnosticCode.BuiltinFunctionNotFound, 3));
     }
@@ -105,7 +105,7 @@ public class IgnoreCommentTests
         // The other half of the same rule: it writes no state either, so the restore below still
         // switches diagnostics back on for the rest of the file.
         ImmutableArray<PragmaDirective> directives = Scan(
-            "// #pragma warning disable 5014\n// gscode ignore\nfoo();\n// #pragma warning restore 5014\nbar();\n");
+            "// #pragma disable 5014\n// gscode ignore\nfoo();\n// #pragma restore 5014\nbar();\n");
 
         Assert.True(PragmaDirectives.IsSuppressed(directives, GscDiagnosticCode.BuiltinFunctionNotFound, 2));
         Assert.False(PragmaDirectives.IsSuppressed(directives, GscDiagnosticCode.BuiltinFunctionNotFound, 4));

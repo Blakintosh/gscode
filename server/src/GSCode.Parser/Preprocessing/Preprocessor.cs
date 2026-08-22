@@ -19,16 +19,31 @@ public sealed class Preprocessor
     private readonly IInsertProvider _insertProvider;
     private readonly NameTable _names;
 
-    /// <summary>Only for the header-extension rule; everything else here is dialect-independent.</summary>
+    /// <summary>
+    /// For the header-extension rule and the no-preprocessor rule (<see cref="ReportIfNoPreprocessor"/>).
+    /// Everything else here is dialect-independent, which is the point: the walk is one algorithm and
+    /// only the two questions that genuinely differ by game are asked of the profile.
+    /// </summary>
     private readonly GameProfile _profile;
+
+    /// <summary>
+    /// Whether <see cref="GscDiagnosticCode.MacrosNotInDialect"/> has already been raised for this
+    /// run. The mistake is a property of the FILE — someone is writing BO3 syntax against an earlier
+    /// game, or has the wrong game selected — so one report says everything a second would, and a
+    /// file of forty <c>#define</c>s should not produce forty Errors. Same reasoning as
+    /// <c>UsingNotFound</c>'s first-site reporting.
+    /// </summary>
+    private bool _reportedNoPreprocessor;
 
     private readonly MacroTable _macros = new();
 
     /// <summary>
     /// The parse stream. Sized from the lexed token count by <see cref="OutputTokensPerLexedToken"/>
-    /// rather than left to grow from empty: a PToken is 80 bytes, so this array crosses the
-    /// large-object-heap threshold at about 1,060 entries — nearly every real script — and each
-    /// array a doubling chain abandons on the way there is a hole in a heap that is never compacted.
+    /// rather than left to grow from empty: a PToken is 40 bytes, so this array crosses the
+    /// large-object-heap threshold at about 2,120 entries — which the larger scripts clear — and
+    /// each array a doubling chain abandons on the way there is a hole in a heap that is never
+    /// compacted. The width is pinned by TokenWidthTests; it was 80 bytes, and the threshold
+    /// therefore 1,060 entries, until Provenance stopped being copied into every token.
     /// </summary>
     private readonly List<PToken> _output;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
@@ -64,6 +79,18 @@ public sealed class Preprocessor
     private sealed record FileFrame(ImmutableArray<Token> Tokens, SourceText Text, string? SourceFile, TextRange? RootSite, int Depth)
     {
         private Provenance? _provenance;
+
+        /// <summary>
+        /// The macro names this frame's own <c>#define</c>s have introduced, for
+        /// <see cref="GscDiagnosticCode.DuplicateMacroDefinition"/>.
+        ///
+        /// Per FRAME rather than per <see cref="MacroTable"/>, and that is the whole rule. Redefining
+        /// a macro across files is legal and deliberate — a header defines a default and the script
+        /// inserting it overrides — so the table's own "redefinition silently replaces" is correct and
+        /// must stay unreported. Two frames also exist for one header inserted twice, and scoping by
+        /// SourceFile instead would report every macro it defines on the second insert.
+        /// </summary>
+        public HashSet<string> DefinedNames { get; } = new(StringComparer.Ordinal);
 
         /// <summary>
         /// The provenance every token from this frame carries, built once.
@@ -156,18 +183,31 @@ public sealed class Preprocessor
             switch ( token.Kind )
             {
                 case TokenKind.DefineDirective:
+                    ReportIfNoPreprocessor(frame, token);
                     index = ParseDefine(frame, index);
                     continue;
                 case TokenKind.InsertDirective:
                     index = HandleInsert(frame, index, sink);
                     continue;
                 case TokenKind.IfDirective:
+                    ReportIfNoPreprocessor(frame, token);
                     index = HandleConditionalChain(frame, index, endExclusive, sink);
                     continue;
                 case TokenKind.ElifDirective:
                 case TokenKind.ElseDirective:
                 case TokenKind.EndifDirective:
-                    AddDiagnostic(frame, token.Range, GscDiagnosticCode.UnexpectedConditionalDirective, KindText(frame, token));
+                    // Only ORPHANS reach here — a chain opened by #if consumes its own branches.
+                    // Where the dialect has no preprocessor at all, "unexpected" is true but beside
+                    // the point, so the dialect answer replaces it rather than joining it.
+                    if ( _profile.HasMacros )
+                    {
+                        AddDiagnostic(frame, token.Range, GscDiagnosticCode.UnexpectedConditionalDirective, KindText(frame, token));
+                    }
+                    else
+                    {
+                        ReportIfNoPreprocessor(frame, token);
+                    }
+
                     index = SkipToEndOfLine(frame, index);
                     continue;
                 default:
@@ -267,10 +307,56 @@ public sealed class Preprocessor
             index++;
         }
 
+        ReportIfAlreadyDefined(frame, name, nameToken.Range);
+
         MacroDefinition definition = new(name, frame.SourceFile, nameToken.Range, parameters, [.. body], documentation);
         _macros.Define(definition);
         _recordingDefinitions?.Add(definition);
         return index;
+    }
+
+    /// <summary>
+    /// Reports a <c>#define</c> of a name something has already defined, at the LATER definition —
+    /// which is the one that takes effect, since the table is order-based and the last one wins.
+    ///
+    /// Two questions, because one of them cannot answer the other:
+    ///
+    /// - The frame's own set catches a name written twice in one file.
+    /// - The macro table catches a name already defined by a DIFFERENT file, which is the case that
+    ///   matters most in practice: a header defines it, the script inserting the header defines it
+    ///   again, and which body a call site expands to depends purely on which was seen last.
+    ///
+    /// The table alone would be wrong. A header whose contribution cannot be replayed from the cache
+    /// is walked again from scratch, and the table still holds what the previous walk put there — so
+    /// every <c>#define</c> in it would report itself as a redefinition of itself. Comparing the
+    /// source file is what separates "this directive, seen a second time" from "a second directive",
+    /// and only the frame's set can then still catch a genuine in-file duplicate on that second walk.
+    ///
+    /// NOT gated on the dialect. 2016 reports that a pre-BO3 game has no preprocessor and then
+    /// expands the macro anyway, so that suppressing it leaves a working file — the case that exists
+    /// for is a custom compiler which does accept macros. Gating this would make it Black Ops III's
+    /// alone, and that same user would lose it silently along with the 2016 they suppressed.
+    /// </summary>
+    private void ReportIfAlreadyDefined(FileFrame frame, string name, TextRange nameRange)
+    {
+        bool duplicateInThisFile = !frame.DefinedNames.Add(name);
+
+        bool duplicateFromAnotherFile = _macros.TryGet(name, out MacroDefinition earlier)
+            && !string.Equals(earlier.SourceFile, frame.SourceFile, StringComparison.OrdinalIgnoreCase);
+
+        if ( !duplicateInThisFile && !duplicateFromAnotherFile )
+        {
+            return;
+        }
+
+        // Naming where the earlier one lives is the whole value of the report: the reader's question
+        // is never "is this a duplicate" but "which body does my call site get", and the answer is
+        // the one written here — so the message has to identify the definition being replaced.
+        string origin = duplicateFromAnotherFile
+            ? $"'{earlier.SourceFile ?? _rootFilePath}'"
+            : "this file";
+
+        AddDiagnostic(frame, nameRange, GscDiagnosticCode.DuplicateMacroDefinition, name, origin);
     }
 
     private int ParseMacroParameters(FileFrame frame, int openParenIndex, string macroName, out ImmutableArray<string>? parameters)
@@ -295,7 +381,18 @@ public sealed class Preprocessor
 
             if ( IsMacroCandidate(current.Kind) )
             {
-                names.Add(_names.Intern(current.GetText(frame.Text)));
+                string parameterName = _names.Intern(current.GetText(frame.Text));
+
+                // Unlike a duplicate DEFINITION, this has no reading under which the author got what
+                // they wanted: the second parameter can never be bound, so every argument passed for
+                // it is discarded. Reported and then added anyway, so the arity the call sites are
+                // judged against still matches what was written.
+                if ( names.Contains(parameterName) )
+                {
+                    AddDiagnostic(frame, current.Range, GscDiagnosticCode.DuplicateMacroParameter, parameterName, macroName);
+                }
+
+                names.Add(parameterName);
             }
 
             // Commas, whitespace, and anything unexpected are simply stepped over.
@@ -1102,6 +1199,32 @@ public sealed class Preprocessor
     private string KindText(FileFrame frame, Token token)
     {
         return TokenFacts.GetStaticText(token.Kind) ?? token.GetText(frame.Text).ToString();
+    }
+
+    /// <summary>
+    /// Reports a preprocessor directive written against a dialect that has none, once per run.
+    ///
+    /// The caller then goes on to PROCESS it anyway. That is deliberate and is the whole design of
+    /// this rule: the reading most likely to be wrong is a custom compiler that does accept macros,
+    /// and under reporting-and-expanding the answer to being wrong is to suppress 2016 and keep
+    /// working IntelliSense. Reporting-and-skipping would leave a suppressed file with its macros
+    /// quietly unexpanded — every name they define unresolved, and nothing on screen to connect
+    /// that to the suppression.
+    /// </summary>
+    private void ReportIfNoPreprocessor(FileFrame frame, Token directive)
+    {
+        if ( _profile.HasMacros || _reportedNoPreprocessor )
+        {
+            return;
+        }
+
+        _reportedNoPreprocessor = true;
+        AddDiagnostic(
+            frame,
+            directive.Range,
+            GscDiagnosticCode.MacrosNotInDialect,
+            KindText(frame, directive),
+            _profile.DisplayName);
     }
 
     /// <summary>Index of the next non-trivia token at or after <paramref name="start"/>, or -1.</summary>

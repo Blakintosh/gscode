@@ -499,11 +499,11 @@ public sealed class SymbolExtractor
                 WalkExpression(switchNode.Subject, assignments);
                 foreach ( CaseGroupNode caseGroup in switchNode.Cases )
                 {
-                    foreach ( ExprNode? label in caseGroup.Labels )
+                    foreach ( CaseLabel label in caseGroup.Labels )
                     {
-                        if ( label is not null )
+                        if ( label.Value is not null )
                         {
-                            WalkExpression(label, assignments);
+                            WalkExpression(label.Value, assignments);
                         }
                     }
 
@@ -623,9 +623,27 @@ public sealed class SymbolExtractor
                     WalkExpression(derefCallee.Pointer, assignments);
                 }
 
-                foreach ( ExprNode argument in call.Arguments )
+                // `self waittill( "damage", attacker, amount );` BINDS its trailing arguments —
+                // they are outputs the engine fills in, not values being read, and they are the
+                // only way those names ever come into existence. Walked as ordinary expressions
+                // they produced no AssignmentSymbol at all, which left go-to-definition, hover
+                // typing and completion with nothing to say about `attacker` and its kind.
+                //
+                // The first argument is the event NAME and is a genuine read. The waittill family
+                // is identified by TOKEN KIND (AstSearch.IsWaittill) because a callable keyword
+                // parses as an IdentifierNode wrapping the keyword token, so the kind is what
+                // separates it from a call to a function sharing the name.
+                bool bindsOutputs = AstSearch.IsWaittill(call.Callee);
+
+                for ( int index = 0; index < call.Arguments.Length; index++ )
                 {
-                    WalkExpression(argument, assignments);
+                    if ( bindsOutputs && index > 0 && call.Arguments[index] is IdentifierNode bound )
+                    {
+                        AddLocalAssignment(bound.Token, assignments);
+                        continue;
+                    }
+
+                    WalkExpression(call.Arguments[index], assignments);
                 }
 
                 return;
@@ -824,7 +842,7 @@ public sealed class SymbolExtractor
             }
             case TokenKind.AnimReference:
             {
-                SymbolKey key = new(null, _names.InternLower(literal.Token.Text.AsSpan(1)), SymbolKind.AnimReference);
+                SymbolKey key = new(null, _names.InternLower(TokenFacts.AnimReferenceName(literal.Token.Text)), SymbolKind.AnimReference);
                 AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }

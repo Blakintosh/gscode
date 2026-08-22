@@ -9,14 +9,19 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - `static class LspMapping` — the ONLY place Core and protocol types meet: structural
   Position/TextRange conversions (both UTF-16 zero-based) and Diagnostic mapping
   (severity cast, numeric code, source "gscode").
+- `LocationAt(path, range)` — a Location for a range in a file on disk. Composition rather than
+  conversion, kept here because a file path reaches the client as a URI exactly one way.
 
 ## Configuration/ServerSettings.cs
 
-- `sealed class ServerSettings` — the parsed gscode.* view (serverLogLevel, raw.enabled,
-  rawPath/modsPath overrides, rawFileWarningMode, outline.showAssignments, codeLens.enabled,
-  inlayHints.parameterNames, inlayHints.inferredTypes, completion.literals). `Apply(JToken)`
-  merges a settings payload (accepting both dotted and nested key forms); missing keys keep
-  current values.
+- `sealed class ServerSettings` — the parsed gscode.* view. It covers EVERY key
+  `client/package.json` contributes and reads nothing else, which is the invariant worth stating
+  rather than a list that goes stale: the game and script roots (game, serverLogLevel, raw.enabled,
+  rawPath/modsPath overrides, rawFileWarningMode), indexing (workspaceIndexingMode,
+  enableWorkspaceCache, diagnostics.scope), the editor features (outline.showAssignments,
+  codeLens.enabled, the inlayHints.* and completion.* pairs) and the four format.* knobs.
+  `Apply(JToken)` merges a settings payload (accepting both dotted and nested key forms); missing
+  keys keep current values.
 
 ## Configuration/ResolverHolder.cs
 
@@ -29,7 +34,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - Incremental text sync. didOpen → immediate analysis; didChange → ~250 ms debounced
   re-analysis with per-document cancellation (superseded runs are cancelled, silently);
   didSave → immediate (bypasses debounce); didClose → clears diagnostics. Before publishing,
-  it merges the parse diagnostics with cross-file lints (`NamespaceUsageLint`) for GSC/CSC docs.
+  it merges the parse diagnostics with the cross-file lints — all of them, via `DocumentLinter`
+  — for GSC/CSC docs.
+
+## Handlers/DocumentLinter.cs
+
+- `DocumentLinter` — the one call site for `WorkspaceLints.Analyze`, holding the four workspace
+  singletons that call needs (database, resolver, builtin API, object fields). Stateless; it exists
+  so the seven-argument pipeline signature is written once rather than in both `TextSyncHandler`
+  and `DependentDiagnosticsRefresher`.
 
 ## Handlers/DiagnosticsPublisher.cs
 
@@ -75,6 +88,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - `NavigationTarget` + `NavigationSupport.Resolve(uri)` — shared plumbing turning a
   document URI into its live analysis + the language store and context id to query.
+- `ResolveDirectivePath(target, path)` — the file a `#using`/`#include` names, with the extension
+  taken from the ASKING document's language. Go-to-definition and ctrl-click ask this same
+  question; with a copy each, a new directive form had to be found twice.
 - `FindAllReferences` is the single query behind both the CodeLens count and the peek list, so the
   number and the list cannot disagree. It narrows via `DeclaringFile`, which resolves "which file
   does this key mean, FROM THIS DOCUMENT" — a lens on a declaration answers itself, a call answers
@@ -107,11 +123,17 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - Find-all-references across the visible context (functions/classes/macros/fields and
   string/hash/istring/anim literals), honoring includeDeclaration.
+- A cursor the reference index does not know falls through to `Workspace/Database/LocalReferences`,
+  which is every LOCAL — the index is keyed by SymbolKey and shared workspace-wide, so locals are
+  deliberately absent from it. Same fallthrough `DefinitionHandler` takes. `includeDeclaration`
+  drops only the introduction there (the parameter, or the first write), not every write.
 
 ## Handlers/DocumentHighlightHandler.cs
 
 - Highlights every occurrence of the symbol under the cursor within the current file
   (definition sites as Write, others as Read).
+- Locals take the same `LocalReferences` fallthrough, with assignments, loop bindings, `waittill`
+  outputs and the parameter all highlighted as Write.
 
 ## Handlers/DocumentLinkHandler.cs
 
@@ -120,7 +142,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/SemanticTokensHandler.cs
 
 - Full-document (and delta/range via the base class) semantic highlighting; the legend
-  order mirrors `SemanticTokenType`. Pushes `SemanticTokenBuilder.Build` output in order.
+  order mirrors `SemanticTokenType`. Merges two producers before pushing in order:
+  `SemanticTokenBuilder.Build` (what the reference index knows — functions, classes, macros,
+  fields) and `LocalReferences.SemanticTokens` (parameters and locals, from the same per-function
+  walk rename and find-references use). The reference classification wins any position both claim.
 
 ## Handlers/CompletionHandler.cs
 
@@ -144,7 +169,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/CodeLensHandler.cs
 
 - "N references" lenses above function/class declarations (counts from the reference index,
-  gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge.
+  gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge. An
+  `autoexec` function reads "autoexec entry point" when the count is zero: the engine calls it on
+  load, so its call sites are in no script and a bare "0 references" reads as dead code.
 
 ## Handlers/WorkspaceFoldersHandler.cs
 
@@ -174,6 +201,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - Rename functions/classes/macros across every reference in the visible context (mods can't
   see each other, so a rename never leaks across them). prepareRename returns the symbol
   range only for renameable kinds — builtins, keywords, and literals get "cannot rename".
+- A LOCAL is always the script's to rename but is invisible to `IsRenameable`, which reads the
+  reference index. BOTH handlers take the `LocalReferences` fallthrough, so the preview and the
+  rename still cannot disagree — which is the whole reason `IsRenameable` is shared. Refused when
+  the function already binds the new name: that case does not fail, it merges two variables.
 
 ## Handlers/CallHierarchyHandler.cs
 
@@ -188,12 +219,21 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/InlayHintHandler.cs
 
 - Inlay hints, two independently-toggleable families over the visible range: inferred-type
-  hints (`: int`) at each FlowTyper `InferredAssignment` name-range end (gated by
-  inlayHints.inferredTypes), and parameter-name hints (`amount:`) before each call argument,
-  resolving the callee's parameter names from the database (script functions in the file's
-  namespaces, else builtins) and qualified `ns::fn` calls (gated by inlayHints.parameterNames).
+  hints (`: int`, and `: derived_thing` for a class instance) at each FlowTyper
+  `InferredAssignment` name-range end (gated by inlayHints.inferredTypes), and parameter-name
+  hints (`amount:`) before each call argument (gated by inlayHints.parameterNames).
   The FlowTyper it builds is seeded with the shared ObjectFields for field-type inference.
   ResolveProvider is false, so the resolve handler is a passthrough.
+
+  Parameter names come from four callee forms. A bare name and a `ns::fn` are answered from the
+  SYNTAX, through `UnqualifiedParameterNames` (script functions in the file's namespaces, else
+  builtins; a method first inside a class body) and `QualifiedParameterNames` (namespace first,
+  then the qualifier as a class name). The two indirect forms are answered from the flow pass
+  instead, because their callee is a VALUE and the syntax only names a local: `[[ ptr ]]( … )`
+  reads the `ScrFunctionRef` the pointer carries, and `[[ obj ]]->method( … )` reads the object's
+  `InstanceClass`. Both showed nothing at all before, which on a BO3 script is most of the
+  dispatch in some files. That is why the handler runs `FlowTyper.InferValues` once per request
+  when parameter hints are on, rather than a position query per call site.
 
 ## Handlers/DocumentFormattingHandler.cs
 
@@ -269,7 +309,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   handlers share it. `Format(ParseResult)` returns the full formatted text (or null).
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
   every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman
-  braces, one statement per line, 4-space indent from brace/dev-block depth, padded
+  braces, one statement per line, one `FormatOptions.IndentUnit` per brace/dev-block level (a tab
+  or `tabSize` spaces, from the request's `insertSpaces` — the client defaults all three languages
+  to tabs, which is what the corpus does), padded
   control-flow and non-empty parens (`( x )`, `()` stays tight), hugging `.`/`::`/`->`/`[ ]`
   and backslash paths, and blank lines capped at two. Line breaks are forced structurally
   (Allman) but original breaks are otherwise preserved, which keeps newline-terminated
@@ -289,9 +331,10 @@ transport, and starts the OmniSharp `LanguageServer` with `OnInitialize` (reads
 On indexing completion it logs `Workspace indexing complete: N files in X.Xs` (info), then a
 formatted `LogIndexBreakdown` block — per-language file counts (`GSC`/`CSC`/`GSH`) each split by
 raw/mod/workspace context (`CategorizeContext` + `FormatLanguageLine`), and a totals line of
-functions · classes · macros · distinct namespaces — and then starts `RunMemoryMonitorAsync`, a
-lifetime background loop that samples the working set every 2 s and logs `Server memory: N MB`
-only on >= 1 MB changes (so a stable process stays quiet).
+functions · classes · macros · distinct namespaces — and then starts `ServerStatusNotifier.RunAsync`,
+a lifetime background loop that samples the working set every 3 s and pushes a `gscode/serverStatus`
+notification only on >= 1 MB changes (so a stable process stays quiet). It does NOT log: the status
+bar is the readout.
 
 ## Transport/TransportOptions.cs
 
@@ -313,12 +356,6 @@ only on >= 1 MB changes (so a stable process stays quiet).
   - `FromSetting(string?)` — maps the client's `gscode.serverLogLevel` string
     (off/error/warning/info/verbose) to a Serilog level; `off` maps to a level past
     Fatal so the channel is truly silent; unknown values fall back to info.
-
-## Configuration/InitializationOptionsReader.cs
-
-- `static class InitializationOptionsReader`
-  - `ReadServerLogLevel(JToken)` — extracts `gscode.serverLogLevel` from the raw
-    `initialize` options; returns null when the section or key is absent.
 
 ## Configuration/CacheHolder.cs
 
@@ -342,10 +379,23 @@ that chose it. These are the pieces that implement it:
   statements sharing a shape has each bracket and argument column padded to its widest.
 - `DirectiveSorter` — groups and sorts the directive block at the top of a file. The formatter's one
   operation that MOVES code rather than whitespace, so it runs as a post-pass on already-reflowed
-  text, after the token-stream equality gate.
-- `LineFacts` — shared line-level predicates for comment tokens, leading whitespace, code-only
-  tokens, and comment-only lines. Keeping these premises in one place prevents the aligners and
-  formatter scope logic from disagreeing.
+  text, after the token-stream equality gate. `#using` and `#include` share a group (one idea, one
+  spelling per dialect) and sort with `#precache`; `#insert` and `#define` keep their order, and a
+  `#define` above an `#insert` stands the whole pass down. `#using_animtree` ENDS the block: it
+  binds every `%anim` below it until the next one, so it is not a preamble directive at all and
+  moving it rebinds animations invisibly. A comment run travels with the directive beneath it,
+  except the run above the FIRST directive — that is the block's banner and stays above it, with
+  whatever spacing the author left — and a run followed by a blank line part-way down, which is
+  owned by nothing and so ends the block.
+- `LineFacts` — shared line-level premises: comment tokens, leading whitespace, code-only tokens,
+  comment-only lines, and `BucketByLine` (a line's significant tokens, whitespace and newlines
+  dropped). Keeping these in one place prevents the aligners and formatter scope logic from
+  disagreeing.
+- `FormattingSupport` — the steps the three formatting handlers share before they diverge:
+  `Prepare` resolves the open document and analyses it FRESH before diffing (a stale read here
+  writes a corrupting edit rather than merely showing something wrong), `ToLspEdits` projects the
+  formatter's per-region edits onto the protocol. Each handler then keeps whichever edits its
+  feature is scoped to.
 
 ## Handlers/ — the remainder
 
@@ -353,8 +403,14 @@ that chose it. These are the pieces that implement it:
   no symbol knowledge of its own and cannot tell a builtin from a script function.
 - `ClearCacheHandler` — drains the cache and deletes only THIS workspace's database, server-side
   where the paths are known.
-- `DependentDiagnosticsRefresher` — debounced re-linting of other open documents when an edited
-  file's exported cross-file signature changes, reusing their cached parse instead of reparsing.
+- `DependentDiagnosticsRefresher` — debounced re-linting of open documents when the world under them
+  moves, reusing their cached parse instead of reparsing. Three callers, and the second and third
+  pass no origin because the event belongs to no open document: an edit that changes a file's
+  exported cross-file signature (`TextSyncHandler`), a change arriving on disk behind the editor's
+  back (`WatchedFilesHandler`), and the completion of the initial index (`Program.cs`). The last is
+  not optional — a tab restored with the window is opened during initialize, so its `didOpen` linted
+  it against a half-built index and the codes gated on `HasCompletedIndex` (5013/5014/5025/5026)
+  were silent until it was closed and reopened.
 - `PrepareRenameHandler` — validates a rename before the UI opens: the symbol's range for anything
   the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
   the editor says "cannot rename here" instead of prompting and then failing. Shares
@@ -362,7 +418,9 @@ that chose it. These are the pieces that implement it:
 - `ServerStatusNotifier` — keeps the status-bar tooltip's memory figure current. It was previously
   set once from the `gscode/indexingComplete` payload and never updated again.
 - `WorkspaceDiagnosticsPublisher` — publishes problems for files that are not open, per
-  `gscode.diagnostics.scope`.
+  `gscode.diagnostics.scope`. It skips open documents deliberately, since `TextSyncHandler` owns
+  those and publishes a richer set for them — which is why every caller of its `Refresh()` has to
+  pair it with `DependentDiagnosticsRefresher.Schedule()` to cover the other half.
 
 ## .editorconfig
 

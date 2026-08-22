@@ -7,7 +7,9 @@ using GSCode.Workspace.Documents;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 using SymbolKind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -42,13 +44,12 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
     public override Task<SymbolInformationOrDocumentSymbolContainer?> Handle(
         DocumentSymbolParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document)
-            || document.LatestResult is null )
+        if ( !_documents.TryGetAnalyzed(
+            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
         {
             return Task.FromResult<SymbolInformationOrDocumentSymbolContainer?>(null);
         }
 
-        ParseResult result = document.LatestResult;
         List<SymbolInformationOrDocumentSymbol> roots = [];
 
         // File-local #define macros first (never ones arriving via #insert).
@@ -64,7 +65,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
         // directives become container nodes (the file-default span stays flat).
         foreach ( NamespaceSpan namespaceSpan in result.Extraction.Namespaces )
         {
-            bool isExplicit = namespaceSpan.NameRange != GSCode.Core.Text.TextRange.Empty;
+            bool isExplicit = namespaceSpan.NameRange != TextRange.Empty;
             List<SymbolInformationOrDocumentSymbol> children = [];
 
             foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
@@ -99,7 +100,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
             //
             // The node needs a selection range that exists in the file, and there is no name to
             // point at, so it selects the first thing it contains.
-            OmniSharp.Extensions.LanguageServer.Protocol.Models.Range selectionRange = isExplicit
+            LspRange selectionRange = isExplicit
                 ? namespaceSpan.NameRange.ToLsp()
                 : FirstSelectionRange(children);
 
@@ -179,7 +180,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
     /// Clients require the selection range to lie inside the node's full range, so it cannot
     /// simply be left empty.
     /// </summary>
-    private static OmniSharp.Extensions.LanguageServer.Protocol.Models.Range FirstSelectionRange(
+    private static LspRange FirstSelectionRange(
         List<SymbolInformationOrDocumentSymbol> children)
     {
         foreach ( SymbolInformationOrDocumentSymbol child in children )
@@ -190,7 +191,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
             }
         }
 
-        return new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range();
+        return new LspRange();
     }
 
     /// <summary>
@@ -210,8 +211,8 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
     private static SymbolInformationOrDocumentSymbol? MakeSymbol(
         string name,
         SymbolKind kind,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Range fullRange,
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Range selectionRange,
+        LspRange fullRange,
+        LspRange selectionRange,
         List<SymbolInformationOrDocumentSymbol> children)
     {
         if ( string.IsNullOrWhiteSpace(name) )

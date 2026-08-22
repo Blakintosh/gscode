@@ -6,7 +6,12 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using JToken = Newtonsoft.Json.Linq.JToken;
+using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
+using LspSymbolKind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind;
+using Position = GSCode.Core.Text.Position;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -68,7 +73,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         // Callers: group non-definition references of this function by their containing file.
-        Dictionary<string, (ScriptRecord Record, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range> Ranges)> byCaller = new(StringComparer.Ordinal);
+        Dictionary<string, (ScriptRecord Record, List<LspRange> Ranges)> byCaller = new(StringComparer.Ordinal);
         foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, key.Value) )
         {
             if ( entry.Kind == ReferenceKind.Definition )
@@ -76,7 +81,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
                 continue;
             }
 
-            if ( !byCaller.TryGetValue(record.Path, out (ScriptRecord Record, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range> Ranges) group) )
+            if ( !byCaller.TryGetValue(record.Path, out (ScriptRecord Record, List<LspRange> Ranges) group) )
             {
                 group = (record, []);
                 byCaller[record.Path] = group;
@@ -86,7 +91,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         List<CallHierarchyIncomingCall> incoming = [];
-        foreach ( (ScriptRecord record, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range> ranges) in byCaller.Values )
+        foreach ( (ScriptRecord record, List<LspRange> ranges) in byCaller.Values )
         {
             // Attribute the call to the function whose body contains the first call range.
             FunctionSymbol? caller = ContainingFunction(record, ranges[0]);
@@ -94,7 +99,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
                 ? MakeItem(new SymbolKey(caller.Namespace.Length > 0 ? caller.Namespace : null, caller.KeyName, SymbolKind.Function), record, caller.NameRange.ToLsp())
                 : MakeFileItem(record);
 
-            incoming.Add(new CallHierarchyIncomingCall { From = item, FromRanges = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range>(ranges) });
+            incoming.Add(new CallHierarchyIncomingCall { From = item, FromRanges = new Container<LspRange>(ranges) });
         }
 
         return Task.FromResult<Container<CallHierarchyIncomingCall>?>(new Container<CallHierarchyIncomingCall>(incoming));
@@ -118,12 +123,12 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         ResolvedFunction self = functions[0];
-        Dictionary<SymbolKey, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range>> calls = new();
+        Dictionary<SymbolKey, List<LspRange>> calls = new();
         foreach ( ReferenceEntry entry in self.Record.References )
         {
             if ( entry.Kind == ReferenceKind.Call && entry.Key.Kind == SymbolKind.Function && self.Function.FullRange.Contains(entry.Range.Start) )
             {
-                if ( !calls.TryGetValue(entry.Key, out List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range>? ranges) )
+                if ( !calls.TryGetValue(entry.Key, out List<LspRange>? ranges) )
                 {
                     ranges = [];
                     calls[entry.Key] = ranges;
@@ -134,7 +139,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         List<CallHierarchyOutgoingCall> outgoing = [];
-        foreach ( (SymbolKey callee, List<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range> ranges) in calls )
+        foreach ( (SymbolKey callee, List<LspRange> ranges) in calls )
         {
             ImmutableArray<ResolvedFunction> resolved = DatabaseQueries.LookupFunctions(
                 target.Store, target.ContextId, target.Path, callee.Namespace, callee.Name, askingNamespaces: target.Namespaces);
@@ -144,15 +149,15 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             }
 
             CallHierarchyItem item = MakeItem(callee, resolved[0].Record, resolved[0].Function.NameRange.ToLsp());
-            outgoing.Add(new CallHierarchyOutgoingCall { To = item, FromRanges = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.Range>(ranges) });
+            outgoing.Add(new CallHierarchyOutgoingCall { To = item, FromRanges = new Container<LspRange>(ranges) });
         }
 
         return Task.FromResult<Container<CallHierarchyOutgoingCall>?>(new Container<CallHierarchyOutgoingCall>(outgoing));
     }
 
-    private static FunctionSymbol? ContainingFunction(ScriptRecord record, OmniSharp.Extensions.LanguageServer.Protocol.Models.Range range)
+    private static FunctionSymbol? ContainingFunction(ScriptRecord record, LspRange range)
     {
-        GSCode.Core.Text.Position start = range.Start.ToCore();
+        Position start = range.Start.ToCore();
         foreach ( FunctionSymbol function in record.Functions )
         {
             if ( function.FullRange.Contains(start) )
@@ -164,31 +169,31 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         return null;
     }
 
-    private static CallHierarchyItem MakeItem(SymbolKey key, ScriptRecord record, GSCode.Core.Text.TextRange nameRange)
+    private static CallHierarchyItem MakeItem(SymbolKey key, ScriptRecord record, TextRange nameRange)
     {
         return MakeItem(key, record, nameRange.ToLsp());
     }
 
-    private static CallHierarchyItem MakeItem(SymbolKey key, ScriptRecord record, OmniSharp.Extensions.LanguageServer.Protocol.Models.Range nameRange)
+    private static CallHierarchyItem MakeItem(SymbolKey key, ScriptRecord record, LspRange nameRange)
     {
         return new CallHierarchyItem
         {
             Name = key.Name,
-            Kind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind.Function,
+            Kind = LspSymbolKind.Function,
             Uri = DocumentUri.FromFileSystemPath(record.Path),
             Range = nameRange,
             SelectionRange = nameRange,
-            Data = Newtonsoft.Json.Linq.JToken.FromObject(new { ns = key.Namespace ?? "", name = key.Name }),
+            Data = JToken.FromObject(new { ns = key.Namespace ?? "", name = key.Name }),
         };
     }
 
     private static CallHierarchyItem MakeFileItem(ScriptRecord record)
     {
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.Range zero = new(0, 0, 0, 0);
+        LspRange zero = new(0, 0, 0, 0);
         return new CallHierarchyItem
         {
             Name = System.IO.Path.GetFileName(record.Path),
-            Kind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind.File,
+            Kind = LspSymbolKind.File,
             Uri = DocumentUri.FromFileSystemPath(record.Path),
             Range = zero,
             SelectionRange = zero,

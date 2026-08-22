@@ -1,4 +1,5 @@
 using GSCode.Parser;
+using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
@@ -85,7 +86,35 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
             return Task.CompletedTask;
         }
 
+        // Two producers, one legend. The builder classifies what the reference index knows —
+        // functions, classes, macros, fields — and LocalReferences supplies parameters and locals
+        // from the AST, the two slots the legend always held and nothing filled. The reference
+        // classification wins any overlap: a name the index explains is not a local, whatever the
+        // body walk made of it.
+        List<GscToken> tokens = [];
+        HashSet<(int Line, int Char)> claimed = [];
+
         foreach ( GscToken token in GscTokenBuilder.Build(result) )
+        {
+            claimed.Add((token.Line, token.StartChar));
+            tokens.Add(token);
+        }
+
+        foreach ( GscToken token in LocalReferences.SemanticTokens(result) )
+        {
+            if ( claimed.Add((token.Line, token.StartChar)) )
+            {
+                tokens.Add(token);
+            }
+        }
+
+        tokens.Sort(static (left, right) =>
+        {
+            int lineCompare = left.Line.CompareTo(right.Line);
+            return lineCompare != 0 ? lineCompare : left.StartChar.CompareTo(right.StartChar);
+        });
+
+        foreach ( GscToken token in tokens )
         {
             builder.Push(token.Line, token.StartChar, token.Length, (int)token.Type, 0);
         }

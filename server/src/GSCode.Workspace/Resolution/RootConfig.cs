@@ -113,12 +113,16 @@ public sealed record RootConfig
     private static string? FindRootAbove(
         ImmutableArray<string> startFolders, string subfolder, IFileSystem fileSystem)
     {
+        // Profiles spell subfolders in the game's own form ("share\raw"); on Linux that
+        // backslash would otherwise be a literal character in a single directory name.
+        string nativeSubfolder = subfolder.Replace('\\', Path.DirectorySeparatorChar);
+
         foreach ( string startFolder in startFolders )
         {
             string? candidate = startFolder;
             while ( candidate is not null )
             {
-                string probe = PathUtil.NormalizeAbsolute(Path.Combine(candidate, subfolder));
+                string probe = PathUtil.NormalizeAbsolute(Path.Combine(candidate, nativeSubfolder));
                 if ( fileSystem.DirectoryExists(probe) )
                 {
                     return probe;

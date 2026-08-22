@@ -435,7 +435,15 @@ LanguageServer server = await LanguageServer.From(options =>
 
                         // Compiles to nothing without -p:GscodeInstrumentation=true, so a normal
                         // build pays neither the timing scopes nor this dump.
-                        PerfTracker.Report(line => Log.Information("Perf  {Scope}", line));
+                        //
+                        // Debug, not Information: an instrumented build reports thirty-odd scopes
+                        // in one burst, and at Information they land in the same channel as the
+                        // handful of lines that say what the server is DOING. Debug is a level
+                        // ABOVE Verbose in Serilog's ordering, which is the point - the dump is
+                        // what an instrumented build was made for, so it should not need the level
+                        // that also turns on a line per file for a thousand files. Same reasoning
+                        // as the slow-file line.
+                        PerfTracker.Report(line => Log.Debug("Perf  {Scope}", line));
 
                         // Start sampling memory only now — during indexing it climbs steadily,
                         // and every sample would be a change. One sampler serves both the

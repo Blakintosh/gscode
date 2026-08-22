@@ -288,6 +288,112 @@ public class CorpusPerfTests
         }
     }
 
+
+    /// <summary>
+    /// What the cache costs BEFORE indexing starts, which is the part of a warm start that runs on
+    /// the thread the server is starting on.
+    ///
+    /// `Program.cs` does four things between `OnStarted` firing and the indexing task being queued:
+    /// sweeps the legacy cache directory, hashes the bundled data files into a build identity,
+    /// opens the database, and reads the blobs. All four are ahead of the `Task.Run`, so they are
+    /// startup latency rather than indexing, and the server's log rolls them into one `cache 0.1s`
+    /// figure that cannot say which of the four to attack.
+    /// </summary>
+    [Fact]
+    public async Task CacheOpen_WhereTheStartupTimeGoes()
+    {
+        if ( !CorpusFixture.Available && !GameCorpusFixture.Available().Any() )
+        {
+            _output.WriteLine("SKIPPED: no %GSCODE_CORPUS_<GAME>% found.");
+            return;
+        }
+
+        string databasePath = Path.Combine(Path.GetTempPath(), $"gscode-startup-{Guid.NewGuid():N}.db");
+
+        try
+        {
+            // Warm the file cache and the JIT the way a second start would find them; the first
+            // read of a 2.8 MB data file off cold disk is a different question.
+            _ = ServerBuildIdentity.Compute(BundledDataFilePaths(), GameProfile.Active.ShortName);
+
+            Stopwatch watch = Stopwatch.StartNew();
+            SqliteCache.CleanUpLegacyCache();
+            double sweep = watch.Elapsed.TotalMilliseconds;
+
+            watch.Restart();
+            string identity = ServerBuildIdentity.Compute(BundledDataFilePaths(), GameProfile.Active.ShortName);
+            double fingerprint = watch.Elapsed.TotalMilliseconds;
+
+            watch.Restart();
+            SqliteCache cache = SqliteCache.Open(databasePath, identity);
+            double open = watch.Elapsed.TotalMilliseconds;
+
+            watch.Restart();
+            int rows = cache.LoadAll().Count;
+            double read = watch.Elapsed.TotalMilliseconds;
+
+            await cache.DisposeAsync();
+
+            // A SECOND open, which is what splits the number above. Microsoft.Data.Sqlite loads its
+            // native provider on first use, so the first Open in a process pays an assembly load, a
+            // native library load and the JIT behind them; every one after it pays the file.
+            string secondPath = Path.Combine(Path.GetTempPath(), $"gscode-startup2-{Guid.NewGuid():N}.db");
+            watch.Restart();
+            SqliteCache second = SqliteCache.Open(secondPath, identity);
+            double reopen = watch.Elapsed.TotalMilliseconds;
+            await second.DisposeAsync();
+            try
+            {
+                File.Delete(secondPath);
+            }
+            catch ( IOException )
+            {
+            }
+
+            _output.WriteLine("");
+            _output.WriteLine($"########## {GameProfile.Active.ShortName} cache open, empty database, {rows} rows");
+            _output.WriteLine($"     legacy sweep   {sweep,8:F1} ms");
+            _output.WriteLine($"     build identity {fingerprint,8:F1} ms   {DataFileBytes() / 1048576.0:F1} MB hashed");
+            _output.WriteLine($"     open           {open,8:F1} ms");
+            _output.WriteLine($"     LoadAll        {read,8:F1} ms");
+            _output.WriteLine($"     open (2nd)     {reopen,8:F1} ms");
+            _output.WriteLine($"     total          {sweep + fingerprint + open + read,8:F1} ms");
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(databasePath);
+            }
+            catch ( IOException )
+            {
+            }
+        }
+    }
+
+    private static IEnumerable<string> BundledDataFilePaths()
+    {
+        string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
+        foreach ( string fileName in GameProfile.Active.BundledDataFileNames )
+        {
+            yield return Path.Combine(apiDirectory, fileName);
+        }
+    }
+
+    private static long DataFileBytes()
+    {
+        long total = 0;
+        foreach ( string path in BundledDataFilePaths() )
+        {
+            if ( File.Exists(path) )
+            {
+                total += new FileInfo(path).Length;
+            }
+        }
+
+        return total;
+    }
+
     private async Task MeasureWarmIndexAsync(GameProfile profile, Func<PathResolver> resolverFactory)
     {
         GameProfile previous = GameProfile.Active;

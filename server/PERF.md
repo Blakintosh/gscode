@@ -84,16 +84,22 @@ flag's own cost is visible rather than folded in:
 | bo3 *(instrumented)* | 980 | 980 ms | 0.19 ms | 27% | 20% | 35% | 18% |
 | bo1 | 2,960 | 3,111 ms | 0.05 ms | 34% | 9% | 41% | 16% |
 
-**Shares are stable to about a point only within a phase, not across a run.** The three-run cod4
-table further down establishes that for `extract` and it does not generalise: `lex` and `parse` move
-4–5 points between the two runs above, which are the same code minutes apart. So read a 4-point
-difference as nothing. Two moves here survive both runs and are therefore real:
+**Corrected 2026-08-22 — shares are NOT stable to a point, and one conclusion below rested on it.**
+This paragraph used to say they were stable to about a point within a phase, that a 4-point
+difference was nothing, and that two moves survived both runs and were therefore real. Five runs of
+one build say `lex` moves ten points and `extract` five to eight; see the section on it further
+down. Only `parse` holds to a point or two. So:
 
-- **bo3 `extract` 12% → 18–20%**, against `preprocess` falling 31% → 20–23%. Extraction's share on
-  the `#insert` dialect has roughly doubled since the figure above it was taken.
-- cod4's total falling by half (1,556 → 816 ms) with its median falling 3x. The distribution is now
-  sharply bimodal — median 0.05 ms against a p99 of 15.3 ms — so the median says little and the
-  slowest 1% carry 24% of the total.
+- **bo3 `extract` 12% → 18–20%** is retracted. The move is inside the instrument's own spread, and
+  the five-run table reads 21 / 13 / 18 / 15 / 18 on code that did not change. Nothing was built on
+  it, but it stood as a finding for ten days.
+- cod4's total falling by half (1,556 → 816 ms) with its median falling 3x **stands**, on the
+  distribution rather than on the share: median 0.05 ms against a p99 of 15.3 ms, so the median says
+  little and the slowest 1% carry 24% of the total. A 2x total against a 26% run-to-run spread is
+  outside the noise where a 6-point share move is not.
+
+Read the sub-scope milliseconds where a number has to be trusted; read this table for which phase is
+worth opening, not for by how much one moved.
 
 **These are not comparable with figures recorded before 2026-07-30.** The total used to be a
 separate stopwatch around a second `Analyze()` call; it is now the SUM of the four phase timings.
@@ -132,6 +138,139 @@ worth nothing: every token's kind, offset, length and range was dumped for eleve
 sources covering each changed path plus 4,000 seeded-random strings over a GSC alphabet, before and
 after, 182,821 lines byte-identical. The corpus sweep then reported the same counts on both sides —
 2 of 894 on cod4, 2 of 980 on bo3, 6 of 2,960 on bo1, with the formatter's gates clean.
+
+### 2026-08-22: the extract move was the instrument, not the code
+
+The table above names "bo3 `extract` 12% → 18–20%" as one of two moves that "survive both runs and
+are therefore real". It does not survive four. Five instrumented sweeps of the same corpus on the
+same machine within twenty minutes, the last four on a byte-identical build:
+
+| bo3 | run 1 | run 2 | run 3 | run 4 | run 5 |
+|---|---:|---:|---:|---:|---:|
+| lex | 26% | 40% | 30% | 31% | 35% |
+| preprocess | 41% | 35% | 39% | 43% | 37% |
+| parse | 12% | 12% | 13% | 12% | 11% |
+| **extract** | **21%** | **13%** | **18%** | **15%** | **18%** |
+
+| cod4 | run 1 | run 2 | run 3 | run 4 | run 5 |
+|---|---:|---:|---:|---:|---:|
+| lex | 32% | 42% | 45% | 45% | 35% |
+| preprocess | 15% | 17% | 15% | 15% | 21% |
+| parse | 26% | 19% | 19% | 22% | 19% |
+| **extract** | **27%** | **21%** | **22%** | **17%** | **25%** |
+
+**`lex` moves ten points and `extract` five to eight, on identical code.** The totals move with them
+— cod4 read 1,251 / 1,331 / 1,461 / 1,162 ms across four runs of one build, a 26% spread. So the
+paragraph above, which says shares are "stable to about a point only within a phase" and that a
+4-point difference is nothing, understates the noise by roughly a factor of two, and the conclusion
+drawn from a 6-point move was drawn from inside it.
+
+`parse` is the exception and is stable to a point or two on both corpora, which is what makes the
+rest readable as noise rather than as the machine being busy: a busy machine would move all four.
+
+**The sub-scope milliseconds are the trustworthy half of this report.** `extract.declarations` on
+cod4 read 261 / 256 / 266 / 238 / 268 ms across the same five runs — a 12% spread against the phase
+share's 10 points. Read those, and read the phase table only for what it was built to show: which
+phase is worth opening, not by how much one moved.
+
+bo3's own sub-scopes are noisier (64–113 ms) for the reason the file gives elsewhere: at 0.065–0.116
+ms per file the quantity is small enough that one GC pause is a third of it. **This harness cannot
+settle a constant factor on bo3's extract phase.** A repetition bench can, and the expression fast
+path further up is the worked example.
+
+Two scopes were added while chasing this, and they are worth keeping even though the answer turned
+out to be "no effect":
+
+- **`extract.build`** — the six builders sealed into arrays. It was the suspect, because the five
+  scopes did not add up to the phase on bo3 (about a fifth unattributed) while covering cod4 to
+  within one percent. It is 2 ms on bo3 and 5 on cod4. The gap was noise, not a stage.
+- **`extract.invocations`** — the pre-walk loop over every macro invocation the preprocessor saw,
+  headers included, to keep the few from this file. Under 0.5 ms on both. The shape is wrong (its
+  cost is set by what was INSERTED, not by the file) and it does not matter at these sizes.
+
+### 2026-08-22: the two unsharded gates, which cost nothing
+
+`LanguageStore.Upsert` takes a striped path gate and then calls four indexes. Two were sharded in
+the COMMIT GATE pass below; `NamespaceIndex` and `ClassGraph` still hold one process-wide `Lock`
+each, taken by every commit AND by the readers a keystroke uses. The same scaling argument that
+justified sharding the other two applies to them on paper, so they were measured before anything
+was done about it. One scope per index, inside the path gate, two cold-index runs each:
+
+| of cold-index thread-time | bo3 | cod4 |
+|---|---:|---:|
+| `commit.upsert` | 9.4% / 6.1% | 10.2% / 8.2% |
+| `upsert.reference` *(sharded)* | 5.0% / 2.8% | 6.1% / 5.4% |
+| `upsert.declaration` *(sharded)* | 0.7% / 0.3% | 0.4% / 0.1% |
+| **`upsert.class`** *(one lock)* | **0.5% / 0.3%** | **0.0% / 0.0%** |
+| **`upsert.namespace`** *(one lock)* | **0.1% / 0.1%** | **0.3% / 0.0%** |
+
+**Together they are 0.1–0.8%, and 9–10 ms per run.** Sharding them would buy nothing measurable and
+add two more shard arrays to maintain. Not done, and this is the record of why — the next person to
+notice a process-wide lock in the commit path should read this row before opening the file.
+
+It also settles where the commit cost actually is: `upsert.reference` is half to two thirds of
+`commit.upsert` on both dialects, and it is already sharded 64 ways. What is left there is the work
+itself — a file's diff is thousands of keys — not contention.
+
+### 2026-08-22: the cache costs 70 ms of STARTUP, and it is the open
+
+`Program.cs` does four things between `OnStarted` firing and the indexing task being queued: sweeps
+the legacy cache directory, hashes the bundled data files into a build identity, opens the database,
+and reads the blobs. All four are ahead of the `Task.Run`, so they are startup latency the user
+waits through rather than indexing, and the server's log rolls them into one `cache 0.1s` figure
+that cannot say which to attack. `CacheOpen_WhereTheStartupTimeGoes` splits them.
+
+| bo3, empty database | first run in a cold process | warm |
+|---|---:|---:|
+| legacy sweep | 3.5 ms | 2.9–3.3 ms |
+| build identity (3.9 MB hashed) | 6.6 ms | 5.7–7.2 ms |
+| **open** | **231.8 ms** | **59.7–64.3 ms** |
+| `LoadAll` | 0.6 ms | 0.4–0.6 ms |
+| **total** | **242.5 ms** | **68.7–75.4 ms** |
+
+**It is the open, by 85–95%, and neither of the two things that look expensive.** Hashing 3.9 MB of
+JSON is 6 ms and the blob read is under one — on a POPULATED database `LoadAll` is 13–54 ms, which
+is still not the headline.
+
+A second `SqliteCache.Open` in the same process costs 27–31 ms against the first one's 60, so about
+half of a warm open is `Microsoft.Data.Sqlite` initialising its native provider on first use — an
+assembly load, a native library load and the JIT behind them. The server opens exactly one cache, so
+it pays that half every start. The 232 ms figure is the same work with the provider's native library
+cold in the OS file cache, which is what a user's first start after an update actually gets.
+
+Against `Ready 1.3 s`, that is 5% warm and 18% cold, all of it serial and all of it in front of an
+indexing pass that could have been running. Moving the block inside the `Task.Run` takes every
+millisecond of it off the startup thread. **Not done here**, because `cacheHolder.Set` would then
+land ~70 ms later than it does, and a `gscode/clearCache` arriving in that window would be told
+"No workspace cache is open" while the cache opened behind it — leaving a cache the user asked to
+delete. That wants a readiness handshake in `CacheHolder`, which is a change to make deliberately
+rather than as a side effect of a timing fix.
+
+### 2026-08-22: enumeration and analysis still do not overlap
+
+`IndexAsync` materialises the whole target list before `Parallel.ForEachAsync` starts, and
+`EnumerateFilesWithExtensions` is itself eager — it fans out across top-level subdirectories and
+returns a `List`. So the find stage runs to completion with no CPU in flight, and then the analysis
+runs with no I/O in flight.
+
+What that costs depends entirely on the workspace, which is why the three figures below look like
+they disagree:
+
+| | `index.enumerate` | of cold-index WALL |
+|---|---:|---:|
+| bo3 corpus (`share\raw`) | 40–44 ms | 7.5% |
+| cod4 corpus (`raw`) | 11 ms | 2.2% |
+| **bo3 as a whole install, from a real server log** | **742 ms** | **more than half a start** |
+
+The corpus rows are the floor and the server row is the case the pruning work below was done for: a
+workspace folder that is the game install is 295,640 files to find 1,105 scripts. Against an analyse
+phase of roughly 500 ms, overlapping the two would take that start from about 1.25 s to about 0.8.
+
+**Not done here**, and the obstacle is not the plumbing. `progress.Started(targets.Count)` needs the
+total up front, and a streamed enumeration does not have one until it finishes — so overlapping
+means the client's indexing progress becomes indeterminate until the walk completes, which is a
+change to what the status bar shows rather than a change to how fast anything is. Worth doing, worth
+deciding first.
 
 ## Sub-phases: inside `parse`
 
@@ -770,9 +909,17 @@ Three runs of identical code and methodology, cod4:
 | max | 49.3 ms | 55.8 ms | 51.9 ms |
 | extract share | 17% | 16% | 16% |
 
-**Shares are stable to about a point; absolutes swing by a quarter.** The noise is largely common to
-all four phases, so it cancels in a ratio and does not in a total. Read shares, sub-phase ratios and
-order-of-magnitude differences as real, and treat any single absolute number as indicative.
+**Corrected 2026-08-22: shares are stable to about a point in THIS table and nowhere else.** The
+three runs above hold `extract` to 17 / 16 / 16, and that reading was generalised into a rule the
+rest of the file then leaned on. Five later runs, cod4 and bo3, put `extract` at 27 / 21 / 22 / 17 /
+25 and `lex` at 32 / 42 / 45 / 45 / 35 — five and ten points, on one build. `parse` is the only
+phase that holds to a point or two across both sets, and one phase behaving is not the four
+behaving. See the section on it near the top of this file.
+
+What survives is the shape of the argument, not the number in it: the noise is largely common to all
+four phases, so it cancels in a ratio further than it does in a total, and absolutes swing by a
+quarter to a third. Read order-of-magnitude differences and sub-scope milliseconds as real, and
+treat both a single absolute AND a single-digit share move as indicative.
 
 The practical consequence: this harness will find a structural problem — it caught a quadratic doc
 lookup that was half of extraction — and will NOT settle a 10% constant-factor tune. Measuring one of
@@ -816,6 +963,8 @@ The scopes, and what a high figure means:
 | `extract.doc` | doc-comment association for one declaration | should be flat per call; if it scales with file size, something is scanning |
 | `extract.macros` | macro definitions and uses to references | proportional to `#define`/`#insert` use |
 | `extract.duplicates` | the duplicate-function report | dictionary-keyed, should stay near zero |
+| `extract.invocations` | keeping this file’s macro invocations out of the inserted ones | set by what was INSERTED, not by the file; well under a millisecond on every corpus |
+| `extract.build` | the six builders sealed into immutable arrays | sized by what the file REFERENCES; added because the scopes above did not add up to the phase on bo3, and it turned out they did — the gap was noise |
 
 ### What this found
 

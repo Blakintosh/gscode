@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Database;
@@ -106,10 +107,21 @@ public sealed class LanguageStore
             // The OLD sets still have to be built here: `previous` is only knowable under the gate,
             // and reading it outside would let two upserts of one file diff against the same
             // version. On a cold index it is always null and these are empty.
+            PerfTracker.Begin("upsert.reference");
             _referenceIndex.Apply(record.Path, ReferenceIndex.KeysOf(previous?.References ?? []), newKeys);
+            PerfTracker.End();
+
+            PerfTracker.Begin("upsert.declaration");
             _declarationIndex.Apply(record.Path, DeclarationIndex.NamesOf(previous?.Functions ?? []), newNames);
+            PerfTracker.End();
+
+            PerfTracker.Begin("upsert.namespace");
             _namespaceIndex.Apply(record.Path, NamespaceIndex.NamespacesOf(previous?.Functions ?? []), newNamespaces);
+            PerfTracker.End();
+
+            PerfTracker.Begin("upsert.class");
             _classGraph.Apply(record.Path, record.Classes);
+            PerfTracker.End();
         }
     }
 

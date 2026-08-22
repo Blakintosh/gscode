@@ -85,18 +85,31 @@ public sealed class SymbolExtractor
         extractor.ReportDuplicateFunctions();
         PerfTracker.End();
 
-        return new ExtractionResult(
+        // The six builders sealed into arrays. Its own scope because the five scopes around it did
+        // NOT add up to the phase on the #insert dialect - bo3 left about a fifth of extract
+        // unattributed where cod4 left under one percent - and a builder is sized by what the file
+        // REFERENCES, which is the quantity #insert inflates.
+        PerfTracker.Begin("extract.build");
+        ExtractionResult built = new ExtractionResult(
             extractor._namespaces.ToImmutable(),
             extractor._functions.ToImmutable(),
             extractor._classes.ToImmutable(),
             extractor._references.ToImmutable(),
             extractor._diagnostics.ToImmutable(),
             extractor._pathCalls.ToImmutable());
+        PerfTracker.End();
+
+        return built;
     }
 
     private void Run(ParseTree tree, PreprocessResult preprocessed)
     {
         // Collected BEFORE the walk, because default-parameter validation consults them.
+        //
+        // Scoped because the loop is over EVERY invocation the preprocessor saw, headers included,
+        // to keep the few that came from this file - so on a dialect with #insert its cost is set
+        // by what was inserted rather than by what the file contains.
+        PerfTracker.Begin("extract.invocations");
         foreach ( MacroInvocation invocation in preprocessed.MacroInvocations )
         {
             if ( invocation.SourceFile is null )
@@ -104,6 +117,8 @@ public sealed class SymbolExtractor
                 _macroInvocations.Add(invocation.Range);
             }
         }
+
+        PerfTracker.End();
 
         // The dominant scope, and the parent of extract.doc and extract.body: everything the walk
         // does is inside it, so the three read as a breakdown rather than as peers.

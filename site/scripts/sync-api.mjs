@@ -64,6 +64,41 @@ for (const name of files) {
 	}
 }
 
+// The macro library artifacts live in `data/macros/` — maintained by `append_macro.py` there, not
+// by field-data — but they ride the same sync so the site never grows a second source of truth.
+const macroSource = resolve(here, '../../data/macros');
+const macroPattern = /^[a-z0-9]+_macros_gsh\.json$/;
+
+let macroFiles = [];
+try {
+	macroFiles = readdirSync(macroSource)
+		.filter((name) => macroPattern.test(name))
+		.sort();
+} catch {
+	/* a checkout without data/ still syncs the function artifacts */
+}
+
+for (const name of macroFiles) {
+	const from = readFileSync(join(macroSource, name));
+	const to = join(destination, name);
+
+	let existing = null;
+	try {
+		existing = readFileSync(to);
+	} catch {
+		/* not there yet */
+	}
+
+	if (existing !== null && existing.equals(from)) {
+		continue;
+	}
+
+	stale.push(name);
+	if (!checkOnly) {
+		writeFileSync(to, from);
+	}
+}
+
 // The home page states how many engine functions ship with the extension, per game. Counting them
 // here rather than typing them into a component is the only way that number stays true: a
 // regeneration moves it, and nobody would think to go and edit the splash.

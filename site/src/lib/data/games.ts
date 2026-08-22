@@ -55,6 +55,12 @@ export type GameEntry = {
 	reliableSignatures: boolean;
 	/** The game whose entries fill in this one's, where they are borrowed rather than its own. */
 	inheritsFrom?: string;
+	/**
+	 * Whether the stock mod tools' preprocessor macros are documented for this game — a GSH
+	 * surface on the library alongside GSC/CSC. Only Black Ops III ships `.gsh` headers to
+	 * document.
+	 */
+	hasMacros?: boolean;
 };
 
 export const games: GameEntry[] = [
@@ -119,7 +125,8 @@ export const games: GameEntry[] = [
 		imports: 'using',
 		source: 'documentation',
 		complete: true,
-		reliableSignatures: true
+		reliableSignatures: true,
+		hasMacros: true
 	}
 ];
 
@@ -146,6 +153,17 @@ export function findGame(slug: string | undefined): GameEntry | undefined {
 /** The languages a game actually has. CSC exists only where the game ships client scripts. */
 export function languagesFor(game: GameEntry): LanguageId[] {
 	return game.hasClientScripts ? ['gsc', 'csc'] : ['gsc'];
+}
+
+/**
+ * A reference surface the library page offers for a game — its script languages, plus the macro
+ * reference (`gsh`) where the stock headers are documented. `gsh` is not a language the librarian
+ * serves; it has its own route and artifact.
+ */
+export type LibrarySurface = LanguageId | 'gsh';
+
+export function surfacesFor(game: GameEntry): LibrarySurface[] {
+	return game.hasMacros ? [...languagesFor(game), 'gsh'] : languagesFor(game);
 }
 
 export function defaultGame(): GameEntry {

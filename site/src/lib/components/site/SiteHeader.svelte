@@ -55,7 +55,14 @@
 <!-- Raise-coloured bar on an edge; nav is mono uppercase, mute → teal. -->
 <!-- The edge is an inset shadow so the bar is exactly h-14: layouts subtract 3.5rem for it. -->
 <header class="bg-popover sticky top-0 z-50 shadow-[inset_0_-1px_0_var(--border)]">
-	<div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:gap-5 sm:px-6">
+	<!-- App surfaces (library, editor) are edge-to-edge below, so their chrome is too;
+	 the marketing pages keep the contained column. -->
+	<div
+		class={cn(
+			'flex h-14 items-center gap-3 px-4 sm:gap-5 sm:px-6',
+			!property && 'mx-auto max-w-7xl'
+		)}
+	>
 		<Logo {property} />
 
 		<nav class="hidden items-center md:flex" aria-label="Primary">

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { languagesFor, type GameEntry } from '$lib/data/games';
+	import { surfacesFor, type GameEntry } from '$lib/data/games';
 	import { cn } from '$lib/utils.js';
 
 	type Props = {
@@ -10,10 +10,11 @@
 	let { onLanguageChange }: Props = $props();
 
 	// Only three of the five games ship client scripts, so CSC is not always a real choice. Offering
-	// it where it does not exist would navigate to a 404.
+	// it where it does not exist would navigate to a 404. Black Ops III alone adds GSH: the macro
+	// reference over the stock headers.
 	const languages = $derived.by(() => {
 		const game = page.data.game as GameEntry | undefined;
-		return game ? languagesFor(game) : (['gsc'] as const);
+		return game ? surfacesFor(game) : (['gsc'] as const);
 	});
 
 	const current = $derived(page.data.languageId as string | undefined);

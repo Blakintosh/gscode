@@ -7,6 +7,7 @@
 	let {
 		ref = $bindable(null),
 		class: className,
+		bodyClass,
 		sideOffset = 4,
 		align = "center",
 		portalProps,
@@ -14,6 +15,8 @@
 		...restProps
 	}: PopoverPrimitive.ContentProps & {
 		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof PopoverPortal>>;
+		/** Classes for the chamfered body wrapper, e.g. to drop its padding for list content. */
+		bodyClass?: string;
 	} = $props();
 </script>
 
@@ -32,7 +35,10 @@
 		<!-- Overlays float on the raise colour with a real shadow; the wrapper carries it. -->
 		<div
 			data-slot="popover-content-body"
-			class="chamfer chamfer-sm rim-edge text-popover-foreground relative z-0 flex flex-col gap-2.5 p-4 text-sm before:absolute before:inset-px before:-z-10 before:bg-popover before:content-[''] before:[clip-path:inherit]"
+			class={cn(
+				"chamfer chamfer-sm rim-edge text-popover-foreground relative z-0 flex flex-col gap-2.5 p-4 text-sm before:absolute before:inset-px before:-z-10 before:bg-popover before:content-[''] before:[clip-path:inherit]",
+				bodyClass
+			)}
 		>
 			{@render children?.()}
 		</div>

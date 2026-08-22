@@ -40,6 +40,14 @@
 			return;
 		}
 
+		// The macro reference is its own route with its own artifact; the librarian only serves
+		// the function libraries, so don't point it at a language it can't load.
+		if (value === 'gsh') {
+			await goto(`/library/${game.slug}/gsh`);
+			onNavigate?.();
+			return;
+		}
+
 		librarian.languageId = value;
 		await goto(`/library/${game.slug}/${value}`);
 		onNavigate?.();

@@ -33,6 +33,13 @@ A complete ground-up rewrite of the language server and VS Code extension.
   (including string/hash/localized/anim literals), highlight, semantic tokens, folding,
   selection ranges, document/workspace symbols, code lens, rename, call and type hierarchy,
   inlay hints, document links, formatting (whole/range/on-type), and code actions.
+- Inlay-hint families apply the moment they are toggled: a settings push that changes one asks the
+  client to re-request its hints, rather than leaving the change invisible (and a family switched
+  off still on screen) until the next keystroke or scroll.
+- Macro parameter-name inlay hints: the arguments of a `#define` invocation labelled with the
+  macro's own parameter names, `IS_TRUE( __a: level.ready )`. A third inlay family, separate from
+  the call-site one and off by default (`gscode.inlayHints.macroParameterNames`), because a macro
+  parameter is named for the macro's body rather than for its caller.
 - Type-flow inference for inferred-type inlay hints and local-variable hovers, seeded with
   engine object-field types.
 - Corruption-proof whitespace-only formatter (refuses syntax errors; re-checks its own output).
@@ -53,7 +60,7 @@ A complete ground-up rewrite of the language server and VS Code extension.
 - A settings surface for the above, under `gscode.*`: the game and script roots
   (`game`, `raw.enabled`, `rawPath`, `modsPath`, `rawFileWarningMode`), indexing
   (`workspaceIndexingMode`, `enableWorkspaceCache`, `diagnostics.scope`), the editor features
-  (`outline.showAssignments`, `codeLens.enabled`, the `inlayHints.*` and `completion.*` pairs) and
+  (`outline.showAssignments`, `codeLens.enabled`, the `inlayHints.*` and `completion.*` keys) and
   formatting (`format.padParens`, `format.maxBlankLines`, `format.sortDirectives`,
   `format.alignConsecutive`).
 

@@ -312,6 +312,12 @@
 						"description": "Show inferred-type hints on local variable assignments.",
 						"scope": "window"
 					},
+					"gscode.inlayHints.macroParameterNames": {
+						"type": "boolean",
+						"default": false,
+						"description": "Show macro parameter-name hints before the arguments of a #define invocation (e.g. IS_TRUE( __a: level.ready )). Off by default: macro parameters are named for the macro's body rather than for the caller.",
+						"scope": "window"
+					},
 					"gscode.completion.literals": {
 						"type": "boolean",
 						"default": true,

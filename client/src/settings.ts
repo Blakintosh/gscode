@@ -19,6 +19,7 @@ export interface GscodeSettings {
     "codeLens.enabled": boolean;
     "inlayHints.parameterNames": boolean;
     "inlayHints.inferredTypes": boolean;
+    "inlayHints.macroParameterNames": boolean;
     "completion.literals": boolean;
     "completion.fieldScope": string;
     "completion.callPunctuation": string;
@@ -46,6 +47,7 @@ export function readSettings(): GscodeSettings {
         "codeLens.enabled": config.get<boolean>("codeLens.enabled", true),
         "inlayHints.parameterNames": config.get<boolean>("inlayHints.parameterNames", true),
         "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", true),
+        "inlayHints.macroParameterNames": config.get<boolean>("inlayHints.macroParameterNames", false),
         "completion.literals": config.get<boolean>("completion.literals", true),
         "completion.fieldScope": config.get<string>("completion.fieldScope", "owner"),
         "completion.callPunctuation": config.get<string>("completion.callPunctuation", "parensAndSemicolon"),

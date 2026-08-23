@@ -210,8 +210,15 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Completion/SignatureEngine.cs
 
 - `SignatureParameter`/`SignatureResult` + `SignatureEngine.Resolve(...)` — scans back from
-  the cursor to the enclosing '(', identifies the callee (script function / builtin) and
+  the cursor to the enclosing '(', identifies the callee (macro / script function / builtin) and
   the active parameter (top-level comma count), and renders the signature + parameter docs.
+- The MACRO is asked first, and from `result.Preprocessed.Macros` rather than the store: the
+  preprocessor substitutes before the parser runs, so where a `#define` and a function share a name
+  the function's parameters describe code that never executes. The lookup is ORDINAL — macro names
+  are the language's one case-sensitive kind — and an object-like macro answers null, since
+  `MAX_PLAYERS( x )` is a body followed by a parenthesised expression rather than a call. Unlike
+  macro COMPLETION this is not gated on `HasMacros`: completion decides what to propose, this
+  describes a name already written, and the preprocessor expands a `#define` on every dialect.
 
 ## Database/SymbolAtPosition.cs
 

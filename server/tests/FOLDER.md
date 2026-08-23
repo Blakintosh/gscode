@@ -169,7 +169,14 @@ preprocessor that game does not have.
 supplies offered outside a body, the functions in scope and the expression atoms a macro
 invocation's arguments need, and the engine globals still withheld there. The punctuation pair
 (no terminator at file scope, no parentheses on a function pointer) lives with the other call
-punctuation cases in `CompletionEngineTests`.
+punctuation cases in `CompletionEngineTests`. `FakeInserts` — the `IInsertProvider` that serves a
+header's text — is shared between them, since both features have to be asked about a macro that
+lives in a `.gsh` rather than the file under test.
+
+`SignatureEngineTests` holds the MACRO cases beside the function and builtin ones: parameter names
+and the active argument, the reported case of an `#insert`ed macro invoked at file scope, and the
+three positions that must NOT answer with a macro — an object-like one, a name whose case does not
+match, and a qualified `namespace::NAME(`.
 
 **Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order ·
 `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·

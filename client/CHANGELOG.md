@@ -73,6 +73,11 @@ A complete ground-up rewrite of the language server and VS Code extension.
   semicolon.
 - A function pointer completes as `&foo`, without the parentheses a call gets. Applies to
   `&namespace::foo` too, and only on Black Ops III, where `&` is what makes a pointer.
+- Signature help answers on a function-like macro, showing its parameter names, the argument the
+  caret is in, what the macro expands to, and its trailing-comment documentation. Previously only a
+  script function or a builtin had a signature, so typing the arguments to `REGISTER_SYSTEM(` or
+  `IS_TRUE(` showed nothing. The macro is read from the file being edited plus the headers it
+  `#insert`s, so a header added a keystroke ago counts.
 - Dialect-specific snippets moved from the extension to the server. A contributed snippet is
   registered per language id and one id covers five games, so `foreach`, `class`, `new`, the
   function declaration, `#precache`, the import directives and the ScriptDoc forms used to be

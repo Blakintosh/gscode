@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using GSCode.Core.Docs;
 using GSCode.Core.Symbols;
@@ -161,12 +162,28 @@ public static class MarkdownDocRenderer
     /// </summary>
     public static string RenderMacro(MacroRecord macro, string expansion = "")
     {
+        return RenderMacro(macro.Name, macro.IsFunctionLike, macro.Parameters, macro.Documentation, expansion);
+    }
+
+    /// <summary>
+    /// The same markdown from the parts rather than from an indexed record, for a caller holding a
+    /// live <see cref="GSCode.Parser.Preprocessing.MacroDefinition"/> instead. Signature help is one:
+    /// it reads the parse in hand, because help fires on an invocation being typed in a file whose
+    /// indexed record may predate the #insert that supplies the macro.
+    /// </summary>
+    public static string RenderMacro(
+        string name,
+        bool isFunctionLike,
+        ImmutableArray<string> parameters,
+        string documentation,
+        string expansion = "")
+    {
         StringBuilder markdown = new();
 
-        markdown.Append("```gsc\n#define ").Append(macro.Name);
-        if ( macro.IsFunctionLike )
+        markdown.Append("```gsc\n#define ").Append(name);
+        if ( isFunctionLike )
         {
-            markdown.Append('(').Append(string.Join(", ", macro.Parameters)).Append(')');
+            markdown.Append('(').Append(string.Join(", ", parameters)).Append(')');
         }
 
         // The expansion is what a caller actually wants to see, so it shares the code block
@@ -178,9 +195,9 @@ public static class MarkdownDocRenderer
 
         markdown.Append("\n```");
 
-        if ( macro.Documentation.Length > 0 )
+        if ( documentation.Length > 0 )
         {
-            markdown.Append("\n\n---\n\n").Append(CleanComment(macro.Documentation));
+            markdown.Append("\n\n---\n\n").Append(CleanComment(documentation));
         }
 
         return markdown.ToString();

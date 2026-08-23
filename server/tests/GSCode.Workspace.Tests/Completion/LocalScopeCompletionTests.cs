@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
@@ -30,36 +29,6 @@ public class LocalScopeCompletionTests
 {
     private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
-
-    /// <summary>Serves one header's text to <c>#insert</c>, so a macro can come from outside the file.</summary>
-    private sealed class FakeInserts : IInsertProvider
-    {
-        private readonly Dictionary<string, InsertedFile> _files = new(StringComparer.OrdinalIgnoreCase);
-
-        public FakeInserts Add(string rawPath, string content)
-        {
-            SourceText text = SourceText.From(content);
-            _files[rawPath] = new InsertedFile(rawPath.ToLowerInvariant(), text, Lexer.Lex(text).Tokens);
-            return this;
-        }
-
-        public bool TryGetInsert(string rawInsertPath, out InsertedFile inserted)
-        {
-            return _files.TryGetValue(rawInsertPath, out inserted!);
-        }
-
-        public bool TryResolveInsertPath(string rawInsertPath, out string resolvedPath)
-        {
-            if ( _files.TryGetValue(rawInsertPath, out InsertedFile? file) )
-            {
-                resolvedPath = file.Path;
-                return true;
-            }
-
-            resolvedPath = "";
-            return false;
-        }
-    }
 
     private static CompletionEngine BuildWorld(FakeFileSystem files)
     {

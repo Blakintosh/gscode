@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text;
 using GSCode.Core.Docs;
 using GSCode.Core.Symbols;
@@ -162,28 +161,12 @@ public static class MarkdownDocRenderer
     /// </summary>
     public static string RenderMacro(MacroRecord macro, string expansion = "")
     {
-        return RenderMacro(macro.Name, macro.IsFunctionLike, macro.Parameters, macro.Documentation, expansion);
-    }
-
-    /// <summary>
-    /// The same markdown from the parts rather than from an indexed record, for a caller holding a
-    /// live <see cref="GSCode.Parser.Preprocessing.MacroDefinition"/> instead. Signature help is one:
-    /// it reads the parse in hand, because help fires on an invocation being typed in a file whose
-    /// indexed record may predate the #insert that supplies the macro.
-    /// </summary>
-    public static string RenderMacro(
-        string name,
-        bool isFunctionLike,
-        ImmutableArray<string> parameters,
-        string documentation,
-        string expansion = "")
-    {
         StringBuilder markdown = new();
 
-        markdown.Append("```gsc\n#define ").Append(name);
-        if ( isFunctionLike )
+        markdown.Append("```gsc\n#define ").Append(macro.Name);
+        if ( macro.IsFunctionLike )
         {
-            markdown.Append('(').Append(string.Join(", ", parameters)).Append(')');
+            markdown.Append('(').Append(string.Join(", ", macro.Parameters)).Append(')');
         }
 
         // The expansion is what a caller actually wants to see, so it shares the code block
@@ -195,9 +178,42 @@ public static class MarkdownDocRenderer
 
         markdown.Append("\n```");
 
+        if ( macro.Documentation.Length > 0 )
+        {
+            markdown.Append("\n\n---\n\n").Append(CleanComment(macro.Documentation));
+        }
+
+        return markdown.ToString();
+    }
+
+    /// <summary>
+    /// Markdown for a macro whose DEFINE FORM is already on screen: the expansion and the
+    /// trailing-comment documentation, without the `#define` line.
+    ///
+    /// Signature help is the caller. Its label IS the define form — rendered by the client, above
+    /// the documentation and with the active argument highlighted — so repeating it here printed
+    /// the parameter list twice in a widget the reader is looking at mid-keystroke. Hover has no
+    /// label above it and keeps the full form.
+    /// </summary>
+    public static string RenderMacroExpansion(string expansion, string documentation)
+    {
+        StringBuilder markdown = new();
+
+        if ( expansion.Length > 0 )
+        {
+            markdown.Append("```gsc\n").Append(expansion).Append("\n```");
+        }
+
         if ( documentation.Length > 0 )
         {
-            markdown.Append("\n\n---\n\n").Append(CleanComment(documentation));
+            // The rule is separating two things that are both there. A body-less #define with a
+            // comment has only the comment, and a bare line above it reads as a missing expansion.
+            if ( markdown.Length > 0 )
+            {
+                markdown.Append("\n\n---\n\n");
+            }
+
+            markdown.Append(CleanComment(documentation));
         }
 
         return markdown.ToString();

@@ -136,11 +136,33 @@ public class SignatureEngineTests
         Assert.Equal("REGISTER_SYSTEM(sys, func, reqs)", signature!.Label);
         Assert.Equal(1, signature.ActiveParameter);
 
-        // The panel carries the define form, what it expands to, and the trailing comment — the same
-        // markdown hover renders, so the two cannot drift apart.
-        Assert.Contains("#define REGISTER_SYSTEM(sys, func, reqs)", signature.Documentation, StringComparison.Ordinal);
+        // The expansion and the trailing comment, and NOT the `#define` line: the label above is
+        // already the define form, so rendering it again printed the parameter list twice.
         Assert.Contains("autoexec", signature.Documentation, StringComparison.Ordinal);
         Assert.Contains("Registers a system.", signature.Documentation, StringComparison.Ordinal);
+        Assert.DoesNotContain("#define", signature.Documentation, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A #define with parameters and no body. The horizontal rule divides two things, so with only
+    /// the comment present it would be a rule above nothing.
+    /// </summary>
+    [Fact]
+    public void Macro_WithNoBody_ShowsTheCommentWithoutASeparator()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+
+        string text = "#define NOOP( a ) // Does nothing.\nfunction run()\n{\n    NOOP( \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterParen = new(3, 10);
+
+        SignatureResult? signature = engine.Resolve(result, "raw", afterParen);
+
+        Assert.NotNull(signature);
+        Assert.Equal("NOOP(a)", signature!.Label);
+        Assert.Contains("Does nothing.", signature.Documentation, StringComparison.Ordinal);
+        Assert.DoesNotContain("---", signature.Documentation, StringComparison.Ordinal);
     }
 
     /// <summary>

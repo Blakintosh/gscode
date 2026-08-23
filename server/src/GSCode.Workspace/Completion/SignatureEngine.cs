@@ -133,20 +133,19 @@ public sealed class SignatureEngine
             parameters.Add(new SignatureParameter(parameterName, ""));
         }
 
-        // The body is rendered with its own parameter names left in, where hover substitutes the
-        // call site's arguments. Here the parameter names ARE the subject — the client highlights
-        // one of them as the caret moves between arguments — so showing where that name lands in
-        // the expansion is what the panel is for.
+        // The EXPANSION alone below the label, without hover's `#define` line: the label above is
+        // the define form already, and the client draws it with the active argument highlighted.
+        //
+        // The body keeps its own parameter names, where hover substitutes the call site's arguments.
+        // Here the parameter names are the subject — they are what the label highlights as the caret
+        // moves between arguments — so showing where the highlighted one lands in the expansion is
+        // what this panel is for.
         return new SignatureResult(
             BuildLabel(macro.Name, parameters),
             parameters.ToImmutable(),
             ClampActive(activeParameter, parameters.Count),
-            MarkdownDocRenderer.RenderMacro(
-                macro.Name,
-                isFunctionLike: true,
-                macroParameters,
-                macro.Documentation ?? "",
-                MacroExpansionPreview.Render(macro.Body)));
+            MarkdownDocRenderer.RenderMacroExpansion(
+                MacroExpansionPreview.Render(macro.Body), macro.Documentation ?? ""));
     }
 
     private SignatureResult? TryScriptFunction(

@@ -58,6 +58,33 @@ completion row admissible: 4,211 of 6,381 requests returned over 500 entries, me
 sample is still landing on the statement-scope arm that queries the store rather than on the cheap
 arms.
 
+### 2026-08-22: re-measured after the builtin library was rewritten
+
+The `t7` libraries grew by roughly 13,000 lines net when the unverified builtin docs were rewritten
+from call-site evidence and 115 signatures were corrected. Two paths read that data on every
+request — `ArgumentCountLint` and the completion producers — so the figures above were re-taken to
+find out whether the bigger library cost anything. It does not.
+
+| | 2026-08-19 | 2026-08-22, after the rewrite |
+|---|---:|---:|
+| lint pass, bo3, 980 files | 1,332 ms | **1,168 ms** |
+| lint median / p99 / max | 0.31 / 19.0 / 47.0 ms | **0.33 / 12.5 / 47.1 ms** |
+| completion, bo3, 6,381 requests | p99 2.12 ms, median 0.30 | **p99 1.64 ms**, median 0.29 |
+| `ArgumentCountLint`, bo3 | 162–205 ms | **144 ms** |
+
+An INSTRUMENTED run, where 2026-08-19 was not, so the two are not strictly comparable and the claim
+here is only the weak one it needs to be: nothing regressed. cod4's lint profile has moved
+underneath, and `UnusedIncludeLint` is now its most expensive rule at 215 ms, ahead of
+`NodeLintPass` at 182 ms.
+
+**One figure is left unexplained rather than claimed.** Analysis came in at 451 ms on bo3 and
+600 ms on cod4, against the 685 ms and 1,556 ms recorded above and in the phase table below — 30 to
+60% lower. Nothing in this branch went near lex, preprocess or parse, so a real improvement of that
+size has no mechanism, and a warm OS file cache is the likelier reading: the other three corpora had
+been swept half an hour earlier. This is the same shape as the extract claim retracted below, which
+is exactly why it is not being written down as a win. It wants a cold-cache pair before it means
+anything.
+
 ## Measured: where analysis time goes
 
 `--filter "Category=Perf"` times every script in a game individually and splits each into the four

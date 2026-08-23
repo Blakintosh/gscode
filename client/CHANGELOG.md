@@ -38,8 +38,13 @@ A complete ground-up rewrite of the language server and VS Code extension.
 - Corruption-proof whitespace-only formatter (refuses syntax errors; re-checks its own output).
 - Code actions: remove-duplicate-`#using` and add-missing-`#using`, backed by a namespace-usage
   lint.
-- Commands: `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, and
-  `gscode.openApiLibrary` (`shift+f1` in gsc/csc/gsh files).
+- Commands: `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`,
+  `gscode.selectGame`, and `gscode.openApiLibrary` (`shift+f1` in gsc/csc/gsh files).
+- **GSCode: Select Game**, a picker for the dialect this workspace targets. The roster comes from
+  the server, so it offers only games with an implemented dialect, and it ticks the game actually
+  in force rather than the one `gscode.game` names — those differ whenever the setting names
+  something the server did not recognise. Previously the picker appeared only if the server
+  noticed a file that did not look like the selected game, and only once per session.
 - In-source suppression carried inside comments: `#pragma disable|restore <code>|all|format`.
   A named code is suppressed at whatever severity it carries, errors and syntax errors included —
   wider than the C# pragma the spelling comes from, which is why `warning` is not part of it (though

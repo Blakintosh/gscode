@@ -18,10 +18,11 @@ Open a folder containing your scripts in VS Code. GSCode activates automatically
 - `.csc` is a client-world script.
 - `.gsh` is a shared header inserted into either world.
 
-The extension defaults to the Black Ops III dialect (`gscode.game: "bo3"`). Select `cod4`, `waw`,
-`mw2`, `bo1`, or `bo3` in Settings when working on another game. The active game is shown in the
-status bar. Changing the game or raw/mod paths prompts you to reload the VS Code window; restarting
-only the language server does not re-read those startup settings.
+The extension defaults to the Black Ops III dialect (`gscode.game: "bo3"`). Run **GSCode: Select
+Game** to switch — it lists the games the server actually supports and ticks the one running now —
+or set `cod4`, `waw`, `mw2`, `bo1`, or `bo3` in Settings. The active game is shown in the status
+bar. Changing the game or raw/mod paths prompts you to reload the VS Code window; restarting only
+the language server does not re-read those startup settings.
 
 ### Game files, raw scripts, and mods
 
@@ -151,6 +152,10 @@ code it suppresses and says where it stops.
 
 - **GSCode: Show Server Output** opens the language-server log.
 - **GSCode: Restart Language Server** restarts a wedged server or picks up a rebuilt server binary.
+- **GSCode: Select Game** picks the Call of Duty dialect this workspace targets, then reloads the
+  window to apply it. The list comes from the server, so it only ever offers games with an
+  implemented dialect, and the tick marks the game the server actually selected rather than what
+  the setting says — the two differ when a setting names something unrecognised.
 - **GSCode: Clear Cache and Reindex** deletes this workspace's cache and reloads the window.
 - **GSCode: Open Documentation for Symbol** opens the matching API page on [gscode.net](https://www.gscode.net/), for the game the server has selected — a Call of Duty 4 workspace opens Call of Duty 4's library, not Black Ops III's. It is also bound to `Shift+F1` in GSC, CSC, and GSH files.
 
@@ -166,7 +171,7 @@ Server** output channel. `gscode.trace.server` can trace the LSP messages exchan
 
 | Symptom | What to check |
 | --- | --- |
-| `#using`, `#include`, or path calls cannot be resolved | Confirm `gscode.game`, `gscode.raw.enabled`, `gscode.rawPath`, and `gscode.modsPath`; reload the window after changing any of them. |
+| `#using`, `#include`, or path calls cannot be resolved | Confirm `gscode.game` (or run **GSCode: Select Game**, which shows the game in force), `gscode.raw.enabled`, `gscode.rawPath`, and `gscode.modsPath`; reload the window after changing any of them. |
 | Completions or references stop at the open file | Make sure `gscode.workspaceIndexingMode` is not `off`, then wait for the status bar to finish indexing. |
 | Diagnostics appear only in some files | Check `gscode.diagnostics.scope`; `open` intentionally excludes closed files, while `all` includes stock raw scripts. |
 | Results look stale after changing paths or game | Use **Developer: Reload Window**. If the index is still wrong, run **GSCode: Clear Cache and Reindex**. |

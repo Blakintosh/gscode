@@ -58,7 +58,8 @@ whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.
 - **Sync + diagnostics**: incremental text sync with debounced re-analysis (`TextSyncHandler`),
   push-model `publishDiagnostics` merging parse diagnostics with the cross-file lints — all of them,
   through `Analysis/WorkspaceLints.Analyze`, which is the one entry point and currently runs
-  twenty-five rules. Naming a single lint here read as if it were the whole merged set.
+  twenty-six rules — seventeen called directly and nine more sharing `NodeLintPass`'s single AST
+  walk. Naming a single lint here read as if it were the whole merged set.
 - **Read**: hover (with inferred local types), definition, references (incl. literals),
   document highlight, document links, document/workspace symbols, folding, selection ranges,
   semantic tokens (full/delta/range).

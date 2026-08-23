@@ -742,7 +742,11 @@ Bundled game data (copied to the build output) plus the loaders and doc renderer
 - `DevOnlyBuiltins.cs` — the conservative fallback set for development-only engine functions;
   API entries can override it when the data carries an explicit `devOnly` value.
 - `MacroExpansionPreview.cs` — renders a readable, length-limited macro body for hover and
-  substitutes call-site arguments token-by-token rather than by unsafe text replacement. One
+  signature help, and substitutes call-site arguments token-by-token rather than by unsafe text
+  replacement. The body keeps the LINES it was written on — the backslashes are gone from it by
+  then, but each token still carries its own line — and indentation is rendered as ranked LEVELS
+  four spaces apart rather than as the author's columns, since a tab is one character in a range
+  and subtracting columns gave a tab-indented header a one-space step. One
   argument scan serves both readers: `ArgumentsFollowing` gives hover the text, and
   `ArgumentSpansFollowing` gives the macro inlay hints the trimmed `MacroArgumentSpan` offsets a
   label is placed at. Nesting counts brackets as well as parentheses, and an unterminated list —

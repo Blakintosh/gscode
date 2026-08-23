@@ -78,6 +78,11 @@ A complete ground-up rewrite of the language server and VS Code extension.
   script function or a builtin had a signature, so typing the arguments to `REGISTER_SYSTEM(` or
   `IS_TRUE(` showed nothing. The macro is read from the file being edited plus the headers it
   `#insert`s, so a header added a keystroke ago counts.
+- A macro's expansion keeps the lines it was written on, in hover as well as signature help. A
+  multi-statement macro used to be joined into one long line along with its backslashes; the
+  backslashes still go, and a macro that declares a function now reads as a declaration. Indentation
+  is redrawn at four spaces a level, so a header indented with tabs reads the same as one indented
+  with spaces.
 - Dialect-specific snippets moved from the extension to the server. A contributed snippet is
   registered per language id and one id covers five games, so `foreach`, `class`, `new`, the
   function declaration, `#precache`, the import directives and the ScriptDoc forms used to be

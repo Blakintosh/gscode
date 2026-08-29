@@ -25,6 +25,8 @@ export interface GscodeSettings {
     "completion.parameterHints": boolean;
     "diagnostics.scope": string;
     "format.padParens": boolean;
+    "format.padCallParens": boolean;
+    "format.padBrackets": boolean;
     "format.maxBlankLines": number;
     "format.sortDirectives": boolean;
     "format.alignConsecutive": boolean;
@@ -52,6 +54,8 @@ export function readSettings(): GscodeSettings {
         "completion.parameterHints": config.get<boolean>("completion.parameterHints", true),
         "diagnostics.scope": config.get<string>("diagnostics.scope", "workspace"),
         "format.padParens": config.get<boolean>("format.padParens", true),
+        "format.padCallParens": config.get<boolean>("format.padCallParens", true),
+        "format.padBrackets": config.get<boolean>("format.padBrackets", true),
         "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),
         "format.sortDirectives": config.get<boolean>("format.sortDirectives", true),
         "format.alignConsecutive": config.get<boolean>("format.alignConsecutive", true),

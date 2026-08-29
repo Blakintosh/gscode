@@ -57,6 +57,31 @@ public class OperatorSpacingTests
     }
 
     [Theory]
+    [InlineData("a = (-150, -1024, 304);", "a = ( -150, -1024, 304 );")]
+    [InlineData("a = -1;", "a = -1;")]
+    [InlineData("a = -(b);", "a = -( b );")]
+    [InlineData("a = b * -1;", "a = b * -1;")]
+    [InlineData("a = &foo;", "a = &foo;")]
+    [InlineData("foo( &bar, -1 );", "foo( &bar, -1 );")]
+    [InlineData("return -1;", "return -1;")]
+    public void AUnaryOperatorHugsItsOperand(string input, string expected)
+    {
+        // Reported in 2.0.0: `(- 150, - 1024, 304)` and `& funcname`.
+        Assert.Contains(expected, Body(input), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("a = b - 1;", "a = b - 1;")]
+    [InlineData("a = (b) - 1;", "a = ( b ) - 1;")]
+    [InlineData("a = b[0] - 1;", "a = b[ 0 ] - 1;")]
+    [InlineData("a = b & 1;", "a = b & 1;")]
+    [InlineData("a = 2 + 1;", "a = 2 + 1;")]
+    public void ABinaryOperatorKeepsItsSpaces(string input, string expected)
+    {
+        Assert.Contains(expected, Body(input), StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("foo();", "foo();")]
     [InlineData("foo( a );", "foo( a );")]
     [InlineData("a = foo( b );", "a = foo( b );")]

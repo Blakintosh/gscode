@@ -182,9 +182,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  *
  * This lives client-side rather than in the server's on-type formatting handler, and stays there
  * UNCONDITIONALLY, because VSCode only sends `textDocument/onTypeFormatting` when
- * `editor.formatOnType` is enabled. We now ship that as a default for the GSC languages, so the
- * handler is usually reachable — but a default is not a guarantee: the setting resolves
- * per-language, per-workspace and per-folder, and can change mid-session.
+ * `editor.formatOnType` is enabled. That is off unless the user turns it on for the GSC languages
+ * (it is deliberately not shipped as a default: it rewrites neighbouring lines on every `;`), so
+ * the handler is usually NOT reachable — and even when it is, the setting resolves per-language,
+ * per-workspace and per-folder, and can change mid-session.
  *
  * Reading the setting to choose between a client- and server-side implementation is the tempting
  * alternative and is worse in the way that is hardest to notice. Running both costs nothing (this

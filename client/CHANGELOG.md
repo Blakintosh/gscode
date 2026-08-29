@@ -4,6 +4,26 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
+## 2.0.1
+
+### Changed
+- On-type formatting is no longer enabled by default. 2.0.0 shipped `editor.formatOnType` on for
+  GSC, CSC and GSH, so typing `;` or `}` re-indented and re-aligned the surrounding lines. To opt
+  back in, add `"[gsc]": { "editor.formatOnType": true }` (and likewise `[csc]`, `[gsh]`) to your
+  settings; Format Document and Format Selection are unaffected. With it off, `}` no longer
+  auto-dedents as you type.
+
+### Added
+- Two more formatter spacing settings, so the padding is yours to choose per kind:
+  `gscode.format.padCallParens` (`foo( a )` vs `foo(a)`, separately from control-flow parens) and
+  `gscode.format.padBrackets` (`a[ i ]` vs `a[i]`). Both default to the 2.0.0 behaviour; set
+  `padCallParens` and `padBrackets` off, with `padParens` on, for `if ( foo(a[i]) )`.
+
+### Fixed
+- The formatter put a space after a unary minus or address-of — `( -150, -1024, 304 )` came out
+  `( - 150, - 1024, 304 )` and `&funcname` as `& funcname`. Sign and `&` now hug their operand;
+  binary `a - b` and `a & b` are unchanged.
+
 ## 2.0.0
 
 A complete ground-up rewrite of the language server and VS Code extension.

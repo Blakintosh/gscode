@@ -24,6 +24,16 @@ namespace GSCode.Server.Formatting;
 /// in stock code (33,140 padded, 4,333 tight), so this is a genuine preference rather than a
 /// convention with one right answer.
 /// </param>
+/// <param name="PadCallParens">
+/// Whether a call's or declaration's parentheses are padded: <c>foo( a )</c> against <c>foo(a)</c>.
+/// Separate from <see cref="PadParens"/> because the two are mixed freely in stock code, and the
+/// tight-call, padded-condition combination is a common hand-written style.
+/// </param>
+/// <param name="PadBrackets">
+/// Whether subscript and array-literal brackets are padded: <c>a[ i ]</c> against <c>a[i]</c>.
+/// Adjacent brackets (<c>[[ ptr ]]</c>, <c>[]</c>) stay tight either way. Stock leans tight
+/// (19,175 to 4,686); padded is the default to match the parentheses, but it is a preference.
+/// </param>
 /// <param name="MaxBlankLines">
 /// The longest run of blank lines to preserve. Two by default, which keeps the 2,477 double blanks
 /// in the stock scripts while still collapsing the 152 longer runs.
@@ -45,6 +55,8 @@ public readonly record struct FormatOptions(
     int IndentWidth = 4,
     bool UseTabs = false,
     bool PadParens = true,
+    bool PadCallParens = true,
+    bool PadBrackets = true,
     int MaxBlankLines = 2,
     bool SortDirectives = true,
     bool AlignConsecutive = false)
@@ -58,7 +70,7 @@ public readonly record struct FormatOptions(
     /// blank lines, not the values declared above.
     /// </summary>
     public static FormatOptions Default { get; } = new(
-        IndentWidth: 4, UseTabs: false, PadParens: true, MaxBlankLines: 2,
+        IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true, MaxBlankLines: 2,
         SortDirectives: true, AlignConsecutive: false);
 
     /// <summary>One level of indentation as text.</summary>
@@ -83,6 +95,8 @@ public readonly record struct FormatOptions(
             IndentWidth: tabSize > 0 ? tabSize : 4,
             UseTabs: !insertSpaces,
             PadParens: settings.FormatPadParens,
+            PadCallParens: settings.FormatPadCallParens,
+            PadBrackets: settings.FormatPadBrackets,
             MaxBlankLines: Math.Max(0, settings.FormatMaxBlankLines),
             SortDirectives: settings.FormatSortDirectives,
             AlignConsecutive: settings.FormatAlignConsecutive);

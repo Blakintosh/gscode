@@ -85,6 +85,39 @@ public class PaddingOptionsTests
             StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("if (a) x = 1;", "if( a ) x = 1;")]
+    [InlineData("while (a) x = 1;", "while( a ) x = 1;")]
+    [InlineData("for (i = 0; i < 1; i++) x = 1;", "for( i = 0; i < 1; i++ ) x = 1;")]
+    [InlineData("foreach (a in i) x = 1;", "foreach( a in i ) x = 1;")]
+    [InlineData("switch (a) { case 1: break; }", "switch( a )")]
+    public void TheKeywordSpaceIsItsOwnSetting(string input, string expected)
+    {
+        Assert.Contains(
+            expected,
+            Format(input, FormatOptions.Default with { SpaceBeforeControlParen = false }), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TightKeywordAndTightInteriorCombine()
+    {
+        Assert.Contains(
+            "if(a) x = 1;",
+            Format("if ( a ) x = 1;", FormatOptions.Default with { SpaceBeforeControlParen = false, PadParens = false }),
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("return (a);", "return ( a );")]
+    [InlineData("x = isdefined(a);", "x = isdefined( a );")]
+    [InlineData("x = foo(a);", "x = foo( a );")]
+    public void OnlyControlFlowKeywordsAreAffected(string input, string expected)
+    {
+        Assert.Contains(
+            expected,
+            Format(input, FormatOptions.Default with { SpaceBeforeControlParen = false }), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void DeclarationParensFollowTheCallSetting()
     {

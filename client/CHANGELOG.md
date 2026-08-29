@@ -4,6 +4,14 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- `xanim` and `anim` are accepted as `#precache` asset types, and offered in completion.
+- `gscode.format.spaceBeforeControlParen`: turn off for `if(`, `for(`, `while(` instead of `if (`.
+  Independent of `padParens`, so every combination of keyword space and interior padding is
+  reachable.
+
 ## 2.0.1
 
 ### Changed

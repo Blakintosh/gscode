@@ -861,6 +861,14 @@ public static class GscFormatter
         // lose their hug under an allow-list.
         if ( current == TokenKind.OpenParen )
         {
+            // `if(`, `for(`, `while(` are a real style (4,333 tight against 33,140 spaced in stock),
+            // so the keyword's space is its own setting. `return (` and `case (` are not keywords
+            // opening a header and keep theirs regardless.
+            if ( IsControlFlowKeyword(previous) )
+            {
+                return options.SpaceBeforeControlParen ? " " : "";
+            }
+
             return IsGroupingParen(previous) ? " " : "";
         }
 

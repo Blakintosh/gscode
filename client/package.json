@@ -374,6 +374,12 @@
 						"description": "Pad the inside of subscript and array-literal brackets: 'a[ i ]' rather than 'a[i]'. Function-pointer brackets '[[ ptr ]]' and empty '[]' stay tight either way. Stock scripts lean tight, about 4 to 1.",
 						"scope": "window"
 					},
+					"gscode.format.spaceBeforeControlParen": {
+						"type": "boolean",
+						"default": true,
+						"description": "Put a space between a control-flow keyword and its parenthesis: 'if ( x )' rather than 'if( x )'. Applies to if, while, for, foreach and switch; 'return (' and 'case (' always keep their space. Independent of padParens, so 'if(x)', 'if( x )', 'if (x)' and 'if ( x )' are all reachable.",
+						"scope": "window"
+					},
 					"gscode.format.maxBlankLines": {
 						"type": "integer",
 						"default": 2,

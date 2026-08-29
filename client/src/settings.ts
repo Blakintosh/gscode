@@ -27,6 +27,7 @@ export interface GscodeSettings {
     "format.padParens": boolean;
     "format.padCallParens": boolean;
     "format.padBrackets": boolean;
+    "format.spaceBeforeControlParen": boolean;
     "format.maxBlankLines": number;
     "format.sortDirectives": boolean;
     "format.alignConsecutive": boolean;
@@ -56,6 +57,7 @@ export function readSettings(): GscodeSettings {
         "format.padParens": config.get<boolean>("format.padParens", true),
         "format.padCallParens": config.get<boolean>("format.padCallParens", true),
         "format.padBrackets": config.get<boolean>("format.padBrackets", true),
+        "format.spaceBeforeControlParen": config.get<boolean>("format.spaceBeforeControlParen", true),
         "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),
         "format.sortDirectives": config.get<boolean>("format.sortDirectives", true),
         "format.alignConsecutive": config.get<boolean>("format.alignConsecutive", true),

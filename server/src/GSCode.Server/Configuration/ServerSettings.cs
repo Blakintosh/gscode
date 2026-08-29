@@ -56,6 +56,9 @@ public sealed class ServerSettings
     /// <summary>Whether subscript brackets are padded: `a[ i ]` against `a[i]`.</summary>
     public bool FormatPadBrackets { get; set; } = true;
 
+    /// <summary>Whether a control-flow keyword is spaced from its parenthesis: `if (` against `if(`.</summary>
+    public bool FormatSpaceBeforeControlParen { get; set; } = true;
+
     /// <summary>The longest run of blank lines the formatter preserves.</summary>
     public int FormatMaxBlankLines { get; set; } = 2;
 
@@ -148,6 +151,9 @@ public sealed class ServerSettings
         FormatPadBrackets = section.Value<bool?>("format.padBrackets")
             ?? section["format"]?.Value<bool?>("padBrackets")
             ?? FormatPadBrackets;
+        FormatSpaceBeforeControlParen = section.Value<bool?>("format.spaceBeforeControlParen")
+            ?? section["format"]?.Value<bool?>("spaceBeforeControlParen")
+            ?? FormatSpaceBeforeControlParen;
         FormatMaxBlankLines = section.Value<int?>("format.maxBlankLines")
             ?? section["format"]?.Value<int?>("maxBlankLines")
             ?? FormatMaxBlankLines;

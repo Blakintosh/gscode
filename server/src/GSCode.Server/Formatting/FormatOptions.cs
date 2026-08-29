@@ -34,6 +34,10 @@ namespace GSCode.Server.Formatting;
 /// Adjacent brackets (<c>[[ ptr ]]</c>, <c>[]</c>) stay tight either way. Stock leans tight
 /// (19,175 to 4,686); padded is the default to match the parentheses, but it is a preference.
 /// </param>
+/// <param name="SpaceBeforeControlParen">
+/// Whether a control-flow keyword is separated from its parenthesis: <c>if ( x )</c> against
+/// <c>if( x )</c>. Independent of the interior padding, so every combination is reachable.
+/// </param>
 /// <param name="MaxBlankLines">
 /// The longest run of blank lines to preserve. Two by default, which keeps the 2,477 double blanks
 /// in the stock scripts while still collapsing the 152 longer runs.
@@ -57,6 +61,7 @@ public readonly record struct FormatOptions(
     bool PadParens = true,
     bool PadCallParens = true,
     bool PadBrackets = true,
+    bool SpaceBeforeControlParen = true,
     int MaxBlankLines = 2,
     bool SortDirectives = true,
     bool AlignConsecutive = false)
@@ -70,7 +75,8 @@ public readonly record struct FormatOptions(
     /// blank lines, not the values declared above.
     /// </summary>
     public static FormatOptions Default { get; } = new(
-        IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true, MaxBlankLines: 2,
+        IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true,
+        SpaceBeforeControlParen: true, MaxBlankLines: 2,
         SortDirectives: true, AlignConsecutive: false);
 
     /// <summary>One level of indentation as text.</summary>
@@ -97,6 +103,7 @@ public readonly record struct FormatOptions(
             PadParens: settings.FormatPadParens,
             PadCallParens: settings.FormatPadCallParens,
             PadBrackets: settings.FormatPadBrackets,
+            SpaceBeforeControlParen: settings.FormatSpaceBeforeControlParen,
             MaxBlankLines: Math.Max(0, settings.FormatMaxBlankLines),
             SortDirectives: settings.FormatSortDirectives,
             AlignConsecutive: settings.FormatAlignConsecutive);

@@ -37,16 +37,18 @@ public static class PrecacheAssetTypes
         // The string-family types accept additional arguments beyond the asset name;
         // everything else takes exactly one value.
         //
-        // Every type the language PDF documents is here. "xmodel" is the one addition beyond it:
-        // undocumented, but used 38 times across the shipped scripts, so rejecting it would flag
-        // stock code. Extend the same way — from real usage, not guesswork.
+        // Every type the language PDF documents is here, plus additions beyond it. "xmodel" is
+        // undocumented but used 38 times across the shipped scripts, so rejecting it would flag
+        // stock code. "xanim" and "anim" are by maintainer report (2026-08): the shipped scripts
+        // never precache an animation (they come through #using_animtree), so the corpus cannot
+        // confirm them. Extend from real usage where it exists.
         string[] singleValueTypes =
         [
             "vehicle", "model", "playercharacter", "aitype", "character", "xmodelalias",
             "weapon", "zbarrier", "rumble", "shellshock", "xcam", "destructible",
             "streamerhint", "headicon", "statusicon", "locationselector", "menu",
             "material", "objective", "fx", "lui_menu", "lui_menu_data",
-            "xmodel",
+            "xmodel", "xanim", "anim",
         ];
 
         string[] stringFamilyTypes = ["string", "debugstring", "eventstring", "triggerstring"];

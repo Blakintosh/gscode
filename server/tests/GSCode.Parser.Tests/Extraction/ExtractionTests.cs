@@ -124,6 +124,14 @@ public class ExtractionTests
             Analyze("#precache( \"nonsense_type\", \"X\" );").AllDiagnostics,
             diagnostic => diagnostic.Code == GscDiagnosticCode.UnknownPrecacheType);
 
+        // Animation types, added by report rather than from the stock scripts.
+        Assert.DoesNotContain(
+            Analyze("#precache( \"xanim\", \"ai_zombie_walk\" );").AllDiagnostics,
+            diagnostic => diagnostic.Code is GscDiagnosticCode.UnknownPrecacheType or GscDiagnosticCode.WrongPrecacheArgumentCount);
+        Assert.DoesNotContain(
+            Analyze("#precache( \"anim\", \"ai_zombie_walk\" );").AllDiagnostics,
+            diagnostic => diagnostic.Code is GscDiagnosticCode.UnknownPrecacheType or GscDiagnosticCode.WrongPrecacheArgumentCount);
+
         Assert.Contains(
             Analyze("#precache( \"model\", \"a\", \"b\" );").AllDiagnostics,
             diagnostic => diagnostic.Code == GscDiagnosticCode.WrongPrecacheArgumentCount);

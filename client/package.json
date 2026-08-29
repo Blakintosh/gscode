@@ -7,7 +7,7 @@
 		"color": "#07080C",
 		"theme": "dark"
 	},
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"publisher": "blakintosh",
 	"license": "GPL-3.0-or-later",
 	"homepage": "https://www.gscode.net",
@@ -359,7 +359,19 @@
 					"gscode.format.padParens": {
 						"type": "boolean",
 						"default": true,
-						"description": "Pad the inside of control-flow parentheses: 'if ( x )' rather than 'if (x)'. Both appear in stock scripts, which are about 88% padded.",
+						"description": "Pad the inside of control-flow and grouping parentheses: 'if ( x )' rather than 'if (x)'. Both appear in stock scripts, which are about 88% padded. Call parentheses have their own setting, gscode.format.padCallParens.",
+						"scope": "window"
+					},
+					"gscode.format.padCallParens": {
+						"type": "boolean",
+						"default": true,
+						"description": "Pad the inside of call and declaration parentheses: 'foo( a, b )' rather than 'foo(a, b)'. Empty parentheses stay '()' either way. Turn this off and keep padParens on for the common 'if ( x )' with 'foo(x)' style.",
+						"scope": "window"
+					},
+					"gscode.format.padBrackets": {
+						"type": "boolean",
+						"default": true,
+						"description": "Pad the inside of subscript and array-literal brackets: 'a[ i ]' rather than 'a[i]'. Function-pointer brackets '[[ ptr ]]' and empty '[]' stay tight either way. Stock scripts lean tight, about 4 to 1.",
 						"scope": "window"
 					},
 					"gscode.format.maxBlankLines": {
@@ -431,8 +443,7 @@
 				},
 				"editor.insertSpaces": false,
 				"editor.tabSize": 4,
-				"editor.autoClosingOvertype": "always",
-				"editor.formatOnType": true
+				"editor.autoClosingOvertype": "always"
 			},
 			"[csc]": {
 				"editor.quickSuggestions": {
@@ -442,8 +453,7 @@
 				},
 				"editor.insertSpaces": false,
 				"editor.tabSize": 4,
-				"editor.autoClosingOvertype": "always",
-				"editor.formatOnType": true
+				"editor.autoClosingOvertype": "always"
 			},
 			"[gsh]": {
 				"editor.quickSuggestions": {
@@ -453,8 +463,7 @@
 				},
 				"editor.insertSpaces": false,
 				"editor.tabSize": 4,
-				"editor.autoClosingOvertype": "always",
-				"editor.formatOnType": true
+				"editor.autoClosingOvertype": "always"
 			}
 		}
 	},

@@ -603,7 +603,9 @@ to be noticed.
 The formatter does not wrap long lines and will not. Everything else the formatter follow-up once
 listed has shipped — `padParens`, `maxBlankLines`, per-request `tabSize`/`insertSpaces`, consecutive
 alignment (`alignConsecutive`), directive sorting, and on-type formatting scoped to the alignment
-group around the cursor with `editor.formatOnType` on by default.
+group around the cursor. On-type formatting is opt-in: it runs only where the user enables
+`editor.formatOnType` for the GSC languages, since a default that rewrites neighbouring lines on
+every `;` proved unwelcome in 2.0.0.
 
 Measured before deciding, across 390,434 BO3 lines and 335,608 CoD4 lines: the 95th percentile is 82
 and 85 characters, and only 1.3%/1.4% pass 120. The number that decided it is not the tail's size

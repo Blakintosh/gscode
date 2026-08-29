@@ -4,7 +4,7 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
-## Unreleased
+## 2.0.2
 
 ### Added
 - `xanim` and `anim` are accepted as `#precache` asset types, and offered in completion.

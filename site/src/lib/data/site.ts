@@ -13,4 +13,4 @@ export const marketplaceUrl = 'https://marketplace.visualstudio.com/items?itemNa
 
 /** Shown in the header, on the install buttons and on the spec sheet. Keep in step with client/package.json
  *  when a release ships (the home page describes the 2.0 feature set). */
-export const extensionVersion = '2.0.0';
+export const extensionVersion = '2.0.2';

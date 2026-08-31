@@ -466,10 +466,16 @@ public static class GscFormatter
         // column. This tracks bodies that are owed an indent without one.
         UnbracedBodyTracker unbraced = new();
 
+        // Whether each open parenthesis is a CALL's (`foo(`) or a control-flow/grouping one
+        // (`if (`, `= (`), so its interior can take the padding rule the user chose for that kind.
+        // The closer needs the same answer, hence a stack rather than a flag.
+        List<bool> callParens = new();
+
         for ( int index = 0; index < significant.Count; index++ )
         {
             Token token = significant[index].Token;
             int newlinesBefore = significant[index].NewlinesBefore;
+            bool insideCallParen = false;
 
             // Closers dedent before this line's indent is computed. A dev block is deliberately
             // absent: `/# … #/` is a compile-time switch, not a scope -- the engine jumps over it
@@ -483,6 +489,12 @@ public static class GscFormatter
             if ( token.Kind == TokenKind.CloseParen )
             {
                 parenDepth = Math.Max(0, parenDepth - 1);
+
+                if ( callParens.Count > 0 )
+                {
+                    insideCallParen = callParens[^1];
+                    callParens.RemoveAt(callParens.Count - 1);
+                }
             }
 
             if ( token.Kind == TokenKind.CloseBrace && blocks.Count > 0 )
@@ -505,6 +517,11 @@ public static class GscFormatter
                 Token previous = significant[index - 1].Token;
                 bool trailingComment = LineFacts.IsComment(token.Kind) && newlinesBefore == 0;
 
+                if ( previous.Kind == TokenKind.OpenParen && callParens.Count > 0 )
+                {
+                    insideCallParen = callParens[^1];
+                }
+
                 if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth) )
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
@@ -513,7 +530,9 @@ public static class GscFormatter
                 }
                 else
                 {
-                    output.Append(Separator(previous.Kind, token.Kind, options));
+                    // The token before the operator decides whether `-`, `+` and `&` are unary.
+                    TokenKind beforePrevious = index >= 2 ? significant[index - 2].Token.Kind : TokenKind.OpenBrace;
+                    output.Append(Separator(beforePrevious, previous.Kind, token.Kind, insideCallParen, options));
                 }
 
                 output.Append(token.GetText(text));
@@ -541,6 +560,7 @@ public static class GscFormatter
             if ( token.Kind == TokenKind.OpenParen )
             {
                 parenDepth++;
+                callParens.Add(index > 0 && !IsGroupingParen(significant[index - 1].Token.Kind));
             }
 
             unbraced.AfterToken(token.Kind);
@@ -767,17 +787,22 @@ public static class GscFormatter
         output.Append(' ', levels * options.IndentWidth);
     }
 
-    private static string Separator(TokenKind previous, TokenKind current, FormatOptions options)
+    private static string Separator(
+        TokenKind beforePrevious, TokenKind previous, TokenKind current, bool insideCallParen, FormatOptions options)
     {
-        // Parenthesis interior padding: "( x )", but "()" stays tight.
+        // Parenthesis interior padding: "( x )", but "()" stays tight. A call's parentheses and a
+        // control-flow/grouping pair each follow their own setting, so `if ( x )` with `foo(x)` --
+        // a common mix in stock code -- is expressible.
+        bool padParen = insideCallParen ? options.PadCallParens : options.PadParens;
+
         if ( previous == TokenKind.OpenParen )
         {
-            return current == TokenKind.CloseParen || !options.PadParens ? "" : " ";
+            return current == TokenKind.CloseParen || !padParen ? "" : " ";
         }
 
         if ( current == TokenKind.CloseParen )
         {
-            return options.PadParens ? " " : "";
+            return padParen ? " " : "";
         }
 
         // Bracket interiors are padded, matching parentheses: `a[ i ]`, `[[ ptr ]]`. Stock leans
@@ -789,12 +814,12 @@ public static class GscFormatter
         // token rather than as nested indexes, and an empty array stays `[]`.
         if ( previous == TokenKind.OpenBracket )
         {
-            return current is TokenKind.OpenBracket or TokenKind.CloseBracket ? "" : " ";
+            return current is TokenKind.OpenBracket or TokenKind.CloseBracket || !options.PadBrackets ? "" : " ";
         }
 
         if ( current == TokenKind.CloseBracket )
         {
-            return previous == TokenKind.CloseBracket ? "" : " ";
+            return previous == TokenKind.CloseBracket || !options.PadBrackets ? "" : " ";
         }
 
         // A '[' hugs its operand only when it SUBSCRIPTS one -- `a[ 0 ]`, `foo()[ 1 ]`. Opening an
@@ -806,6 +831,14 @@ public static class GscFormatter
         }
 
         if ( NoSpaceAfter(previous) )
+        {
+            return "";
+        }
+
+        // A sign or address-of hugs its operand: `-150`, `&funcname`, `-( a )`. The same tokens are
+        // binary when an operand precedes them (`a - b`, `flags & MASK`), and only then take the
+        // space. Reported as `(- 150, - 1024, 304)` and `& funcname` in 2.0.0.
+        if ( IsUnaryHere(beforePrevious, previous) )
         {
             return "";
         }
@@ -828,16 +861,30 @@ public static class GscFormatter
         // lose their hug under an allow-list.
         if ( current == TokenKind.OpenParen )
         {
-            // `return ( … )` and `case ( … )` group rather than call, so they take the space that
-            // any other keyword-followed-by-paren would not.
-            bool grouping = IsControlFlowKeyword(previous)
-                || IsBinaryOrAssignmentOperator(previous)
-                || previous is TokenKind.Return or TokenKind.Case;
+            // `if(`, `for(`, `while(` are a real style (4,333 tight against 33,140 spaced in stock),
+            // so the keyword's space is its own setting. `return (` and `case (` are not keywords
+            // opening a header and keep theirs regardless.
+            if ( IsControlFlowKeyword(previous) )
+            {
+                return options.SpaceBeforeControlParen ? " " : "";
+            }
 
-            return grouping ? " " : "";
+            return IsGroupingParen(previous) ? " " : "";
         }
 
         return " ";
+    }
+
+    /// <summary>
+    /// Whether a '(' after <paramref name="previous"/> opens a group rather than a call. `return ( … )`
+    /// and `case ( … )` group rather than call, so they take the space that any other
+    /// keyword-followed-by-paren would not.
+    /// </summary>
+    private static bool IsGroupingParen(TokenKind previous)
+    {
+        return IsControlFlowKeyword(previous)
+            || IsBinaryOrAssignmentOperator(previous)
+            || previous is TokenKind.Return or TokenKind.Case;
     }
 
     private static bool NoSpaceAfter(TokenKind kind)
@@ -940,6 +987,17 @@ public static class GscFormatter
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="operatorKind"/> is a prefix operator in this position: minus, plus or ampersand
+    /// with nothing before it that could be an operand. `)` and `]` end operands too, so `(a) - 1`
+    /// and `a[ 0 ] - 1` stay binary.
+    /// </summary>
+    private static bool IsUnaryHere(TokenKind beforePrevious, TokenKind operatorKind)
+    {
+        return operatorKind is TokenKind.Minus or TokenKind.Plus or TokenKind.Ampersand
+            && !EndsAnOperand(beforePrevious);
     }
 
     private static bool IsControlFlowKeyword(TokenKind kind)

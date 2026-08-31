@@ -183,7 +183,18 @@ guideline](../server/FORMATTING.md).
 
 ## Release Notes
 
-### 2.0.0 (latest)
+### 2.0.2 (latest)
+
+- `xanim` and `anim` are accepted as `#precache` asset types, and offered in completion.
+- `gscode.format.spaceBeforeControlParen`: turn off for `if(`, `for(`, `while(` instead of `if (`. Independent of `padParens`, so every combination of keyword space and interior padding is reachable.
+
+### 2.0.1
+
+- Format-on-type is no longer enabled by default. 2.0.0 shipped `editor.formatOnType` on for GSC, CSC and GSH, so typing `;` or `}` re-indented and re-aligned the surrounding lines. To opt back in, add `"[gsc]": { "editor.formatOnType": true }` (and likewise `[csc]`, `[gsh]`) to your settings; Format Document and Format Selection are unaffected.
+- Two more formatter spacing settings: `gscode.format.padCallParens` (`foo( a )` vs `foo(a)`, separately from control-flow parens) and `gscode.format.padBrackets` (`a[ i ]` vs `a[i]`). Both default to the 2.0.0 behaviour.
+- Fixed the formatter putting a space after a unary minus or address-of: `( -150, -1024, 304 )` came out `( - 150, - 1024, 304 )` and `&funcname` as `& funcname`.
+
+### 2.0.0
 
 A complete ground-up rewrite of the language server and extension for speed, low memory use, and accuracy.
 

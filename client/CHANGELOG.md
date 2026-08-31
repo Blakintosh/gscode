@@ -6,6 +6,23 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 
 ## 2.0.2
 
+### Changed
+- The "N references" code lens is now off by default. It re-rendered against analysis that runs
+  250 ms behind the keystroke, so the lens rows jumped on every keypress and dragged the viewport
+  with them — this was the "editor scrolls as I type" complaint, not format-on-type. Opt back in
+  with `gscode.codeLens.enabled`.
+- The formatter refuses scripts that ship with the game. Format Document, Format Selection and
+  format-on-type all return nothing for a stock script, so a stray format (or format-on-save)
+  cannot leave the install differing from everyone else's. Your own scripts placed under `raw`
+  still format — the test is whether the file is one of the game's, not which folder it is in.
+
+### Fixed
+- Code lens and inlay hint requests now re-analyse the document when its text has moved on since
+  the last run, so their positions match the buffer instead of trailing one edit behind it.
+- `for ( ;; )` was broken across lines, with the `)` pushed onto a line of its own, whatever the
+  settings. An empty `for` clause now stays on the header line, and one already broken that way by
+  an earlier format is joined back on the next.
+
 ### Added
 - `xanim` and `anim` are accepted as `#precache` asset types, and offered in completion.
 - `gscode.format.spaceBeforeControlParen`: turn off for `if(`, `for(`, `while(` instead of `if (`.

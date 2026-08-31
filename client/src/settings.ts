@@ -46,7 +46,7 @@ export function readSettings(): GscodeSettings {
         modsPath: config.get<string>("modsPath", ""),
         rawFileWarningMode: config.get<string>("rawFileWarningMode", "stock"),
         "outline.showAssignments": config.get<boolean>("outline.showAssignments", true),
-        "codeLens.enabled": config.get<boolean>("codeLens.enabled", true),
+        "codeLens.enabled": config.get<boolean>("codeLens.enabled", false),
         "inlayHints.parameterNames": config.get<boolean>("inlayHints.parameterNames", true),
         "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", true),
         "completion.literals": config.get<boolean>("completion.literals", true),

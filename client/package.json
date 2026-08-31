@@ -292,7 +292,7 @@
 					},
 					"gscode.codeLens.enabled": {
 						"type": "boolean",
-						"default": true,
+						"default": false,
 						"description": "Show a 'N references' code lens above each function and class declaration.",
 						"scope": "window"
 					},

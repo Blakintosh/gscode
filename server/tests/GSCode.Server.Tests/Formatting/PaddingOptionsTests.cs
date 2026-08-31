@@ -118,6 +118,22 @@ public class PaddingOptionsTests
             Format(input, FormatOptions.Default with { SpaceBeforeControlParen = false }), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("for (;;) { break; }", "for ( ;; )")]
+    [InlineData("for ( ;; ) { break; }", "for ( ;; )")]
+    [InlineData("for (i = 0;;) { break; }", "for ( i = 0;; )")]
+    [InlineData("for (;; i++) { break; }", "for ( ;; i++ )")]
+    [InlineData("for (i = 0; i < 1;) { break; }", "for ( i = 0; i < 1; )")]
+    [InlineData("for ( ;;\n\t) { break; }", "for ( ;; )")]
+    [InlineData("for ( i = 0; i < 1;\n\t) { break; }", "for ( i = 0; i < 1; )")]
+    public void AnEmptyForClauseStaysOnItsLine(string input, string expected)
+    {
+        // Reported: `for ( ;;` followed by `)` on a line of its own, whatever the settings.
+        string formatted = Format(input, FormatOptions.Default);
+        Assert.Contains(expected, formatted, StringComparison.Ordinal);
+        Assert.DoesNotContain(";\n", formatted[..formatted.IndexOf('{', formatted.IndexOf("for"))], StringComparison.Ordinal);
+    }
+
     [Fact]
     public void DeclarationParensFollowTheCallSetting()
     {

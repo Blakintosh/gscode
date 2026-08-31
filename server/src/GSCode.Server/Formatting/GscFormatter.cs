@@ -758,9 +758,20 @@ public static class GscFormatter
 
         // Inside parentheses a ';' separates the clauses of a `for` header rather than ending a
         // statement, so it must not break the line: `for ( i = 0; i < 10; i++ )`.
-        if ( previous == TokenKind.Semicolon && parenDepth == 0 )
+        // A ';' directly before ')' can only be an empty `for` clause -- `for ( ;; )`. The depth
+        // has already been decremented for that ')' by the time this is asked, so without the
+        // exclusion it reads as a statement end and the ')' is pushed onto a line of its own.
+        if ( previous == TokenKind.Semicolon && parenDepth == 0 && current != TokenKind.CloseParen )
         {
             return true;
+        }
+
+        // ...and one that was ALREADY broken there is joined back, rather than kept the way a
+        // newline inside parentheses otherwise is. Nobody writes `for ( ;;` with the `)` on its
+        // own line on purpose; every instance is this formatter's own earlier output.
+        if ( previous == TokenKind.Semicolon && current == TokenKind.CloseParen )
+        {
+            return false;
         }
 
         return newlinesBefore > 0;

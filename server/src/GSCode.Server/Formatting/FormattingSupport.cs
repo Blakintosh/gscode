@@ -1,7 +1,11 @@
 using System.Collections.Immutable;
 using GSCode.Parser;
 using GSCode.Server.Mapping;
+using GSCode.Server.Configuration;
+using GSCode.Workspace.Api;
 using GSCode.Workspace.Documents;
+using GSCode.Workspace.Resolution;
+using Serilog;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
@@ -35,12 +39,26 @@ internal static class FormattingSupport
     /// characters and corrupts the file. Every other stale read in this server shows something
     /// wrong; this one writes something wrong.
     /// </remarks>
-    public static FormatRequest? Prepare(DocumentStore documents, DocumentUri uri, FormatOptions options)
+    public static FormatRequest? Prepare(
+        DocumentStore documents, ResolverHolder resolver, StockScripts stockScripts, DocumentUri uri, FormatOptions options)
     {
+        string path = uri.GetFileSystemPath();
+
+        // A script that ships with the game is never formatted. It is reference material that a
+        // modder opens to read, and a formatter that rewrites it -- on a stray Format Document, or
+        // on save -- leaves the install differing from every other player's. The check is by
+        // identity (is this one of the game's own files) rather than by folder, so a modder's own
+        // new script placed under raw still formats.
+        if ( IsStockScript(resolver, stockScripts, path) )
+        {
+            Log.Information("Formatting refused for stock script {Path}", path);
+            return null;
+        }
+
         // Only that an analysis EXISTS is asked here — a document nothing has parsed yet has
         // nothing to format. The one actually formatted is taken fresh on the next line, for the
         // reason the remarks above give, so the result this hands back is deliberately discarded.
-        if ( !documents.TryGetAnalyzed(uri.GetFileSystemPath(), out OpenDocument document, out ParseResult _) )
+        if ( !documents.TryGetAnalyzed(path, out OpenDocument document, out ParseResult _) )
         {
             return null;
         }
@@ -48,6 +66,13 @@ internal static class FormattingSupport
         ParseResult analysis = documents.AnalyzeIfStale(document);
 
         return new FormatRequest(document, GscFormatter.FormatMinimalEdits(analysis, options));
+    }
+
+    private static bool IsStockScript(ResolverHolder resolver, StockScripts stockScripts, string path)
+    {
+        PathResolver current = resolver.Current;
+        ResolutionContext context = current.GetContext(path);
+        return stockScripts.Contains(current.GetScriptRelativePath(path, context));
     }
 
     /// <summary>

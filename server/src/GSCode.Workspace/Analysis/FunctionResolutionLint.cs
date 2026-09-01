@@ -168,11 +168,10 @@ public static class FunctionResolutionLint
         Dictionary<SymbolKey, SymbolKey> canonicalCache = [];
         FunctionLookupCache lookups = new(store, askingContextId, askingPath, ownNamespaces);
 
-        // Macro-expanded calls all key to the invocation range, so a body naming one missing
-        // function twice would report it twice on one word. The verdict below depends on nothing
-        // but the range, the key and the kind, so two entries agreeing on all three always reach
-        // the same answer and the second can be dropped here rather than at each report site.
-        // Only expanded entries can collide, and the set waits for one — see NamespaceUsageLint.
+        // Keyed on the symbol AND the kind, and asked at the top of the loop: the verdict below
+        // depends on nothing else, so two entries agreeing on all three always reach the same answer
+        // and the second can be dropped before any of the work rather than at each of the four
+        // report sites. See MacroReports.
         HashSet<(TextRange Range, SymbolKey Key, ReferenceKind Kind)>? seenFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
@@ -186,19 +185,19 @@ public static class FunctionResolutionLint
             // suppresses the builtin half entirely (see canJudgeBuiltins), which is the case that
             // would otherwise blame the user for a macro they did not write: an unexpanded IS_TRUE
             // is an identifier followed by an argument list, indistinguishable from a call.
+            // NOT ReferenceEntry.IsFunctionCall, which the five import and privacy rules share:
+            // that one excludes the arrow form, and this rule is the one that wants it. An
+            // unresolved [[x]]->name() is a script function nobody declares, and saying so is the
+            // whole of the MethodCall arm below.
             bool isCall = entry.Kind is ReferenceKind.Call or ReferenceKind.MethodCall;
             if ( !isCall || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
             }
 
-            if ( entry.FromMacro )
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key, entry.Kind), ref seenFromMacros) )
             {
-                seenFromMacros ??= [];
-                if ( !seenFromMacros.Add((entry.Range, entry.Key, entry.Kind)) )
-                {
-                    continue;
-                }
+                continue;
             }
 
             // Declared right here. Only counts for a call that could reach it unqualified — one

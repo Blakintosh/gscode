@@ -578,8 +578,14 @@ are out.
   whether the target exists on DISK, which is what decides linking, while this also requires the
   index to have reached it.
 - `ImportGate` — the precondition several lints share: an unresolved `#insert` or `#using` makes the
-  set of legal names unknowable, so a rule about to say "this matches nothing" stands down. The
-  caller names which codes matter.
+  set of legal names unknowable, so a rule about to say "this matches nothing" stands down.
+  `MacrosLost` is the header half and is NOT the caller's to name — all six ways the preprocessor
+  abandons a splice, since each loses the macros identically and `InsertNotFound` alone is merely
+  the one anybody remembers. `InsertMissingSemicolon` is excluded because it reports and carries on.
+  The `#using` half stays a parameter, since rules differ on whether they already cover it.
+- `MacroReports` — the one rule six lints share about a reference a macro expanded into: report it
+  once per site, and allocate nothing when no macro is involved. The dedupe KEY stays the caller's,
+  because it is each rule's own claim about what it would have you fix.
 - `ArgumentCountLint` (5022/5023) — the rule is NOT symmetric. A **script function** is only wrong
   with too MANY arguments: passing fewer is legal and idiomatic, the rest being `undefined`. A
   **builtin** is engine-validated, so its mandatory count is a real lower bound — but only where

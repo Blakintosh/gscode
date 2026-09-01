@@ -245,4 +245,18 @@ public enum ReferenceKind
 /// `REGISTER_SYSTEM`, so hover and go-to-definition belong to the macro.
 /// </param>
 public readonly record struct ReferenceEntry(
-    SymbolKey Key, TextRange Range, ReferenceKind Kind, bool FromMacro = false);
+    SymbolKey Key, TextRange Range, ReferenceKind Kind, bool FromMacro = false)
+{
+    /// <summary>
+    /// A call to a SCRIPT function by name — the shape five cross-file lints each open on.
+    ///
+    /// It is not every call: <see cref="ReferenceKind.MethodCall"/> is excluded, because the arrow
+    /// form guarantees a class method and the rules that ask this question are about namespaces,
+    /// imports and privacy, none of which a method has. <c>FunctionResolutionLint</c> is the one
+    /// rule that wants both and writes its own test for that reason.
+    /// </summary>
+    public bool IsFunctionCall
+    {
+        get { return Kind == ReferenceKind.Call && Key.Kind == SymbolKind.Function; }
+    }
+}

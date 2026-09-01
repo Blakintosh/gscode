@@ -158,24 +158,28 @@ public class SourceEncodingTests
     /// The repository root, found by walking up from the test binary for the file that sits at it.
     /// Throws when there is none, for the reason <see cref="RunGit"/> does.
     /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            DirectoryInfo? directory = new(AppContext.BaseDirectory);
-            while ( directory is not null )
-            {
-                if ( File.Exists(Path.Combine(directory.FullName, ".gitattributes")) )
-                {
-                    return directory.FullName;
-                }
+    /// <remarks>
+    /// Found ONCE. It was a property, and both tests read it inside their per-file loop, so locating
+    /// the root cost a walk up the ancestor chain — a `File.Exists` per level — for every one of the
+    /// ~1,400 tracked files, twice over. The answer cannot change while the process lives.
+    /// </remarks>
+    private static readonly string RepositoryRoot = FindRepositoryRoot();
 
-                directory = directory.Parent;
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while ( directory is not null )
+        {
+            if ( File.Exists(Path.Combine(directory.FullName, ".gitattributes")) )
+            {
+                return directory.FullName;
             }
 
-            throw new DirectoryNotFoundException(
-                $"No .gitattributes above {AppContext.BaseDirectory}, so the encoding policy could not "
-                + "be checked against anything. This test must not pass by finding no files.");
+            directory = directory.Parent;
         }
+
+        throw new DirectoryNotFoundException(
+            $"No .gitattributes above {AppContext.BaseDirectory}, so the encoding policy could not "
+            + "be checked against anything. This test must not pass by finding no files.");
     }
 }

@@ -168,11 +168,8 @@ public static class IncludeUsageLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        // Macro-expanded calls all key to the invocation range, so one body calling the same
-        // function twice would stack the same Error on one word. The NAME is part of the key
-        // because a body calling two uninclude-able functions is two imports to think about.
-        // Only expanded entries can collide, so the set holds only those and waits until one
-        // appears — see NamespaceUsageLint for why written text never collides.
+        // Keyed on the NAME: a macro body calling two uninclude-able functions is two imports to
+        // think about. See MacroReports.
         HashSet<(TextRange Range, string Name)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
@@ -182,7 +179,7 @@ public static class IncludeUsageLint
             // rule only runs on the include dialects, and none of them HAS a preprocessor
             // (GameProfile.HasMacros) — but a #define in one of those files is still expanded after
             // being reported as 2016, and the call it produces needs its include like any other.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -229,13 +226,9 @@ public static class IncludeUsageLint
                 continue;
             }
 
-            if ( entry.FromMacro )
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key.Name), ref reportedFromMacros) )
             {
-                reportedFromMacros ??= [];
-                if ( !reportedFromMacros.Add((entry.Range, entry.Key.Name)) )
-                {
-                    continue;
-                }
+                continue;
             }
 
             diagnostics.Add(Report(entry, declaring));

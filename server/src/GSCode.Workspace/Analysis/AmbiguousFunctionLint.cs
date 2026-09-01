@@ -77,10 +77,8 @@ public static class AmbiguousFunctionLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        // Macro-expanded calls all key to the invocation range, so a body naming one ambiguous
-        // function twice would warn about the same undecided call twice on one word.
-        // Only expanded entries can collide, and the set waits until one appears — see
-        // NamespaceUsageLint.
+        // Keyed on the symbol: one undecided call named twice by a macro body is one warning.
+        // See MacroReports.
         HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
 
         // Report at the CALL, not at the definitions: the definitions are each fine on their own,
@@ -91,7 +89,7 @@ public static class AmbiguousFunctionLint
             // invoking the macro is what brings the call into this file — a header body naming
             // `util::wait_endon` is as undecided here as writing it out, and for the same reason:
             // two of the files this one links against declare it.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -110,13 +108,9 @@ public static class AmbiguousFunctionLint
             // Asked BEFORE the related-information array and the Diagnostic are built. Checking
             // afterwards did the work of reporting and then threw it away, which is the wrong order
             // for the one entry shape that can arrive twice.
-            if ( entry.FromMacro )
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
             {
-                reportedFromMacros ??= [];
-                if ( !reportedFromMacros.Add((entry.Range, entry.Key)) )
-                {
-                    continue;
-                }
+                continue;
             }
 
             ImmutableArray<DiagnosticRelation> related =

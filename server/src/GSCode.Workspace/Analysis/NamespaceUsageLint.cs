@@ -109,16 +109,8 @@ public static class NamespaceUsageLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        // A macro that expands to several calls into one namespace produces one entry each, all
-        // keyed to the same invocation range, and three identical Errors stacked on one word is
-        // not three problems. Deduplicated on (range, namespace) rather than on range alone: two
-        // different namespaces missing at one site really are two imports to add, and the code
-        // action offers both.
-        //
-        // Only expanded entries can collide, so only they are tracked and the set is not allocated
-        // until one appears. Written text cannot: a range is one name token, and one token is one
-        // reference. Every file in a dialect without macros therefore pays nothing for this, and so
-        // does every BO3 file that invokes none.
+        // Keyed on the NAMESPACE, not the range: two namespaces missing at one macro invocation
+        // are two imports to add, and the code action offers both. See MacroReports.
         HashSet<(TextRange Range, string Namespace)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
@@ -132,7 +124,7 @@ public static class NamespaceUsageLint
             // The range is then the INVOCATION, not the callee, so the Error lands on the macro's
             // name. That is the only text on screen, and it is also where the add-#using fix must
             // be offered, which CodeActionHandler.FindMissingUsingSites derives from the same entry.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -160,13 +152,9 @@ public static class NamespaceUsageLint
                 continue;
             }
 
-            if ( entry.FromMacro )
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, namespaceName), ref reportedFromMacros) )
             {
-                reportedFromMacros ??= [];
-                if ( !reportedFromMacros.Add((entry.Range, namespaceName)) )
-                {
-                    continue;
-                }
+                continue;
             }
 
             diagnostics.Add(Diagnostic.Create(

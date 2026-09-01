@@ -42,10 +42,8 @@ public static class PrivateAccessLint
         FunctionLookupCache visibleLookups = new(store, askingContextId, askingPath, askingNamespaces);
         FunctionLookupCache anyLookups = new(store, askingContextId, askingPath);
 
-        // Macro-expanded calls all key to the invocation range, so a body calling one private
-        // function twice would say so twice on one word.
-        // Only those can collide, so only those are tracked and the set waits until one appears —
-        // see NamespaceUsageLint.
+        // Keyed on the symbol: one private function named twice by a macro body is one broken
+        // call. See MacroReports.
         HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
@@ -54,7 +52,7 @@ public static class PrivateAccessLint
             // reach a declaration, and it applies to the expansion the compiler sees — a macro is
             // not a way around `private`, so a header whose body calls another namespace's private
             // function produces a call that does not link, in every file that invokes it.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -106,16 +104,11 @@ public static class PrivateAccessLint
                 DiagnosticRelation declaredAt = new(
                     candidate.Record.Path, candidate.Function.NameRange, "Declared private here.");
 
-                if ( entry.FromMacro )
+                if ( MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
                 {
-                    reportedFromMacros ??= [];
-                    if ( !reportedFromMacros.Add((entry.Range, entry.Key)) )
-                    {
-                        break;
-                    }
+                    diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
                 }
 
-                diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
                 break;
             }
         }

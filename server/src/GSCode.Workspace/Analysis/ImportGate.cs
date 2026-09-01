@@ -15,10 +15,9 @@ namespace GSCode.Workspace.Analysis;
 /// for a macro they did not write. An unresolved <c>#using</c> is the same story for a merge dialect,
 /// where an included file's functions are called unqualified.
 ///
-/// Which codes matter differs by rule, so the caller names them: a rule that already suppresses
-/// itself on an unresolvable <c>#include</c> by other means does not need to ask about that one.
-/// For the header half there is nothing to choose, so <see cref="MacrosLost"/> is the list rather
-/// than each caller's memory of it.
+/// The header half is not the caller's to choose — <see cref="MacrosLost"/> is the list — while the
+/// <c>#using</c> half differs by rule, so that stays a parameter: a rule already suppressing itself
+/// on an unresolvable <c>#include</c> by other means does not need to ask about it.
 /// </summary>
 internal static class ImportGate
 {
@@ -50,9 +49,9 @@ internal static class ImportGate
     /// <summary>
     /// The <see cref="MacrosLost"/> set plus whatever else a caller's rule turns on.
     ///
-    /// One pass over the diagnostics testing both lists, rather than concatenating them and calling
-    /// <see cref="AnyUnresolved"/>: this runs per file per keystroke, and the concatenation was a
-    /// fresh array each time to ask a question about six constants.
+    /// One pass over the diagnostics testing both lists rather than concatenating them: this runs
+    /// per file per keystroke, and a concatenation would be a fresh array each time to ask a
+    /// question about six constants.
     /// </summary>
     public static bool AnyMacrosLost(ParseResult result, params GscDiagnosticCode[] alsoCodes)
     {
@@ -74,22 +73,6 @@ internal static class ImportGate
             if ( candidate == code )
             {
                 return true;
-            }
-        }
-
-        return false;
-    }
-
-    public static bool AnyUnresolved(ParseResult result, params GscDiagnosticCode[] codes)
-    {
-        foreach ( Diagnostic diagnostic in result.AllDiagnostics )
-        {
-            foreach ( GscDiagnosticCode code in codes )
-            {
-                if ( diagnostic.Code == code )
-                {
-                    return true;
-                }
             }
         }
 

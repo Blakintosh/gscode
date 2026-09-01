@@ -40,10 +40,8 @@ public static class DevBlockCallLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        // Macro-expanded calls all key to the invocation range, so a body calling one dev-only
-        // function twice would report the same shipped-build failure twice on one word.
-        // Only those can collide, so only those are tracked and the set waits — see
-        // NamespaceUsageLint.
+        // Keyed on the symbol: one dev-only function named twice by a macro body is one shipped-
+        // build failure, not two. See MacroReports.
         HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
@@ -53,7 +51,7 @@ public static class DevBlockCallLint
             // is the one that stops compiling. This is the rule the flag change helps most — the
             // failure appears only once the mod ships, so an editor that stayed silent about it
             // was silent about the one class of bug this lint exists for.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -67,13 +65,9 @@ public static class DevBlockCallLint
                 continue;
             }
 
-            if ( entry.FromMacro )
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
             {
-                reportedFromMacros ??= [];
-                if ( !reportedFromMacros.Add((entry.Range, entry.Key)) )
-                {
-                    continue;
-                }
+                continue;
             }
 
             ImmutableArray<ResolvedFunction> resolved = lookups.Lookup(entry.Key.Namespace, entry.Key.Name);

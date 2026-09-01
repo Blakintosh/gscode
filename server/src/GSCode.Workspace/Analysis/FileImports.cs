@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
@@ -23,10 +23,21 @@ public sealed record ImportedFile(string RawPath, TextRange DirectiveRange, Scri
 /// <see cref="AmbiguousFunctionLint"/> — and each resolve is a filesystem probe per configured root.
 /// This runs on every keystroke.
 ///
-/// <see cref="Complete"/> carries the shared bail-out. It is false when any directive did not resolve
-/// or was not indexed, and every one of those lints stands down on it for the same reason: a file
-/// they cannot read might supply the namespace they were about to complain about, or the second
-/// declaration that makes a name ambiguous, or the function that makes an import used after all.
+/// <see cref="Complete"/> is false when any directive did not resolve or was not indexed. It has
+/// ONE consumer, <see cref="NamespaceUsageLint"/>, and that is the point: it used to be read by four
+/// lints on one shared sentence — a file we cannot read might supply the namespace, or the second
+/// declaration that makes a name ambiguous, or the function that makes an import used after all —
+/// and only the first clause survived being checked.
+///
+/// An unreadable import cannot reduce two providers to one, so ambiguity does not need it. Whether
+/// an import is used depends on this file's references and on that import's own declarations, so
+/// neither unused-import rule needs it. What is left is the one claim an unknown file really can
+/// falsify: that NOTHING this script imports declares namespace X. That claim is an Error, so it
+/// keeps the bail-out.
+///
+/// The directives that failed are absent from <see cref="Usings"/> and <see cref="Includes"/>
+/// either way, which is what lets the other three judge the rest of the list and still never report
+/// on a directive they could not read.
 ///
 /// Both directive kinds are gathered in one pass and kept apart, because no dialect has both and a
 /// single list would let a <c>#using</c> be judged by the rule for <c>#include</c>. That distinction

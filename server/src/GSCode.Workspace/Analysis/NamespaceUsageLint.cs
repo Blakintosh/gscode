@@ -32,6 +32,13 @@ namespace GSCode.Workspace.Analysis;
 /// is never flagged. That property is what an Error severity rests on, so weakening any of the
 /// bail-outs below now costs more than it used to.
 ///
+/// This is the LAST reader of <see cref="FileImports.Complete"/>, and deliberately so. Three other
+/// lints copied the bail-out and were narrowed once each was asked what an unreadable file could
+/// actually change about its answer; the answer here is the whole verdict, because the claim is
+/// that NOTHING this script imports declares the namespace and a file nobody can read is exactly
+/// the counterexample. The cost is known and unpaid-for: a workspace missing one script is told
+/// nothing about any namespace, so an incomplete script dump silences the rule everywhere.
+///
 /// Namespace dialects only, which is the same gate <see cref="IncludeUsageLint"/> opens on from the
 /// other side. Where a file merges rather than imports there is no <c>#using</c> to add, and the
 /// rule is not just inapplicable but unsatisfiable — see the comment on the check itself.

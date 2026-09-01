@@ -1,4 +1,4 @@
-﻿namespace GSCode.Workspace.Cache;
+namespace GSCode.Workspace.Cache;
 
 /// <summary>
 /// The SQLite schema and the two version gates. Bump SchemaVersion when the table shape

@@ -1,4 +1,4 @@
-﻿// BO3 (Treyarch GSC) — the deliberate findings.
+// BO3 (Treyarch GSC) — the deliberate findings.
 //
 // One mistake at a time, each declared by the `// expect <code>` comment above it. The file still
 // PARSES cleanly on purpose: a syntax error puts the parser into recovery, several rules stand down

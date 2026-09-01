@@ -53,6 +53,7 @@ public class SqliteCacheTests : IDisposable
             References =
             [
                 new ReferenceEntry(new SymbolKey("test", "sample", SymbolKind.Function), TextRange.FromCoordinates(0, 9, 0, 15), ReferenceKind.Definition),
+                new ReferenceEntry(new SymbolKey("test", "expanded", SymbolKind.Function), TextRange.FromCoordinates(1, 4, 1, 12), ReferenceKind.Call, FromMacro: true),
             ],
         };
     }
@@ -111,7 +112,15 @@ public class SqliteCacheTests : IDisposable
             Assert.Equal(record.Path, loaded.Path);
             Assert.Equal(record.ContentHash, loaded.ContentHash);
             Assert.Equal("Sample", Assert.Single(loaded.Functions).Name);
-            Assert.Equal(record.References[0].Key, Assert.Single(loaded.References).Key);
+            Assert.Equal(record.References[0].Key, loaded.References[0].Key);
+
+            // FromMacro is the field RecordFormatVersion 5 exists for: a blob that loses it reads
+            // as ordinary text written in the file, which puts hover and go-to-definition on the
+            // macro's callee at a range spelling the macro's name. It is additive on the wire, so
+            // nothing else would fail if it silently stopped round-tripping.
+            Assert.False(loaded.References[0].FromMacro);
+            Assert.True(loaded.References[1].FromMacro);
+            Assert.Equal(ReferenceKind.Call, loaded.References[1].Kind);
         }
     }
 

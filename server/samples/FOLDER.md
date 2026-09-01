@@ -1,4 +1,4 @@
-﻿# samples — one worked example per game, per language world
+# samples — one worked example per game, per language world
 
 Hand-written scripts that show the whole surface of a dialect and of the diagnostics, checked
 against their own comments by `SampleScriptTests` in `GSCode.Server.Tests`. They are meant to be

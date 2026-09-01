@@ -1,4 +1,4 @@
-﻿// BO3 (Treyarch GSC) — the unresolvable import, alone in its own file.
+// BO3 (Treyarch GSC) — the unresolvable import, alone in its own file.
 //
 // It is alone for ONE rule now, not three, and the narrowing is worth knowing. 5000 claims that
 // nothing this script imports declares the namespace; a `#using` that failed to resolve is exactly

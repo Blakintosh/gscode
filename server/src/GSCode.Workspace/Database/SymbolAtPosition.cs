@@ -1,4 +1,4 @@
-﻿using GSCode.Core.Symbols;
+using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 

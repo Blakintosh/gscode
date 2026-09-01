@@ -17,7 +17,7 @@ public sealed class ServerSettings
     public string ModsPath { get; set; } = "";
     public string RawFileWarningMode { get; set; } = "stock";
     public bool OutlineShowAssignments { get; set; } = true;
-    public bool CodeLensEnabled { get; set; } = true;
+    public bool CodeLensEnabled { get; set; } = false;
     public bool InlayParameterNames { get; set; } = true;
     public bool InlayInferredTypes { get; set; } = true;
 

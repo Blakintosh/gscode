@@ -54,7 +54,9 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
 
     public override Task<InlayHintContainer?> Handle(InlayHintParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        // ResolveFresh for the same reason CodeLens uses it: hints are positional, and stale
+        // analysis painted them one edit behind the buffer.
+        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri);
         if ( target is null )
         {
             return Task.FromResult<InlayHintContainer?>(null);

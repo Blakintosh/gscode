@@ -168,12 +168,19 @@ public static class IncludeUsageLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        // Macro-expanded calls all key to the invocation range, so one body calling the same
+        // function twice would stack the same Error on one word. The NAME is part of the key
+        // because a body calling two uninclude-able functions is two imports to think about.
+        HashSet<(TextRange Range, string Name)> reported = [];
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            // Macro-expanded calls are held out of this rule for now — see ReferenceEntry.FromMacro.
-            // They ARE calls and the kind now says so; opting each lint in is a separate, swept step.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function
-                || entry.FromMacro )
+            // FromMacro is not skipped, matching NamespaceUsageLint: a call is a call whoever wrote
+            // the text, and the engine links the expansion. It is close to theoretical here — this
+            // rule only runs on the include dialects, and none of them HAS a preprocessor
+            // (GameProfile.HasMacros) — but a #define in one of those files is still expanded after
+            // being reported as 2016, and the call it produces needs its include like any other.
+            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
             }
@@ -216,6 +223,11 @@ public static class IncludeUsageLint
 
             // Declared nowhere: 5013/5014's verdict, not this one's. One cause, one diagnostic.
             if ( declaring.Length == 0 )
+            {
+                continue;
+            }
+
+            if ( !reported.Add((entry.Range, entry.Key.Name)) )
             {
                 continue;
             }

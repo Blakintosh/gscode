@@ -23,6 +23,16 @@ namespace GSCode.Server.Tests.Repository;
 /// line endings and says nothing about byte-order marks, and the only visible signal was a diff
 /// touching the first line of files whose first line nobody had edited.
 ///
+/// Line endings are the same bargain and were the same afternoon's second slip. `.gitattributes`
+/// says LF "everywhere, in the repository AND in the working tree", and git enforces only the first
+/// half: it normalizes on the way in, so blobs stayed LF while 43 files sat CRLF ON DISK from a
+/// checkout that predated the policy. Git warned on every commit and the warning was read as
+/// pre-existing noise, which it was — it was pre-existing and it was also right.
+///
+/// That asymmetry is why the working tree is what gets checked here. A clone is LF by construction
+/// and can only go wrong afterwards: a stale checkout, or an editor writing CRLF into one file.
+/// Neither shows up in a diff, because the clean filter erases both on the way back in.
+///
 /// This is the bargain the samples strike, applied to bytes instead of diagnostics: the artifact and
 /// the thing that checks it are one, or the artifact stops being true and nobody notices.
 /// </summary>
@@ -59,6 +69,28 @@ public class SourceEncodingTests
             $"server/.editorconfig declares `charset = utf-8`, which is UTF-8 with NO byte-order mark. "
             + $"{offenders.Count} tracked file(s) carry one:\n  "
             + string.Join("\n  ", offenders.Take(40)));
+    }
+
+    [Fact]
+    public void NoTrackedTextFileHoldsACarriageReturn()
+    {
+        List<string> offenders = [];
+        foreach ( string relative in TrackedTextFiles() )
+        {
+            string full = Path.Combine(RepositoryRoot, relative);
+            if ( File.Exists(full) && File.ReadAllBytes(full).Contains((byte)'\r') )
+            {
+                offenders.Add(relative);
+            }
+        }
+
+        // The fix is a checkout, not an edit: the blobs are already LF, so re-normalizing the tree
+        // restores it. `git add --renormalize .` then `git checkout -- .` does it repository-wide.
+        Assert.True(
+            offenders.Count == 0,
+            $".gitattributes declares LF in the repository AND in the working tree; git enforces only "
+            + $"the first half, so these are on disk and invisible to `git diff`. {offenders.Count} "
+            + $"tracked file(s) hold a carriage return:\n  " + string.Join("\n  ", offenders.Take(40)));
     }
 
     private static bool StartsWithBom(string path)

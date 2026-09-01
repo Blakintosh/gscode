@@ -73,14 +73,19 @@ public static class AmbiguousFunctionLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        // Macro-expanded calls all key to the invocation range, so a body naming one ambiguous
+        // function twice would warn about the same undecided call twice on one word.
+        HashSet<(TextRange Range, SymbolKey Key)> reported = [];
+
         // Report at the CALL, not at the definitions: the definitions are each fine on their own,
         // and this file is where the ambiguity exists.
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            // Macro-expanded calls are held out of this rule for now — see ReferenceEntry.FromMacro.
-            // They ARE calls and the kind now says so; opting each lint in is a separate, swept step.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function
-                || entry.FromMacro )
+            // FromMacro is not skipped. The ambiguity is a property of what THIS file imports, and
+            // invoking the macro is what brings the call into this file — a header body naming
+            // `util::wait_endon` is as undecided here as writing it out, and for the same reason:
+            // two of the files this one links against declare it.
+            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
             }
@@ -109,6 +114,11 @@ public static class AmbiguousFunctionLint
                 entry.Key.Name,
                 entry.Key.Namespace,
                 declaring.Count);
+
+            if ( !reported.Add((entry.Range, entry.Key)) )
+            {
+                continue;
+            }
 
             diagnostics.Add(ambiguous with { RelatedInformation = related });
         }

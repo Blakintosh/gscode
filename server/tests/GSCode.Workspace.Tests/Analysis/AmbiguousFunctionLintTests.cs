@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -120,5 +120,33 @@ public class AmbiguousFunctionLintTests
             TwoProviders(),
             "#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n#using scripts\\nope;\n"
             + "function run()\n{\n    util::helper();\n}\n"));
+    }
+
+    [Fact]
+    public void ACallAMacroExpandedInto_IsAmbiguousToo()
+    {
+        // Invoking the macro is what brings the call into THIS file, and this file is where the
+        // two definitions meet — so a header body naming util::helper is as undecided as writing
+        // it out. The warning lands on the invocation, the only text on screen.
+        ImmutableArray<Diagnostic> diagnostics = Lint(
+            TwoProviders(),
+            "#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n"
+            + "#define HELP() util::helper()\nfunction run()\n{\n    HELP();\n}\n");
+
+        Diagnostic ambiguous = Assert.Single(diagnostics);
+
+        Assert.Equal(GscDiagnosticCode.AmbiguousFunction, ambiguous.Code);
+        Assert.Equal(5, ambiguous.Range.Start.Line);
+    }
+
+    [Fact]
+    public void AnAmbiguousCallAMacroMakesTwice_WarnsOnce()
+    {
+        ImmutableArray<Diagnostic> diagnostics = Lint(
+            TwoProviders(),
+            "#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n"
+            + "#define HELP() util::helper(); util::helper()\nfunction run()\n{\n    HELP();\n}\n");
+
+        Assert.Single(diagnostics);
     }
 }

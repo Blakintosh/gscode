@@ -19,10 +19,12 @@ namespace GSCode.Workspace.Analysis;
 /// conservative — deleting a working include is worse than keeping a stale one — so an autoexec
 /// anywhere it reaches keeps it (imported for its side effects).
 ///
-/// One unreadable <c>#include</c> used to suppress the whole pass. It does not any more, for the
-/// reason <see cref="UnusedUsingLint"/> sets out, and the sole-supplier test below fails SAFE
-/// against what is left: a supplier we cannot see can only make a judged include look MORE
-/// essential than it is, which keeps a directive rather than offering to delete a working one.
+/// An unreadable <c>#include</c> DIRECTIVE used to suppress the whole pass and no longer does, for
+/// the reason <see cref="UnusedUsingLint"/> sets out: it never enters the resolved list, so it goes
+/// unjudged while its siblings are judged. What is still bailed out on is one level down — an
+/// unreadable file inside a resolved include's CLOSURE, checked per include below, because there the
+/// missing file really could be the one supplying a name and "nothing else supplies it" is the whole
+/// test.
 ///
 /// <see cref="UnusedUsingLint"/> gained an unresolved-<c>#insert</c> gate in the same change and
 /// this did not, which is a dialect fact rather than an oversight: <c>#insert</c> does not lex on

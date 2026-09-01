@@ -1,4 +1,4 @@
-// BO3 (Treyarch GSC) — the deliberate findings.
+﻿// BO3 (Treyarch GSC) — the deliberate findings.
 //
 // One mistake at a time, each declared by the `// expect <code>` comment above it. The file still
 // PARSES cleanly on purpose: a syntax error puts the parser into recovery, several rules stand down
@@ -20,13 +20,19 @@
 // expect 5001 — nothing in this file uses anything it declares
 #using gscode_unused;
 
-// Note what is not HERE: 5009, the unresolvable import. It lives in gscode_unresolved.gsc, because
-// a file with one missing import gets no answer from the other import rules at all — see that file
-// for why. Putting it here would silently delete the 5001 case above.
+// Note what is not HERE: 5009, the unresolvable import. It lives in gscode_unresolved.gsc, and what
+// putting it here would cost has NARROWED: 5001 above survives an unreadable import now, because
+// whether an import is used depends on this file's references and on that import's own
+// declarations, and a file nobody can read is neither. 5000 below does not survive it — that rule
+// claims NOTHING this script imports declares the namespace, and an unreadable file is exactly the
+// counterexample. So this file still imports nothing broken, and the case it would delete is 5000.
 
 #insert gscode.gsh;
 
 #namespace gscode_lints;
+
+// A macro whose body reaches into another namespace. Used far below, in calls_that_do_not_resolve.
+#define CALL_THE_OTHER_NAMESPACE() gscode_unresolved::calls_into_the_missing_script()
 
 // ---------------------------------------------------------------------------
 // 4000 range — declarations and directives, decided from this file alone.
@@ -182,6 +188,17 @@ function calls_that_do_not_resolve()
 	// than qualified — which cannot happen here, so that rule lives in the pre-BO3 samples.
 	// expect 5000 — the namespace itself is not imported
 	gscode_unresolved::calls_into_the_missing_script();
+
+	// The same rule, reached through a macro, and the case that is easy to assume is not checked:
+	// nothing on THIS line spells gscode_unresolved — the #define near the top of the file does —
+	// and the import is required all the same, because the preprocessor runs before anything looks
+	// at imports and what links is the expansion.
+	//
+	// The Error lands here, on the invocation, because that is the only text on screen. The
+	// add-#using fix is offered at the same place for the same reason. Every call rule in the
+	// 5000 range judges an expansion this way: 5003, 5006, 5007 and 5013 all see one too.
+	// expect 5000 — the namespace the macro expands into is not imported either
+	CALL_THE_OTHER_NAMESPACE();
 
 	// expect 5003 — gscode::helper is private, so only its own file may call it
 	gscode::helper( 1, 2, undefined );

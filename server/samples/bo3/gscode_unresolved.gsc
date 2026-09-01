@@ -1,13 +1,18 @@
-// BO3 (Treyarch GSC) — the unresolvable import, alone in its own file.
+﻿// BO3 (Treyarch GSC) — the unresolvable import, alone in its own file.
 //
-// It has to be alone, and that is worth knowing rather than working around. The import lints share
-// one resolution pass, and the pass reports NOTHING when any `#using` in the file failed to resolve:
-// once an import is missing, every "unused import" and every "declared but not imported" answer
-// would be drawn from a scope that is known to be incomplete, and the file would be covered in
-// errors pointing at calls instead of at the one line that is actually wrong.
+// It is alone for ONE rule now, not three, and the narrowing is worth knowing. 5000 claims that
+// nothing this script imports declares the namespace; a `#using` that failed to resolve is exactly
+// the file that might have, so that rule reports nothing at all while one is missing — otherwise a
+// single wrong line would cover the file in errors pointing at calls instead of at itself.
 //
-// So 5009 suppresses 5001 and 5026, and a file demonstrating all three would demonstrate one. The
-// other two live in gscode_lints.gsc, which imports nothing broken.
+// 5001 and 5026 used to stand down on the same pass and no longer do. Whether an import is used
+// depends on this file's references and on that import's own declarations, and a file nobody can
+// read is neither of those, so the readable imports are judged and only the broken directive goes
+// unjudged. It never enters the resolved list, which is why 5009 is still the only thing said about
+// this line rather than 5009 and 5001 both.
+//
+// So the file stays alone, and 5000 is what it protects. That case lives in gscode_lints.gsc,
+// which imports nothing broken.
 
 // expect 5009 — no such script under the raw root
 #using gscode_does_not_exist;

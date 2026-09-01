@@ -1,4 +1,4 @@
-# samples — one worked example per game, per language world
+﻿# samples — one worked example per game, per language world
 
 Hand-written scripts that show the whole surface of a dialect and of the diagnostics, checked
 against their own comments by `SampleScriptTests` in `GSCode.Server.Tests`. They are meant to be
@@ -117,7 +117,18 @@ Several rules cannot be shown everywhere:
   `"devOnly": false` on every entry, which beats the fallback list in `DevOnlyBuiltins`, so only
   BO3 can pin it today.
 
-One rule cannot share a file with the others: an unresolvable import suppresses the whole import
-pass, so **5009** lives alone in each game's `gscode_unresolved.gsc`. Moved back into
-`gscode_lints`, it would silently delete 5001 there (5012 and 5026 on the pre-BO3 games) and the
-suite would still be green.
+One rule cannot share a file with the others: an unresolvable import stands down the rule that
+claims nothing imported declares a name, so **5009** lives alone in each game's
+`gscode_unresolved.gsc`. Moved back into `gscode_lints`, it would silently delete **5000** there
+(**5026** on the pre-BO3 games) and the suite would still be green.
+
+That list used to include 5001 and 5012, and no longer does. An unreadable import cannot change
+whether a DIFFERENT import is used — that answer is drawn from this file's references and from that
+import's own declarations — so the broken directive goes unjudged and its siblings are judged. Only
+the "nothing declares this" rules still need the whole pass, because an unreadable file is exactly
+the counterexample to them.
+
+`bo3/gscode_lints.gsc` also carries the macro form of 5000: a `#define` whose body reaches into
+another namespace, invoked far below. Nothing on the invocation line spells the namespace, the
+import is required all the same, and the Error lands on the macro's name because that is the only
+text on screen. Every call rule in the 5000 range judges an expansion that way.

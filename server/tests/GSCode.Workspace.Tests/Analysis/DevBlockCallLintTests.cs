@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -237,5 +237,36 @@ public class DevBlockCallLintTests
             + "function run()\n{\n    helper();\n}\n";
 
         Assert.Empty(Lint(source, files));
+    }
+
+    [Fact]
+    public void ADevOnlyCallAMacroExpandedInto_IsReported()
+    {
+        // The macro hides the call, not the consequence: `foo` is stripped from a release build,
+        // so the file invoking HELP() is the one that stops compiling once the mod ships.
+        string source = "/#\nfunction foo()\n{\n}\n#/\n#define HELP() foo()\nfunction bar()\n{\n    HELP();\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Equal(8, diagnostic.Range.Start.Line);
+    }
+
+    [Fact]
+    public void ADevOnlyCallFromAMacroInvokedInsideADevBlock_IsFine()
+    {
+        // What decides whether the call survives is where the MACRO WAS INVOKED — the expansion
+        // lands there — so an invocation inside /# #/ disappears alongside its target.
+        string source = "/#\nfunction foo()\n{\n}\n#/\n#define HELP() foo()\nfunction bar()\n{\n    /#\n    HELP();\n    #/\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void ADevOnlyCallAMacroMakesTwice_IsReportedOnce()
+    {
+        string source = "/#\nfunction foo()\n{\n}\n#/\n#define HELP() foo(); foo()\nfunction bar()\n{\n    HELP();\n}\n";
+
+        Assert.Single(Lint(source));
     }
 }

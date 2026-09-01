@@ -40,18 +40,32 @@ public static class DevBlockCallLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        // Macro-expanded calls all key to the invocation range, so a body calling one dev-only
+        // function twice would report the same shipped-build failure twice on one word.
+        HashSet<(TextRange Range, SymbolKey Key)> reported = [];
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            // Macro-expanded calls are held out of this rule for now — see ReferenceEntry.FromMacro.
-            // They ARE calls and the kind now says so; opting each lint in is a separate, swept step.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function
-                || entry.FromMacro )
+            // FromMacro is not skipped: a dev-only function called from a macro body vanishes from
+            // a release build exactly as it would called directly, and the file invoking the macro
+            // is the one that stops compiling. This is the rule the flag change helps most — the
+            // failure appears only once the mod ships, so an editor that stayed silent about it
+            // was silent about the one class of bug this lint exists for.
+            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
             }
 
-            // A call that is itself dev-only disappears alongside its target, so it is fine.
+            // A call that is itself dev-only disappears alongside its target, so it is fine. The
+            // range is the INVOCATION for an expanded call, which is the right question to ask:
+            // what decides whether the call survives is where the macro was invoked, not where
+            // its body was written.
             if ( IsInsideDevRegion(entry.Range, devRegions) )
+            {
+                continue;
+            }
+
+            if ( !reported.Add((entry.Range, entry.Key)) )
             {
                 continue;
             }

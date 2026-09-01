@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -131,5 +131,29 @@ public class PrivateAccessLintTests
         string source = "#namespace game;\nfunction run()\n{\n    IPrintLn( \"hi\" );\n}\n";
 
         Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void APrivateCallAMacroExpandedInto_IsReported()
+    {
+        // A macro is not a way around `private`: the compiler sees the expansion, so a body that
+        // reaches into another namespace's private function produces a call that does not link in
+        // every file invoking it. The Error lands on the invocation, the only text on screen.
+        string source =
+            "#using scripts\\util;\n#define HELP() util::hidden()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.PrivateFunctionNotVisible, diagnostic.Code);
+        Assert.Equal(5, diagnostic.Range.Start.Line);
+    }
+
+    [Fact]
+    public void APrivateCallAMacroMakesTwice_IsReportedOnce()
+    {
+        string source =
+            "#using scripts\\util;\n#define HELP() util::hidden(); util::hidden()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        Assert.Single(Lint(source));
     }
 }

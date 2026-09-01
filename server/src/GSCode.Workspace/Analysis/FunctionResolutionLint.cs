@@ -169,12 +169,30 @@ public static class FunctionResolutionLint
         Dictionary<SymbolKey, SymbolKey> canonicalCache = [];
         FunctionLookupCache lookups = new(store, askingContextId, askingPath, ownNamespaces);
 
+        // Macro-expanded calls all key to the invocation range, so a body naming one missing
+        // function twice would report it twice on one word. The verdict below depends on nothing
+        // but the range, the key and the kind, so two entries agreeing on all three always reach
+        // the same answer and the second can be dropped here rather than at each report site.
+        HashSet<(TextRange Range, SymbolKey Key, ReferenceKind Kind)> seen = [];
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            // Macro-expanded calls are held out of this rule for now — see ReferenceEntry.FromMacro.
-            // They ARE calls and the kind now says so; opting each lint in is a separate, swept step.
+            // FromMacro is not skipped. A macro body calling a function nobody declares produces a
+            // call that does not link, in every file that invokes it — and the person who has to
+            // act on it is the one editing the invoking file, since a .gsh is not compiled on its
+            // own and its body is never parsed as code at its definition site.
+            //
+            // The gates this rule already carries are what make that safe. An unresolved #insert
+            // suppresses the builtin half entirely (see canJudgeBuiltins), which is the case that
+            // would otherwise blame the user for a macro they did not write: an unexpanded IS_TRUE
+            // is an identifier followed by an argument list, indistinguishable from a call.
             bool isCall = entry.Kind is ReferenceKind.Call or ReferenceKind.MethodCall;
-            if ( !isCall || entry.Key.Kind != SymbolKind.Function || entry.FromMacro )
+            if ( !isCall || entry.Key.Kind != SymbolKind.Function )
+            {
+                continue;
+            }
+
+            if ( !seen.Add((entry.Range, entry.Key, entry.Kind)) )
             {
                 continue;
             }

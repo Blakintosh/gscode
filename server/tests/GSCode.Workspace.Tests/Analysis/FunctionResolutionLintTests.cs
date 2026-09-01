@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -267,6 +267,41 @@ public class FunctionResolutionLintTests
     {
         // BO3 has foreach, so it lexes as a keyword and never reaches this lint at all.
         string source = "#namespace vibing3;\nfunction main()\n{\n    foreach ( p in level.players )\n    {\n    }\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void AQualifiedCallAMacroExpandedInto_IsAScriptMiss()
+    {
+        // A .gsh is not compiled on its own and its body is never parsed as code at its definition
+        // site, so the person who can act on this is the one editing the invoking file. The Error
+        // lands on the invocation, the only text on screen.
+        string source =
+            "#using scripts\\util;\n#define HELP() util::no_such_thing()\n#namespace game;\nfunction main()\n{\n    HELP();\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
+        Assert.Equal(5, diagnostic.Range.Start.Line);
+    }
+
+    [Fact]
+    public void AMissingCallAMacroMakesTwice_IsReportedOnce()
+    {
+        // Both calls key to the invocation range and reach the same verdict, so the second is
+        // dropped rather than stacking an identical Error on one word.
+        string source =
+            "#using scripts\\util;\n#define HELP() util::no_such_thing(); util::no_such_thing()\n#namespace game;\nfunction main()\n{\n    HELP();\n}\n";
+
+        Assert.Single(Lint(source));
+    }
+
+    [Fact]
+    public void AResolvingCallAMacroExpandedInto_IsSilent()
+    {
+        string source =
+            "#using scripts\\util;\n#define HELP() util::shown()\n#namespace game;\nfunction main()\n{\n    HELP();\n}\n";
 
         Assert.Empty(Lint(source));
     }

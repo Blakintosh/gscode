@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;

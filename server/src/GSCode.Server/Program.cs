@@ -1,4 +1,4 @@
-﻿using CommandLine;
+using CommandLine;
 using System.Diagnostics;
 using System.Runtime;
 using GSCode.Core;

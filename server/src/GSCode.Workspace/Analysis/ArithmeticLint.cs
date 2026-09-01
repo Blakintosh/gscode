@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using System.Globalization;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser.Lexing;

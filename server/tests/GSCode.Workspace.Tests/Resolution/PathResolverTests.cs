@@ -1,4 +1,4 @@
-﻿using GSCode.Core.Paths;
+using GSCode.Core.Paths;
 using GSCode.Workspace.Resolution;
 using Xunit;
 

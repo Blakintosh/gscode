@@ -1,4 +1,4 @@
-﻿using GSCode.Core;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Resolution;

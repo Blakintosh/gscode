@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Text;

@@ -112,14 +112,18 @@ public class AmbiguousFunctionLintTests
     }
 
     [Fact]
-    public void AnUnresolvableImportSuppressesThePass()
+    public void AnUnreadableImportDoesNotSuppressThePass()
     {
-        // A definition from a file we could not read might be the one that makes a name
-        // ambiguous, or the one that makes it fine.
-        Assert.Empty(Lint(
+        // Ambiguity is MONOTONIC: both providers are records in hand, and a third the workspace
+        // cannot read could only add to them — it can never reduce two to one. The bail-out here
+        // was copied from a rule whose answer an unreadable file really can change, and this is
+        // the case that used to be told nothing because of it.
+        Diagnostic ambiguous = Assert.Single(Lint(
             TwoProviders(),
             "#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n#using scripts\\nope;\n"
             + "function run()\n{\n    util::helper();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.AmbiguousFunction, ambiguous.Code);
     }
 
     [Fact]

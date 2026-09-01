@@ -24,9 +24,17 @@ namespace GSCode.Workspace.Analysis;
 /// file knows which definitions actually meet, which is why the question is asked here rather
 /// than of the database as a whole.
 ///
-/// As with the other <c>#using</c> lints, one import that cannot be resolved suppresses the pass:
-/// a definition from a file we could not read might be the one that makes a name ambiguous, or
-/// the one that makes it fine.
+/// One unreadable <c>#using</c> used to suppress the pass, on the stated grounds that a definition
+/// we could not read "might be the one that makes a name ambiguous, or the one that makes it fine".
+/// Only the first half was true. Ambiguity here is MONOTONIC: the claim is that two files this
+/// script imports both declare the name, both of them are records in hand, and a third provider
+/// nobody can read cannot reduce two to one. The reasoning that justifies a bail-out elsewhere was
+/// copied to a rule whose answer it cannot change.
+///
+/// What an unreadable import DOES cost is the count in the message, which can only be understated —
+/// it says how many of the files this script imports declare the name, and one it could not read is
+/// not among them. A Warning that says two where the truth is three still points at the right
+/// call.
 ///
 /// The nine it reports on the stock scripts are real rather than tolerated noise:
 /// <c>scripts\mp\_util.gsc:395</c> and <c>scripts\shared\util_shared.gsc:1663</c> both declare
@@ -50,10 +58,6 @@ public static class AmbiguousFunctionLint
         // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
         // back to resolving here keeps this callable on its own, which the tests rely on.
         FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
-        if ( !resolvedImports.Complete )
-        {
-            return [];
-        }
 
         // namespace::name -> the files reachable from here that declare it.
         Dictionary<string, List<ScriptRecord>> providers = new(StringComparer.Ordinal);

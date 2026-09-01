@@ -3,6 +3,7 @@ using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
+using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
@@ -98,12 +99,26 @@ public static class NamespaceUsageLint
         HashSet<string> classNames = ClassNames(store);
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+
+        // A macro that expands to several calls into one namespace produces one entry each, all
+        // keyed to the same invocation range, and three identical Errors stacked on one word is
+        // not three problems. Deduplicated on (range, namespace) rather than on range alone: two
+        // different namespaces missing at one site really are two imports to add, and the code
+        // action offers both.
+        HashSet<(TextRange Range, string Namespace)> reported = [];
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            // Macro-expanded calls are held out of this rule for now — see ReferenceEntry.FromMacro.
-            // They ARE calls and the kind now says so; opting each lint in is a separate, swept step.
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function
-                || entry.FromMacro )
+            // FromMacro is deliberately NOT skipped. `#define HELP() flag::exists( "x" )` reaches
+            // into the `flag` namespace as surely as writing the call out does, and the engine
+            // wants `#using scripts\shared\flag_shared` either way — the preprocessor runs before
+            // anything looks at imports, so what links is the expansion. This was the whole reason
+            // the kind stopped being overwritten: the rule could not see the call at all.
+            //
+            // The range is then the INVOCATION, not the callee, so the Error lands on the macro's
+            // name. That is the only text on screen, and it is also where the add-#using fix must
+            // be offered, which CodeActionHandler.FindMissingUsingSites derives from the same entry.
+            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
             }
@@ -127,6 +142,11 @@ public static class NamespaceUsageLint
             // method is declared by an ancestor, not by the class the call names.
             if ( classNames.Contains(namespaceName)
                 && MethodResolution.FindDeclaringClass(store, askingContextId, namespaceName, entry.Key.Name) is not null )
+            {
+                continue;
+            }
+
+            if ( !reported.Add((entry.Range, namespaceName)) )
             {
                 continue;
             }

@@ -902,11 +902,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            // Held out alongside the lint this fixes — see ReferenceEntry.FromMacro. An offer here
-            // with no diagnostic behind it would be a quick fix for a problem nothing reported.
+            // FromMacro entries are included, matching NamespaceUsageLint exactly: it reports the
+            // missing import for a call a macro expanded into, and a diagnostic with no fix behind
+            // it is worse than either half alone. The range is the invocation site in both, which
+            // is what lets the action be matched to the Error the client reported.
             if ( entry.Kind != ReferenceKind.Call
-                || entry.Key.Kind != SymbolKind.Function
-                || entry.FromMacro )
+                || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
             }

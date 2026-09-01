@@ -1,4 +1,4 @@
-namespace GSCode.Workspace.Cache;
+﻿namespace GSCode.Workspace.Cache;
 
 /// <summary>
 /// The SQLite schema and the two version gates. Bump SchemaVersion when the table shape
@@ -18,8 +18,13 @@ public static class CacheSchema
     /// to move even though the shape is additive.
     /// 4: extraction started WRITING OwnerClass, and FunctionSymbol/ClassSymbol gained
     /// OwnerClassKeyName and Constructor/Destructor. A version-3 blob predates every method key.
+    /// 5: ReferenceEntry gained FromMacro, and the ReferenceKind that used to carry that fact was
+    /// removed. Additive on the wire and therefore the dangerous kind: a version-4 blob deserializes
+    /// with FromMacro false everywhere, so every reference a macro expanded would read as ordinary
+    /// text written in the file — putting go-to-definition and hover on the macro's callee instead
+    /// of the macro, at a range that spells the macro's name.
     /// </remarks>
-    public const int RecordFormatVersion = 4;
+    public const int RecordFormatVersion = 5;
 
     // meta keys.
     public const string MetaSchemaVersion = "schema_version";

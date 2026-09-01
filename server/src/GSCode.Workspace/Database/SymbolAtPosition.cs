@@ -1,4 +1,4 @@
-using GSCode.Core.Symbols;
+﻿using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 
@@ -40,7 +40,7 @@ public static class SymbolAtPosition
         {
             // Never resolve the cursor to something a macro expanded into: the characters under
             // it spell the macro's name, so go-to-definition and hover belong to the macro.
-            if ( entry.Kind == ReferenceKind.ExpandedFromMacro )
+            if ( entry.FromMacro )
             {
                 continue;
             }
@@ -69,7 +69,7 @@ public static class SymbolAtPosition
         {
             // Never resolve the cursor to something a macro expanded into: the characters under
             // it spell the macro's name, so go-to-definition and hover belong to the macro.
-            if ( entry.Kind == ReferenceKind.ExpandedFromMacro )
+            if ( entry.FromMacro )
             {
                 continue;
             }

@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -250,7 +250,9 @@ public sealed partial class CompletionEngine
         string detail = LiteralDetail(literalKind);
         foreach ( ReferenceEntry entry in references )
         {
-            if ( entry.Kind != ReferenceKind.Literal || entry.Key.Kind != literalKind )
+            // Literals inside a macro body are skipped: the range is the invocation site, and the
+            // text is the macro author's, not a name this file uses.
+            if ( entry.Kind != ReferenceKind.Literal || entry.Key.Kind != literalKind || entry.FromMacro )
             {
                 continue;
             }

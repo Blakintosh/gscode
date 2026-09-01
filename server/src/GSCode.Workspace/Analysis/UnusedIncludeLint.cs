@@ -58,7 +58,10 @@ public static class UnusedIncludeLint
         HashSet<string> calledFunctions = new(StringComparer.Ordinal);
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Definition && entry.Key.Kind == SymbolKind.Function )
+            // Macro-expanded uses count, for the reason UnusedUsingLint spells out — including
+            // the declaration-shaped ones, which is what the flag test preserves.
+            if ( (entry.Kind != ReferenceKind.Definition || entry.FromMacro)
+                && entry.Key.Kind == SymbolKind.Function )
             {
                 calledFunctions.Add(entry.Key.Name);
             }

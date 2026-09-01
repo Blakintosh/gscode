@@ -170,7 +170,10 @@ public static class IncludeUsageLint
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // Macro-expanded calls are held out of this rule for now — see ReferenceEntry.FromMacro.
+            // They ARE calls and the kind now says so; opting each lint in is a separate, swept step.
+            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function
+                || entry.FromMacro )
             {
                 continue;
             }

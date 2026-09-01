@@ -171,8 +171,10 @@ public static class FunctionResolutionLint
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
+            // Macro-expanded calls are held out of this rule for now — see ReferenceEntry.FromMacro.
+            // They ARE calls and the kind now says so; opting each lint in is a separate, swept step.
             bool isCall = entry.Kind is ReferenceKind.Call or ReferenceKind.MethodCall;
-            if ( !isCall || entry.Key.Kind != SymbolKind.Function )
+            if ( !isCall || entry.Key.Kind != SymbolKind.Function || entry.FromMacro )
             {
                 continue;
             }

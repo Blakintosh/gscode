@@ -73,11 +73,12 @@ public static class UnusedUsingLint
     {
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            // ExpandedFromMacro is deliberately NOT skipped: `REGISTER_SYSTEM(...)` expands to
-            // `system::register(...)`, so a file using that macro genuinely needs its
+            // A macro-expanded reference is deliberately NOT skipped: `REGISTER_SYSTEM(...)`
+            // expands to `system::register(...)`, so a file using that macro genuinely needs its
             // `#using scripts\shared\system_shared`. Ignoring those uses told 471 stock files
-            // their import was pointless.
-            if ( entry.Kind == ReferenceKind.Definition )
+            // their import was pointless. That holds even for the declaration-shaped ones, which is
+            // why the flag is tested here rather than the kind alone.
+            if ( entry.Kind == ReferenceKind.Definition && !entry.FromMacro )
             {
                 continue;
             }

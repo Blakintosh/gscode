@@ -985,32 +985,25 @@ public sealed class SymbolExtractor
     }
 
     /// <summary>
-    /// Records a reference at the token's root-file range, unless the token came out of a
+    /// Records a reference at the token's root-file range, flagged when the token came out of a
     /// macro body.
     ///
-    /// Expanded tokens report the INVOCATION's range, so recording them would stack a macro's
-    /// whole body onto the one call site: go-to-definition would land on whatever the body
-    /// mentions first, and every expanded call would contribute its own parameter hints there.
-    /// Arguments passed at the call site keep their own provenance and so are still recorded,
-    /// as is the MacroUse reference for the invocation itself.
+    /// Expanded tokens report the INVOCATION's range, because that is the only text on screen:
+    /// the macro's whole body stacks onto the one call site. That is what
+    /// <see cref="ReferenceEntry.FromMacro"/> exists to say, and every consumer that must not
+    /// treat the range as the reference's own text — hover, go-to-definition, parameter hints —
+    /// reads it. Arguments passed at the call site keep their own provenance and so are recorded
+    /// unflagged, as is the MacroUse reference for the invocation itself.
     ///
-    /// The cost is that a function named only inside a macro body gets no reference anywhere,
-    /// since the body is never parsed as code at its definition site either.
+    /// The KIND is left alone, which it was not before: an expanded call used to be rewritten to a
+    /// kind of its own, so a lint asking `Kind == Call` could not see it. A call a macro expands
+    /// into is still a call, and needs its import, its dev-block check and its argument count like
+    /// any other.
     /// </summary>
     private void AddReference(SymbolKey key, PToken token, ReferenceKind kind)
     {
-        // Text from a macro body still USES what it names — a file invoking REGISTER_SYSTEM
-        // really does call system::register — but the cursor can never sit on it, because the
-        // characters on screen spell the macro's name. Recording it under a separate kind keeps
-        // the fact while leaving navigation to resolve the macro instead. RootRange is already
-        // the invocation site in this file, so the range is meaningful either way.
-        if ( token.Provenance.DefinitionSite is not null )
-        {
-            _references.Add(new ReferenceEntry(key, token.RootRange, ReferenceKind.ExpandedFromMacro));
-            return;
-        }
-
-        _references.Add(new ReferenceEntry(key, token.RootRange, kind));
+        _references.Add(new ReferenceEntry(
+            key, token.RootRange, kind, FromMacro: token.Provenance.DefinitionSite is not null));
     }
 
     private void AddDiagnostic(GscDiagnosticCode code, TextRange range, params object[] arguments)

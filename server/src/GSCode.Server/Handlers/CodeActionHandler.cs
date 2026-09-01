@@ -902,8 +902,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
+            // Held out alongside the lint this fixes — see ReferenceEntry.FromMacro. An offer here
+            // with no diagnostic behind it would be a quick fix for a problem nothing reported.
             if ( entry.Kind != ReferenceKind.Call
-                || entry.Key.Kind != SymbolKind.Function )
+                || entry.Key.Kind != SymbolKind.Function
+                || entry.FromMacro )
             {
                 continue;
             }

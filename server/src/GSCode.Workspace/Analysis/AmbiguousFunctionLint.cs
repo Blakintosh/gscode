@@ -79,7 +79,9 @@ public static class AmbiguousFunctionLint
 
         // Macro-expanded calls all key to the invocation range, so a body naming one ambiguous
         // function twice would warn about the same undecided call twice on one word.
-        HashSet<(TextRange Range, SymbolKey Key)> reported = [];
+        // Only expanded entries can collide, and the set waits until one appears — see
+        // NamespaceUsageLint.
+        HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
 
         // Report at the CALL, not at the definitions: the definitions are each fine on their own,
         // and this file is where the ambiguity exists.
@@ -105,6 +107,18 @@ public static class AmbiguousFunctionLint
                 continue;
             }
 
+            // Asked BEFORE the related-information array and the Diagnostic are built. Checking
+            // afterwards did the work of reporting and then threw it away, which is the wrong order
+            // for the one entry shape that can arrive twice.
+            if ( entry.FromMacro )
+            {
+                reportedFromMacros ??= [];
+                if ( !reportedFromMacros.Add((entry.Range, entry.Key)) )
+                {
+                    continue;
+                }
+            }
+
             ImmutableArray<DiagnosticRelation> related =
             [
                 .. declaring.Select(record => new DiagnosticRelation(
@@ -118,11 +132,6 @@ public static class AmbiguousFunctionLint
                 entry.Key.Name,
                 entry.Key.Namespace,
                 declaring.Count);
-
-            if ( !reported.Add((entry.Range, entry.Key)) )
-            {
-                continue;
-            }
 
             diagnostics.Add(ambiguous with { RelatedInformation = related });
         }

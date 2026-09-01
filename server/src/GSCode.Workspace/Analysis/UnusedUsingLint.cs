@@ -51,7 +51,7 @@ public static class UnusedUsingLint
         FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
 
         if ( resolvedImports.Usings.Length == 0
-            || ImportGate.AnyUnresolved(result, GscDiagnosticCode.InsertNotFound) )
+            || ImportGate.AnyMacrosLost(result) )
         {
             return [];
         }

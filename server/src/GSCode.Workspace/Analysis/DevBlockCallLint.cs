@@ -42,7 +42,9 @@ public static class DevBlockCallLint
 
         // Macro-expanded calls all key to the invocation range, so a body calling one dev-only
         // function twice would report the same shipped-build failure twice on one word.
-        HashSet<(TextRange Range, SymbolKey Key)> reported = [];
+        // Only those can collide, so only those are tracked and the set waits — see
+        // NamespaceUsageLint.
+        HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -65,9 +67,13 @@ public static class DevBlockCallLint
                 continue;
             }
 
-            if ( !reported.Add((entry.Range, entry.Key)) )
+            if ( entry.FromMacro )
             {
-                continue;
+                reportedFromMacros ??= [];
+                if ( !reportedFromMacros.Add((entry.Range, entry.Key)) )
+                {
+                    continue;
+                }
             }
 
             ImmutableArray<ResolvedFunction> resolved = lookups.Lookup(entry.Key.Namespace, entry.Key.Name);

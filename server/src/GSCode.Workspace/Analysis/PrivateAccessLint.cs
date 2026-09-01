@@ -44,7 +44,9 @@ public static class PrivateAccessLint
 
         // Macro-expanded calls all key to the invocation range, so a body calling one private
         // function twice would say so twice on one word.
-        HashSet<(TextRange Range, SymbolKey Key)> reported = [];
+        // Only those can collide, so only those are tracked and the set waits until one appears —
+        // see NamespaceUsageLint.
+        HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -104,11 +106,16 @@ public static class PrivateAccessLint
                 DiagnosticRelation declaredAt = new(
                     candidate.Record.Path, candidate.Function.NameRange, "Declared private here.");
 
-                if ( reported.Add((entry.Range, entry.Key)) )
+                if ( entry.FromMacro )
                 {
-                    diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
+                    reportedFromMacros ??= [];
+                    if ( !reportedFromMacros.Add((entry.Range, entry.Key)) )
+                    {
+                        break;
+                    }
                 }
 
+                diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
                 break;
             }
         }

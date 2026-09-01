@@ -114,7 +114,12 @@ public static class NamespaceUsageLint
         // not three problems. Deduplicated on (range, namespace) rather than on range alone: two
         // different namespaces missing at one site really are two imports to add, and the code
         // action offers both.
-        HashSet<(TextRange Range, string Namespace)> reported = [];
+        //
+        // Only expanded entries can collide, so only they are tracked and the set is not allocated
+        // until one appears. Written text cannot: a range is one name token, and one token is one
+        // reference. Every file in a dialect without macros therefore pays nothing for this, and so
+        // does every BO3 file that invokes none.
+        HashSet<(TextRange Range, string Namespace)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -155,9 +160,13 @@ public static class NamespaceUsageLint
                 continue;
             }
 
-            if ( !reported.Add((entry.Range, namespaceName)) )
+            if ( entry.FromMacro )
             {
-                continue;
+                reportedFromMacros ??= [];
+                if ( !reportedFromMacros.Add((entry.Range, namespaceName)) )
+                {
+                    continue;
+                }
             }
 
             diagnostics.Add(Diagnostic.Create(

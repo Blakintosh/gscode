@@ -48,12 +48,9 @@ public static class UnassignedVariableLint
         //
         // The same gate FunctionResolutionLint uses, for the same reason: when the set of names
         // legally in scope is unknowable, "nothing assigns this" is not a claim worth making.
-        foreach ( Diagnostic diagnostic in result.AllDiagnostics )
+        if ( ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound) )
         {
-            if ( diagnostic.Code is GscDiagnosticCode.InsertNotFound or GscDiagnosticCode.UsingNotFound )
-            {
-                return [];
-            }
+            return [];
         }
 
         GameProfile game = profile ?? GameProfile.Active;

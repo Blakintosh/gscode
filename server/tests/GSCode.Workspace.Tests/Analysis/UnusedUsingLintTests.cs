@@ -124,6 +124,18 @@ public class UnusedUsingLintTests
     }
 
     [Fact]
+    public void AnInsertNamingAScriptSuppressesThePassToo()
+    {
+        // InsertNotFound is one of SIX ways a header fails to deliver its macros, and was the only
+        // one four separate gates asked about. `#insert` takes a .gsh; naming a .gsc is reported as
+        // 2014 and the splice is abandoned exactly as it is for a missing file, so the reference set
+        // is short in exactly the same way. See ImportGate.MacrosLost.
+        string source = "#insert scripts\\util.gsc;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
     public void FlagsOnlyTheUnusedImport_WhenBothArePresent()
     {
         string source = "#using scripts\\util;\n#using scripts\\shapes;\n#namespace game;\nfunction run()\n{\n    util::helper();\n}\n";

@@ -96,7 +96,7 @@ public static class IncludeUsageLint
 
         // #using is not asked about: no include dialect has one, and an unresolvable #include is
         // already caught by the closure walk below reporting an incomplete set.
-        if ( ImportGate.AnyUnresolved(result, GscDiagnosticCode.InsertNotFound) )
+        if ( ImportGate.AnyMacrosLost(result) )
         {
             return [];
         }
@@ -171,7 +171,9 @@ public static class IncludeUsageLint
         // Macro-expanded calls all key to the invocation range, so one body calling the same
         // function twice would stack the same Error on one word. The NAME is part of the key
         // because a body calling two uninclude-able functions is two imports to think about.
-        HashSet<(TextRange Range, string Name)> reported = [];
+        // Only expanded entries can collide, so the set holds only those and waits until one
+        // appears — see NamespaceUsageLint for why written text never collides.
+        HashSet<(TextRange Range, string Name)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -227,9 +229,13 @@ public static class IncludeUsageLint
                 continue;
             }
 
-            if ( !reported.Add((entry.Range, entry.Key.Name)) )
+            if ( entry.FromMacro )
             {
-                continue;
+                reportedFromMacros ??= [];
+                if ( !reportedFromMacros.Add((entry.Range, entry.Key.Name)) )
+                {
+                    continue;
+                }
             }
 
             diagnostics.Add(Report(entry, declaring));

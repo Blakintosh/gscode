@@ -92,8 +92,7 @@ public static class FunctionResolutionLint
         bool canJudgeBuiltins = (game.HasCompleteBuiltinLibrary || judgeUnverifiedBuiltins)
             && game.DataFilePrefix is not null
             && builtins.Count > 0
-            && !ImportGate.AnyUnresolved(
-                result, GscDiagnosticCode.InsertNotFound, GscDiagnosticCode.UsingNotFound);
+            && !ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound);
 
         List<Diagnostic> diagnosticsForMissingFiles = [];
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
@@ -173,7 +172,8 @@ public static class FunctionResolutionLint
         // function twice would report it twice on one word. The verdict below depends on nothing
         // but the range, the key and the kind, so two entries agreeing on all three always reach
         // the same answer and the second can be dropped here rather than at each report site.
-        HashSet<(TextRange Range, SymbolKey Key, ReferenceKind Kind)> seen = [];
+        // Only expanded entries can collide, and the set waits for one — see NamespaceUsageLint.
+        HashSet<(TextRange Range, SymbolKey Key, ReferenceKind Kind)>? seenFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
@@ -192,9 +192,13 @@ public static class FunctionResolutionLint
                 continue;
             }
 
-            if ( !seen.Add((entry.Range, entry.Key, entry.Kind)) )
+            if ( entry.FromMacro )
             {
-                continue;
+                seenFromMacros ??= [];
+                if ( !seenFromMacros.Add((entry.Range, entry.Key, entry.Kind)) )
+                {
+                    continue;
+                }
             }
 
             // Declared right here. Only counts for a call that could reach it unqualified — one

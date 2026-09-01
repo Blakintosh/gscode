@@ -17,8 +17,18 @@ namespace GSCode.Workspace.Analysis;
 ///
 /// <c>#include</c> MERGES a file's functions into this scope, so "used" is by NAME. Deliberately
 /// conservative — deleting a working include is worse than keeping a stale one — so an autoexec
-/// anywhere it reaches keeps it (imported for its side effects), and as with the other import lints
-/// one unresolvable <c>#include</c> suppresses the whole pass rather than guessing.
+/// anywhere it reaches keeps it (imported for its side effects).
+///
+/// One unreadable <c>#include</c> used to suppress the whole pass. It does not any more, for the
+/// reason <see cref="UnusedUsingLint"/> sets out, and the sole-supplier test below fails SAFE
+/// against what is left: a supplier we cannot see can only make a judged include look MORE
+/// essential than it is, which keeps a directive rather than offering to delete a working one.
+///
+/// <see cref="UnusedUsingLint"/> gained an unresolved-<c>#insert</c> gate in the same change and
+/// this did not, which is a dialect fact rather than an oversight: <c>#insert</c> does not lex on
+/// an include dialect (<c>Keywords.IsDirectiveEnabled</c>), so the diagnostic that gate reads can
+/// never be raised in a file this rule runs on. Writing it here would be a branch nothing can
+/// take.
 ///
 /// The test is MARGINAL, not direct, and that distinction is what stops a Hint from manufacturing an
 /// Error. <c>#include</c> flattens transitively (see <see cref="DatabaseQueries.IncludeClosure"/>), so
@@ -48,7 +58,7 @@ public static class UnusedIncludeLint
         // back to resolving here keeps this callable on its own, which the tests rely on.
         FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
 
-        if ( resolvedImports.Includes.Length == 0 || !resolvedImports.Complete )
+        if ( resolvedImports.Includes.Length == 0 )
         {
             return [];
         }

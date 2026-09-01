@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -98,9 +98,27 @@ public class UnusedUsingLintTests
     }
 
     [Fact]
-    public void Suppressed_WhenAUsingCannotBeResolved()
+    public void OnlyTheUnreadableUsingGoesUnjudged()
     {
+        // This used to report nothing at all: one import the workspace could not read stood the
+        // whole pass down. Whether `util` is used depends on this file's references and on util's
+        // own declarations, and a file we cannot read is neither — so it goes unjudged (it never
+        // enters Usings) and the rest are judged as before. The missing one is UsingNotFound's to
+        // report, so this rule still never doubles up on that line.
         string source = "#using scripts\\missing;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(1, diagnostic.Range.Start.Line);
+    }
+
+    [Fact]
+    public void AnUnresolvedInsertStillSuppressesThePass()
+    {
+        // The gate the old one was standing in for. A header that did not expand takes its macros
+        // with it, so the reference set is short — the exact shape that makes a live import look
+        // unused, and the reference set is this rule's input.
+        string source = "#insert scripts\\missing.gsh;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n";
 
         Assert.Empty(Lint(source));
     }

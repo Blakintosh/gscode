@@ -19,8 +19,22 @@ namespace GSCode.Workspace.Analysis;
 /// one, so three separate rules keep an import: it declares a referenced function or class,
 /// it contributes a namespace some qualified reference mentions (namespace merging means the
 /// called function may live in a sibling file), or it declares an autoexec function (the file
-/// is imported purely for its side effects). As with the namespace lint, one unresolvable
-/// <c>#using</c> suppresses the whole pass.
+/// is imported purely for its side effects).
+///
+/// One unreadable <c>#using</c> used to suppress the whole pass, copied from
+/// <see cref="NamespaceUsageLint"/> where it IS load-bearing. It is not load-bearing here, and the
+/// question this rule asks is why: whether import Y is used depends on THIS FILE'S REFERENCES and
+/// on Y'S OWN DECLARATIONS, and a file we cannot read is neither of those. Nor can it flip an
+/// answer — if the unreadable file was the real provider of what this file calls, then Y provides
+/// nothing referenced and saying so is right. So an unreadable directive is simply not judged (it
+/// never entered <c>Usings</c>), and every other one still is: a workspace missing one script no
+/// longer greys out nothing at all.
+///
+/// An unresolved <c>#insert</c> DOES suppress the pass, and that is the gate the old one was
+/// standing in for without saying so. A header that did not expand takes its macros with it, so
+/// <c>REGISTER_SYSTEM(...)</c> never becomes <c>system::register(...)</c> and the reference set is
+/// short — which is exactly the shape that makes a live import look unused. The reference count is
+/// this rule's INPUT, so a gate about macros belongs here in a way a gate about imports never did.
 /// </summary>
 public static class UnusedUsingLint
 {
@@ -36,7 +50,8 @@ public static class UnusedUsingLint
         // back to resolving here keeps this callable on its own, which the tests rely on.
         FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
 
-        if ( resolvedImports.Usings.Length == 0 || !resolvedImports.Complete )
+        if ( resolvedImports.Usings.Length == 0
+            || ImportGate.AnyUnresolved(result, GscDiagnosticCode.InsertNotFound) )
         {
             return [];
         }

@@ -134,10 +134,25 @@ public class UnusedIncludeLintTests
     }
 
     [Fact]
-    public void AnUnresolvableIncludeSuppressesThePass()
+    public void AnUnreadableIncludeIsNotJudged()
     {
-        // A missing target is UsingNotFound/UsingNotFound's job; this lint stays quiet rather than
-        // guessing, so it never reports both a missing AND an unused include for the same line.
+        // A missing target is UsingNotFound's job. The directive never enters Includes, so this
+        // rule still never reports both a missing AND an unused include for one line — what
+        // changed is that the file's OTHER includes are judged now instead of the pass standing
+        // down wholesale.
         Assert.Empty(Lint("#include scripts\\does_not_exist;\nrun()\n{\n}\n"));
+    }
+
+    [Fact]
+    public void AnUnreadableIncludeNoLongerSpares_ItsSiblings()
+    {
+        // The narrowing, stated as the behaviour change: this file used to be told nothing at all
+        // because one of its two includes could not be read. The readable one supplies nothing
+        // called here, and that verdict never depended on the unreadable one.
+        Diagnostic diagnostic = Assert.Single(Lint(
+            "#include scripts\\does_not_exist;\n#include common_scripts\\utility;\nrun()\n{\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.UnusedInclude, diagnostic.Code);
+        Assert.Equal(1, diagnostic.Range.Start.Line);
     }
 }

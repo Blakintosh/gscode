@@ -168,4 +168,53 @@ public class ExportSignatureTests
 
         Assert.Equal(SignatureOf(WithClass), SignatureOf(constructed));
     }
+    // --- Headers ---
+    //
+    // A GSH is pasted into every file that #inserts it, so EVERY byte of it is something a
+    // neighbour can observe: a macro's body decides what the dependent's tokens are, and with it
+    // the dependent's parse, its diagnostics and what its hover says. Only macro NAMES and arities
+    // were hashed, so editing `#define CAP 5` to `#define CAP 99` left the header's signature
+    // identical, nothing was told the world had moved, and every open dependent went on showing
+    // the old value until a keystroke in it forced a re-analysis.
+
+    private static ulong HeaderSignatureOf(string source)
+    {
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\shared\shared.gsh",
+            ScriptLanguage.Gsh,
+            SourceText.From(source),
+            NullInsertProvider.Instance,
+            new NameTable());
+
+        ScriptDatabase database = new();
+        return ExportSignature.Of(
+            database.Commit(result, ResolutionContext.RawContext, false, @"scripts\shared\shared.gsh"));
+    }
+
+    private const string Header = "#define CAP 5\n#define IS_TRUE(__a) (isdefined(__a) && __a)\n";
+
+    [Fact]
+    public void TheSameHeaderHashesTheSame()
+    {
+        Assert.Equal(HeaderSignatureOf(Header), HeaderSignatureOf(Header));
+    }
+
+    [Fact]
+    public void ChangingAMacroBody_ChangesTheHeaderSignature()
+    {
+        // The reported bug, at its root: the value a dependent expands changed, and nothing noticed.
+        Assert.NotEqual(
+            HeaderSignatureOf(Header),
+            HeaderSignatureOf("#define CAP 99\n#define IS_TRUE(__a) (isdefined(__a) && __a)\n"));
+    }
+
+    [Fact]
+    public void EditingAHeaderComment_ChangesTheHeaderSignature()
+    {
+        // Conservative on purpose, and cheap: headers are not what anyone types into all day, and a
+        // comment above a #define is its hover documentation, which a dependent does display.
+        Assert.NotEqual(
+            HeaderSignatureOf(Header),
+            HeaderSignatureOf("// the cap\n#define CAP 5\n#define IS_TRUE(__a) (isdefined(__a) && __a)\n"));
+    }
 }

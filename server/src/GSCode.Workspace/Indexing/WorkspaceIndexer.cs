@@ -512,6 +512,20 @@ public sealed class WorkspaceIndexer
         _inserts.Invalidate(normalizedPath);
     }
 
+    /// <summary>
+    /// Announces that a header appeared or vanished, rather than that one changed.
+    ///
+    /// <see cref="InvalidateGsh"/> cannot speak for this. It reports a header whose CONTENT moved,
+    /// and says nothing when the cache holds no copy — correct, since a header nobody has read
+    /// cannot have been expanded into anyone's parse. A header that did not exist a moment ago is
+    /// exactly that case and still changes what an insert path resolves to, both for the file that
+    /// could not resolve it at all and for the one whose raw header a new mod copy now shadows.
+    /// </summary>
+    public void NoteHeaderSetChanged()
+    {
+        _inserts.NoteHeaderSetChanged();
+    }
+
     /// <summary>Removes a deleted file from the database, persistent cache, and insert cache.</summary>
     public void RemoveFile(string normalizedPath, ScriptLanguage language)
     {

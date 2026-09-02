@@ -14,6 +14,13 @@ public sealed class FakeFileSystem : IFileSystem
         return this;
     }
 
+    /// <summary>Takes a file back out, for the tests that model a deletion rather than an edit.</summary>
+    public FakeFileSystem RemoveFile(string absolutePath)
+    {
+        _files.Remove(PathUtil.NormalizeAbsolute(absolutePath));
+        return this;
+    }
+
     public bool FileExists(string absolutePath)
     {
         return _files.ContainsKey(PathUtil.NormalizeAbsolute(absolutePath));

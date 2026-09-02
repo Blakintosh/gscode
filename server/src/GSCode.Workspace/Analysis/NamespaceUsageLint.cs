@@ -1,8 +1,9 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
+using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
@@ -30,6 +31,15 @@ namespace GSCode.Workspace.Analysis;
 /// record, the whole lint is suppressed — a namespace that a not-yet-known import might supply
 /// is never flagged. That property is what an Error severity rests on, so weakening any of the
 /// bail-outs below now costs more than it used to.
+///
+/// One of only TWO readers of <see cref="FileImports.Complete"/> left, the other being
+/// <see cref="IncludeUsageLint"/> — which is this same claim in the merge dialect and keeps it for
+/// this same reason. Three other lints had copied the bail-out and were narrowed once each was
+/// asked what an unreadable file could actually change about its answer. Here it changes the whole
+/// verdict: the claim is that NOTHING this script imports declares the namespace, and a file nobody
+/// can read is exactly the counterexample. The cost is known and unpaid-for — a workspace missing
+/// one script is told nothing about any namespace, so an incomplete script dump silences the rule
+/// everywhere.
 ///
 /// Namespace dialects only, which is the same gate <see cref="IncludeUsageLint"/> opens on from the
 /// other side. Where a file merges rather than imports there is no <c>#using</c> to add, and the
@@ -98,9 +108,23 @@ public static class NamespaceUsageLint
         HashSet<string> classNames = ClassNames(store);
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+
+        // Keyed on the NAMESPACE, not the range: two namespaces missing at one macro invocation
+        // are two imports to add, and the code action offers both. See MacroReports.
+        HashSet<(TextRange Range, string Namespace)>? reportedFromMacros = null;
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // FromMacro is deliberately NOT skipped. `#define HELP() flag::exists( "x" )` reaches
+            // into the `flag` namespace as surely as writing the call out does, and the engine
+            // wants `#using scripts\shared\flag_shared` either way — the preprocessor runs before
+            // anything looks at imports, so what links is the expansion. This was the whole reason
+            // the kind stopped being overwritten: the rule could not see the call at all.
+            //
+            // The range is then the INVOCATION, not the callee, so the Error lands on the macro's
+            // name. That is the only text on screen, and it is also where the add-#using fix must
+            // be offered, which CodeActionHandler.FindMissingUsingSites derives from the same entry.
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -124,6 +148,11 @@ public static class NamespaceUsageLint
             // method is declared by an ancestor, not by the class the call names.
             if ( classNames.Contains(namespaceName)
                 && MethodResolution.FindDeclaringClass(store, askingContextId, namespaceName, entry.Key.Name) is not null )
+            {
+                continue;
+            }
+
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, namespaceName), ref reportedFromMacros) )
             {
                 continue;
             }

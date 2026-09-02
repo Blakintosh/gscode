@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
@@ -147,27 +147,49 @@ public sealed class SqliteCache : IAsyncDisposable
         return new SqliteCache(connection);
     }
 
-    /// <summary>Reads every cached record (cold-restore input), skipping any that fail to deserialize.</summary>
-    public IReadOnlyDictionary<string, ScriptRecord> LoadAll()
+    /// <summary>
+    /// Reads every cached entry (warm-restore input) WITHOUT deserializing any of them.
+    ///
+    /// This used to return finished records, which made it the whole cost of a warm start: one
+    /// thread inflating gzip and parsing JSON over every file's references and diagnostics, run to
+    /// completion before <c>IndexAsync</c> was called at all. Measured back to back in one process,
+    /// uninstrumented, that restore against a cold index of the same tree: bo3 1,509 ms against
+    /// 390 ms, cod4 720 against 236, bo1 2,747 against 718. The analysis the cache exists to avoid
+    /// runs at <c>ProcessorCount - 1</c>, so a serial restore made the cache four times slower than
+    /// the work it saved. Nothing had ever measured it, because the server calls this as an
+    /// ARGUMENT to <c>UseCache</c> — outside the stopwatch that times indexing.
+    ///
+    /// What is left here is the part that has to be serial: <see cref="SqliteDataReader"/> is not
+    /// thread-safe and a blob is only valid until the next <c>Read</c>. That part is cheap, because
+    /// the bytes are still compressed. The expensive part now happens inside the indexer's parallel
+    /// per-file loop and only for files whose content hash still matches — see
+    /// <see cref="CachedEntry"/>.
+    ///
+    /// The hash is stored beside the blob rather than inside it for exactly this reason: the
+    /// freshness check has to be answerable without paying for the record it guards.
+    /// </summary>
+    public IReadOnlyDictionary<string, CachedEntry> LoadAll()
     {
-        Dictionary<string, ScriptRecord> records = new(StringComparer.Ordinal);
+        Dictionary<string, CachedEntry> entries = new(StringComparer.Ordinal);
 
         using SqliteCommand command = _connection.CreateCommand();
-        command.CommandText = "SELECT path, record FROM files;";
+        command.CommandText = "SELECT path, content_hash, record FROM files;";
         using SqliteDataReader reader = command.ExecuteReader();
 
         while ( reader.Read() )
         {
-            string path = reader.GetString(0);
-            byte[] blob = (byte[])reader[1];
-            ScriptRecord? record = RecordSerializer.Deserialize(blob);
-            if ( record is not null )
+            // Written as text by the upsert, since SQLite's INTEGER is signed and a content hash is
+            // not. A row whose hash cannot be read is simply not offered for restore: it would fail
+            // the freshness check anyway, and re-analysing one file is the cheap outcome.
+            if ( !ulong.TryParse(reader.GetString(1), out ulong contentHash) )
             {
-                records[path] = record;
+                continue;
             }
+
+            entries[reader.GetString(0)] = new CachedEntry(contentHash, (byte[])reader[2]);
         }
 
-        return records;
+        return entries;
     }
 
     /// <summary>

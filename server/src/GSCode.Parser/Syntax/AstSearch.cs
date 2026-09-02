@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax.Ast;
@@ -92,139 +93,281 @@ public static class AstSearch
             && identifier.Token.Kind is TokenKind.WaitTill or TokenKind.WaitTillMatch;
     }
 
-    /// <summary>Direct structural children of a node (expression operands included).</summary>
-    public static IEnumerable<AstNode> ChildrenOf(AstNode node)
+    /// <summary>
+    /// Direct structural children of a node (expression operands included).
+    ///
+    /// Returns a STRUCT enumerable rather than an <c>IEnumerable</c>, and every caller is a
+    /// <c>foreach</c> that binds to it by shape, so the walk allocates nothing. It used to be a
+    /// <c>yield return</c> iterator, which allocated one state machine per node VISITED — and this
+    /// is walked once per rule, by fifteen lints plus the reference, hint and typing passes, over
+    /// trees of a million nodes. Measured on bo3: a bare full-tree walk of every script cost
+    /// 128–145 ms through the iterator against 35–47 ms without it, three times over, and a variant
+    /// that short-circuits leaves before the type switch measured the same as the plain one — so the
+    /// allocation was the cost and the thirty-case switch was not.
+    /// </summary>
+    public static ChildEnumerable ChildrenOf(AstNode node)
     {
         switch ( node )
         {
             case ScriptNode script:
-                foreach ( AstNode element in script.Elements ) { yield return element; }
-                yield break;
+                return ChildEnumerable.Of(script.Elements);
             case FunctionNode function:
-                foreach ( ParameterNode parameter in function.Parameters ) { yield return parameter; }
-                yield return function.Body;
-                yield break;
+                return ChildEnumerable.Of(function.Parameters.CastArray<AstNode>(), function.Body);
             case ParameterNode parameter:
-                if ( parameter.DefaultValue is not null ) { yield return parameter.DefaultValue; }
-                yield break;
+                return ChildEnumerable.Of(parameter.DefaultValue);
             case ClassNode classNode:
-                foreach ( AstNode member in classNode.Members ) { yield return member; }
-                yield break;
+                return ChildEnumerable.Of(classNode.Members);
             case ConstructorNode constructor:
-                foreach ( ParameterNode parameter in constructor.Parameters ) { yield return parameter; }
-                yield return constructor.Body;
-                yield break;
+                return ChildEnumerable.Of(constructor.Parameters.CastArray<AstNode>(), constructor.Body);
             case DestructorNode destructor:
-                foreach ( ParameterNode parameter in destructor.Parameters ) { yield return parameter; }
-                yield return destructor.Body;
-                yield break;
+                return ChildEnumerable.Of(destructor.Parameters.CastArray<AstNode>(), destructor.Body);
             case DevBlockDeclNode devDecl:
-                foreach ( AstNode declaration in devDecl.Declarations ) { yield return declaration; }
-                yield break;
+                return ChildEnumerable.Of(devDecl.Declarations);
             case BlockNode block:
-                foreach ( AstNode statement in block.Statements ) { yield return statement; }
-                yield break;
+                return ChildEnumerable.Of(block.Statements);
             case IfNode ifNode:
-                yield return ifNode.Condition;
-                yield return ifNode.Then;
-                if ( ifNode.Else is not null ) { yield return ifNode.Else; }
-                yield break;
+                return ChildEnumerable.Of(ifNode.Condition, ifNode.Then, ifNode.Else);
             case WhileNode whileNode:
-                yield return whileNode.Condition;
-                yield return whileNode.Body;
-                yield break;
+                return ChildEnumerable.Of(whileNode.Condition, whileNode.Body);
             case DoWhileNode doWhile:
-                yield return doWhile.Body;
-                yield return doWhile.Condition;
-                yield break;
+                return ChildEnumerable.Of(doWhile.Body, doWhile.Condition);
             case ForNode forNode:
-                if ( forNode.Initializer is not null ) { yield return forNode.Initializer; }
-                if ( forNode.Condition is not null ) { yield return forNode.Condition; }
-                if ( forNode.Increment is not null ) { yield return forNode.Increment; }
-                yield return forNode.Body;
-                yield break;
+                return ChildEnumerable.Of(forNode.Initializer, forNode.Condition, forNode.Increment, forNode.Body);
             case ForeachNode foreachNode:
-                yield return foreachNode.Collection;
-                yield return foreachNode.Body;
-                yield break;
+                return ChildEnumerable.Of(foreachNode.Collection, foreachNode.Body);
             case SwitchNode switchNode:
-                yield return switchNode.Subject;
-                foreach ( CaseGroupNode caseGroup in switchNode.Cases ) { yield return caseGroup; }
-                yield break;
+                return ChildEnumerable.Of(switchNode.Subject, switchNode.Cases.CastArray<AstNode>());
             case CaseGroupNode caseGroup:
-                foreach ( CaseLabel label in caseGroup.Labels )
-                {
-                    if ( label.Value is not null ) { yield return label.Value; }
-                }
-
-                foreach ( AstNode statement in caseGroup.Statements ) { yield return statement; }
-                yield break;
+                return ChildEnumerable.OfCaseGroup(caseGroup.Labels, caseGroup.Statements);
             case ReturnNode returnNode:
-                if ( returnNode.Value is not null ) { yield return returnNode.Value; }
-                yield break;
+                return ChildEnumerable.Of(returnNode.Value);
             case WaitNode wait:
-                yield return wait.Duration;
-                yield break;
+                return ChildEnumerable.Of(wait.Duration);
             case ConstDeclNode constDecl:
-                yield return constDecl.Value;
-                yield break;
+                return ChildEnumerable.Of(constDecl.Value);
             case ExprStatementNode exprStatement:
-                yield return exprStatement.Expression;
-                yield break;
+                return ChildEnumerable.Of(exprStatement.Expression);
             case DevBlockStmtNode devStmt:
-                foreach ( AstNode statement in devStmt.Statements ) { yield return statement; }
-                yield break;
+                return ChildEnumerable.Of(devStmt.Statements);
             case AssignmentNode assignment:
-                yield return assignment.Target;
-                yield return assignment.Value;
-                yield break;
+                return ChildEnumerable.Of(assignment.Target, assignment.Value);
             case BinaryNode binary:
-                yield return binary.Left;
-                yield return binary.Right;
-                yield break;
+                return ChildEnumerable.Of(binary.Left, binary.Right);
             case TernaryNode ternary:
-                yield return ternary.Condition;
-                yield return ternary.WhenTrue;
-                yield return ternary.WhenFalse;
-                yield break;
+                return ChildEnumerable.Of(ternary.Condition, ternary.WhenTrue, ternary.WhenFalse);
             case PrefixNode prefix:
-                yield return prefix.Operand;
-                yield break;
+                return ChildEnumerable.Of(prefix.Operand);
             case PostfixNode postfix:
-                yield return postfix.Operand;
-                yield break;
+                return ChildEnumerable.Of(postfix.Operand);
             case ParenNode paren:
-                yield return paren.Inner;
-                yield break;
+                return ChildEnumerable.Of(paren.Inner);
             case VectorNode vector:
-                yield return vector.X;
-                yield return vector.Y;
-                yield return vector.Z;
-                yield break;
+                return ChildEnumerable.Of(vector.X, vector.Y, vector.Z);
             case MemberNode member:
-                yield return member.Object;
-                yield break;
+                return ChildEnumerable.Of(member.Object);
             case IndexNode index:
-                yield return index.Object;
-                yield return index.Index;
-                yield break;
+                return ChildEnumerable.Of(index.Object, index.Index);
             case PointerDerefNode pointer:
-                yield return pointer.Pointer;
-                yield break;
+                return ChildEnumerable.Of(pointer.Pointer);
             case CallNode call:
-                if ( call.Target is not null ) { yield return call.Target; }
-                yield return call.Callee;
-                foreach ( ExprNode argument in call.Arguments ) { yield return argument; }
-                yield break;
+                return ChildEnumerable.Of(call.Target, call.Callee, call.Arguments.CastArray<AstNode>());
             case ArrowCallNode arrow:
-                yield return arrow.Object;
-                foreach ( ExprNode argument in arrow.Arguments ) { yield return argument; }
-                yield break;
+                return ChildEnumerable.Of(arrow.Object, arrow.Arguments.CastArray<AstNode>());
             case NewNode newNode:
-                foreach ( ExprNode argument in newNode.Arguments ) { yield return argument; }
-                yield break;
+                return ChildEnumerable.Of(newNode.Arguments.CastArray<AstNode>());
             default:
-                yield break;
+                return ChildEnumerable.Empty;
+        }
+    }
+}
+
+/// <summary>
+/// One node's children, in the order the tree declares them, held without allocating.
+///
+/// Every shape in the AST is some of: a LEADING array (a block's statements, a function's
+/// parameters), up to four NAMED children (a ternary's three operands, a for-loop's four parts),
+/// a case group's LABELS — whose values are the children, and any of which may be absent — and a
+/// TRAILING array (a call's arguments, a switch's case groups). The enumerator yields those four
+/// groups in that order, skipping the absent ones, which reproduces the hand-written order the
+/// <c>yield return</c> version had for every node type.
+///
+/// The arrays arrive through <c>CastArray</c>, which reinterprets the existing array rather than
+/// copying it — <c>ImmutableArray&lt;T&gt;</c> is a struct, so an array of a derived node type is
+/// not an array of <c>AstNode</c> without it.
+/// </summary>
+public readonly struct ChildEnumerable
+{
+    private readonly ImmutableArray<AstNode> _leading;
+    private readonly AstNode? _first;
+    private readonly AstNode? _second;
+    private readonly AstNode? _third;
+    private readonly AstNode? _fourth;
+    private readonly ImmutableArray<CaseLabel> _labels;
+    private readonly ImmutableArray<AstNode> _trailing;
+
+    private ChildEnumerable(
+        ImmutableArray<AstNode> leading,
+        AstNode? first,
+        AstNode? second,
+        AstNode? third,
+        AstNode? fourth,
+        ImmutableArray<CaseLabel> labels,
+        ImmutableArray<AstNode> trailing)
+    {
+        _leading = leading;
+        _first = first;
+        _second = second;
+        _third = third;
+        _fourth = fourth;
+        _labels = labels;
+        _trailing = trailing;
+    }
+
+    /// <summary>A leaf: an identifier, a literal, a directive, a `break`.</summary>
+    public static ChildEnumerable Empty
+    {
+        get { return default; }
+    }
+
+    public static ChildEnumerable Of(ImmutableArray<AstNode> children)
+    {
+        return new ChildEnumerable(children, null, null, null, null, default, default);
+    }
+
+    public static ChildEnumerable Of(AstNode? first, AstNode? second = null, AstNode? third = null, AstNode? fourth = null)
+    {
+        return new ChildEnumerable(default, first, second, third, fourth, default, default);
+    }
+
+    /// <summary>A declaration's parameters or members, then its body.</summary>
+    public static ChildEnumerable Of(ImmutableArray<AstNode> leading, AstNode body)
+    {
+        return new ChildEnumerable(leading, body, null, null, null, default, default);
+    }
+
+    /// <summary>A subject or receiver, then a list: a switch's cases, an arrow call's arguments.</summary>
+    public static ChildEnumerable Of(AstNode subject, ImmutableArray<AstNode> trailing)
+    {
+        return new ChildEnumerable(default, subject, null, null, null, default, trailing);
+    }
+
+    /// <summary>A call: its optional target, its callee, then its arguments.</summary>
+    public static ChildEnumerable Of(AstNode? target, AstNode callee, ImmutableArray<AstNode> trailing)
+    {
+        return new ChildEnumerable(default, target, callee, null, null, default, trailing);
+    }
+
+    /// <summary>The labels' values, then the statements they guard.</summary>
+    public static ChildEnumerable OfCaseGroup(ImmutableArray<CaseLabel> labels, ImmutableArray<AstNode> statements)
+    {
+        return new ChildEnumerable(default, null, null, null, null, labels, statements);
+    }
+
+    public Enumerator GetEnumerator()
+    {
+        return new Enumerator(this);
+    }
+
+    /// <summary>
+    /// Walks the four groups in order. A struct, and never boxed, because <c>foreach</c> binds to
+    /// <c>GetEnumerator</c> by shape rather than through <c>IEnumerable</c> — which is the whole
+    /// point of this type.
+    /// </summary>
+    public struct Enumerator
+    {
+        private readonly ChildEnumerable _children;
+        private int _stage;
+        private int _index;
+        private AstNode? _current;
+
+        internal Enumerator(ChildEnumerable children)
+        {
+            _children = children;
+            _stage = 0;
+            _index = 0;
+            _current = null;
+        }
+
+        public AstNode Current
+        {
+            get { return _current!; }
+        }
+
+        public bool MoveNext()
+        {
+            while ( true )
+            {
+                switch ( _stage )
+                {
+                    case 0:
+                        if ( !_children._leading.IsDefaultOrEmpty && _index < _children._leading.Length )
+                        {
+                            _current = _children._leading[_index++];
+                            return true;
+                        }
+
+                        _stage = 1;
+                        _index = 0;
+                        continue;
+
+                    case 1:
+                        if ( _index >= 4 )
+                        {
+                            _stage = 2;
+                            _index = 0;
+                            continue;
+                        }
+
+                        // The named children, in declaration order, skipping the absent ones — an
+                        // `if` with no `else`, a `for` with no initializer, a bare `return`.
+                        AstNode? named = _index switch
+                        {
+                            0 => _children._first,
+                            1 => _children._second,
+                            2 => _children._third,
+                            _ => _children._fourth,
+                        };
+
+                        _index++;
+                        if ( named is not null )
+                        {
+                            _current = named;
+                            return true;
+                        }
+
+                        continue;
+
+                    case 2:
+                        if ( !_children._labels.IsDefaultOrEmpty && _index < _children._labels.Length )
+                        {
+                            ExprNode? value = _children._labels[_index++].Value;
+                            if ( value is not null )
+                            {
+                                _current = value;
+                                return true;
+                            }
+
+                            continue;
+                        }
+
+                        _stage = 3;
+                        _index = 0;
+                        continue;
+
+                    case 3:
+                        if ( !_children._trailing.IsDefaultOrEmpty && _index < _children._trailing.Length )
+                        {
+                            _current = _children._trailing[_index++];
+                            return true;
+                        }
+
+                        _stage = 4;
+                        continue;
+
+                    default:
+                        return false;
+                }
+            }
         }
     }
 }

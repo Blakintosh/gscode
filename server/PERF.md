@@ -33,6 +33,58 @@ Their corpus roots are read from `GSCODE_CORPUS_<GAME>`. Those variables are usu
 USER level, so a child process inherits every game whether you want it or not — clear the three you
 are not sweeping, or `GameCorpusFixture.Available()` will pick them up.
 
+## Where bo3 stands after the 2026-08-19 pass
+
+One uninstrumented run of the whole perf category at the end of that day's work, so the sections
+below — which are each a before/after pair of one change — have a single reading to be read against.
+Compared with the last figures recorded for the same quantities:
+
+| | recorded before | 2026-08-19 |
+|---|---:|---:|
+| lint pass, 980 files | 2,191 ms | **1,332 ms** |
+| lint median / p99 / max | 0.61 / 23.1 / 95.1 ms | **0.31 / 19.0 / 47.0 ms** |
+| completion, 6,381 requests | p99 4.22–4.26 ms | **p99 2.12 ms**, median 0.30 |
+| analysis, 980 files | 612 ms | 685 ms |
+| cold index, 1,085 files | 1,714–1,732 ms | 1,620 ms |
+
+The lint pass and completion are the two that moved, and both are the sum of the changes below
+rather than of any one of them: the typer memo, the allocation-free child walk, the nine-into-one
+per-node pass, and the namespace index. Analysis and the cold index are unchanged within noise,
+which is what they should be — nothing in that pass touched the lex, preprocess or parse phases, and
+the parse work of that day added measurement only.
+
+**Single run, so read the shares and the distributions.** The entry-count line is what makes the
+completion row admissible: 4,211 of 6,381 requests returned over 500 entries, median 1,930, so the
+sample is still landing on the statement-scope arm that queries the store rather than on the cheap
+arms.
+
+### 2026-08-22: re-measured after the builtin library was rewritten
+
+The `t7` libraries grew by roughly 13,000 lines net when the unverified builtin docs were rewritten
+from call-site evidence and 115 signatures were corrected. Two paths read that data on every
+request — `ArgumentCountLint` and the completion producers — so the figures above were re-taken to
+find out whether the bigger library cost anything. It does not.
+
+| | 2026-08-19 | 2026-08-22, after the rewrite |
+|---|---:|---:|
+| lint pass, bo3, 980 files | 1,332 ms | **1,168 ms** |
+| lint median / p99 / max | 0.31 / 19.0 / 47.0 ms | **0.33 / 12.5 / 47.1 ms** |
+| completion, bo3, 6,381 requests | p99 2.12 ms, median 0.30 | **p99 1.64 ms**, median 0.29 |
+| `ArgumentCountLint`, bo3 | 162–205 ms | **144 ms** |
+
+An INSTRUMENTED run, where 2026-08-19 was not, so the two are not strictly comparable and the claim
+here is only the weak one it needs to be: nothing regressed. cod4's lint profile has moved
+underneath, and `UnusedIncludeLint` is now its most expensive rule at 215 ms, ahead of
+`NodeLintPass` at 182 ms.
+
+**One figure is left unexplained rather than claimed.** Analysis came in at 451 ms on bo3 and
+600 ms on cod4, against the 685 ms and 1,556 ms recorded above and in the phase table below — 30 to
+60% lower. Nothing in this branch went near lex, preprocess or parse, so a real improvement of that
+size has no mechanism, and a warm OS file cache is the likelier reading: the other three corpora had
+been swept half an hour earlier. This is the same shape as the extract claim retracted below, which
+is exactly why it is not being written down as a win. It wants a cold-cache pair before it means
+anything.
+
 ## Measured: where analysis time goes
 
 `--filter "Category=Perf"` times every script in a game individually and splits each into the four
@@ -59,16 +111,22 @@ flag's own cost is visible rather than folded in:
 | bo3 *(instrumented)* | 980 | 980 ms | 0.19 ms | 27% | 20% | 35% | 18% |
 | bo1 | 2,960 | 3,111 ms | 0.05 ms | 34% | 9% | 41% | 16% |
 
-**Shares are stable to about a point only within a phase, not across a run.** The three-run cod4
-table further down establishes that for `extract` and it does not generalise: `lex` and `parse` move
-4–5 points between the two runs above, which are the same code minutes apart. So read a 4-point
-difference as nothing. Two moves here survive both runs and are therefore real:
+**Corrected 2026-08-22 — shares are NOT stable to a point, and one conclusion below rested on it.**
+This paragraph used to say they were stable to about a point within a phase, that a 4-point
+difference was nothing, and that two moves survived both runs and were therefore real. Five runs of
+one build say `lex` moves ten points and `extract` five to eight; see the section on it further
+down. Only `parse` holds to a point or two. So:
 
-- **bo3 `extract` 12% → 18–20%**, against `preprocess` falling 31% → 20–23%. Extraction's share on
-  the `#insert` dialect has roughly doubled since the figure above it was taken.
-- cod4's total falling by half (1,556 → 816 ms) with its median falling 3x. The distribution is now
-  sharply bimodal — median 0.05 ms against a p99 of 15.3 ms — so the median says little and the
-  slowest 1% carry 24% of the total.
+- **bo3 `extract` 12% → 18–20%** is retracted. The move is inside the instrument's own spread, and
+  the five-run table reads 21 / 13 / 18 / 15 / 18 on code that did not change. Nothing was built on
+  it, but it stood as a finding for ten days.
+- cod4's total falling by half (1,556 → 816 ms) with its median falling 3x **stands**, on the
+  distribution rather than on the share: median 0.05 ms against a p99 of 15.3 ms, so the median says
+  little and the slowest 1% carry 24% of the total. A 2x total against a 26% run-to-run spread is
+  outside the noise where a 6-point share move is not.
+
+Read the sub-scope milliseconds where a number has to be trusted; read this table for which phase is
+worth opening, not for by how much one moved.
 
 **These are not comparable with figures recorded before 2026-07-30.** The total used to be a
 separate stopwatch around a second `Analyze()` call; it is now the SUM of the four phase timings.
@@ -107,6 +165,233 @@ worth nothing: every token's kind, offset, length and range was dumped for eleve
 sources covering each changed path plus 4,000 seeded-random strings over a GSC alphabet, before and
 after, 182,821 lines byte-identical. The corpus sweep then reported the same counts on both sides —
 2 of 894 on cod4, 2 of 980 on bo3, 6 of 2,960 on bo1, with the formatter's gates clean.
+
+### 2026-08-22: the extract move was the instrument, not the code
+
+The table above names "bo3 `extract` 12% → 18–20%" as one of two moves that "survive both runs and
+are therefore real". It does not survive four. Five instrumented sweeps of the same corpus on the
+same machine within twenty minutes, the last four on a byte-identical build:
+
+| bo3 | run 1 | run 2 | run 3 | run 4 | run 5 |
+|---|---:|---:|---:|---:|---:|
+| lex | 26% | 40% | 30% | 31% | 35% |
+| preprocess | 41% | 35% | 39% | 43% | 37% |
+| parse | 12% | 12% | 13% | 12% | 11% |
+| **extract** | **21%** | **13%** | **18%** | **15%** | **18%** |
+
+| cod4 | run 1 | run 2 | run 3 | run 4 | run 5 |
+|---|---:|---:|---:|---:|---:|
+| lex | 32% | 42% | 45% | 45% | 35% |
+| preprocess | 15% | 17% | 15% | 15% | 21% |
+| parse | 26% | 19% | 19% | 22% | 19% |
+| **extract** | **27%** | **21%** | **22%** | **17%** | **25%** |
+
+**`lex` moves ten points and `extract` five to eight, on identical code.** The totals move with them
+— cod4 read 1,251 / 1,331 / 1,461 / 1,162 ms across four runs of one build, a 26% spread. So the
+paragraph above, which says shares are "stable to about a point only within a phase" and that a
+4-point difference is nothing, understates the noise by roughly a factor of two, and the conclusion
+drawn from a 6-point move was drawn from inside it.
+
+`parse` is the exception and is stable to a point or two on both corpora, which is what makes the
+rest readable as noise rather than as the machine being busy: a busy machine would move all four.
+
+**The sub-scope milliseconds are the trustworthy half of this report.** `extract.declarations` on
+cod4 read 261 / 256 / 266 / 238 / 268 ms across the same five runs — a 12% spread against the phase
+share's 10 points. Read those, and read the phase table only for what it was built to show: which
+phase is worth opening, not by how much one moved.
+
+bo3's own sub-scopes are noisier (64–113 ms) for the reason the file gives elsewhere: at 0.065–0.116
+ms per file the quantity is small enough that one GC pause is a third of it. **This harness cannot
+settle a constant factor on bo3's extract phase.** A repetition bench can, and the expression fast
+path further up is the worked example.
+
+Two scopes were added while chasing this, and they are worth keeping even though the answer turned
+out to be "no effect":
+
+- **`extract.build`** — the six builders sealed into arrays. It was the suspect, because the five
+  scopes did not add up to the phase on bo3 (about a fifth unattributed) while covering cod4 to
+  within one percent. It is 2 ms on bo3 and 5 on cod4. The gap was noise, not a stage.
+- **`extract.invocations`** — the pre-walk loop over every macro invocation the preprocessor saw,
+  headers included, to keep the few from this file. Under 0.5 ms on both. The shape is wrong (its
+  cost is set by what was INSERTED, not by the file) and it does not matter at these sizes.
+
+### 2026-08-22: the two unsharded gates, which cost nothing
+
+`LanguageStore.Upsert` takes a striped path gate and then calls four indexes. Two were sharded in
+the COMMIT GATE pass below; `NamespaceIndex` and `ClassGraph` still hold one process-wide `Lock`
+each, taken by every commit AND by the readers a keystroke uses. The same scaling argument that
+justified sharding the other two applies to them on paper, so they were measured before anything
+was done about it. One scope per index, inside the path gate, two cold-index runs each:
+
+| of cold-index thread-time | bo3 | cod4 |
+|---|---:|---:|
+| `commit.upsert` | 9.4% / 6.1% | 10.2% / 8.2% |
+| `upsert.reference` *(sharded)* | 5.0% / 2.8% | 6.1% / 5.4% |
+| `upsert.declaration` *(sharded)* | 0.7% / 0.3% | 0.4% / 0.1% |
+| **`upsert.class`** *(one lock)* | **0.5% / 0.3%** | **0.0% / 0.0%** |
+| **`upsert.namespace`** *(one lock)* | **0.1% / 0.1%** | **0.3% / 0.0%** |
+
+**Together they are 0.1–0.8%, and 9–10 ms per run.** Sharding them would buy nothing measurable and
+add two more shard arrays to maintain. Not done, and this is the record of why — the next person to
+notice a process-wide lock in the commit path should read this row before opening the file.
+
+It also settles where the commit cost actually is: `upsert.reference` is half to two thirds of
+`commit.upsert` on both dialects, and it is already sharded 64 ways. What is left there is the work
+itself — a file's diff is thousands of keys — not contention.
+
+### 2026-08-22: the cache costs 70 ms of STARTUP, and it is the open
+
+`Program.cs` does four things between `OnStarted` firing and the indexing task being queued: sweeps
+the legacy cache directory, hashes the bundled data files into a build identity, opens the database,
+and reads the blobs. All four are ahead of the `Task.Run`, so they are startup latency the user
+waits through rather than indexing, and the server's log rolls them into one `cache 0.1s` figure
+that cannot say which to attack. `CacheOpen_WhereTheStartupTimeGoes` splits them.
+
+| bo3, empty database | first run in a cold process | warm |
+|---|---:|---:|
+| legacy sweep | 3.5 ms | 2.9–3.3 ms |
+| build identity (3.9 MB hashed) | 6.6 ms | 5.7–7.2 ms |
+| **open** | **231.8 ms** | **59.7–64.3 ms** |
+| `LoadAll` | 0.6 ms | 0.4–0.6 ms |
+| **total** | **242.5 ms** | **68.7–75.4 ms** |
+
+**It is the open, by 85–95%, and neither of the two things that look expensive.** Hashing 3.9 MB of
+JSON is 6 ms and the blob read is under one — on a POPULATED database `LoadAll` is 13–54 ms, which
+is still not the headline.
+
+A second `SqliteCache.Open` in the same process costs 27–31 ms against the first one's 60, so about
+half of a warm open is `Microsoft.Data.Sqlite` initialising its native provider on first use — an
+assembly load, a native library load and the JIT behind them. The server opens exactly one cache, so
+it pays that half every start. The 232 ms figure is the same work with the provider's native library
+cold in the OS file cache, which is what a user's first start after an update actually gets.
+
+Against `Ready 1.3 s`, that is 5% warm and 18% cold, all of it serial and all of it in front of an
+indexing pass that could have been running. Moving the block inside the `Task.Run` takes every
+millisecond of it off the startup thread. **Not done here**, because `cacheHolder.Set` would then
+land ~70 ms later than it does, and a `gscode/clearCache` arriving in that window would be told
+"No workspace cache is open" while the cache opened behind it — leaving a cache the user asked to
+delete. That wants a readiness handshake in `CacheHolder`, which is a change to make deliberately
+rather than as a side effect of a timing fix.
+
+### 2026-08-22: enumeration and analysis still do not overlap
+
+`IndexAsync` materialises the whole target list before `Parallel.ForEachAsync` starts, and
+`EnumerateFilesWithExtensions` is itself eager — it fans out across top-level subdirectories and
+returns a `List`. So the find stage runs to completion with no CPU in flight, and then the analysis
+runs with no I/O in flight.
+
+What that costs depends entirely on the workspace, which is why the three figures below look like
+they disagree:
+
+| | `index.enumerate` | of cold-index WALL |
+|---|---:|---:|
+| bo3 corpus (`share\raw`) | 40–44 ms | 7.5% |
+| cod4 corpus (`raw`) | 11 ms | 2.2% |
+| **bo3 as a whole install, from a real server log** | **742 ms** | **more than half a start** |
+
+The corpus rows are the floor and the server row is the case the pruning work below was done for: a
+workspace folder that is the game install is 295,640 files to find 1,105 scripts. Against an analyse
+phase of roughly 500 ms, overlapping the two would take that start from about 1.25 s to about 0.8.
+
+**Not done here**, and the obstacle is not the plumbing. `progress.Started(targets.Count)` needs the
+total up front, and a streamed enumeration does not have one until it finishes — so overlapping
+means the client's indexing progress becomes indeterminate until the walk completes, which is a
+change to what the status bar shows rather than a change to how fast anything is. Worth doing, worth
+deciding first.
+
+## Sub-phases: inside `parse`
+
+`parse` has been the largest analysis phase since the lex work landed, and until 2026-08-19 nothing
+measured inside it — `extract` had five scopes and the parser had none, so "parse is a third of
+analysis" was the end of the story rather than the start of one.
+
+Three scopes, all in instrumented builds only:
+
+| scope | covers | reads as |
+|---|---|---|
+| `parse.function` | one function declaration, parameters and body | the bulk of parsing; declarations do not nest |
+| `parse.class` | one class, its members included | rare on bo3 — 38 of them — and nested `parse.function` scopes are inside it |
+| `parse.expression` | one OUTERMOST expression, entered from a statement | the share of parsing that is expressions rather than structure |
+
+`parse.expression` counts only the outermost entry, by a depth counter that exists in instrumented
+builds alone. A scope at every level would nest inside itself, and the report sums nested scopes, so
+`a + b * c` would be charged once per level of its own depth.
+
+Two instrumented runs on bo3, 980 files:
+
+| | run 1 | run 2 |
+|---|---:|---:|
+| analysis total | 1,608 ms | 1,276 ms |
+| `parse` share of phases | 26% | 29% |
+| `parse.function` (15,601 calls) | 395 ms | 357 ms |
+| `parse.expression` (151,568 calls) | 294 ms | 228 ms |
+| `parse.class` (38 calls) | 23 ms | 11 ms |
+
+**Parsing is function bodies, and two thirds of a body is expressions.** `parse.function` accounts
+for essentially the whole phase, and `parse.expression` is 62–74% of that, over 151,568 outermost
+expressions — about 155 per file. The call counts are identical between runs, which is what makes
+the two comparable at all.
+
+Nothing here is superlinear, so there is no repeat of the doc-lookup find. The candidate the numbers
+DO name is the descent: `ParseExpression` reaches `ParsePrimary` through `ParseExpressionCore`,
+`ParseTernary`, `ParseTernaryCore`, `ParseBinary`, `ParseCallChain`, `ParseUnary`, `ParseUnaryCore`
+and `ParsePostfix`, so a bare identifier pays eight calls and three `EnterNesting`/`ExitNesting`
+pairs to produce one node. A fast path there was the next thing to try in this phase, and being a
+change to the parser's core it wanted the token-stream pinning the lexer work used rather than a
+corpus sweep alone. It is done, below.
+
+**Corrected 2026-08-20.** That paragraph used to say "ten levels of `ParseBinary` … around fifteen
+frames". It was wrong for as long as it stood: `ParseBinary` is precedence CLIMBING — one method
+with a loop and a `ParseBinary(precedence + 1)` back edge — not ten nested methods, and the back
+edge only fires when an operator is actually there. Nothing was decided on the strength of the wrong
+number, but it overstated the prize by roughly half, which is what a figure nobody re-derives does
+over time.
+
+The scope timings are inflated by their own instrumentation more than most: `parse.expression` runs
+151,568 times per sweep, so its `Begin`/`End` pair is a larger fraction of what it reports than for
+a scope that runs once per file. Read the SHARE, and do not compare these milliseconds with an
+uninstrumented total.
+
+### 2026-08-20: the leaf fast path, which the sweep cannot see and a repetition bench can
+
+Most expressions in a script are one token. `foo( a, 1, "x" )` is three expressions and not one of
+them has an operator in it; nor does an array index, nor the right side of a field assignment. Each
+took the whole descent above.
+
+`ParseExpressionInner` now takes the nesting claim, and then — when the NEXT token is `,` `)` `]` or
+`;` and the current one is a name or a literal — builds the node directly. The follower set is the
+whole argument, and it was checked one skipped level at a time rather than assumed: none of those
+four is an assignment operator, none is `?`, none has a binary precedence, none begins a method call
+(that needs `thread`, `childthread`, `call`, an identifier or `[[`), and none is a postfix operator,
+so `.` `[` `(` `++` `--` `->` are all excluded. The two lookahead forms `ParsePrimary` would check
+for, `name::name` and an inline `path
+ame`, both need a token these four are not. `:` is left out
+deliberately: a ternary's arms and a `case` label go through `ParseTernary`, not through here.
+
+**The corpus sweep cannot measure this, and that is as much the finding as the change is.** Three
+instrumented baseline runs put `parse.expression` at 220, 211 and 97 ms, with call counts identical
+to the digit; four runs of the changed build gave 96, 193, 223 and 215. The two distributions sit on
+top of each other. This is the warning further down — the harness finds structural problems and does
+not settle constant factors — arriving in practice rather than in principle.
+
+What settles it is repetition, which the sweep deliberately does not do: preprocess BO3's 60 largest
+files once, then parse those token streams 20 times per trial, five trials, with a forced collection
+between them. Two sessions each side, first trial dropped as tiered-JIT warm-up:
+
+| | trials |
+|---|---|
+| before | 441 / 433 / 438 / 447 / 454 / 457 / 445 / 452 / 435 ms |
+| after | **412 / 399 / 407 / 406 / 398 / 396 / 397 / 399 / 399 / 398 ms** |
+
+**Roughly 11% off the parse phase, and the two ranges do not overlap.** Read it as a parse-phase
+number and not an analysis one: parse is 26–29% of analysis, so this is about 3% of a file's
+analysis and invisible in anything downstream of it.
+
+Behaviour was pinned the way the lexer work was, since a parser that is faster and wrong is worth
+nothing. Every node of every parse tree — its type and its start and end position — plus every
+parser diagnostic was dumped for all five game corpora on both sides: **11,122,507 lines, byte
+identical.** The `Category=Corpus` gates then passed in 1 m 14 s, and the 779 parser unit tests with
+them.
 
 ## Measured: the CROSS-FILE LINTS, which cost more than the parse
 
@@ -198,12 +483,210 @@ builds. It is also why one corpus cannot stand in for the other here.
 bo3's 95 ms worst file — a single-shot measurement at that — is the closest anything comes. Do not
 optimise on these numbers. They are here so that the next 2x has something to be a 2x *of*.
 
+### 2026-08-19: the three type rules now share one inference walk
+
+They had three walks between them over the same tree — `TypeMismatchLint` called `InferValues`,
+`PreferBooleanLiteralLint` and `ReadOnlyWriteLint` each called `InferAssignments` — with a `FlowTyper`
+shared between them that memoised nothing. `InferValues` was already a superset, since a
+`ScriptTypes` carries the assignments and the field writes alongside the per-expression map, so it
+now memoises per `ParseResult` and all three read one answer. Keyed by REFERENCE: a `ParseResult` is
+a record, so structural equality would compare two whole trees to settle what identity settles
+exactly, and a keystroke produces a new one, so a stale answer cannot be served.
+
+Measured as three INTERLEAVED A/B pairs in one session, instrumented, bo3 only. Interleaved because
+the first attempt ran three of each back to back and the twenty-one untouched rules drifted 29%
+between the halves — larger than the effect being measured, and a reminder that "same session, same
+machine" is not the same claim as "same conditions".
+
+| pair | the three rules | control (21 other rules) | their share of the pass |
+|---|---|---|---|
+| 1 | 851 → **467** ms | 1,888 → 2,083 ms | 31.1% → **18.3%** |
+| 2 | 798 → **512** ms | 1,878 → 1,893 ms | 29.8% → **21.3%** |
+| 3 | 832 → **570** ms | 1,832 → 2,048 ms | 31.2% → **21.8%** |
+
+**Read the share: 30% → 20%, in three pairs, with non-overlapping bands.** Normalised against the
+control the three rules fall 36–50% (median 39%); unnormalised, 31–45%. The control still drifts
++1% to +12% within a pair, which is why the share is the admissible number and not the milliseconds.
+
+Per rule, medians of three: `ReadOnlyWriteLint` 191 → 0.8 ms, since it now reads a memo and does
+nothing else; `TypeMismatchLint` 352 → 179 ms, the residue being its own AST walk rather than
+inference; `PreferBooleanLiteralLint` 279 → **340** ms, because it runs first and therefore pays for
+the whole walk, including the per-expression recording it does not read. Net about −295 ms.
+
+The lint total falls in all three pairs, 2,689–2,763 → 2,430–2,642 ms, and that is NOT claimed: the
+bands touch and the 700 ms band above says what a single total is worth. Nothing moved at the tail —
+median 0.62–0.68 → 0.57–0.65 ms, p99 35.9–39.4 → 34.8–38.9 ms. It was never a latency fix; the p99
+was already ten times inside the debounce.
+
+Findings are unchanged, which is the bar rather than a bonus: the bo3 `Category=Corpus` sweep printed
+byte-identical output on both sides — 31 tests over 980 scripts, every count and every reported line
+the same, only the xUnit timestamps differing.
+
+**Rejected, by reasoning rather than measurement:** memoising the *assignment* pass separately, so
+the two field-write rules keep the cheap walk they had. That leaves `TypeMismatchLint` walking again
+with recording on, so the file is walked twice — about 470 ms against the 467–570 ms measured above,
+which buys nothing and adds a second cache state. One memo on the richer answer is the shape.
+
+### 2026-08-19: the child walk allocated once per node visited
+
+`AstSearch.ChildrenOf` was a `yield return` iterator, so every node VISITED allocated a state
+machine — and the tree is walked once per rule by fifteen lints, plus the reference, rename,
+inlay-hint and parameter-typing passes. bo3's 980 scripts are 1,049,221 nodes.
+
+Priced first with three probes in one run, each a bare full-tree walk that visits and does nothing:
+
+| bare walk of every script | bo3, 862 files |
+|---|---|
+| through the iterator | 128–145 ms |
+| direct recursion, same switch, no enumerable | 35–47 ms |
+| direct recursion with leaves short-circuited BEFORE the switch | same as the row above |
+
+The last row is what named the cause. Short-circuiting identifiers and literals — most of the nodes
+in any tree — ahead of the thirty-case type switch changed nothing, so the switch was not the cost
+and the allocation was. The probe order was then reversed and the ratio held, which rules out the
+first walk simply paying to warm the tree into cache for the others.
+
+`ChildrenOf` now returns a STRUCT enumerable that each caller's `foreach` binds to by shape, so the
+walk allocates nothing and all 22 call sites are unchanged. Measured as four A/B pairs with the
+ORDER ALTERNATED between pairs — three pairs run orig-then-mine had every untouched rule reading
+about 25% slower in the second half, which is an ordering artefact and not an effect:
+
+| | orig | after |
+|---|---|---|
+| the 14 rules that walk the AST | 1,783 ms | **1,423 ms (−20%)** |
+| the 7 rules that do not | 287 ms | 338 ms (+18%, unexplained) |
+| lint pass total | 2,328–2,598 ms | **2,081–2,335 ms** |
+
+The total falls in all four pairs — 3%, 6%, 10%, 20% — for a median of 9%, and twelve of the
+fourteen walking rules fall individually, by 11% to 40%. **The non-walking rules rising 18% is not
+explained.** It works against the change rather than for it, so the walking-rule figure is a floor.
+
+**The remaining 2x is the enumerator, not a copy.** With the struct in place the same bare walk
+costs 80–93 ms against 43–58 ms for direct recursion. A second variant carrying only the node, with
+the shape switch moved into the enumerator's constructor so that a 56-byte struct is not copied per
+node, measured the same ratio — 1.6–1.9x against 1.7–2.0x — so the copy was not the cost, and the
+more readable version was kept. Closing that gap means fusing the switch into each walk, which is
+what "one shared walk instead of fifteen" would do and this change deliberately does not.
+
+Behaviour was pinned before any timing was taken: every node's child sequence over all 980 bo3
+scripts, 1,049,221 nodes, dumped with type and position and byte-identical on both sides. The
+`Category=Corpus` sweep then printed identical output, and `ChildEnumerationTests` pins the child
+order per shape — including the two that a position-counting walk would get wrong, a `for` with
+omitted clauses and a `default:` label that contributes no child — plus one test asserting that a
+whole-tree walk allocates zero bytes, which is the property the struct exists for.
+
+This is NOT an index-path change. Outside the lints, `ChildrenOf` serves rename, references, inlay
+hints and the parameter typer, all per-request; indexing does not call it.
+
+### 2026-08-19: the flow typer's environment cloning is NOT worth attacking
+
+`FlowTyper` clones the whole local environment at nine sites — both arms of an `if`, both
+`isdefined` narrowings, a dev block, each loop body, each `switch` case, and the no-default path —
+so the obvious guess is that a function with branchy control flow pays O(branches × locals) copies
+on every keystroke. It is now the most expensive single rule in the lint pass, since
+`PreferBooleanLiteralLint` runs first and therefore carries the shared inference walk.
+
+**Measured, and the guess was wrong.** A counting probe around `Clone`:
+
+| | bo3, 862 files |
+|---|---|
+| clones per sweep | 71,862 (about 83 per file) |
+| of those, an EMPTY environment | 7,727 |
+| fewer than 8 entries | 49,713 |
+| 8 or more | 14,422 |
+
+Nine tenths of the clones copy fewer than eight entries. The scope reported 62–93 ms, and most of
+that is the probe's own `Begin`/`End` pair on a path that runs 72,000 times — a sub-hundred-nanosecond
+copy cannot be measured by a mechanism that costs more than the thing it measures. There is no
+structural cost here to remove, so no persistent map, copy-on-write scope chain or undo journal was
+built: each would add real complexity to buy a slice of something too small to see.
+
+Two other things this settled, both worth not retrying:
+
+- **The walk types each expression once.** `TypeExpressionForEffects` and `TypeOf` were suspected of
+  typing an assignment's value twice — they do not, and a double-typing would have been the find.
+  What remains is genuine per-expression work: the type switch, the environment lookups, and the
+  `_recorded` insert.
+- **Case-insensitive hashing is not the lever either.** GSC names are case-insensitive so every
+  environment is `StringComparer.OrdinalIgnoreCase`, which hashes far more slowly than `Ordinal`, and
+  interning names to a canonical form would allow the cheap comparer. Swapping the comparer as a
+  measurement (semantically wrong, so measurement only) reported 399 and 481 ms against a clean
+  order-balanced baseline of 340–395 ms — noise, in the wrong direction, and no signal to justify a
+  cross-cutting change to `NameTable` and every environment.
+
+What is left in the inference walk is `_recorded`: about 60 ms of it, from the before/after pair
+where `PreferBooleanLiteralLint` cost 279 ms without recording and 340 ms with it. Removing that
+means `TypeMismatchLint` getting its values without a whole-file map — which is the same shape as
+fusing rule work into one walk, and belongs with that change rather than here.
+
+### 2026-08-19: nine rules, one walk
+
+Nine lints each descended the whole file on their own to ask one question per node, so a
+thousand-node tree was traversed nine times to answer nine independent questions about each node.
+They qualified because each one's walk was PURE PASS-THROUGH — look at the node, recurse into every
+child unconditionally — which is what makes fusing them a rearrangement rather than a rewrite.
+`NodeLintPass` now visits each node once and asks all nine.
+
+Three A/B pairs, order alternated, instrumented, bo3:
+
+| pair | the nine rules | control (the other rules) | lint total |
+|---|---|---|---|
+| 1 | 1,151 → **703** ms | 1,115 → 1,476 ms | 2,299 → 2,199 ms |
+| 2 | 1,212 → **702** ms | 1,274 → 1,381 ms | 2,515 → 2,106 ms |
+| 3 | 1,176 → **719** ms | 1,237 → 1,472 ms | 2,448 → 2,224 ms |
+
+**−40% on the nine, and the after side is stable to 2%** — 703, 702, 719 — which is the tightest
+band anything in this file has produced. The lint total falls in all three pairs, median −10%.
+
+The after side splits into the flow typer's inference walk, which the pass carries because
+`TypeMismatchLint` needs it, and the nine rules' own per-node work:
+
+| | before | after |
+|---|---|---|
+| nine walks + inference | 1,151–1,212 ms | — |
+| `lint.NodeLintPass` (inference + nine judgements, one walk) | — | 578 ms |
+| `ConstDeclarationLint`'s declaration-level pass | inside its 184 ms | 132 ms |
+| `PreferBooleanLiteralLint`'s field writes | inside its 443 ms | 0.5 ms |
+
+Inference is roughly 400 ms of that 578, so the nine rules' walking and predicates together fell
+from about 750 ms to about 180 ms. That is the shape the bare-walk probe predicted: the traversal
+was nearly all of what these rules cost.
+
+**The control rose 8–32%, which is the second time that has happened** — the same pattern as the
+struct-enumerable change, in the same direction, on rules that were not touched either time. Two
+sightings make it a real property of this sweep rather than a coincidence, and it is still
+unexplained; a plausible reading is that rules running later meet a different cache and GC state
+once the rules ahead of them stop allocating and stop walking. It works against the measured win in
+both cases, so the target figures are floors.
+
+**What was left out, and why.** `ThreadedResultLint` threads a "value is consumed" flag down its
+descent. `UnusedLocalLint`, `UnusedBindingLint` and `UnassignedVariableLint` build per-function
+state, so their walk is scoped to a declaration rather than to the file. `ArgumentCountLint` and
+`DevBlockCallLint` carry a lookup cache and a namespace set, and the second reads reference entries
+rather than the tree. None of those is pass-through, so none of them is a rearrangement.
+
+Each rule keeps its own `Analyze`, which still walks on its own — that is what its unit tests
+exercise and what an offline caller with a single file uses — and the shared pass calls the same
+per-node methods, so there is one copy of each judgement rather than two that can drift.
+
+This change is what the sort in `WorkspaceLints.InReadingOrder` was for: fusing the walks
+interleaves the rules' findings, and without a sort the corpus sweep would have reported that as a
+difference. With it, the bo3 `Category=Corpus` sweep prints byte-identical output across 31 tests
+and 980 scripts.
+
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced
-call sites per file, with a finished index, the parse done outside the stopwatch, and each position
-warmed before the timed run. One row per REQUEST rather than per file, because the question is
-whether one keystroke is answered in time and a per-file sum answers nothing anybody waits for.
+call sites per file **plus one file-scope position**, with a finished index, the parse done outside
+the stopwatch, and each position warmed before the timed run. One row per REQUEST rather than per
+file, because the question is whether one keystroke is answered in time and a per-file sum answers
+nothing anybody waits for.
+
+The file-scope sample was added on 2026-08-18 and the reason is worth keeping: the positions come
+from the extraction's call references, and a call only ever appears inside a function body, so the
+sweep measured one of completion's two arms and could not see the other at all. That was harmless
+while file scope returned a static word list before any store query ran, and stopped being harmless
+the moment it ran the same queries a body does.
 
 It was written expecting to find the lint problem again. `FunctionsInNamespace` walks the whole
 record store once **per namespace**, and on a namespace dialect statement-scope completion calls it
@@ -217,6 +700,9 @@ The shape is real and it is visible in the numbers. It does not matter.
 | bo3 (1,085 files, **namespace** dialect) | 6,381 | 0.42 ms | 2.03 ms | **4.22 ms** | 24.2 ms |
 | cod4 (904 files, merge dialect) | 6,944 | 0.20 ms | 0.34 ms | 1.03 ms | 16.4 ms |
 | bo1 (2,963 files, merge dialect) | 21,157 | 0.44 ms | 0.64 ms | 1.47 ms | 31.4 ms |
+
+The request counts in that table predate the file-scope sample, so a rerun now reports roughly one
+more per file (7,361 on bo3, 7,838 on cod4) — see the 2026-08-18 entry below.
 
 Reconfirmed 2026-08-12 on all three, and it is the most stable measurement in this file: bo3
 p99 4.26 ms, cod4 1.09 ms, bo1 1.57 ms, with the entry-count line identical to the digit. Nothing
@@ -249,12 +735,17 @@ the three queries that scan every record to find the ~20 a `#using` list names. 
 first; the reason it exists is that the same reasoning predicted a problem here and was wrong about
 the size of it.
 
+**The `NamespaceIndex` half was built on 2026-08-19** — for `ArgumentCountLint`, which asks the same
+question on a path that is not completion — and completion got a 2x out of it anyway. See the
+section below; the `RelativePathIndex` half is still unbuilt and still unmeasured.
+
 ### Reading the entry-count line
 
 The sweep also reports how many entries came back, and that line is what makes the timings
 admissible rather than decorative. `Complete` has around ten arms and most return almost nothing —
 a path segment list, an asset type list, an empty result where the position was not a completion
-site. Only the statement-scope arm queries the store.
+site. Only the statement-scope arm queries the store, and since 2026-08-18 it serves file scope as
+well as bodies, so a file-scope sample lands on it rather than short-circuiting.
 
 At 66–74% of requests returning over 500 entries (median 847–1,404), the sample is landing on that
 arm. A sweep that quietly hit cheap arms would report fast completions and have measured nothing,
@@ -284,6 +775,89 @@ the macro half is empty, and its scripts assign through `level.` rather than to 
 sampled functions in `animscripts\battlechatter.gsc` declare 12, 15 and 7 assignments and only 1, 1
 and 2 of them are locals. Two entries per request is not a measurement. That the numbers barely
 moved there is the expected answer, not a sign the feature is missing on that dialect.
+
+### 2026-08-18: file scope gained the body's list, and the noise floor was measured
+
+File scope used to return keywords and snippets and nothing else — a `!insideFunction` early return
+sat above every store query — so completion outside a function body cost almost nothing and answered
+almost nothing. Removing it puts the macros, the functions in scope, the classes and the builtins at
+that position too, which is a real quantity of new work on a path with no debounce.
+
+Measured as a BEFORE/AFTER PAIR in one session on one machine, sampler change in both halves so the
+request sets are identical (7,361 bo3, 7,838 cod4):
+
+| | median | p90 | p99 |
+|---|---:|---:|---:|
+| bo3 before | 0.363 ms | 2.059 ms | 4.228 ms |
+| bo3 after | **0.473 ms** | 2.094 ms | 4.207 ms |
+| cod4 before | 0.195 ms | 0.342 ms | 1.008 ms |
+| cod4 after | 0.203 ms | 0.337 ms | 1.096 ms |
+
+**The median moves and the tail does not**, which is the shape to expect: file-scope requests were
+the cheap half of the sample and are now ordinary ones, while the p99 is set by the per-namespace
+store walk that this did not touch.
+
+**Read the median here with the noise floor in hand, because it is the same size as the effect.**
+Two later runs of IDENTICAL code — both with the function-pointer arm below in place, taken back to
+back — gave bo3 medians of 0.556 and 0.499 ms and p99s of 5.12 and 4.45 ms. So bo3 run-to-run spread
+is about ±0.06 ms at the median and ±0.7 ms at p99: the 0.11 ms above is real but only about twice
+the spread, and any future single-run comparison claiming less than that has measured the machine.
+CoD4 is the steadier of the two and its ±0.008 ms here says nothing either way.
+
+That pair is also the whole measurement of the function-pointer arm, which is why it has no row: at
+one to three token lookbacks per request it sits well under the floor, and the two runs bracket the
+before-figure in both directions.
+
+### 2026-08-19: the namespace index, built for a lint and paid off in completion
+
+`DatabaseQueries.FunctionsInNamespace` walked every record and every function in each — about 30,000
+symbols on BO3 — keeping the few dozen in one namespace, and it is asked once per namespace a file
+can see. `NamespaceIndex` maps a namespace to the files declaring into it, maintained in
+`LanguageStore.Upsert` beside the declaration and reference indexes, so the query reads a few dozen
+records instead of the store.
+
+It was built for `ArgumentCountLint`, the most expensive rule left in the lint pass after the shared
+walk landed. Three A/B pairs, order alternated:
+
+| | base | with the index |
+|---|---|---|
+| `ArgumentCountLint` | 209–241 ms | **162–205 ms** (median −20%) |
+| lint pass total | 1,513–1,547 ms | 1,419–1,534 ms |
+
+That is a real but noisy win: the three pairs read −33%, −11% and −11%, so the median is worth more
+than any one of them.
+
+**Completion is the result that matters, and it was not the target.** Same three pairs, bo3, 6,381
+requests each side with the count identical to the digit:
+
+| | base | with the index |
+|---|---|---|
+| median | 0.45–0.46 ms | **0.35–0.36 ms** |
+| p90 | 2.09–2.25 ms | **1.11–1.19 ms** |
+| p99 | 5.03–5.23 ms | **2.46–2.57 ms** |
+| total | 5,633–5,794 ms | **2,996–3,030 ms** |
+
+**A 2x, with non-overlapping bands on every statistic** — the cleanest measurement in this file. It
+is exactly the quadratic the completion section above predicted and declined to fix: statement-scope
+completion on the namespace dialect calls `FunctionsInNamespace` once per own namespace plus once per
+imported namespace, and each of those calls used to read the whole store.
+
+The reasoning that declined it still stands, and is worth keeping straight: a p99 of 5 ms was fifty
+times inside the debounce, so fixing it for completion's sake would have bought the user nothing. The
+index is here because a second caller asked the same question, and the completion improvement is a
+side effect of a change that had its own justification. That is the distinction to preserve when the
+`RelativePathIndex` comes up — it needs its own caller and its own measurement, not this result as a
+precedent.
+
+Findings unchanged: the bo3 `Category=Corpus` sweep prints byte-identical output, which also settles
+the one behavioural risk. The query returns records in index order now rather than store order, and
+nothing downstream depends on that order.
+
+Both halves of this pair were taken with file scope still on the early return, so the absolute
+figures belong to the smaller list of the section above it rather than to the one shipping now. The
+2x is a ratio between two runs of the same tree and survives that; the millisecond values do not
+carry across to the section above, which is the same one-session-one-machine rule the rest of this
+file is read under.
 
 ## Measured: COLD INDEXING, the first-run path
 
@@ -318,13 +892,16 @@ and are listed but never added to the total.
 
 Achieved parallelism is 20.6–21.0x against a ceiling of 23. Three things this settles:
 
-- **Enumeration is not the bottleneck.** The `roots × globs` duplicate walk in
-  `PathResolver.EnumerateIndexTargets` costs 121–130 ms on BO3 and 30 ms on CoD4. Removing the
-  duplication entirely would save perhaps 85 ms of a 2,100 ms run.
+- **Enumeration is not the bottleneck** — **true only of the corpus fixture; see the section on
+  FINDING the files.** The `roots × globs` duplicate walk in `PathResolver.EnumerateIndexTargets`
+  costs 121–130 ms on BO3 and 30 ms on CoD4 when the root is a `raw` folder. A real workspace folder
+  is often the game INSTALL, and then enumeration is the largest single cost in a cold index.
 - **`index.commit` is the one worth attention**, and much more so on CoD4 — a fifth to a quarter of
   thread-time against BO3's tenth. That is `BuildRecord` plus `LanguageStore.Upsert`, which takes one
   process-wide write gate and holds it across per-file hashing in three index diffs. A global lock is
-  exactly what inflates thread-time at 21x parallelism.
+  exactly what inflates thread-time at 21x parallelism. **Both gates were removed 2026-08-20 — see
+  the COMMIT GATE section — and the wall-clock did not move, which is the more useful half of that
+  finding.**
 - **`index.enqueue` is free** — but this measurement attaches no cache, so it says nothing about the
   SQLite writer. Measuring that needs a run with `UseCache`.
 
@@ -354,7 +931,8 @@ The stage shares moved, in opposite directions:
 - **`index.commit` improved and is no longer the headline.** cod4 fell from a fifth-to-a-quarter of
   thread-time to an eighth. It is still 99% `commit.upsert` — 1,334 of 1,392 ms on cod4, 5,099 of
   5,191 on bo1 — so the process-wide write gate is still the shape of it, and bo1's 19.7x is the
-  lowest parallelism of the three, which is what a contended global lock looks like.
+  lowest parallelism of the three, which is what a contended global lock looks like. *(Both gates
+  are gone as of 2026-08-20; parallelism did not respond, and the COMMIT GATE section says why.)*
 - **`index.read` is the new one to watch.** Its share roughly tripled on both games and is 18.3% on
   bo1 — 1.4–2.2 ms per file, and this sweep runs fourth, so every file was already in the OS cache.
   Instrumentation inflates `analyse`, which would push read's share *down*, so the figure is
@@ -407,9 +985,17 @@ Three runs of identical code and methodology, cod4:
 | max | 49.3 ms | 55.8 ms | 51.9 ms |
 | extract share | 17% | 16% | 16% |
 
-**Shares are stable to about a point; absolutes swing by a quarter.** The noise is largely common to
-all four phases, so it cancels in a ratio and does not in a total. Read shares, sub-phase ratios and
-order-of-magnitude differences as real, and treat any single absolute number as indicative.
+**Corrected 2026-08-22: shares are stable to about a point in THIS table and nowhere else.** The
+three runs above hold `extract` to 17 / 16 / 16, and that reading was generalised into a rule the
+rest of the file then leaned on. Five later runs, cod4 and bo3, put `extract` at 27 / 21 / 22 / 17 /
+25 and `lex` at 32 / 42 / 45 / 45 / 35 — five and ten points, on one build. `parse` is the only
+phase that holds to a point or two across both sets, and one phase behaving is not the four
+behaving. See the section on it near the top of this file.
+
+What survives is the shape of the argument, not the number in it: the noise is largely common to all
+four phases, so it cancels in a ratio further than it does in a total, and absolutes swing by a
+quarter to a third. Read order-of-magnitude differences and sub-scope milliseconds as real, and
+treat both a single absolute AND a single-digit share move as indicative.
 
 The practical consequence: this harness will find a structural problem — it caught a quadratic doc
 lookup that was half of extraction — and will NOT settle a 10% constant-factor tune. Measuring one of
@@ -453,6 +1039,8 @@ The scopes, and what a high figure means:
 | `extract.doc` | doc-comment association for one declaration | should be flat per call; if it scales with file size, something is scanning |
 | `extract.macros` | macro definitions and uses to references | proportional to `#define`/`#insert` use |
 | `extract.duplicates` | the duplicate-function report | dictionary-keyed, should stay near zero |
+| `extract.invocations` | keeping this file’s macro invocations out of the inserted ones | set by what was INSERTED, not by the file; well under a millisecond on every corpus |
+| `extract.build` | the six builders sealed into immutable arrays | sized by what the file REFERENCES; added because the scopes above did not add up to the phase on bo3, and it turned out they did — the gap was noise |
 
 ### What this found
 
@@ -644,16 +1232,403 @@ once per index, unconditionally, on a thread nobody is waiting on.
 
 Two things this measurement also settled:
 
-- **Do not switch to Server GC.** Per-core heaps would multiply the fragmentation, and
-  Workstation GC is the right choice for a language server. The 2026-08-05 `ArrayPool` result
-  is the same lesson from another angle: anything that keeps per-core state across the indexing
-  threads trades holes for retention.
+- **Do not switch to Server GC** — **REVERSED 2026-08-19, see below.** The reasoning was that
+  per-core heaps would multiply the fragmentation, and it is correct as far as it goes: unbounded
+  Server GC on a 24-thread machine does leave 35 MB of large-object holes where Workstation leaves
+  0.1. What it missed is that the heap count is a DIAL rather than a switch, and that nothing had
+  measured what the single heap was costing in throughput. The 2026-08-05 `ArrayPool` result is
+  still the lesson it was: that one traded holes for RETENTION, which this does not.
 - **Cache restore is not skipping `NameTable` interning.** That worry predicted a warm start
   carrying duplicate strings, which would show up as a *higher* warm live set. It came in 3.9
   MB *lower*, so the concern is closed.
 
 If cold ever climbs again without fragmentation climbing with it, that is the leak-hunt
 signal — a genuinely higher live set means the analysis path is retaining something.
+
+## Measured: the GC, which was three quarters of the cold index
+
+The cold-index sections above all say the same thing — `index.analyse` is 86–93% of thread-time —
+and none of them asked whether that time is the analysis. It was not. The same analysis measured
+per-file by the sequential sweep costs about 0.7 ms; inside the parallel index it was costing about
+39 ms of thread-time per file. A fifty-fold gap between the same code measured two ways is not a
+property of the code.
+
+It was the garbage collector. Indexing runs at `ProcessorCount - 1` and allocates a token array, a
+`PToken` stream, an AST and extraction builders for every file, and under Workstation GC all of
+those threads collect against one heap.
+
+Measured on bo3, 1,085 files, uninstrumented, two runs per configuration:
+
+| configuration | cold index |
+|---|---:|
+| Workstation, as shipped since the beginning | 2,177 / 2,182 ms |
+| Workstation, `GCConserveMemory` off | 2,156 / 2,238 ms |
+| Workstation, gen0 budget raised to 16 MB | 2,016 / 2,112 ms |
+| Workstation, gen0 budget raised to 64 MB | 1,553 / 1,526 ms |
+| Workstation, gen0 budget raised to 256 MB | 1,336 / 1,406 ms |
+| Server GC, 4 heaps | 768 / 768 ms |
+| **Server GC, 8 heaps (shipped)** | **564 / 638 / 601 / 602 / 702 ms** |
+| Server GC, 12 heaps | 722 / 632 ms |
+| Server GC, unbounded (24) | 768 / 733 ms |
+| Server GC, 2 heaps | 1,051 / 1,333 ms |
+
+The 4-heap row was first measured at 1,237–1,315 ms and re-measured at 768 ms twice in a later
+session; the earlier pair was taken while the machine was drifting, which the control groups
+elsewhere in this file caught doing the same thing. The later pair is quoted because it is repeated
+and because the memory table below was taken alongside it.
+
+**Roughly 3.4x, and the gen0 rows are what identify the cause.** Raising the collection budget by
+16x on Workstation recovers only a third of the gap, so the problem is that the threads share one
+heap rather than that they collect too often. `ConserveMemory` costs nothing here and stays.
+
+### Why eight heaps and not one per core
+
+**Measured on the real server, not on the probe.** The earlier version of this section chose four
+heaps to protect a working set that turned out not to exist: `MemoryProbeTests` never runs the
+post-index LOH compaction that `Program.cs` performs at the indexing → serving transition, and that
+compaction returns the pages the heap count was appearing to cost. Driving the bundled server over
+stdio and reading its own log lines, bo3, 1,085 files:
+
+| heaps | indexing | peak while indexing | **resting, after compaction** |
+|---|---|---:|---:|
+| Workstation (before) | 2.6–2.7 s | — | 127 MB |
+| 4 | 0.5 / 0.6 / 0.6 s | 309–334 MB | 125.4–125.9 MB |
+| **8 (shipped)** | **0.4 / 0.5 s** | 320–342 MB | **125.0–126.8 MB** |
+| one per core (24) | 0.4 / 0.5 s | 392–453 MB | 128.3–128.9 MB |
+
+**Every setting rests at the same place**, 125–129 MB, and so does Workstation. Retained memory is
+55.1–55.2 MB live at all of them, fragmentation 0.0 after the compaction. What the heap count moves
+is the PEAK during indexing and the time it takes: one per core peaks 60–130 MB higher for no gain,
+four is a tenth of a second slower than eight for a peak within a few MB of it.
+
+So the memory column that argued for four does not survive contact with the shipping path. This is
+the same lesson as the fragmentation gate two sections up — measuring the right quantity in the
+wrong process — and the correction here is the same shape: read the server's own log, not the
+probe's table.
+
+### What this does NOT change
+
+The phase shares, the lint pass and completion are all measured by sequential sweeps, so none of
+them moves: this is a change to what happens when 23 threads allocate at once. The keystroke path
+allocates on one thread and was never contended.
+
+## Measured: FINDING the files, which a corpus fixture cannot see
+
+Every enumeration figure in this file was taken with a `raw` folder as the root, because that is
+what `GSCODE_CORPUS_<GAME>` points at. A user's workspace folder is whatever they opened in the
+editor, and for a modder that is routinely the game install — at which point `OutermostRoots` drops
+the derived `raw` and `mods` roots as contained by it, correctly, and the walk covers everything:
+
+| | files | directories |
+|---|---:|---:|
+| bo3 `share\\raw` | 6,831 | 426 |
+| bo3 `mods` | 787 | 309 |
+| **the whole install** | **295,640** | **12,776** |
+| of which `share\\assetconvert` | 170,328 | |
+| of which `texture_assets` | 4,329 | |
+
+**295,640 files walked to find 1,105 scripts.** It was reported as part of "indexing", so it read as
+slow analysis; the log line said 2.8 s and the analysis was under half a second of it.
+
+Two changes, measured on that install, warm, two runs each — all four variants return the same 1,105
+files:
+
+| | enumeration |
+|---|---:|
+| as it was | 741–792 ms |
+| fanned out across top-level subtrees | 483–504 ms |
+| skipping the two tool-output trees | 277–281 ms |
+| **both, as shipped** | **231–233 ms** |
+
+The pruning is what does it, and `assetconvert` plus `texture_assets` is the whole list:
+`GameProfile.ToolOutputDirectories`. `zone`, `sound` and `video` were measured too and are NOT
+skipped — they cost nothing on top of these two, and each is a name a mod could plausibly give a
+scripts folder. A directory wrongly skipped is a file that silently never gets indexed, which is a
+worse failure than a slow walk. The fan-out stays because it is free and helps a wide tree, but it
+is the smaller half: one subtree can hold most of the files, and here one does.
+
+End to end, driving the bundled server over stdio with the install as the workspace folder, the same
+shape the user's session has:
+
+```
+Workspace indexing complete: 1105 files in 0.7s (find 0.3s, analyse 0.4s at 22.1x, 0 from cache)
+Ready 1.4s after start
+```
+
+against 2.8 s before. **The split is now in the log**, which is the durable part of this: enumeration
+is serial and scales with the WORKSPACE, analysis is parallel and scales with the SCRIPTS, and the
+parallelism figure separates "each file is slow" from "the workers are not running". None of that
+was visible in a single "indexing complete" number, and working it out took a log file and a
+timeline reconstruction.
+
+**These are warm-cache figures.** The user's 2.8 s was a first walk of that tree; the pruning helps
+more when cold, since it is directories not visited at all, but no cold measurement is recorded here
+— dropping the Windows file cache is not something this harness does.
+
+## Measured: the COMMIT gate, where the contention was real and the wall-clock was not
+
+`index.commit` has been called "the one worth attention" in this file since the first cold-index
+breakdown, and it kept coming back. Re-measured 2026-08-20, instrumented, one run:
+
+| | `index.commit` | of which `commit.upsert` |
+|---|---:|---:|
+| bo3 | 1,473 ms, 10.2% of thread-time | 1,269 ms, 8.7% |
+| **cod4** | **2,069 ms, 29.3%** | **2,019 ms, 28.6%** |
+| bo1 | — | 13.5% |
+
+CoD4 was back at its worst recorded level. Two process-wide locks were behind it, one inside the
+other.
+
+**`LanguageStore`'s write gate was the wrong shape.** One `Lock` for the whole store, held across
+the record swap and all four index diffs. The race it exists to stop is between two writers of the
+SAME file — read-previous and swap are separate steps, so two upserts of one path could diff against
+one version. Two writers of DIFFERENT files share nothing there, because every index below
+serialises its own dictionary under its own lock. So the gate was serialising every index diff in
+the workspace against every other one to protect a per-path invariant. It is now striped across 64
+locks by path hash: same file still collides, different files collide only on a hash coincidence,
+and correctness is unchanged either way.
+
+**`ReferenceIndex` was one dictionary under one lock.** With the store gate striped, that became the
+next bottleneck immediately — cod4 only fell 28.6% → 24.9%. A file's diff is thousands of keys and
+it held that lock for all of them. Sharded 64 ways by key hash, taking a shard lock per key instead:
+an uncontended `Lock` is a few nanoseconds and a file has thousands of keys, so the acquisitions
+cost microseconds against the milliseconds the single gate spent waiting. The trade is sound only
+because no invariant spans two keys — each key's entry is complete on its own and nothing reads a
+group of them expecting one instant.
+
+| `commit.upsert`, thread-time | before | store gate striped | + index sharded |
+|---|---:|---:|---:|
+| bo3 | 1,269 ms (8.7%) | 623 ms (4.8%) | 1,015 ms (7.3%) |
+| **cod4** | **2,019 ms (28.6%)** | 1,630 ms (24.9%) | **469 ms (8.4%)** |
+| bo1 | 2,631 ms (13.5%) | 2,631 ms (13.5%) | **1,411 ms (7.2%)** |
+
+**4.3x on CoD4.** The bo3 column moves around because it is one run per cell and bo3 was never the
+contended case; read cod4 and bo1, where the direction is unambiguous and large.
+
+### And the wall-clock did not move, which is the part worth writing down
+
+Three cold-index runs each side, uninstrumented:
+
+| | before | after |
+|---|---|---|
+| bo3 | 644 / 627 / 628 ms | 642 / 570 / 632 ms |
+| cod4 | 361 / 318 / 315 ms | 391 / 295 / 321 ms |
+| bo1 | 1,041 / 1,067 / 1,014 ms | 1,007 / 1,178 / 965 ms |
+
+Achieved parallelism is 20.3–20.8x on both sides against a ceiling of 23. The lint sweep does not
+move either, and should not: it is sequential, so it has no contention to remove.
+
+**A thread waiting on a lock spends thread-time without spending wall-clock.** The waits were real
+and are gone, but they were not on the critical path: at twenty-three cores there was enough other
+analysis to run while a thread queued for the gate, so removing the queue freed CPU that nothing was
+short of. This is the reason `index.commit`'s share kept reading as alarming while the totals never
+responded to it, and it is worth remembering the next time a thread-time share is used to pick a
+target.
+
+What it does buy is not visible to any harness here. The gate it removes was taken by
+`FilesFor` as well as by the committing threads — so during a workspace index, a keystroke's lint
+was queueing behind every file being committed. Both sweeps that could measure that are sequential
+and run against a finished index, so neither has ever had the two happening at once. The change is
+kept on that argument and on the scaling one — a process-wide write gate at 20x parallelism is a
+limit whatever this machine's slack happens to hide — and not on a wall-clock number, because there
+is not one.
+
+Verified rather than assumed: 2,269 unit tests and the `Category=Corpus` gates over five games, all
+passing, with the sweep taking 49 s of real work.
+
+## Measured: the WARM start, which was never timed and was slower than no cache at all
+
+Every figure above this line is a cold index. The warm path — the one a user takes on every start
+after their first — had one recorded number, 2.6 s, read off the server's log by hand before the
+server GC, the pruned enumeration and the one-pass reader landed. Nothing re-measured it, and
+`ColdIndex_WhereTheTimeGoes` says why in its own comment: it attaches no cache on purpose, because
+"a warm run measures the restore path instead, which is a different question with a different
+answer". The question was then never asked.
+
+It could not have been answered from the server either. `Program.cs` called
+
+```csharp
+indexer.UseCache(workspaceCache, workspaceCache.LoadAll());
+```
+
+and `LoadAll` is an ARGUMENT, so it ran to completion before the stopwatch that times indexing was
+started. The whole restore was outside every measurement the server takes and outside the
+`(find …, analyse …)` split that was added to make indexing legible.
+
+`WarmIndex_WhereTheTimeGoes` now times it. Each game indexes once into a fresh database, drains the
+writer, then throws everything away except the file and indexes again with a new resolver, NameTable
+and store — so only the database crosses between the two runs. Uninstrumented, one run, cold control
+taken in the same process minutes apart:
+
+| | files | cache read | index | **warm start** | cold index |
+|---|---:|---:|---:|---:|---:|
+| bo3 | 1,085 | 1,509 ms | 150 ms | **1,659 ms** | 390 ms |
+| cod4 | 904 | 720 ms | 242 ms | **962 ms** | 236 ms |
+| bo1 | 2,963 | 2,747 ms | 473 ms | **3,220 ms** | 718 ms |
+
+**The cache made startup four times slower than not having one.** The restore was 85–91% of a warm
+start, all of it on one thread — gzip inflation and a JSON parse per record — in front of a parallel
+index that does the entire job from source in 390 ms. The two arms of the fork had diverged: every
+optimisation of the last month landed on the cold one, and the warm one was still doing 2016's work
+on a single core.
+
+### What changed, and what it was worth
+
+Two changes, in that order. The first is obvious and the second is the one that matters.
+
+**Deserializing in parallel.** `RecordSerializer.Deserialize` touches no shared state, so the rows
+come off the connection serially — `SqliteDataReader` is not thread-safe and a blob is valid only
+until the next `Read` — and the expensive half fans out at `ProcessorCount - 1`. Restore fell to
+410 / 554 / 599 ms. That is 3.7x on bo3 and 4.6x on bo1, and it still did not beat the cold index on
+any of the three.
+
+**Not deserializing at all until the file is known to be current.** The freshness check is a content
+hash, `content_hash` has been its own column since the schema was written, and the indexer already
+had the file's text in hand on a parallel worker. So `LoadAll` now returns `CachedEntry` — the hash
+and the blob, unopened — and the inflate and parse happen inside the indexer's per-file loop, behind
+the check. A file that changed costs one hash and never touches its blob.
+
+| | files | cache read | index | **warm start** | cold index |
+|---|---:|---:|---:|---:|---:|
+| bo3 | 1,085 | 13 ms | 464 ms | **477 ms** | 369 ms |
+| cod4 | 904 | 27 ms | 510 ms | **537 ms** | 210 ms |
+| bo1 | 2,963 | 54 ms | 847 ms | **902 ms** | 813 ms |
+
+**3.5x, 1.8x and 3.6x on the warm start**, and the serial stage is gone: 13–54 ms to read the blobs,
+against 720–2,747 ms to read and materialise them.
+
+### The cache still does not pay for itself on this machine, and the reason is the format
+
+Read the last two columns rather than the improvement. A warm start is still no faster than a cold
+one on a 24-core box — 477 against 369 on bo3, 537 against 210 on cod4, 902 against 813 on bo1.
+
+The instrumented breakdown says why. `index.restore` is now 90–98% of warm thread-time: 9,086 ms on
+bo3 across 1,085 files, which is the same order as the analysis it replaces. **Inflating and parsing
+a record costs about what lexing, preprocessing, parsing and extracting the source costs.** The cache
+is not saving work so much as trading one parse for another.
+
+That leaves it earning its place only on the machines where total CPU matters more than wall-clock —
+restore is roughly 5x less thread-time than analysis, so a four-core laptop still wins where a
+twenty-four-core desktop breaks even. Which is a reason to keep it, not a reason to be pleased with
+it.
+
+**Gzip is not the cost, and was measured rather than assumed.** Storing the JSON uncompressed:
+
+| | warm start, gzipped | uncompressed | cache file |
+|---|---:|---:|---|
+| bo3 | 477 ms | 489 ms | 21.0 → 106.0 MB |
+| cod4 | 537 ms | 654 ms | 23.0 → 132.5 MB |
+| bo1 | 902 ms | 913 ms | 63.6 → 328.4 MB |
+
+Flat to worse, for five times the disk. The compression was reverted. The remaining lever, if the
+cache is ever to beat a cold index outright, is the JSON itself — a compact binary record, not a
+different compressor. Nobody should reach for that without re-running the table above first: on a
+machine with fewer cores the cold column moves and the conclusion with it.
+
+### What this does NOT change
+
+The cold index, the phase shares, the lint pass and completion are all untouched — this is the other
+arm of the fork. The keystroke path never reads the cache at all.
+
+### 2026-08-22: the warm arm was holding its own blobs for the session
+
+Every memory figure in this file is a COLD index. `MemoryProbeTests` has two probes and neither
+could see the warm arm: one attaches no cache at all, and the one that does opens a fresh
+`gscode-probe-<guid>.db` per run, so `LoadAll` returns nothing and every file is analysed. It
+measures the cache being WRITTEN. The restore snapshot only exists where the database already has
+rows, and until `EachGame_WarmIndexWithCache_ThenWatchRetainedMemory` was added, the bytes it costs
+had never been on a scale.
+
+`WorkspaceIndexer` held that snapshot in a field set once by `UseCache` and never cleared, and the
+server registers the indexer as a singleton — so every gzipped blob `LoadAll` read stayed reachable
+for the session, long after the last file that could restore from one was indexed. `ProcessFile`
+consults it only under `allowRestore`; phase two and the watcher's `IndexFile` both pass false. It
+is dead the moment `IndexAsync` returns.
+
+Populate, drain, throw everything away except the database file, index again warm, then one sample
+after a forced blocking collection with the indexer kept alive:
+
+| retained after a warm index | before | after |
+|---|---:|---:|
+| bo3, 1,085 files | 82.2 MB | **68.8 MB** |
+| cod4, 904 files | 74.4 MB | **61.0 MB** |
+
+**13.4 MB on both, 16% and 18% of what the workspace costs to keep.** The figure is smaller than
+the database on disk — 21.0 MB for bo3, 23.0 for cod4 — and should be: the file carries the schema,
+the `deps` table and SQLite's own indices, while what was pinned is the record column alone.
+
+`GC.KeepAlive(indexer)` is what makes the probe answer the question asked. The server's indexer
+outlives every index it runs; a probe that lets it be collected measures the database only and reads
+clean whatever the indexer is keeping.
+
+Releasing it alone would have made a workspace-folder change a cold index, since that handler is the
+only caller that indexes twice in a session. `ReloadRestoreSnapshot` re-reads it there instead —
+16–21 ms on these two corpora, on a path taken by hand, to keep the other case free.
+
+**The header-cache merge in the same pass freed nothing measurable, and the probe says so.** The
+indexer kept a private `ConcurrentDictionary<path, Lazy<InsertedFile?>>` beside the `InsertCache` it
+was already handed for macros, so BO3's 114 distinct headers were held twice. Merging them reads
+68.8 and 61.0 — the same two numbers to the decimal. A hundred small files is not 13 MB, and the
+merge is kept for the duplicate it removes and for three defects the surviving cache does not have
+(ordinal path comparison, no revalidation, a failed read cached for good), not for memory.
+
+## Measured: STARTUP, which is not indexing and had never been separated from it
+
+`Ready Ns after start` has been in the log for a while and every reading of it was attributed to
+indexing. It is not. Driving the published server over stdio against BO3's 1,105 scripts, warm
+cache, the two numbers in that log pair are:
+
+```
+Workspace indexing complete: 1085 files in 0.6s (cache 0.1s, find 0.0s, analyse 0.5s at 20.9x, 1,085 from cache)
+Ready 1.3s after start
+```
+
+**Half of a start is not indexing.** It is process creation, assembly loading, host construction and
+the JIT compiling the lex/preprocess/parse/extract pipeline on the way to its first file. Nothing in
+this document had ever looked at it, because every harness in `CorpusPerfTests` runs inside a process
+that is already up.
+
+### ReadyToRun
+
+`PublishReadyToRun` precompiles the IL, so the pipeline arrives already native. Five alternating
+runs of each build, warm cache, same machine and session:
+
+| | Ready | index inside it |
+|---|---|---|
+| framework-dependent, no RID (as shipped) | 1.3 / 1.3 / 1.3 / 1.3 / 1.3 s | 0.6 s |
+| `-r win-x64`, ReadyToRun | **1.0 / 0.9 / 0.9 / 1.0 / 1.0 s** | 0.5–0.6 s |
+
+**0.3–0.4 s, about a quarter of the start, and it does not vary.** The index inside is unchanged on
+both sides, which is what makes this attributable: the change cannot have made analysis faster, and
+it did not. The same gap appears whether the host is the apphost or `dotnet GSCode.Server.dll`,
+which is the form the extension actually launches.
+
+The first run of a freshly published R2R build reads 2.0 s rather than 1.0 — a bigger file, cold in
+the OS cache. Every reading here is warm, and the first-ever start on a user's machine pays that
+once either way.
+
+It also makes the bundle smaller, which precompiled native code does not obviously suggest:
+**48 MB → 29 MB.** A RID-less publish carries `runtimes/` for all 22 platforms the SQLite package
+supports; naming one keeps that platform's native library and drops the other 21.
+
+### Why it is not on by default
+
+A RID-specific bundle runs on one platform, and `npm run bundle-server` produces one cross-platform
+`service/` folder for one `.vsix`. Switching the default means shipping a `.vsix` per target
+platform through VS Code's `targetPlatform`, which is a packaging and CI change rather than a server
+one.
+
+So the csproj enables it only when a `RuntimeIdentifier` is given, and `bundle-server-win`,
+`bundle-server-linux` and `bundle-server-osx` opt in. `bundle-server` is byte-for-byte what it was —
+verified by publishing both: the default still writes `runtimes/` for 22 platforms and all 23 `Api/`
+data files.
+
+### What is left in startup after that
+
+About 0.9 s, of which the index is 0.5–0.6. Roughly 0.3 s is runtime start and host construction
+before the first log line appears. Nothing has been attributed inside that yet, and it wants a
+different tool than this file's harness — an ETW trace or `DOTNET_JitTimeLogFile`, not a stopwatch
+in a test.
 
 ## Reading the reports
 
@@ -737,7 +1712,12 @@ in-process, while the server indexes cold at `ProcessorCount - 1`:
 2. Launch the extension against the tools root (see the client `.env` debug flow, or install the
    packaged extension).
 3. For cold vs warm: delete `%APPDATA%\gscode\cache\*.db`, start once (cold), restart (warm), and
-   read the "indexing complete" line each time.
+   read the "indexing complete" line each time. That line now splits out `cache`, so a warm start is
+   readable without a second measurement — and note `Ready` on the line after it, which includes the
+   startup the STARTUP section is about and which indexing is only the last part of.
+
+   The harness answers the same question without the editor: `WarmIndex_WhereTheTimeGoes` populates a
+   database, drains the writer and indexes again, reporting the cache read and the index separately.
 4. For the steady-state working set, hover the status bar once the process settles. That is the only
    readout — it is pushed as a notification, not logged.
 
@@ -785,9 +1765,25 @@ Measured on the local BO3-tools machine (corpus not committed):
 | Scenario | Corpus size | Measured | Budget | Within budget |
 |---|---|---|---|---|
 | Cold index | 1,105 files | 5.5 s | < 60 s | yes |
-| Warm start | 1,105 files | 2.6 s | < 5 s | yes |
+| Warm start *(stale; see the warm-start section)* | 1,105 files | 2.6 s | < 5 s | yes |
+| Warm start, harness, 2026-08-20 | 1,085 files (bo3) | 477 ms | < 5 s | yes |
+
+Driving the published server over stdio, BO3 as the workspace, 2026-08-20 — the same shape a user's
+session has, and the only place `Ready` can be read:
+
+| | cold | warm |
+|---|---|---|
+| `Workspace indexing complete` | 0.5 s (cache 0.1, find 0.0, analyse 0.3 at 21.3x) | 0.6 s (1,085 from cache) |
+| `Ready … after start` | 1.2 s | 1.3 s |
+
+Two things to read off that pair rather than off either number. **A warm start is not faster than a
+cold one** — the WARM START section explains why and what the remaining lever is. And **half of
+`Ready` is not indexing at all**; the STARTUP section measures what the other half is, and takes
+0.3–0.4 s off it with a RID-specific publish that is not the default.
 | Steady-state memory (cold, before compaction) | 1,105 files | 390.3 MB | < 400 MB | just inside |
 | Steady-state memory (warm) | 1,105 files | 212.2 MB | < 400 MB | yes |
+| Retained after a warm index, harness, 2026-08-22 | 1,085 files (bo3) | 68.8 MB | < 400 MB | yes |
+| Retained after a warm index, harness, 2026-08-22 | 904 files (cod4) | 61.0 MB | < 400 MB | yes |
 | Live managed set (either path) | 1,105 files | ~115 MB | — | — |
 
 From the test harness rather than the server, 2026-08-12 — a different question, as the section on

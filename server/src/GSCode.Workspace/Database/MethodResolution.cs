@@ -520,7 +520,7 @@ public static class MethodResolution
 
             Collect(
                 new SymbolKey(qualifier, canonical.Name, SymbolKind.Function),
-                static entry => entry.Kind == ReferenceKind.Call);
+                static entry => entry.Kind == ReferenceKind.Call && !entry.FromMacro);
         }
 
         // 4. Arrow calls on a receiver whose class is unknown — 155 of the 159 in the stock scripts.
@@ -529,7 +529,7 @@ public static class MethodResolution
         //    unqualified call, because both of those carry Kind == Call.
         Collect(
             new SymbolKey(null, canonical.Name, SymbolKind.Function),
-            static entry => entry.Kind == ReferenceKind.MethodCall);
+            static entry => entry.Kind == ReferenceKind.MethodCall && !entry.FromMacro);
 
         return [.. found.Values];
     }

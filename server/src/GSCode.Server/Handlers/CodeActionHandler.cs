@@ -1,4 +1,4 @@
-﻿using GSCode.Core;
+using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -902,6 +902,10 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
+            // FromMacro entries are included, matching NamespaceUsageLint exactly: it reports the
+            // missing import for a call a macro expanded into, and a diagnostic with no fix behind
+            // it is worse than either half alone. The range is the invocation site in both, which
+            // is what lets the action be matched to the Error the client reported.
             if ( entry.Kind != ReferenceKind.Call
                 || entry.Key.Kind != SymbolKind.Function )
             {

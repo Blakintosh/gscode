@@ -19,7 +19,7 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   rather than a list that goes stale: the game and script roots (game, serverLogLevel, raw.enabled,
   rawPath/modsPath overrides, rawFileWarningMode), indexing (workspaceIndexingMode,
   enableWorkspaceCache, diagnostics.scope), the editor features (outline.showAssignments,
-  codeLens.enabled, the inlayHints.* and completion.* pairs) and the four format.* knobs.
+  codeLens.enabled, the three inlayHints.* and the completion.* keys) and the four format.* knobs.
   `Apply(JToken)` merges a settings payload (accepting both dotted and nested key forms); missing
   keys keep current values.
 
@@ -66,6 +66,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/ConfigurationHandler.cs
 
 - didChangeConfiguration → ServerSettings.Apply + live Serilog level switch update.
+- Two things are re-requested on an ACTUAL change, because clients push their whole configuration
+  on any settings edit: a workspace diagnostics republish when diagnostics.scope moves, and
+  `workspace/inlayHint/refresh` when `ServerSettings.InlayFamilies` does. Hints are cached by the
+  client, so without the refresh a toggled family does nothing until the next keystroke or scroll,
+  and a family turned OFF leaves its hints on screen — both of which read as the setting being
+  ignored. Fire-and-forget, like the code-lens refresh.
 
 ## Handlers/IndexProgressNotifier.cs
 
@@ -218,12 +224,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/InlayHintHandler.cs
 
-- Inlay hints, two independently-toggleable families over the visible range: inferred-type
+- Inlay hints, three independently-toggleable families over the visible range: inferred-type
   hints (`: int`, and `: derived_thing` for a class instance) at each FlowTyper
   `InferredAssignment` name-range end (gated by inlayHints.inferredTypes), and parameter-name
-  hints (`amount:`) before each call argument (gated by inlayHints.parameterNames).
-  The FlowTyper it builds is seeded with the shared ObjectFields for field-type inference.
-  ResolveProvider is false, so the resolve handler is a passthrough.
+  hints (`amount:`) before each call argument (gated by inlayHints.parameterNames), and macro
+  parameter-name hints (`__a:`) before the arguments of a `#define` invocation (gated by
+  inlayHints.macroParameterNames, which is OFF by default). The FlowTyper it builds is seeded
+  with the shared ObjectFields for field-type inference, and is built only when one of the first
+  two families is on — the macro pass reads the preprocessor's invocation list and needs no flow
+  analysis. ResolveProvider is false, so the resolve handler is a passthrough.
 
   Parameter names come from four callee forms. A bare name and a `ns::fn` are answered from the
   SYNTAX, through `UnqualifiedParameterNames` (script functions in the file's namespaces, else
@@ -234,6 +243,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   `InstanceClass`. Both showed nothing at all before, which on a BO3 script is most of the
   dispatch in some files. That is why the handler runs `FlowTyper.InferValues` once per request
   when parameter hints are on, rather than a position query per call site.
+
+  Macro hints are a separate pass rather than a relaxation of the call pass's macro guard. By the
+  time there is a tree the invocation is gone: the author's call was replaced by the body it
+  expands to, and every token of that body reports the invocation's own range, so hinting it
+  would stamp the whole expansion onto one call site. `PreprocessResult.MacroInvocations` is the
+  only record the call site existed, and its range covers the NAME alone — the arguments are
+  found by scanning the file text after it, through the same
+  `MacroExpansionPreview.ArgumentSpansFollowing` the macro hover reads, so a hint can never name
+  an argument the hover splits differently.
 
 ## Handlers/DocumentFormattingHandler.cs
 

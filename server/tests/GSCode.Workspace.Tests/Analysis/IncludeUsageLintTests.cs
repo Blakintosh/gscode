@@ -166,4 +166,26 @@ public class IncludeUsageLintTests
         Assert.Empty(Lint(
             "#include maps\\mp\\_load;\ninit()\n{\n\tscriptPrintln();\n}\n", GameProfile.BlackOps3));
     }
+
+    [Fact]
+    public void ReportsACallAMacroExpandedInto()
+    {
+        // Nothing in the file spells scriptPrintln — a macro does — and the engine still links the
+        // expansion, so the include is just as required. Theoretical-looking on a dialect with no
+        // preprocessor, but a #define in a CoD4 file is reported as 2016 and then expanded anyway,
+        // which is deliberate: suppression has to leave a working file behind.
+        Diagnostic reported = Assert.Single(Lint(
+            "#include maps\\mp\\_load;\n#define HELP() scriptPrintln()\ninit()\n{\n\tHELP();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.FunctionNotIncluded, reported.Code);
+    }
+
+    [Fact]
+    public void ReportsOnceWhenAMacroBodyCallsTheSameFunctionTwice()
+    {
+        // Both calls key to the invocation range, so without the (range, name) guard this is the
+        // same Error twice on one word.
+        Assert.Single(Lint(
+            "#include maps\\mp\\_load;\n#define HELP() scriptPrintln(); scriptPrintln()\ninit()\n{\n\tHELP();\n}\n"));
+    }
 }

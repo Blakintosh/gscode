@@ -238,4 +238,95 @@ public class DevBlockCallLintTests
 
         Assert.Empty(Lint(source, files));
     }
+
+    [Fact]
+    public void ADevOnlyCallAMacroExpandedInto_IsReported()
+    {
+        // The macro hides the call, not the consequence: `foo` is stripped from a release build,
+        // so the file invoking HELP() is the one that stops compiling once the mod ships.
+        string source = "/#\nfunction foo()\n{\n}\n#/\n#define HELP() foo()\nfunction bar()\n{\n    HELP();\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Equal(8, diagnostic.Range.Start.Line);
+    }
+
+    [Fact]
+    public void ADevOnlyCallFromAMacroInvokedInsideADevBlock_IsFine()
+    {
+        // What decides whether the call survives is where the MACRO WAS INVOKED — the expansion
+        // lands there — so an invocation inside /# #/ disappears alongside its target.
+        string source = "/#\nfunction foo()\n{\n}\n#/\n#define HELP() foo()\nfunction bar()\n{\n    /#\n    HELP();\n    #/\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void ADevOnlyCallAMacroMakesTwice_IsReportedOnce()
+    {
+        string source = "/#\nfunction foo()\n{\n}\n#/\n#define HELP() foo(); foo()\nfunction bar()\n{\n    HELP();\n}\n";
+
+        Assert.Single(Lint(source));
+    }
+
+    [Fact]
+    public void AnInheritedMethodSharingItsNameWithADevOnlyFunction_IsNotReported()
+    {
+        // The shape that shipped broken. scene_shared.gsc calls `error( cond, msg )` thirteen times
+        // inside cSceneObject, meaning the bool-returning method it inherits from
+        // cScriptBundleObjectBase — and BO3 also declares a dev-block `util::error( msg )` in both
+        // mp/_util.gsc and zm/_util.gsc. The rule looked the name up as a namespace function, which
+        // cannot see methods and reads a null namespace as "any namespace", so all thirteen calls
+        // were reported as shipped-build failures against a function they never reach.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(
+                @$"{Raw}\scripts\bundle.gsc",
+                "#namespace bundle;\nclass cBundleBase\n{\n    function error( condition, msg )\n    {\n    }\n}\n")
+            .AddFile(
+                @$"{Raw}\scripts\util.gsc",
+                "#namespace util;\n/#\nfunction error( msg )\n{\n}\n#/\n");
+
+        string source = "#using scripts\\bundle;\n#using scripts\\util;\n#namespace scene;\n"
+            + "class cSceneObject : cBundleBase\n{\n    function play()\n    {\n"
+            + "        error( 1, \"no animation\" );\n    }\n}\n";
+
+        Assert.Empty(Lint(source, files));
+    }
+
+    [Fact]
+    public void ABareCallInsideAClassThatIsNoMethod_StillFallsBackToTheNamespace()
+    {
+        // The other half of the routing decision, and what stops the fix from being a blanket
+        // "skip anything written inside a class". A bare name that no class in the chain declares
+        // means the namespace function, and a dev-only one is exactly as broken here as anywhere.
+        string source = "#namespace game;\n/#\nfunction dump_state()\n{\n}\n#/\n"
+            + "class cThing\n{\n    function run()\n    {\n        dump_state();\n    }\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Contains("dump_state", diagnostic.Message);
+    }
+
+    [Fact]
+    public void AMethodInheritedFromAClassInsideADevBlock_IsReported()
+    {
+        // Routing gains the rule a case it could never see before: the whole class is stripped from
+        // a release build, so the derived class's call to an inherited method stops compiling. The
+        // parser takes /# #/ only around a whole class — a dev block inside a class body is not a
+        // class member — so this is the only shape a dev-only method comes in.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(
+                @$"{Raw}\scripts\devbase.gsc",
+                "#namespace devbase;\n/#\nclass cDevBase\n{\n    function dump_state()\n    {\n    }\n}\n#/\n");
+
+        string source = "#using scripts\\devbase;\n#namespace game;\n"
+            + "class cThing : cDevBase\n{\n    function run()\n    {\n        dump_state();\n    }\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source, files));
+
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Contains("dump_state", diagnostic.Message);
+    }
 }

@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
@@ -126,26 +126,8 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.UnusedLocalLint");
         lints.AddRange(UnusedLocalLint.Analyze(result));
         PerfTracker.End();
-        PerfTracker.Begin("lint.CaseLabelLint");
-        lints.AddRange(CaseLabelLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.UnreachableCodeLint");
-        lints.AddRange(UnreachableCodeLint.Analyze(result));
-        PerfTracker.End();
         PerfTracker.Begin("lint.ThreadedResultLint");
         lints.AddRange(ThreadedResultLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ConstDeclarationLint");
-        lints.AddRange(ConstDeclarationLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.GlobalObjectWriteLint");
-        lints.AddRange(GlobalObjectWriteLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ArithmeticLint");
-        lints.AddRange(ArithmeticLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ExpressionStatementLint");
-        lints.AddRange(ExpressionStatementLint.Analyze(result));
         PerfTracker.End();
         PerfTracker.Begin("lint.UnassignedVariableLint");
         lints.AddRange(UnassignedVariableLint.Analyze(result));
@@ -156,26 +138,34 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.UnusedBindingLint");
         lints.AddRange(UnusedBindingLint.Analyze(result));
         PerfTracker.End();
-        PerfTracker.Begin("lint.VoidResultLint");
-        lints.AddRange(VoidResultLint.Analyze(result, languageBuiltins));
-        PerfTracker.End();
         PerfTracker.Begin("lint.ClassCycleLint");
         lints.AddRange(ClassCycleLint.Analyze(result, store, contextId));
         PerfTracker.End();
         PerfTracker.Begin("lint.ArgumentCountLint");
         lints.AddRange(ArgumentCountLint.Analyze(result, store, contextId, path, languageBuiltins));
         PerfTracker.End();
-        // One typer for both field rules: each of them runs the assignment inference, and the
-        // walk is the expensive half.
+        // One typer for all three rules that read it, and — because InferValues memoises per parse
+        // — one inference walk between them. Each used to run its own: two InferAssignments and an
+        // InferValues over the same tree, which was 30% of BO3's lint pass and is now 20%.
+        // Whichever rule runs first pays for the walk; the other two read the same ScriptTypes.
         PerfTracker.Begin("lint.FlowTyper.ctor");
         FlowTyper typer = new(languageBuiltins, objectFields);
         PerfTracker.End();
 
-        PerfTracker.Begin("lint.PreferBooleanLiteralLint");
-        lints.AddRange(PreferBooleanLiteralLint.Analyze(result, languageBuiltins, objectFields, typer));
+        // The nine rules whose judgement is about one node, in ONE descent of the tree rather than
+        // nine. Run here because two of them read the flow typer, whose answer has to exist first;
+        // everything else in the pass is order-independent now that the result is sorted.
+        PerfTracker.Begin("lint.NodeLintPass");
+        NodeLintPass.Run(result, languageBuiltins, typer.InferValues(result), lints);
         PerfTracker.End();
-        PerfTracker.Begin("lint.TypeMismatchLint");
-        lints.AddRange(TypeMismatchLint.Analyze(result, typer));
+
+        // What those rules do that is NOT per-node, and so has no place in the shared walk: the
+        // field writes the typer collected, and the declaration-level constant checks.
+        PerfTracker.Begin("lint.PreferBooleanLiteralLint.FieldWrites");
+        PreferBooleanLiteralLint.InspectRest(result, objectFields, typer, lints);
+        PerfTracker.End();
+        PerfTracker.Begin("lint.ConstDeclarationLint.Declarations");
+        ConstDeclarationLint.InspectRest(result, lints);
         PerfTracker.End();
         PerfTracker.Begin("lint.PrivateAccessLint");
         lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
@@ -218,6 +208,41 @@ public static class WorkspaceLints
         lints.AddRange(DevBlockCallLint.Analyze(
             result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));
         PerfTracker.End();
+
+        return InReadingOrder(lints);
+    }
+
+    /// <summary>
+    /// The lints sorted by position, then by code.
+    ///
+    /// They came out in RULE order, which made the published order an accident of the order the
+    /// calls above happen to be written in — and made every corpus comparison sensitive to it. The
+    /// sweep that arbitrates a diagnostic change compares output text, so restructuring which rule
+    /// walks when would have shown up as a difference with no change in what was reported.
+    ///
+    /// Position then code, so the order is a property of the FILE rather than of this method: two
+    /// rules reporting the same position sort by their code, which is stable however they are
+    /// invoked. It also happens to be the order a reader wants, since a client that does not sort
+    /// shows them as given.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> InReadingOrder(ImmutableArray<Diagnostic>.Builder lints)
+    {
+        lints.Sort(static (left, right) =>
+        {
+            int line = left.Range.Start.Line.CompareTo(right.Range.Start.Line);
+            if ( line != 0 )
+            {
+                return line;
+            }
+
+            int character = left.Range.Start.Character.CompareTo(right.Range.Start.Character);
+            if ( character != 0 )
+            {
+                return character;
+            }
+
+            return ((int)left.Code).CompareTo((int)right.Code);
+        });
 
         return lints.ToImmutable();
     }

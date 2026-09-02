@@ -338,12 +338,6 @@ public class PathResolverTests
             return _inner.GetLastWriteTimeUtc(absolutePath);
         }
 
-        public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
-        {
-            EnumerationCount++;
-            return _inner.EnumerateFiles(directory, searchPattern);
-        }
-
         public IEnumerable<string> EnumerateFilesWithExtensions(
             string directory, System.Collections.Immutable.ImmutableArray<string> extensions)
         {

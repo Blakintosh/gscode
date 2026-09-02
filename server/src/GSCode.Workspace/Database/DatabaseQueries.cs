@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Parser.Extraction;
@@ -233,8 +233,17 @@ public static class DatabaseQueries
         // Same normalization contract as LookupFunctions: the same-file test gates privacy.
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // The files that declare INTO this namespace, rather than every file in the store. The old
+        // walk read all ~30,000 BO3 symbols to keep the few dozen in one namespace, and it is asked
+        // once per namespace a file can see — so a namespace-dialect script paid for the whole store
+        // several times over on every keystroke.
+        foreach ( string declaringPath in store.FilesDeclaringInto(namespaceName) )
         {
+            if ( !store.TryGet(declaringPath, out ScriptRecord record) )
+            {
+                continue;
+            }
+
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
             {
                 continue;

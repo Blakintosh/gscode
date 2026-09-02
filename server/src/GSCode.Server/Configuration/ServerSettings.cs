@@ -20,6 +20,14 @@ public sealed class ServerSettings
     public bool CodeLensEnabled { get; set; } = false;
     public bool InlayParameterNames { get; set; } = true;
     public bool InlayInferredTypes { get; set; } = true;
+
+    /// <summary>
+    /// Whether a MACRO invocation's arguments get their parameter names —
+    /// <c>IS_TRUE( __a: level.ready )</c>. Off by default: macro parameters are named for the
+    /// macro's own body rather than for the caller, so the label often adds noise rather than
+    /// meaning, and macros are dense in this code.
+    /// </summary>
+    public bool InlayMacroParameterNames { get; set; } = false;
     public bool CompletionLiterals { get; set; } = true;
 
     /// <summary>"owner" (default) or "all" — how widely assignment-derived fields are offered.</summary>
@@ -93,6 +101,25 @@ public sealed class ServerSettings
         }
     }
 
+    /// <summary>
+    /// The three inlay families as one comparable value.
+    ///
+    /// A hint is computed per request and cached by the client, so toggling a family changes
+    /// nothing the user can see until something else invalidates the document — a keystroke, a
+    /// scroll, a reopen. Comparing this across a settings push is what tells the handler to ask
+    /// for a refresh, and comparing a STRING rather than three fields keeps the caller to one
+    /// line. Not part of <see cref="EffectiveSummary"/>: that line is for the log, and these
+    /// three are not what a "why is it doing that" turns on.
+    /// </summary>
+    public string InlayFamilies
+    {
+        get
+        {
+            return $"types={OnOff(InlayInferredTypes)}, parameters={OnOff(InlayParameterNames)}, "
+                + $"macroParameters={OnOff(InlayMacroParameterNames)}";
+        }
+    }
+
     private static string OnOff(bool value)
     {
         return value ? "on" : "off";
@@ -127,6 +154,9 @@ public sealed class ServerSettings
         InlayInferredTypes = section.Value<bool?>("inlayHints.inferredTypes")
             ?? section["inlayHints"]?.Value<bool?>("inferredTypes")
             ?? InlayInferredTypes;
+        InlayMacroParameterNames = section.Value<bool?>("inlayHints.macroParameterNames")
+            ?? section["inlayHints"]?.Value<bool?>("macroParameterNames")
+            ?? InlayMacroParameterNames;
         CompletionLiterals = section.Value<bool?>("completion.literals")
             ?? section["completion"]?.Value<bool?>("literals")
             ?? CompletionLiterals;

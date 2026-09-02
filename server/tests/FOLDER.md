@@ -53,11 +53,13 @@ heaviest rules stand down without a finished index — timing them against a par
 cheap half as the total. CoD4 and BO3 only, since each game measured pays a full index.
 
 `Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced call sites per
-file — one report row per REQUEST, since the question is whether a keystroke is answered in time and
-a per-file sum answers nothing anybody waits for. It also prints how many ENTRIES came back, and
-that line is what makes the timings admissible: `Complete` has ~10 arms and only the statement-scope
-one queries the store, so a sample that quietly hit the cheap arms would report fast completions and
-have measured nothing. Adds BO1 to the usual CoD4/BO3 pair, because every query on this path reads
+file, plus one FILE-SCOPE position — one report row per REQUEST, since the question is whether a
+keystroke is answered in time and a per-file sum answers nothing anybody waits for. The call sites
+come from the extraction's call references and every one of those is inside a body, so until the
+file-scope sample was added this sweep could not see the other arm at all. It also prints how many
+ENTRIES came back, and that line is what makes the timings admissible: `Complete` has ~10 arms and
+only the statement-scope one queries the store, so a sample that quietly hit the cheap arms would
+report fast completions and have measured nothing. Adds BO1 to the usual CoD4/BO3 pair, because every query on this path reads
 the record store and BO1 is the only corpus large enough to show whether store size drives the cost.
 It does not — see PERF.md, which also records why the quadratic found here was left alone.
 
@@ -159,8 +161,22 @@ to CSC — covering both how BO3 marks them (a `client` prefix) and how WaW/BO1 
 `ClassMethodCompletionTests` inherited and overriding methods · `ArrowSignatureTests` signatures
 for unknown-receiver method calls · `DialectCompletionTests` that a dialect is offered only its
 own keywords, global objects, snippets and DIRECTIVES — including the reported case end to end, a
-`#` at file scope under CoD4 returning exactly `#include` and `#using_animtree`, and that
-`#animtree` is a body position in every game.
+`#` at file scope under CoD4 returning exactly `#include` and `#using_animtree`, that `#animtree` is
+a body position in every game, and that a CoD4 file-scope list carries no macro rows for a
+preprocessor that game does not have.
+
+`LocalScopeCompletionTests` also holds the FILE-SCOPE cases: the macros an `#insert`ed header
+supplies offered outside a body, the functions in scope and the expression atoms a macro
+invocation's arguments need, and the engine globals still withheld there. The punctuation pair
+(no terminator at file scope, no parentheses on a function pointer) lives with the other call
+punctuation cases in `CompletionEngineTests`. `FakeInserts` — the `IInsertProvider` that serves a
+header's text — is shared between them, since both features have to be asked about a macro that
+lives in a `.gsh` rather than the file under test.
+
+`SignatureEngineTests` holds the MACRO cases beside the function and builtin ones: parameter names
+and the active argument, the reported case of an `#insert`ed macro invoked at file scope, and the
+three positions that must NOT answer with a macro — an object-like one, a name whose case does not
+match, and a qualified `namespace::NAME(`.
 
 **Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order ·
 `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·
@@ -230,6 +246,25 @@ line means "suppressed on this game" rather than "run twice".
   than gating on a count. It went 2,742 reports on CoD4 alone down to 17 across all 7,309 scripts
   as each dialect fact was learned, so a jump means a gap in the rule's exclusions.
 
+**Samples.** `SampleScriptTests` — the hand-written worked example per game per language world in
+`server/samples`, run through the whole diagnostic pipeline and checked against the `// expect`
+comments in the scripts themselves. Two halves: that every declared diagnostic is produced, and that
+NOTHING else is — the showcase files declare none, so a finding there is a false positive caught on
+code written to be correct. `EveryLanguageWorldTheGameHasIsSampled` reads `ScriptExtensions` off the
+profile, so a game that gains `.csc` fails until its showcase exists. Joins `GameProfileCollection`
+like the corpus classes; needs no game install, since each sample folder IS a raw root.
+`SampleExpectations` parses the comments, `SampleWorkspace` indexes and analyses one game.
+See `server/samples/FOLDER.md`.
+
+This suite is why `GSCode.Server.Tests` no longer runs its collections in parallel, and why
+`SampleWorkspace` puts `GameProfile.Active` back when it is done. It is the first class OUTSIDE
+`Corpus/` to move the active dialect, and three hundred classes here read that global without
+saying so: leaving it on CoD4 failed 132 of them in the formatter and the handlers, for reasons that
+looked like the thing under test. Serializing alone still left 121, since a class running after a
+sample run reads the leftover as happily as one running beside it — both halves are needed while a
+global decides what the parser and the lints do. The serialization costs about a second on 313
+tests, and nothing within a test: the corpus sweeps still parallelise their own file walk.
+
 **Formatting.** `GscFormatterTests` the formatter at large · `FormatMinimalEditsTests` minimal edits ·
 `StaleFormatEditTests` edits against a changed buffer · `UnbracedBodyFormattingTests`,
 `UnbracedBodyShapeTests` braceless bodies · `ElseIfChainTests` · `OperatorSpacingTests`,
@@ -247,4 +282,8 @@ request · `OnTypeBlockScopeTests` · `UntitledDocumentTests` documents with no 
 request · `RenameScopeTests` what may be renamed, drawn on ownership rather than kind.
 
 **Configuration and mapping.** `SettingsReachTheServerTests` that a setting actually arrives ·
+`SupportedGamesHandlerTests` the game picker's roster — exactly the supported profiles, the tick on
+what the server SELECTED rather than what was asked for, and the two cross-file checks that close
+the gap the original bug lived in: that the roster and the `gscode.game` enum are the same list,
+and that `gscode.selectGame` is both declared in the manifest and registered in `extension.ts` ·
 `EffectiveSummaryTests` · `DiagnosticMappingTests` our diagnostics to LSP.

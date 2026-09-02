@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -24,6 +24,11 @@ namespace GSCode.Workspace.Analysis;
 /// Engine builtins get the same treatment through <see cref="BuiltinFunction.IsDevOnly"/>,
 /// since some exist only in a development build. There is no declaration to point at for
 /// those, so they are reported without related information.
+///
+/// Resolution goes through <see cref="MethodResolution.ResolveCall"/> rather than straight to
+/// <see cref="DatabaseQueries.LookupFunctions"/>, because a bare call inside a class body means a
+/// METHOD first and that query cannot see one. A dev-only method is worth catching for exactly the
+/// same reason a dev-only function is, and routing is what makes it visible here.
 /// </summary>
 public static class DevBlockCallLint
 {
@@ -36,24 +41,63 @@ public static class DevBlockCallLint
         BuiltinApi builtins)
     {
         ImmutableArray<TextRange> devRegions = DevRegions(result);
-        FunctionLookupCache lookups = new(store, askingContextId, askingPath, askingNamespaces);
+
+        // Where a bare call inside a class falls back TO when no class in the chain declares the
+        // name: the file's own namespace function, which is what the call then really means. Same
+        // source as FunctionResolutionLint uses for the same purpose.
+        string fileNamespace = askingNamespaces.IsDefaultOrEmpty ? "" : askingNamespaces[0];
+
+        // Keyed on the WRITTEN key, so a name called repeatedly in one file is routed once. This
+        // stands in for the FunctionLookupCache that used to be here: that memo can only ask
+        // LookupFunctions, and LookupFunctions is the query this rule must no longer use alone.
+        Dictionary<SymbolKey, ImmutableArray<ResolvedFunction>> resolutions = [];
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        // Keyed on the symbol: one dev-only function named twice by a macro body is one shipped-
+        // build failure, not two. See MacroReports.
+        HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // FromMacro is not skipped: a dev-only function called from a macro body vanishes from
+            // a release build exactly as it would called directly, and the file invoking the macro
+            // is the one that stops compiling. This is the rule the flag change helps most — the
+            // failure appears only once the mod ships, so an editor that stayed silent about it
+            // was silent about the one class of bug this lint exists for.
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
 
-            // A call that is itself dev-only disappears alongside its target, so it is fine.
+            // A call that is itself dev-only disappears alongside its target, so it is fine. The
+            // range is the INVOCATION for an expanded call, which is the right question to ask:
+            // what decides whether the call survives is where the macro was invoked, not where
+            // its body was written.
             if ( IsInsideDevRegion(entry.Range, devRegions) )
             {
                 continue;
             }
 
-            ImmutableArray<ResolvedFunction> resolved = lookups.Lookup(entry.Key.Namespace, entry.Key.Name);
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
+            {
+                continue;
+            }
+
+            // ROUTED, not looked up. SymbolExtractor keys an unqualified call written inside a class
+            // body to that class, and LookupFunctions cannot answer for one: it scans a record's
+            // top-level functions, where no method ever lands, and reads a null namespace as "any
+            // namespace". So `error( ... )` inside cSceneObject — the inherited
+            // cScriptBundleObjectBase method, which returns a bool and is not dev-only — matched the
+            // unrelated `util::error` declared in a dev block in mp/_util.gsc, and every one of
+            // scene_shared.gsc's thirteen calls to it was reported as a shipped-build failure.
+            if ( !resolutions.TryGetValue(entry.Key, out ImmutableArray<ResolvedFunction> resolved) )
+            {
+                resolved = MethodResolution.ResolveCall(
+                    store, askingContextId, askingPath, entry.Key, entry.Kind, askingNamespaces, fileNamespace);
+
+                resolutions[entry.Key] = resolved;
+            }
 
             if ( resolved.Length == 0 )
             {

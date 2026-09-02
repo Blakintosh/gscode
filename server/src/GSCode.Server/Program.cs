@@ -1,4 +1,6 @@
-﻿using CommandLine;
+using CommandLine;
+using System.Diagnostics;
+using System.Runtime;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
@@ -33,6 +35,18 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 
 Log.Information("GSCode {Version} language server starting", ServerVersion());
+
+// The GC configuration this process actually got, which is not the same question as what the
+// repository's runtimeconfig template says. The template is baked into runtimeconfig.json at
+// PUBLISH time, so an extension running a bundle from before a template change runs the old
+// settings however recently the server project itself was rebuilt — and the difference between
+// Workstation and four-heap Server GC is a cold index of 2.2 s against 0.8 on bo3. That took a
+// while to spot from timings alone; it is one line to state.
+Log.Information(
+    "GC: {Mode}, {Heaps} heap(s), {Processors} processors",
+    GCSettings.IsServerGC ? "server" : "workstation",
+    AppContext.GetData("System.GC.HeapCount") ?? "one per core",
+    Environment.ProcessorCount);
 
 TransportOptions transportOptions = new();
 CommandLine.Parser.Default.ParseArguments<TransportOptions>(args).WithParsed(parsed => transportOptions = parsed);
@@ -150,6 +164,7 @@ LanguageServer server = await LanguageServer.From(options =>
         .AddHandler<WorkspaceFoldersHandler>()
         .AddHandler<PlanRenameHandler>()
         .AddHandler<ClearCacheHandler>()
+        .AddHandler<SupportedGamesHandler>()
         .AddHandler<BuiltinAtHandler>()
         .AddHandler<HoverHandler>()
         .AddHandler<DefinitionHandler>()
@@ -272,9 +287,20 @@ LanguageServer server = await LanguageServer.From(options =>
                 WorkspaceIndexer indexer = languageServer.Services.GetRequiredService<WorkspaceIndexer>();
                 IndexProgressNotifier notifier = new(languageServer.Services.GetRequiredService<ILanguageServerFacade>());
 
-                // Open the persistent cache and prime the indexer with its restored records.
+                // Open the persistent cache and prime the indexer with its restored entries.
+                //
+                // Timed, because this is where a warm start used to disappear. `LoadAll` is an
+                // ARGUMENT to UseCache, so it ran to completion before the stopwatch below was even
+                // started, and every warm figure on record was the index alone. It was reading and
+                // deserializing every cached record on this one thread while the parallel index it
+                // was feeding sat idle behind it — 1,509 ms on BO3 in front of a cold index that
+                // does the whole job in 390. Now it reads blobs only and the deserialize happens on
+                // the indexing threads, but the number stays in the log either way: an untimed
+                // stage is one that can regress without anybody noticing.
+                TimeSpan restoreElapsed = TimeSpan.Zero;
                 if ( settings.EnableWorkspaceCache )
                 {
+                    System.Diagnostics.Stopwatch restoreWatch = System.Diagnostics.Stopwatch.StartNew();
                     try
                     {
                         SqliteCache.CleanUpLegacyCache();
@@ -301,6 +327,11 @@ LanguageServer server = await LanguageServer.From(options =>
                     {
                         Log.Error(exception, "Failed to open the workspace cache; continuing without it");
                     }
+
+                    // Outside the catch, so a cache that failed to open still reports what the
+                    // attempt cost rather than reporting zero.
+                    restoreWatch.Stop();
+                    restoreElapsed = restoreWatch.Elapsed;
                 }
 
                 _ = Task.Run(async () =>
@@ -317,11 +348,32 @@ LanguageServer server = await LanguageServer.From(options =>
                         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
                         IndexOutcome outcome = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
                         stopwatch.Stop();
+                        // Split, because "indexing took 2.8s" hid which half was slow and the two
+                        // have nothing to do with each other. Enumeration is serial and depends on
+                        // how big the WORKSPACE is; analysis is parallel and depends on how many
+                        // SCRIPTS there are. A workspace folder holding a whole game install is
+                        // 295,640 files to find 1,105 scripts, and it read as slow analysis.
+                        //
+                        // The parallelism figure is thread-time over analysis wall-clock. Well below
+                        // the core count means the workers are not running — contention, or a lock —
+                        // rather than each file being expensive.
                         Log.Information(
-                            "Workspace indexing complete: {Count} files in {Seconds:F1}s ({Restored:N0} from cache)",
+                            "Workspace indexing complete: {Count} files in {Seconds:F1}s "
+                            + "(cache {Restore:F1}s, find {Enumerate:F1}s, analyse {Analyse:F1}s at {Parallelism:F1}x, "
+                            + "{Restored:N0} from cache)",
                             outcome.Total,
-                            stopwatch.Elapsed.TotalSeconds,
+                            restoreElapsed.TotalSeconds + stopwatch.Elapsed.TotalSeconds,
+                            restoreElapsed.TotalSeconds,
+                            outcome.Enumerate.TotalSeconds,
+                            outcome.Analyse.TotalSeconds,
+                            outcome.Parallelism,
                             outcome.Restored);
+
+                        // What the user actually waited: the process has been up since before the
+                        // client connected, and indexing is only the last part of it.
+                        Log.Information(
+                            "Ready {Seconds:F1}s after start",
+                            (DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds);
                         // A dropped cache write is not an error the user can act on, but it is the
                         // difference between the next start being warm and it silently re-analysing
                         // part of the workspace. It used to be invisible.
@@ -384,7 +436,15 @@ LanguageServer server = await LanguageServer.From(options =>
 
                         // Compiles to nothing without -p:GscodeInstrumentation=true, so a normal
                         // build pays neither the timing scopes nor this dump.
-                        PerfTracker.Report(line => Log.Information("Perf  {Scope}", line));
+                        //
+                        // Debug, not Information: an instrumented build reports thirty-odd scopes
+                        // in one burst, and at Information they land in the same channel as the
+                        // handful of lines that say what the server is DOING. Debug is a level
+                        // ABOVE Verbose in Serilog's ordering, which is the point - the dump is
+                        // what an instrumented build was made for, so it should not need the level
+                        // that also turns on a line per file for a thousand files. Same reasoning
+                        // as the slow-file line.
+                        PerfTracker.Report(line => Log.Debug("Perf  {Scope}", line));
 
                         // Start sampling memory only now — during indexing it climbs steadily,
                         // and every sample would be a change. One sampler serves both the

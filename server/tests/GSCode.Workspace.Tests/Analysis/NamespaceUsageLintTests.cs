@@ -141,4 +141,53 @@ public class NamespaceUsageLintTests
 
         Assert.Empty(LintAsCod4(source));
     }
+
+    [Fact]
+    public void Reports_WhenTheUnimportedCallCameOutOfAMacroBody()
+    {
+        // The reported case: nothing in the file spells `util::` — a macro does — and the import is
+        // just as required, because the preprocessor runs first and what links is the expansion.
+        // Before ReferenceEntry.FromMacro existed the expansion overwrote the reference's kind, so
+        // this rule (which asks for Call) could not see the call at all.
+        string source =
+            "#define HELP() util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        ImmutableArray<Diagnostic> diagnostics = Lint(source);
+
+        Assert.Single(diagnostics);
+        Assert.Equal(GscDiagnosticCode.NamespaceNotImported, diagnostics[0].Code);
+    }
+
+    [Fact]
+    public void TheMacroReport_LandsOnTheInvocation_NotInsideTheDefine()
+    {
+        // The macro's name is the only text on screen, so that is where the squiggle belongs — and
+        // it is where the add-#using fix is offered, which is derived from the same entry.
+        string source =
+            "#define HELP() util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        Diagnostic report = Lint(source)[0];
+
+        Assert.Equal(4, report.Range.Start.Line);
+    }
+
+    [Fact]
+    public void OneReportPerNamespace_WhenAMacroBodyCallsIntoItTwice()
+    {
+        // Every call in the body keys to the same invocation range, so without the (range,
+        // namespace) guard a two-call macro stacks two identical Errors on one word.
+        string source =
+            "#define HELP() util::helper(); util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        Assert.Single(Lint(source));
+    }
+
+    [Fact]
+    public void NoDiagnostic_WhenTheMacroBodysNamespaceIsImported()
+    {
+        string source =
+            "#using scripts\\util;\n#define HELP() util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
 }

@@ -206,4 +206,19 @@ public class NamespaceImportFixTests
         Assert.DoesNotContain(
             await ActionsAtAsync(handler, 3, 10, 16), f => f.Title!.StartsWith("Add #using", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task AskingOnAMacroInvocation_OffersTheImportItsExpansionNeeds()
+    {
+        // The lint reports 5000 here, so the fix has to be offered here too — a diagnostic with no
+        // fix behind it is worse than either half alone. Nothing on this line spells `util::`; the
+        // #define does, and the expanded reference is keyed to the invocation.
+        CodeActionHandler handler = BuildHandler(
+            "#define HELP() util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n", out DocumentStore _);
+
+        List<CodeAction> fixes = await ActionsAtAsync(handler, 4, 4, 8);
+
+        CodeAction fix = Assert.Single(fixes, f => f.Title!.StartsWith("Add #using", StringComparison.Ordinal));
+        Assert.Equal("Add #using scripts\\util", fix.Title);
+    }
 }

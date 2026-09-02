@@ -14,6 +14,13 @@ public sealed class FakeFileSystem : IFileSystem
         return this;
     }
 
+    /// <summary>Takes a file back out, for the tests that model a deletion rather than an edit.</summary>
+    public FakeFileSystem RemoveFile(string absolutePath)
+    {
+        _files.Remove(PathUtil.NormalizeAbsolute(absolutePath));
+        return this;
+    }
+
     public bool FileExists(string absolutePath)
     {
         return _files.ContainsKey(PathUtil.NormalizeAbsolute(absolutePath));
@@ -45,11 +52,6 @@ public sealed class FakeFileSystem : IFileSystem
     public DateTime GetLastWriteTimeUtc(string absolutePath)
     {
         return FileExists(absolutePath) ? DateTime.UnixEpoch : DateTime.MinValue;
-    }
-
-    public IEnumerable<string> EnumerateFiles(string directory, string searchPattern)
-    {
-        return EnumerateFilesWithExtensions(directory, [searchPattern.TrimStart('*')]);
     }
 
     public IEnumerable<string> EnumerateFilesWithExtensions(

@@ -1,8 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Parser;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Analysis;
@@ -26,7 +24,13 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class GlobalObjectWriteLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result)
+    /// <summary>
+    /// The dialect's global object names, minus `classes`.
+    ///
+    /// Built once per file and handed to the per-node check, since the set is a property of the
+    /// active profile rather than of the node being looked at.
+    /// </summary>
+    internal static HashSet<string> GlobalNames()
     {
         HashSet<string> globals = new(StringComparer.OrdinalIgnoreCase);
         foreach ( string name in GameProfile.Active.GlobalObjectNames )
@@ -37,13 +41,15 @@ public static class GlobalObjectWriteLint
             }
         }
 
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        Inspect(result.Tree.Root, globals, diagnostics);
-
-        return diagnostics.ToImmutable();
+        return globals;
     }
 
-    private static void Inspect(
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. The name set comes from
+    /// <see cref="GlobalNames"/>, built once per file rather than per node.
+    /// </summary>
+    internal static void InspectNode(
         AstNode node, HashSet<string> globals, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         switch ( node )
@@ -56,11 +62,6 @@ public static class GlobalObjectWriteLint
             case PostfixNode { Operand: IdentifierNode operand }:
                 Report(operand, globals, diagnostics);
                 break;
-        }
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Inspect(child, globals, diagnostics);
         }
     }
 

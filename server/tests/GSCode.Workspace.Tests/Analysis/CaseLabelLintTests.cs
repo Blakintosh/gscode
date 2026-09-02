@@ -28,7 +28,7 @@ public class CaseLabelLintTests
         ParseResult result = ScriptAnalysis.Analyze(
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
-        return CaseLabelLint.Analyze(result);
+        return NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class CaseLabelLintTests
         ParseResult result = ScriptAnalysis.Analyze(
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
-        Assert.Equal(GscDiagnosticCode.CaseUndefined, Assert.Single(CaseLabelLint.Analyze(result)).Code);
+        Assert.Equal(GscDiagnosticCode.CaseUndefined, Assert.Single(NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode)).Code);
     }
 
     // --- 5017: a label the switch already has ---
@@ -200,7 +200,7 @@ public class CaseLabelLintTests
             @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.DoesNotContain(
-            CaseLabelLint.Analyze(result),
+            NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode),
             diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels);
     }
 

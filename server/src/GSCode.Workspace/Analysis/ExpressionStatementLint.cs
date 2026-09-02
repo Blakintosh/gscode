@@ -20,34 +20,6 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class ExpressionStatementLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result)
-    {
-        // Stands down on a file the parser could not read, and the corpus is the entire argument for
-        // it. Before this gate the rule reported nine statements across the five games and not one
-        // was a statement with no effect — every single one was the wreckage of a parse the tree had
-        // recovered from:
-        //
-        // - bo3's two are the known `gib.gsc(58)` grammar gap, where an object-like macro is called
-        //   as `GET_GIB_BUNDLES()` and the postfix chain will not accept the '('.
-        // - bo1's four are `level.scr_anim[…] = % o_full_interstitial_01_camera;` — an anim
-        //   reference written with a space after '%', which splits into an assignment and a bare
-        //   identifier, and the identifier is what got reported.
-        //
-        // The rule's premise is that the statement is what the author wrote. After a parse error the
-        // tree is a recovery guess, so the premise does not hold and neither does the finding —
-        // which would also be a second diagnostic on a line that already has one.
-        if ( HasParseError(result) )
-        {
-            return [];
-        }
-
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        Walk(result.Tree.Root, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
     private static bool HasParseError(ParseResult result)
     {
         foreach ( Diagnostic diagnostic in result.Tree.Diagnostics )
@@ -61,7 +33,12 @@ public static class ExpressionStatementLint
         return false;
     }
 
-    private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. The caller is responsible for
+    /// the parse-error gate — see <see cref="Applies"/>.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         // A for-loop's initializer and increment are ExprStatementNodes too, and the same rule
         // applies to them: `for ( i = 0; i < 3; i )` increments nothing.
@@ -72,11 +49,34 @@ public static class ExpressionStatementLint
                 DiagnosticSeverity.Warning,
                 GscDiagnosticCode.InvalidExpressionStatement));
         }
+    }
 
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, diagnostics);
-        }
+    /// <summary>
+    /// Whether this rule speaks about this file at all. It stands down on a file the parser could
+    /// not read, and the corpus is the entire argument for that.
+    ///
+    /// Before this gate the rule reported nine statements across the five games and not one was a
+    /// statement with no effect — every single one was the wreckage of a parse the tree had
+    /// recovered from:
+    ///
+    /// <list type="bullet">
+    /// <item>bo3's two are the known `gib.gsc(58)` grammar gap, where an object-like macro is called
+    /// as <c>GET_GIB_BUNDLES()</c> and the postfix chain will not accept the '('.</item>
+    /// <item>bo1's four are <c>level.scr_anim[…] = % o_full_interstitial_01_camera;</c> — an anim
+    /// reference written with a space after '%', which splits into an assignment and a bare
+    /// identifier, and the identifier is what got reported.</item>
+    /// </list>
+    ///
+    /// The rule's premise is that the statement is what the author wrote. After a parse error the
+    /// tree is a recovery guess, so the premise does not hold and neither does the finding — which
+    /// would also be a second diagnostic on a line that already has one.
+    ///
+    /// Called by <see cref="NodeLintPass"/>, which asks once per file and then skips the rule for
+    /// every node rather than re-testing it at each one.
+    /// </summary>
+    internal static bool Applies(ParseResult result)
+    {
+        return !HasParseError(result);
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -92,8 +92,7 @@ public static class FunctionResolutionLint
         bool canJudgeBuiltins = (game.HasCompleteBuiltinLibrary || judgeUnverifiedBuiltins)
             && game.DataFilePrefix is not null
             && builtins.Count > 0
-            && !ImportGate.AnyUnresolved(
-                result, GscDiagnosticCode.InsertNotFound, GscDiagnosticCode.UsingNotFound);
+            && !ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound);
 
         List<Diagnostic> diagnosticsForMissingFiles = [];
         ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
@@ -169,10 +168,34 @@ public static class FunctionResolutionLint
         Dictionary<SymbolKey, SymbolKey> canonicalCache = [];
         FunctionLookupCache lookups = new(store, askingContextId, askingPath, ownNamespaces);
 
+        // Keyed on the symbol AND the kind, and asked at the top of the loop: the verdict below
+        // depends on nothing else, so two entries agreeing on all three always reach the same answer
+        // and the second can be dropped before any of the work rather than at each of the four
+        // report sites. See MacroReports.
+        HashSet<(TextRange Range, SymbolKey Key, ReferenceKind Kind)>? seenFromMacros = null;
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
+            // FromMacro is not skipped. A macro body calling a function nobody declares produces a
+            // call that does not link, in every file that invokes it — and the person who has to
+            // act on it is the one editing the invoking file, since a .gsh is not compiled on its
+            // own and its body is never parsed as code at its definition site.
+            //
+            // The gates this rule already carries are what make that safe. An unresolved #insert
+            // suppresses the builtin half entirely (see canJudgeBuiltins), which is the case that
+            // would otherwise blame the user for a macro they did not write: an unexpanded IS_TRUE
+            // is an identifier followed by an argument list, indistinguishable from a call.
+            // NOT ReferenceEntry.IsFunctionCall, which the five import and privacy rules share:
+            // that one excludes the arrow form, and this rule is the one that wants it. An
+            // unresolved [[x]]->name() is a script function nobody declares, and saying so is the
+            // whole of the MethodCall arm below.
             bool isCall = entry.Kind is ReferenceKind.Call or ReferenceKind.MethodCall;
             if ( !isCall || entry.Key.Kind != SymbolKind.Function )
+            {
+                continue;
+            }
+
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key, entry.Kind), ref seenFromMacros) )
             {
                 continue;
             }

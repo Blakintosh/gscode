@@ -97,6 +97,24 @@ corpora `#animtree` appears in 415 files and **not once at the start of a line**
 belongs in `GscKeywords.BodyDirectives` and not `TopLevelKeywords`. It was in the latter, and a
 line-anchored grep is what made it look unused everywhere — measure this one without `^`.
 
+## BO3 file scope is an EXPRESSION position, not declarations-only
+
+A macro invocation is a call, and BO3 invokes macros at column 0 — `REGISTER_SYSTEM( "aat",
+&__init__, undefined )` appears 477 times in the shipped scripts, expanding (via
+`scripts/shared/shared.gsh`) to `function autoexec __init__sytem__() { … }`. So the argument list of
+that call is an expression sitting outside every function body: **510 function pointers and 467
+`undefined`s** are written at file scope across the corpus.
+
+Any rule that assumes "outside a body, only a declaration or a directive is legal" is wrong on those
+977 sites. It is what made completion's file-scope list keywords-only, and what a legality filter
+there would have kept hiding. Two consequences worth carrying: `undefined`, `true`, `false` and the
+other expression atoms belong at file scope as much as `function` does, and a name completed there
+takes no semicolon, since none of the 447 `REGISTER_SYSTEM` lines carries one.
+
+The macro's own expansion is the only thing that decides whether it may stand alone there. Of BO3's
+3,844 header macros exactly two are shaped like a top-level construct, so a shape test is not a
+useful filter — the language does not stop anyone expanding any of them anywhere.
+
 ## Under `#include`, every same-named function shares one key
 
 The merge dialects key a function as `(null, name)` — no namespace. CoD4's animscripts hold 1,230

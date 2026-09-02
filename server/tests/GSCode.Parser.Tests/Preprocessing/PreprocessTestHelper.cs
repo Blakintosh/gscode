@@ -65,6 +65,12 @@ public sealed class FakeHeaderMacroCache : IHeaderMacroCache
         _contributions[resolvedPath] = contribution;
     }
 
+    /// <summary>Never moves: nothing here models a header changing under an analysis.</summary>
+    public long Generation
+    {
+        get { return 0; }
+    }
+
     public bool Contains(string resolvedPath)
     {
         return _contributions.ContainsKey(resolvedPath);

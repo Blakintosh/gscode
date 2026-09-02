@@ -3,6 +3,7 @@ using GSCode.Server.Logging;
 using MediatR;
 using Newtonsoft.Json.Linq;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 using Serilog;
 using Serilog.Core;
@@ -15,15 +16,18 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
     private readonly ServerSettings _settings;
     private readonly LoggingLevelSwitch _levelSwitch;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
+    private readonly ILanguageServerFacade _server;
 
     public ConfigurationHandler(
         ServerSettings settings,
         LoggingLevelSwitch levelSwitch,
-        WorkspaceDiagnosticsPublisher workspaceDiagnostics)
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics,
+        ILanguageServerFacade server)
     {
         _settings = settings;
         _levelSwitch = levelSwitch;
         _workspaceDiagnostics = workspaceDiagnostics;
+        _server = server;
     }
 
     public override Task<Unit> Handle(DidChangeConfigurationParams request, CancellationToken cancellationToken)
@@ -35,6 +39,7 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
 
         string previousScope = _settings.DiagnosticsScope;
         string previousSummary = _settings.EffectiveSummary;
+        string previousInlay = _settings.InlayFamilies;
 
         _settings.Apply(settingsRoot);
         _levelSwitch.MinimumLevel = ServerLogLevel.FromSetting(_settings.ServerLogLevel);
@@ -78,6 +83,29 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
             _workspaceDiagnostics.Refresh();
         }
 
+        // Same reasoning, for the inlay families: turning one on or off is invisible until the
+        // client re-requests, so without this the setting appears not to work until the next
+        // keystroke or scroll — and turning one OFF leaves stale hints on screen, which reads as
+        // the setting being ignored entirely.
+        if ( !string.Equals(previousInlay, _settings.InlayFamilies, StringComparison.Ordinal) )
+        {
+            RequestInlayHintRefresh();
+        }
+
         return Unit.Task;
+    }
+
+    /// <summary>
+    /// Asks the client to re-request every inlay hint.
+    ///
+    /// A REQUEST per the spec, not a notification: the client answers with null. Fire-and-forget,
+    /// like the code-lens refresh — a client that does not support it just errors, and a failed
+    /// refresh costs nothing beyond the delay this exists to remove.
+    /// </summary>
+    private void RequestInlayHintRefresh()
+    {
+        _ = _server.SendRequest("workspace/inlayHint/refresh")
+            .ReturningVoid(CancellationToken.None)
+            .ContinueWith(static _ => { }, TaskScheduler.Default);
     }
 }

@@ -45,7 +45,14 @@ public class PreferBooleanLiteralLintTests
             ],
             []);
 
-        return PreferBooleanLiteralLint.Analyze(result, api, fields, new FlowTyper(api, fields));
+        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        diagnostics.AddRange(NodeLintHarness.Run(
+            result,
+            (node, into) => PreferBooleanLiteralLint.InspectNode(node, api, into)));
+
+        // The second half, which the server calls once per file outside the shared walk.
+        PreferBooleanLiteralLint.InspectRest(result, fields, new FlowTyper(api, fields), diagnostics);
+        return diagnostics.ToImmutable();
     }
 
     [Theory]

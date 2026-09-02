@@ -53,6 +53,29 @@ public sealed class SignatureEngine
 
         ArrowReceiver arrow = ClassifyArrow(tokens, result.Text, site.Value.CalleeIndex);
 
+        // A macro is asked BEFORE a function, because the preprocessor gets there first: where a
+        // #define and a function share a name, the invocation being typed is replaced before the
+        // parser ever sees it, so the function's parameters would describe code that never runs.
+        // They can only collide on exact case — a macro name is the language's one case-SENSITIVE
+        // kind. Neither an arrow call nor a qualified name can reach one: `[[o]]->NAME(` dispatches
+        // on an object and `util::NAME(` names a namespace member, and the preprocessor expands
+        // neither.
+        //
+        // Deliberately NOT gated on the dialect's HasMacros, unlike macro COMPLETION. Completion
+        // decides what to propose, and proposing an expansion a pre-BO3 engine will not perform is
+        // a wrong answer. This describes a name the user has already written, and the preprocessor
+        // expands a #define on every dialect by design — see Preprocessor.ReportIfNoPreprocessor,
+        // which reports the directive and then processes it anyway. Withholding help here would
+        // leave the expansion happening with nothing on screen to describe it.
+        if ( arrow == ArrowReceiver.None && namespaceName is null )
+        {
+            SignatureResult? macroSignature = TryMacro(result, calleeName, site.Value.ActiveParameter);
+            if ( macroSignature is not null )
+            {
+                return macroSignature;
+            }
+        }
+
         SignatureResult? scriptSignature = TryScriptFunction(
             result, contextId, namespaceName, calleeName, site.Value.ActiveParameter, position, arrow);
         if ( scriptSignature is not null )
@@ -77,6 +100,52 @@ public sealed class SignatureEngine
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Signature help for a function-like macro, read from the PARSE IN HAND rather than the store.
+    /// The macro table is rebuilt on every parse from this file plus the headers it #inserts, so it
+    /// is current for a header inserted a keystroke ago — which the indexed record is not, and help
+    /// fires while the invocation is still being typed.
+    /// </summary>
+    private static SignatureResult? TryMacro(ParseResult result, string calleeName, int activeParameter)
+    {
+        // Ordinal, which is the lookup MacroTable is keyed by: `IS_TRUE(` and `is_true(` are two
+        // different questions, unlike every other name in the language.
+        if ( !result.Preprocessed.Macros.TryGet(calleeName, out GSCode.Parser.Preprocessing.MacroDefinition macro) )
+        {
+            return null;
+        }
+
+        // An OBJECT-like macro is not a call. `MAX_PLAYERS( x )` expands to its body followed by a
+        // parenthesised expression, so it has no parameters to describe, and answering null hands
+        // the position back to the by-name lookups rather than showing an empty signature.
+        if ( macro.Parameters is not ImmutableArray<string> macroParameters )
+        {
+            return null;
+        }
+
+        ImmutableArray<SignatureParameter>.Builder parameters = ImmutableArray.CreateBuilder<SignatureParameter>();
+        foreach ( string parameterName in macroParameters )
+        {
+            // Nothing to document per parameter: a #define carries at most one trailing comment,
+            // and it describes the macro rather than any one of its arguments.
+            parameters.Add(new SignatureParameter(parameterName, ""));
+        }
+
+        // The EXPANSION alone below the label, without hover's `#define` line: the label above is
+        // the define form already, and the client draws it with the active argument highlighted.
+        //
+        // The body keeps its own parameter names, where hover substitutes the call site's arguments.
+        // Here the parameter names are the subject — they are what the label highlights as the caret
+        // moves between arguments — so showing where the highlighted one lands in the expansion is
+        // what this panel is for.
+        return new SignatureResult(
+            BuildLabel(macro.Name, parameters),
+            parameters.ToImmutable(),
+            ClampActive(activeParameter, parameters.Count),
+            MarkdownDocRenderer.RenderMacroExpansion(
+                MacroExpansionPreview.Render(macro.Body), macro.Documentation ?? ""));
     }
 
     private SignatureResult? TryScriptFunction(

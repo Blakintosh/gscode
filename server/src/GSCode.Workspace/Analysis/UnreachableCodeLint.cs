@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 
@@ -32,15 +31,6 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class UnreachableCodeLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        Walk(result.Tree.Root, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
     /// <summary>
     /// Finds every block in the file. Only <see cref="BlockNode"/> is interesting — the run of
     /// statements after a terminator lives there and nowhere else — so everything else just
@@ -52,24 +42,16 @@ public static class UnreachableCodeLint
     /// release build, so a debugging aid after a return is something the author put there knowingly
     /// rather than a leftover.
     /// </summary>
-    private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. Only ever called for a node that
+    /// is not an <c>ExprNode</c>, which is the same restriction the walk above applies.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        // Nothing this rule looks for lives inside an expression: a block is a statement, and GSC
-        // has no construct that puts one inside an operand. Descending anyway walked every operand
-        // of every expression in the file for nothing, which was most of the rule's cost.
-        if ( node is ExprNode )
-        {
-            return;
-        }
-
         if ( node is BlockNode block )
         {
             ReportAfterTerminator(block, diagnostics);
-        }
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, diagnostics);
         }
     }
 

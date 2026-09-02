@@ -20,6 +20,21 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class ExpressionStatementLintTests
 {
+    /// <summary>
+    /// The rule as the server runs it: the shared walk, but only when `Applies` says the file's
+    /// premise holds. A file the parser could not read silences the rule, and two of the tests below
+    /// exist to prove that gate, so the harness has to carry it.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> RunRule(ParseResult result)
+    {
+        if ( !ExpressionStatementLint.Applies(result) )
+        {
+            return [];
+        }
+
+        return NodeLintHarness.Run(result, ExpressionStatementLint.InspectNode);
+    }
+
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         string source = "function f( a, b )\n{\n" + body + "\n}\n";
@@ -32,7 +47,7 @@ public class ExpressionStatementLintTests
         // pass for the wrong reason.
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
 
-        return ExpressionStatementLint.Analyze(result);
+        return RunRule(result);
     }
 
     [Theory]
@@ -126,7 +141,7 @@ public class ExpressionStatementLintTests
 
         // The premise: this file really did fail to parse.
         Assert.Contains(result.Tree.Diagnostics, d => (int)d.Code is >= 3000 and < 4000);
-        Assert.Empty(ExpressionStatementLint.Analyze(result));
+        Assert.Empty(RunRule(result));
     }
 
     [Fact]

@@ -20,7 +20,13 @@ namespace GSCode.Workspace.Documents;
 /// already replaced, which is exactly what the staleness check exists to prevent. One reference
 /// write of a pair cannot come apart that way.
 /// </summary>
-public sealed record AnalysisSnapshot(ParseResult Result, int Version);
+/// <param name="HeaderGeneration">
+/// The <see cref="IHeaderMacroCache.Generation"/> the headers in this parse were read at, taken
+/// BEFORE the analysis rather than after. A header edit landing mid-parse must leave the result
+/// looking old, not be stamped as already seen — the conservative direction costs one extra parse
+/// and the other loses the edit until the next keystroke.
+/// </param>
+public sealed record AnalysisSnapshot(ParseResult Result, int Version, long HeaderGeneration);
 
 /// <summary>One open editor document: its live text and latest analysis.</summary>
 public sealed class OpenDocument
@@ -78,14 +84,20 @@ public sealed class OpenDocument
     /// The caller is handed the winner because it publishes diagnostics from what it gets back,
     /// and a superseded parse must not be what those describe.
     /// </summary>
-    public AnalysisSnapshot Publish(ParseResult result, int version)
+    public AnalysisSnapshot Publish(ParseResult result, int version, long headerGeneration = 0)
     {
-        AnalysisSnapshot published = new(result, version);
+        AnalysisSnapshot published = new(result, version, headerGeneration);
 
         while ( true )
         {
             AnalysisSnapshot? current = Volatile.Read(ref _analysis);
-            if ( current is not null && current.Version >= version )
+
+            // Newer text wins outright; at the same text, the one that read the newer headers does.
+            // Without the second half a re-analysis forced by a header edit would be discarded as
+            // "same version", which is the whole reason it was run.
+            if ( current is not null
+                && (current.Version > version
+                    || (current.Version == version && current.HeaderGeneration >= headerGeneration)) )
             {
                 return current;
             }
@@ -220,6 +232,10 @@ public sealed class DocumentStore
         int version = document.Version;
         SourceText text = document.Text;
 
+        // Read with them, and for the same reason: a header edit landing mid-analysis must leave
+        // the result looking old rather than be stamped as already seen.
+        long headerGeneration = HeaderGeneration;
+
         ParseResult result = ScriptAnalysis.Analyze(
             document.Path,
             document.Language,
@@ -229,16 +245,32 @@ public sealed class DocumentStore
             profile: null,
             headerCache: _headerCache);
 
-        return document.Publish(result, version).Result;
+        return document.Publish(result, version, headerGeneration).Result;
     }
 
     /// <summary>
-    /// The document's analysis, re-running it first when the text has moved on.
+    /// Where the headers stand right now, or 0 when nothing caches them (tests, and any store built
+    /// without one — a document with no cache has no header that can move behind it).
+    /// </summary>
+    private long HeaderGeneration
+    {
+        get { return _headerCache?.Generation ?? 0; }
+    }
+
+    /// <summary>
+    /// The document's analysis, re-running it first when the text — or a header it inserts — has
+    /// moved on.
     ///
     /// For interactive, position-sensitive features — completion, signature help — where the
     /// request carries a live cursor position that only means anything against matching text.
     /// The debounce exists to keep diagnostics off the keystroke path; it must not make the
     /// editor answer questions about text the user has already replaced.
+    ///
+    /// The header half is the same argument about a different input. A parse expands whatever the
+    /// <c>#insert</c>ed headers said at the time, so editing a GSH invalidates every dependent's
+    /// parse without touching a character of it. Checking the document's own version alone let
+    /// those parses report themselves current forever, which is why a macro's value in a GSC
+    /// updated only once something was typed into the GSC.
     /// </summary>
     public ParseResult AnalyzeIfStale(OpenDocument document)
     {
@@ -246,7 +278,7 @@ public sealed class DocumentStore
         // two reads could straddle a concurrent publish and return a result from a version other
         // than the one just found to be current.
         AnalysisSnapshot? analysis = document.Analysis;
-        if ( analysis is not null && analysis.Version == document.Version )
+        if ( analysis is not null && analysis.Version == document.Version && analysis.HeaderGeneration == HeaderGeneration )
         {
             return analysis.Result;
         }

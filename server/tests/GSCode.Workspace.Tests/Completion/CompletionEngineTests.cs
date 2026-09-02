@@ -714,7 +714,13 @@ public class CompletionEngineTests
 
         Assert.True(HasLabel(entries, "function"));
         Assert.True(HasLabel(entries, "class"));
-        Assert.False(HasLabel(entries, "if"));
+
+        // The expression atoms come too, and `if` with them. A top-level macro invocation is a
+        // CALL, so file scope is not the declarations-only position it looks like: the shipped BO3
+        // scripts pass `undefined` to REGISTER_SYSTEM 467 times. Telling an atom apart from a
+        // control-flow word would be a rule to maintain in exchange for suppressing a word nobody
+        // types here by accident.
+        Assert.True(HasLabel(entries, "undefined"));
     }
 
     // --- Call punctuation ---
@@ -758,6 +764,38 @@ public class CompletionEngineTests
         Assert.EndsWith("($0);", CallEntry(line).InsertText, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// File scope holds no statements, so nothing completed there takes a terminator. The construct
+    /// that stands alone at that position is a macro invocation expanding to a DECLARATION —
+    /// REGISTER_SYSTEM writes `function autoexec ...() { }` — and all 447 of its uses in the shipped
+    /// BO3 scripts are written without one. Left to itself IsStatementPosition scans back, finds the
+    /// previous function's '}' and answers true, which is right in a body and meaningless outside
+    /// one.
+    /// </summary>
+    [Fact]
+    public void AFileScopeCallTakesNoSemicolon()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction foo()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        // The caret sits on the blank line after run()'s closing brace — where a REGISTER_SYSTEM
+        // line goes.
+        string text = "#namespace util;\nfunction run()\n{\n}\n\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            result, "raw", new Position(4, 0), callPunctuation: CallPunctuation.ParensAndSemicolon);
+
+        CompletionEntry entry = Assert.Single(
+            entries,
+            e => e.Kind == CompletionKind.Function && e.Label == "foo");
+
+        Assert.EndsWith("($0)", entry.InsertText, StringComparison.Ordinal);
+        Assert.DoesNotContain(";", entry.InsertText, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("if ( ")]               // a condition
     [InlineData("other( ")]             // an argument
@@ -793,6 +831,69 @@ public class CompletionEngineTests
         // The ')' of `get_ready()` must not be mistaken for a control-flow header's, or every
         // chained expression would gain a semicolon.
         Assert.EndsWith("($0)", CallEntry("x = get_ready() + ").InsertText, StringComparison.Ordinal);
+    }
+
+    // --- Function pointers ---
+    //
+    // `&foo` NAMES a function; `&foo()` calls it and takes the address of the result. BO3 writes
+    // 4,564 pointers and only four `&name(` of any kind, so the parentheses this file adds
+    // everywhere else are a correction the user has to undo here.
+
+    [Theory]
+    [InlineData("level.on_death = &")]      // stored on an object
+    [InlineData("thread run( &")]           // passed as an argument
+    [InlineData("&")]                       // and at the start of a statement
+    public void AFunctionPointerTakesNoParentheses(string line)
+    {
+        Assert.Equal("foo", CallEntry(line).InsertText);
+    }
+
+    /// <summary>
+    /// The other 585: a pointer written through a namespace. The '::' arm produces the list, and it
+    /// reached CallSnippet by the same route the bare name does.
+    /// </summary>
+    [Fact]
+    public void ANamespaceQualifiedPointerTakesNoneEither()
+    {
+        Assert.Equal("foo", CallEntry("level.on_death = &util::").InsertText);
+    }
+
+    /// <summary>
+    /// Pre-BO3 an '&amp;' is arithmetic — a pointer there is a bare qualified name, with no operator to
+    /// key on — so the call after one is still a call and still takes its punctuation.
+    /// </summary>
+    [Fact]
+    public void AnAmpersandIsArithmeticInTheInfinityWardLine()
+    {
+        GameProfile cod4 = GameProfile.ByName("cod4")!;
+
+        (CompletionEngine engine, _, _) = BuildWorld(new FakeFileSystem());
+
+        // Asserted on a BUILTIN rather than a script function: the indexer parses the workspace
+        // with the active profile, so a merge dialect's `foo() { }` in a fixture file extracts to
+        // nothing and the store would have had no function to offer.
+        string text = "main()\n{\n    x = mask & \n}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            @$"{Raw}\maps\mp\test.gsc",
+            ScriptAnalysis.LanguageFromPath(@$"{Raw}\maps\mp\test.gsc"),
+            SourceText.From(text),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
+            new NameTable(),
+            cod4);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            result,
+            "raw",
+            new Position(2, 15),
+            callPunctuation: CallPunctuation.ParensAndSemicolon,
+            profile: cod4);
+
+        CompletionEntry entry = Assert.Single(entries, e => e.Label == "Vibrate");
+
+        // Parentheses, where the same position in BO3 would complete to the bare name. No
+        // semicolon, but that is the operand rule rather than the dialect: `x = a + f()` does not
+        // end a statement either.
+        Assert.Equal("Vibrate($0)", entry.InsertText);
     }
 
     // --- Call-shaped keywords ---

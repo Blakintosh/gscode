@@ -126,7 +126,11 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         Dictionary<SymbolKey, List<LspRange>> calls = new();
         foreach ( ReferenceEntry entry in self.Record.References )
         {
-            if ( entry.Kind == ReferenceKind.Call && entry.Key.Kind == SymbolKind.Function && self.Function.FullRange.Contains(entry.Range.Start) )
+            // !entry.FromMacro preserves what the collapsed kind used to do here. An expanded call
+            // is keyed to its INVOCATION range, so a macro used twice in one function would list the
+            // same outgoing edge at ranges that spell the macro's name, not the callee's.
+            if ( entry.Kind == ReferenceKind.Call && !entry.FromMacro && entry.Key.Kind == SymbolKind.Function
+                && self.Function.FullRange.Contains(entry.Range.Start) )
             {
                 if ( !calls.TryGetValue(entry.Key, out List<LspRange>? ranges) )
                 {

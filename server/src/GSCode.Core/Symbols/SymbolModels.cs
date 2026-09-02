@@ -221,23 +221,42 @@ public enum ReferenceKind
     /// it was chasing is largely gone.
     /// </summary>
     ConcatenatedLiteral,
-
-    /// <summary>
-    /// A use that came from inside a MACRO BODY, recorded against the invocation site in this
-    /// file rather than the macro's own text.
-    ///
-    /// These used to be dropped outright, which was right about ranges and wrong about facts.
-    /// `REGISTER_SYSTEM(...)` expands to `system::register(...)`, so a file using that macro
-    /// really does call into the `system` namespace — but with nothing recorded, the unused-import
-    /// lint saw no use and told 471 stock files their `#using scripts\shared\system_shared` was
-    /// pointless. Code-lens counts and find-all-references were short by the same amount.
-    ///
-    /// Kept as a distinct kind rather than folded in, because the two consumers want opposite
-    /// things: counting a use is right, but resolving the CURSOR to one is not — the text under
-    /// it reads `REGISTER_SYSTEM`, and go-to-definition there must still reach the macro.
-    /// </summary>
-    ExpandedFromMacro,
 }
 
-/// <summary>One classified reference site: key + where + how. No text is stored beyond the interned key.</summary>
-public readonly record struct ReferenceEntry(SymbolKey Key, TextRange Range, ReferenceKind Kind);
+/// <summary>
+/// One classified reference site: key + where + how + whether the text came from a macro body.
+/// No text is stored beyond the interned key.
+/// </summary>
+/// <param name="FromMacro">
+/// True when the token that produced this reference came out of a MACRO BODY, in which case
+/// <see cref="Range"/> is the INVOCATION site in this file rather than the macro's own text.
+///
+/// A separate field rather than a <see cref="ReferenceKind"/> value, which is what it was. The two
+/// facts are orthogonal — WHAT the reference is (a call, a field access, an address-of) and WHERE
+/// its text was written — and one enum can only carry one of them, so provenance won and the kind
+/// was overwritten. Every consumer that asked `Kind == Call` therefore could not see a call a macro
+/// expanded into: `#define HELP() flag::exists("x")` needs `#using scripts\shared\flag_shared`
+/// exactly as much as writing the call out does, and nothing said so.
+///
+/// Both facts have real consumers wanting opposite things, which is why neither can be dropped.
+/// Counting the use is right — dropping these told 471 stock files their
+/// `#using scripts\shared\system_shared` was pointless, and left code lens and find-all-references
+/// short by the same amount. Resolving the CURSOR to one is not: the characters on screen spell
+/// `REGISTER_SYSTEM`, so hover and go-to-definition belong to the macro.
+/// </param>
+public readonly record struct ReferenceEntry(
+    SymbolKey Key, TextRange Range, ReferenceKind Kind, bool FromMacro = false)
+{
+    /// <summary>
+    /// A call to a SCRIPT function by name — the shape five cross-file lints each open on.
+    ///
+    /// It is not every call: <see cref="ReferenceKind.MethodCall"/> is excluded, because the arrow
+    /// form guarantees a class method and the rules that ask this question are about namespaces,
+    /// imports and privacy, none of which a method has. <c>FunctionResolutionLint</c> is the one
+    /// rule that wants both and writes its own test for that reason.
+    /// </summary>
+    public bool IsFunctionCall
+    {
+        get { return Kind == ReferenceKind.Call && Key.Kind == SymbolKind.Function; }
+    }
+}

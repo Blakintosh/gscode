@@ -153,8 +153,11 @@ public class DialectCompletionTests
     [Fact]
     public void GlobalObjectsAreNotOfferedAtTopLevel()
     {
-        // Outside a function body only declarations and directives are legal, and `self` there is
-        // not a thing anyone can write.
+        // File scope is NOT declarations-only — a top-level macro invocation is a call, so it opens
+        // an expression there — but nothing at that position can be sent a call, so `self` is still
+        // not a thing anyone writes. They are held back on a second count as well: a global is a
+        // Variable, which is the first sort tier, so offering them would put them at the head of
+        // every file-scope list.
         CompletionEngine engine = BuildEngine();
         ParseResult result = ScriptAnalysis.Analyze(
             @$"{Raw}\maps\mp\test.gsc",
@@ -167,6 +170,33 @@ public class DialectCompletionTests
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(0, 0), profile: Cod4);
 
         Assert.DoesNotContain(entries, e => e.Detail == "global");
+    }
+
+    /// <summary>
+    /// File scope now runs the same producers a body does, so the dialect gating has to hold at a
+    /// position it never used to reach. CoD4 has no preprocessor and no class system, so neither a
+    /// macro row nor a BO3 declaration keyword may appear there.
+    /// </summary>
+    [Fact]
+    public void Cod4FileScopeStaysWithinTheDialect()
+    {
+        CompletionEngine engine = BuildEngine();
+        ParseResult result = ScriptAnalysis.Analyze(
+            @$"{Raw}\maps\mp\test.gsc",
+            ScriptLanguage.Gsc,
+            SourceText.From("#define CAP 5\n\nmain()\n{\n}\n"),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
+            new NameTable(),
+            Cod4);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(1, 0), profile: Cod4);
+
+        Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.Macro);
+        Assert.DoesNotContain(entries, e => e.Label == "class");
+        Assert.DoesNotContain(entries, e => e.Label == "#using");
+
+        // The dialect's own file-scope word is still there, so this is not passing on an empty list.
+        Assert.Contains(entries, e => e.Label == "#include");
     }
 
     // --- Dialect-gated snippets ---

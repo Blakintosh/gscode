@@ -186,6 +186,39 @@ public static class MarkdownDocRenderer
         return markdown.ToString();
     }
 
+    /// <summary>
+    /// Markdown for a macro whose DEFINE FORM is already on screen: the expansion and the
+    /// trailing-comment documentation, without the `#define` line.
+    ///
+    /// Signature help is the caller. Its label IS the define form — rendered by the client, above
+    /// the documentation and with the active argument highlighted — so repeating it here printed
+    /// the parameter list twice in a widget the reader is looking at mid-keystroke. Hover has no
+    /// label above it and keeps the full form.
+    /// </summary>
+    public static string RenderMacroExpansion(string expansion, string documentation)
+    {
+        StringBuilder markdown = new();
+
+        if ( expansion.Length > 0 )
+        {
+            markdown.Append("```gsc\n").Append(expansion).Append("\n```");
+        }
+
+        if ( documentation.Length > 0 )
+        {
+            // The rule is separating two things that are both there. A body-less #define with a
+            // comment has only the comment, and a bare line above it reads as a missing expansion.
+            if ( markdown.Length > 0 )
+            {
+                markdown.Append("\n\n---\n\n");
+            }
+
+            markdown.Append(CleanComment(documentation));
+        }
+
+        return markdown.ToString();
+    }
+
     private static string FunctionSignature(FunctionSymbol function)
     {
         StringBuilder signature = new();

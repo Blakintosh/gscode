@@ -6,7 +6,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace GSCode.Server.Handlers;
 
-/// <summary>Signature help for script functions, builtins, and call-shaped keywords.</summary>
+/// <summary>Signature help for script functions, builtins, function-like macros, and call-shaped keywords.</summary>
 public sealed class SignatureHelpHandler : SignatureHelpHandlerBase
 {
     private readonly NavigationSupport _support;

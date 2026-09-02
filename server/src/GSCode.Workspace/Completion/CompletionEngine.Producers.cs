@@ -250,7 +250,9 @@ public sealed partial class CompletionEngine
         string detail = LiteralDetail(literalKind);
         foreach ( ReferenceEntry entry in references )
         {
-            if ( entry.Kind != ReferenceKind.Literal || entry.Key.Kind != literalKind )
+            // Literals inside a macro body are skipped: the range is the invocation site, and the
+            // text is the macro author's, not a name this file uses.
+            if ( entry.Kind != ReferenceKind.Literal || entry.Key.Kind != literalKind || entry.FromMacro )
             {
                 continue;
             }
@@ -684,9 +686,23 @@ public sealed partial class CompletionEngine
         // Both scopes are filtered to what the active game actually has, so e.g. CoD4 is not
         // offered class/#using. The dialect's global objects are NOT folded in here — see the
         // separate loop below for why.
-        IEnumerable<string> words = insideFunction
-            ? GscKeywords.StatementKeywords
-            : GscKeywords.TopLevelKeywords;
+        //
+        // File scope takes BOTH lists, because it is not the declarations-only position it looks
+        // like. A top-level macro invocation is a CALL, so it opens an expression outside every
+        // function body: the shipped BO3 scripts pass `undefined` to REGISTER_SYSTEM 467 times, and
+        // `undefined` is a statement-scope word that file scope could not complete. Splitting the
+        // statement list into expression atoms and control flow would buy nothing but a rule to
+        // maintain — `if` offered at file scope is noise, not a wrong answer.
+        List<string> words = [];
+        if ( insideFunction )
+        {
+            words.AddRange(GscKeywords.StatementKeywords);
+        }
+        else
+        {
+            words.AddRange(GscKeywords.TopLevelKeywords);
+            words.AddRange(GscKeywords.StatementKeywords);
+        }
 
         if ( !insideFunction )
         {
@@ -783,11 +799,13 @@ public sealed partial class CompletionEngine
                 keyword, CompletionKind.Keyword, "", KeywordInsertText(keyword, callSuffix), documentation));
         }
 
-        if ( !insideFunction )
-        {
-            return entries.ToImmutable();
-        }
-
+        // Everything below used to be behind a `!insideFunction` return, so file scope was a static
+        // word list and no workspace data reached it at all: the macros a header supplies, the
+        // file's own functions, its classes. None of those is a per-CURSOR fact — the macro table
+        // is built per parse from this file plus the headers it #inserts, and a function is in
+        // scope for the file, not for a body — so the return was hiding categories that had no
+        // reason to be hidden, and the two scopes now differ only where a name is BOUND
+        // differently.
         LanguageStore store = _database.StoreFor(result.Language);
 
         // The class this cursor is inside, read from the live extraction's ranges rather than the
@@ -818,7 +836,13 @@ public sealed partial class CompletionEngine
             }
         }
 
-        CollectLocalScope(enclosingFunction!, position, boundNames, entries);
+        // Parameters and locals are the one category that genuinely IS per-cursor: outside a
+        // declaration nothing is bound, so there is nothing to collect rather than a list to
+        // suppress.
+        if ( enclosingFunction is not null )
+        {
+            CollectLocalScope(enclosingFunction, position, boundNames, entries);
+        }
 
         // Methods of the class this cursor is inside, own and inherited — a bare name written in a
         // class body means a method: all 525 such calls in the stock BO3 scripts do. They are added
@@ -841,9 +865,18 @@ public sealed partial class CompletionEngine
         // which threw away the ones a header exists to supply: a script whose constants all live
         // in a shared .gsh got none of them, which is the normal arrangement rather than an
         // unusual one.
-        foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )
+        //
+        // Gated on the dialect, like every other category here. The preprocessor records a #define
+        // whatever game is active, but only BO3 HAS one: in the IW line the single #define in the
+        // corpus is a commented-out block of C in _hud.gsc, and completing its name would offer an
+        // expansion the engine will never perform. This was already true in a body — the gate is
+        // not a consequence of file scope reaching the loop, only of the loop being read again.
+        if ( game.HasMacros )
         {
-            entries.Add(MacroEntry(macro, callSuffix, parameterHints));
+            foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )
+            {
+                entries.Add(MacroEntry(macro, callSuffix, parameterHints));
+            }
         }
 
         // The declared set rather than the namespace spans, which carry a leading region named after

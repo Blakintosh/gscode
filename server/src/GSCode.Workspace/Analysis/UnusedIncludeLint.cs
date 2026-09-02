@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
@@ -17,8 +17,20 @@ namespace GSCode.Workspace.Analysis;
 ///
 /// <c>#include</c> MERGES a file's functions into this scope, so "used" is by NAME. Deliberately
 /// conservative — deleting a working include is worse than keeping a stale one — so an autoexec
-/// anywhere it reaches keeps it (imported for its side effects), and as with the other import lints
-/// one unresolvable <c>#include</c> suppresses the whole pass rather than guessing.
+/// anywhere it reaches keeps it (imported for its side effects).
+///
+/// An unreadable <c>#include</c> DIRECTIVE used to suppress the whole pass and no longer does, for
+/// the reason <see cref="UnusedUsingLint"/> sets out: it never enters the resolved list, so it goes
+/// unjudged while its siblings are judged. What is still bailed out on is one level down — an
+/// unreadable file inside a resolved include's CLOSURE, checked per include below, because there the
+/// missing file really could be the one supplying a name and "nothing else supplies it" is the whole
+/// test.
+///
+/// <see cref="UnusedUsingLint"/> gained an unresolved-<c>#insert</c> gate in the same change and
+/// this did not, which is a dialect fact rather than an oversight: <c>#insert</c> does not lex on
+/// an include dialect (<c>Keywords.IsDirectiveEnabled</c>), so the diagnostic that gate reads can
+/// never be raised in a file this rule runs on. Writing it here would be a branch nothing can
+/// take.
 ///
 /// The test is MARGINAL, not direct, and that distinction is what stops a Hint from manufacturing an
 /// Error. <c>#include</c> flattens transitively (see <see cref="DatabaseQueries.IncludeClosure"/>), so
@@ -48,7 +60,7 @@ public static class UnusedIncludeLint
         // back to resolving here keeps this callable on its own, which the tests rely on.
         FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
 
-        if ( resolvedImports.Includes.Length == 0 || !resolvedImports.Complete )
+        if ( resolvedImports.Includes.Length == 0 )
         {
             return [];
         }
@@ -58,7 +70,10 @@ public static class UnusedIncludeLint
         HashSet<string> calledFunctions = new(StringComparer.Ordinal);
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Definition && entry.Key.Kind == SymbolKind.Function )
+            // Macro-expanded uses count, for the reason UnusedUsingLint spells out — including
+            // the declaration-shaped ones, which is what the flag test preserves.
+            if ( (entry.Kind != ReferenceKind.Definition || entry.FromMacro)
+                && entry.Key.Kind == SymbolKind.Function )
             {
                 calledFunctions.Add(entry.Key.Name);
             }

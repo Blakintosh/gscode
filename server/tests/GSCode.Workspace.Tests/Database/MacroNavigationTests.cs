@@ -65,7 +65,7 @@ public class MacroNavigationTests
         PositionHit hit = SymbolAtPosition.Resolve(result, InvocationPosition(result));
 
         Assert.NotEqual("clear", hit.Key.Name);
-        Assert.NotEqual(ReferenceKind.ExpandedFromMacro, hit.ReferenceKind);
+        Assert.Equal(ReferenceKind.MacroUse, hit.ReferenceKind);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class MacroNavigationTests
 
         Assert.Contains(
             result.Extraction.References,
-            entry => entry.Kind == ReferenceKind.ExpandedFromMacro
+            entry => entry.FromMacro
                 && string.Equals(entry.Key.Name, "clear", StringComparison.OrdinalIgnoreCase));
     }
 }

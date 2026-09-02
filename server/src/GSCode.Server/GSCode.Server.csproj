@@ -9,6 +9,29 @@
     <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
+  <!-- Ahead-of-time compilation, but only for a publish that names a runtime.
+
+       What it buys, measured by driving the published server over stdio against BO3's 1,105
+       scripts and reading its own "Ready" line, five alternating runs each, warm cache:
+       1.3 s every time without it against 0.9-1.0 s with it. The index inside that is 0.5-0.6 s
+       on both sides, so the whole difference is startup - the JIT compiling the lex, parse and
+       extract pipeline on the way to its first file - and none of it is analysis getting faster.
+       Same result whether the host is the apphost or `dotnet GSCode.Server.dll`, which is what the
+       extension actually runs.
+
+       It also makes the bundle SMALLER, which is the opposite of what precompiled code suggests:
+       48 MB to 29 MB. A RID-less publish carries runtimes/ for all 22 platforms the SQLite package
+       supports; naming one keeps that platform's native library and drops the rest.
+
+       Gated on RuntimeIdentifier rather than turned on, because that is the whole cost of it: a
+       RID-specific bundle runs on one platform, and `npm run bundle-server` currently produces one
+       cross-platform folder for one .vsix. Turning this on by default means shipping a .vsix per
+       target platform. Until that happens, `bundle-server-win` opts in and the default does not. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="OmniSharp.Extensions.LanguageProtocol" Version="0.19.9" />

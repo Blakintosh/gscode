@@ -58,7 +58,8 @@ whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.
 - **Sync + diagnostics**: incremental text sync with debounced re-analysis (`TextSyncHandler`),
   push-model `publishDiagnostics` merging parse diagnostics with the cross-file lints — all of them,
   through `Analysis/WorkspaceLints.Analyze`, which is the one entry point and currently runs
-  twenty-five rules. Naming a single lint here read as if it were the whole merged set.
+  twenty-six rules — seventeen called directly and nine more sharing `NodeLintPass`'s single AST
+  walk. Naming a single lint here read as if it were the whole merged set.
 - **Read**: hover (with inferred local types), definition, references (incl. literals),
   document highlight, document links, document/workspace symbols, folding, selection ranges,
   semantic tokens (full/delta/range).
@@ -85,9 +86,10 @@ GSC/CSC/GSH language registrations, TextMate grammar, semantic-token scope mappi
 quick-suggestion defaults. Two log channels: "GSCode" (`LogOutputChannel`, extension-host
 lifecycle) and "GSCode Server" (the server's stderr/Serilog). A status-bar item shows the live
 indexing counter driven by `gscode/indexingStarted|Progress|Complete` notifications. Commands:
-`gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`,
-`gscode.openApiLibrary` (`shift+f1` in GSC, CSC, and GSH files), and the
-`gscode.showReferences` bridge for code-lens clicks. Settings flow to the server via
+`gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, `gscode.selectGame`
+(the game picker, whose roster comes from the server over `gscode/supportedGames` so the client
+never keeps its own list of which dialects exist), `gscode.openApiLibrary` (`shift+f1` in GSC,
+CSC, and GSH files), and the `gscode.showReferences` bridge for code-lens clicks. Settings flow to the server via
 `initializationOptions.gscode` and `workspace/didChangeConfiguration`.
 
 ## Dev-time tooling

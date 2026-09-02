@@ -6,20 +6,34 @@ using GSCode.Parser.Preprocessing;
 namespace GSCode.Workspace.Api;
 
 /// <summary>
+/// One argument of a macro invocation, as offsets into the file's text: <c>[Start, End)</c>,
+/// already trimmed of the whitespace around it.
+/// </summary>
+/// <param name="Start">Offset of the argument's first character.</param>
+/// <param name="End">Offset one past its last.</param>
+public readonly record struct MacroArgumentSpan(int Start, int End);
+
+/// <summary>
 /// Renders a macro body back into readable GSC for hover.
 ///
 /// Reconstructed from the token stream rather than sliced out of the original source, because
 /// a macro reached through <c>#insert</c> lives in a header whose text is not loaded at hover
-/// time. That costs the author's exact spacing, but it gains one thing that matters more: line
-/// continuations collapse, so a nine-statement macro reads as what it actually expands to
-/// instead of a wall of backslashes.
+/// time. That costs the author's exact spacing WITHIN a line, but the backslashes go with it, so
+/// a nine-statement macro reads as what it expands to instead of a wall of continuations.
+///
+/// The line STRUCTURE survives. Each body token still carries the line it was written on, so a
+/// break is a token whose line is past the last one's, and a macro that declares a function reads
+/// as a declaration rather than as one very long line.
 /// </summary>
 public static class MacroExpansionPreview
 {
     /// <summary>Long bodies are truncated: a hover is a glance, not a code listing.</summary>
     public const int MaxLength = 240;
 
-    /// <summary>The macro's body as a single readable line, or "" for a body-less define.</summary>
+    /// <summary>Spaces per indent level in the rendered body.</summary>
+    private const int IndentWidth = 4;
+
+    /// <summary>The macro's body on the lines it was written on, or "" for a body-less define.</summary>
     public static string Render(ImmutableArray<PToken> body)
     {
         return Render(body, [], []);
@@ -42,11 +56,32 @@ public static class MacroExpansionPreview
             return "";
         }
 
+        // Indentation is rendered as LEVELS, not as the author's own columns.
+        //
+        // A tab is ONE character in a token's range, so subtracting columns renders a tab-indented
+        // header at a one-space step — the structure is there and unreadable. Ranking the distinct
+        // columns the body's lines start at and giving each rank a fixed step reproduces the shape
+        // whatever the file was written with, which is what a preview wants.
+        //
+        // The body's own first line is the base, so the expansion sits flush against the code fence
+        // it is rendered into. A line further left than that — the body opened on the `#define`'s
+        // own line and continued underneath it — clamps to the base rather than going negative.
+        ImmutableArray<int> columns = LineStartColumns(body);
+        int baseLevel = columns.IndexOf(body[0].Range.Start.Character);
+        int line = body[0].Range.Start.Line;
+
         StringBuilder text = new();
         for ( int index = 0; index < body.Length; index++ )
         {
             PToken token = body[index];
-            if ( text.Length > 0 && NeedsSpaceBefore(token.Kind, body[index - 1].Kind) )
+
+            if ( token.Range.Start.Line > line )
+            {
+                int level = columns.IndexOf(token.Range.Start.Character) - baseLevel;
+                text.Append('\n').Append(' ', Math.Max(0, level) * IndentWidth);
+                line = token.Range.Start.Line;
+            }
+            else if ( text.Length > 0 && NeedsSpaceBefore(token.Kind, body[index - 1].Kind) )
             {
                 text.Append(' ');
             }
@@ -60,6 +95,28 @@ public static class MacroExpansionPreview
         }
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// The distinct columns the body's lines start at, ascending. A line's indent LEVEL is its
+    /// column's index here, which is what makes a tab-indented header and a space-indented one
+    /// render identically — and what keeps a body indented by some other width readable.
+    /// </summary>
+    private static ImmutableArray<int> LineStartColumns(ImmutableArray<PToken> body)
+    {
+        SortedSet<int> columns = [];
+        int line = -1;
+
+        foreach ( PToken token in body )
+        {
+            if ( token.Range.Start.Line != line )
+            {
+                columns.Add(token.Range.Start.Character);
+                line = token.Range.Start.Line;
+            }
+        }
+
+        return [.. columns];
     }
 
     /// <summary>The argument this token stands for, or the token's own text.</summary>
@@ -92,6 +149,19 @@ public static class MacroExpansionPreview
     /// </summary>
     public static ImmutableArray<string> ArgumentsFollowing(string text, int afterName)
     {
+        return Texts(text, ArgumentSpansFollowing(text, afterName));
+    }
+
+    /// <summary>
+    /// Where each of those arguments IS, rather than what it says — the trimmed offsets of every
+    /// top-level argument following the name at <paramref name="afterName"/>.
+    ///
+    /// Inlay hints need the position and not the text: a <c>__a:</c> label goes immediately before
+    /// the argument it names. Sharing the scan with <see cref="ArgumentsFollowing"/> is what keeps
+    /// the hint on the same argument the hover claims it is.
+    /// </summary>
+    public static ImmutableArray<MacroArgumentSpan> ArgumentSpansFollowing(string text, int afterName)
+    {
         int scan = afterName;
         while ( scan < text.Length && char.IsWhiteSpace(text[scan]) )
         {
@@ -103,7 +173,7 @@ public static class MacroExpansionPreview
             return [];
         }
 
-        return ParseArguments(text[scan..]);
+        return SpansFrom(text, scan);
     }
 
     /// <summary>
@@ -121,48 +191,75 @@ public static class MacroExpansionPreview
             return [];
         }
 
-        ImmutableArray<string>.Builder arguments = ImmutableArray.CreateBuilder<string>();
-        StringBuilder current = new();
-        int depth = 0;
+        return Texts(invocationText, SpansFrom(invocationText, open));
+    }
 
-        for ( int index = open; index < invocationText.Length; index++ )
+    /// <summary>The text each span covers.</summary>
+    private static ImmutableArray<string> Texts(string text, ImmutableArray<MacroArgumentSpan> spans)
+    {
+        return [.. spans.Select(span => text[span.Start..span.End])];
+    }
+
+    /// <summary>
+    /// The top-level argument spans of the parenthesised list opening at <paramref name="open"/>,
+    /// each already trimmed of surrounding whitespace.
+    ///
+    /// Depth counts brackets as well as parentheses, so <c>things[0, 1]</c> stays one argument. An
+    /// unterminated list — the normal state while typing — yields what has been written so far.
+    /// </summary>
+    private static ImmutableArray<MacroArgumentSpan> SpansFrom(string text, int open)
+    {
+        ImmutableArray<MacroArgumentSpan>.Builder spans = ImmutableArray.CreateBuilder<MacroArgumentSpan>();
+        int depth = 0;
+        int start = open + 1;
+
+        for ( int index = open; index < text.Length; index++ )
         {
-            char c = invocationText[index];
+            char c = text[index];
 
             if ( c is '(' or '[' )
             {
                 depth++;
-                if ( depth == 1 )
-                {
-                    // The opening parenthesis is not part of the first argument.
-                    continue;
-                }
             }
             else if ( c is ')' or ']' )
             {
                 depth--;
                 if ( depth == 0 )
                 {
-                    break;
+                    // `FOO()` takes none; `FOO( a, )` really was written with a second, empty one.
+                    AddSpan(spans, text, start, index, keepEmpty: spans.Count > 0);
+                    return spans.ToImmutable();
                 }
             }
             else if ( c == ',' && depth == 1 )
             {
-                arguments.Add(current.ToString().Trim());
-                current.Clear();
-                continue;
+                AddSpan(spans, text, start, index, keepEmpty: true);
+                start = index + 1;
             }
-
-            current.Append(c);
         }
 
-        string last = current.ToString().Trim();
-        if ( last.Length > 0 || arguments.Count > 0 )
+        AddSpan(spans, text, start, text.Length, keepEmpty: spans.Count > 0);
+        return spans.ToImmutable();
+    }
+
+    /// <summary>Adds [start, end) with its surrounding whitespace trimmed off both ends.</summary>
+    private static void AddSpan(
+        ImmutableArray<MacroArgumentSpan>.Builder spans, string text, int start, int end, bool keepEmpty)
+    {
+        while ( start < end && char.IsWhiteSpace(text[start]) )
         {
-            arguments.Add(last);
+            start++;
         }
 
-        return arguments.ToImmutable();
+        while ( end > start && char.IsWhiteSpace(text[end - 1]) )
+        {
+            end--;
+        }
+
+        if ( start < end || keepEmpty )
+        {
+            spans.Add(new MacroArgumentSpan(start, end));
+        }
     }
 
     /// <summary>

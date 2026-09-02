@@ -19,4 +19,16 @@
     <ProjectReference Include="..\..\src\GSCode.Server\GSCode.Server.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      The sample scripts are analysed from disk beside the test assembly, so they are copied rather
+      than located by walking up to the repo. LinkBase keeps the per-game folder shape, which the
+      resolver needs: each game's folder IS its raw root.
+    -->
+    <Content Include="..\..\samples\**\*.gsc;..\..\samples\**\*.csc;..\..\samples\**\*.gsh">
+      <LinkBase>Samples</LinkBase>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

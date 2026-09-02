@@ -1,9 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Parser;
-using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Typing;
 
@@ -38,17 +35,11 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class TypeMismatchLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, FlowTyper typer)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        ScriptTypes types = typer.InferValues(result);
-        Walk(result.Tree.Root, types, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
-    private static void Walk(AstNode node, ScriptTypes types, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ScriptTypes types, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         switch ( node )
         {
@@ -59,11 +50,6 @@ public static class TypeMismatchLint
             case VectorNode vector:
                 InspectVectorComponents(vector, types, diagnostics);
                 break;
-        }
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, types, diagnostics);
         }
     }
 

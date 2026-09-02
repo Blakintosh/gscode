@@ -34,25 +34,58 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Database/LanguageStore.cs
 
 - `sealed class LanguageStore` — ONE language world: path-keyed record map + its
-  ReferenceIndex, DeclarationIndex and ClassGraph. Upsert swaps records atomically and diffs all
-  three under one write gate; GSC/CSC isolation is two instances of this class, never a filter.
+  ReferenceIndex, DeclarationIndex, NamespaceIndex and ClassGraph. Upsert swaps records atomically
+  and diffs all four; GSC/CSC isolation is two instances of this class, never a filter.
+- The write gates are STRIPED by path, 64 of them, not one for the store. The race they stop is
+  between two writers of the SAME file — read-previous and swap are separate steps — and two writers
+  of different files share nothing here, because each index below serialises its own dictionary.
+  One gate for the store serialised every index diff in the workspace against every other one and
+  made `commit.upsert` 28.6% of CoD4's cold-index thread-time. See `PERF.md`.
+
+## Database/PackedInvertedIndex.cs
+
+- `internal sealed class PackedInvertedIndex<TKey>` — key→files storage plus the per-file diff,
+  shared by `ReferenceIndex` and `DeclarationIndex`. They were the same class twice: same packing,
+  same remove-then-add diff, same snapshot read, differing only in what a key is. Keeping them apart
+  meant a change to the diff had to land in both, and they had already drifted.
+- Packed: a bare `string` while exactly one file carries a key, promoted to a `HashSet<string>` only
+  once a second appears. Most keys are carried by one file and a HashSet holding one reference costs
+  ~150 bytes to carry 8 — on BO1 that is the declaration index costing 5.1 MB against well under
+  one. The union never escapes the class.
+- Sharded 64 ways by key hash, each shard its own dictionary and lock, taking a shard lock per key
+  rather than one lock per diff. Sound only because no invariant spans two keys. This took
+  `commit.upsert` from 28.6% of CoD4's cold-index thread-time to 8.4%; see `PERF.md`.
+- `NamespaceIndex` is deliberately NOT built on this — see its entry.
 
 ## Database/ReferenceIndex.cs
 
-- `sealed class ReferenceIndex` — the inverted key→files index. One lock, held per
-  file-diff; exact ranges come from scanning the named files' reference lists.
+- `sealed class ReferenceIndex` — the inverted key→files index. `KeysOf` turns a record's
+  reference list into keys outside the caller's write gate; the storage and the diff come from
+  `PackedInvertedIndex<SymbolKey>`. Exact ranges come from scanning the named files' reference lists.
 
 ## Database/DeclarationIndex.cs
 
 - `sealed class DeclarationIndex` — the name→declaring-files index, the counterpart to
-  `ReferenceIndex`. Maintained by the same Apply-on-upsert diff under the store's write gate, and
-  holds PATHS rather than records for the same reason: a record is swapped wholesale on every edit,
+  `ReferenceIndex`, and literally so — both are wrappers over `PackedInvertedIndex<TKey>`. Holds
+  PATHS rather than records for the same reason: a record is swapped wholesale on every edit,
   so holding one would pin a stale version. Keyed on `FunctionSymbol.KeyName` and compared ordinally
   — exactly the comparison `LookupFunctions` performs, so the candidate set is identical.
 - It exists because `LookupFunctions` used to walk every record and every function in each (~30,000
   symbols on BO3) once per CALL SITE, which made four lints 97% of the cross-file lint cost. It
   narrows WHERE to look and decides nothing: visibility, namespace, privacy and overlay shadowing
   all still apply after it. See `PERF.md`.
+
+## Database/NamespaceIndex.cs
+
+- `sealed class NamespaceIndex` — the namespace→declaring-files index, the third of the
+  inverted indexes and built for the same reason as the other two: a question that used to be
+  answered by walking the whole store is answered by a lookup. `FilesDeclaringInto` narrows the
+  candidate set for a namespace before anything reads a record.
+- Holds a plain `HashSet<string>` per namespace rather than sharing `PackedInvertedIndex<TKey>`
+  with the other two, because a namespace is declared into by many files by nature, where a function
+  name usually is not: the packing saves nothing here and the diff it needs is genuinely simpler.
+  Unifying all three would take a flag to tell the two shapes apart, which is the sign they are not
+  one shape.
 
 ## Database/FunctionLookupCache.cs
 
@@ -79,7 +112,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 - `static GscKeywords` — the statement-scope and top-level keyword/directive lists offered in
   completion (assert/assertmsg excluded — they come from the builtin API instead). Documented
-  entries get their KeywordDocs blurb as the completion's documentation.
+  entries get their KeywordDocs blurb as the completion's documentation. A body is offered
+  `StatementKeywords`; file scope is offered BOTH lists, since a top-level macro invocation opens
+  an expression there — see the engine below.
 - `BodyDirectives` is the third list: the directives the preprocessor dispatches from its flat
   token walk (`#if`/`#elif`/`#else`/`#endif`, `#define`, `#insert`), which are therefore legal
   inside a function body as well as at file scope. Everything else in the family is consumed by
@@ -93,9 +128,29 @@ lints, `Completion/` and `Typing/` the information surfaces.
   reference index (gated by `includeLiterals` = the completion.literals setting; disabled →
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
-  (+ `.size`), and statement/top-level scope (keywords, the dialect's global objects and snippets,
+  (+ `.size`), and statement scope (keywords, the dialect's global objects and snippets,
   the enclosing function's parameters and locals, every macro in scope, namespace functions,
   visible classes, namespace-less builtins as call snippets).
+- **File scope gets that same list.** It used to be keywords and snippets alone — a
+  `!insideFunction` return sat above every store query — so `REGISTER_SYSTEM`, written at column 0
+  in 477 of the shipped BO3 scripts, was never offered, nor was any macro, function or class. None
+  of those is a per-cursor fact; the macro table is per FILE and a function is in scope for the
+  file, so the return was hiding categories for no reason but the order they were added in. File
+  scope is also not declarations-only, which is why narrowing the list was not the fix instead: a
+  top-level macro invocation is a CALL, so it opens an expression there, and BO3 writes 510 function
+  pointers and 467 `undefined`s inside those argument lists. Hence both keyword lists at file scope.
+  What stays behind is what is not BOUND there: parameters and locals (nothing is bound outside a
+  declaration) and the engine globals (`self` at file scope is unwritable, and a global sorts in the
+  first tier, so it would head every list).
+- Two punctuation rules are decided once above the dispatch, since each is a fact about the POSITION
+  rather than about the list an arm produces. **File scope takes no terminator** —
+  `IsStatementPosition` finds the previous function's `}` and answers true, which is right in a body
+  and meaningless where there are no statements; all 447 `REGISTER_SYSTEM` uses carry no semicolon.
+  **A function pointer takes no parentheses at all** — `&foo` names the function where `&foo()`
+  calls it, and BO3 writes 4,564 pointers against four `&name(` of any kind. The pointer rule covers
+  `&ns::foo` too (585 of them), and is gated on `GameProfile.FunctionPointerStyle`, since pre-BO3 a
+  pointer is a bare qualified name and an `&` is arithmetic. Only the suffix changes: what may be
+  pointed at is what may be called, so the producers already answer that position.
 - `CollectLocalScope(function, position, entries)` — the names bound INSIDE the function being
   edited, and the only per-function list here. Parameters, then the locals introduced by an
   assignment AT OR ABOVE the cursor; an owner (`self.count = 1`) makes it a field rather than a
@@ -107,7 +162,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   file plus the headers it `#insert`s, so it already is "what this file can expand"; filtering it
   to `SourceFile is null` kept the root file's own and dropped every constant a shared `.gsh`
   exists to supply. A function-like macro takes the call punctuation a function does, since at the
-  use site it is a call; the detail names the defining header.
+  use site it is a call; the detail names the defining header. Gated on `GameProfile.HasMacros`,
+  like every other category here is gated on the dialect: the preprocessor records a `#define`
+  whatever game is active, but only BO3 has a preprocessor, and in the IW line the one `#define`
+  per corpus is a commented-out block of C in `_hud.gsc`.
 - A `#` INSIDE a body has two readings and gets both: `GscKeywords.BodyDirectives`, plus the
   `#"..."` literals where `GameProfile.HasHashStrings`. Reading it as a hash string alone lost the
   `#if` family everywhere and left the three dialects without hash strings an empty list.
@@ -120,7 +178,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   .Statements / .Expressions)`, and the same reason.
   - `.Context.cs` — WHERE the cursor is. All static, and reads only tokens, source text and the
     parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `EnclosingFunction`,
-    `PreviousSignificant`, `TryPrecacheContext` and the rest. `EnclosingFunction` is carried by the
+    `PreviousSignificant`, `TryPrecacheContext`, `IsAddressOfPosition` and the rest. `EnclosingFunction` is carried by the
     dispatcher as a symbol rather than reduced to a bool, since the same walk answers which keyword
     set is legal, whether `vararg` binds, and which parameters and locals are in scope. Nothing here
     touches the database, which is the property that makes the boundary hold.
@@ -152,8 +210,15 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Completion/SignatureEngine.cs
 
 - `SignatureParameter`/`SignatureResult` + `SignatureEngine.Resolve(...)` — scans back from
-  the cursor to the enclosing '(', identifies the callee (script function / builtin) and
+  the cursor to the enclosing '(', identifies the callee (macro / script function / builtin) and
   the active parameter (top-level comma count), and renders the signature + parameter docs.
+- The MACRO is asked first, and from `result.Preprocessed.Macros` rather than the store: the
+  preprocessor substitutes before the parser runs, so where a `#define` and a function share a name
+  the function's parameters describe code that never executes. The lookup is ORDINAL — macro names
+  are the language's one case-sensitive kind — and an object-like macro answers null, since
+  `MAX_PLAYERS( x )` is a body followed by a parenthesised expression rather than a call. Unlike
+  macro COMPLETION this is not gated on `HasMacros`: completion decides what to propose, this
+  describes a name already written, and the preprocessor expands a `#define` on every dialect.
 
 ## Database/SymbolAtPosition.cs
 
@@ -250,15 +315,23 @@ lints, `Completion/` and `Typing/` the information surfaces.
   effect immediately. Takes an optional `GameProfile`, null meaning `GameProfile.Active` at
   analysis time — which is what the server wants, selecting the game once at startup, and what
   a caller holding a profile must override: indexing under the wrong dialect does not fail, it
-  parses declarations away and leaves the store EMPTY. A `ConcurrentDictionary<path, Lazy<InsertedFile?>>` lexes each GSH
-  exactly once no matter how many scripts insert it; `InvalidateGsh` drops one on change.
-  `IndexFile` is the single-file path the watcher reuses. `UseCache` enables cold-restore:
+  parses declarations away and leaves the store EMPTY. Inserts go through the shared `InsertCache`
+  and a `ResolverInsertProvider`, the same two the document path uses, so each GSH is lexed once no
+  matter how many scripts insert it; `InvalidateGsh` drops one on change. The argument is optional
+  and the field is not — a caller supplying none gets its own cache rather than no cache.
+  `IndexFile` is the single-file path the watcher reuses. `UseCache` enables warm-restore:
   the two-pass `IndexAsync` restores files whose on-disk content hash matches the cached
-  record (skipping the parse), then re-parses restored files that #insert a header which
+  `CachedEntry`, deserializing the blob only once that check passes and skipping the parse, then
+  re-parses restored files that #insert a header which
   itself changed (phase two), and write-throughs every fresh analysis to the cache. Phase
   two closes the changed-header set over the insert graph first, since a restored `.gsh`
   that inserts a changed one contributes something new despite its own bytes matching.
   `RemoveFile` drops a deleted file from the database, the cache, and the GSH lex cache.
+  The restore snapshot is held for one pass only: `IndexAsync` releases it in a `finally`, so a
+  server-lifetime singleton does not carry 21 MB (bo3) or 64 MB (bo1) of gzipped blobs for the
+  session. `ReloadRestoreSnapshot` re-reads it for the one caller that indexes twice — the
+  workspace-folder handler — and swallows a read failure, since a cache closed by
+  `gscode/clearCache` should give a cold index rather than an exception.
 
 ## Cache/CacheSchema.cs
 
@@ -281,12 +354,24 @@ lints, `Completion/` and `Typing/` the information surfaces.
   ScriptRecord to/from a gzipped JSON blob (no runtime reflection). Deserialize returns
   null on a corrupt blob so one bad row never fails the restore.
 
+## Cache/CachedEntry.cs
+
+- `sealed record CachedEntry(ulong ContentHash, byte[] Blob)` + `Materialize()` — one cached
+  record still in its stored form. The deserialize is deliberately NOT done when the cache is read:
+  `LoadAll` runs before the indexer knows which files are current, so materialising everything there
+  paid gzip inflation and a JSON parse for files about to be re-analysed anyway — on ONE thread, in
+  front of an index that runs on all of them. That made a warm start slower than having no cache at
+  all (bo3 1,509 ms of restore against a 390 ms cold index). Handing the indexer the blob moves both
+  halves into its parallel per-file loop, behind the content-hash check. The hash is stored beside
+  the blob rather than inside it for exactly that reason. See `PERF.md`.
+
 ## Cache/SqliteCache.cs
 
 - `sealed class SqliteCache : IAsyncDisposable` — the per-workspace cache.
   `ResolveDatabasePath` (→ %APPDATA%/gscode/cache/&lt;hash&gt;.db), `CleanUpLegacyCache`
   (deletes the old single-file gzip-JSON cache), `Open` (WAL + busy_timeout, creates
-  tables, wipes on version/identity mismatch), `LoadAll` (cold-restore input),
+  tables, wipes on version/identity mismatch), `LoadAll` (warm-restore input, as `CachedEntry`
+  rows rather than records — see below),
   `Enqueue`/`EnqueueDelete` (never block — a single background writer drains a bounded
   channel, coalescing batches into transactions; dirty records are skipped), and
   `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing).
@@ -323,14 +408,18 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Resolution/ResolverInsertProvider.cs
 
-- `sealed class ResolverInsertProvider` — the real #insert provider: resolves the raw
-  path through the asking file's ResolutionContext, reads and lexes the target. The
-  shared lexed-GSH cache arrives with the indexer (P5).
+- `sealed class ResolverInsertProvider` — the ONLY #insert provider: resolves the raw
+  path through the asking file's ResolutionContext, then takes the target from `InsertCache` or
+  reads and lexes it. Both the document path and `WorkspaceIndexer` use it; the indexer had a
+  private one of its own over a second cache of the same headers until they were merged.
 
 ## Resolution/IFileSystem.cs
 
 - `interface IFileSystem` — the thin disk seam (FileExists/DirectoryExists/ReadAllText/
-  EnumerateFiles) so resolver and indexer tests run on fake in-memory trees.
+  GetLastWriteTimeUtc/EnumerateFilesWithExtensions) so resolver and indexer tests run on fake
+  in-memory trees. `EnumerateFilesWithExtensions` is the only enumeration on it: a single-pattern
+  form was carried for a while after its last caller went and cost every implementer a method
+  nothing called.
 - `sealed class PhysicalFileSystem` — the real one.
 
 ## Resolution/RootConfig.cs
@@ -401,7 +490,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Analysis/PreferBooleanLiteralLint.cs
 
-- `static PreferBooleanLiteralLint.Analyze(result, builtins)` — hints that a literal `0`/`1`
+- `PreferBooleanLiteralLint.InspectNode(node, builtins, …)` + `InspectRest(…)` — hints that a literal `0`/`1`
   passed to a builtin parameter declared `bool` should be `false`/`true`. Scoped to
   declared-bool parameters ONLY: an int parameter legitimately takes 0 and 1, and flagging
   those was the v1 bug this rule's original test existed to pin. Every overload must agree the
@@ -426,7 +515,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Analysis/GlobalObjectWriteLint.cs
 
-- `static GlobalObjectWriteLint.Analyze(result)` — reports an assignment to one of the engine's
+- `GlobalObjectWriteLint.InspectNode(node, globals, …)` + `GlobalNames()` — reports an assignment to one of the engine's
   global objects (5035, Error): `level = 1`, `anim = 1`. The names come from
   `GameProfile.GlobalObjectNames`, never a table here, so `world` is a global on BO3 and an ordinary
   local name on CoD4. Only a BARE name counts — `level.things = []` and `game[ "k" ] = 1` write
@@ -434,11 +523,32 @@ lints, `Completion/` and `Typing/` the information surfaces.
   where the profile lists it: nothing establishes what the compiler does with an assignment to it,
   and an Error has to be certain. Swept clean over 8,289 scripts across all five games.
 
+## Analysis/NodeLintPass.cs
+
+- `internal static NodeLintPass.Run(result, builtins, types, diagnostics)` — ONE walk of the tree
+  shared by the nine rules whose judgement is about a single node. Each of those descended the whole
+  file on its own, visiting the same million corpus nodes nine times to ask nine independent
+  questions; a bare walk that does nothing else is about 85 ms of a 2.1 s bo3 lint pass, so the
+  traversal was nearly all of what those rules cost.
+- A rule qualifies only when its own walk was PURE PASS-THROUGH. The six left out are named in the
+  type's doc comment with the reason each one cannot join — a threaded flag, per-function state, or
+  a cache carried down the descent. Read that list before adding a tenth.
+- Each rule exposes `InspectNode`, its whole judgement about one node with no descent, so there is
+  one copy of each judgement. Diagnostics land in one builder and `WorkspaceLints` sorts by position
+  before returning, so merging the walks cannot change what is published.
+
 ## Analysis/ — the remaining lints
 
-Each is a `static Analyze(...)` returning diagnostics, run per open document and merged by the
-server's `TextSyncHandler`. Severity is chosen by MEASUREMENT over the corpus, not by taste: a rule
-reported as an Error must never land on code that ships and works.
+Each is run per open document by `WorkspaceLints` and merged by the server's `TextSyncHandler`.
+Severity is chosen by MEASUREMENT over the corpus, not by taste: a rule reported as an Error must
+never land on code that ships and works.
+
+Two entry shapes. A rule that needs its own traversal — per-function state, a flag threaded down the
+descent, a cache carried along — exposes `static Analyze(...)` and walks the tree itself. A rule
+whose judgement is about a single node exposes `InspectNode` instead and is driven by
+`NodeLintPass`'s one shared walk; it has no `Analyze`, because a second walker that nothing but a
+test called is how the two silently drift. `NodeLintPass` names which rules are in and why the rest
+are out.
 
 - `FunctionResolutionLint` (5013/5014/5025) — a call resolving to no script function and no builtin.
   Splits script from builtin so a corpus sweep of 5014 yields the candidate list for curating the
@@ -468,8 +578,14 @@ reported as an Error must never land on code that ships and works.
   whether the target exists on DISK, which is what decides linking, while this also requires the
   index to have reached it.
 - `ImportGate` — the precondition several lints share: an unresolved `#insert` or `#using` makes the
-  set of legal names unknowable, so a rule about to say "this matches nothing" stands down. The
-  caller names which codes matter.
+  set of legal names unknowable, so a rule about to say "this matches nothing" stands down.
+  `MacrosLost` is the header half and is NOT the caller's to name — all six ways the preprocessor
+  abandons a splice, since each loses the macros identically and `InsertNotFound` alone is merely
+  the one anybody remembers. `InsertMissingSemicolon` is excluded because it reports and carries on.
+  The `#using` half stays a parameter, since rules differ on whether they already cover it.
+- `MacroReports` — the one rule six lints share about a reference a macro expanded into: report it
+  once per site, and allocate nothing when no macro is involved. The dedupe KEY stays the caller's,
+  because it is each rule's own claim about what it would have you fix.
 - `ArgumentCountLint` (5022/5023) — the rule is NOT symmetric. A **script function** is only wrong
   with too MANY arguments: passing fewer is legal and idiomatic, the rest being `undefined`. A
   **builtin** is engine-validated, so its mandatory count is a real lower bound — but only where
@@ -524,6 +640,10 @@ reported as an Error must never land on code that ships and works.
 - Validated by last-write time rather than by an invalidation message, because a watcher that drops
   an event leaves a stale header — and a stale header changes what macros expand to with no error to
   trace back. A failed read is not cached. See `PERF.md` for what the two caches were worth.
+- `SeedIfAbsent` takes a header the indexer has already read and lexed as one of its own targets,
+  rather than letting the insert path build it a second time. `TryAdd`, not an assignment: a `.gsc`
+  inserting the header may get there first, and its entry is equally current and may already carry a
+  walked contribution. The stamp must be read BEFORE the content it describes.
 
 ## Resolution/RawWriteGuard.cs
 
@@ -628,6 +748,14 @@ Bundled game data (copied to the build output) plus the loaders and doc renderer
 - `DevOnlyBuiltins.cs` — the conservative fallback set for development-only engine functions;
   API entries can override it when the data carries an explicit `devOnly` value.
 - `MacroExpansionPreview.cs` — renders a readable, length-limited macro body for hover and
-  substitutes call-site arguments token-by-token rather than by unsafe text replacement.
+  signature help, and substitutes call-site arguments token-by-token rather than by unsafe text
+  replacement. The body keeps the LINES it was written on — the backslashes are gone from it by
+  then, but each token still carries its own line — and indentation is rendered as ranked LEVELS
+  four spaces apart rather than as the author's columns, since a tab is one character in a range
+  and subtracting columns gave a tab-indented header a one-space step. One
+  argument scan serves both readers: `ArgumentsFollowing` gives hover the text, and
+  `ArgumentSpansFollowing` gives the macro inlay hints the trimmed `MacroArgumentSpan` offsets a
+  label is placed at. Nesting counts brackets as well as parentheses, and an unterminated list —
+  the normal state while typing — yields what has been written so far.
 - `StockScripts.cs` — loads the profile's raw-relative stock-script list and canonicalizes slash
   style and casing for the raw-file warning setting.

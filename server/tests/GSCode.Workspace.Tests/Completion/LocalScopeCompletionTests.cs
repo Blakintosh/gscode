@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
@@ -30,36 +29,6 @@ public class LocalScopeCompletionTests
 {
     private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
-
-    /// <summary>Serves one header's text to <c>#insert</c>, so a macro can come from outside the file.</summary>
-    private sealed class FakeInserts : IInsertProvider
-    {
-        private readonly Dictionary<string, InsertedFile> _files = new(StringComparer.OrdinalIgnoreCase);
-
-        public FakeInserts Add(string rawPath, string content)
-        {
-            SourceText text = SourceText.From(content);
-            _files[rawPath] = new InsertedFile(rawPath.ToLowerInvariant(), text, Lexer.Lex(text).Tokens);
-            return this;
-        }
-
-        public bool TryGetInsert(string rawInsertPath, out InsertedFile inserted)
-        {
-            return _files.TryGetValue(rawInsertPath, out inserted!);
-        }
-
-        public bool TryResolveInsertPath(string rawInsertPath, out string resolvedPath)
-        {
-            if ( _files.TryGetValue(rawInsertPath, out InsertedFile? file) )
-            {
-                resolvedPath = file.Path;
-                return true;
-            }
-
-            resolvedPath = "";
-            return false;
-        }
-    }
 
     private static CompletionEngine BuildWorld(FakeFileSystem files)
     {
@@ -396,5 +365,84 @@ public class LocalScopeCompletionTests
             "#define LOCAL_CAP 5\n#namespace game;\nfunction run()\n{\n    |\n}\n");
 
         Assert.NotNull(Entry(entries, "LOCAL_CAP"));
+    }
+
+    // --- File scope ---
+    //
+    // Outside every function body the list used to be a static set of words: no macro, no function,
+    // no class reached it, because everything workspace-derived sat below a `!insideFunction`
+    // return. REGISTER_SYSTEM is written at column 0 in 477 of the shipped BO3 scripts and was
+    // never offered once.
+
+    /// <summary>The reported case, at the position it was reported from.</summary>
+    [Fact]
+    public void FileScope_OffersMacrosFromAnInsertedHeader()
+    {
+        CompletionEngine engine = BuildWorld(new FakeFileSystem());
+        FakeInserts inserts = new FakeInserts()
+            .Add(
+                @"scripts\shared\shared.gsh",
+                "#define REGISTER_SYSTEM( sys, func, reqs ) function autoexec __init__sytem__() { }\n#define MAX_PLAYERS 18\n");
+
+        ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
+            engine,
+            @$"{Raw}\scripts\main.gsc",
+            "#insert scripts\\shared\\shared.gsh;\n#namespace game;\n|\nfunction run()\n{\n}\n",
+            inserts);
+
+        CompletionEntry? macro = Entry(entries, "REGISTER_SYSTEM");
+        Assert.NotNull(macro);
+        Assert.Equal(CompletionKind.Macro, macro!.Kind);
+        Assert.Equal("macro (shared.gsh)", macro.Detail);
+
+        // No terminator: the expansion is a declaration, and none of the 447 corpus uses carries one.
+        Assert.Equal("REGISTER_SYSTEM($0)", macro.InsertText);
+
+        // The object-like ones come too. File scope gets the list a body gets, rather than a
+        // narrowed one whose rule would have to grow an exception per construct.
+        Assert.NotNull(Entry(entries, "MAX_PLAYERS"));
+    }
+
+    /// <summary>
+    /// What a macro invocation's ARGUMENTS need. `REGISTER_SYSTEM( "aat", &amp;__init__, undefined )`
+    /// is a call, so file scope is an expression position too: the shipped BO3 scripts write 510
+    /// function pointers and 467 `undefined`s there, and neither was reachable.
+    /// </summary>
+    [Fact]
+    public void FileScope_OffersTheFunctionsInScopeAndTheExpressionAtoms()
+    {
+        CompletionEngine engine = BuildWorld(new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\system.gsc", "#namespace game;\nfunction __init__()\n{\n}\n"));
+
+        ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
+            engine,
+            @$"{Raw}\scripts\main.gsc",
+            "#namespace game;\n|\nfunction run()\n{\n}\n");
+
+        Assert.Contains(
+            entries,
+            e => e.Kind == CompletionKind.Function
+                && e.Label.StartsWith("__init__", StringComparison.Ordinal));
+
+        Assert.NotNull(Entry(entries, "undefined"));
+    }
+
+    /// <summary>
+    /// The one category deliberately held back. The engine globals are <c>CompletionKind.Variable</c>,
+    /// which sorts FIRST, so offering them at file scope would put `self` and `level` at the head of
+    /// every list at a position where nothing can be sent on them.
+    /// </summary>
+    [Fact]
+    public void FileScope_DoesNotOfferTheEngineGlobals()
+    {
+        CompletionEngine engine = BuildWorld(new FakeFileSystem());
+
+        ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
+            engine,
+            @$"{Raw}\scripts\main.gsc",
+            "#namespace game;\n|\nfunction run()\n{\n}\n");
+
+        Assert.False(HasVariable(entries, "self"));
+        Assert.False(HasVariable(entries, "level"));
     }
 }

@@ -1,6 +1,7 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
+using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -41,9 +42,17 @@ public static class PrivateAccessLint
         FunctionLookupCache visibleLookups = new(store, askingContextId, askingPath, askingNamespaces);
         FunctionLookupCache anyLookups = new(store, askingContextId, askingPath);
 
+        // Keyed on the symbol: one private function named twice by a macro body is one broken
+        // call. See MacroReports.
+        HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // FromMacro is not skipped. Privacy is the engine's rule about which namespace may
+            // reach a declaration, and it applies to the expansion the compiler sees — a macro is
+            // not a way around `private`, so a header whose body calls another namespace's private
+            // function produces a call that does not link, in every file that invokes it.
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -95,7 +104,11 @@ public static class PrivateAccessLint
                 DiagnosticRelation declaredAt = new(
                     candidate.Record.Path, candidate.Function.NameRange, "Declared private here.");
 
-                diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
+                if ( MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
+                {
+                    diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
+                }
+
                 break;
             }
         }

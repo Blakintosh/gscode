@@ -587,6 +587,23 @@ public sealed partial record GameProfile
         get { return [.. ScriptExtensions.Select(static extension => "*" + extension)]; }
     }
 
+    /// <summary>
+    /// Directory names the workspace walk never descends into, because the tools write them and no
+    /// source lives there.
+    ///
+    /// This exists because a workspace folder is often the GAME INSTALL, not a scripts folder: a
+    /// Black Ops III install is 295,640 files, of which 170,328 are under `share\assetconvert` —
+    /// one shader and mesh cache per asset — and 4,329 more under `texture_assets`. Finding 1,105
+    /// scripts meant walking all of it, which took longer than analysing every one of them.
+    ///
+    /// Kept deliberately SHORT and specific to tool output. `zone`, `sound` and `video` were
+    /// measured too and are not worth the risk: they cost nothing on top of these two, and each is
+    /// a name a mod could plausibly give a scripts folder. Skipping a directory a user keeps
+    /// scripts in is a file that silently never gets indexed, which is a worse failure than a slow
+    /// walk.
+    /// </summary>
+    public static ImmutableArray<string> ToolOutputDirectories { get; } = ["assetconvert", "texture_assets"];
+
     private static readonly Lazy<ImmutableArray<GameProfile>> s_lineage = new(BuildLineage);
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
@@ -53,6 +53,7 @@ public class SqliteCacheTests : IDisposable
             References =
             [
                 new ReferenceEntry(new SymbolKey("test", "sample", SymbolKind.Function), TextRange.FromCoordinates(0, 9, 0, 15), ReferenceKind.Definition),
+                new ReferenceEntry(new SymbolKey("test", "expanded", SymbolKind.Function), TextRange.FromCoordinates(1, 4, 1, 12), ReferenceKind.Call, FromMacro: true),
             ],
         };
     }
@@ -98,13 +99,28 @@ public class SqliteCacheTests : IDisposable
 
         await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-a") )
         {
-            IReadOnlyDictionary<string, ScriptRecord> restored = reopened.LoadAll();
+            IReadOnlyDictionary<string, CachedEntry> restored = reopened.LoadAll();
 
-            ScriptRecord loaded = Assert.Single(restored).Value;
+            CachedEntry entry = Assert.Single(restored).Value;
+
+            // The hash comes off its own COLUMN now, not out of the blob, and that is the whole
+            // reason a warm start can decide a file is stale without deserializing it.
+            Assert.Equal(record.ContentHash, entry.ContentHash);
+
+            ScriptRecord? loaded = entry.Materialize();
+            Assert.NotNull(loaded);
             Assert.Equal(record.Path, loaded.Path);
             Assert.Equal(record.ContentHash, loaded.ContentHash);
             Assert.Equal("Sample", Assert.Single(loaded.Functions).Name);
-            Assert.Equal(record.References[0].Key, Assert.Single(loaded.References).Key);
+            Assert.Equal(record.References[0].Key, loaded.References[0].Key);
+
+            // FromMacro is the field RecordFormatVersion 5 exists for: a blob that loses it reads
+            // as ordinary text written in the file, which puts hover and go-to-definition on the
+            // macro's callee at a range spelling the macro's name. It is additive on the wire, so
+            // nothing else would fail if it silently stopped round-tripping.
+            Assert.False(loaded.References[0].FromMacro);
+            Assert.True(loaded.References[1].FromMacro);
+            Assert.Equal(ReferenceKind.Call, loaded.References[1].Kind);
         }
     }
 
@@ -186,12 +202,19 @@ public class SqliteCacheTests : IDisposable
 
         await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "id") )
         {
-            IReadOnlyDictionary<string, ScriptRecord> restored = reopened.LoadAll();
+            IReadOnlyDictionary<string, CachedEntry> restored = reopened.LoadAll();
 
             Assert.Equal(8, restored.Count);
             for ( int index = 0; index < 8; index++ )
             {
-                ScriptRecord loaded = restored[PathUtil.NormalizeAbsolute(@$"c:\ws\scripts\keep{index}.gsc")];
+                CachedEntry entry = restored[PathUtil.NormalizeAbsolute(@$"c:\ws\scripts\keep{index}.gsc")];
+
+                // Both sides of the row, because leakage between records is what this test is for:
+                // the column the freshness check reads, and the blob behind it.
+                Assert.Equal((ulong)(100 + index), entry.ContentHash);
+
+                ScriptRecord? loaded = entry.Materialize();
+                Assert.NotNull(loaded);
                 Assert.Equal((ulong)(100 + index), loaded.ContentHash);
             }
         }
@@ -245,13 +268,63 @@ public class ColdRestoreTests : IDisposable
         (ScriptDatabase db2, WorkspaceIndexer indexer2, _) = Build(files);
         await using ( SqliteCache cache2 = SqliteCache.Open(_dbPath, "id") )
         {
-            IReadOnlyDictionary<string, ScriptRecord> restored = cache2.LoadAll();
+            IReadOnlyDictionary<string, CachedEntry> restored = cache2.LoadAll();
             Assert.Single(restored);
             indexer2.UseCache(cache2, restored);
             await indexer2.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
         }
 
         Assert.Single(DatabaseQueries.LookupFunctions(db2.Gsc, "raw", "", null, "alpha"));
+    }
+
+    /// <summary>
+    /// The restore snapshot is released when a pass finishes, and re-read by the one caller that
+    /// indexes twice.
+    ///
+    /// It used to be held for the life of the indexer, which is a singleton in the server: a bo3
+    /// workspace kept 21 MB of gzipped blobs and a bo1 one 64 MB, long after the last file that
+    /// could restore from them was indexed. Both halves are pinned here because either alone is a
+    /// bug — never releasing wastes the memory, and releasing without a way back makes every
+    /// workspace-folder change a cold index.
+    /// </summary>
+    [Fact]
+    public async Task RestoreSnapshot_IsReleasedAfterAPassAndReReadOnDemand()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\a.gsc", "function alpha()\n{\n}\n")
+            .AddFile(@$"{Raw}\scripts\b.gsc", "function beta()\n{\n}\n");
+
+        // First cold start populates the cache.
+        (ScriptDatabase _, WorkspaceIndexer indexer1, _) = Build(files);
+        await using ( SqliteCache cache1 = SqliteCache.Open(_dbPath, "id") )
+        {
+            indexer1.UseCache(cache1, cache1.LoadAll());
+            await indexer1.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+        }
+
+        (ScriptDatabase _, WorkspaceIndexer indexer2, _) = Build(files);
+        await using ( SqliteCache cache2 = SqliteCache.Open(_dbPath, "id") )
+        {
+            indexer2.UseCache(cache2, cache2.LoadAll());
+
+            IndexOutcome warm = await indexer2.IndexAsync(
+                IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+            Assert.Equal(2, warm.Restored);
+
+            // Same indexer, same attached cache, no reload: the snapshot is gone, so this pass has
+            // nothing to restore from and analyses both files afresh.
+            IndexOutcome released = await indexer2.IndexAsync(
+                IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+            Assert.Equal(0, released.Restored);
+            Assert.Equal(2, released.Analysed);
+
+            // What the workspace-folder handler does before its second pass.
+            indexer2.ReloadRestoreSnapshot();
+
+            IndexOutcome reloaded = await indexer2.IndexAsync(
+                IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+            Assert.Equal(2, reloaded.Restored);
+        }
     }
 
     /// <summary>

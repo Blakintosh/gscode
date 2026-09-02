@@ -61,6 +61,14 @@ public sealed partial class Parser
         return new ParseTree(root, parser._diagnostics.ToImmutable());
     }
 
+#if GSCODE_INSTRUMENTATION
+    /// <summary>
+    /// How deep the expression parser currently is, so only the outermost entry is timed. Present in
+    /// instrumented builds only — see the note in <c>ParseExpression</c>.
+    /// </summary>
+    private int _expressionDepth;
+#endif
+
     // --- Cursor ---
 
     private PToken Current

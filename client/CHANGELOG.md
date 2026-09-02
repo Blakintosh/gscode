@@ -78,13 +78,25 @@ A complete ground-up rewrite of the language server and VS Code extension.
   (including string/hash/localized/anim literals), highlight, semantic tokens, folding,
   selection ranges, document/workspace symbols, code lens, rename, call and type hierarchy,
   inlay hints, document links, formatting (whole/range/on-type), and code actions.
+- Inlay-hint families apply the moment they are toggled: a settings push that changes one asks the
+  client to re-request its hints, rather than leaving the change invisible (and a family switched
+  off still on screen) until the next keystroke or scroll.
+- Macro parameter-name inlay hints: the arguments of a `#define` invocation labelled with the
+  macro's own parameter names, `IS_TRUE( __a: level.ready )`. A third inlay family, separate from
+  the call-site one and off by default (`gscode.inlayHints.macroParameterNames`), because a macro
+  parameter is named for the macro's body rather than for its caller.
 - Type-flow inference for inferred-type inlay hints and local-variable hovers, seeded with
   engine object-field types.
 - Corruption-proof whitespace-only formatter (refuses syntax errors; re-checks its own output).
 - Code actions: remove-duplicate-`#using` and add-missing-`#using`, backed by a namespace-usage
   lint.
-- Commands: `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, and
-  `gscode.openApiLibrary` (`shift+f1` in gsc/csc/gsh files).
+- Commands: `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`,
+  `gscode.selectGame`, and `gscode.openApiLibrary` (`shift+f1` in gsc/csc/gsh files).
+- **GSCode: Select Game**, a picker for the dialect this workspace targets. The roster comes from
+  the server, so it offers only games with an implemented dialect, and it ticks the game actually
+  in force rather than the one `gscode.game` names — those differ whenever the setting names
+  something the server did not recognise. Previously the picker appeared only if the server
+  noticed a file that did not look like the selected game, and only once per session.
 - In-source suppression carried inside comments: `#pragma disable|restore <code>|all|format`.
   A named code is suppressed at whatever severity it carries, errors and syntax errors included —
   wider than the C# pragma the spelling comes from, which is why `warning` is not part of it (though
@@ -93,12 +105,29 @@ A complete ground-up rewrite of the language server and VS Code extension.
 - A settings surface for the above, under `gscode.*`: the game and script roots
   (`game`, `raw.enabled`, `rawPath`, `modsPath`, `rawFileWarningMode`), indexing
   (`workspaceIndexingMode`, `enableWorkspaceCache`, `diagnostics.scope`), the editor features
-  (`outline.showAssignments`, `codeLens.enabled`, the `inlayHints.*` and `completion.*` pairs) and
+  (`outline.showAssignments`, `codeLens.enabled`, the `inlayHints.*` and `completion.*` keys) and
   formatting (`format.padParens`, `format.maxBlankLines`, `format.sortDirectives`,
   `format.alignConsecutive`).
 
 ### Changed
 - Requires the .NET 10 runtime.
+- Completion outside a function body offers the same names it offers inside one — the macros an
+  `#insert`ed header supplies, the functions and classes in scope — rather than keywords and
+  snippets alone. A `REGISTER_SYSTEM` line and the function pointers and `undefined`s inside its
+  arguments are all completable now, and nothing completed at file scope carries a trailing
+  semicolon.
+- A function pointer completes as `&foo`, without the parentheses a call gets. Applies to
+  `&namespace::foo` too, and only on Black Ops III, where `&` is what makes a pointer.
+- Signature help answers on a function-like macro, showing its parameter names, the argument the
+  caret is in, what the macro expands to, and its trailing-comment documentation. Previously only a
+  script function or a builtin had a signature, so typing the arguments to `REGISTER_SYSTEM(` or
+  `IS_TRUE(` showed nothing. The macro is read from the file being edited plus the headers it
+  `#insert`s, so a header added a keystroke ago counts.
+- A macro's expansion keeps the lines it was written on, in hover as well as signature help. A
+  multi-statement macro used to be joined into one long line along with its backslashes; the
+  backslashes still go, and a macro that declares a function now reads as a declaration. Indentation
+  is redrawn at four spaces a level, so a header indented with tabs reads the same as one indented
+  with spaces.
 - Dialect-specific snippets moved from the extension to the server. A contributed snippet is
   registered per language id and one id covers five games, so `foreach`, `class`, `new`, the
   function declaration, `#precache`, the import directives and the ScriptDoc forms used to be

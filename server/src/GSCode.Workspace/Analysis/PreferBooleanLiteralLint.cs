@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
@@ -30,23 +29,13 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class PreferBooleanLiteralLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(
-        ParseResult result, BuiltinApi builtins, ObjectFields objectFields, FlowTyper typer)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        Inspect(result.Tree.Root, builtins, diagnostics);
-        InspectFieldWrites(result, objectFields, typer, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
     private static void InspectFieldWrites(
         ParseResult result,
         ObjectFields objectFields,
         FlowTyper typer,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        typer.InferAssignments(result, out ImmutableArray<FieldWrite> writes);
+        ImmutableArray<FieldWrite> writes = typer.InferValues(result).FieldWrites;
 
         foreach ( FieldWrite write in writes )
         {
@@ -103,17 +92,27 @@ public static class PreferBooleanLiteralLint
         return sawEntityKind;
     }
 
-    private static void Inspect(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. The field-write half is a
+    /// separate pass over the flow typer's output — see <see cref="InspectRest"/>.
+    /// </summary>
+    internal static void InspectNode(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         if ( node is CallNode call )
         {
             InspectCall(call, builtins, diagnostics);
         }
+    }
 
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Inspect(child, builtins, diagnostics);
-        }
+    /// <summary>Everything this rule does that is not per-node: the field writes the typer found.</summary>
+    internal static void InspectRest(
+        ParseResult result,
+        ObjectFields objectFields,
+        FlowTyper typer,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        InspectFieldWrites(result, objectFields, typer, diagnostics);
     }
 
     private static void InspectCall(CallNode call, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)

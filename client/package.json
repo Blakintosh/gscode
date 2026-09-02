@@ -160,6 +160,10 @@
 				"title": "GSCode: Restart Language Server"
 			},
 			{
+				"command": "gscode.selectGame",
+				"title": "GSCode: Select Game"
+			},
+			{
 				"command": "gscode.clearCacheAndReindex",
 				"title": "GSCode: Clear Cache and Reindex"
 			},
@@ -306,6 +310,12 @@
 						"type": "boolean",
 						"default": true,
 						"description": "Show inferred-type hints on local variable assignments.",
+						"scope": "window"
+					},
+					"gscode.inlayHints.macroParameterNames": {
+						"type": "boolean",
+						"default": false,
+						"description": "Show macro parameter-name hints before the arguments of a #define invocation (e.g. IS_TRUE( __a: level.ready )). Off by default: macro parameters are named for the macro's body rather than for the caller.",
 						"scope": "window"
 					},
 					"gscode.completion.literals": {
@@ -479,6 +489,9 @@
 		"watch": "tsc -watch -p ./",
 		"lint": "eslint src",
 		"bundle-server": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -o ./service",
+		"bundle-server-win": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r win-x64 -o ./service",
+		"bundle-server-linux": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r linux-x64 -o ./service",
+		"bundle-server-osx": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r osx-arm64 -o ./service",
 		"package": "npm run compile && npm run bundle-server && npx --yes @vscode/vsce package"
 	},
 	"devDependencies": {

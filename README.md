@@ -31,8 +31,9 @@ exist, how functions resolve, and which engine data files load.
 
 ## Getting started
 
-Open a folder of scripts and GSCode indexes it. Two optional settings tell it where the game's own
-scripts live, so that includes and path calls resolve against them:
+Open a folder of scripts and GSCode indexes it. Run **GSCode: Select Game** to pick the dialect — it
+lists only the games with an implemented dialect and marks the one in force. Two optional settings
+tell it where the game's own scripts live, so that includes and path calls resolve against them:
 
 - `gscode.rawPath` — the game's raw script folder. Set this when the folder you have open is a mod
   or a loose set of scripts. Left empty, only the open workspace folders are indexed.
@@ -48,10 +49,12 @@ game's compiler. The goal is to catch everything the compiler catches at build t
 mistakes that otherwise only surface at runtime.
 
 Before opening an issue, try **Developer: Reload Window**, wait for indexing to finish, and check
-the active game plus `gscode.rawPath`, `gscode.modsPath`, and `gscode.raw.enabled`. If results still
-look stale, run **GSCode: Clear Cache and Reindex**. For server or indexing problems, set
-`gscode.serverLogLevel` to `info` or `verbose` and copy the relevant part of the **GSCode Server**
-output. The [client README](client/README.md) has the full troubleshooting and cache-reset guide.
+the active game (**GSCode: Select Game** shows which one the server actually chose, which is not
+always what the setting names) plus `gscode.rawPath`, `gscode.modsPath`, and `gscode.raw.enabled`.
+If results still look stale, run **GSCode: Clear Cache and Reindex**. For server or indexing
+problems, set `gscode.serverLogLevel` to `info` or `verbose` and copy the relevant part of the
+**GSCode Server** output. The [client README](client/README.md) has the full troubleshooting and
+cache-reset guide.
 
 ### Bug reports
 

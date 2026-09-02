@@ -80,6 +80,43 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>
+    /// Whether the name being completed is the operand of a function-pointer <c>&amp;</c> — either
+    /// directly (<c>&amp;foo</c>) or through a namespace (<c>&amp;util::foo</c>), which is how 585 of
+    /// BO3's 4,564 pointers are written.
+    ///
+    /// Only the punctuation depends on this, not the list: what may be pointed at is what may be
+    /// called, so the same producers answer both. The caller gates it on the dialect's pointer
+    /// style, since a pre-BO3 <c>&amp;</c> is arithmetic and its pointers are bare qualified names.
+    /// </summary>
+    private static bool IsAddressOfPosition(ImmutableArray<Token> tokens, int triggerIndex)
+    {
+        if ( triggerIndex < 0 )
+        {
+            return false;
+        }
+
+        if ( tokens[triggerIndex].Kind == TokenKind.Ampersand )
+        {
+            return true;
+        }
+
+        // `&util::` — the trigger is the '::', so the '&' sits two significant tokens back.
+        if ( tokens[triggerIndex].Kind != TokenKind.ScopeResolution )
+        {
+            return false;
+        }
+
+        int namespaceIndex = PreviousSignificant(tokens, triggerIndex);
+        if ( namespaceIndex < 0 || tokens[namespaceIndex].Kind != TokenKind.Identifier )
+        {
+            return false;
+        }
+
+        int beforeNamespace = PreviousSignificant(tokens, namespaceIndex);
+        return beforeNamespace >= 0 && tokens[beforeNamespace].Kind == TokenKind.Ampersand;
+    }
+
+    /// <summary>
     /// Whether the lone colon at <paramref name="colonIndex"/> is the first half of a <c>::</c>
     /// being typed, rather than a ternary's divider.
     ///

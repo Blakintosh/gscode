@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
+using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Api;
@@ -19,9 +20,9 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 namespace GSCode.Server.Handlers;
 
 /// <summary>
-/// Inlay hints: inferred local types after assignments (FlowTyper) and parameter names
-/// before call arguments. Each family is independently toggleable and only shown when the
-/// underlying fact is certain.
+/// Inlay hints: inferred local types after assignments (FlowTyper), parameter names before
+/// call arguments, and macro parameter names before the arguments of a #define invocation.
+/// Each family is independently toggleable and only shown when the underlying fact is certain.
 /// </summary>
 public sealed class InlayHintHandler : InlayHintsHandlerBase
 {
@@ -64,27 +65,26 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         TextRange window = request.Range.ToCore();
         List<InlayHint> hints = [];
 
-        if ( !_settings.InlayInferredTypes && !_settings.InlayParameterNames )
-        {
-            return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
-        }
-
-        FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
-
         // Per-expression values are needed only by the parameter-name pass, which has to ask what a
         // `[[ ptr ]]` holds to know whose parameters to name. The type-hint pass wants assignment
-        // sites alone, so it runs the cheaper walk that records nothing else.
+        // sites alone, so it runs the cheaper walk that records nothing else. The macro pass reads
+        // the preprocessor's invocation list and needs neither, so it pays for no flow analysis.
         ScriptTypes types = ScriptTypes.Empty;
-        ImmutableArray<InferredAssignment> assignments;
+        ImmutableArray<InferredAssignment> assignments = [];
 
-        if ( _settings.InlayParameterNames )
+        if ( _settings.InlayInferredTypes || _settings.InlayParameterNames )
         {
-            types = typer.InferValues(target.Result);
-            assignments = types.Assignments;
-        }
-        else
-        {
-            assignments = typer.InferAssignments(target.Result);
+            FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
+
+            if ( _settings.InlayParameterNames )
+            {
+                types = typer.InferValues(target.Result);
+                assignments = types.Assignments;
+            }
+            else
+            {
+                assignments = typer.InferAssignments(target.Result);
+            }
         }
 
         if ( _settings.InlayInferredTypes )
@@ -111,7 +111,70 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             AddParameterNameHints(target, types, window, hints);
         }
 
+        if ( _settings.InlayMacroParameterNames )
+        {
+            AddMacroParameterNameHints(target, window, hints);
+        }
+
         return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
+    }
+
+    /// <summary>
+    /// Parameter names before the arguments of a MACRO invocation — <c>IS_TRUE( __a: value )</c>.
+    ///
+    /// A separate pass from <see cref="AddParameterNameHints"/> rather than a relaxation of its
+    /// macro guard, because by the time there is a tree the invocation is gone: the call the
+    /// author wrote was replaced by the body it expands to, and every token of that body reports
+    /// the invocation's own range. The preprocessor's invocation list is the only record that the
+    /// call site existed, and it names the macro that was expanded there.
+    ///
+    /// Off by default (<c>inlayHints.macroParameterNames</c>). A macro parameter is named for the
+    /// macro's implementation rather than for its caller — <c>__a</c>, <c>__b</c> — so unlike a
+    /// function's parameters the name is often worth less than the space it takes.
+    /// </summary>
+    private static void AddMacroParameterNameHints(NavigationTarget target, TextRange window, List<InlayHint> hints)
+    {
+        string text = target.Result.Text.Text;
+
+        foreach ( MacroInvocation invocation in target.Result.Preprocessed.MacroInvocations )
+        {
+            // Only invocations written in THIS file: one reached through an #insert has its range
+            // in the header's coordinates, which here would land on unrelated lines.
+            if ( invocation.SourceFile is not null || !window.Contains(invocation.Range.Start) )
+            {
+                continue;
+            }
+
+            // Object-like macros take no arguments, so there is nothing to label.
+            if ( invocation.Definition.Parameters is not { } parameters || parameters.IsEmpty )
+            {
+                continue;
+            }
+
+            // The range covers the NAME only — `IS_TRUE`, not `IS_TRUE( v )` — so the arguments
+            // are found by scanning the text that follows it.
+            int afterName = target.Result.Text.GetOffset(invocation.Range.End);
+            if ( afterName <= 0 || afterName > text.Length )
+            {
+                continue;
+            }
+
+            ImmutableArray<MacroArgumentSpan> spans = MacroExpansionPreview.ArgumentSpansFollowing(text, afterName);
+
+            // Whichever list is shorter: a half-written invocation should label what it has, and a
+            // wrong-arity one should not name arguments the macro never declared.
+            int count = Math.Min(parameters.Length, spans.Length);
+            for ( int index = 0; index < count; index++ )
+            {
+                hints.Add(new InlayHint
+                {
+                    Position = target.Result.Text.GetPosition(spans[index].Start).ToLsp(),
+                    Label = parameters[index] + ":",
+                    Kind = InlayHintKind.Parameter,
+                    PaddingRight = true,
+                });
+            }
+        }
     }
 
     /// <summary>True when the call's callee token was produced by expanding a macro body.</summary>

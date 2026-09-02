@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
@@ -6,7 +6,6 @@ using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
@@ -30,7 +29,32 @@ public enum IndexingMode
 /// <param name="Restored">Files served from the cache without re-analysis.</param>
 /// <param name="Analysed">Files taken through the full lex/preprocess/parse/extract pipeline.</param>
 /// <param name="SkippedOversized">Files past the size limit, left unanalysed.</param>
-public readonly record struct IndexOutcome(int Total, int Restored, int Analysed, int SkippedOversized = 0);
+/// <param name="Enumerate">
+/// How long it took to find the files. SERIAL, and it blocks every worker — a workspace folder
+/// that contains the whole game install is 295,640 files to find 1,105 scripts, and that showed up
+/// as slow "indexing" with no way to tell it from the analysis.
+/// </param>
+/// <param name="Analyse">Wall-clock for the parallel pass: reading, analysing and committing.</param>
+/// <param name="ThreadTime">
+/// The per-file elapsed times summed. Against <paramref name="Analyse"/> it gives the parallel
+/// speedup actually achieved, which is the number that separates "each file is slow" from "the
+/// threads are not running".
+/// </param>
+public readonly record struct IndexOutcome(
+    int Total,
+    int Restored,
+    int Analysed,
+    int SkippedOversized = 0,
+    TimeSpan Enumerate = default,
+    TimeSpan Analyse = default,
+    TimeSpan ThreadTime = default)
+{
+    /// <summary>Thread-time over analysis wall-clock: 1x means the parallelism bought nothing.</summary>
+    public double Parallelism
+    {
+        get { return Analyse.TotalMilliseconds <= 0 ? 0 : ThreadTime.TotalMilliseconds / Analyse.TotalMilliseconds; }
+    }
+}
 
 /// <summary>Receives indexing lifecycle events (the server maps these to notifications).</summary>
 public interface IIndexProgressListener
@@ -79,7 +103,8 @@ public sealed class NullIndexProgressListener : IIndexProgressListener
 /// <summary>
 /// Cold-start indexing: enumerate every reachable script, run the per-file pipeline
 /// under bounded parallelism (across files, never within one), and commit records.
-/// GSH files inserted by many scripts are lexed exactly once via a Lazy cache.
+/// GSH files inserted by many scripts are lexed exactly once, via the shared
+/// <see cref="InsertCache"/>.
 /// </summary>
 public sealed class WorkspaceIndexer
 {
@@ -96,15 +121,44 @@ public sealed class WorkspaceIndexer
 
     private int _skippedOversized;
 
-    // path → lazily lexed insert target, shared by every file that inserts it.
-    private readonly ConcurrentDictionary<string, Lazy<InsertedFile?>> _gshCache = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Lexed <c>#insert</c> targets, shared by every file that inserts one.
+    ///
+    /// This used to be a second cache of its own — a <c>ConcurrentDictionary&lt;path,
+    /// Lazy&lt;InsertedFile?&gt;&gt;</c> beside the <see cref="InsertCache"/> the same constructor
+    /// was already handed for macros. Two caches of the same headers, keyed the same way and living
+    /// the same session, so BO3's 114 distinct headers were held twice over; and the local one was
+    /// the weaker of the two, keyed ordinally where paths are not case-sensitive, never revalidated
+    /// against the file, and caching a failed read for good.
+    ///
+    /// Never null: a caller that supplies none gets one of its own rather than no cache at all,
+    /// which is what the argument being optional used to mean. Without it a header is re-read and
+    /// re-lexed once per file that inserts it — BO3 writes 2,137 insert directives naming those
+    /// 114 headers.
+    /// </summary>
+    private readonly InsertCache _inserts;
 
-    // Optional persistent cache and its cold-restore snapshot (set via UseCache).
+    // Optional persistent cache and its warm-restore snapshot (set via UseCache). The snapshot
+    // holds blobs rather than records: see CachedEntry for why the deserialize belongs down here.
     private SqliteCache? _cache;
-    private IReadOnlyDictionary<string, ScriptRecord> _restored = new Dictionary<string, ScriptRecord>();
 
-    /// <summary>Reads the current resolver each call, so resolver swaps take effect immediately.</summary>
-    private readonly IHeaderMacroCache? _headerCache;
+    /// <summary>
+    /// The blobs a warm start may restore from, held only for the duration of an indexing pass.
+    ///
+    /// It used to be set once and kept for the session, and this class is a singleton in the
+    /// server — so a bo3 workspace carried 21 MB of gzipped blobs, and a bo1 one 64 MB, for the
+    /// whole run after the last file that could use them was indexed. Against a 400 MB
+    /// steady-state budget that is worth reclaiming.
+    ///
+    /// <see cref="IndexAsync"/> releases it on the way out and <see cref="ReloadRestoreSnapshot"/>
+    /// puts it back for the one caller that indexes twice. Paying a second 13-54 ms read on a
+    /// workspace-folder change is the cheaper side of that trade: the snapshot is live for
+    /// milliseconds and dead for hours.
+    /// </summary>
+    private IReadOnlyDictionary<string, CachedEntry> _restored = EmptyRestore;
+
+    private static readonly IReadOnlyDictionary<string, CachedEntry> EmptyRestore =
+        new Dictionary<string, CachedEntry>(StringComparer.Ordinal);
 
     /// <summary>
     /// The dialect every indexed file is parsed as. Null defers to <see cref="GameProfile.Active"/>
@@ -120,21 +174,49 @@ public sealed class WorkspaceIndexer
 
     public WorkspaceIndexer(
         ScriptDatabase database, Func<PathResolver> resolverProvider, IFileSystem fileSystem, NameTable names,
-        IHeaderMacroCache? headerCache = null, GameProfile? profile = null)
+        InsertCache? inserts = null, GameProfile? profile = null)
     {
         _database = database;
         _resolverProvider = resolverProvider;
         _fileSystem = fileSystem;
         _names = names;
-        _headerCache = headerCache;
+        _inserts = inserts ?? new InsertCache();
         _profile = profile;
     }
 
-    /// <summary>Enables persistent caching: unchanged files restore from <paramref name="restored"/>, fresh analyses are written to <paramref name="cache"/>.</summary>
-    public void UseCache(SqliteCache cache, IReadOnlyDictionary<string, ScriptRecord> restored)
+    /// <summary>
+    /// Enables persistent caching: unchanged files restore from <paramref name="restored"/>, fresh
+    /// analyses are written to <paramref name="cache"/>.
+    ///
+    /// The snapshot is consumed by the NEXT indexing pass and released when it finishes. A caller
+    /// that indexes again wants <see cref="ReloadRestoreSnapshot"/> first; the cache itself stays
+    /// attached either way, so writes continue regardless.
+    /// </summary>
+    public void UseCache(SqliteCache cache, IReadOnlyDictionary<string, CachedEntry> restored)
     {
         _cache = cache;
         _restored = restored;
+    }
+
+    /// <summary>
+    /// Re-reads the restore snapshot from the attached cache, for a second indexing pass in the
+    /// same session.
+    ///
+    /// A failed read leaves the snapshot empty rather than throwing: the cache may have been closed
+    /// and deleted by <c>gscode/clearCache</c> since it was attached, and the right answer to that
+    /// is the cold index the user asked for. It is not silent — the pass that follows reports zero
+    /// files restored, which is the same thing the log would say.
+    /// </summary>
+    public void ReloadRestoreSnapshot()
+    {
+        try
+        {
+            _restored = _cache?.LoadAll() ?? EmptyRestore;
+        }
+        catch ( Exception exception ) when ( exception is not OutOfMemoryException )
+        {
+            _restored = EmptyRestore;
+        }
     }
 
     private PathResolver Resolver
@@ -144,6 +226,22 @@ public sealed class WorkspaceIndexer
 
     /// <summary>Indexes everything the resolver can reach. Returns the number of files indexed.</summary>
     public async Task<IndexOutcome> IndexAsync(IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await IndexCoreAsync(mode, progress, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            // In a finally rather than after the return, so a cancelled pass releases it too. The
+            // folder-change caller passes a real token, and a cancellation there would otherwise
+            // pin the whole snapshot for the rest of the session — which is the case this exists
+            // to remove.
+            _restored = EmptyRestore;
+        }
+    }
+
+    private async Task<IndexOutcome> IndexCoreAsync(IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken)
     {
         if ( mode == IndexingMode.Off )
         {
@@ -159,6 +257,7 @@ public sealed class WorkspaceIndexer
         PerfTracker.Begin("index.enumerate");
         List<string> targets = [.. Resolver.EnumerateIndexTargets()];
         PerfTracker.End();
+        TimeSpan enumerate = stopwatch.Elapsed;
 
         progress.Started(targets.Count);
 
@@ -176,13 +275,20 @@ public sealed class WorkspaceIndexer
         ConcurrentBag<ScriptRecord> restoredRecords = [];
         int reparsedAfterHeaderChange = 0;
 
+        // Summed across the workers, so it is thread-time rather than wall-clock. The listener is
+        // handed the same figure per file, but only for logging — this is the total the outcome
+        // reports, so a caller gets the parallelism without having to add up a thousand log lines.
+        long threadTicks = 0;
+
         await Parallel.ForEachAsync(targets, options, (path, token) =>
         {
             token.ThrowIfCancellationRequested();
 
             long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
             FileOutcome outcome = ProcessFile(path, allowRestore: true);
-            progress.FileIndexed(path, System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks), outcome.Restored);
+            TimeSpan fileElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks);
+            Interlocked.Add(ref threadTicks, fileElapsed.Ticks);
+            progress.FileIndexed(path, fileElapsed, outcome.Restored);
 
             if ( outcome.Restored && outcome.Record is not null )
             {
@@ -262,7 +368,14 @@ public sealed class WorkspaceIndexer
         // the workspace looks nonexistent.
         _database.MarkIndexComplete();
 
-        return new IndexOutcome(completed, restored, completed - restored, _skippedOversized);
+        return new IndexOutcome(
+            completed,
+            restored,
+            completed - restored,
+            _skippedOversized,
+            Enumerate: enumerate,
+            Analyse: stopwatch.Elapsed - enumerate,
+            ThreadTime: TimeSpan.FromTicks(Interlocked.Read(ref threadTicks)));
     }
 
     /// <summary>Outcome of processing one file: whether it came from cache, and the resulting record.</summary>
@@ -277,6 +390,15 @@ public sealed class WorkspaceIndexer
     private FileOutcome ProcessFile(string path, bool allowRestore)
     {
         string normalized = PathUtil.NormalizeAbsolute(path);
+
+        ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
+
+        // Read BEFORE the content, and only for the file the seed below can apply to. A stamp taken
+        // afterwards would date a write that landed between the two as already seen, and the seeded
+        // entry would then stay stale until the file changed a second time.
+        DateTime headerStamp = language == ScriptLanguage.Gsh
+            ? _fileSystem.GetLastWriteTimeUtc(normalized)
+            : default;
 
         // The scopes below split the per-file cost the way the cold path actually spends it: read is
         // blocking I/O inside the parallel body, analyse is the four-phase pipeline, commit is where
@@ -312,20 +434,33 @@ public sealed class WorkspaceIndexer
         }
 
         // Restore from cache when the on-disk content matches what was analysed before.
-        if ( allowRestore && _restored.TryGetValue(normalized, out ScriptRecord? cached) )
+        //
+        // The hash is checked BEFORE the record is materialised, which is the whole point of
+        // holding blobs rather than records: a file that has changed costs one hash here and never
+        // pays the gzip inflation or the JSON parse behind it. On a genuinely warm start that saves
+        // nothing, since every file matches — what it saves is doing all of that work serially at
+        // startup, ahead of this loop, instead of on the loop's own threads.
+        if ( allowRestore && _restored.TryGetValue(normalized, out CachedEntry? cached) )
         {
             PerfTracker.Begin("index.restore");
-            bool matches = cached.ContentHash == ScriptDatabase.ComputeContentHash(content);
-            if ( matches )
+
+            ScriptRecord? restored = null;
+            if ( cached.ContentHash == ScriptDatabase.ComputeContentHash(content) )
             {
-                _database.CommitRecord(cached);
+                // Null when the blob is corrupt, which falls through to a normal analysis below
+                // rather than failing the file — the same outcome a missing cache entry has.
+                restored = cached.Materialize();
+                if ( restored is not null )
+                {
+                    _database.CommitRecord(restored);
+                }
             }
 
             PerfTracker.End();
 
-            if ( matches )
+            if ( restored is not null )
             {
-                return new FileOutcome(Restored: true, Record: cached);
+                return new FileOutcome(Restored: true, Record: restored);
             }
         }
 
@@ -334,27 +469,21 @@ public sealed class WorkspaceIndexer
         PerfTracker.Begin("index.analyse");
         ParseResult result = ScriptAnalysis.Analyze(
             normalized,
-            ScriptAnalysis.LanguageFromPath(normalized),
+            language,
             SourceText.From(content),
-            new CachingInsertProvider(this, context),
+            new ResolverInsertProvider(Resolver, context, _fileSystem, _inserts),
             _names,
             profile: _profile,
-            headerCache: _headerCache);
+            headerCache: _inserts);
         PerfTracker.End();
 
         // A header is an index target in its own right (it matches *.gsh) AND an insert source, and
-        // those two paths each read and lexed it independently — the analysis above has already
-        // produced exactly what LoadInsert would go on to build from scratch. Seed it here instead.
-        //
-        // GetOrAdd rather than an assignment because the race is real and unordered: a .gsc that
-        // inserts this header may be processed first and populate the entry itself. Whoever arrives
-        // first wins, and the two would produce identical content anyway — same file, same lexer,
-        // same profile. So this halves the header work rather than eliminating it.
+        // the analysis above has already produced exactly what the insert path would go on to build
+        // from scratch. See InsertCache.SeedIfAbsent for why it is offered rather than assigned.
         if ( result.Language == ScriptLanguage.Gsh )
         {
-            _gshCache.GetOrAdd(
-                normalized,
-                new Lazy<InsertedFile?>(new InsertedFile(normalized, result.Text, result.Lexed.Tokens)));
+            _inserts.SeedIfAbsent(
+                normalized, new InsertedFile(normalized, result.Text, result.Lexed.Tokens), headerStamp);
         }
 
         string relativePath = Resolver.GetScriptRelativePath(normalized, context);
@@ -370,75 +499,41 @@ public sealed class WorkspaceIndexer
         return new FileOutcome(Restored: false, Record: record);
     }
 
-    /// <summary>Drops a GSH from the lex cache (called when the file changes on disk).</summary>
+    /// <summary>
+    /// Drops a GSH from the insert cache (called when the file changes on disk).
+    ///
+    /// The timestamp check inside the cache is the backstop and would catch this on its own; this
+    /// is the fast path for a caller that already knows. It now also drops the header's walked
+    /// CONTRIBUTION, which the local cache it replaced could not reach — that was left to the same
+    /// timestamp check, one call later.
+    /// </summary>
     public void InvalidateGsh(string normalizedPath)
     {
-        _gshCache.TryRemove(normalizedPath, out _);
+        _inserts.Invalidate(normalizedPath);
     }
 
-    /// <summary>Removes a deleted file from the database, persistent cache, and GSH lex cache.</summary>
+    /// <summary>
+    /// Announces that a header appeared or vanished, rather than that one changed.
+    ///
+    /// <see cref="InvalidateGsh"/> cannot speak for this. It reports a header whose CONTENT moved,
+    /// and says nothing when the cache holds no copy — correct, since a header nobody has read
+    /// cannot have been expanded into anyone's parse. A header that did not exist a moment ago is
+    /// exactly that case and still changes what an insert path resolves to, both for the file that
+    /// could not resolve it at all and for the one whose raw header a new mod copy now shadows.
+    /// </summary>
+    public void NoteHeaderSetChanged()
+    {
+        _inserts.NoteHeaderSetChanged();
+    }
+
+    /// <summary>Removes a deleted file from the database, persistent cache, and insert cache.</summary>
     public void RemoveFile(string normalizedPath, ScriptLanguage language)
     {
         _database.Remove(normalizedPath, language);
         _cache?.EnqueueDelete(normalizedPath);
         if ( language == ScriptLanguage.Gsh )
         {
-            _gshCache.TryRemove(normalizedPath, out _);
-        }
-    }
-
-    private InsertedFile? LoadInsert(string rawInsertPath, ResolutionContext context)
-    {
-        string? resolved = Resolver.Resolve(context, rawInsertPath);
-        if ( resolved is null )
-        {
-            return null;
-        }
-
-        Lazy<InsertedFile?> lazy = _gshCache.GetOrAdd(resolved, key => new Lazy<InsertedFile?>(() =>
-        {
-            try
-            {
-                SourceText text = SourceText.From(_fileSystem.ReadAllText(key));
-                return new InsertedFile(key, text, Lexer.Lex(text).Tokens);
-            }
-            catch ( IOException )
-            {
-                return null;
-            }
-            catch ( UnauthorizedAccessException )
-            {
-                return null;
-            }
-        }));
-
-        return lazy.Value;
-    }
-
-    /// <summary>Insert provider backed by the shared Lazy GSH cache.</summary>
-    private sealed class CachingInsertProvider : IInsertProvider
-    {
-        private readonly WorkspaceIndexer _indexer;
-        private readonly ResolutionContext _context;
-
-        public CachingInsertProvider(WorkspaceIndexer indexer, ResolutionContext context)
-        {
-            _indexer = indexer;
-            _context = context;
-        }
-
-        public bool TryGetInsert(string rawInsertPath, out InsertedFile inserted)
-        {
-            InsertedFile? loaded = _indexer.LoadInsert(rawInsertPath, _context);
-            inserted = loaded!;
-            return loaded is not null;
-        }
-
-        public bool TryResolveInsertPath(string rawInsertPath, out string resolvedPath)
-        {
-            string? resolved = _indexer.Resolver.Resolve(_context, rawInsertPath);
-            resolvedPath = resolved ?? "";
-            return resolved is not null;
+            _inserts.Invalidate(normalizedPath);
         }
     }
 }

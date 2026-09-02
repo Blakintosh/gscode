@@ -29,7 +29,12 @@ public class SignatureEngineTests
 
     private static ParseResult Analyze(string path, string text)
     {
-        return ScriptAnalysis.Analyze(path, ScriptAnalysis.LanguageFromPath(path), SourceText.From(text), NullInsertProvider.Instance, new NameTable());
+        return Analyze(path, text, NullInsertProvider.Instance);
+    }
+
+    private static ParseResult Analyze(string path, string text, IInsertProvider inserts)
+    {
+        return ScriptAnalysis.Analyze(path, ScriptAnalysis.LanguageFromPath(path), SourceText.From(text), inserts, new NameTable());
     }
 
     [Fact]
@@ -81,6 +86,132 @@ public class SignatureEngineTests
         Position notInCall = new(2, 9);
 
         Assert.Null(engine.Resolve(result, "raw", notInCall));
+    }
+
+    // --- Macros ---
+    //
+    // A function-like #define is a call with named arguments and nothing described them: the panel
+    // answered nothing at all, in a body and at file scope alike. The names come from the parse in
+    // hand rather than the store, which is what makes a header inserted a keystroke ago count.
+
+    [Fact]
+    public void Macro_ShowsParametersAndActiveIndex()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+
+        string text = "#define GIVE( weapon, ammo ) self giveweapon( weapon )\nfunction run()\n{\n    GIVE( \"x\", \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterComma = new(3, 15);
+
+        SignatureResult? signature = engine.Resolve(result, "raw", afterComma);
+
+        Assert.NotNull(signature);
+        Assert.Equal("GIVE(weapon, ammo)", signature!.Label);
+        Assert.Equal(1, signature.ActiveParameter);
+    }
+
+    /// <summary>
+    /// The reported case: a macro from an <c>#insert</c>ed header, invoked at column 0. Both halves
+    /// were missing — file scope is where the shipped scripts write these, and the header is where
+    /// the macro lives.
+    /// </summary>
+    [Fact]
+    public void Macro_FromAnInsertedHeader_ResolvesAtFileScope()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+        FakeInserts inserts = new FakeInserts()
+            .Add(
+                @"scripts\shared\shared.gsh",
+                "#define REGISTER_SYSTEM( sys, func, reqs ) function autoexec __init__system__() { } // Registers a system.\n");
+
+        string text = "#insert scripts\\shared\\shared.gsh;\n#namespace game;\nREGISTER_SYSTEM( \"aat\", \nfunction run()\n{\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text, inserts);
+        Position afterComma = new(2, 24);
+
+        SignatureResult? signature = engine.Resolve(result, "raw", afterComma);
+
+        Assert.NotNull(signature);
+        Assert.Equal("REGISTER_SYSTEM(sys, func, reqs)", signature!.Label);
+        Assert.Equal(1, signature.ActiveParameter);
+
+        // The expansion and the trailing comment, and NOT the `#define` line: the label above is
+        // already the define form, so rendering it again printed the parameter list twice.
+        Assert.Contains("autoexec", signature.Documentation, StringComparison.Ordinal);
+        Assert.Contains("Registers a system.", signature.Documentation, StringComparison.Ordinal);
+        Assert.DoesNotContain("#define", signature.Documentation, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A #define with parameters and no body. The horizontal rule divides two things, so with only
+    /// the comment present it would be a rule above nothing.
+    /// </summary>
+    [Fact]
+    public void Macro_WithNoBody_ShowsTheCommentWithoutASeparator()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+
+        string text = "#define NOOP( a ) // Does nothing.\nfunction run()\n{\n    NOOP( \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterParen = new(3, 10);
+
+        SignatureResult? signature = engine.Resolve(result, "raw", afterParen);
+
+        Assert.NotNull(signature);
+        Assert.Equal("NOOP(a)", signature!.Label);
+        Assert.Contains("Does nothing.", signature.Documentation, StringComparison.Ordinal);
+        Assert.DoesNotContain("---", signature.Documentation, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An object-like macro is not a call, so it must not answer with an empty signature and take
+    /// the position away from whatever the name would otherwise resolve to.
+    /// </summary>
+    [Fact]
+    public void ObjectLikeMacro_IsNotACall()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+
+        string text = "#define MAX_PLAYERS 18\nfunction run()\n{\n    x = MAX_PLAYERS( \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterParen = new(3, 21);
+
+        Assert.Null(engine.Resolve(result, "raw", afterParen));
+    }
+
+    /// <summary>
+    /// Macro names are the language's one case-SENSITIVE kind, so the lookup is ordinal: the
+    /// preprocessor would not expand <c>is_true(</c> either, and answering with IS_TRUE's parameters
+    /// would describe an expansion that never happens.
+    /// </summary>
+    [Fact]
+    public void Macro_LookupIsCaseSensitive()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+
+        string text = "#define IS_TRUE( value ) isdefined( value ) && value\nfunction run()\n{\n    x = is_true( \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterParen = new(3, 17);
+
+        Assert.Null(engine.Resolve(result, "raw", afterParen));
+    }
+
+    /// <summary>A qualified name is a namespace member, and the preprocessor expands no such thing.</summary>
+    [Fact]
+    public void QualifiedName_DoesNotReachAMacro()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+
+        string text = "#define IS_TRUE( value ) isdefined( value ) && value\nfunction run()\n{\n    x = util::IS_TRUE( \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterParen = new(3, 23);
+
+        Assert.Null(engine.Resolve(result, "raw", afterParen));
     }
 }
 

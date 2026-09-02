@@ -45,4 +45,24 @@ public interface IHeaderMacroCache
     bool TryGet(string resolvedPath, out HeaderContribution contribution);
 
     void Store(string resolvedPath, HeaderContribution contribution);
+
+    /// <summary>
+    /// A counter that moves whenever any header held here changes, so a completed analysis can be
+    /// asked whether the headers it expanded are still the ones on disk.
+    ///
+    /// A parse is stale for two reasons, not one: the file's own text moved, or a header it
+    /// <c>#insert</c>s did. Only the first was ever checked, so editing a GSH left every open
+    /// dependent holding a parse of the OLD macro bodies while reporting itself current — the
+    /// reported hover bug, where a value updated only once something was typed into the dependent.
+    ///
+    /// One counter for all headers rather than a per-document dependency set: a header edit is a
+    /// rare, user-paced event and open documents are few, so the cost of the occasional needless
+    /// re-parse is far below the cost of getting a dependency set subtly wrong — nested inserts
+    /// make "which files see this header" a transitive question, and a narrow answer would be
+    /// silently stale rather than merely conservative.
+    ///
+    /// The parser does not read this. The interface lives here for the same reason the rest of it
+    /// does: the parser cannot reference the workspace that owns the cache.
+    /// </summary>
+    long Generation { get; }
 }

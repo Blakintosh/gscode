@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;

@@ -15,21 +15,64 @@ namespace GSCode.Workspace.Analysis;
 /// for a macro they did not write. An unresolved <c>#using</c> is the same story for a merge dialect,
 /// where an included file's functions are called unqualified.
 ///
-/// Which codes matter differs by rule, so the caller names them: a rule that already suppresses
-/// itself on an unresolvable <c>#include</c> by other means does not need to ask about that one.
+/// The header half is not the caller's to choose — <see cref="MacrosLost"/> is the list — while the
+/// <c>#using</c> half differs by rule, so that stays a parameter: a rule already suppressing itself
+/// on an unresolvable <c>#include</c> by other means does not need to ask about it.
 /// </summary>
 internal static class ImportGate
 {
-    public static bool AnyUnresolved(ParseResult result, params GscDiagnosticCode[] codes)
+    /// <summary>
+    /// Every way an <c>#insert</c> can fail to deliver its macros — the six the preprocessor
+    /// abandons the splice on.
+    ///
+    /// Four callers each asked about <see cref="GscDiagnosticCode.InsertNotFound"/> alone, which is
+    /// one of six and the only one anybody remembers. A header naming a script instead of a
+    /// <c>.gsh</c> (2014), nested past the depth cap (2007), in a cycle (2008), written with an
+    /// illegal path (2005) or with no path at all (2003) leaves exactly the same hole: the macros
+    /// never arrive, and an unexpanded macro is an identifier followed by an argument list.
+    ///
+    /// <see cref="GscDiagnosticCode.InsertMissingSemicolon"/> is deliberately ABSENT, and it is the
+    /// one that has to be read rather than assumed. The preprocessor reports it and carries on —
+    /// every other case above ends in `return index` — so the macros DO arrive and a rule that stood
+    /// down on it would go quiet over a punctuation slip.
+    /// </summary>
+    public static readonly GscDiagnosticCode[] MacrosLost =
+    [
+        GscDiagnosticCode.MissingInsertPath,
+        GscDiagnosticCode.InvalidInsertPath,
+        GscDiagnosticCode.InsertNotAHeader,
+        GscDiagnosticCode.InsertTooDeep,
+        GscDiagnosticCode.InsertNotFound,
+        GscDiagnosticCode.InsertCycle,
+    ];
+
+    /// <summary>
+    /// The <see cref="MacrosLost"/> set plus whatever else a caller's rule turns on.
+    ///
+    /// One pass over the diagnostics testing both lists rather than concatenating them: this runs
+    /// per file per keystroke, and a concatenation would be a fresh array each time to ask a
+    /// question about six constants.
+    /// </summary>
+    public static bool AnyMacrosLost(ParseResult result, params GscDiagnosticCode[] alsoCodes)
     {
         foreach ( Diagnostic diagnostic in result.AllDiagnostics )
         {
-            foreach ( GscDiagnosticCode code in codes )
+            if ( Holds(MacrosLost, diagnostic.Code) || Holds(alsoCodes, diagnostic.Code) )
             {
-                if ( diagnostic.Code == code )
-                {
-                    return true;
-                }
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool Holds(GscDiagnosticCode[] codes, GscDiagnosticCode code)
+    {
+        foreach ( GscDiagnosticCode candidate in codes )
+        {
+            if ( candidate == code )
+            {
+                return true;
             }
         }
 

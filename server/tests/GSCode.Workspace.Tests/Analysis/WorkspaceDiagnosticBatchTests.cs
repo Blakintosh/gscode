@@ -57,6 +57,22 @@ public class WorkspaceDiagnosticBatchTests
             Analyze("#using scripts\\shared\\util;\n#using scripts\\shared\\array;\n")));
     }
 
+    /// <summary>
+    /// The rule as the server runs it: the shared per-node walk, gated on `Applies`, which stands
+    /// the rule down on a game that bundles no builtin library.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> RunVoidResultLint(ParseResult result, BuiltinApi builtins)
+    {
+        if ( !VoidResultLint.Applies(builtins) )
+        {
+            return [];
+        }
+
+        return NodeLintHarness.Run(
+            result,
+            (node, diagnostics) => VoidResultLint.InspectNode(node, builtins, diagnostics));
+    }
+
     // --- 5019: keeping the result of something that returns nothing ---
 
     [Fact]
@@ -64,7 +80,7 @@ public class WorkspaceDiagnosticBatchTests
     {
         BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
 
-        Diagnostic diagnostic = Assert.Single(VoidResultLint.Analyze(
+        Diagnostic diagnostic = Assert.Single(RunVoidResultLint(
             Analyze("function f()\n{\n\tx = PrintLn( \"a\" );\n}\n"), builtins));
 
         Assert.Equal(GscDiagnosticCode.VoidResultAssigned, diagnostic.Code);
@@ -76,7 +92,7 @@ public class WorkspaceDiagnosticBatchTests
         // The mistake is only visible where the value is KEPT; the call itself is ordinary.
         BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
 
-        Assert.Empty(VoidResultLint.Analyze(
+        Assert.Empty(RunVoidResultLint(
             Analyze("function f()\n{\n\tPrintLn( \"a\" );\n}\n"), builtins));
     }
 
@@ -85,7 +101,7 @@ public class WorkspaceDiagnosticBatchTests
     {
         BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
 
-        Assert.Empty(VoidResultLint.Analyze(
+        Assert.Empty(RunVoidResultLint(
             Analyze("function f()\n{\n\tt = GetTime();\n}\n"), builtins));
     }
 
@@ -96,7 +112,7 @@ public class WorkspaceDiagnosticBatchTests
         // end on others is legal, so the same claim about a script function would be a guess.
         BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
 
-        Assert.Empty(VoidResultLint.Analyze(
+        Assert.Empty(RunVoidResultLint(
             Analyze("function f()\n{\n\tx = helper();\n}\nfunction helper()\n{\n}\n"), builtins));
     }
 

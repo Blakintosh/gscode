@@ -35,7 +35,10 @@ public class TypeMismatchLintTests
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
 
         FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc), ObjectFields.Load(ApiDirectory));
-        return TypeMismatchLint.Analyze(result, typer);
+        ScriptTypes types = typer.InferValues(result);
+        return NodeLintHarness.Run(
+            result,
+            (node, diagnostics) => TypeMismatchLint.InspectNode(node, types, diagnostics));
     }
 
     // --- 5033: enumerating something that cannot be enumerated ---

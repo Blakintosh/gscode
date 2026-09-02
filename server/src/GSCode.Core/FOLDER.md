@@ -61,8 +61,12 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   - `MemberSymbol` / `ClassSymbol` — a class `var` member; a class with parent, members,
     methods, ctor/dtor flags, and ranges.
   - `NamespaceSpan(Name, KeyName, NameRange, GovernedRange)` — one #namespace region.
-  - `enum ReferenceKind` + `readonly record struct ReferenceEntry(Key, Range, Kind)` — one
-    classified reference site; no text stored beyond the interned key.
+  - `enum ReferenceKind` + `readonly record struct ReferenceEntry(Key, Range, Kind, FromMacro)` —
+    one classified reference site; no text stored beyond the interned key. `Kind` is WHAT the
+    reference is and `FromMacro` is WHERE its text came from: two orthogonal facts that shared the
+    enum until an expansion overwriting the kind left every `Kind == Call` rule blind to a call a
+    macro produced. When `FromMacro` is set, `Range` is the INVOCATION site, not the callee.
+    `IsFunctionCall` is the named call to a script function that five cross-file lints open on.
 
 ## Symbols/ScrType.cs
 

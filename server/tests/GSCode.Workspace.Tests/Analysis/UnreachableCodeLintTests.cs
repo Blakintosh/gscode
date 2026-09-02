@@ -29,7 +29,7 @@ public class UnreachableCodeLintTests
             NullInsertProvider.Instance,
             new NameTable());
 
-        return UnreachableCodeLint.Analyze(result);
+        return NodeLintHarness.RunOnStatements(result, UnreachableCodeLint.InspectNode);
     }
 
     [Theory]
@@ -102,7 +102,7 @@ public class UnreachableCodeLintTests
             NullInsertProvider.Instance,
             new NameTable());
 
-        Assert.Single(UnreachableCodeLint.Analyze(result));
+        Assert.Single(NodeLintHarness.RunOnStatements(result, UnreachableCodeLint.InspectNode));
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class UnreachableCodeLintTests
             NullInsertProvider.Instance,
             new NameTable());
 
-        Diagnostic diagnostic = Assert.Single(UnreachableCodeLint.Analyze(result));
+        Diagnostic diagnostic = Assert.Single(NodeLintHarness.RunOnStatements(result, UnreachableCodeLint.InspectNode));
         Assert.Equal(GscDiagnosticCode.UnreachableCode, diagnostic.Code);
     }
 }

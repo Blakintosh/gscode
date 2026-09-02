@@ -24,16 +24,13 @@ namespace GSCode.Server.Handlers;
 /// <summary>Payload for gscode/rawFolderWriteWarning.</summary>
 public sealed record RawFolderWriteWarningParams(string Path, string RelativePath, bool IsStockScript);
 
-/// <summary>One game the extension can be switched to, as offered in the mismatch picker.</summary>
-public sealed record SupportedGame(string Id, string Label);
-
 /// <summary>
 /// Payload for gscode/gameMismatch: the selected game does not match what the file looks like.
 ///
-/// Carries the roster rather than letting the client keep its own. Only the server knows which
-/// profiles are <see cref="GameProfile.Supported"/>, and the client's hardcoded list had drifted to
-/// nine games — four of them cores with no dialect filled in, so picking one wrote a value the
-/// gscode.game enum does not accept and the server then resolved back to BO3.
+/// Carries the roster rather than letting the client keep its own, and carries it HERE rather than
+/// making the client ask: the offer to switch is one notification and should not need a round trip
+/// to be able to list anything. It is the same list <see cref="GameRoster"/> gives the picker
+/// command, so the two offers can never disagree about which games exist.
 /// </summary>
 public sealed record GameMismatchParams(
     string SelectedGame,
@@ -60,6 +57,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ILanguageServerFacade _server;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
     private readonly DependentDiagnosticsRefresher _dependents;
+    private readonly InsertCache _inserts;
 
     public TextSyncHandler(
         DocumentStore documents,
@@ -72,8 +70,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         DocumentLinter linter,
         ILanguageServerFacade server,
         WorkspaceDiagnosticsPublisher workspaceDiagnostics,
-        DependentDiagnosticsRefresher dependents)
+        DependentDiagnosticsRefresher dependents,
+        InsertCache inserts)
     {
+        _inserts = inserts;
         _dependents = dependents;
         _workspaceDiagnostics = workspaceDiagnostics;
         _linter = linter;
@@ -148,29 +148,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
                 active.ShortName,
                 active.DisplayName,
                 shape == GameShape.BlackOps3,
-                SupportedGames()));
-    }
-
-    /// <summary>
-    /// The games the picker may offer, in release order. Exactly the supported profiles, which is
-    /// also exactly what the gscode.game enum accepts — the two lists are the same list now, so a
-    /// pick can no longer write a setting the schema rejects.
-    ///
-    /// Labelled with the release year, since the display names alone do not separate the two Modern
-    /// Warfare 2s or the two Modern Warfare 3s once the cores are ever promoted.
-    /// </summary>
-    private static List<SupportedGame> SupportedGames()
-    {
-        List<SupportedGame> games = [];
-        foreach ( GameProfile profile in GameProfile.All )
-        {
-            if ( profile.Supported )
-            {
-                games.Add(new SupportedGame(profile.ShortName, profile.DisplayName + " (" + profile.ReleaseYear + ")"));
-            }
-        }
-
-        return games;
+                GameRoster.Supported()));
     }
 
     public override Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken cancellationToken)
@@ -200,10 +178,36 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             }
 
             AnalyzeAndPublish(document, request.TextDocument.Uri);
+            RefreshDependentsOfSavedHeader(document);
             WarnIfProtectedRawFile(document);
         }
 
         return Unit.Value;
+    }
+
+    /// <summary>
+    /// Republishes the other open documents when the file just saved is a header.
+    ///
+    /// A GSH is read from DISK by every file that inserts it, so its edits reach them at the save
+    /// and not before — which is why this is on the save path rather than the analysis one, and why
+    /// typing in a header costs nothing here. Two things have to happen and neither implies the
+    /// other: the cache has to drop the copy it lexed before the save, and the documents whose
+    /// parses expanded that copy have to be told, since not one character of THEIR text changed.
+    ///
+    /// Without it, editing a macro's value and saving left every open dependent showing the old
+    /// value on hover until something was typed into it. The export signature does not cover this
+    /// case on its own: the header's record was committed from its buffer when the debounce fired,
+    /// so by the time the save arrives the signature has already moved and moves no further.
+    /// </summary>
+    private void RefreshDependentsOfSavedHeader(OpenDocument document)
+    {
+        if ( document.Language != ScriptLanguage.Gsh )
+        {
+            return;
+        }
+
+        _inserts.Invalidate(document.Path);
+        _dependents.Schedule(document.Path);
     }
 
     /// <summary>

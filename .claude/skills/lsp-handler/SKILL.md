@@ -18,6 +18,17 @@ symptom always reads as intermittent rather than broken.
 
 `Resolve` (unfreshened) is fine where the answer is a symbol rather than a position.
 
+**Text is not the only input that goes stale.** A parse also expands whatever the `#insert`ed
+headers said at the time, so editing a GSH invalidates every dependent's parse without changing a
+character of it. `AnalysisSnapshot` therefore carries `IHeaderMacroCache.Generation` beside the
+document version, and `AnalyzeIfStale` re-parses when either has moved. That check is passive:
+something still has to PUSH the refresh, because hover and the rest read `LatestResult` and never
+ask. Two things do — `ExportSignature` covers a header's whole content hash, so a header changing
+on disk moves it; and `TextSyncHandler` invalidates the insert cache and schedules a dependent
+refresh when a GSH is SAVED, which is when its edits become visible to the files reading it from
+disk. Remove either and the old symptom returns: the macro's value updates only once something is
+typed into the dependent.
+
 ## Diagnostics: one reporter per cause
 
 A cause is reported by exactly one layer. The preprocessor reports a missing `#insert`; the lint

@@ -1,4 +1,4 @@
-# Every push to `preview` publishes a Marketplace PRE-RELEASE automatically. Users who opted into
+# Every push to `preview` or `preview/*` publishes a Marketplace PRE-RELEASE automatically. Users who opted into
 # pre-releases in VS Code get it; everyone else keeps the last full release.
 #
 # Versioning: the Marketplace does not allow semver suffixes, so pre-releases share the
@@ -16,7 +16,7 @@ name: Pre-release
 
 on:
   push:
-    branches: [preview]
+    branches: [preview, "preview/**"]
 
 concurrency:
   group: prerelease

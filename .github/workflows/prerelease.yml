@@ -1,0 +1,61 @@
+# Every push to `preview` publishes a Marketplace PRE-RELEASE automatically. Users who opted into
+# pre-releases in VS Code get it; everyone else keeps the last full release.
+#
+# Versioning: the Marketplace does not allow semver suffixes, so pre-releases share the
+# major.minor.patch namespace with releases. VS Code's documented convention is ODD minors for
+# pre-release and EVEN minors for release, so this derives `<major>.<next odd minor>.<run number>`
+# from client/package.json: a 2.0.x stable line publishes previews as 2.1.N, and once stable moves
+# to 2.2.0 previews become 2.3.N. The run number only ever increases, so each push gets a fresh,
+# higher version - but a RE-RUN of the same workflow run reuses its number and the publish is
+# rejected as a duplicate; push a new commit instead.
+#
+# Two rules that follow from sharing one namespace: never publish a full release with the odd
+# minor the previews are using, and the next stable minor bump must go to the even number ABOVE
+# the current preview minor, or pre-release users will never be moved onto it.
+name: Pre-release
+
+on:
+  push:
+    branches: [preview]
+
+concurrency:
+  group: prerelease
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: calc
+        run: |
+          base=$(node -p "require('./client/package.json').version")
+          major=${base%%.*}; rest=${base#*.}; minor=${rest%%.*}
+          if (( minor % 2 == 0 )); then minor=$((minor + 1)); fi
+          version="$major.$minor.${{ github.run_number }}"
+          echo "Pre-release version: $version (from $base)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    uses: ./.github/workflows/build-vsix.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      pre-release: true
+
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    # No approval gate on this environment - previews are meant to flow. It still exists so the
+    # PAT is scoped to publishing jobs rather than being a repo-wide secret.
+    environment: marketplace-prerelease
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: gscode-vsix
+      - name: Publish pre-release to the Marketplace
+        run: npx --yes @vscode/vsce publish --pre-release --packagePath "${{ needs.build.outputs.vsix }}"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}

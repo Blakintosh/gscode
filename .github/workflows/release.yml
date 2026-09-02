@@ -1,0 +1,63 @@
+# Full release. Pushing a tag `v<version>` builds the VSIX and then WAITS for a human to approve
+# the `marketplace` environment before anything is published. Set that environment up once under
+# Settings > Environments with yourself as a required reviewer; the VSIX is attached to the run as
+# an artifact so it can be downloaded and smoke-tested while the approval is pending.
+#
+# The tag must match client/package.json exactly (bump the version there first, as the existing
+# "Version 2.0.2" commits already do), so the Marketplace, the GitHub Release and the manifest can
+# never disagree about what shipped.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write # to create the GitHub Release
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: v
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./client/package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match client/package.json version $pkg"
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    uses: ./.github/workflows/build-vsix.yml
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    # The approval gate. Required reviewers on this environment hold the job here until approved.
+    environment:
+      name: marketplace
+      url: https://marketplace.visualstudio.com/items?itemName=blakintosh.gscode
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: gscode-vsix
+
+      - name: Publish to the Marketplace
+        run: npx --yes @vscode/vsce publish --packagePath "${{ needs.build.outputs.vsix }}"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      # Attaches the exact VSIX that went to the Marketplace, so users without Marketplace access
+      # (or who want to pin) can install it, and so the release history lives in the repo.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ needs.check.outputs.version }}
+          files: ${{ needs.build.outputs.vsix }}
+          generate_release_notes: true

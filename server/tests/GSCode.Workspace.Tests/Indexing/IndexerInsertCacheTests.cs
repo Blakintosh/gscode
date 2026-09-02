@@ -119,6 +119,30 @@ public class IndexerInsertCacheTests
     }
 
     [Fact]
+    public async Task ANestedHeadersAncestorLosesItsStoredContribution()
+    {
+        // A contribution is what the WALK left behind, and the walk of an outer header descends
+        // into the ones it inserts — so a wrapper's entry carries copies of the inner header's
+        // macros. Dropping the inner one alone leaves those copies to be replayed, and a re-parse
+        // reproduces the values it just discarded.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\shared\base.gsh", "#define CAP 5\n")
+            .AddFile(@$"{Raw}\scripts\shared\wrapper.gsh", "#insert scripts\\shared\\base.gsh;\n")
+            .AddFile(
+                @$"{Raw}\scripts\uses_it.gsc",
+                "#insert scripts\\shared\\wrapper.gsh;\nfunction f()\n{\nx = CAP;\n}\n");
+
+        (WorkspaceIndexer indexer, InsertCache inserts) = Build(files);
+        await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+
+        indexer.InvalidateGsh(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\base.gsh"));
+
+        // The wrapper keeps its lexed tokens — its own bytes did not change — and loses only what
+        // it was found to contribute, which is the half the inner header decides.
+        Assert.False(inserts.TryGet(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\wrapper.gsh"), out _));
+    }
+
+    [Fact]
     public void InvalidatingAHeaderNothingHolds_DoesNotMoveIt()
     {
         // A save of a GSH nothing has inserted yet, or a second invalidation of the same path.

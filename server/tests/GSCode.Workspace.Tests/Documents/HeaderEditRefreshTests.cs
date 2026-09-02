@@ -94,6 +94,38 @@ public class HeaderEditRefreshTests
     }
 
     [Fact]
+    public void AChangeToANestedHeaderReachesTheOpenDependentToo()
+    {
+        // A header inserted through ANOTHER header. Re-parsing is not enough on its own here: the
+        // wrapper's cached contribution carries copies of the macros the inner header defined, so
+        // dropping the inner one alone leaves the re-parse replaying the values it just discarded.
+        const string WrapperPath = @$"{Raw}\scripts\shared\wrapper.gsh";
+        const string BasePath = @$"{Raw}\scripts\shared\base.gsh";
+        const string ThroughWrapper = "#insert scripts\\shared\\wrapper.gsh;\nfunction f()\n{\n    x = CAP;\n}\n";
+
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(BasePath, "#define CAP 5\n")
+            .AddFile(WrapperPath, "#insert scripts\\shared\\base.gsh;\n")
+            .AddFile(GscPath, ThroughWrapper);
+
+        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        PathResolver resolver = new(config, files);
+        InsertCache inserts = new();
+        DocumentStore store = new(
+            path => new ResolverInsertProvider(resolver, resolver.GetContext(path), files, inserts),
+            new NameTable(),
+            inserts);
+
+        OpenDocument document = store.Open(GscPath, ThroughWrapper, version: 1);
+        Assert.Equal("5", MacroBody(store.Analyze(document), "CAP"));
+
+        files.AddFile(BasePath, "#define CAP 99\n");
+        inserts.Invalidate(PathUtil.NormalizeAbsolute(BasePath));
+
+        Assert.Equal("99", MacroBody(store.AnalyzeIfStale(document), "CAP"));
+    }
+
+    [Fact]
     public void AnUntouchedHeaderCostsNoSecondAnalysis()
     {
         // The other half: the refresh must not turn every AnalyzeIfStale into a re-parse. Nothing

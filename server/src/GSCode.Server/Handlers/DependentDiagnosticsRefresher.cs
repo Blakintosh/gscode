@@ -31,6 +31,10 @@ namespace GSCode.Server.Handlers;
 ///    is skipped outright.
 /// 2. A dependent's TEXT has not changed, so its parse is reused (<c>AnalyzeIfStale</c> returns the
 ///    cached result) and only the lints re-run. Revalidation costs a lint pass, not a re-parse.
+///    The one exception is a changed <c>#insert</c>ed header, which invalidates the parse itself —
+///    the macro bodies it expanded are no longer what the header says — and <c>AnalyzeIfStale</c>
+///    re-parses for that reason alone. Header edits are rare and user-paced, so the exception does
+///    not touch the typing path.
 ///
 /// Scope is every OTHER open document, not a computed dependency set. Open documents are few — the
 /// user's tabs — while "reaches this file" is not a simple question: under the merge dialects an

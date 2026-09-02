@@ -57,6 +57,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ILanguageServerFacade _server;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
     private readonly DependentDiagnosticsRefresher _dependents;
+    private readonly InsertCache _inserts;
 
     public TextSyncHandler(
         DocumentStore documents,
@@ -69,8 +70,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         DocumentLinter linter,
         ILanguageServerFacade server,
         WorkspaceDiagnosticsPublisher workspaceDiagnostics,
-        DependentDiagnosticsRefresher dependents)
+        DependentDiagnosticsRefresher dependents,
+        InsertCache inserts)
     {
+        _inserts = inserts;
         _dependents = dependents;
         _workspaceDiagnostics = workspaceDiagnostics;
         _linter = linter;
@@ -175,10 +178,36 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             }
 
             AnalyzeAndPublish(document, request.TextDocument.Uri);
+            RefreshDependentsOfSavedHeader(document);
             WarnIfProtectedRawFile(document);
         }
 
         return Unit.Value;
+    }
+
+    /// <summary>
+    /// Republishes the other open documents when the file just saved is a header.
+    ///
+    /// A GSH is read from DISK by every file that inserts it, so its edits reach them at the save
+    /// and not before — which is why this is on the save path rather than the analysis one, and why
+    /// typing in a header costs nothing here. Two things have to happen and neither implies the
+    /// other: the cache has to drop the copy it lexed before the save, and the documents whose
+    /// parses expanded that copy have to be told, since not one character of THEIR text changed.
+    ///
+    /// Without it, editing a macro's value and saving left every open dependent showing the old
+    /// value on hover until something was typed into it. The export signature does not cover this
+    /// case on its own: the header's record was committed from its buffer when the debounce fired,
+    /// so by the time the save arrives the signature has already moved and moves no further.
+    /// </summary>
+    private void RefreshDependentsOfSavedHeader(OpenDocument document)
+    {
+        if ( document.Language != ScriptLanguage.Gsh )
+        {
+            return;
+        }
+
+        _inserts.Invalidate(document.Path);
+        _dependents.Schedule(document.Path);
     }
 
     /// <summary>

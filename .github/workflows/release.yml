@@ -49,7 +49,22 @@ jobs:
           name: gscode-vsix
 
       - name: Publish to the Marketplace
-        run: npx --yes @vscode/vsce publish --packagePath "${{ needs.build.outputs.vsix }}"
+        # The Marketplace sometimes takes longer to process a ~20 MB upload than vsce is willing to
+        # wait, and reports "Request timeout" even though the server keeps going and may finish the
+        # publish anyway. Retry a few times; a retry that finds the version already there is a
+        # success, not a failure.
+        run: |
+          for attempt in 1 2 3; do
+            if out=$(npx --yes @vscode/vsce publish --packagePath "${{ needs.build.outputs.vsix }}" 2>&1); then
+              echo "$out"; exit 0
+            fi
+            echo "$out"
+            if echo "$out" | grep -qi "already exists"; then
+              echo "Version already published by an earlier attempt."; exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 60s..."; sleep 60
+          done
+          exit 1
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 

@@ -84,4 +84,50 @@ public class IndexerInsertCacheTests
 
         Assert.Equal(0, inserts.Count);
     }
+
+    // --- The generation ---
+    //
+    // What an open document's completed analysis is checked against, so a header edit makes every
+    // dependent's parse stale without a character of that dependent changing. It must move for a
+    // header that CHANGED and stay put for one merely read, or the first index would mark every
+    // open document stale once per file and the editor would re-parse them all for nothing.
+
+    [Fact]
+    public async Task IndexingAWorkspace_DoesNotMoveTheGeneration()
+    {
+        FakeFileSystem files = Workspace();
+        (WorkspaceIndexer indexer, InsertCache inserts) = Build(files);
+        long before = inserts.Generation;
+
+        await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+
+        // Reading a header for the first time is not a header changing.
+        Assert.Equal(before, inserts.Generation);
+    }
+
+    [Fact]
+    public async Task InvalidatingAHeldHeader_MovesTheGeneration()
+    {
+        FakeFileSystem files = Workspace();
+        (WorkspaceIndexer indexer, InsertCache inserts) = Build(files);
+        await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+
+        long before = inserts.Generation;
+        indexer.InvalidateGsh(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\shared.gsh"));
+
+        Assert.NotEqual(before, inserts.Generation);
+    }
+
+    [Fact]
+    public void InvalidatingAHeaderNothingHolds_DoesNotMoveIt()
+    {
+        // A save of a GSH nothing has inserted yet, or a second invalidation of the same path.
+        // Neither invalidates anyone's parse, and reacting would re-parse every open tab for free.
+        InsertCache inserts = new();
+        long before = inserts.Generation;
+
+        inserts.Invalidate(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\shared.gsh"));
+
+        Assert.Equal(before, inserts.Generation);
+    }
 }

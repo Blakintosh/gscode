@@ -38,6 +38,23 @@ public sealed class InsertCache : IHeaderMacroCache
 
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
 
+    private long _generation;
+
+    /// <inheritdoc />
+    public long Generation
+    {
+        get { return Interlocked.Read(ref _generation); }
+    }
+
+    /// <summary>
+    /// Records that a header stopped being what it was. Called from every point that replaces or
+    /// drops an entry, so no caller has to remember to announce a change separately from making it.
+    /// </summary>
+    private void Moved()
+    {
+        Interlocked.Increment(ref _generation);
+    }
+
     /// <summary>
     /// The header at this resolved path, lexed once and reused until the file changes. Null when it
     /// could not be read — and a failure is NOT cached, so a header that appears later, or becomes
@@ -60,6 +77,14 @@ public sealed class InsertCache : IHeaderMacroCache
 
         // The file moved, so whatever it used to contribute is no longer what it contributes.
         _contributions.TryRemove(resolvedPath, out _);
+
+        // Only a REPLACEMENT is a change; the first read of a header is not, and counting it would
+        // make every file analysed during indexing invalidate every other one's parse.
+        if ( cached is not null )
+        {
+            Moved();
+        }
+
         _entries[resolvedPath] = new Entry(file, stamp);
         return file;
     }
@@ -108,15 +133,26 @@ public sealed class InsertCache : IHeaderMacroCache
     /// <summary>Drops one header, for a caller that knows it changed and will not wait for the stat.</summary>
     public void Invalidate(string resolvedPath)
     {
-        _entries.TryRemove(resolvedPath, out _);
+        bool held = _entries.TryRemove(resolvedPath, out _);
         _contributions.TryRemove(resolvedPath, out _);
+
+        if ( held )
+        {
+            Moved();
+        }
     }
 
     /// <summary>Drops everything — used when the resolution roots change, so paths mean new files.</summary>
     public void Clear()
     {
+        bool held = !_entries.IsEmpty;
         _entries.Clear();
         _contributions.Clear();
+
+        if ( held )
+        {
+            Moved();
+        }
     }
 
     /// <summary>How many headers are held. For diagnostics and tests.</summary>

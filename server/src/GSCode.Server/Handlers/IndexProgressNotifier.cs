@@ -36,6 +36,15 @@ public sealed record IndexingCompleteParams(
     int FilesIndexed, int TotalFiles, long ElapsedMilliseconds, double WorkingSetMegabytes);
 
 /// <summary>
+/// Payload for gscode/indexingFailed: the startup pass threw before finishing. A dedicated
+/// notification rather than <c>gscode/indexingComplete</c> with a made-up count, because that one
+/// reads as success on the client (a checkmark and a file/second summary) — sending it for a
+/// pass that never actually indexed anything would be a confident lie about the thing that most
+/// needs the user's attention.
+/// </summary>
+public sealed record IndexingFailedParams(string Reason);
+
+/// <summary>
 /// Maps indexer progress onto the gscode/indexing* notifications. Progress fires on
 /// every file completion but is coalesced to at most one notification per ~40 ms so
 /// the status-bar counter visibly races without flooding the pipe; the final count
@@ -216,6 +225,38 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
                 Environment.WorkingSet / (1024.0 * 1024.0)));
 
         RequestCodeLensRefresh();
+    }
+
+    /// <summary>
+    /// The startup pass threw before it could finish — a cache open failure, a resolver error, an
+    /// exception nobody anticipated. Also terminal, and also may not be dropped: without this,
+    /// <see cref="Started"/> having gone out with no matching <c>gscode/indexingComplete</c> ever
+    /// arriving left the status bar's spinner running for the rest of the session, which read as
+    /// the server having hung rather than having failed. A genuine shutdown-triggered cancellation
+    /// is NOT this — the caller distinguishes the two and only calls this for a real failure.
+    /// </summary>
+    public void Failed(string reason)
+    {
+        // Not logged here: the caller already logs the exception itself (Program.cs's catch), and
+        // this would otherwise be the same failure twice in two different shapes.
+        if ( !_settled.IsCompleted )
+        {
+            _ = _settled.ContinueWith(
+                _ => SendFailed(reason),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            return;
+        }
+
+        SendFailed(reason);
+    }
+
+    private void SendFailed(string reason)
+    {
+        FlushStartedIfReady();
+        _server.SendNotification("gscode/indexingFailed", new IndexingFailedParams(reason));
     }
 
     /// <summary>

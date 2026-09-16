@@ -587,7 +587,10 @@ public sealed class SymbolExtractor
                 return;
             }
             case TernaryNode ternary:
-                WalkExpression(ternary.Condition, assignments);
+                // The condition is a boolean test, not a message fragment, even when the ternary
+                // itself sits inside a `+` chain — `"a" + ( x > 0 ? "b" : "c" )` must not flag the
+                // comparison's own operands as concatenated literals.
+                WalkWithoutConcatenation(ternary.Condition, assignments);
                 WalkExpression(ternary.WhenTrue, assignments);
                 WalkExpression(ternary.WhenFalse, assignments);
                 return;
@@ -619,17 +622,21 @@ public sealed class SymbolExtractor
                 WalkExpression(member.Object, assignments);
                 return;
             case IndexNode index:
-                WalkExpression(index.Object, assignments);
-                WalkExpression(index.Index, assignments);
+                // `"a" + level.flags[ "key" ]` — the index is a lookup key, not a fragment of the
+                // outer concatenation, even though it sits inside one.
+                WalkWithoutConcatenation(index.Object, assignments);
+                WalkWithoutConcatenation(index.Index, assignments);
                 return;
             case PointerDerefNode pointer:
                 WalkExpression(pointer.Pointer, assignments);
                 return;
             case CallNode call:
             {
+                // "a" + foo( "name" ) — the call's target and its arguments are their own
+                // expressions, not fragments of an enclosing `+` chain merely passing through here.
                 if ( call.Target is not null )
                 {
-                    WalkExpression(call.Target, assignments);
+                    WalkWithoutConcatenation(call.Target, assignments);
                 }
 
                 RecordCalleeReference(call.Callee, ReferenceKind.Call);
@@ -658,14 +665,14 @@ public sealed class SymbolExtractor
                         continue;
                     }
 
-                    WalkExpression(call.Arguments[index], assignments);
+                    WalkWithoutConcatenation(call.Arguments[index], assignments);
                 }
 
                 return;
             }
             case ArrowCallNode arrow:
             {
-                WalkExpression(arrow.Object.Pointer, assignments);
+                WalkWithoutConcatenation(arrow.Object.Pointer, assignments);
 
                 // [[self]]->m() inside a class is a call on THIS class, and that is the only
                 // receiver whose class is knowable without typing the locals. Everything else —
@@ -680,7 +687,7 @@ public sealed class SymbolExtractor
 
                 foreach ( ExprNode argument in arrow.Arguments )
                 {
-                    WalkExpression(argument, assignments);
+                    WalkWithoutConcatenation(argument, assignments);
                 }
 
                 return;
@@ -692,7 +699,7 @@ public sealed class SymbolExtractor
 
                 foreach ( ExprNode argument in newNode.Arguments )
                 {
-                    WalkExpression(argument, assignments);
+                    WalkWithoutConcatenation(argument, assignments);
                 }
 
                 return;
@@ -707,6 +714,22 @@ public sealed class SymbolExtractor
             default:
                 return;
         }
+    }
+
+    /// <summary>
+    /// Walks a child expression that begins its OWN expression, not a continuation of an enclosing
+    /// `+` chain — a call's target and arguments, an index, a ternary's condition. `_inStringConcatenation`
+    /// is instance state that <see cref="WalkExpression"/>'s <c>BinaryNode</c> case sets and restores
+    /// around its own two operands; every other node that recurses into an independent sub-expression
+    /// has to break that inheritance itself, or a literal several levels inside a call argument —
+    /// `"a" + foo( "name" )` — is recorded as a message fragment the outer `+` never touches.
+    /// </summary>
+    private void WalkWithoutConcatenation(ExprNode expression, ImmutableArray<AssignmentSymbol>.Builder assignments)
+    {
+        bool wasInConcatenation = _inStringConcatenation;
+        _inStringConcatenation = false;
+        WalkExpression(expression, assignments);
+        _inStringConcatenation = wasInConcatenation;
     }
 
     private void RecordAssignmentTarget(ExprNode target, ImmutableArray<AssignmentSymbol>.Builder assignments)

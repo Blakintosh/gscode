@@ -335,6 +335,33 @@ public class ExtractionTests
     }
 
     [Fact]
+    public void References_ConcatenationFlagDoesNotLeakIntoNestedExpressions()
+    {
+        // "a" + foo( "name" ) — the OUTER string is a genuine message fragment, but "name" is an
+        // ordinary argument sitting inside a call the concatenation merely passes through. Only the
+        // outer literal should be flagged; a call argument, an index expression and a nested `+`
+        // chain of their own must each be judged on their own terms.
+        ParseResult result = Analyze(
+            "function f()\n{\nx = \"a\" + foo( \"name\" );\ny = \"b\" + level.flags[ \"key\" ];\nz = \"c\" + (\"d\" + bar( \"e\" ));\n}");
+
+        List<ReferenceEntry> references = [.. result.Extraction.References];
+
+        SymbolKey Key(string text)
+        {
+            return new SymbolKey(null, text, SymbolKind.StringLiteral);
+        }
+
+        Assert.Contains(references, entry => entry.Key == Key("a") && entry.Kind == ReferenceKind.ConcatenatedLiteral);
+        Assert.Contains(references, entry => entry.Key == Key("b") && entry.Kind == ReferenceKind.ConcatenatedLiteral);
+        Assert.Contains(references, entry => entry.Key == Key("c") && entry.Kind == ReferenceKind.ConcatenatedLiteral);
+        Assert.Contains(references, entry => entry.Key == Key("d") && entry.Kind == ReferenceKind.ConcatenatedLiteral);
+
+        Assert.Contains(references, entry => entry.Key == Key("name") && entry.Kind == ReferenceKind.Literal);
+        Assert.Contains(references, entry => entry.Key == Key("key") && entry.Kind == ReferenceKind.Literal);
+        Assert.Contains(references, entry => entry.Key == Key("e") && entry.Kind == ReferenceKind.Literal);
+    }
+
+    [Fact]
     public void References_SpacedAnimReferenceKeysTheSameAsAJoinedOne()
     {
         // `%run` and `% run` name one animation, so find-all-references has to see one symbol with

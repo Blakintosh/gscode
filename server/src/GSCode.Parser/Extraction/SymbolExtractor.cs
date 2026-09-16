@@ -236,11 +236,12 @@ public sealed class SymbolExtractor
         WalkStatement(function.Body, assignments);
         PerfTracker.End();
 
+        string? sourceFile = function.NameToken.Provenance.SourceFile;
         ImmutableArray<ParameterSymbol>.Builder parameters = ImmutableArray.CreateBuilder<ParameterSymbol>();
         foreach ( ParameterNode parameter in function.Parameters )
         {
-            string defaultText = parameter.DefaultValue is null ? "" : AstPrinter.Print(parameter.DefaultValue);
-            parameters.Add(new ParameterSymbol(parameter.NameToken.Text, parameter.ByRef, defaultText));
+            parameters.Add(new ParameterSymbol(
+                parameter.NameToken.Text, parameter.ByRef, DefaultValueText(parameter.DefaultValue, sourceFile)));
         }
 
         return new FunctionSymbol
@@ -260,6 +261,36 @@ public sealed class SymbolExtractor
             Doc = FindDocComment(function.Range.Start.Line, function.NameToken.Provenance.SourceFile),
             Assignments = assignments.ToImmutable(),
         };
+    }
+
+    /// <summary>
+    /// A parameter default AS WRITTEN — what signature help, hover and export signatures show —
+    /// rather than <see cref="AstPrinter"/>'s S-expression debug format, which surfaced verbatim as
+    /// e.g. <c>v = (vector 0 0 1)</c> and <c>n = (prefix- 1)</c>.
+    ///
+    /// A default's <see cref="AstNode.Range"/> is real root-file text only for a ROOT-file function:
+    /// slicing <see cref="_text"/> by it then reproduces exactly what is on screen, macro invocations
+    /// included (the range covers the invocation as written, not its expansion). For a function an
+    /// <c>#insert</c>ed header declares, every token's range collapses onto the insert SITE — see
+    /// <c>Provenance.RootSite</c> — so slicing there would return the directive's own characters. The
+    /// printer stays the fallback for that one case, same as before this existed.
+    /// </summary>
+    private string DefaultValueText(ExprNode? defaultValue, string? sourceFile)
+    {
+        if ( defaultValue is null )
+        {
+            return "";
+        }
+
+        if ( sourceFile is not null )
+        {
+            return AstPrinter.Print(defaultValue);
+        }
+
+        TextRange range = defaultValue.Range;
+        int start = _text.GetOffset(range.Start);
+        int end = _text.GetOffset(range.End);
+        return _text.Slice(start, end - start).ToString();
     }
 
     private void ExtractClass(ClassNode classNode)

@@ -40,6 +40,25 @@ public class ExtractionTests
     }
 
     [Fact]
+    public void Function_ParameterDefault_IsShownAsWritten_NotAsAnSExpression()
+    {
+        // Signature help, hover and export signatures show DefaultValueText verbatim. It must read
+        // like the source the author wrote, not AstPrinter's debug format — `(vector 0 0 1)` and
+        // `(prefix- 1)` are meaningless to a reader looking at a function signature.
+        ParseResult result = Analyze(
+            "#define MAX_HEALTH 100\nfunction f( v = ( 0, 0, 1 ), n = -1, s = \"hi\", m = MAX_HEALTH )\n{\n}");
+
+        FunctionSymbol function = Assert.Single(result.Extraction.Functions);
+        Assert.Equal("( 0, 0, 1 )", function.Parameters[0].DefaultValueText);
+        Assert.Equal("-1", function.Parameters[1].DefaultValueText);
+        Assert.Equal("\"hi\"", function.Parameters[2].DefaultValueText);
+
+        // A macro-expanded default is shown as the INVOCATION the author wrote, not its expansion —
+        // the default's range covers "MAX_HEALTH" in the root file regardless of what it expands to.
+        Assert.Equal("MAX_HEALTH", function.Parameters[3].DefaultValueText);
+    }
+
+    [Fact]
     public void Namespace_DefaultIsFileStem_AndDirectiveSwitches()
     {
         ParseResult result = Analyze("function a()\n{\n}\n#namespace util;\nfunction b()\n{\n}");

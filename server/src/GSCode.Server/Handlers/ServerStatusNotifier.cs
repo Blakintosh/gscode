@@ -52,7 +52,12 @@ public sealed class ServerStatusNotifier
                 if ( Math.Abs(workingSetBytes - lastSentBytes) >= ReportThresholdBytes )
                 {
                     lastSentBytes = workingSetBytes;
-                    double megabytes = workingSetBytes / ReportThresholdBytes;
+
+                    // Cast BEFORE dividing: long / long truncates to whole megabytes before the
+                    // result ever reaches the double it is assigned to, so this disagreed with
+                    // gscode/indexingComplete's WorkingSetMegabytes (Environment.WorkingSet /
+                    // (1024.0 * 1024.0)) by up to a megabyte on the same tooltip.
+                    double megabytes = workingSetBytes / (double)ReportThresholdBytes;
 
                     _server.SendNotification("gscode/serverStatus", new ServerStatusParams(megabytes));
                 }

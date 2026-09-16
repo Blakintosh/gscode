@@ -42,10 +42,12 @@ public sealed class ClearCacheResponse
 public sealed class ClearCacheHandler : IJsonRpcRequestHandler<ClearCacheParams, ClearCacheResponse>
 {
     private readonly CacheHolder _cache;
+    private readonly IndexingLifetime _indexing;
 
-    public ClearCacheHandler(CacheHolder cache)
+    public ClearCacheHandler(CacheHolder cache, IndexingLifetime indexing)
     {
         _cache = cache;
+        _indexing = indexing;
     }
 
     public async Task<ClearCacheResponse> Handle(ClearCacheParams request, CancellationToken cancellationToken)
@@ -57,6 +59,14 @@ public sealed class ClearCacheHandler : IJsonRpcRequestHandler<ClearCacheParams,
             // client is about to trigger is still the right outcome.
             return new ClearCacheResponse { Message = "No workspace cache is open." };
         }
+
+        // Stop the startup pass BEFORE closing the cache it may still be writing to — closing
+        // first left it enqueuing into a channel already being completed, every one of those
+        // writes counted as dropped rather than persisted, and the count it reported for a cache
+        // that no longer existed to hold them was actively misleading. The client reloads the
+        // window right after this either way (see gscode.clearCacheAndReindex), so there is
+        // nothing this pass could still usefully finish.
+        await _indexing.CancelAndWaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         // Drain and close first: SQLite holds the file, and the sidecars, until it is disposed.
         await _cache.CloseAsync().ConfigureAwait(false);

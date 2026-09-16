@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Server.Configuration;
 using GSCode.Workspace.Analysis;
@@ -45,7 +46,17 @@ public sealed class DocumentLinter
     /// </param>
     public ImmutableArray<Diagnostic> Analyze(OpenDocument document, ParseResult result)
     {
-        return WorkspaceLints.Analyze(
-            result, document.Language, document.Path, _database, _resolver.Current, _builtins, _objectFields);
+        return Analyze(document.Language, document.Path, result);
+    }
+
+    /// <summary>
+    /// Same pipeline, for a caller with no <see cref="OpenDocument"/> — the full-mode workspace
+    /// lint sweep (<see cref="WorkspaceLintSweep"/>), which re-analyses a CLOSED file straight
+    /// from disk and needs exactly the two facts an <see cref="OpenDocument"/> would otherwise
+    /// have supplied.
+    /// </summary>
+    public ImmutableArray<Diagnostic> Analyze(ScriptLanguage language, string path, ParseResult result)
+    {
+        return WorkspaceLints.Analyze(result, language, path, _database, _resolver.Current, _builtins, _objectFields);
     }
 }

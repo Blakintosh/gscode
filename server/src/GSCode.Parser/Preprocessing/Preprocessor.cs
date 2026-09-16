@@ -15,6 +15,22 @@ public sealed class Preprocessor
 {
     private const int MaxInsertDepth = 16;
 
+    /// <summary>
+    /// Ceiling on how deeply a function-like macro CALL SITE may nest its own name —
+    /// <c>F(F(F(…</c> — before the innermost is simply left unexpanded rather than descended into.
+    ///
+    /// Unlike <see cref="ExpandBody"/>'s recursion (bounded by how many distinct macros the file
+    /// defines, and guarded against self-recursion by <see cref="_expansionStack"/>), this pair —
+    /// <see cref="TryExpandAt"/> calling <see cref="TryCollectArguments"/>, which calls
+    /// <see cref="TryExpandAt"/> again while scanning arguments for nested macro uses — has nothing
+    /// bounding it but how much TEXT the call site writes, which is under an attacker's or a
+    /// pathological input's control regardless of the file's actual macro count. Confirmed: 20,000
+    /// levels of <c>F(F(F(…</c> overflowed a 1 MB thread stack before this existed. 64 matches
+    /// <see cref="ConditionalEvaluator.MaxDepth"/> and the depth cap used elsewhere in the server
+    /// (ClassCycleLint, MethodResolution) — nothing hand-written comes near it.
+    /// </summary>
+    private const int MaxMacroExpansionDepth = 64;
+
     private readonly string _rootFilePath;
     private readonly IInsertProvider _insertProvider;
     private readonly NameTable _names;
@@ -74,6 +90,10 @@ public sealed class Preprocessor
 
     private readonly HashSet<string> _activeInsertPaths = new(StringComparer.Ordinal);
     private readonly HashSet<string> _expansionStack = new(StringComparer.Ordinal);
+
+    // How many function-like macro calls TryExpandAt is currently inside of, via TryCollectArguments'
+    // argument scan re-entering it. See MaxMacroExpansionDepth.
+    private int _expansionDepth;
 
     /// <summary>One file being walked: its tokens, its text, and how it anchors to the root file.</summary>
     private sealed record FileFrame(ImmutableArray<Token> Tokens, SourceText Text, string? SourceFile, TextRange? RootSite, int Depth)
@@ -838,7 +858,22 @@ public sealed class Preprocessor
             return false;
         }
 
-        if ( !TryCollectArguments(frame, openParenIndex, definition, out Dictionary<string, List<PToken>> arguments, out int afterArguments) )
+        // Past the cap, this invocation is simply left unexpanded — the same answer given elsewhere
+        // for a construct too deep to resolve. Returning false rather than consuming anything sends
+        // the caller down its own "not a macro" path, which emits this token as ordinary text and
+        // lets the scan continue: the rest of the pathological chain is walked, just not descended
+        // into, so parsing stays bounded without a diagnostic pretending this is a real error.
+        if ( _expansionDepth >= MaxMacroExpansionDepth )
+        {
+            return false;
+        }
+
+        _expansionDepth++;
+        bool argumentsCollected = TryCollectArguments(
+            frame, openParenIndex, definition, out Dictionary<string, List<PToken>> arguments, out int afterArguments);
+        _expansionDepth--;
+
+        if ( !argumentsCollected )
         {
             index = afterArguments;
             return true;

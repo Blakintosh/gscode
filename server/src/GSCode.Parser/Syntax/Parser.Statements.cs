@@ -448,7 +448,16 @@ public sealed partial class Parser
             ImmutableArray<AstNode>.Builder statements = ImmutableArray.CreateBuilder<AstNode>();
             while ( Kind != TokenKind.Case && Kind != TokenKind.Default && Kind != TokenKind.CloseBrace && Kind != TokenKind.EndOfFile )
             {
+                int before = _index;
                 statements.Add(ParseStatement());
+
+                // Same belt-and-braces as ParseBlock: every statement parser is meant to consume
+                // something, and this loop has no sync-point exit of its own to fall back on if one
+                // ever does not.
+                if ( _index == before )
+                {
+                    Advance();
+                }
             }
 
             cases.Add(new CaseGroupNode(RangeFrom(groupStart), labels.ToImmutable(), statements.ToImmutable()));
@@ -483,7 +492,16 @@ public sealed partial class Parser
 
         while ( Kind != TokenKind.DevBlockClose && Kind != TokenKind.EndOfFile && Kind != TokenKind.CloseBrace )
         {
+            int before = _index;
             statements.Add(ParseStatement());
+
+            // Same belt-and-braces as ParseBlock: every statement parser is meant to consume
+            // something, and this loop has no sync-point exit of its own to fall back on if one
+            // ever does not.
+            if ( _index == before )
+            {
+                Advance();
+            }
         }
 
         if ( !Match(TokenKind.DevBlockClose) )

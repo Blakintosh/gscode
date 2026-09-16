@@ -674,6 +674,34 @@ interleaves the rules' findings, and without a sort the corpus sweep would have 
 difference. With it, the bo3 `Category=Corpus` sweep prints byte-identical output across 31 tests
 and 980 scripts.
 
+### 2026-09-15: the 44 ms/file that stood down "lints for closed files" was the sweep, not the work
+
+`FOLLOWUPS.md`'s "Cross-file lints for files that are not open" entry deferred a workspace-wide
+lint sweep on the strength of one figure: option 1 "runs at roughly 44 ms/file — about 43 s for
+BO3's 980 stock scripts". That figure is `Category=Corpus`'s own sequential wall-clock, which does
+considerably more per file than a sweep would — parses, diffs against a reference output, and
+accumulates a report. It was never the cost of `ScriptAnalysis.Analyze` + `WorkspaceLints.Analyze`
+themselves.
+
+The two components ARE measured, separately, elsewhere in this file — `WorkspaceLints_WhereTheTimeGoes`
+(this section, re-run today) and `ColdIndex_WhereTheTimeGoes` (parallel, cores − 1):
+
+| | bo3, 980 files | cod4, 894 files |
+|---|---:|---:|
+| lint pass (`WorkspaceLints_WhereTheTimeGoes`, sequential) | 1,731 ms | 1,062 ms |
+| lint median / p90 / p99 / max | 0.51 / 3.99 / 25.55 / 67.35 ms | 0.44 / 3.13 / 13.01 / 26.61 ms |
+| cold index — analysis, parallel (`ColdIndex_WhereTheTimeGoes`) | 408 ms / 1,085 files | 301 ms / 904 files |
+
+Combined and read as a SEQUENTIAL per-file cost — the worst-case shape, since a real sweep would
+run analysis and linting across `cores − 1` the same way the cold index already does — bo3 comes to
+roughly **(408 + 1,731) ms / 980 ≈ 2.2 ms/file**, cod4 to **(301 + 1,062) ms / 894 ≈ 1.5 ms/file**.
+That is a full bo3 workspace-wide sweep landing somewhere under **2.5 seconds sequential, well
+under one parallelised** — not 43. `FOLLOWUPS.md`'s entry is corrected rather than deleted: the
+sweep itself is affordable; what that entry's second objection (stale results after a rename) still
+correctly identifies as the hard part is INVALIDATION, which is solved separately by reusing
+`ReferenceIndex`/`DeclarationIndex` rather than by re-sweeping — see the `workspaceIndexingMode:
+full` feature this measurement unblocked.
+
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced

@@ -178,7 +178,14 @@ and the active argument, the reported case of an `#insert`ed macro invoked at fi
 three positions that must NOT answer with a macro — an object-like one, a name whose case does not
 match, and a qualified `namespace::NAME(`.
 
-**Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order ·
+**Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order,
+plus the resolution memo (a hit and a miss both cost nothing the second time; a watched
+create/delete forces a re-probe) · `ImportResolutionProbeCostTests` the filesystem-probe count
+behind `#using`/`#include` — confirms the memo's fix, and that the cold, root-count-multiplied
+cost it cannot remove is still exactly what it should be ·
+`WorkspaceIndexerOwnershipTests` an open document's committed record survives a concurrent index
+pass untouched, and the disk content still reaches the cache ·
+`WorkspaceIndexerConcurrencyTests` two `IndexAsync` calls on one indexer never interleave ·
 `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·
 `ClassGraphTests` incremental class-index updates · `MethodResolutionTests` inherited and
 qualified method lookup · `MethodReferenceTests` class-method reference unions ·
@@ -195,7 +202,8 @@ nothing is configured ·
 `ServerBuildIdentityTests` that two games can never share a cache.
 
 **Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` · `StaleAnalysisTests` edits
-racing analysis · `WatchedFileUpdaterTests` · `FlowTyperTests`, `TypeFlowConvergenceTests` local type
+racing analysis, including that `AnalyzeSnapshot` stamps the WINNING version on a superseded
+caller's own result rather than its own · `WatchedFileUpdaterTests` · `FlowTyperTests`, `TypeFlowConvergenceTests` local type
 inference and that the walk terminates · `ValueIdentityTests` the two facts the `ScrType` projection
 cannot hold — which class an instance is, which function a pointer holds — including the guard that
 no OTHER label moved when display stopped going through the projection.
@@ -273,8 +281,13 @@ tests, and nothing within a test: the corpus sweeps still parallelise their own 
 `GuidelineExampleTests` the examples in `FORMATTING.md`.
 
 **Handlers.** `CodeActionHandlerTests` quick fixes · `DependentDiagnosticsTests` debounced
-cross-file refreshes for other open documents · `CodeLensArgumentTests` the lens command payload,
-which must be primitives so no serializer can case-mangle it · `CompletionResolveDataTests` ·
+cross-file refreshes for other open documents, plus `ClosedDependentsOf` (the `full`-mode half): a
+closed file referencing the origin's function is named, the origin itself and an open caller are
+not · `WorkspaceLintSweepTests` the `workspaceIndexingMode: full` sweep — a closed record's stored
+diagnostics gain the cross-file lints, an open document is skipped and left untouched, and
+`RelintClosedFilesAsync` upgrades only the file it was given · `CodeLensArgumentTests` the lens
+command payload, which must be primitives so no serializer can case-mangle it ·
+`CompletionResolveDataTests` ·
 `DiagnosticsScopeTests` `gscode.diagnostics.scope` · `BuiltinAtTests` the builtin-under-cursor
 request · `OnTypeBlockScopeTests` · `UntitledDocumentTests` documents with no path ·
 `WorkspaceFoldersHandlerTests` · `IndexProgressNotifierTests`, `ServerStatusNotifierTests` ·

@@ -88,58 +88,6 @@ That is a lot of duplication for a colour, and it would fragment the language id
 resolve to, which every other contribution point keys off. Not worth doing until someone actually
 reports being misled by it — the diagnostic now tells them, which is the half that matters.
 
-### Cross-file lints for files that are not open
-
-`gscode.diagnostics.scope` now publishes problems for indexed files, but a closed file reports
-only what `ScriptRecord.Diagnostics` holds — the parse-level findings (syntax errors, unknown
-directives, precache mistakes). Opening it adds the cross-file lints: unused `#using`, namespace
-usage, private access, dev-block calls, read-only writes, prefer-boolean-literal.
-
-So a file can gain problems on being opened, which is honest but slightly odd.
-
-Closing the gap needs those lints run over the whole workspace, and they need a `ParseResult`,
-which records deliberately do not retain — holding 1,105 of them is exactly the memory the
-rewrite avoided. Options, roughly in order of appeal:
-
-1. A background pass after indexing that re-analyses each file, runs the lints, stores the merged
-   diagnostics on the record and drops the result. Costs a second analysis pass but bounded, and
-   it can be cancelled and resumed.
-2. Run the lints during indexing's second phase, once the database is complete enough for the
-   cross-file ones to be meaningful.
-3. Leave it, and document that closed files report parse-level problems only.
-
-Whichever, the count in the status bar and the Problems panel should agree, so decide before
-adding any "N problems" summary.
-
-**Revisited, and deliberately still not done.** The OPEN half of this is now solved — an edit that
-changes what other files can see republishes their diagnostics (`ExportSignature` +
-`DependentDiagnosticsRefresher`). That fix is cheap for exactly two reasons, and it is worth being
-precise about them because NEITHER holds for closed files:
-
-* open documents are the user's tabs, so there are a handful of them; and
-* their text has not changed, so the parse is reused and only the lint pass re-runs.
-
-Closed files are the opposite on both counts: there are thousands, and none has a retained parse.
-Measured against the corpus sweep, which does precisely this work, a parse-plus-all-lints pass runs
-at roughly 44 ms/file — about 43 s for BO3's 980 stock scripts, or a second or two for a mod of
-fifty.
-
-The trap is that option 1 reads like a ONE-OFF cost and is not. Stored lint results go stale on the
-same trigger the open files do: rename a function and every stored diagnostic that mentions it is
-wrong. So it is a sweep per rename, not a sweep per session — seconds of background CPU on a common
-keystroke, which is a louder problem than the quiet gap it closes.
-
-Doing it properly therefore needs incremental invalidation, not a re-sweep: a reverse-dependency
-index answering "which files reach this one", so only genuinely affected files re-lint. That index
-is the hard part, and the difficulty is documented rather than assumed — under the merge dialects an
-unqualified call resolves by NAME across the whole workspace, so a narrow answer is wrong rather
-than merely conservative (see the same problem in `DatabaseQueries.ScopeToIncludeGraph`).
-
-That is a subsystem, not a bolt-on, so it stays here until it is worth one. What DID land meanwhile:
-an on-disk change now republishes closed files' stored diagnostics (`WatchedFilesHandler` calls
-`WorkspaceDiagnosticsPublisher.Refresh()`), so what closed files do report is at least no longer
-stale after a branch switch.
-
 ### Variadic builtins are not modelled, so a builtin call has no upper argument bound
 
 `ArgumentCountLint` treats a builtin's mandatory count as a LOWER bound and stops there. The upper

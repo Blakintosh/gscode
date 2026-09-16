@@ -31,18 +31,29 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/TextSyncHandler.cs
 
-- Incremental text sync. didOpen → immediate analysis; didChange → ~250 ms debounced
-  re-analysis with per-document cancellation (superseded runs are cancelled, silently);
-  didSave → immediate (bypasses debounce); didClose → clears diagnostics. Before publishing,
-  it merges the parse diagnostics with the cross-file lints — all of them, via `DocumentLinter`
-  — for GSC/CSC docs.
+- Incremental text sync. didOpen → scheduled onto the thread pool (`Task.Run`, no delay — a file
+  opens once, so nothing needs coalescing, only getting off the LSP handler thread: a window's
+  worth of restored tabs used to run their analyses back to back on it); didChange → ~250 ms
+  debounced re-analysis with per-document cancellation (superseded runs are cancelled, silently);
+  didSave → immediate (bypasses debounce); didClose → clears diagnostics. `AnalysisGate` makes
+  both scheduled paths single-flight per document: a second trigger while one is still running
+  queues a rerun instead of starting a concurrent second analysis. Publishes diagnostics stamped
+  with the WINNING analysis's version (`DocumentStore.AnalyzeSnapshot`), not whatever
+  `document.Version` has become by publish time — the two can differ when two analyses of one
+  document race. Before publishing, it merges the parse diagnostics with the cross-file lints —
+  all of them, via `DocumentLinter` — for GSC/CSC docs, and logs a Warning when one analysis takes
+  at or past the debounce, since that is the file a slow-typing complaint would be about.
+  `gscode/gameMismatch` (once per session) goes through `ConnectionSettleGate` rather than
+  straight to the client.
 
 ## Handlers/DocumentLinter.cs
 
 - `DocumentLinter` — the one call site for `WorkspaceLints.Analyze`, holding the four workspace
   singletons that call needs (database, resolver, builtin API, object fields). Stateless; it exists
-  so the seven-argument pipeline signature is written once rather than in both `TextSyncHandler`
-  and `DependentDiagnosticsRefresher`.
+  so the seven-argument pipeline signature is written once rather than in every caller. Two
+  overloads of `Analyze` share one body: `(OpenDocument, ParseResult)` for the live-editing path,
+  `(ScriptLanguage, string path, ParseResult)` for `WorkspaceLintSweep`, which re-lints a CLOSED
+  file with no `OpenDocument` to read the two facts off.
 
 ## Handlers/DiagnosticsPublisher.cs
 
@@ -77,7 +88,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - Maps indexer progress onto the gscode/indexingStarted|Progress|Complete notifications
   (concrete record payloads), coalesced to ≤1 per ~40 ms so the status-bar counter
-  races without flooding the pipe; the final count always sends.
+  races without flooding the pipe; the final count always sends. `SendNothingBefore` is handed
+  `ConnectionSettleGate.Settled` rather than starting its own timer. `Failed(reason)` is the other
+  notification that may not be dropped: it sends `gscode/indexingFailed` (not a fabricated
+  `indexingComplete`, which would read as success) when the startup pass throws instead of
+  finishing, so the status-bar spinner does not run for the rest of the session.
 
 ## Handlers/WatchedFilesHandler.cs
 
@@ -345,14 +360,28 @@ stdio transport; the pipe-transport client shows stderr in the "GSCode Server" o
 channel) behind a `LoggingLevelSwitch`, parses transport options, connects the
 transport, and starts the OmniSharp `LanguageServer` with `OnInitialize` (reads
 `initializationOptions.gscode.serverLogLevel` into the level switch) and
-`OnInitialized` hooks. Waits for exit, then disposes the transport owner and flushes logs.
-On indexing completion it logs `Workspace indexing complete: N files in X.Xs` (info), then a
-formatted `LogIndexBreakdown` block — per-language file counts (`GSC`/`CSC`/`GSH`) each split by
-raw/mod/workspace context (`CategorizeContext` + `FormatLanguageLine`), and a totals line of
-functions · classes · macros · distinct namespaces — and then starts `ServerStatusNotifier.RunAsync`,
-a lifetime background loop that samples the working set every 3 s and pushes a `gscode/serverStatus`
+`OnInitialized` hooks.
+
+`OnStarted` sends `gscode/serverReady` through `ConnectionSettleGate`, opens the persistent cache
+(regardless of `workspaceIndexingMode`, so `gscode/clearCache` and `ServerStatusNotifier` both have
+something to act on even with indexing off), and — when the mode is not `off` — launches the
+startup index as a `Task` held by `IndexingLifetime` rather than fire-and-forget, cancellable by
+shutdown and by `gscode/clearCache`. When the mode is `full`, `WorkspaceLintSweep.RunFullSweepAsync`
+runs after the index and before `WorkspaceDiagnosticsPublisher.Refresh()`, so a closed file's
+Problems entry is upgraded before anything republishes it. On indexing completion it logs
+`Workspace indexing complete: N files in X.Xs` (info), a `full`-mode sweep its own
+`Workspace lint sweep complete` line, then a formatted `LogIndexBreakdown` block — per-language
+file counts (`GSC`/`CSC`/`GSH`) each split by raw/mod/workspace context (`CategorizeContext` +
+`FormatLanguageLine`), and a totals line of functions · classes · macros · distinct namespaces —
+and then starts `ServerStatusNotifier.RunAsync`, a background loop (on `IndexingLifetime.Token`,
+so shutdown stops it) that samples the working set every 3 s and pushes a `gscode/serverStatus`
 notification only on >= 1 MB changes (so a stable process stays quiet). It does NOT log: the status
-bar is the readout.
+bar is the readout. A failure anywhere in the startup task sends `gscode/indexingFailed` instead of
+leaving the client's progress UI spinning forever.
+
+Waits for exit, cancels and bounded-awaits `IndexingLifetime` BEFORE `CacheHolder.CloseAsync()` (so
+an in-flight cache write is not silently dropped by closing out from under it), then disposes the
+transport owner and flushes logs.
 
 ## Transport/TransportOptions.cs
 
@@ -380,6 +409,26 @@ bar is the readout.
 - `CacheHolder` — owns the persistent cache's lifetime so handlers can reach it through DI. The
   cache opens during startup, after settings and workspace folders have arrived, which is too late
   for constructor injection — hence a holder, matching `ResolverHolder`.
+
+## Configuration/IndexingLifetime.cs
+
+- `IndexingLifetime` — owns the startup indexing task's `CancellationTokenSource` and the task
+  itself, so exit and `gscode/clearCache` can both `CancelAndWaitAsync` (bounded) it before
+  `CacheHolder.CloseAsync()` runs. Used to run detached on `CancellationToken.None`, so a server
+  closed mid-index raced its own cache close: in-flight `SqliteCache.Enqueue` calls landed on an
+  already-completing write channel and were silently counted as dropped. One token covers the
+  whole startup task — the index, the full-mode lint sweep, the settle delay, the cache drain and
+  `ServerStatusNotifier` — so a single cancellation reaches all of it.
+
+## Configuration/ConnectionSettleGate.cs
+
+- `ConnectionSettleGate` — the shared "has the pipe had a moment to settle" clock
+  (`Task.Delay(500)`, started lazily on first read). A notification sent inside the
+  initialize/initialized window is silently dropped by the transport; this used to be private to
+  `IndexProgressNotifier`, which is exactly why `gscode/serverReady` and a restored tab's
+  `gscode/gameMismatch` went out unprotected. `SendOnceSettled(Action)` runs a send once settled
+  (or immediately, if already settled) via a continuation rather than an awaited `Task`, so a
+  synchronous LSP handler can use it without becoming async.
 
 ## Formatting/
 
@@ -419,22 +468,37 @@ that chose it. These are the pieces that implement it:
 
 - `BuiltinAtHandler` — serves the `gscode/builtinAt` request behind `shift+f1`, since the client has
   no symbol knowledge of its own and cannot tell a builtin from a script function.
-- `ClearCacheHandler` — drains the cache and deletes only THIS workspace's database, server-side
-  where the paths are known.
-- `DependentDiagnosticsRefresher` — debounced re-linting of open documents when the world under them
-  moves, reusing their cached parse instead of reparsing. Three callers, and the second and third
-  pass no origin because the event belongs to no open document: an edit that changes a file's
-  exported cross-file signature (`TextSyncHandler`), a change arriving on disk behind the editor's
-  back (`WatchedFilesHandler`), and the completion of the initial index (`Program.cs`). The last is
-  not optional — a tab restored with the window is opened during initialize, so its `didOpen` linted
-  it against a half-built index and the codes gated on `HasCompletedIndex` (5013/5014/5025/5026)
-  were silent until it was closed and reopened.
+- `ClearCacheHandler` — cancels the startup indexing task (`IndexingLifetime.CancelAndWaitAsync`,
+  so it stops enqueueing into a cache about to close) THEN drains the cache and deletes only THIS
+  workspace's database, server-side where the paths are known.
+- `DependentDiagnosticsRefresher` — debounced re-linting when the world under a file moves. Two
+  halves. OPEN documents: every other open tab, reusing its cached parse instead of reparsing.
+  Three callers, and the second and third pass no origin because the event belongs to no open
+  document: an edit that changes a file's exported cross-file signature (`TextSyncHandler`), a
+  change arriving on disk behind the editor's back (`WatchedFilesHandler`), and the completion of
+  the initial index (`Program.cs`). The last is not optional — a tab restored with the window is
+  opened during initialize, so its `didOpen` linted it against a half-built index and the codes
+  gated on `HasCompletedIndex` (5013/5014/5025/5026) were silent until it was closed and reopened.
+  CLOSED files, `workspaceIndexingMode: full` only, gated on `ScriptDatabase.HasCompletedLintSweep`:
+  `ClosedDependentsOf` names the files `LanguageStore.FilesReferencing` says mention a function the
+  ORIGIN declares, and `WorkspaceLintSweep.RelintClosedFilesAsync` re-lints just those — a rename
+  costs the files that mention the name, not the workspace. Only fires for a caller-named origin
+  (not the on-disk-change case) and only covers function declarations, not classes — stated gaps.
 - `PrepareRenameHandler` — validates a rename before the UI opens: the symbol's range for anything
   the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
   the editor says "cannot rename here" instead of prompting and then failing. Shares
   `RenameHandler.IsRenameable`, so the preview and the rename cannot disagree.
 - `ServerStatusNotifier` — keeps the status-bar tooltip's memory figure current. It was previously
-  set once from the `gscode/indexingComplete` payload and never updated again.
+  set once from the `gscode/indexingComplete` payload and never updated again. Starts immediately
+  when `workspaceIndexingMode: off` (nothing to wait for), or after indexing finishes otherwise, on
+  `IndexingLifetime.Token` rather than `CancellationToken.None` — shutdown now actually stops it.
+- `WorkspaceLintSweep` — the `full` mode itself: runs the cross-file lints over every indexed
+  GSC/CSC record (`RunFullSweepAsync`, once after the startup index) or a named subset
+  (`RelintClosedFilesAsync`, from `DependentDiagnosticsRefresher`), storing the merged result via
+  `ScriptDatabase.SetDiagnostics` and dropping the re-parsed `ParseResult` — records still retain
+  none. Skips any path that is open (the live-analysis path already covers it, from text that may
+  be ahead of disk); `SetDiagnostics`'s content-hash gate skips a path that changed underneath the
+  sweep, in either direction, rather than writing diagnostics that no longer describe the record.
 - `WorkspaceDiagnosticsPublisher` — publishes problems for files that are not open, per
   `gscode.diagnostics.scope`. It skips open documents deliberately, since `TextSyncHandler` owns
   those and publishes a richer set for them — which is why every caller of its `Refresh()` has to

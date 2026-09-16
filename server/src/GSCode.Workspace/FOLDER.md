@@ -41,6 +41,13 @@ lints, `Completion/` and `Typing/` the information surfaces.
   of different files share nothing here, because each index below serialises its own dictionary.
   One gate for the store serialised every index diff in the workspace against every other one and
   made `commit.upsert` 28.6% of CoD4's cold-index thread-time. See `PERF.md`.
+- `SetDiagnostics(path, expectedContentHash, diagnostics)` — for the `workspaceIndexingMode: full`
+  lint sweep: swaps a record's diagnostics in place under the SAME per-path gate `Upsert` uses, but
+  touches none of the four indexes, since a lint result changes what a record REPORTS, never what
+  it declares or references. Gated on the content hash of what was just read and linted, not a
+  hash captured before that read — disk (and the record, via a concurrent watched-file update) can
+  move in between, and applying a stale sweep's result onto a record that has already moved on
+  would silently regress it back to describing text that no longer exists.
 
 ## Database/PackedInvertedIndex.cs
 
@@ -102,7 +109,14 @@ lints, `Completion/` and `Typing/` the information surfaces.
   ParseResult; `BuildRecord` is the pure builder (macros filtered to file-local,
   dependency edges from inserts + usings, xxHash64 content hash). `CanSee` encodes the
   visibility rule (raw←raw; mod M←{M,raw}; workspace←{workspaces,raw}); `ContextIdOf`
-  stringifies contexts.
+  stringifies contexts. `SetDiagnostics(path, language, expectedContentHash, diagnostics)`
+  delegates to the language's store — see `LanguageStore.SetDiagnostics`.
+- `HasCompletedIndex` / `MarkIndexComplete()` and `HasCompletedLintSweep` /
+  `MarkLintSweepComplete()` — two separate volatile-backed flags, not one. The first gates the
+  four lints that need the index to answer "does this function exist" at all
+  (5013/5014/5025/5026); the second gates whether a CLOSED file's stored diagnostics include the
+  cross-file lints yet (`workspaceIndexingMode: full`'s sweep) — a narrower, later question the
+  first flag cannot answer.
 
 ## Completion/CompletionEntry.cs
 
@@ -332,6 +346,22 @@ lints, `Completion/` and `Typing/` the information surfaces.
   session. `ReloadRestoreSnapshot` re-reads it for the one caller that indexes twice — the
   workspace-folder handler — and swallows a read failure, since a cache closed by
   `gscode/clearCache` should give a cold index rather than an exception.
+- `IndexAsync` takes an internal `SemaphoreSlim` (`_passGate`), held for the whole pass: the
+  startup pass and a workspace-folder-change re-index can both call `IndexAsync` on the SAME
+  instance, and interleaving two passes corrupted `_restored` (one pass's snapshot replaced mid-read
+  by the other's reload) and `_skippedOversized` (reset mid-count). `reloadSnapshot: true` runs
+  `ReloadRestoreSnapshot` INSIDE the gate rather than as a separate call before it, closing the
+  window where a concurrent pass's reload could land in between the two.
+- `ownedByEditor` (optional, on `IndexAsync`/`ProcessFile`): an open document's buffer, already
+  committed by the text-sync handler, is the source of truth, and this pass has no way to know
+  whether that commit landed before or after its own disk read — so for an owned path it builds
+  the record (`ScriptDatabase.BuildRecord`, still enqueued to the cache) without calling `Commit`,
+  the same "skip the store write, keep everything else" rule `WatchedFileUpdater.Apply` already
+  applied to an on-disk change behind the editor's back.
+- `AnalyzeForLintSweep(path)` — read + analyse with NO commit, NO cache write, NO header seeding:
+  purely a `ParseResult` for the `workspaceIndexingMode: full` lint sweep (`WorkspaceLintSweep`,
+  server-side), which needs one because records do not retain theirs. Null on the same two cases
+  `ProcessFile` treats as nothing-to-analyse (unreadable, oversized).
 
 ## Cache/CacheSchema.cs
 
@@ -385,6 +415,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
   the touched paths for diagnostic republishing. Takes an `ownedByEditor` predicate and
   skips every record it would rewrite for a file that is OPEN — the changed file and any
   dependent alike — because this reads disk and a buffer may hold unsaved edits.
+- A create or delete (either language, not just GSH) also calls
+  `WorkspaceIndexer.InvalidateResolutionCache()` — a file appearing or vanishing can falsify any
+  cached "does this exist" answer `PathResolver.Resolve` has given out, for a `.gsc`/`.csc` target
+  as much as a header. A plain content change does not: nothing about whether a target EXISTS
+  moved.
 
 ## Documents/DocumentStore.cs
 
@@ -401,6 +436,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `Open`/`Close`/`TryGet`, `ApplyChange` (LSP incremental splice or full replace), and
   `Analyze` (runs ScriptAnalysis with an insert provider bound to the file's context
   via the injected factory, and hands back whichever snapshot stands afterwards).
+  `Analyze` is `AnalyzeSnapshot(document).Result` — a thin projection kept for the many callers
+  that read `document.Version` themselves right after. `AnalyzeSnapshot` is for the one caller
+  that cannot (`TextSyncHandler.AnalyzeAndPublish`, publishing diagnostics): it needs the WINNING
+  version stamped on what it publishes, not whatever `document.Version` has become by then, since
+  those can differ when two analyses of one document race and the version CAS in
+  `OpenDocument.Publish` decides which one's parse actually stands.
 - `TryGetAnalyzed(path, out document, out result)` — the document AND its latest completed
   analysis, false when either is missing. The cheap resolve: it answers only what the store knows,
   where the server's `NavigationSupport.Resolve` also builds the store, context id and declared
@@ -456,7 +497,14 @@ lints, `Completion/` and `Typing/` the information surfaces.
     against it and never fired, and the workspace behaved as though no file included anything.
   - `Resolve(context, scriptPathWithExtension)` — probes Mod: [mods\m, raw] · Raw: [raw]
     · Workspace: [base, other folders, raw]; first existing file wins. Rooted paths,
-    drive letters, and ".." are rejected. Both slash styles accepted.
+    drive letters, and ".." are rejected. Both slash styles accepted. Memoized by
+    `(context, relative path)`, MISS included: an uncached miss walks every root and is asked
+    about on every keystroke by two independent callers resolving the same directive list
+    (`FileImports` and `UsingNotFoundLint`) — measured as an exact 2x-by-caller, 4x-by-root-count
+    multiplier before this existed. `InvalidateResolutionCache()` clears it wholesale on any
+    watched create/delete (`WatchedFileUpdater.Apply`, both branches, regardless of language) —
+    coarse, but those events are user-paced, and a create can turn a cached miss into a hit just as
+    a delete can turn a cached hit into a miss.
   - `EnumerateIndexTargets()` — every .gsc/.csc/.gsh under raw + mods + workspace
     folders, deduplicated (cold-start indexing input).
 

@@ -115,6 +115,8 @@ public static class AstSearch
                 return ChildEnumerable.Of(function.Parameters.CastArray<AstNode>(), function.Body);
             case ParameterNode parameter:
                 return ChildEnumerable.Of(parameter.DefaultValue);
+            case FileScopeConstantNode constant:
+                return ChildEnumerable.Of(constant.Value);
             case ClassNode classNode:
                 return ChildEnumerable.Of(classNode.Members);
             case ConstructorNode constructor:

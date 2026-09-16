@@ -1,3 +1,4 @@
+using GSCode.Core;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using Xunit;
@@ -146,6 +147,18 @@ public class ChildEnumerationTests
         ExprStatementNode statement = Assert.IsType<ExprStatementNode>(FirstStatement("a;"));
 
         Assert.Equal("", ChildrenOf(statement.Expression));
+    }
+
+    [Fact]
+    public void AFileScopeConstantYieldsItsValue()
+    {
+        // Previously ChildEnumerable.Empty: a lint or ChainAt walking the tree could not descend
+        // into an Infinity Ward file-scope constant's value at all.
+        GameProfile mw2 = GameProfile.ByName("mw2")!;
+        AstNode constant = Assert.Single(ParserTestHelper.Parse("MAX = 1 + 2;", mw2).Root.Elements);
+
+        Assert.IsType<FileScopeConstantNode>(constant);
+        Assert.Equal("BinaryNode", ChildrenOf(constant));
     }
 
     [Fact]

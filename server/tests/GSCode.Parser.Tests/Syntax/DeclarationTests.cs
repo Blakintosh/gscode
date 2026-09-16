@@ -1,3 +1,4 @@
+using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
@@ -7,6 +8,27 @@ namespace GSCode.Parser.Tests.Syntax;
 
 public class DeclarationTests
 {
+    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
+    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+
+    [Fact]
+    public void Include_ParsesPath()
+    {
+        // Previously unprinted: fell through AstPrinter's default case as "(?IncludeNode)".
+        string printed = ParserTestHelper.PrintScript(@"#include common_scripts\utility;", Cod4);
+        Assert.Equal(@"(script (include ""common_scripts\utility""))", printed);
+    }
+
+    [Fact]
+    public void FileScopeConstant_PrintsItsValue()
+    {
+        // Previously unprinted: fell through AstPrinter's default case as "(?FileScopeConstantNode)",
+        // which hid the value from anything (CaseLabelLint's duplicate check) that identifies a node
+        // by its printed form.
+        string printed = ParserTestHelper.PrintScript("MAX = 1 + 2;", Mw2);
+        Assert.Equal("(script (const MAX (+ 1 2)))", printed);
+    }
+
     [Fact]
     public void Using_ParsesPath()
     {

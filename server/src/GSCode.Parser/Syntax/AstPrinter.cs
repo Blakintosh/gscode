@@ -70,6 +70,14 @@ public static class AstPrinter
             case UsingNode usingNode:
                 builder.Append("(using \"").Append(usingNode.Path).Append("\")");
                 return;
+            case IncludeNode includeNode:
+                builder.Append("(include \"").Append(includeNode.Path).Append("\")");
+                return;
+            case FileScopeConstantNode constant:
+                builder.Append("(const ").Append(constant.NameToken.Text).Append(' ');
+                Write(constant.Value, builder, depth + 1);
+                builder.Append(')');
+                return;
             case NamespaceNode namespaceNode:
                 builder.Append("(namespace ").Append(namespaceNode.NameToken.Text).Append(')');
                 return;

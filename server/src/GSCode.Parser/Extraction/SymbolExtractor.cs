@@ -188,6 +188,16 @@ public sealed class SymbolExtractor
                 case PrecacheNode precache:
                     ValidatePrecache(precache);
                     continue;
+                case FileScopeConstantNode constant:
+                {
+                    // An Infinity Ward file-scope constant sits outside any function, so unlike a
+                    // parameter default there is no owning FunctionSymbol to attach an AssignmentSymbol
+                    // to — only the REFERENCES its value makes (a call, a field read, an address-of)
+                    // belong in the file's symbol surface, so the builder here is scratch and discarded.
+                    ImmutableArray<AssignmentSymbol>.Builder discarded = ImmutableArray.CreateBuilder<AssignmentSymbol>();
+                    WalkExpression(constant.Value, discarded);
+                    continue;
+                }
                 case DevBlockDeclNode devBlock:
                     // Everything declared in here is stripped from a release build.
                     _devBlockDepth++;

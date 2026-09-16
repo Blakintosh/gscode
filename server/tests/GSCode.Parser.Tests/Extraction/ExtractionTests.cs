@@ -11,14 +11,15 @@ namespace GSCode.Parser.Tests.Extraction;
 
 public class ExtractionTests
 {
-    private static ParseResult Analyze(string source, string path = @"c:\work\scripts\test.gsc")
+    private static ParseResult Analyze(string source, string path = @"c:\work\scripts\test.gsc", GameProfile? profile = null)
     {
         return ScriptAnalysis.Analyze(
             path,
             ScriptAnalysis.LanguageFromPath(path),
             SourceText.From(source),
             NullInsertProvider.Instance,
-            new NameTable());
+            new NameTable(),
+            profile);
     }
 
     [Fact]
@@ -56,6 +57,21 @@ public class ExtractionTests
         // A macro-expanded default is shown as the INVOCATION the author wrote, not its expansion —
         // the default's range covers "MAX_HEALTH" in the root file regardless of what it expands to.
         Assert.Equal("MAX_HEALTH", function.Parameters[3].DefaultValueText);
+    }
+
+    [Fact]
+    public void FileScopeConstant_ExtractsReferencesFromItsValue()
+    {
+        // An Infinity Ward file-scope constant's value was invisible to WalkDeclarations entirely,
+        // so a call, a field read or an address-of inside it never reached the reference list —
+        // go-to-definition and find-all-references had nothing to say about names used only there.
+        GameProfile mw2 = GameProfile.ByName("mw2")!;
+        ParseResult result = Analyze("MAX_HEALTH = get_default();\nrun()\n{\n}\n", profile: mw2);
+
+        // MW2 does not resolve calls by namespace, so an unqualified call keys with none.
+        SymbolKey calleeKey = new(null, "get_default", SymbolKind.Function);
+        Assert.Contains(
+            result.Extraction.References, entry => entry.Key == calleeKey && entry.Kind == ReferenceKind.Call);
     }
 
     [Fact]

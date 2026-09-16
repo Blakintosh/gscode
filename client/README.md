@@ -45,10 +45,16 @@ there to help avoid editing the wrong copy.
 ### Indexing and analysis
 
 The default `gscode.workspaceIndexingMode: "partial"` indexes signatures for workspace-wide
-navigation, references, and completion. Use `"full"` for diagnostics across the whole index, or
-`"off"` when only open files should be analyzed. `gscode.diagnostics.scope` controls which indexed
-files publish diagnostics: `open`, `workspace` (default, your workspace/mod files), or `all`
-(including stock raw files).
+navigation, references, and completion; cross-file diagnostics (unused imports, missing functions,
+and the like) still only apply to files you have open. Use `"full"` to run those same cross-file
+lints over every indexed file, so a script's Problems entry is complete even when it is closed —
+this costs a background pass after indexing finishes, on top of the index itself. Use `"off"` when
+only open files should be analyzed — note that some diagnostics need the index to answer at all
+(an unresolved function call, a missing or duplicate import) and simply do not run with indexing
+off. `gscode.diagnostics.scope` controls which indexed files publish
+diagnostics at all: `open`, `workspace` (default, your workspace/mod files), or `all` (including
+stock raw files) — `full` decides how COMPLETE a published file's diagnostics are, `diagnostics.scope`
+decides WHICH files get any.
 
 `gscode.enableWorkspaceCache` is enabled by default and stores analyzed scripts per workspace so
 unchanged files can be restored quickly. If the cache becomes stale, run **GSCode: Clear Cache and

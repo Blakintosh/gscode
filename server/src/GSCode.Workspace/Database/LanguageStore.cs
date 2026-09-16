@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using GSCode.Core.Diagnostics;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
 
@@ -122,6 +123,36 @@ public sealed class LanguageStore
             PerfTracker.Begin("upsert.class");
             _classGraph.Apply(record.Path, record.Classes);
             PerfTracker.End();
+        }
+    }
+
+    /// <summary>
+    /// Swaps a record's diagnostics in place — for the full-mode lint sweep, which changes what a
+    /// CLOSED record REPORTS without changing what it declares or references. Skips every index
+    /// diff <see cref="Upsert"/> does, since none of them can have moved: a lint sweep re-analyses
+    /// the same content, not new content.
+    ///
+    /// Gated on <paramref name="expectedContentHash"/> rather than applied unconditionally: the
+    /// sweep reads the file, re-parses it and runs the lints — all of that off the write gate — so
+    /// by the time it comes back with an answer, an ordinary edit (a save, a watched-file change)
+    /// could have replaced this record with one describing DIFFERENT content. Applying the
+    /// sweep's diagnostics onto that newer record would describe content the record no longer
+    /// has. A hash mismatch means someone else now owns this path's diagnostics — the watched-file
+    /// path, an open document, or a later sweep — so this quietly declines rather than guessing.
+    /// </summary>
+    /// <returns>False when the record moved or vanished before this could apply.</returns>
+    public bool SetDiagnostics(string normalizedPath, ulong expectedContentHash, ImmutableArray<Diagnostic> diagnostics)
+    {
+        lock ( GateFor(normalizedPath) )
+        {
+            if ( !_records.TryGetValue(normalizedPath, out ScriptRecord? existing)
+                || existing.ContentHash != expectedContentHash )
+            {
+                return false;
+            }
+
+            _records[normalizedPath] = existing with { Diagnostics = diagnostics };
+            return true;
         }
     }
 

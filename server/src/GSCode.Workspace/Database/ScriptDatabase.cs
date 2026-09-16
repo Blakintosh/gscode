@@ -20,7 +20,6 @@ namespace GSCode.Workspace.Database;
 /// </summary>
 public sealed class ScriptDatabase
 {
-    /// <summary>The GSC world.</summary>
     /// <summary>
     /// Whether a workspace index has finished at least once.
     ///
@@ -29,13 +28,42 @@ public sealed class ScriptDatabase
     /// the index is populated every script function in the workspace looks nonexistent. So that one
     /// lint has to know, and there is no cheaper signal — unlike a missing FILE, which the resolver
     /// can answer from the filesystem, a missing FUNCTION can only be answered by the index.
+    ///
+    /// Written on the indexing thread, read on every LSP handler thread that lints — volatile
+    /// rules out a stale read surviving past the write, at no cost for a value this size.
     /// </summary>
-    public bool HasCompletedIndex { get; private set; }
+    public bool HasCompletedIndex
+    {
+        get { return _hasCompletedIndex; }
+    }
+
+    private volatile bool _hasCompletedIndex;
 
     /// <summary>Marks the index complete; called by the indexer when a full pass finishes.</summary>
     public void MarkIndexComplete()
     {
-        HasCompletedIndex = true;
+        _hasCompletedIndex = true;
+    }
+
+    /// <summary>
+    /// Whether the <c>workspaceIndexingMode: full</c> lint sweep has completed at least once —
+    /// separate from <see cref="HasCompletedIndex"/> because it answers a narrower question. A
+    /// closed file's stored diagnostics are parse-level only until this has run once; after that
+    /// they carry the cross-file lints too. Read by the server's dependent-diagnostics refresher
+    /// to decide whether re-linting a CLOSED dependent is upgrading it to a baseline that exists,
+    /// or inventing one that never ran.
+    /// </summary>
+    public bool HasCompletedLintSweep
+    {
+        get { return _hasCompletedLintSweep; }
+    }
+
+    private volatile bool _hasCompletedLintSweep;
+
+    /// <summary>Marks the lint sweep complete; called once by <c>WorkspaceLintSweep</c> per pass.</summary>
+    public void MarkLintSweepComplete()
+    {
+        _hasCompletedLintSweep = true;
     }
 
     public LanguageStore Gsc { get; } = new();
@@ -55,6 +83,17 @@ public sealed class ScriptDatabase
         }
 
         return Gsc;
+    }
+
+    /// <summary>
+    /// Swaps a record's diagnostics in place, for the language its own path already lives in —
+    /// see <see cref="LanguageStore.SetDiagnostics"/> for the content-hash gate and why it exists.
+    /// </summary>
+    public bool SetDiagnostics(
+        string normalizedPath, ScriptLanguage language, ulong expectedContentHash,
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics)
+    {
+        return StoreFor(language).SetDiagnostics(normalizedPath, expectedContentHash, diagnostics);
     }
 
     /// <summary>

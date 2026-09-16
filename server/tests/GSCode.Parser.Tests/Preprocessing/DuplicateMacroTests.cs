@@ -106,6 +106,33 @@ public class DuplicateMacroTests
     }
 
     [Fact]
+    public void AHeaderRedefiningWhatTheScriptAlreadyDefinedIsReportedToo_EvenWhenTheHeaderIsReplayedFromCache()
+    {
+        // Same finding as AHeaderRedefiningWhatTheScriptAlreadyDefinedIsReportedToo, but the header's
+        // contribution comes from the cache instead of a fresh walk. The replay path
+        // (Preprocessor.HandleInsert) re-registers each cached definition directly into the macro
+        // table without ever calling ReportIfAlreadyDefined for it — so whether this collision is
+        // reported must not depend on whether some UNRELATED file happened to insert the same header
+        // first and warmed the cache.
+        FakeHeaderMacroCache cache = new();
+        FakeInsertProvider provider = new FakeInsertProvider()
+            .AddInsert(GshPath, "#define FLAG 2\n");
+
+        // Warm the cache: a file with no FLAG of its own, so the header is a pure macro bank and
+        // gets cached.
+        PreprocessTestHelper.Run($"#insert {GshPath};\n", provider, cache);
+
+        // The file under test never triggers a fresh walk of the header — it hits the cache. Its own
+        // FLAG comes first, so the header's (replayed) definition is the one that wins and should be
+        // the one reported, exactly as the from-scratch walk reports it in the sibling test above.
+        PreprocessResult result = PreprocessTestHelper.Run(
+            $"#define FLAG 1\n#insert {GshPath};\nx = FLAG;", provider, cache);
+
+        Assert.Single(result.Diagnostics, d => d.Code == GscDiagnosticCode.DuplicateMacroDefinition);
+        Assert.Equal(["x", "=", "2", ";"], PreprocessTestHelper.Texts(result));
+    }
+
+    [Fact]
     public void ItIsReportedAtTheDefinitionThatWins()
     {
         // Order decides, so the report goes on the later one — the definition that actually takes

@@ -511,8 +511,17 @@ public sealed class Preprocessor
             && _headerCache.TryGet(inserted.Path, out HeaderContribution known)
             && NestedInsertsResolveAsRecorded(known.Inserts) )
         {
+            // A frame for the header exists here purely so ReportIfAlreadyDefined has a SourceFile
+            // and a DefinedNames set to check each replayed definition against — the same two things
+            // a fresh walk's ParseDefine would have asked. Without this, a collision between a
+            // replayed definition and something the INCLUDING file (or an earlier insert of it)
+            // already defined went unreported, and whether it did depended on whether some unrelated
+            // file happened to insert this header first and warm the cache.
+            FileFrame replayFrame = new(inserted.Tokens, inserted.Text, inserted.Path, rootSite, frame.Depth + 1);
+
             foreach ( MacroDefinition definition in known.Definitions )
             {
+                ReportIfAlreadyDefined(replayFrame, definition.Name, definition.NameRange);
                 _macros.Define(definition);
                 _recordingDefinitions?.Add(definition);
             }

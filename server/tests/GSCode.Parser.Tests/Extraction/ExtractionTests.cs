@@ -437,6 +437,21 @@ public class ExtractionTests
     }
 
     [Fact]
+    public void References_AShadowedMacroDefinitionStillGetsADefinitionReference()
+    {
+        // MAX is defined twice; the table keeps only the second, but the reader looking AT the
+        // first #define line — the one DuplicateMacroDefinition already flags as the one being
+        // replaced — deserves go-to-definition and rename recognizing it as a definition too.
+        ParseResult result = Analyze("#define MAX 4\n#define MAX 8\nx = MAX;");
+        List<ReferenceEntry> definitions = [.. result.Extraction.References
+            .Where(entry => entry.Key == new SymbolKey(null, "MAX", SymbolKind.Macro) && entry.Kind == ReferenceKind.Definition)];
+
+        Assert.Equal(2, definitions.Count);
+        Assert.Equal(0, definitions[0].Range.Start.Line);
+        Assert.Equal(1, definitions[1].Range.Start.Line);
+    }
+
+    [Fact]
     public void DocComment_AssociatesWithFunctionBelow()
     {
         string source = """

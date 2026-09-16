@@ -187,7 +187,8 @@ public static class ConditionalEvaluator
             return inner;
         }
 
-        if ( current.Kind == TokenKind.Integer && int.TryParse(current.Text, out int value) )
+        if ( current.Kind == TokenKind.Integer
+            && int.TryParse(current.Text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int value) )
         {
             position++;
             return value;

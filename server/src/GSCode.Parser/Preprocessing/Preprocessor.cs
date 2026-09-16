@@ -64,6 +64,7 @@ public sealed class Preprocessor
     private readonly List<PToken> _output;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
     private readonly ImmutableArray<InsertEdge>.Builder _inserts = ImmutableArray.CreateBuilder<InsertEdge>();
+    private readonly ImmutableArray<MacroDefinition>.Builder _allDefinitions = ImmutableArray.CreateBuilder<MacroDefinition>();
     private readonly ImmutableArray<MacroInvocation>.Builder _invocations = ImmutableArray.CreateBuilder<MacroInvocation>();
     private readonly ImmutableArray<TextRange>.Builder _disabledRegions = ImmutableArray.CreateBuilder<TextRange>();
 
@@ -179,6 +180,7 @@ public sealed class Preprocessor
         return new PreprocessResult(
             [.. preprocessor._output],
             preprocessor._macros,
+            preprocessor._allDefinitions.ToImmutable(),
             preprocessor._invocations.ToImmutable(),
             preprocessor._inserts.ToImmutable(),
             preprocessor._disabledRegions.ToImmutable(),
@@ -331,6 +333,7 @@ public sealed class Preprocessor
 
         MacroDefinition definition = new(name, frame.SourceFile, nameToken.Range, parameters, [.. body], documentation);
         _macros.Define(definition);
+        _allDefinitions.Add(definition);
         _recordingDefinitions?.Add(definition);
         return index;
     }
@@ -543,6 +546,7 @@ public sealed class Preprocessor
             {
                 ReportIfAlreadyDefined(replayFrame, definition.Name, definition.NameRange);
                 _macros.Define(definition);
+                _allDefinitions.Add(definition);
                 _recordingDefinitions?.Add(definition);
             }
 
@@ -656,6 +660,12 @@ public sealed class Preprocessor
     {
         Token chainStart = frame.Tokens[index];
         bool branchTaken = false;
+
+        // An #elif or a second #else after the chain's #else is already out of place — #else is
+        // meant to be the last branch — but nothing stopped the chain from simply treating it as one
+        // more (permanently inactive, since branchTaken is already true) branch and reading straight
+        // through to #endif with no diagnostic at all.
+        bool sawElse = false;
         _conditionalChains++;
 
         while ( index < endExclusive )
@@ -663,6 +673,11 @@ public sealed class Preprocessor
             Token directive = frame.Tokens[index];
             TokenKind directiveKind = directive.Kind;
             index++;
+
+            if ( sawElse && directiveKind is TokenKind.ElifDirective or TokenKind.ElseDirective )
+            {
+                AddDiagnostic(frame, directive.Range, GscDiagnosticCode.UnexpectedConditionalDirective, KindText(frame, directive));
+            }
 
             bool active;
             if ( directiveKind == TokenKind.IfDirective || directiveKind == TokenKind.ElifDirective )
@@ -674,6 +689,7 @@ public sealed class Preprocessor
             else
             {
                 // #else takes the branch when nothing before it did.
+                sawElse = true;
                 index = SkipToEndOfLine(frame, index);
                 active = !branchTaken;
             }

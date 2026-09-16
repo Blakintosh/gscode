@@ -130,8 +130,11 @@ public sealed class SymbolExtractor
 
         PerfTracker.Begin("extract.macros");
 
-        // Macro definitions in THIS file are definitions; every invocation is a use.
-        foreach ( MacroDefinition macro in preprocessed.Macros.All )
+        // Every #define THIS file wrote is a definition reference at its own name — not just the
+        // one Macros kept as the winner. A name defined twice (or a root define a later #insert
+        // shadows) would otherwise have NO definition reference anywhere for the one that lost,
+        // since the table holds only the surviving definition.
+        foreach ( MacroDefinition macro in preprocessed.AllMacroDefinitions )
         {
             if ( macro.SourceFile is null )
             {

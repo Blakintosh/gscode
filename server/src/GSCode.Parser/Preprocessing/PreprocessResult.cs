@@ -21,12 +21,23 @@ public sealed record MacroInvocation(string Name, string? SourceFile, TextRange 
 
 /// <summary>
 /// The preprocessor's complete output: the trivia-free parse stream (EndOfFile-terminated),
-/// every macro visible at end of file, use sites, insert edges, the root-file regions
-/// disabled by inactive #if branches (grey-out), and diagnostics.
+/// every macro visible at end of file, every <c>#define</c> site seen (win or lose), use
+/// sites, insert edges, the root-file regions disabled by inactive #if branches (grey-out),
+/// and diagnostics.
 /// </summary>
+/// <param name="Macros">The SURVIVING definition per name — last one wins, matching engine
+/// behavior. Not every definition the file wrote: a name defined twice keeps only the second.</param>
+/// <param name="AllMacroDefinitions">Every <c>#define</c> actually parsed, in source order,
+/// including one a later redefinition went on to shadow. <see cref="Macros"/> answers "what does
+/// this name resolve to"; this answers "what did the file declare" — the question a reference at
+/// each <c>#define</c>'s own name deserves regardless of which one the table kept. A shadowed
+/// root-file definition (redefined later in the same file, or overridden by a later `#insert`)
+/// used to have NO Definition reference at all: <c>Macros.All</c> holds only the winner, so the
+/// loser's own name was invisible to go-to-definition and rename.</param>
 public sealed record PreprocessResult(
     ImmutableArray<PToken> Tokens,
     MacroTable Macros,
+    ImmutableArray<MacroDefinition> AllMacroDefinitions,
     ImmutableArray<MacroInvocation> MacroInvocations,
     ImmutableArray<InsertEdge> Inserts,
     ImmutableArray<TextRange> DisabledRegions,

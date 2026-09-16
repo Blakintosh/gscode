@@ -68,6 +68,19 @@ public class DuplicateMacroTests
     }
 
     [Fact]
+    public void AllMacroDefinitionsKeepsBothWhereMacrosKeepsOnlyTheWinner()
+    {
+        // Macros (the table) answers "what does MAX resolve to" and correctly keeps only the
+        // second. AllMacroDefinitions answers "what did the file declare" and must keep both, since
+        // the FIRST #define's own name deserves a definition reference too — see
+        // SymbolExtractor.Run, which used to read Macros.All and so only ever saw the winner.
+        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\nx = MAX;");
+
+        Assert.Equal(1, result.Macros.Count);
+        Assert.Equal(2, result.AllMacroDefinitions.Length);
+    }
+
+    [Fact]
     public void ANameDefinedOnceIsFine()
     {
         PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MIN 1\n");

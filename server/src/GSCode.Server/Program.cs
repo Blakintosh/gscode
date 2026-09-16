@@ -78,6 +78,16 @@ ResolverHolder resolverHolder = new(fileSystem);
 // rather than a local, so the gscode/clearCache handler can close and delete it on request.
 CacheHolder cacheHolder = new();
 
+// Owns the startup indexing task's cancellation, so exit and gscode/clearCache can both stop it
+// rather than letting it run detached against a cache that is about to close underneath it.
+IndexingLifetime indexingLifetime = new();
+
+// Shared by every notification the server sends unprompted early in the connection's life —
+// serverReady, the indexing family, a restored tab's gameMismatch — so exactly one clock decides
+// when the pipe has had a moment to settle, rather than each caller starting (or forgetting to
+// start) its own. See its own remarks for why that used to be indexing's alone.
+ConnectionSettleGate settleGate = new();
+
 LanguageServer server = await LanguageServer.From(options =>
 {
     options
@@ -94,6 +104,8 @@ LanguageServer server = await LanguageServer.From(options =>
             services.AddSingleton<InsertCache>();
             services.AddSingleton(resolverHolder);
             services.AddSingleton(cacheHolder);
+            services.AddSingleton(indexingLifetime);
+            services.AddSingleton(settleGate);
             services.AddSingleton(NameTable.Shared);
 
             services.AddSingleton(new TextDocumentSelector(
@@ -122,6 +134,7 @@ LanguageServer server = await LanguageServer.From(options =>
             // The one place the cross-file lint pipeline is called from. Registered before its two
             // consumers only for readability — the container resolves in dependency order.
             services.AddSingleton<DocumentLinter>();
+            services.AddSingleton<WorkspaceLintSweep>();
             services.AddSingleton<DependentDiagnosticsRefresher>();
             services.AddSingleton<ServerStatusNotifier>();
 
@@ -268,9 +281,9 @@ LanguageServer server = await LanguageServer.From(options =>
             // unrecognised name falls back to BO3, so the setting says what was asked for while this
             // says what was selected — and a status bar confirming a game that is not in use is
             // worse than none, because it rules out the very thing that is wrong.
-            languageServer.SendNotification(
+            settleGate.SendOnceSettled(() => languageServer.SendNotification(
                 "gscode/serverReady",
-                new ServerReadyParams(GameProfile.Active.Abbreviation, GameProfile.Active.DisplayName));
+                new ServerReadyParams(GameProfile.Active.Abbreviation, GameProfile.Active.DisplayName)));
 
             // Kick off cold-start indexing only once the server is fully started — the
             // client connection is ready to receive gscode/indexing* notifications now
@@ -282,71 +295,88 @@ LanguageServer server = await LanguageServer.From(options =>
                 _ => IndexingMode.Partial,
             };
 
-            if ( mode != IndexingMode.Off )
+            WorkspaceIndexer indexer = languageServer.Services.GetRequiredService<WorkspaceIndexer>();
+
+            // Opened regardless of indexing mode, not only inside the block below: a user running
+            // with workspaceIndexingMode=off still has a cache from a PREVIOUS session on disk,
+            // and gscode/clearCache used to answer "No workspace cache is open" for them — true
+            // of the indexer's own use of it, misleading about whether one exists to clear.
+            //
+            // Timed, because this is where a warm start used to disappear. `LoadAll` is an
+            // ARGUMENT to UseCache, so it ran to completion before the stopwatch below was even
+            // started, and every warm figure on record was the index alone. It was reading and
+            // deserializing every cached record on this one thread while the parallel index it
+            // was feeding sat idle behind it — 1,509 ms on BO3 in front of a cold index that
+            // does the whole job in 390. Now it reads blobs only and the deserialize happens on
+            // the indexing threads, but the number stays in the log either way: an untimed
+            // stage is one that can regress without anybody noticing.
+            TimeSpan restoreElapsed = TimeSpan.Zero;
+            if ( settings.EnableWorkspaceCache )
             {
-                WorkspaceIndexer indexer = languageServer.Services.GetRequiredService<WorkspaceIndexer>();
-                IndexProgressNotifier notifier = new(languageServer.Services.GetRequiredService<ILanguageServerFacade>());
-
-                // Open the persistent cache and prime the indexer with its restored entries.
-                //
-                // Timed, because this is where a warm start used to disappear. `LoadAll` is an
-                // ARGUMENT to UseCache, so it ran to completion before the stopwatch below was even
-                // started, and every warm figure on record was the index alone. It was reading and
-                // deserializing every cached record on this one thread while the parallel index it
-                // was feeding sat idle behind it — 1,509 ms on BO3 in front of a cold index that
-                // does the whole job in 390. Now it reads blobs only and the deserialize happens on
-                // the indexing threads, but the number stays in the log either way: an untimed
-                // stage is one that can regress without anybody noticing.
-                TimeSpan restoreElapsed = TimeSpan.Zero;
-                if ( settings.EnableWorkspaceCache )
+                System.Diagnostics.Stopwatch restoreWatch = System.Diagnostics.Stopwatch.StartNew();
+                try
                 {
-                    System.Diagnostics.Stopwatch restoreWatch = System.Diagnostics.Stopwatch.StartNew();
-                    try
+                    SqliteCache.CleanUpLegacyCache();
+                    RootConfig roots = resolverHolder.Current.Config;
+                    List<string> cacheKeyRoots = [.. roots.WorkspaceFolders];
+                    if ( roots.RawRoot is not null )
                     {
-                        SqliteCache.CleanUpLegacyCache();
-                        RootConfig roots = resolverHolder.Current.Config;
-                        List<string> cacheKeyRoots = [.. roots.WorkspaceFolders];
-                        if ( roots.RawRoot is not null )
-                        {
-                            cacheKeyRoots.Add(roots.RawRoot);
-                        }
-
-                        if ( roots.ModsRoot is not null )
-                        {
-                            cacheKeyRoots.Add(roots.ModsRoot);
-                        }
-
-                        string databasePath = SqliteCache.ResolveDatabasePath(cacheKeyRoots);
-                        string identity = ServerBuildIdentity.Compute(
-                            BundledDataFilePaths(), GameProfile.Active.ShortName);
-                        SqliteCache workspaceCache = SqliteCache.Open(databasePath, identity);
-                        cacheHolder.Set(workspaceCache, databasePath);
-                        indexer.UseCache(workspaceCache, workspaceCache.LoadAll());
-                    }
-                    catch ( Exception exception )
-                    {
-                        Log.Error(exception, "Failed to open the workspace cache; continuing without it");
+                        cacheKeyRoots.Add(roots.RawRoot);
                     }
 
-                    // Outside the catch, so a cache that failed to open still reports what the
-                    // attempt cost rather than reporting zero.
-                    restoreWatch.Stop();
-                    restoreElapsed = restoreWatch.Elapsed;
+                    if ( roots.ModsRoot is not null )
+                    {
+                        cacheKeyRoots.Add(roots.ModsRoot);
+                    }
+
+                    string databasePath = SqliteCache.ResolveDatabasePath(cacheKeyRoots);
+                    string identity = ServerBuildIdentity.Compute(
+                        BundledDataFilePaths(), GameProfile.Active.ShortName);
+                    SqliteCache workspaceCache = SqliteCache.Open(databasePath, identity);
+                    cacheHolder.Set(workspaceCache, databasePath);
+                    // Priming an indexer that workspaceIndexingMode=off never runs is harmless —
+                    // held state nobody reads — and simpler than threading "should I bother"
+                    // through this block for what is already a rare (cache disabled) path.
+                    indexer.UseCache(workspaceCache, workspaceCache.LoadAll());
+                }
+                catch ( Exception exception )
+                {
+                    Log.Error(exception, "Failed to open the workspace cache; continuing without it");
                 }
 
-                _ = Task.Run(async () =>
+                // Outside the catch, so a cache that failed to open still reports what the
+                // attempt cost rather than reporting zero.
+                restoreWatch.Stop();
+                restoreElapsed = restoreWatch.Elapsed;
+            }
+
+            if ( mode == IndexingMode.Off )
+            {
+                // No indexing climb to sample around when indexing never runs, so nothing here
+                // waits for one — the non-Off path starts this only once indexing finishes,
+                // exactly to avoid sampling that climb; see the call site below.
+                _ = languageServer.Services.GetRequiredService<ServerStatusNotifier>().RunAsync(indexingLifetime.Token);
+            }
+
+            if ( mode != IndexingMode.Off )
+            {
+                IndexProgressNotifier notifier = new(languageServer.Services.GetRequiredService<ILanguageServerFacade>());
+                DocumentStore documents = languageServer.Services.GetRequiredService<DocumentStore>();
+
+                Task indexingTask = Task.Run(async () =>
                 {
                     try
                     {
-                        // The connection's output pump needs a moment before a notification will
-                        // survive — sending inside the initialize/initialized window drops them.
-                        // The WORK does not need that moment, and used to wait for it anyway: half
-                        // a second of an idle process on every single start. The wait now gates the
-                        // notifier instead, so indexing runs through it.
-                        notifier.SendNothingBefore(Task.Delay(500, CancellationToken.None));
+                        // The WORK does not need to wait for the pipe to settle, only the
+                        // notifications describing it do — so the notifier is handed the shared
+                        // gate's clock instead of starting its own, and indexing runs through it
+                        // immediately.
+                        notifier.SendNothingBefore(settleGate.Settled);
 
                         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                        IndexOutcome outcome = await indexer.IndexAsync(mode, notifier, CancellationToken.None);
+                        IndexOutcome outcome = await indexer.IndexAsync(
+                            mode, notifier, indexingLifetime.Token,
+                            ownedByEditor: candidate => documents.TryGet(candidate, out OpenDocument _));
                         stopwatch.Stop();
                         // Split, because "indexing took 2.8s" hid which half was slow and the two
                         // have nothing to do with each other. Enumeration is serial and depends on
@@ -393,6 +423,27 @@ LanguageServer server = await LanguageServer.From(options =>
                                 WorkspaceIndexer.MaxAnalysedCharacters / (1024 * 1024));
                         }
 
+                        // `full` beyond `partial`: the cross-file lints, over every indexed
+                        // GSC/CSC file rather than just open ones. Runs AFTER the index and BEFORE
+                        // the diagnostics refresh below, so a closed file's Problems entry is
+                        // upgraded before anything republishes it — see WorkspaceLintSweep and
+                        // PERF.md's 2026-09-15 entry for why this is affordable where
+                        // FOLLOWUPS.md's older estimate said it was not.
+                        if ( mode == IndexingMode.Full )
+                        {
+                            System.Diagnostics.Stopwatch lintStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                            LintSweepOutcome lintOutcome = await languageServer.Services
+                                .GetRequiredService<WorkspaceLintSweep>()
+                                .RunFullSweepAsync(indexingLifetime.Token);
+                            lintStopwatch.Stop();
+
+                            Log.Information(
+                                "Workspace lint sweep complete: {Linted} file(s) in {Seconds:F1}s ({Skipped} skipped)",
+                                lintOutcome.Linted,
+                                lintStopwatch.Elapsed.TotalSeconds,
+                                lintOutcome.Skipped);
+                        }
+
                         // Guarded: the breakdown walks every record in both stores plus every GSH,
                         // accumulating counts and a namespace set, to produce ONE Verbose line. That
                         // traversal ran whatever the log level was.
@@ -428,7 +479,7 @@ LanguageServer server = await LanguageServer.From(options =>
                         // back" the memory report kept showing.
                         if ( cacheHolder.Current is SqliteCache draining )
                         {
-                            await draining.WaitForIdleAsync(CancellationToken.None);
+                            await draining.WaitForIdleAsync(indexingLifetime.Token);
                         }
 
                         Compact();
@@ -449,14 +500,34 @@ LanguageServer server = await LanguageServer.From(options =>
                         // Start sampling memory only now — during indexing it climbs steadily,
                         // and every sample would be a change. One sampler serves both the
                         // status-bar tooltip and the verbose log.
+                        //
+                        // Shares indexingLifetime's token rather than running forever
+                        // uncancellably: it holds no resource that needs a clean drain, so there
+                        // is nothing lost in letting shutdown stop it the same way it stops
+                        // everything else in this task.
                         _ = languageServer.Services.GetRequiredService<ServerStatusNotifier>()
-                            .RunAsync(CancellationToken.None);
+                            .RunAsync(indexingLifetime.Token);
+                    }
+                    catch ( OperationCanceledException )
+                    {
+                        // Shutdown, or gscode/clearCache, asked this to stop — not a failure, and
+                        // not worth notifying the client about: the connection is going away (or
+                        // about to reload) either way.
                     }
                     catch ( Exception exception )
                     {
                         Log.Error(exception, "Workspace indexing failed");
+
+                        // Terminal either way: gscode/indexingComplete is the one notification
+                        // that may never simply be dropped, on pain of a status-bar spinner that
+                        // runs for the rest of the session looking like a hang. A genuine failure
+                        // gets its own notification instead of a fabricated completion, so the
+                        // client can tell "nothing to index" from "something broke".
+                        notifier.Failed(exception.Message);
                     }
-                }, CancellationToken.None);
+                }, indexingLifetime.Token);
+
+                indexingLifetime.SetTask(indexingTask);
             }
 
             return Task.CompletedTask;
@@ -464,6 +535,13 @@ LanguageServer server = await LanguageServer.From(options =>
 });
 
 await server.WaitForExit;
+
+// Stop the startup task and give it a bounded moment to actually finish BEFORE closing the
+// cache it may still be writing to — closing first raced the two, and every enqueue that landed
+// after close was silently counted as dropped rather than persisted. Bounded rather than awaited
+// outright: a task that ignores cancellation must not hang shutdown, and this is best-effort
+// next to it — a killed process loses only whatever was in flight at that instant either way.
+await indexingLifetime.CancelAndWaitAsync(TimeSpan.FromSeconds(5));
 
 // Drain the cache writer so the last records land before we close. A no-op when
 // gscode/clearCache already closed it.
@@ -728,7 +806,8 @@ static BuiltinApiSet LoadBuiltinApi()
         LogDataFile(game, directory, game.ApiFileName(ScriptLanguage.Csc), "builtin API (csc)");
     }
 
-    BuiltinApiSet set = BuiltinApiSet.Load(directory, game);
+    BuiltinApiSet set = BuiltinApiSet.Load(directory, game, static (path, exception) =>
+        Log.Warning(exception, "Builtin API file {Path} failed to parse; treating it as empty", path));
     Log.Information(
         "Builtin API loaded for {Game}: {Gsc} gsc, {Csc} csc functions",
         game.ShortName, set.For(ScriptLanguage.Gsc).Count, set.For(ScriptLanguage.Csc).Count);

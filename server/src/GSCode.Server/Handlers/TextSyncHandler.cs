@@ -1,5 +1,6 @@
 using GSCode.Core;
 using System.Collections.Immutable;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
@@ -58,6 +59,58 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
     private readonly DependentDiagnosticsRefresher _dependents;
     private readonly InsertCache _inserts;
+    private readonly ConnectionSettleGate _settleGate;
+
+    /// <summary>
+    /// One analysis in flight per document, at most — see <see cref="AnalysisGate"/>. The 250 ms
+    /// debounce only guards the WAIT between an edit and analysis STARTING; once analysis has
+    /// started, nothing stopped a second one starting 250 ms later on a file slow enough to still
+    /// be running, each carrying its own token arrays and AST. Keyed by normalized path rather
+    /// than kept on <see cref="OpenDocument"/> itself: this is scheduling state private to how
+    /// THIS handler drives analysis, not a fact about the document.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AnalysisGate> _analysisGates = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Coalesces concurrent analysis requests for one document into: whichever is already
+    /// running, plus at most one more queued to run immediately after against whatever text is
+    /// current by then. <see cref="OpenDocument.Publish"/>'s version CAS already decides which
+    /// analysis's RESULT wins when two somehow still overlap (a request thread's
+    /// <see cref="DocumentStore.AnalyzeIfStale"/> can still run concurrently with this), so this
+    /// gate is purely about not PAYING for more analyses in flight than the debounce intended,
+    /// not about correctness of the published result.
+    /// </summary>
+    private sealed class AnalysisGate
+    {
+        private int _running;
+        private int _rerunRequested;
+
+        /// <summary>
+        /// True when the caller should run now; false when another run is already in flight and
+        /// has been told to loop once more instead.
+        /// </summary>
+        public bool TryStart()
+        {
+            if ( Interlocked.Exchange(ref _running, 1) == 0 )
+            {
+                return true;
+            }
+
+            Volatile.Write(ref _rerunRequested, 1);
+            return false;
+        }
+
+        /// <summary>Clears any rerun request and reports whether one had been made.</summary>
+        public bool ConsumeRerunRequest()
+        {
+            return Interlocked.Exchange(ref _rerunRequested, 0) != 0;
+        }
+
+        public void Finish()
+        {
+            Volatile.Write(ref _running, 0);
+        }
+    }
 
     public TextSyncHandler(
         DocumentStore documents,
@@ -71,8 +124,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         ILanguageServerFacade server,
         WorkspaceDiagnosticsPublisher workspaceDiagnostics,
         DependentDiagnosticsRefresher dependents,
-        InsertCache inserts)
+        InsertCache inserts,
+        ConnectionSettleGate settleGate)
     {
+        _settleGate = settleGate;
         _inserts = inserts;
         _dependents = dependents;
         _workspaceDiagnostics = workspaceDiagnostics;
@@ -115,7 +170,12 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             request.TextDocument.Text,
             request.TextDocument.Version ?? 0);
 
-        AnalyzeAndPublish(document, request.TextDocument.Uri);
+        // Off the handler thread, not inline: a window's worth of restored tabs used to run N
+        // full parse-plus-lint passes back to back ON THIS THREAD, one per didOpen, contending
+        // with a cold index that is already using every other core for the same work. Nothing
+        // here needs to finish before the handler returns — analysis publishes its own
+        // diagnostics once it does, exactly like the debounced edit path already does.
+        ScheduleImmediateAnalysis(document, request.TextDocument.Uri);
         WarnIfGameLooksWrong(document);
         return Unit.Task;
     }
@@ -136,19 +196,24 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             return;
         }
 
-        // Once per session; Interlocked so two files opening at once cannot both prompt.
+        // Once per session; Interlocked so two files opening at once cannot both prompt. Claimed
+        // eagerly rather than after the send completes — the send below is itself deferred until
+        // the connection has settled, so eager-claim-then-deferred-send is what stops two
+        // concurrent opens from both queuing a copy, not what caused the notification to go
+        // missing. That was the send itself landing in the drop window, which the settle gate
+        // fixes at its source.
         if ( Interlocked.Exchange(ref _gameMismatchNotified, 1) != 0 )
         {
             return;
         }
 
-        _server.SendNotification(
+        _settleGate.SendOnceSettled(() => _server.SendNotification(
             "gscode/gameMismatch",
             new GameMismatchParams(
                 active.ShortName,
                 active.DisplayName,
                 shape == GameShape.BlackOps3,
-                GameRoster.Supported()));
+                GameRoster.Supported())));
     }
 
     public override Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken cancellationToken)
@@ -243,6 +308,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
         _documents.Close(path);
         _diagnostics.Clear(request.TextDocument.Uri);
+        _analysisGates.TryRemove(PathUtil.NormalizeAbsolute(path), out _);
 
         // Clearing is right for what THIS handler published, but the file may still be in the
         // workspace scope, where its problems are supposed to stay visible. Without handing it
@@ -250,6 +316,35 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _workspaceDiagnostics.OnDocumentClosed(path);
 
         return Unit.Task;
+    }
+
+    /// <summary>
+    /// Schedules a document's first analysis (on open) onto the thread pool rather than running
+    /// it on the LSP handler thread — see the call site's comment for why. No delay, unlike
+    /// <see cref="ScheduleDebouncedAnalysis"/>: a file opens once, so there is nothing to coalesce,
+    /// only work to get off the request path. <c>Task.Delay(0, ...)</c> would NOT do that — a
+    /// zero-length delay completes synchronously, running the whole continuation inline on the
+    /// caller's thread exactly like today's bug — so this uses <see cref="Task.Run(Action)"/>
+    /// instead, which is the one thing here that actually guarantees a different thread.
+    /// </summary>
+    private void ScheduleImmediateAnalysis(OpenDocument document, DocumentUri uri)
+    {
+        document.PendingAnalysis?.Cancel();
+        CancellationTokenSource pending = new();
+        document.PendingAnalysis = pending;
+
+        _ = Task.Run(() => RunImmediate(document, uri, pending.Token), pending.Token);
+    }
+
+    private void RunImmediate(OpenDocument document, DocumentUri uri, CancellationToken cancellationToken)
+    {
+        if ( cancellationToken.IsCancellationRequested )
+        {
+            // Superseded already — an edit arrived before the thread pool picked this up.
+            return;
+        }
+
+        RunAnalysisSingleFlight(document, uri);
     }
 
     private void ScheduleDebouncedAnalysis(OpenDocument document, DocumentUri uri)
@@ -266,15 +361,48 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         try
         {
             await Task.Delay(DebounceMilliseconds, cancellationToken);
-            AnalyzeAndPublish(document, uri);
         }
         catch ( OperationCanceledException )
         {
             // Superseded by a newer edit — not an error.
+            return;
         }
-        catch ( Exception exception )
+
+        RunAnalysisSingleFlight(document, uri);
+    }
+
+    /// <summary>
+    /// Runs analysis for a document, coalescing with whatever is already running for it — see
+    /// <see cref="AnalysisGate"/>. If nothing is running, runs (and re-runs, if a request arrived
+    /// while it was busy) here and now; otherwise queues the rerun and returns immediately,
+    /// leaving the in-flight call to pick it up.
+    /// </summary>
+    private void RunAnalysisSingleFlight(OpenDocument document, DocumentUri uri)
+    {
+        AnalysisGate gate = _analysisGates.GetOrAdd(document.Path, static _ => new AnalysisGate());
+        if ( !gate.TryStart() )
         {
-            Log.Error(exception, "Analysis failed for {Path}", document.Path);
+            return;
+        }
+
+        try
+        {
+            do
+            {
+                try
+                {
+                    AnalyzeAndPublish(document, uri);
+                }
+                catch ( Exception exception )
+                {
+                    Log.Error(exception, "Analysis failed for {Path}", document.Path);
+                }
+            }
+            while ( gate.ConsumeRerunRequest() );
+        }
+        finally
+        {
+            gate.Finish();
         }
     }
 
@@ -282,11 +410,19 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     {
         long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
 
-        ParseResult result = _documents.Analyze(document);
+        // The WINNING snapshot, not document.Version read afterwards: two analyses of the same
+        // document can run concurrently, OpenDocument.Publish's version CAS decides which one's
+        // parse actually stands, and a caller stamping diagnostics with the LIVE version would
+        // describe even a superseded analysis as being about text the client has already moved
+        // past — which defeats the version's whole purpose (see AnalysisSnapshot/AnalyzeSnapshot).
+        AnalysisSnapshot snapshot = _documents.AnalyzeSnapshot(document);
+        ParseResult result = snapshot.Result;
         ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics = _linter.Analyze(document, result);
 
-        _diagnostics.Publish(uri, document.Version, diagnostics);
+        _diagnostics.Publish(uri, snapshot.Version, diagnostics);
         CommitAndRefreshLenses(document, result);
+
+        double elapsedMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;
 
         // The single most useful verbose line there is: it says whether the server reacted to a
         // keystroke at all, how long it took, and what it decided — which is most of what anyone
@@ -294,9 +430,23 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         Log.Verbose(
             "Analysed {Path} v{Version} in {Elapsed:F1}ms → {Count} diagnostic(s)",
             document.Path,
-            document.Version,
-            System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
+            snapshot.Version,
+            elapsedMilliseconds,
             diagnostics.Length);
+
+        // The corpus measures a per-file max well inside the debounce (PERF.md), so this is not
+        // expected to fire on ordinary scripts — it exists to turn "we assume every file is fast
+        // enough" into evidence from a real workspace where the assumption is wrong, rather than a
+        // silent pile-up of overlapping analyses (see AnalysisGate) that nobody gets told about.
+        if ( elapsedMilliseconds >= DebounceMilliseconds )
+        {
+            Log.Warning(
+                "Analysis of {Path} took {Elapsed:F0}ms, at or past the {Debounce}ms debounce — "
+                + "sustained editing of this file may overlap several analyses in flight",
+                document.Path,
+                elapsedMilliseconds,
+                DebounceMilliseconds);
+        }
     }
 
     /// <summary>

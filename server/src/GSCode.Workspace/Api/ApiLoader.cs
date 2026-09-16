@@ -28,7 +28,8 @@ public static class ApiLoader
     /// Loads the library for a language from the given Api directory, using the profile's data-file
     /// naming. Empty when the profile ships no data (non-BO3 today) or the file is absent.
     /// </summary>
-    public static BuiltinApi Load(string apiDirectory, ScriptLanguage language, GameProfile? profile = null)
+    public static BuiltinApi Load(
+        string apiDirectory, ScriptLanguage language, GameProfile? profile = null, Action<string, Exception>? onParseFailure = null)
     {
         string? fileName = (profile ?? GameProfile.Active).ApiFileName(language);
         if ( fileName is null )
@@ -36,15 +37,23 @@ public static class ApiLoader
             return BuiltinApi.Empty;
         }
 
-        return LoadFile(Path.Combine(apiDirectory, fileName));
+        return LoadFile(Path.Combine(apiDirectory, fileName), onParseFailure);
     }
 
     /// <summary>
     /// Loads one API file by full path. Split out of <see cref="Load"/> so a caller that has already
     /// decided WHICH file it wants — the engine-name fallback, which reads a sibling game's — is not
     /// forced to go back through profile-based naming to ask for it.
+    ///
+    /// A missing file is silent either way — that is the profile saying it ships no data, which
+    /// the server's own aggregate warning already reports. A file that EXISTS but fails to parse
+    /// is a different fact — corrupt or truncated bundled data — and this layer has no logger of
+    /// its own (see the project's dependency rule in ARCHITECTURE.md), so
+    /// <paramref name="onParseFailure"/> is the caller's seam for reporting it. Optional and null
+    /// by default, so every caller that does not need to distinguish the two silent cases keeps
+    /// its previous behaviour exactly.
     /// </summary>
-    public static BuiltinApi LoadFile(string path)
+    public static BuiltinApi LoadFile(string path, Action<string, Exception>? onParseFailure = null)
     {
         if ( !File.Exists(path) )
         {
@@ -57,8 +66,9 @@ public static class ApiLoader
             using FileStream stream = File.OpenRead(path);
             file = JsonSerializer.Deserialize(stream, ApiJsonContext.Default.ApiFile);
         }
-        catch ( JsonException )
+        catch ( JsonException exception )
         {
+            onParseFailure?.Invoke(path, exception);
             return BuiltinApi.Empty;
         }
 

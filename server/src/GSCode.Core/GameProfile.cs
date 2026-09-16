@@ -680,7 +680,12 @@ public sealed partial record GameProfile
         return null;
     }
 
-    private static GameProfile? s_active;
+    // Written from the LSP handler thread (ConfigurationHandler, on a live gscode.game push) and
+    // read by every indexing worker thread. volatile costs nothing on a reference-typed field and
+    // rules out a stale read surviving past the write that should have replaced it — Active's own
+    // null-coalescing fallback already makes a torn read merely stale rather than unsafe, so this
+    // is a correctness-under-weak-memory-models fix rather than a fix for an observed bug.
+    private static volatile GameProfile? s_active;
 
     /// <summary>
     /// The profile in force. BO3 by default, changed by <see cref="Select"/> from the

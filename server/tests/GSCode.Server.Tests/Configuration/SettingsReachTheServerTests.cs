@@ -47,13 +47,18 @@ public class SettingsReachTheServerTests
     public void EveryDeclaredSettingIsSentToTheServer()
     {
         DirectoryInfo? client = FindClientDirectory();
-        if ( client is null )
-        {
-            _output.WriteLine("SKIPPED: client/ not found from the test output directory.");
-            return;
-        }
 
-        string manifest = File.ReadAllText(Path.Combine(client.FullName, "package.json"));
+        // This is the one guard against a setting that silently does nothing, so a missing
+        // client/ must fail loudly rather than pass vacuously — a quiet return here used to read
+        // as "every setting checked out" when nothing was checked at all, in whatever environment
+        // could not find the directory.
+        Assert.True(
+            client is not null,
+            $"Could not find client/package.json walking up from {AppContext.BaseDirectory}. "
+            + "This test asserts nothing when it cannot find the manifest, so a green run here "
+            + "must mean the manifest was actually read.");
+
+        string manifest = File.ReadAllText(Path.Combine(client!.FullName, "package.json"));
         string payload = File.ReadAllText(Path.Combine(client.FullName, "src", "settings.ts"));
 
         // Every "gscode.<name>" key inside contributes.configuration.

@@ -9,14 +9,18 @@ LSP types anywhere.
 - `sealed record ParseResult` — every stage's product (text, lexed, preprocessed, tree,
   extraction) plus the merged diagnostic list.
 - `static class ScriptAnalysis` — THE per-file pipeline entry: `Analyze(path, language,
-  text, insertProvider, names)` runs lex → preprocess → parse → extract, pure and
-  synchronous. GSH lenient mode suppresses parse-stage (3xxx) diagnostics for
-  injectable fragments while macros still extract fully. `LanguageFromPath` helper.
+  text, insertProvider, names, profile?, headerCache?)` runs lex → preprocess → parse →
+  extract, pure and synchronous. `profile` defaults to `GameProfile.Active`; `headerCache`
+  is optional (isolated parses and most tests pass none). GSH lenient mode suppresses
+  parse-stage (3xxx) diagnostics for injectable fragments while macros still extract
+  fully. `LanguageFromPath` helper.
 
 ## Extraction/ExtractionResult.cs
 
-- `sealed record ExtractionResult(Namespaces, Functions, Classes, References, Diagnostics)`
-  — the extracted symbol surface the Workspace layer builds ScriptRecords from.
+- `sealed record ExtractionResult(Namespaces, Functions, Classes, References, Diagnostics, PathCalls)`
+  — the extracted symbol surface the Workspace layer builds ScriptRecords from. `PathCalls`
+  is the Infinity Ward path-qualified call sites (`maps\x::foo()`), kept alongside the
+  namespace-less reference so go-to-definition can pin one to its file.
 
 ## Extraction/PragmaDirectives.cs
 
@@ -39,10 +43,25 @@ LSP types anywhere.
   (default = file stem; positional #namespace switching), FunctionSymbols with contained
   assignments (locals, any-owner fields, foreach variables, const), ClassSymbols
   (members/methods/ctor-dtor flags + parameter-rule diagnostics), #precache validation
-  against PrecacheAssetTypes, plain-value default enforcement, the classified reference
-  list (definitions, calls with unqualified-under-current-namespace and sys::→builtin
-  keying, address-of, class uses, field accesses, macro def/use, literal references with
-  the case rules), and /@ @/ doc association by line adjacency.
+  against PrecacheAssetTypes, the classified reference list (definitions, calls with
+  unqualified-under-current-namespace and sys::→builtin keying, address-of, class uses,
+  field accesses, macro def/use, literal references with the case rules), and /@ @/ doc
+  association by line adjacency. A `FileScopeConstantNode`'s value (IW dialects) is
+  walked for references the same way; it has no owning function, so the AssignmentSymbol
+  builder used is scratch and discarded.
+- A macro definition reference is emitted per `PreprocessResult.AllMacroDefinitions` entry,
+  not per surviving `Macros` table entry — so a `#define` a later one in the same file (or
+  a later `#insert`) shadows still gets a Definition reference at its OWN name, matching
+  `DuplicateMacroDefinition`'s "the one being replaced."
+- A parameter default's `DefaultValueText` is sliced from the ROOT file's source text at the
+  default expression's range (falling back to `AstPrinter.Print` only for a function an
+  `#insert` brings in, whose ranges collapse onto the insert site) — the text signature
+  help, hover and export signatures show verbatim, so it has to read as written, not as
+  AstPrinter's S-expression debug format.
+- `_inStringConcatenation` is cleared (via `WalkWithoutConcatenation`) when descending into
+  a call's target/arguments, an index's object/index, an arrow call's object/arguments, a
+  `new`'s arguments, and a ternary's condition — every child that begins its OWN
+  expression rather than continuing the enclosing `+` chain.
 
 ## Extraction/SemanticTokenType.cs
 
@@ -52,9 +71,13 @@ LSP types anywhere.
 ## Extraction/SemanticTokenBuilder.cs
 
 - `static SemanticTokenBuilder.Build(ParseResult)` — ordered, non-overlapping semantic
-  tokens: identifiers classified from the reference list (function/class/macro/property),
-  keywords/numbers/strings/comments from the raw stream; multi-line comments split per
-  line. Unclassified identifiers are left to the TextMate grammar.
+  tokens: only IDENTIFIERS are classified, from the reference list
+  (function/class/macro/property). Keywords, numbers, strings and comments are left
+  entirely to the TextMate grammar — a semantic token can only add or repaint, never
+  suppress a grammar scope, so classifying a purely lexical category either agrees (just
+  changes the shade) or disagrees (the grammar's colour stands anyway), and either way it
+  flickers on open before the server's tokens arrive. Unclassified identifiers are left to
+  the grammar too.
 
 ## Extraction/FoldingRegions.cs
 
@@ -75,6 +98,7 @@ LSP types anywhere.
   on bo3: a bare full-tree walk cost 128–145 ms through the iterator against 35–47 ms without it.
   A variant short-circuiting leaves before the type switch measured the same as the plain one, so
   the allocation was the cost and the thirty-case switch was not.
+- `FileScopeConstantNode` yields its `Value` as its one child, same as `ParameterNode`'s default.
 
 ## Syntax/Ast/AstNode.cs
 
@@ -89,6 +113,11 @@ LSP types anywhere.
 - `ScriptNode(Elements)` — every top-level element in source order (namespace state is
   positional). `UsingNode(Path, PathRange)`, `NamespaceNode(NameToken)`,
   `PrecacheNode(Arguments raw)`, `UsingAnimTreeNode(TreeNameToken)`.
+- `IncludeNode(Path, PathRange)` — `#include`, the Infinity Ward import that MERGES the
+  included file's functions into scope (unlike `#using`'s namespace import); parsed
+  identically to `UsingNode`, the merge semantics are a resolution concern elsewhere.
+- `FileScopeConstantNode(NameToken, Value)` — `NAME = value;` outside any function (MW2
+  onward; BO3 uses `#define` and rejects a bare top-level assignment).
 - `FunctionNode(NameToken, IsPrivate, IsAutoexec, Parameters, HasVarargs, Body)` and
   `ParameterNode(NameToken, ByRef, DefaultValue)`.
 - `ClassNode(NameToken, ParentToken, Members)` with `VarDeclNode`, `ConstructorNode`,
@@ -106,7 +135,11 @@ LSP types anywhere.
 ## Syntax/Ast/Expressions.cs
 
 - Literals/names: `LiteralNode` (numbers, all three string kinds, anim refs,
-  true/false/undefined, #animtree), `IdentifierNode`, `QualifiedNode` (ns::name).
+  true/false/undefined, #animtree), `IdentifierNode`, `QualifiedNode` (ns::name),
+  `PathQualifiedNode(Path, PathRange, NameToken)` — `maps\mp\_utility::foo`, the Infinity
+  Ward path-qualified reference (call callee or, with no argument list, a function
+  pointer); only appears when the profile has `HasInlinePathCalls`. The leading `::foo`
+  local form is modelled with an empty `Path`.
 - Structure: `ParenNode`, `VectorNode` ((x,y,z)), `ArrayLiteralNode` ([]),
   `BinaryNode`, `TernaryNode`, `PrefixNode` (! ~ - &), `PostfixNode` (++ --),
   `AssignmentNode`, `MemberNode` (.field), `IndexNode` ([i]).
@@ -138,9 +171,14 @@ LSP types anywhere.
 
 ## Syntax/Parser.cs (+ .Declarations / .Statements / .Expressions partials)
 
-- `sealed partial class Parser` — recursive descent over PTokens; `static Parse(tokens)
-  → ParseTree`. Panic-mode recovery: one diagnostic then silent skip to a sync token
-  (declaration keywords / ';' / '}' / '#/'), always guaranteeing progress.
+- `sealed partial class Parser` — recursive descent over PTokens; `static Parse(tokens,
+  profile)` → `ParseTree`. Panic-mode recovery: one diagnostic then silent skip to a sync
+  token (declaration keywords / ';' / '}' / '#/'), always guaranteeing progress — including
+  the case-body loop in `ParseSwitch` and `ParseDevBlockStatements`, which carry the same
+  "did we advance?" guard `ParseBlock` does, as defense-in-depth against a future statement
+  parser that stops guaranteeing it.
+- `ParseUsing` and `ParseInclude` share `ParseDirectivePath` (path tokens up to `;`); they
+  differ only in which AST node they build and which directive name a missing path names.
 - Nesting is capped at `MaxNestingDepth = 512` grammar entries (3015 NestingTooDeep, then a
   skip to the next statement boundary and silence until the parser is back at declaration
   level). Counted in `ParseExpression` / `ParseTernary` / `ParseUnary` / `ParseStatement` —
@@ -194,19 +232,24 @@ LSP types anywhere.
 
 - `static class AstPrinter.Print(node)` — deterministic S-expression rendering; the
   golden format for parser tests and a debugging aid. Not test-only: `CaseLabelLint` prints a
-  case label to compare it, and `SymbolExtractor` prints a parameter's default value, so its
-  recursion runs inside the server on whatever the parser produced.
+  case label to compare it, so its recursion runs inside the server on whatever the parser
+  produced. `IncludeNode` and `FileScopeConstantNode` print as `(include "path")` and
+  `(const NAME value)`; every node shape has a case — the printer's `default:` fallback
+  (`(?TypeName)`) exists only for a genuinely new shape, not as a standing gap.
 - Descends at most `MaxPrintDepth = 128` levels and renders anything deeper as `(...)`. See the
   nesting note above for why the parser's own cap is not enough here.
 
 ## Preprocessing/PToken.cs
 
-- `readonly record struct Provenance(string? SourceFile, TextRange? RootSite, TextRange? DefinitionSite)`
-  — where a preprocessed token really came from. All-null (`Provenance.Root`) = the root
-  file as written. `SourceFile` = the file holding the token's true location (a .gsh for
-  inserted tokens). `RootSite` = the root-file range to anchor diagnostics to (the
-  #insert directive or macro invocation). `DefinitionSite` = the #define name range for
-  macro-expanded tokens.
+- `sealed record Provenance(string? SourceFile, TextRange? RootSite, TextRange? DefinitionSite)`
+  — where a preprocessed token really came from. A CLASS (held by reference) rather than a
+  struct, deliberately: it describes an expansion SITE, of which a file has a handful, but is
+  carried by every token in the parse stream, and the overwhelming majority share the
+  all-null answer — one shared `Provenance.Root` singleton beats copying three nullable
+  fields into every token. All-null (`Provenance.Root`) = the root file as written.
+  `SourceFile` = the file holding the token's true location (a .gsh for inserted tokens).
+  `RootSite` = the root-file range to anchor diagnostics to (the #insert directive or
+  macro invocation). `DefinitionSite` = the #define name range for macro-expanded tokens.
 - `readonly record struct PToken(TokenKind Kind, string Text, TextRange Range, Provenance Provenance)`
   — one parse-stream token with materialized (interned) text, so the parser never juggles
   multiple SourceTexts. `RootRange` = RootSite ?? Range. Trivia never reaches this stream.
@@ -234,9 +277,13 @@ LSP types anywhere.
   one #insert dependency edge (ResolvedPath null on failure).
 - `sealed record MacroInvocation(Name, SourceFile, Range, Definition)` — one macro use
   site; powers references/hover/signature help for macros.
-- `sealed record PreprocessResult(Tokens, Macros, MacroInvocations, Inserts, DisabledRegions, Diagnostics)`
+- `sealed record PreprocessResult(Tokens, Macros, AllMacroDefinitions, MacroInvocations, Inserts, DisabledRegions, Diagnostics)`
   — the full output: trivia-free EndOfFile-terminated parse stream, all macros, use
   sites, insert edges, root-file ranges disabled by inactive #if branches, diagnostics.
+  `Macros` is the SURVIVING definition per name (last one wins); `AllMacroDefinitions` is
+  every `#define` actually parsed, in source order, including one a later redefinition
+  shadowed — the definition-reference walk needs the latter, since the table alone has
+  nothing to say about the loser of a redefinition.
 
 ## Preprocessing/ConditionalEvaluator.cs
 
@@ -247,11 +294,15 @@ LSP types anywhere.
 - Paren nesting is capped at 64: it is a second recursive descent, over the condition's own
   tokens, so the parser's tree ceiling does not reach it. Past the cap the condition is simply
   unresolvable, which is a case the caller already handles.
+- Integer literals parse with `NumberStyles.None` + `CultureInfo.InvariantCulture`, not the
+  current thread's culture — matching `PragmaDirectives`' own `int.TryParse` elsewhere in
+  this project.
 
 ## Preprocessing/Preprocessor.cs
 
-- `sealed class Preprocessor` — `static Process(rootFilePath, tokens, text, insertProvider, names)`.
-  One linear pass per file; inserts recurse (depth cap 16 + active-path cycle set).
+- `sealed class Preprocessor` — `static Process(rootFilePath, tokens, text, insertProvider,
+  names, profile?, headerCache?)`. One linear pass per file; inserts recurse (depth cap 16 +
+  active-path cycle set).
   - The dialect is asked exactly twice, and everything else here is game-independent: the
     header-extension rule on `#insert`, and `ReportIfNoPreprocessor`, which raises `2016
     MacrosNotInDialect` when a `#define` or an `#if` member appears in a game without
@@ -259,18 +310,39 @@ LSP types anywhere.
     processed anyway so suppressing the code leaves a working file; the reasoning is on the code.
   - `#define`: keyword-or-identifier names; parameter list only when `(` is ADJACENT to
     the name; `\` continuation must immediately precede the line break (else diagnostic,
-    backslash excluded); trailing comment captured as documentation.
+    backslash excluded); trailing comment captured as documentation. `2017
+    DuplicateMacroDefinition` fires on a name redefined in one file, or shadowed across
+    files (last one wins; the report names the one being replaced) — scoped per FRAME, not
+    per file, so replaying a cached header's definitions checks the SAME question a fresh
+    walk's `ParseDefine` would. `2018 DuplicateMacroParameter` fires on a repeated parameter
+    name (added anyway, so the arity call sites are judged against still matches).
   - `#insert`: path text sliced verbatim until `;` (line break → missing-semicolon
     diagnostic but the insert still proceeds); rooted/drive/`..` paths rejected; spliced
     tokens keep their own gsh-local ranges with SourceFile + RootSite provenance;
     diagnostics from inside inserts anchor at the root #insert site.
   - `#if/#elif/#else/#endif`: condition line macro-expanded then evaluated; first true
     branch processes, the rest record DisabledRegions (root file only, grey-out);
-    inactive branches register nothing (defines/inserts inside them don't exist).
+    inactive branches register nothing (defines/inserts inside them don't exist). A second
+    `#else`, or an `#elif` after a chain's `#else`, reports `UnexpectedConditionalDirective`
+    rather than silently reading as one more (permanently inactive) branch.
   - Macro expansion: exact-case lookup; keywords are candidates too (so `#define TRUE 1`
-    works); function-like without `(` → diagnostic, no expansion; blank arguments expand
-    to nothing; nested/argument expansion with a self-recursion guard; `__LINE__`
-    (1-based), `__FILE__` (real path string), `FASTFILE` (`__fastfile__` placeholder).
+    works); function-like without `(` → `MissingMacroArguments`, no expansion; a
+    mismatched argument count → `WrongMacroArgumentCount` (checked for a nested call written
+    inside another macro's body too, via `TryExpandBodyToken` — the same method
+    `ExpandBody`'s own loop and `TryCollectBodyArguments`' argument scan both call, so a
+    macro NAME used as a nested call's argument there expands the same way it would
+    anywhere else); blank arguments expand to nothing; nested/argument expansion with a
+    self-recursion guard (`_expansionStack`) plus a depth cap (`MaxMacroExpansionDepth =
+    64`) on how deeply a call SITE may nest a function-like macro's own name
+    (`F(F(F(…`) — unlike the self-recursion guard, that shape is bounded only by how much
+    text the site writes, not by the file's macro count, and 20,000 levels of it overflowed
+    the stack before the cap existed; `__LINE__` (1-based), `__FILE__` (real path string),
+    `__FUNCTION__` (the enclosing `namespace::function`, found by scanning backward for
+    the nearest `function` keyword and `#namespace` — a known simplification: it
+    therefore finds nothing in a dialect without the `function` keyword, and can
+    misattribute to an earlier function when used outside any function, both accepted
+    since across the whole stock corpus this is written once), `FASTFILE`
+    (`__fastfile__` placeholder).
   - Passes `#using`/`#namespace`/`#precache`/animtree directives through — those belong
     to the parser.
 
@@ -279,17 +351,22 @@ LSP types anywhere.
 - `enum TokenKind` — every producible token kind: sentinels (EndOfFile, Error), trivia
   (Whitespace, Newline, LineComment, BlockComment, DocComment), literals (Identifier,
   Integer, Float, Hex, String, LocalizedString `&"..."`, HashString `#"..."`,
-  AnimReference `%name`), case-insensitive keywords, case-sensitive preprocessor
-  directives, dev-block delimiters, punctuation, and operators. Globals (`self`,
-  `level`, …) deliberately lex as Identifier. `[[`/`]]` are NOT double-bracket kinds —
-  the parser recognizes two ADJACENT brackets, so `a[b[1]]` lexes unambiguously.
+  AnimReference `%name`), case-insensitive keywords — including `ChildThread`/`Call`
+  (MW2+, threaded vs. synchronous function-pointer calls) and `ThisThread` (the running
+  thread as a value), each a keyword only where the dialect's keyword set lists it —
+  case-sensitive preprocessor directives, dev-block delimiters, punctuation, and
+  operators. Globals (`self`, `level`, …) deliberately lex as Identifier. `[[`/`]]` are
+  NOT double-bracket kinds — the parser recognizes two ADJACENT brackets, so `a[b[1]]`
+  lexes unambiguously.
 
 ## Lexing/Token.cs
 
 - `readonly record struct Token(TokenKind Kind, int Start, int Length, TextRange Range)`
   — one token: UTF-16 offset span + precomputed line/character range. Tokens own no
   text; `GetText(SourceText)` returns a span view. `End` is one-past-last (half-open).
-  `IsTrivia` marks the kinds the parser skips.
+  `IsTrivia` marks the kinds the preprocessor drops on the way to the parse stream (the
+  parser itself never sees a trivia token); the formatter and semantic tokens read the
+  raw stream directly and use it to walk past whitespace and comments themselves.
 
 ## Lexing/TokenFacts.cs
 
@@ -305,6 +382,12 @@ LSP types anywhere.
     examples use `Function`/`Do`/`Break`).
   - `TryMatchDirective(span, out kind)` — case-SENSITIVE lowercase whole-word match for
     the word after `#` (engine convention).
+  - Both have a `GameProfile` overload — `TryMatchKeyword(span, profile, out kind)` /
+    `TryMatchDirective(span, profile, out kind)` — that matches only what the dialect
+    actually has: a keyword the dialect lacks (`foreach` before MW2, `function`/`class` in
+    the Infinity Ward games) or a directive from the wrong import family (`#include` vs.
+    `#using`/`#namespace`/`#insert`/`#precache`) stays an ordinary word instead. BO3 has
+    every keyword and directive, so its lexing is unchanged through either overload.
 
 ## Lexing/Lexer.cs
 
@@ -317,9 +400,12 @@ LSP types anywhere.
   - `/#` and `#/` lex as DevBlockOpen/DevBlockClose; dev-block content lexes normally.
   - Directive words match whole-word, so `#iffoo` is an unknown-directive error rather
     than `#if` + `foo`; bare `#` is a Hash token; unknown directives → Error + diagnostic.
-  - `%word` is an AnimReference only where no operand can sit to its left (after
-    `= ( , : ?` `return`, or at start of file — tracked via the last significant token);
-    otherwise `%` is modulo. Spaces and tabs may sit between the `%` and the name — BO1
+  - `%word` is an AnimReference only where no operand can sit to its left — stated as the
+    COMPLEMENT of the modulo case (not after an identifier, literal, `)`/`]`, `++`/`--`,
+    `true`/`false`/`undefined`, or another anim reference), since the set of
+    operand-enders is small and closed where the set of positions an anim reference may
+    appear in is not; an allowlist missed real code like `if ( deathanim != %walk )`.
+    Otherwise `%` is modulo. Spaces and tabs may sit between the `%` and the name — BO1
     ships `= % o_full_interstitial_01_camera;` — and the token covers both, so consumers
     take the name with `TokenFacts.AnimReferenceName` rather than slicing past the `%`.
     A newline ends it: `%` at end of line is a wrapped modulo.
@@ -330,9 +416,3 @@ LSP types anywhere.
 
 - `sealed record LexResult(ImmutableArray<Token> Tokens, ImmutableArray<Diagnostic> Diagnostics)`
   — the full stream (trivia included, EndOfFile-terminated) plus lexical diagnostics.
-
-## Lexing/TokenCursor.cs
-
-- `struct TokenCursor` — the parser's trivia-skipping view over the token array.
-  `Current`/`Kind`/`Index`, `Advance()` (parks at EndOfFile), `Peek(n)` (looks ahead
-  past trivia without moving).

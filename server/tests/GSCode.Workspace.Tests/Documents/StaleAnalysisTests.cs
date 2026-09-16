@@ -150,6 +150,39 @@ public class StaleAnalysisTests
         Assert.Equal("#pre\n", olderResult.Text.Text);
     }
 
+    /// <summary>
+    /// F8e: a caller that publishes something STAMPED with a version (diagnostics, specifically)
+    /// must stamp it with the version the winning analysis actually describes, not
+    /// <c>document.Version</c> read live afterwards — which could disagree with what was just
+    /// analysed in exactly this shape, and previously did (TextSyncHandler.AnalyzeAndPublish used
+    /// to read document.Version directly).
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeSnapshot_OnTheOlderCaller_ReportsTheWinnersVersion_NotItsOwn()
+    {
+        ManualResetEventSlim insideFirst = new(false);
+        ManualResetEventSlim releaseFirst = new(false);
+        DocumentStore store = GatedStore(insideFirst, releaseFirst);
+
+        OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
+
+        Task<AnalysisSnapshot> older = Task.Run(() => store.AnalyzeSnapshot(document));
+        Assert.True(insideFirst.Wait(Patience));
+
+        // A second edit arrives and is analysed while the first (v1) analysis is still parked.
+        store.ApplyChange(document, range: null, "#pre\n", version: 2);
+        AnalysisSnapshot newer = store.AnalyzeSnapshot(document);
+
+        releaseFirst.Set();
+        AnalysisSnapshot olderSnapshot = await older.WaitAsync(Patience);
+
+        // Both callers see the SAME winning snapshot — version 2 — never the version either one
+        // actually read at the top of its own call (1, for the older one).
+        Assert.Equal(2, newer.Version);
+        Assert.Equal(2, olderSnapshot.Version);
+        Assert.Equal("#pre\n", olderSnapshot.Result.Text.Text);
+    }
+
     [Fact]
     public async Task AnEditArrivingDuringAnalysisLeavesTheDocumentStale()
     {

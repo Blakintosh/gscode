@@ -224,6 +224,26 @@ public sealed class DocumentStore
     /// <summary>Runs the full per-file pipeline on the document's current text.</summary>
     public ParseResult Analyze(OpenDocument document)
     {
+        return AnalyzeSnapshot(document).Result;
+    }
+
+    /// <summary>
+    /// Same work as <see cref="Analyze"/>, but returns the WINNING snapshot (parse and version
+    /// together) rather than projecting out just the parse.
+    ///
+    /// <see cref="Analyze"/> is the answer for every caller that reads <c>document.Version</c>
+    /// itself right after — the overwhelming majority — but a caller that PUBLISHES something
+    /// stamped with a version (diagnostics, most notably) must stamp it with the version this
+    /// analysis actually describes, not whatever <c>document.Version</c> has become by the time
+    /// the publish happens. Those can differ: two analyses of one document can run concurrently
+    /// (the debounced one and a request thread's <see cref="AnalyzeIfStale"/>), the version CAS in
+    /// <see cref="OpenDocument.Publish"/> decides which one's result actually wins, and a caller
+    /// reading the live version afterwards would stamp even the LOSING analysis's diagnostics with
+    /// the newest text's version — which is exactly the version a client uses to discard
+    /// diagnostics that describe text it has already moved past.
+    /// </summary>
+    public AnalysisSnapshot AnalyzeSnapshot(OpenDocument document)
+    {
         // Read the version and the text TOGETHER, before anything slow, and analyse those: an edit
         // arriving mid-analysis must leave the document marked stale, not stamped with a version
         // whose text was never analysed. Both are read from a document another thread is free to
@@ -245,7 +265,7 @@ public sealed class DocumentStore
             profile: null,
             headerCache: _headerCache);
 
-        return document.Publish(result, version, headerGeneration).Result;
+        return document.Publish(result, version, headerGeneration);
     }
 
     /// <summary>

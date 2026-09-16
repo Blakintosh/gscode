@@ -1,9 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Symbols;
 using GSCode.Parser;
-
-// Kept for the ExportSignature cref in the class comment below — the gate this whole type hangs
-// off. Nothing in the body references the namespace, so the build's cref check is what holds it.
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -36,11 +34,25 @@ namespace GSCode.Server.Handlers;
 ///    re-parses for that reason alone. Header edits are rare and user-paced, so the exception does
 ///    not touch the typing path.
 ///
-/// Scope is every OTHER open document, not a computed dependency set. Open documents are few — the
-/// user's tabs — while "reaches this file" is not a simple question: under the merge dialects an
+/// Scope for OPEN documents is every OTHER one, not a computed dependency set — they are few (the
+/// user's tabs), while "reaches this file" is not a simple question: under the merge dialects an
 /// unqualified call resolves by name across the whole workspace, so a narrow answer would be wrong
-/// rather than merely conservative. Closed files need nothing here, since their stored diagnostics
-/// are parse-level and depend on no other file.
+/// rather than merely conservative.
+///
+/// CLOSED files were exempt for the same reason their diagnostics stayed parse-level-only — see
+/// <c>ScriptDatabase.HasCompletedLintSweep</c> — until <c>workspaceIndexingMode: full</c> gave them
+/// cross-file diagnostics too. That case is narrow BY NAME rather than wide the way the open-tab
+/// scope is: <see cref="RefreshClosedDependentsAsync"/> uses <c>LanguageStore.FilesReferencing</c>
+/// on the origin's own declared functions, so a rename costs the files that mention the name
+/// rather than the workspace — affordable specifically because it does NOT try to be the open-tab
+/// scope's "every one, since there are few" answer at workspace scale.
+///
+/// It only fires for a caller-named origin path — an on-disk change
+/// with no single origin (a branch switch, most plausibly) does not attempt it, and neither does
+/// a class rename (only function declarations are covered so far). Both are stated gaps, not
+/// silent ones: the closed file involved keeps whatever cross-file diagnostics its last sweep or
+/// refresh gave it until the next full sweep, an edit that does reach it through
+/// <see cref="RefreshClosedDependentsAsync"/>, or <c>gscode.clearCacheAndReindex</c>.
 /// </summary>
 public sealed class DependentDiagnosticsRefresher
 {
@@ -54,16 +66,27 @@ public sealed class DependentDiagnosticsRefresher
     private readonly DocumentStore _documents;
     private readonly DiagnosticsPublisher _diagnostics;
     private readonly DocumentLinter _linter;
+    private readonly ScriptDatabase _database;
+    private readonly WorkspaceLintSweep _lintSweep;
+    private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
 
     private readonly object _gate = new();
     private CancellationTokenSource? _pending;
 
     public DependentDiagnosticsRefresher(
-        DocumentStore documents, DiagnosticsPublisher diagnostics, DocumentLinter linter)
+        DocumentStore documents,
+        DiagnosticsPublisher diagnostics,
+        DocumentLinter linter,
+        ScriptDatabase database,
+        WorkspaceLintSweep lintSweep,
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics)
     {
         _documents = documents;
         _diagnostics = diagnostics;
         _linter = linter;
+        _database = database;
+        _lintSweep = lintSweep;
+        _workspaceDiagnostics = workspaceDiagnostics;
     }
 
     /// <summary>
@@ -93,6 +116,7 @@ public sealed class DependentDiagnosticsRefresher
         {
             await Task.Delay(DebounceMilliseconds, cancellationToken);
             Refresh(originPath, cancellationToken);
+            await RefreshClosedDependentsAsync(originPath, cancellationToken).ConfigureAwait(false);
         }
         catch ( OperationCanceledException )
         {
@@ -101,6 +125,48 @@ public sealed class DependentDiagnosticsRefresher
         catch ( Exception exception )
         {
             Log.Error(exception, "Dependent diagnostics refresh failed after {Path}", originPath);
+        }
+    }
+
+    /// <summary>
+    /// The `full`-mode half of a refresh: CLOSED files that reference a function the origin
+    /// declares. See the class comment for exactly what this does and does not cover yet.
+    /// </summary>
+    private async Task RefreshClosedDependentsAsync(string originPath, CancellationToken cancellationToken)
+    {
+        if ( originPath.Length == 0 || !_database.HasCompletedLintSweep )
+        {
+            return;
+        }
+
+        if ( !_database.TryGetAnyRecord(originPath, out ScriptRecord origin)
+            || origin.Language is not (ScriptLanguage.Gsc or ScriptLanguage.Csc) )
+        {
+            return;
+        }
+
+        HashSet<string> dependents = ClosedDependentsOf(origin, _database.StoreFor(origin.Language), _documents);
+        if ( dependents.Count == 0 )
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        LintSweepOutcome outcome = await _lintSweep.RelintClosedFilesAsync(dependents, cancellationToken)
+            .ConfigureAwait(false);
+
+        if ( outcome.Linted > 0 )
+        {
+            // SetDiagnostics only changed what a record HOLDS; nothing has told the client yet.
+            _workspaceDiagnostics.Refresh();
+
+            Log.Verbose(
+                "Re-linted {Count} closed dependent(s) in {Elapsed:F1}ms after {Path} changed its exports",
+                outcome.Linted,
+                System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
+                originPath);
         }
     }
 
@@ -145,6 +211,45 @@ public sealed class DependentDiagnosticsRefresher
     internal static bool ShouldRefresh(OpenDocument document, string originPath)
     {
         return !string.Equals(document.Path, originPath, StringComparison.Ordinal) && !document.IsStale;
+    }
+
+    /// <summary>
+    /// The CLOSED files that reference any function <paramref name="origin"/> declares — the
+    /// dependent set a full-mode re-lint actually needs to touch. Excludes the origin itself and
+    /// any path that turns out to be open (the live-analysis path already covers those, from
+    /// text that may be ahead of what is on disk).
+    ///
+    /// Only function declarations, not classes — a stated gap, not a silent one; see the class
+    /// comment.
+    /// </summary>
+    internal static HashSet<string> ClosedDependentsOf(ScriptRecord origin, LanguageStore store, DocumentStore documents)
+    {
+        HashSet<string> dependents = new(StringComparer.Ordinal);
+
+        foreach ( FunctionSymbol function in origin.Functions )
+        {
+            SymbolKey key = function.OwnerClassKeyName is string ownerClass
+                ? new SymbolKey(null, function.KeyName, SymbolKind.Function, ownerClass)
+                : new SymbolKey(
+                    function.Namespace.Length == 0 ? null : function.Namespace, function.KeyName, SymbolKind.Function);
+
+            foreach ( string path in store.FilesReferencing(key) )
+            {
+                if ( string.Equals(path, origin.Path, StringComparison.Ordinal) )
+                {
+                    continue;
+                }
+
+                if ( documents.TryGet(path, out OpenDocument _) )
+                {
+                    continue;
+                }
+
+                dependents.Add(path);
+            }
+        }
+
+        return dependents;
     }
 
     private void RefreshOne(OpenDocument document)

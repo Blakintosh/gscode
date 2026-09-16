@@ -1,7 +1,13 @@
 using GSCode.Core;
+using GSCode.Core.Paths;
+using GSCode.Core.Symbols;
+using GSCode.Core.Text;
+using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Server.Handlers;
+using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
+using GSCode.Workspace.Resolution;
 using Xunit;
 
 namespace GSCode.Server.Tests.Handlers;
@@ -63,5 +69,65 @@ public class DependentDiagnosticsTests
 
         Assert.True(typing.IsStale);
         Assert.False(DependentDiagnosticsRefresher.ShouldRefresh(typing, originPath: @"c:\ws\util.gsc"));
+    }
+
+    // --- ClosedDependentsOf (F7: the full-mode closed-file half) ---
+
+    private const string LibPath = @"C:\ws\lib.gsc";
+    private const string CallerPath = @"C:\ws\caller.gsc";
+
+    private static (ScriptDatabase Database, ScriptRecord Origin) BuildTwoFileWorkspace()
+    {
+        NameTable names = new();
+        ScriptDatabase database = new();
+
+        ParseResult lib = ScriptAnalysis.Analyze(
+            LibPath, ScriptLanguage.Gsc, SourceText.From("#namespace lib;\nfunction helper()\n{\n}\n"),
+            NullInsertProvider.Instance, names);
+        ScriptRecord origin = database.Commit(lib, ResolutionContext.RawContext, isDirty: false, "lib.gsc");
+
+        ParseResult caller = ScriptAnalysis.Analyze(
+            CallerPath, ScriptLanguage.Gsc,
+            SourceText.From("#using scripts\\lib;\n#namespace game;\nfunction run()\n{\n    lib::helper();\n}\n"),
+            NullInsertProvider.Instance, names);
+        database.Commit(caller, ResolutionContext.RawContext, isDirty: false, "caller.gsc");
+
+        return (database, origin);
+    }
+
+    [Fact]
+    public void ClosedDependentsOf_FindsAClosedCaller()
+    {
+        (ScriptDatabase database, ScriptRecord origin) = BuildTwoFileWorkspace();
+        DocumentStore noOpenDocuments = new(static _ => NullInsertProvider.Instance, new NameTable());
+
+        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(origin, database.Gsc, noOpenDocuments);
+
+        Assert.Contains(PathUtil.NormalizeAbsolute(CallerPath), dependents);
+    }
+
+    [Fact]
+    public void ClosedDependentsOf_ExcludesAnOpenCaller()
+    {
+        // The live-analysis path already covers an open file with the richer, real-time result —
+        // re-linting it here from disk would describe whatever was last SAVED instead.
+        (ScriptDatabase database, ScriptRecord origin) = BuildTwoFileWorkspace();
+        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
+        documents.Open(CallerPath, "irrelevant buffer text", version: 1);
+
+        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(origin, database.Gsc, documents);
+
+        Assert.Empty(dependents);
+    }
+
+    [Fact]
+    public void ClosedDependentsOf_ExcludesTheOriginItself()
+    {
+        (ScriptDatabase database, ScriptRecord origin) = BuildTwoFileWorkspace();
+        DocumentStore noOpenDocuments = new(static _ => NullInsertProvider.Instance, new NameTable());
+
+        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(origin, database.Gsc, noOpenDocuments);
+
+        Assert.DoesNotContain(PathUtil.NormalizeAbsolute(LibPath), dependents);
     }
 }

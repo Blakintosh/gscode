@@ -1113,42 +1113,76 @@ public sealed class Preprocessor
 
         while ( index < body.Count )
         {
-            PToken current = body[index];
-
-            if ( IsMacroCandidate(current.Kind) )
+            if ( IsMacroCandidate(body[index].Kind) && TryExpandBodyToken(body, ref index, arguments, rootSite, sink) )
             {
-                // Parameter reference → splice the (already expanded) argument tokens.
-                if ( arguments is not null && arguments.TryGetValue(current.Text, out List<PToken>? argumentTokens) )
-                {
-                    sink.AddRange(argumentTokens);
-                    index++;
-                    continue;
-                }
-
-                // Nested macro use inside the body.
-                if ( _macros.TryGet(current.Text, out MacroDefinition nested) && !_expansionStack.Contains(current.Text) )
-                {
-                    if ( !nested.IsFunctionLike )
-                    {
-                        index++;
-                        ExpandBody(nested, arguments: null, rootSite, sink);
-                        continue;
-                    }
-
-                    if ( TryCollectBodyArguments(body, index + 1, nested, arguments, rootSite, out Dictionary<string, List<PToken>> nestedArguments, out int afterNested) )
-                    {
-                        index = afterNested;
-                        ExpandBody(nested, nestedArguments, rootSite, sink);
-                        continue;
-                    }
-                }
+                continue;
             }
 
+            PToken current = body[index];
             sink.Add(current with { Provenance = new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite) });
             index++;
         }
 
         _expansionStack.Remove(definition.Name);
+    }
+
+    /// <summary>
+    /// Handles ONE macro-candidate token found while scanning a macro's BODY — either body content
+    /// being emitted directly (<see cref="ExpandBody"/>'s own loop) or an argument being collected
+    /// for a nested call written inside that body (<see cref="TryCollectBodyArguments"/>'s loop).
+    /// Both ask the same question — does this name consume more tokens before it can just be
+    /// appended as text: a parameter splice, or a nested macro's own use — so both share this rather
+    /// than each answering it differently.
+    ///
+    /// Before this was shared, only <see cref="ExpandBody"/>'s own loop asked it: a macro name
+    /// appearing as one of a NESTED call's arguments — <c>#define WRAP() INNER(VALUE)</c>, where
+    /// VALUE is itself a <c>#define</c> — reached <see cref="TryCollectBodyArguments"/> instead,
+    /// which only spliced an OUTER parameter reference and otherwise copied every token verbatim.
+    /// <c>VALUE</c> stayed as the literal identifier rather than expanding, and — since it never
+    /// reached this method's <c>_macros.TryGet</c> branch — the nested <c>INNER</c> call itself
+    /// recorded no <see cref="MacroInvocation"/> either, leaving hover and find-references with
+    /// nothing to say about a macro used only inside another macro's body.
+    ///
+    /// Returns false when nothing here applies, so the caller appends the token unexpanded —
+    /// matching <see cref="TryExpandAt"/>'s "not a macro" contract at the top level.
+    /// </summary>
+    private bool TryExpandBodyToken(
+        IReadOnlyList<PToken> body, ref int index, Dictionary<string, List<PToken>>? arguments,
+        TextRange rootSite, List<PToken> sink)
+    {
+        PToken current = body[index];
+
+        // Parameter reference → splice the (already expanded) argument tokens.
+        if ( arguments is not null && arguments.TryGetValue(current.Text, out List<PToken>? argumentTokens) )
+        {
+            sink.AddRange(argumentTokens);
+            index++;
+            return true;
+        }
+
+        // Nested macro use inside the body.
+        if ( !_macros.TryGet(current.Text, out MacroDefinition nested) || _expansionStack.Contains(current.Text) )
+        {
+            return false;
+        }
+
+        if ( !nested.IsFunctionLike )
+        {
+            _invocations.Add(new MacroInvocation(current.Text, current.Provenance.SourceFile, current.Range, nested));
+            index++;
+            ExpandBody(nested, arguments: null, rootSite, sink);
+            return true;
+        }
+
+        if ( TryCollectBodyArguments(body, index + 1, nested, arguments, rootSite, out Dictionary<string, List<PToken>> nestedArguments, out int afterNested) )
+        {
+            _invocations.Add(new MacroInvocation(current.Text, current.Provenance.SourceFile, current.Range, nested));
+            index = afterNested;
+            ExpandBody(nested, nestedArguments, rootSite, sink);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Collects a nested invocation's arguments from the remaining BODY tokens.</summary>
@@ -1188,6 +1222,21 @@ public sealed class Preprocessor
                 {
                     afterArguments = index + 1;
                     ImmutableArray<string> parameters = nested.Parameters ?? [];
+
+                    // Same rule as TryCollectArguments' top-level counterpart, and the same reason:
+                    // a macro's parameter list is exact, so a mismatched call silently produces a
+                    // malformed expansion rather than binding fewer/extra values the way a script
+                    // function call would. There is no frame here to anchor at the invocation SITE,
+                    // so this reports at the outer call's rootSite — the only location on screen
+                    // that names any of this.
+                    int supplied = collected.Count == 1 && collected[0].Count == 0 ? 0 : collected.Count;
+                    if ( supplied != parameters.Length )
+                    {
+                        _diagnostics.Add(Diagnostic.Create(
+                            rootSite, DiagnosticSeverity.Error, GscDiagnosticCode.WrongMacroArgumentCount,
+                            nested.Name, parameters.Length, supplied));
+                    }
+
                     for ( int position = 0; position < parameters.Length; position++ )
                     {
                         nestedArguments[parameters[position]] = position < collected.Count ? collected[position] : [];
@@ -1203,11 +1252,11 @@ public sealed class Preprocessor
                 continue;
             }
 
-            // Outer parameters referenced inside nested arguments splice through.
-            if ( outerArguments is not null && IsMacroCandidate(current.Kind) && outerArguments.TryGetValue(current.Text, out List<PToken>? outerTokens) )
+            // An outer parameter reference splices through; a macro NAME written as an argument here
+            // — #define WRAP() INNER(VALUE) — is expanded the same way it would be anywhere else in
+            // the body, via the method ExpandBody's own loop uses for exactly this question.
+            if ( IsMacroCandidate(current.Kind) && TryExpandBodyToken(body, ref index, outerArguments, rootSite, collected[^1]) )
             {
-                collected[^1].AddRange(outerTokens);
-                index++;
                 continue;
             }
 

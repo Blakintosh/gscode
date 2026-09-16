@@ -236,12 +236,13 @@ public sealed class Preprocessor
                     break;
             }
 
-            if ( IsMacroCandidate(token.Kind) && TryExpandAt(frame, ref index, sink) )
+            string? interned = null;
+            if ( IsMacroCandidate(token.Kind) && TryExpandAt(frame, ref index, sink, out interned) )
             {
                 continue;
             }
 
-            sink.Add(MakePToken(frame, token));
+            sink.Add(interned is not null ? MakePToken(frame, token, interned) : MakePToken(frame, token));
             index++;
         }
     }
@@ -791,12 +792,13 @@ public sealed class Preprocessor
                 continue;
             }
 
-            if ( IsMacroCandidate(current.Kind) && TryExpandAt(frame, ref index, condition) )
+            string? interned = null;
+            if ( IsMacroCandidate(current.Kind) && TryExpandAt(frame, ref index, condition, out interned) )
             {
                 continue;
             }
 
-            condition.Add(MakePToken(frame, current));
+            condition.Add(interned is not null ? MakePToken(frame, current, interned) : MakePToken(frame, current));
             index++;
         }
 
@@ -839,11 +841,15 @@ public sealed class Preprocessor
     /// <summary>
     /// Attempts to expand the macro-candidate token at <paramref name="index"/>. Returns
     /// false when it is not a macro (the caller emits it as an ordinary token).
+    ///
+    /// <paramref name="name"/> is the token's interned text either way, so a caller that gets
+    /// false back — the common case, since most identifiers are not macro uses — can build the
+    /// plain token from it directly instead of interning the same span a second time.
     /// </summary>
-    private bool TryExpandAt(FileFrame frame, ref int index, List<PToken> sink)
+    private bool TryExpandAt(FileFrame frame, ref int index, List<PToken> sink, out string name)
     {
         Token nameToken = frame.Tokens[index];
-        string name = _names.Intern(nameToken.GetText(frame.Text));
+        name = _names.Intern(nameToken.GetText(frame.Text));
 
         if ( TryExpandBuiltin(frame, name, nameToken.Range, index, sink) )
         {
@@ -1064,12 +1070,13 @@ public sealed class Preprocessor
                 continue;
             }
 
-            if ( IsMacroCandidate(current.Kind) && TryExpandAt(frame, ref index, collected[^1]) )
+            string? interned = null;
+            if ( IsMacroCandidate(current.Kind) && TryExpandAt(frame, ref index, collected[^1], out interned) )
             {
                 continue;
             }
 
-            collected[^1].Add(MakePToken(frame, current));
+            collected[^1].Add(interned is not null ? MakePToken(frame, current, interned) : MakePToken(frame, current));
             index++;
         }
 
@@ -1127,6 +1134,12 @@ public sealed class Preprocessor
         IReadOnlyList<PToken> body = definition.Body;
         int index = 0;
 
+        // Every token this loop re-stamps shares the same SourceFile and DefinitionSite — ParseDefine
+        // stamped the whole body with them at once — and the same rootSite, so the provenance is
+        // identical for every token one ExpandBody call emits. Computed once, lazily, rather than
+        // once per token.
+        Provenance? stamped = null;
+
         while ( index < body.Count )
         {
             if ( IsMacroCandidate(body[index].Kind) && TryExpandBodyToken(body, ref index, arguments, rootSite, sink) )
@@ -1135,7 +1148,8 @@ public sealed class Preprocessor
             }
 
             PToken current = body[index];
-            sink.Add(current with { Provenance = new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite) });
+            stamped ??= new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite);
+            sink.Add(current with { Provenance = stamped });
             index++;
         }
 
@@ -1223,6 +1237,11 @@ public sealed class Preprocessor
         int depth = 1;
         int index = startIndex + 1;
 
+        // Every raw token this scan copies re-stamps to the SAME provenance — one rootSite, and a
+        // SourceFile/DefinitionSite that came from ParseDefine stamping the whole outer body at
+        // once — so it is computed once, lazily, rather than once per token.
+        Provenance? stamped = null;
+
         while ( index < body.Count )
         {
             PToken current = body[index];
@@ -1276,7 +1295,8 @@ public sealed class Preprocessor
                 continue;
             }
 
-            collected[^1].Add(current with { Provenance = new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite) });
+            stamped ??= new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite);
+            collected[^1].Add(current with { Provenance = stamped });
             index++;
         }
 
@@ -1288,6 +1308,20 @@ public sealed class Preprocessor
     private PToken MakePToken(FileFrame frame, Token token)
     {
         string text = TokenFacts.GetStaticText(token.Kind) ?? _names.Intern(token.GetText(frame.Text));
+
+        return new PToken(token.Kind, text, token.Range, frame.Provenance);
+    }
+
+    /// <summary>
+    /// Same as <see cref="MakePToken(FileFrame, Token)"/>, but for a caller that already interned
+    /// this exact token's text — every <c>TryExpandAt</c> call site, once it comes back false. Every
+    /// macro-candidate kind (the only kinds routed through that path) has no static text of its own,
+    /// so the fallback below is never actually taken here; it stays for the same reason the other
+    /// overload keeps it — this is a general PToken constructor, not one written only for this case.
+    /// </summary>
+    private static PToken MakePToken(FileFrame frame, Token token, string internedText)
+    {
+        string text = TokenFacts.GetStaticText(token.Kind) ?? internedText;
 
         return new PToken(token.Kind, text, token.Range, frame.Provenance);
     }

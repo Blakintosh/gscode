@@ -899,7 +899,7 @@ public sealed class SymbolExtractor
             case TokenKind.String:
             {
                 // Strings are content-exact (case-sensitive).
-                SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text)), SymbolKind.StringLiteral);
+                SymbolKey key = new(null, _names.Intern(UnquoteSpan(literal.Token.Text)), SymbolKind.StringLiteral);
                 AddReference(
                     key,
                     literal.Token,
@@ -912,13 +912,13 @@ public sealed class SymbolExtractor
                 // turned KILLSTREAK_COMBAT_ROBOT_CRATE into killstreak_combat_robot_crate. Safe
                 // to match case-sensitively too — across the stock scripts no hash string or
                 // localized string is ever written with two different casings.
-                SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text[1..])), SymbolKind.HashString);
+                SymbolKey key = new(null, _names.Intern(UnquoteSpan(literal.Token.Text, prefixLength: 1)), SymbolKind.HashString);
                 AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
             case TokenKind.LocalizedString:
             {
-                SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text[1..])), SymbolKind.LocalizedString);
+                SymbolKey key = new(null, _names.Intern(UnquoteSpan(literal.Token.Text, prefixLength: 1)), SymbolKind.LocalizedString);
                 AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
@@ -1049,6 +1049,32 @@ public sealed class SymbolExtractor
         }
 
         return trimmed;
+    }
+
+    /// <summary>
+    /// The same trim as <see cref="Unquote"/> — an optional prefix, then the surrounding quotes —
+    /// but as a SPAN: slicing a string allocates a new one at every step, and <see cref="Unquote"/>
+    /// paid for two throwaway strings (the prefix skip, then the quote trim) on every literal
+    /// reference just to compute a POOL LOOKUP KEY, which <see cref="NameTable.Intern"/> already
+    /// takes as a span. For an already-interned literal — the common case, since scripts repeat
+    /// string content constantly — that was two allocations spent on a value the call was about to
+    /// discard either way.
+    /// </summary>
+    private static ReadOnlySpan<char> UnquoteSpan(string text, int prefixLength = 0)
+    {
+        ReadOnlySpan<char> span = text.AsSpan(prefixLength);
+
+        if ( span.Length > 0 && span[0] == '"' )
+        {
+            span = span[1..];
+        }
+
+        if ( span.Length > 0 && span[^1] == '"' )
+        {
+            span = span[..^1];
+        }
+
+        return span;
     }
 
     /// <summary>

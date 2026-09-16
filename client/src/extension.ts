@@ -519,6 +519,24 @@ function registerIndexingStatusBar(
             // The server logs its own completion line; repeating it here would double it.
         },
     );
+
+    languageClient.onNotification(
+        "gscode/indexingFailed",
+        (params: { reason: string }) => {
+            // A warning icon rather than the checkmark indexingComplete uses: the spinner has to
+            // stop either way, or it would run for the rest of the session looking like a hang
+            // rather than a failure, but showing success here would be worse than the spinner —
+            // it tells the user their workspace is fully indexed when nothing was.
+            statusBar.text = `$(warning) GSCode: indexing failed`;
+            statusBar.tooltip = new vscode.MarkdownString(
+                `**GSCode indexing failed**\n\n${params.reason}\n\n_Click to open the server log._`,
+            );
+            log.error(`Workspace indexing failed: ${params.reason}`);
+            // The server logs its own error line at Warning by default now; this one is the
+            // extension host's own channel, which a user reading only "GSCode" (not "GSCode
+            // Server") would otherwise never see this in at all.
+        },
+    );
 }
 
 export function deactivate(): Thenable<void> | undefined {

@@ -153,39 +153,27 @@ public sealed partial class Parser
 
     private UsingNode ParseUsing()
     {
-        PToken directive = Advance();
-
-        System.Text.StringBuilder path = new();
-        PToken? firstPathToken = null;
-        PToken? lastPathToken = null;
-
-        while ( IsPathToken(Kind) )
-        {
-            PToken part = Advance();
-            firstPathToken ??= part;
-            lastPathToken = part;
-            path.Append(part.Text);
-        }
-
-        if ( firstPathToken is null )
-        {
-            AddError(GscDiagnosticCode.ExpectedScriptPath, directive.RootRange, "#using");
-        }
-
-        Expect(TokenKind.Semicolon, ";");
-
-        TextRange pathRange = firstPathToken is not null
-            ? new TextRange(firstPathToken.Value.RootRange.Start, lastPathToken!.Value.RootRange.End)
-            : directive.RootRange;
-
-        return new UsingNode(RangeFrom(directive), path.ToString(), pathRange);
+        PToken directive = ParseDirectivePath("#using", out string path, out TextRange pathRange);
+        return new UsingNode(RangeFrom(directive), path, pathRange);
     }
 
     private IncludeNode ParseInclude()
     {
+        PToken directive = ParseDirectivePath("#include", out string path, out TextRange pathRange);
+        return new IncludeNode(RangeFrom(directive), path, pathRange);
+    }
+
+    /// <summary>
+    /// Reads a script path after a directive that names one — identifiers, integers and the
+    /// separator characters a path may be joined with, until the terminating ';'. Shared by
+    /// <see cref="ParseUsing"/> and <see cref="ParseInclude"/>, which differ only in which AST node
+    /// they build from the result and which directive name a missing path is reported against.
+    /// </summary>
+    private PToken ParseDirectivePath(string directiveDisplay, out string path, out TextRange pathRange)
+    {
         PToken directive = Advance();
 
-        System.Text.StringBuilder path = new();
+        System.Text.StringBuilder builder = new();
         PToken? firstPathToken = null;
         PToken? lastPathToken = null;
 
@@ -194,21 +182,22 @@ public sealed partial class Parser
             PToken part = Advance();
             firstPathToken ??= part;
             lastPathToken = part;
-            path.Append(part.Text);
+            builder.Append(part.Text);
         }
 
         if ( firstPathToken is null )
         {
-            AddError(GscDiagnosticCode.ExpectedScriptPath, directive.RootRange, "#include");
+            AddError(GscDiagnosticCode.ExpectedScriptPath, directive.RootRange, directiveDisplay);
         }
 
         Expect(TokenKind.Semicolon, ";");
 
-        TextRange pathRange = firstPathToken is not null
+        path = builder.ToString();
+        pathRange = firstPathToken is not null
             ? new TextRange(firstPathToken.Value.RootRange.Start, lastPathToken!.Value.RootRange.End)
             : directive.RootRange;
 
-        return new IncludeNode(RangeFrom(directive), path.ToString(), pathRange);
+        return directive;
     }
 
     private static bool IsPathToken(TokenKind kind)

@@ -2,9 +2,10 @@ namespace GSCode.Parser.Lexing;
 
 /// <summary>
 /// Every kind of token the lexer can produce. Trivia (whitespace, comments) are tokens
-/// too — the parser skips them via TokenCursor, while the formatter and semantic tokens
-/// read the raw stream. Note: [[ and ]] are NOT lexed as double-bracket tokens; the
-/// parser recognizes two adjacent brackets, so nested indexers like a[b[1]] just work.
+/// too — the preprocessor drops them on the way to the parse stream, so the parser never
+/// sees one, while the formatter and semantic tokens read the raw stream directly. Note:
+/// [[ and ]] are NOT lexed as double-bracket tokens; the parser recognizes two adjacent
+/// brackets, so nested indexers like a[b[1]] just work.
 /// </summary>
 public enum TokenKind
 {

@@ -45,10 +45,6 @@ public sealed class SymbolExtractor
     // walk, and afterwards by ClassSymbol.FullRange for anything that needs it positionally.
     private string? _currentClass;
 
-    // Ranges in THIS file where a macro was invoked. An expansion's AST nodes report the
-    // invocation's range, so containment identifies macro-supplied syntax.
-    private readonly List<TextRange> _macroInvocations = [];
-
     // How many dev blocks enclose the walk right now; > 0 means release builds drop this code.
     private int _devBlockDepth;
 
@@ -104,22 +100,6 @@ public sealed class SymbolExtractor
 
     private void Run(ParseTree tree, PreprocessResult preprocessed)
     {
-        // Collected BEFORE the walk, because default-parameter validation consults them.
-        //
-        // Scoped because the loop is over EVERY invocation the preprocessor saw, headers included,
-        // to keep the few that came from this file - so on a dialect with #insert its cost is set
-        // by what was inserted rather than by what the file contains.
-        PerfTracker.Begin("extract.invocations");
-        foreach ( MacroInvocation invocation in preprocessed.MacroInvocations )
-        {
-            if ( invocation.SourceFile is null )
-            {
-                _macroInvocations.Add(invocation.Range);
-            }
-        }
-
-        PerfTracker.End();
-
         // The dominant scope, and the parent of extract.doc and extract.body: everything the walk
         // does is inside it, so the three read as a breakdown rather than as peers.
         PerfTracker.Begin("extract.declarations");
@@ -420,26 +400,6 @@ public sealed class SymbolExtractor
             Assignments = assignments.ToImmutable(),
         };
     }
-
-    /// <summary>
-    /// True when the expression occupies a macro invocation's range — i.e. the preprocessor put
-    /// it there. Checked by containment rather than token provenance so it holds for every node
-    /// shape an expansion can produce, not just the ones that carry a token directly.
-    /// </summary>
-    private bool IsMacroSupplied(ExprNode expression)
-    {
-        foreach ( TextRange invocation in _macroInvocations )
-        {
-            if ( invocation.Contains(expression.Range.Start) )
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>The spec allows only plain values as parameter defaults: literals, vectors, negated literals.</summary>
 
     private void ValidatePrecache(PrecacheNode precache)
     {

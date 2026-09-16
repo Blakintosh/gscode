@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
@@ -13,6 +14,20 @@ public sealed class PathResolver
 {
     private readonly RootConfig _config;
     private readonly IFileSystem _fileSystem;
+
+    /// <summary>
+    /// Memoizes <see cref="Resolve"/> by (context, relative path) — including a MISS, since a
+    /// miss is the expensive case: it walks every configured root before returning null, and a
+    /// broken or not-yet-created import is asked about on every keystroke by two independent
+    /// callers (<see cref="Analysis.FileImports"/> and <see cref="Analysis.UsingNotFoundLint"/>
+    /// each resolve the same directive list), so an uncached miss is paid twice per analysis and
+    /// again on every later one. A confirmed 4x-by-root-count, 2x-by-caller multiplier on an
+    /// adversarial workspace — no wall-clock claim, since that depends on the filesystem, but the
+    /// probe count is real and unbounded by nothing else. Invalidated wholesale by
+    /// <see cref="InvalidateResolutionCache"/> on any watched create/delete, which is coarse but
+    /// correct and cheap next to a probe: those events are user-paced, never per-keystroke.
+    /// </summary>
+    private readonly ConcurrentDictionary<(ResolutionContext Context, string Relative), string?> _resolveCache = new();
 
     public PathResolver(RootConfig config, IFileSystem fileSystem)
     {
@@ -64,6 +79,9 @@ public sealed class PathResolver
     /// Resolves a game-relative script path (e.g. "scripts\shared\util_shared.gsc") from
     /// the given context. Returns the normalized absolute path of the first existing
     /// candidate, or null. Rooted paths and ".." traversal are rejected outright.
+    ///
+    /// Memoized, including the null answer — see <see cref="_resolveCache"/> for why a miss is
+    /// the case that matters most here.
     /// </summary>
     public string? Resolve(ResolutionContext context, string scriptPathWithExtension)
     {
@@ -74,6 +92,23 @@ public sealed class PathResolver
             return null;
         }
 
+        (ResolutionContext, string) key = (context, relative);
+        if ( _resolveCache.TryGetValue(key, out string? cached) )
+        {
+            return cached;
+        }
+
+        string? resolved = ResolveUncached(context, relative);
+
+        // A last-write-wins race between two threads resolving the same key concurrently is fine:
+        // both computed the same answer from the same (unmoving, for the duration of one probe)
+        // filesystem state, so whichever write lands is correct either way.
+        _resolveCache[key] = resolved;
+        return resolved;
+    }
+
+    private string? ResolveUncached(ResolutionContext context, string relative)
+    {
         foreach ( string root in RootsFor(context) )
         {
             string candidate = Path.Combine(root, relative.Replace('\\', Path.DirectorySeparatorChar));
@@ -86,6 +121,20 @@ public sealed class PathResolver
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Forgets every memoized resolution. Called on any watched file create or delete: a create
+    /// can turn a cached miss into a hit, and a delete can turn a cached hit into a miss, and
+    /// nothing here tracks which specific keys a given path could affect — a file might be named
+    /// by any relative path from any context. Coarse, but cheap next to what it protects against:
+    /// these events are user-paced (a save, a branch switch), never per-keystroke, so clearing the
+    /// whole cache costs a handful of re-probes on the next few analyses rather than one that
+    /// never resolves a rename or a newly created import.
+    /// </summary>
+    public void InvalidateResolutionCache()
+    {
+        _resolveCache.Clear();
     }
 
     /// <summary>

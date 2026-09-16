@@ -181,6 +181,77 @@ public class PathResolverTests
         Assert.Null(resolver.Resolve(ResolutionContext.RawContext, scriptPath));
     }
 
+    // --- Resolution memo (F8f) ---
+
+    [Fact]
+    public void Resolve_CachesAHit_SecondCallProbesNothing()
+    {
+        CountingFileSystem fileSystem = new(StandardTree());
+        PathResolver resolver = StandardResolver(fileSystem);
+
+        resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\util_shared.gsc");
+        int probesAfterFirst = fileSystem.FileExistsCount;
+
+        string? resolved = resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\util_shared.gsc");
+
+        Assert.NotNull(resolved);
+        Assert.Equal(probesAfterFirst, fileSystem.FileExistsCount);
+    }
+
+    [Fact]
+    public void Resolve_CachesAMiss_SecondCallProbesNothing()
+    {
+        // The miss is the case that matters most: it is the one that walks every configured root
+        // before giving up, and a broken import is asked about again on every keystroke.
+        CountingFileSystem fileSystem = new(StandardTree());
+        PathResolver resolver = StandardResolver(fileSystem);
+
+        resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\missing.gsc");
+        int probesAfterFirst = fileSystem.FileExistsCount;
+        Assert.True(probesAfterFirst > 0);
+
+        string? resolved = resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\missing.gsc");
+
+        Assert.Null(resolved);
+        Assert.Equal(probesAfterFirst, fileSystem.FileExistsCount);
+    }
+
+    [Fact]
+    public void InvalidateResolutionCache_LetsANewlyCreatedFileBeFound()
+    {
+        FakeFileSystem files = StandardTree();
+        CountingFileSystem counting = new(files);
+        PathResolver resolver = StandardResolver(counting);
+
+        Assert.Null(resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\brand_new.gsc"));
+
+        // The file appears on disk after the miss was cached — the shape of a script created
+        // while the server is running.
+        files.AddFile(@$"{Raw}\scripts\shared\brand_new.gsc");
+        Assert.Null(resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\brand_new.gsc"));
+
+        resolver.InvalidateResolutionCache();
+
+        Assert.NotNull(resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\brand_new.gsc"));
+    }
+
+    [Fact]
+    public void InvalidateResolutionCache_LetsADeletedFileStopResolving()
+    {
+        FakeFileSystem files = StandardTree();
+        CountingFileSystem counting = new(files);
+        PathResolver resolver = StandardResolver(counting);
+
+        Assert.NotNull(resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\util_shared.gsc"));
+
+        files.RemoveFile(@$"{Raw}\scripts\shared\util_shared.gsc");
+        Assert.NotNull(resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\util_shared.gsc"));
+
+        resolver.InvalidateResolutionCache();
+
+        Assert.Null(resolver.Resolve(ResolutionContext.RawContext, @"scripts\shared\util_shared.gsc"));
+    }
+
     // --- Configured roots + workspace-only mode ---
 
     [Fact]
@@ -304,45 +375,5 @@ public class PathResolverTests
 
         // Raw and mods are two roots, so two walks — never two per extension.
         Assert.Equal(2, fileSystem.EnumerationCount);
-    }
-
-    /// <summary>Counts tree walks, so a test can assert on work done rather than on results.</summary>
-    private sealed class CountingFileSystem : IFileSystem
-    {
-        private readonly FakeFileSystem _inner;
-
-        public CountingFileSystem(FakeFileSystem inner)
-        {
-            _inner = inner;
-        }
-
-        public int EnumerationCount { get; private set; }
-
-        public bool FileExists(string absolutePath)
-        {
-            return _inner.FileExists(absolutePath);
-        }
-
-        public bool DirectoryExists(string absolutePath)
-        {
-            return _inner.DirectoryExists(absolutePath);
-        }
-
-        public string ReadAllText(string absolutePath)
-        {
-            return _inner.ReadAllText(absolutePath);
-        }
-
-        public DateTime GetLastWriteTimeUtc(string absolutePath)
-        {
-            return _inner.GetLastWriteTimeUtc(absolutePath);
-        }
-
-        public IEnumerable<string> EnumerateFilesWithExtensions(
-            string directory, System.Collections.Immutable.ImmutableArray<string> extensions)
-        {
-            EnumerationCount++;
-            return _inner.EnumerateFilesWithExtensions(directory, extensions);
-        }
     }
 }

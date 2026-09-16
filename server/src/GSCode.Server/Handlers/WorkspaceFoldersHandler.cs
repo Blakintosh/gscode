@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core.Paths;
 using GSCode.Workspace.Database;
+using GSCode.Workspace.Documents;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
 using GSCode.Server.Configuration;
@@ -34,19 +35,22 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
     private readonly IFileSystem _fileSystem;
     private readonly ScriptDatabase _database;
     private readonly WorkspaceIndexer _indexer;
+    private readonly DocumentStore _documents;
 
     public WorkspaceFoldersHandler(
         ResolverHolder resolver,
         ServerSettings settings,
         IFileSystem fileSystem,
         ScriptDatabase database,
-        WorkspaceIndexer indexer)
+        WorkspaceIndexer indexer,
+        DocumentStore documents)
     {
         _resolver = resolver;
         _settings = settings;
         _fileSystem = fileSystem;
         _database = database;
         _indexer = indexer;
+        _documents = documents;
     }
 
     protected override DidChangeWorkspaceFolderRegistrationOptions CreateRegistrationOptions(ClientCapabilities clientCapabilities)
@@ -71,10 +75,14 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
         // Only worth re-indexing when a folder was added; a pure removal has nothing new.
         if ( request.Event.Added.Any() )
         {
-            _indexer.ReloadRestoreSnapshot();
-
+            // reloadSnapshot, not a separate ReloadRestoreSnapshot() call before this: both now
+            // happen under the indexer's own pass gate, so a startup pass already in flight can
+            // no longer have its snapshot swapped out from under it by this reload landing in the
+            // gap between the two calls.
             IndexOutcome outcome = await _indexer
-                .IndexAsync(IndexingModeFor(_settings), NullIndexProgressListener.Instance, cancellationToken)
+                .IndexAsync(
+                    IndexingModeFor(_settings), NullIndexProgressListener.Instance, cancellationToken,
+                    reloadSnapshot: true, ownedByEditor: candidate => _documents.TryGet(candidate, out OpenDocument _))
                 .ConfigureAwait(false);
 
             Log.Information(

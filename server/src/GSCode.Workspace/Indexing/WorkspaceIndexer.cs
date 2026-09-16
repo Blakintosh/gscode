@@ -172,6 +172,19 @@ public sealed class WorkspaceIndexer
     /// </summary>
     private readonly GameProfile? _profile;
 
+    /// <summary>
+    /// Serialises whole passes: <see cref="IndexAsync"/> is re-entrant on a single shared
+    /// instance (the startup pass and a workspace-folder-change re-index both call it on the
+    /// SAME <see cref="WorkspaceIndexer"/>), and interleaving two passes corrupts state neither
+    /// one owns exclusively — <see cref="_restored"/> can be swapped out from under the pass
+    /// reading it, <see cref="_skippedOversized"/> resets mid-count, and
+    /// <see cref="ScriptDatabase.MarkIndexComplete"/> can fire from the second pass before the
+    /// first has actually finished. A second caller WAITS rather than corrupting anything; a
+    /// folder-change re-index arriving during a cold start is an ordinary thing to happen, not a
+    /// contention path worth failing.
+    /// </summary>
+    private readonly SemaphoreSlim _passGate = new(1, 1);
+
     public WorkspaceIndexer(
         ScriptDatabase database, Func<PathResolver> resolverProvider, IFileSystem fileSystem, NameTable names,
         InsertCache? inserts = null, GameProfile? profile = null)
@@ -224,12 +237,35 @@ public sealed class WorkspaceIndexer
         get { return _resolverProvider(); }
     }
 
-    /// <summary>Indexes everything the resolver can reach. Returns the number of files indexed.</summary>
-    public async Task<IndexOutcome> IndexAsync(IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken)
+    /// <summary>
+    /// Indexes everything the resolver can reach. Returns the number of files indexed.
+    ///
+    /// One pass at a time — see <see cref="_passGate"/>. A caller that also needs
+    /// <see cref="ReloadRestoreSnapshot"/> should ask for it here via
+    /// <paramref name="reloadSnapshot"/> rather than calling it separately beforehand: done
+    /// outside the gate, a concurrent pass already past the reload could have its snapshot
+    /// replaced mid-read by this call's reload landing in between.
+    /// </summary>
+    /// <param name="ownedByEditor">
+    /// Whether a given path is open in the editor, in which case its buffer — already committed
+    /// by the text-sync handler — is the source of truth and this pass must not overwrite it with
+    /// what disk currently says. Null treats everything as closed, which is correct for a
+    /// workspace with nothing open yet. See <see cref="ProcessFile"/> for what "must not
+    /// overwrite" means precisely — the cache still gets the disk content either way.
+    /// </param>
+    public async Task<IndexOutcome> IndexAsync(
+        IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken,
+        bool reloadSnapshot = false, Func<string, bool>? ownedByEditor = null)
     {
+        await _passGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await IndexCoreAsync(mode, progress, cancellationToken).ConfigureAwait(false);
+            if ( reloadSnapshot )
+            {
+                ReloadRestoreSnapshot();
+            }
+
+            return await IndexCoreAsync(mode, progress, cancellationToken, ownedByEditor).ConfigureAwait(false);
         }
         finally
         {
@@ -238,10 +274,13 @@ public sealed class WorkspaceIndexer
             // pin the whole snapshot for the rest of the session — which is the case this exists
             // to remove.
             _restored = EmptyRestore;
+            _passGate.Release();
         }
     }
 
-    private async Task<IndexOutcome> IndexCoreAsync(IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken)
+    private async Task<IndexOutcome> IndexCoreAsync(
+        IndexingMode mode, IIndexProgressListener progress, CancellationToken cancellationToken,
+        Func<string, bool>? ownedByEditor)
     {
         if ( mode == IndexingMode.Off )
         {
@@ -285,7 +324,7 @@ public sealed class WorkspaceIndexer
             token.ThrowIfCancellationRequested();
 
             long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-            FileOutcome outcome = ProcessFile(path, allowRestore: true);
+            FileOutcome outcome = ProcessFile(path, allowRestore: true, ownedByEditor);
             TimeSpan fileElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks);
             Interlocked.Add(ref threadTicks, fileElapsed.Ticks);
             progress.FileIndexed(path, fileElapsed, outcome.Restored);
@@ -353,7 +392,7 @@ public sealed class WorkspaceIndexer
 
             foreach ( string path in stale )
             {
-                ProcessFile(path, allowRestore: false);
+                ProcessFile(path, allowRestore: false, ownedByEditor);
                 reparsedAfterHeaderChange++;
             }
         }
@@ -387,11 +426,64 @@ public sealed class WorkspaceIndexer
         return ProcessFile(path, allowRestore: false).Record;
     }
 
-    private FileOutcome ProcessFile(string path, bool allowRestore)
+    /// <summary>
+    /// Re-reads and re-parses one file WITHOUT committing anything — for the full-mode lint
+    /// sweep, which needs a <see cref="ParseResult"/> purely to run the cross-file lints (records
+    /// do not retain one) and must not perturb the database's structural state doing it. The
+    /// sweep already knows the record it is refreshing; this only has to reproduce its parse.
+    ///
+    /// Null on a read failure or an oversized file — the same two cases <see cref="ProcessFile"/>
+    /// treats as "nothing to analyse here" on the indexing path.
+    /// </summary>
+    public ParseResult? AnalyzeForLintSweep(string path)
+    {
+        string normalized = PathUtil.NormalizeAbsolute(path);
+
+        string content;
+        try
+        {
+            content = _fileSystem.ReadAllText(normalized);
+        }
+        catch ( IOException )
+        {
+            return null;
+        }
+        catch ( UnauthorizedAccessException )
+        {
+            return null;
+        }
+
+        if ( content.Length > MaxAnalysedCharacters )
+        {
+            return null;
+        }
+
+        ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
+        ResolutionContext context = Resolver.GetContext(normalized);
+
+        return ScriptAnalysis.Analyze(
+            normalized,
+            language,
+            SourceText.From(content),
+            new ResolverInsertProvider(Resolver, context, _fileSystem, _inserts),
+            _names,
+            profile: _profile,
+            headerCache: _inserts);
+    }
+
+    private FileOutcome ProcessFile(string path, bool allowRestore, Func<string, bool>? ownedByEditor = null)
     {
         string normalized = PathUtil.NormalizeAbsolute(path);
 
         ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
+
+        // Checked once and reused below: an open document's buffer is the source of truth, and
+        // the text-sync handler has already committed it. Reading DISK is still worth doing here
+        // — it is what the cache below wants, and what a GSH's insert-cache seeding wants — the
+        // one thing it must not do is overwrite the live record the editor owns, which on a cold
+        // start it would otherwise do unconditionally, seconds after (or before) the open
+        // document's own commit lands, whichever direction the race goes.
+        bool ownedByOpenDocument = ownedByEditor is not null && ownedByEditor(normalized);
 
         // Read BEFORE the content, and only for the file the seed below can apply to. A stamp taken
         // afterwards would date a write that landed between the two as already seen, and the seeded
@@ -450,7 +542,7 @@ public sealed class WorkspaceIndexer
                 // Null when the blob is corrupt, which falls through to a normal analysis below
                 // rather than failing the file — the same outcome a missing cache entry has.
                 restored = cached.Materialize();
-                if ( restored is not null )
+                if ( restored is not null && !ownedByOpenDocument )
                 {
                     _database.CommitRecord(restored);
                 }
@@ -488,8 +580,16 @@ public sealed class WorkspaceIndexer
 
         string relativePath = Resolver.GetScriptRelativePath(normalized, context);
 
+        // Own the record either way — the cache below wants disk's actual content regardless of
+        // who is open — but STORE it only when nobody has it open: an open document's buffer was
+        // already committed as isDirty by the text-sync handler, and this pass has no way to know
+        // whether that commit landed before or after this read, so it must never guess by
+        // overwriting. BuildRecord does the same work Commit does, minus the store write; the
+        // watched-file path skips the same way for the same reason (WatchedFileUpdater.Apply).
         PerfTracker.Begin("index.commit");
-        ScriptRecord record = _database.Commit(result, context, isDirty: false, relativePath);
+        ScriptRecord record = ownedByOpenDocument
+            ? ScriptDatabase.BuildRecord(result, context, isDirty: false, relativePath)
+            : _database.Commit(result, context, isDirty: false, relativePath);
         PerfTracker.End();
 
         PerfTracker.Begin("index.enqueue");
@@ -524,6 +624,17 @@ public sealed class WorkspaceIndexer
     public void NoteHeaderSetChanged()
     {
         _inserts.NoteHeaderSetChanged();
+    }
+
+    /// <summary>
+    /// Forgets every memoized answer the live resolver has given out — see
+    /// <see cref="PathResolver.InvalidateResolutionCache"/>. Indirected through the indexer, like
+    /// every other resolver access here, so a caller never has to know the resolver is reached
+    /// through <see cref="_resolverProvider"/> rather than held directly.
+    /// </summary>
+    public void InvalidateResolutionCache()
+    {
+        _resolverProvider().InvalidateResolutionCache();
     }
 
     /// <summary>Removes a deleted file from the database, persistent cache, and insert cache.</summary>

@@ -52,6 +52,16 @@ public sealed class WatchedFileUpdater
         ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
         bool ownsChangedFile = ownedByEditor is not null && ownedByEditor(normalized);
 
+        // A file appearing or vanishing can falsify any cached "does this exist" answer the
+        // resolver has given out — for a .gsc/.csc target as much as for a .gsh one, since
+        // #using/#include resolve through the same PathResolver.Resolve the GSH-only
+        // NoteHeaderSetChanged below cannot speak for. A plain content change cannot: nothing
+        // about whether a target EXISTS moved. See PathResolver.InvalidateResolutionCache.
+        if ( change != WatchedFileChange.Changed )
+        {
+            _indexer.InvalidateResolutionCache();
+        }
+
         if ( change == WatchedFileChange.Deleted )
         {
             // Read while the record is still there: it is how a file that inserts this header by

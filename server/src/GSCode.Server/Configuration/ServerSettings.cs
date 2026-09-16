@@ -9,7 +9,7 @@ namespace GSCode.Server.Configuration;
 /// </summary>
 public sealed class ServerSettings
 {
-    public string ServerLogLevel { get; set; } = "off";
+    public string ServerLogLevel { get; set; } = "warning";
     public string WorkspaceIndexingMode { get; set; } = "partial";
     public bool EnableWorkspaceCache { get; set; } = true;
     public bool RawEnabled { get; set; } = true;

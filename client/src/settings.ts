@@ -39,7 +39,7 @@ export interface GscodeSettings {
 export function readSettings(): GscodeSettings {
     const config = workspace.getConfiguration("gscode");
     return {
-        serverLogLevel: config.get<string>("serverLogLevel", "off"),
+        serverLogLevel: config.get<string>("serverLogLevel", "warning"),
         workspaceIndexingMode: config.get<string>("workspaceIndexingMode", "partial"),
         enableWorkspaceCache: config.get<boolean>("enableWorkspaceCache", true),
         "raw.enabled": config.get<boolean>("raw.enabled", true),

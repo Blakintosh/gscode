@@ -418,7 +418,7 @@
 				"properties": {
 					"gscode.serverLogLevel": {
 						"type": "string",
-						"default": "off",
+						"default": "warning",
 						"enum": [
 							"off",
 							"error",

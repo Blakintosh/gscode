@@ -467,7 +467,7 @@ public readonly record struct ScrValue
         return new ScrValue
         {
             Types = ScrTypeSet.Entity,
-            EntityKinds = kinds,
+            EntityKinds = DeduplicateKinds(kinds),
             Imprecision = imprecision,
             Truthiness = true,
         };
@@ -532,7 +532,7 @@ public readonly record struct ScrValue
             Types = types,
             Constant = left.Constant is { } a && right.Constant is { } b && a == b ? a : null,
             Truthiness = left.Truthiness == right.Truthiness ? left.Truthiness : null,
-            EntityKinds = UnionKinds(left.EntityKinds, right.EntityKinds),
+            EntityKinds = UnionEntityKinds(left, right),
             InstanceClass = string.Equals(left.InstanceClass, right.InstanceClass, StringComparison.OrdinalIgnoreCase)
                 ? left.InstanceClass
                 : null,
@@ -729,6 +729,40 @@ public readonly record struct ScrValue
         return null;
     }
 
+    /// <summary>
+    /// The entity kinds a Union should carry, computed from the whole values rather than just
+    /// their kind lists — a list alone cannot tell "not an entity" from "an entity of unknown
+    /// kind", and the two need opposite treatment on the side that DOES have a list.
+    /// </summary>
+    private static ImmutableArray<string> UnionEntityKinds(ScrValue left, ScrValue right)
+    {
+        bool leftIsEntity = left.MayBe(ScrTypeSet.Entity);
+        bool rightIsEntity = right.MayBe(ScrTypeSet.Entity);
+
+        // A side that cannot be an entity at all contributes nothing; the other side's kinds (or
+        // lack of them) stand on their own.
+        if ( !leftIsEntity )
+        {
+            return right.EntityKinds;
+        }
+
+        if ( !rightIsEntity )
+        {
+            return left.EntityKinds;
+        }
+
+        // Both sides may be an entity. An empty list means "kind unknown", and that uncertainty
+        // must survive the join: narrowing it down to the OTHER branch's specific kinds would
+        // claim a precision neither branch alone established — this is what let
+        // Union(unknownKind, OfEntity(["player"])) come out claiming "definitely player".
+        if ( left.EntityKinds.IsDefaultOrEmpty || right.EntityKinds.IsDefaultOrEmpty )
+        {
+            return ImmutableArray<string>.Empty;
+        }
+
+        return UnionKinds(left.EntityKinds, right.EntityKinds);
+    }
+
     private static ImmutableArray<string> UnionKinds(ImmutableArray<string> left, ImmutableArray<string> right)
     {
         if ( left.IsDefaultOrEmpty )
@@ -752,6 +786,33 @@ public readonly record struct ScrValue
         }
 
         return builder.ToImmutable();
+    }
+
+    /// <summary>
+    /// Collapses duplicate entries (case-insensitively), so <see cref="EntityKinds"/> is always a
+    /// SET going in. Without this, <c>KindsEqual</c>'s length+Contains check could not tell
+    /// <c>["player","player"]</c> apart from <c>["player","actor"]</c> (same length, every element
+    /// of the first found in the second via Contains — duplicates go uncounted) despite their hash
+    /// codes legitimately differing, breaking the Equals/GetHashCode contract a fixpoint's worklist
+    /// depends on.
+    /// </summary>
+    private static ImmutableArray<string> DeduplicateKinds(ImmutableArray<string> kinds)
+    {
+        if ( kinds.IsDefaultOrEmpty || kinds.Length == 1 )
+        {
+            return kinds;
+        }
+
+        ImmutableArray<string>.Builder builder = ImmutableArray.CreateBuilder<string>();
+        foreach ( string kind in kinds )
+        {
+            if ( !builder.Contains(kind, StringComparer.OrdinalIgnoreCase) )
+            {
+                builder.Add(kind);
+            }
+        }
+
+        return builder.Count == kinds.Length ? kinds : builder.ToImmutable();
     }
 
     private static bool KindsEqual(ImmutableArray<string> left, ImmutableArray<string> right)

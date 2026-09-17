@@ -396,6 +396,44 @@ public class ScrValueTests
         Assert.NotEqual(ScrValue.OfEntity(["player"]), ScrValue.OfEntity(["player", "actor"]));
     }
 
+    /// <summary>
+    /// An empty <see cref="ScrValue.EntityKinds"/> means "entity, kind unknown" — so a Union with a
+    /// branch that DOES know its kind must keep that uncertainty, never narrow to the other
+    /// branch's specific kinds. `Union` fell back to whichever side was non-empty, so
+    /// `Union(unknownKind, OfEntity(["player"]))` claimed "definitely player" even though the first
+    /// branch could have been any entity kind at all.
+    /// </summary>
+    [Fact]
+    public void UnionOfAnUnknownEntityKindWidensRatherThanNarrows()
+    {
+        ScrValue unknownKind = ScrValue.OfEntity([]);
+        ScrValue knownKind = ScrValue.OfEntity(["player"]);
+
+        ScrValue joined = ScrValue.Union(unknownKind, knownKind);
+
+        Assert.True(joined.EntityKinds.IsDefaultOrEmpty);
+    }
+
+    /// <summary>
+    /// A duplicate entry in <see cref="ScrValue.EntityKinds"/> must not change what the value means,
+    /// or the length+Contains check <c>KindsEqual</c> uses breaks: `["player","player"]` compared
+    /// unequal to `["player"]` (different lengths) and — worse — compared EQUAL to
+    /// `["player","actor"]` (same length, each element found via Contains, duplicates uncounted),
+    /// while their hash codes (XORed per element) legitimately differed — violating the
+    /// Equals/GetHashCode contract a dataflow fixpoint's worklist relies on.
+    /// </summary>
+    [Fact]
+    public void DuplicateEntityKindsCollapseRatherThanBreakingTheHashContract()
+    {
+        ScrValue withDuplicate = ScrValue.OfEntity(["player", "player"]);
+        ScrValue withoutDuplicate = ScrValue.OfEntity(["player"]);
+        ScrValue differentKind = ScrValue.OfEntity(["player", "actor"]);
+
+        Assert.Equal(withoutDuplicate, withDuplicate);
+        Assert.Equal(withoutDuplicate.GetHashCode(), withDuplicate.GetHashCode());
+        Assert.NotEqual(withDuplicate, differentKind);
+    }
+
     [Fact]
     public void ADefaultKindArrayEqualsAnEmptyOne()
     {

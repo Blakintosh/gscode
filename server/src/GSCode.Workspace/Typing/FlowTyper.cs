@@ -519,6 +519,9 @@ public sealed class FlowTyper
         MergeAlternatives(environment, environment, blockEnvironment);
     }
 
+    /// <summary>How many silent warm-up passes <see cref="MergeLoopBody"/> takes to reach a fixpoint.</summary>
+    private const int LoopFixpointPasses = 3;
+
     /// <summary>
     /// Walks a loop body as an alternative path: the body may run zero times, so its effects
     /// are joined with the environment as it stood before the loop.
@@ -543,7 +546,49 @@ public sealed class FlowTyper
             return;
         }
 
-        Dictionary<string, ScrValue> bodyEnvironment = Clone(environment);
+        // A SINGLE pass reads the body against the environment as it stood BEFORE the loop, so a
+        // read that happens before the corresponding write LATER IN THE SAME BODY — which a second
+        // iteration would see, since GSC has no per-iteration scoping — never does:
+        //
+        //   p = undefined;
+        //   for ( i = 0; i < 3; i++ ) { if ( i ) foreach ( e in p ) {} p = getplayers(); }
+        //
+        // `p` stays `undefined` at the foreach on every reading of this loop, though the second
+        // and third iterations reach it with whatever `getplayers()` left there. "A union only
+        // ever grows, so one join suffices" is true of the join itself but answers a different
+        // question — that join only folds in what flows out the FAR END of the body, once; it
+        // never feeds that back in as a starting point the body's OWN statements are read against.
+        //
+        // Found by silent warm-up passes (their own scratch hinted set and hint/write builders, so
+        // re-running the body to find the fixpoint does not also duplicate every hint and field
+        // write it records) that converge the environment REACHABLE AT THE TOP of the body across
+        // any number of prior iterations. The lattice only grows and is finite, so this always
+        // terminates; capped as a safety bound rather than a belief that real loops need it.
+        Dictionary<string, ScrValue> candidate = Clone(environment);
+        for ( int pass = 0; pass < LoopFixpointPasses; pass++ )
+        {
+            Dictionary<string, ScrValue> warmupBody = Clone(candidate);
+            WalkStatementSilently(body, warmupBody);
+            if ( increment is not null )
+            {
+                WalkStatementSilently(increment, warmupBody);
+            }
+
+            Dictionary<string, ScrValue> joined = Clone(environment);
+            MergeAlternatives(joined, joined, warmupBody);
+
+            if ( EnvironmentsEqual(joined, candidate) )
+            {
+                break;
+            }
+
+            candidate = joined;
+        }
+
+        // The real, hint-recording pass starts from the CONVERGED candidate rather than the raw
+        // pre-loop environment — the only difference from before the fix — so a read anywhere in
+        // the body sees what a prior iteration could have left there.
+        Dictionary<string, ScrValue> bodyEnvironment = Clone(candidate);
         WalkStatement(body, bodyEnvironment, hinted, hints, writes);
 
         if ( increment is not null )
@@ -551,9 +596,40 @@ public sealed class FlowTyper
             WalkStatement(increment, bodyEnvironment, hinted, hints, writes);
         }
 
-        // One join suffices: a union only ever grows, so iterating to a fixpoint could not narrow
-        // the answer this single pass gives.
         MergeAlternatives(environment, environment, bodyEnvironment);
+    }
+
+    /// <summary>Runs a warm-up pass with scratch bookkeeping, so nothing it finds is recorded twice.</summary>
+    private void WalkStatementSilently(AstNode statement, Dictionary<string, ScrValue> environment)
+    {
+        WalkStatement(
+            statement, environment,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            ImmutableArray.CreateBuilder<InferredAssignment>(),
+            ImmutableArray.CreateBuilder<FieldWrite>());
+    }
+
+    /// <summary>
+    /// Whether two environments agree on every value — a false negative (two structurally equal
+    /// values compared unequal, e.g. over <see cref="ScrValue.EntityKinds"/>' array identity) only
+    /// costs one more warm-up pass, never an incorrect fixpoint, since the pass count is capped.
+    /// </summary>
+    private static bool EnvironmentsEqual(Dictionary<string, ScrValue> first, Dictionary<string, ScrValue> second)
+    {
+        if ( first.Count != second.Count )
+        {
+            return false;
+        }
+
+        foreach ( KeyValuePair<string, ScrValue> entry in first )
+        {
+            if ( !second.TryGetValue(entry.Key, out ScrValue other) || !entry.Value.Equals(other) )
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

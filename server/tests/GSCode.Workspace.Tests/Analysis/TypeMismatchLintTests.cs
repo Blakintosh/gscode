@@ -80,6 +80,27 @@ public class TypeMismatchLintTests
     }
 
     [Fact]
+    public void AValueOnlySetLaterInALoopBody_IsNotReportedOnAnEarlierIteration()
+    {
+        // The reported gap: a single pass over a loop body reads it against the environment as it
+        // stood BEFORE the loop, so `p` looked certainly undefined at the foreach — even though a
+        // second iteration reaches it with whatever the tail assignment left there, and GSC has no
+        // per-iteration scoping to stop that from happening.
+        Assert.Empty(Lint(
+            "    p = undefined;\n"
+            + "    for ( i = 0; i < 3; i++ )\n"
+            + "    {\n"
+            + "        if ( i )\n"
+            + "        {\n"
+            + "            foreach ( e in p )\n"
+            + "            {\n"
+            + "            }\n"
+            + "        }\n\n"
+            + "        p = getplayers();\n"
+            + "    }"));
+    }
+
+    [Fact]
     public void EnumeratingSomethingCertainlyUndefinedIsReported()
     {
         // The gap the first version of this rule had. `foo = undefined;` is not a scalar, so a

@@ -117,7 +117,7 @@ public static class DatabaseQueries
     /// enumeration order, so the same edit can resolve to the raw base class one moment and the
     /// overridden one the next.
     /// </summary>
-    private static ImmutableArray<T> ApplyShadowing<T>(
+    public static ImmutableArray<T> ApplyShadowing<T>(
         ImmutableArray<T> matches,
         Func<T, ScriptRecord> recordOf,
         Func<T, string> keyNameOf)
@@ -754,8 +754,10 @@ public static class DatabaseQueries
         string askingPath,
         ImmutableArray<string> includedPaths)
     {
-        Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
+
+        ImmutableArray<(ScriptRecord Record, FunctionSymbol Function)>.Builder matches =
+            ImmutableArray.CreateBuilder<(ScriptRecord, FunctionSymbol)>();
 
         foreach ( ScriptRecord record in store.AllRecords )
         {
@@ -774,8 +776,18 @@ public static class DatabaseQueries
 
             foreach ( FunctionSymbol function in record.Functions )
             {
-                byName.TryAdd(function.KeyName, function);
+                matches.Add((record, function));
             }
+        }
+
+        // Overlay shadowing: a raw file and the mod overlay replacing it both match the same
+        // #include-relative path, and without this a bare Dictionary.TryAdd kept whichever one
+        // enumerated first — dead-code raw signature or live overlay one, by dictionary luck.
+        Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
+        foreach ( (ScriptRecord _, FunctionSymbol function) in ApplyShadowing(
+            matches.ToImmutable(), static m => m.Record, static m => m.Function.KeyName) )
+        {
+            byName.TryAdd(function.KeyName, function);
         }
 
         return [.. byName.Values];
@@ -803,8 +815,10 @@ public static class DatabaseQueries
         string askingPath,
         ImmutableArray<string> importedPaths)
     {
-        Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
+
+        ImmutableArray<(ScriptRecord Record, ClassSymbol Class)>.Builder matches =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ClassSymbol)>();
 
         // Only the handful of files that declare a class, not every record: this runs per keystroke
         // behind statement-scope completion.
@@ -830,8 +844,17 @@ public static class DatabaseQueries
 
             foreach ( ClassSymbol classSymbol in record.Classes )
             {
-                byName.TryAdd(classSymbol.KeyName, classSymbol);
+                matches.Add((record, classSymbol));
             }
+        }
+
+        // Overlay shadowing, as above: without it a mod's own override of a class is one arbitrary
+        // pick away from offering the raw base's members instead of the ones the mod actually ships.
+        Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
+        foreach ( (ScriptRecord _, ClassSymbol classSymbol) in ApplyShadowing(
+            matches.ToImmutable(), static m => m.Record, static m => m.Class.KeyName) )
+        {
+            byName.TryAdd(classSymbol.KeyName, classSymbol);
         }
 
         return [.. byName.Values];
@@ -958,7 +981,11 @@ public static class DatabaseQueries
             results.AddRange(FindGshReferences(database, askingContextId, key));
         }
 
-        return results.ToImmutable();
+        // Overlay shadowing again: a mod overlay and the raw copy it shadows can both declare (and
+        // reference) the SAME key at the SAME script-relative path — the engine only ever loads the
+        // overlay, but nothing upstream of here knows that, so both copies' entries are collected.
+        // Without this, go-to-definition/find-references on such a key shows both, one of them dead.
+        return ApplyShadowing(results.ToImmutable(), static r => r.Record, static _ => "");
     }
 
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferences(

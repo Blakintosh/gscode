@@ -55,9 +55,14 @@ public class WaittillBindingTests
     }
 
     [Fact]
-    public void WaittillMatchBindsTheSameWay()
+    public void WaittillMatchDoesNotBind()
     {
-        Assert.True(Binds("    self waittillmatch( \"done\", stage );", "stage"));
+        // Unlike waittill, waittillmatch's trailing argument is the value to MATCH against the
+        // notify's own parameters — a read. Confirmed against the shipped scripts: the trailing
+        // argument is overwhelmingly a string literal (`waittillmatch( "stepanim", "gravity on" )`),
+        // and a bind target can never be one. Binding it invented an assignment the code never made,
+        // which hid a genuinely unassigned name from UnassignedVariableLint.
+        Assert.False(Binds("    self waittillmatch( \"done\", stage );", "stage"));
     }
 
     [Fact]

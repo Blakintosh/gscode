@@ -81,16 +81,21 @@ public static class AstSearch
     }
 
     /// <summary>
-    /// Whether a callee is the <c>waittill</c> family, whose trailing arguments are BOUND rather
-    /// than read — the distinction any rule about reads or unused names has to make.
+    /// Whether a callee is <c>waittill</c>, whose trailing arguments are BOUND rather than read —
+    /// the distinction any rule about reads or unused names has to make.
+    ///
+    /// <c>waittillmatch</c> is NOT this: its trailing argument is the value to MATCH against the
+    /// notify's own parameters, which is a read. Confirmed against the shipped scripts —
+    /// `self waittillmatch( "stepanim", "gravity on" )` is the overwhelmingly common shape, and a
+    /// bind target can never be a string literal. Its own doc string already said as much
+    /// ("...whose parameters match the given values") before the binding code disagreed with it.
     ///
     /// A callable keyword parses as an <see cref="IdentifierNode"/> wrapping the keyword token, so
     /// the TOKEN KIND is what distinguishes it from a call to a function sharing the name.
     /// </summary>
     public static bool IsWaittill(ExprNode callee)
     {
-        return callee is IdentifierNode identifier
-            && identifier.Token.Kind is TokenKind.WaitTill or TokenKind.WaitTillMatch;
+        return callee is IdentifierNode identifier && identifier.Token.Kind == TokenKind.WaitTill;
     }
 
     /// <summary>

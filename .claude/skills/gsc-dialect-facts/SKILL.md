@@ -14,8 +14,8 @@ from other languages that GSC does not honour.
 self waittill( "damage", attacker, amount );
 ```
 
-`attacker` and `amount` are **outputs** the engine fills in, not values being read. Same for
-`waittillmatch`. The first argument is the event name and is a genuine read.
+`attacker` and `amount` are **outputs** the engine fills in, not values being read. The first
+argument is the event name and is a genuine read.
 
 A rule that treats these as reads reports `other`, `attacker`, `damage` and `notetrack` across
 half the codebase — that alone was 2,117 of the first 2,742 false positives the unassigned-variable
@@ -23,6 +23,15 @@ lint produced.
 
 Parsed as a `CallNode` whose `Callee` is an `IdentifierNode` wrapping the **keyword token**, so the
 token kind is what identifies it.
+
+**`waittillmatch` does NOT bind, despite the name.** This skill said "same for waittillmatch" for a
+while, and that sentence was itself the source of a bug: `AstSearch.IsWaittill` treated both
+keywords identically, so `self waittillmatch( "single anim", matchname )` bound `matchname` as a
+fake output instead of reading it. `waittillmatch`'s trailing argument is the value to MATCH
+against the notify's own parameters — confirmed against the shipped scripts, where it is
+overwhelmingly a string literal (`self waittillmatch( "stepanim", "gravity on" )` — hundreds of
+call sites across cod4/waw/mw2), and a bind target can never be one. Its own doc string already
+said "whose parameters match the given values" before the binding code disagreed with it.
 
 ## Subscripting an undefined variable CREATES it
 

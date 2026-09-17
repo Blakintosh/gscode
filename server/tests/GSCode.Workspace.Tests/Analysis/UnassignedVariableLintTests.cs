@@ -61,6 +61,19 @@ public class UnassignedVariableLintTests
     }
 
     [Fact]
+    public void AWaittillMatchArgument_IsAReadNotAnOutput()
+    {
+        // waittillmatch's trailing argument is the value to MATCH against the notify's own
+        // parameters — a read, unlike waittill, which BINDS its trailing arguments as outputs. The
+        // shared helper treated both the same, so a name never assigned anywhere and passed as the
+        // match value was silently treated as its own assignment.
+        string source = "function f()\n{\n\tself waittillmatch( \"single anim\", matchname );\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+        Assert.Equal(GscDiagnosticCode.VariableNeverAssigned, diagnostic.Code);
+    }
+
+    [Fact]
     public void AFileScopeConstantIsVisibleToEveryFunction()
     {
         // The Infinity Ward dialects allow `NAME = value;` between declarations, readable from all

@@ -820,6 +820,20 @@ public sealed class FlowTyper
             return;
         }
 
+        // `x++`/`x--` on a plain local reads and writes it in the same step, same as a member's.
+        // Left unhandled, this fell to the bare-expression branch below: typed for its value (which
+        // IS correct — see the PostfixNode arm of TypeOf) and then thrown away, so the environment
+        // kept whatever `x` was BEFORE the increment — including a stale CONSTANT, since
+        // `old.Restrict(Number)` is a no-op once the value is already a number.
+        if ( IncrementedIdentifier(expression) is { } incrementedLocal )
+        {
+            string incrementedName = incrementedLocal.Token.Text;
+            ScrValue previousValue = environment.TryGetValue(incrementedName, out ScrValue priorValue) ? priorValue : ScrValue.Unknown;
+            ScrBinaryOp incrementOp = IsIncrement(expression) ? ScrBinaryOp.Add : ScrBinaryOp.Subtract;
+            environment[incrementedName] = ScrOperators.Apply(incrementOp, previousValue, ScrValue.OfConstant(ScrConstant.OfInt(1))).Value;
+            return;
+        }
+
         // Parentheses around an assignment are how the deliberate form is written — `if ( ( x = f() ) )`
         // is what suppresses 3013 — so they must not hide the assignment from the walk.
         while ( expression is ParenNode paren )
@@ -904,10 +918,29 @@ public sealed class FlowTyper
             return;
         }
 
-        // Only plain `local = value` (the '=' operator) yields a type; compound ops keep
-        // the existing type.
-        if ( assignment.Operator != TokenKind.Assign || assignment.Target is not IdentifierNode target )
+        if ( assignment.Target is not IdentifierNode target )
         {
+            return;
+        }
+
+        // A compound assignment (`+=` and friends) both reads and writes: `x += 0.5` narrows the
+        // environment the same way `x = x + 0.5` would. Left unhandled, this was silently a no-op —
+        // the value was never even typed for effects — so `x = 0; x += 0.5;` kept reporting `int`
+        // for x, though adding a float promotes the result.
+        if ( assignment.Operator != TokenKind.Assign )
+        {
+            if ( TryMapCompoundAssign(assignment.Operator, out ScrBinaryOp compoundOp) )
+            {
+                ScrValue rhs = TypeOf(assignment.Value, environment);
+                string compoundName = target.Token.Text;
+                ScrValue previous = environment.TryGetValue(compoundName, out ScrValue existing) ? existing : ScrValue.Unknown;
+                environment[compoundName] = ScrOperators.Apply(compoundOp, previous, rhs).Value;
+            }
+            else
+            {
+                TypeOf(assignment.Value, environment);
+            }
+
             return;
         }
 
@@ -952,6 +985,52 @@ public sealed class FlowTyper
     private static bool IsIncrementOrDecrement(TokenKind kind)
     {
         return kind == TokenKind.PlusPlus || kind == TokenKind.MinusMinus;
+    }
+
+    /// <summary>The local a ++/-- applies to, or null when the expression is not one (or applies to a member).</summary>
+    private static IdentifierNode? IncrementedIdentifier(ExprNode expression)
+    {
+        if ( expression is PostfixNode postfix && IsIncrementOrDecrement(postfix.Operator) )
+        {
+            return postfix.Operand as IdentifierNode;
+        }
+
+        if ( expression is PrefixNode prefix && IsIncrementOrDecrement(prefix.Operator) )
+        {
+            return prefix.Operand as IdentifierNode;
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether a ++/-- expression is the incrementing half, rather than the decrementing one.</summary>
+    private static bool IsIncrement(ExprNode expression)
+    {
+        return expression switch
+        {
+            PostfixNode postfix => postfix.Operator == TokenKind.PlusPlus,
+            PrefixNode prefix => prefix.Operator == TokenKind.PlusPlus,
+            _ => true,
+        };
+    }
+
+    /// <summary>Maps a compound-assignment token onto the binary operator it applies before storing.</summary>
+    private static bool TryMapCompoundAssign(TokenKind kind, out ScrBinaryOp op)
+    {
+        switch ( kind )
+        {
+            case TokenKind.PlusAssign: op = ScrBinaryOp.Add; return true;
+            case TokenKind.MinusAssign: op = ScrBinaryOp.Subtract; return true;
+            case TokenKind.StarAssign: op = ScrBinaryOp.Multiply; return true;
+            case TokenKind.SlashAssign: op = ScrBinaryOp.Divide; return true;
+            case TokenKind.PercentAssign: op = ScrBinaryOp.Modulo; return true;
+            case TokenKind.AmpersandAssign: op = ScrBinaryOp.BitAnd; return true;
+            case TokenKind.PipeAssign: op = ScrBinaryOp.BitOr; return true;
+            case TokenKind.CaretAssign: op = ScrBinaryOp.BitXor; return true;
+            case TokenKind.ShiftLeftAssign: op = ScrBinaryOp.ShiftLeft; return true;
+            case TokenKind.ShiftRightAssign: op = ScrBinaryOp.ShiftRight; return true;
+            default: op = default; return false;
+        }
     }
 
     /// <summary>

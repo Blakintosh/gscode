@@ -371,6 +371,47 @@ public class FlowTyperTests
         Assert.Equal(ScrType.Int, hover.Type);
     }
 
+    // --- Compound assignment and ++/-- apply the operator, rather than keeping the old value ---
+
+    [Fact]
+    public void ACompoundAssignment_AppliesTheOperatorRatherThanKeepingTheOldType()
+    {
+        // The reported gap: `x = 0; x += 0.5;` kept reporting `int` for x, though adding a float
+        // promotes the result — compound assignment was never typed at all, so the environment
+        // still held whatever `x` was before the `+=`.
+        string source = "function f()\n{\n\tx = 0;\n\tx += 0.5;\n\tuse( x );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Float, hover.Type);
+    }
+
+    [Fact]
+    public void AnIncrement_AppliesTheOperatorRatherThanKeepingTheStaleConstant()
+    {
+        // `i = 0; ... i++;` kept the CONSTANT 0 for the rest of the flow: `x++` as a bare statement
+        // was typed for its value and then thrown away, never written back to the environment.
+        string source = "function f()\n{\n\ti = 0;\n\ti++;\n\tuse( i );\n}\n";
+
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        Assert.True(NewTyper().TryGetValueAt(result, new Position(4, 6), out ScrValue value));
+        Assert.Equal(ScrType.Int, value.ToScrType());
+        Assert.Equal(1, value.Constant!.Value.Integer);
+    }
+
+    [Fact]
+    public void ADecrement_AppliesTheOperator()
+    {
+        string source = "function f()\n{\n\ti = 5;\n\ti--;\n\tuse( i );\n}\n";
+
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        Assert.True(NewTyper().TryGetValueAt(result, new Position(4, 6), out ScrValue value));
+        Assert.Equal(4, value.Constant!.Value.Integer);
+    }
+
     // --- Subscript writes: `a[i] = v` says as much about `a` as `a = value` does ---
 
     [Fact]

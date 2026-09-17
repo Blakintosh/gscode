@@ -148,14 +148,26 @@ public static class DiagnosticMessages
             "'{0}' is an engine global and cannot be assigned to; write to a field on it instead, as in '{0}.field = value'.",
     }.ToFrozenDictionary();
 
-    /// <summary>Formats the template for a code with its arguments.</summary>
+    /// <summary>
+    /// Formats the template for a code with its arguments.
+    ///
+    /// A template with no placeholders of its own (like
+    /// <see cref="GscDiagnosticCode.UnterminatedBlock"/>'s) still spells a literal brace as
+    /// '{{'/'}}', string.Format's own escape for it — so returning the template unchanged when
+    /// there are no arguments, as this used to, left those escapes in the message the user sees.
+    /// But calling <see cref="string.Format(IFormatProvider?, string, object?[])"/> unconditionally
+    /// is not the fix either: a template that DOES have a placeholder throws FormatException if it
+    /// is ever formatted with zero arguments, since string.Format still looks for '{0}' in the
+    /// argument list. Zero arguments only happens for a template with none of its own, so the
+    /// escapes are unescaped by hand in that case instead.
+    /// </summary>
     public static string Format(GscDiagnosticCode code, params object[] arguments)
     {
         string template = s_templates[code];
 
         if ( arguments.Length == 0 )
         {
-            return template;
+            return template.Replace("{{", "{").Replace("}}", "}");
         }
 
         return string.Format(System.Globalization.CultureInfo.InvariantCulture, template, arguments);

@@ -277,7 +277,13 @@ public static class ScrOperators
             return new ScrOperatorResult(ScrValue.Of(ScrTypeSet.Int), ScrOperandDiagnosis.DivisionByZero);
         }
 
-        if ( left.Constant is { Type: ScrTypeSet.Int } a && right.Constant is { Type: ScrTypeSet.Int } b && b.Integer != 0 )
+        // long.MinValue % -1 throws OverflowException in .NET regardless of checked/unchecked
+        // context, because the mathematical result (2^63) does not fit back into a signed 64-bit
+        // integer. Reachable purely through folding — e.g. `(-9223372036854775807 - 1) % -1` — so
+        // this pass declines to fold it rather than letting the exception take down analysis of
+        // the whole file.
+        if ( left.Constant is { Type: ScrTypeSet.Int } a && right.Constant is { Type: ScrTypeSet.Int } b
+            && b.Integer != 0 && !(a.Integer == long.MinValue && b.Integer == -1) )
         {
             return ScrOperatorResult.Ok(ScrValue.OfConstant(ScrConstant.OfInt(a.Integer % b.Integer)));
         }

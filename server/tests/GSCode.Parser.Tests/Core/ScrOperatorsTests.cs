@@ -247,6 +247,22 @@ public class ScrOperatorsTests
         Assert.Equal(ScrOperandDiagnosis.DivisionByZero, Apply(op, Int(10), Int(0)).Diagnosis);
     }
 
+    /// <summary>
+    /// `long.MinValue % -1` throws OverflowException in .NET regardless of checked/unchecked
+    /// context — the one input pair '%' cannot evaluate, since the mathematical result
+    /// (2^63, positive) does not fit back into a signed 64-bit integer. Reachable purely through
+    /// folding, e.g. `(-9223372036854775807 - 1) % -1`, and the exception used to propagate out of
+    /// Apply and take down analysis of the whole file rather than staying a modulo this pass
+    /// declines to fold.
+    /// </summary>
+    [Fact]
+    public void MinValueModuloNegativeOneDoesNotThrow()
+    {
+        ScrOperatorResult result = Apply(ScrBinaryOp.Modulo, Int(long.MinValue), Int(-1));
+
+        Assert.Equal(ScrTypeSet.Int, result.Value.Types);
+    }
+
     [Fact]
     public void AZeroReachedByFoldingIsCaught()
     {

@@ -1278,6 +1278,37 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void FunctionDeclaredInThisFile_IsOfferedWithoutWaitingForReindex()
+    {
+        // Unlike classes just above, the own-namespace and include-scope function queries read
+        // only the STORE — the last successfully indexed parse — never the live extraction. A
+        // function typed a moment ago is missing from the list until the record catches up.
+        string text = "#namespace game;\n\nfunction helper_just_typed()\n{\n}\n\nfunction run()\n{\n    \n}\n";
+
+        Assert.True(HasLabel(CompleteInMain(text, new Position(8, 4)), "helper_just_typed"));
+    }
+
+    [Fact]
+    public void FunctionDeclaredInThisFile_OnAMergeDialect_IsOfferedWithoutWaitingForReindex()
+    {
+        // The merge-dialect arm (FunctionsInIncludeScope) has the same gap: its "same file" reach
+        // is answered from the store too.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\vehicles.gsc", ClassFile);
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        GameProfile mw2 = GameProfile.ByName("mw2")!;
+        string text = "helper_just_typed()\n{\n}\n\nrun()\n{\n    \n}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            @$"{Raw}\maps\main.gsc", GSCode.Core.Symbols.ScriptLanguage.Gsc, SourceText.From(text),
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable(), mw2);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(6, 4), profile: mw2);
+
+        Assert.True(HasLabel(entries, "helper_just_typed"));
+    }
+
+    [Fact]
     public void ImportedClass_IsOfferedOnlyOnce()
     {
         // The file's own extraction and the store both contribute; the union must dedupe.

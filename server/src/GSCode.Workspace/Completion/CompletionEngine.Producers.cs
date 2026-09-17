@@ -946,13 +946,32 @@ public sealed partial class CompletionEngine
         //
         // The include scope alone is the answer for a merge dialect: this file, plus the files it
         // actually includes.
+        //
+        // The file's own functions come from the live extraction FIRST — same treatment as the
+        // classes just below — so one typed a moment ago completes before the record is
+        // reindexed. Both branches below still read the STORE for "this file's own functions" too
+        // (a namespace dialect through its own-namespace loop, a merge dialect through
+        // FunctionsInIncludeScope's same-file arm), so seenFunctions keeps that from adding a
+        // second, stale-shaped row for a name the live extraction already offered.
+        HashSet<string> seenFunctions = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( FunctionSymbol function in result.Extraction.Functions )
+        {
+            if ( seenFunctions.Add(function.KeyName) )
+            {
+                entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+            }
+        }
+
         if ( game.ResolvesByNamespace )
         {
             foreach ( string ns in ownNamespaces )
             {
                 foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, ownNamespaces) )
                 {
-                    entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                    if ( seenFunctions.Add(function.KeyName) )
+                    {
+                        entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                    }
                 }
             }
 
@@ -966,6 +985,9 @@ public sealed partial class CompletionEngine
                 // reachable by already knowing it existed.
                 entries.Add(NamespaceEntry(ns));
 
+                // Not gated on seenFunctions: this is a DIFFERENT reachability path (through an
+                // import, inserted qualified) from the bare-name entry above, even for the same
+                // function name.
                 foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(
                     store, contextId, result.FilePath, ns, ownNamespaces) )
                 {
@@ -978,7 +1000,10 @@ public sealed partial class CompletionEngine
             foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInIncludeScope(
                 store, contextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result)) )
             {
-                entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                if ( seenFunctions.Add(function.KeyName) )
+                {
+                    entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                }
             }
         }
 

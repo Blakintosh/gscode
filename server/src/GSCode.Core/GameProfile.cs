@@ -323,7 +323,8 @@ public sealed partial record GameProfile
     /// it <c>vararg</c> and it is an ARRAY: <c>foreach ( str_flag in vararg )</c> and
     /// <c>vararg.size</c> are how the stock scripts use it (array_shared, util_shared, scene_shared
     /// and animation_shared all do). Derived from the keyword set, so the name lives in ONE place —
-    /// the lexer table — and a rule that needs to recognise the pack does it by token kind.
+    /// a profile's <see cref="Keywords"/> — and a rule that needs to recognise the pack does it by
+    /// token kind rather than a second hardcoded spelling of the word.
     /// </summary>
     public bool HasVarargBinding => HasKeyword("vararg");
 

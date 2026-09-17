@@ -24,7 +24,14 @@ public static class PerfTracker
     private readonly record struct OpenScope(string Name, long StartTimestamp);
 
     /// <summary>
-    /// Opens a timing scope on the current thread. Must be paired with a later <see cref="End"/>.
+    /// Opens a timing scope on the current thread. Must be paired with a later <see cref="End"/>
+    /// on the SAME thread — the stack is <c>[ThreadStatic]</c>, so a Begin/End pair split across
+    /// an <c>await</c> that resumes on a different thread pops whatever that thread's own
+    /// innermost scope happens to be, silently attributing the wrong timing to the wrong name. An
+    /// exception thrown between Begin and End leaves the scope open and never recorded at all
+    /// unless the caller wraps the pair in <c>try</c>/<c>finally</c>; every call site in this
+    /// codebase today is a synchronous block with no await and no throwing code between its Begin
+    /// and its End, which is what keeps this safe without either guard.
     /// </summary>
     [Conditional("GSCODE_INSTRUMENTATION")]
     public static void Begin(string scopeName)
@@ -35,7 +42,8 @@ public static class PerfTracker
 
     /// <summary>
     /// Closes the innermost open scope on the current thread and records its elapsed time.
-    /// An unmatched End is ignored rather than throwing.
+    /// An unmatched End is ignored rather than throwing. See <see cref="Begin"/> for the
+    /// same-thread, no-await-between requirement this relies on.
     /// </summary>
     [Conditional("GSCODE_INSTRUMENTATION")]
     public static void End()

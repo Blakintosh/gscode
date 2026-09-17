@@ -94,6 +94,12 @@ public enum ScrTypeSet : ulong
 /// transpiler must still emit something for every expression, so "unknown" is only actionable when
 /// it comes with a reason — a parameter nothing has told us about is a different problem from two
 /// branches that genuinely disagree, and they have different fallbacks.
+///
+/// Declaration order here IS the order <see cref="ScrValue.Union"/> picks between two disagreeing
+/// reasons (it keeps the larger raw enum value) — a deliberate tie-break, not a genuine severity
+/// ranking. No measurement backs one reason mattering more than another; a member's position is
+/// free to move without changing what any rule reports, since nothing reads the reason for its
+/// ORDER outside that one tie-break.
 /// </remarks>
 public enum ScrImprecision
 {
@@ -509,8 +515,10 @@ public readonly record struct ScrValue
     /// different text to emit.
     ///
     /// A constant survives only if both sides carry the same one. Truthiness survives only if both
-    /// agree. Entity kinds union. Imprecision takes the more severe side, and a disagreement in
-    /// types is itself recorded as <see cref="ScrImprecision.BranchDisagreement"/>.
+    /// agree. Entity kinds union. Imprecision takes the larger raw enum value as an arbitrary but
+    /// deterministic tie-break (see <see cref="ScrImprecision"/>'s own remarks — this is not a
+    /// severity ranking), and a disagreement in types is itself recorded as
+    /// <see cref="ScrImprecision.BranchDisagreement"/>.
     /// </summary>
     public static ScrValue Union(ScrValue left, ScrValue right)
     {
@@ -900,6 +908,14 @@ public static class ScrValues
     ///
     /// The whole dialect fork in one predicate: structs, entities and class instances alias in every
     /// game, and arrays alias only where <c>GameProfile.ArraysPassedByReference</c> holds.
+    ///
+    /// Takes ONE exact bit, deliberately — <c>type == ScrTypeSet.Array</c> is exact equality, not
+    /// <c>MustBe</c>/<c>MayBe</c>, so a union like <c>Array|Undefined</c> answers false here even
+    /// though it MAY be an array. No caller exists yet (this is unused API surface today); when one
+    /// arrives it decides the real question — an array-parameter mutation lint needs MayBe (any
+    /// chance of aliasing matters), while a rewriter emitting a definite by-ref parameter needs
+    /// MustBe — and should route through <see cref="ScrValue.MayBe"/>/<see cref="ScrValue.MustBe"/>
+    /// rather than call this on a raw union.
     /// </summary>
     public static bool IsByReference(ScrTypeSet type, bool arraysByReference)
     {

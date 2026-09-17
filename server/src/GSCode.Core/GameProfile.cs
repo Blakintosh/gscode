@@ -65,6 +65,30 @@ public enum ScriptDocStyle
 /// </summary>
 public sealed partial record GameProfile
 {
+    /// <summary>
+    /// Identity equality by <see cref="Id"/> alone, rather than the compiler-generated structural
+    /// equality every field would otherwise take part in.
+    ///
+    /// <see cref="GetKeywordIndex"/> builds and caches <see cref="_keywordIndex"/> lazily on first
+    /// use, and the compiler-generated record equality compares private fields along with public
+    /// ones — so two `with`-copies of the SAME profile, identical in every value a caller can see,
+    /// compared unequal the moment one of them answered an <see cref="IsKeyword"/> call and the
+    /// other had not. <see cref="Id"/> is unique across the whole lineage (see
+    /// <c>EveryShortNameIsUnique</c>'s sibling assertion) and is exactly what identifies a profile
+    /// — two profiles sharing an Id are the same game by construction, nothing here ever builds one
+    /// otherwise.
+    /// </summary>
+    public bool Equals(GameProfile? other)
+    {
+        return other is not null && string.Equals(Id, other.Id, StringComparison.Ordinal);
+    }
+
+    /// <summary>Agrees with <see cref="Equals(GameProfile?)"/> — hashes by Id alone.</summary>
+    public override int GetHashCode()
+    {
+        return StringComparer.Ordinal.GetHashCode(Id);
+    }
+
     /// <summary>Short identifier used in logs and cache metadata, e.g. "t7".</summary>
     public required string Id { get; init; }
 

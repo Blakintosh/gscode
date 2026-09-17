@@ -418,4 +418,29 @@ public class GameProfileTests
     {
         Assert.Equal(GameProfile.All.Length, GameProfile.All.Select(static profile => profile.ShortName).Distinct().Count());
     }
+
+    /// <summary>
+    /// Two logically identical profiles must compare equal REGARDLESS of what a caller happened to
+    /// ask one of them before the comparison. The compiler-generated record equality compares
+    /// every private field too, including the lazily-built keyword index cache — so calling
+    /// IsKeyword on one `with`-copy and not the other made two structurally identical profiles
+    /// compare unequal, purely from an incidental prior method call rather than any real
+    /// difference. Nothing compares profiles today, but that is exactly the kind of bug that
+    /// stays invisible until the day something starts (a profile used as a dictionary key, or in
+    /// an assertion), and by then it looks like a mystery rather than a one-line cause.
+    /// </summary>
+    [Fact]
+    public void EqualityIsNotDisturbedByBuildingTheKeywordIndexCache()
+    {
+        GameProfile original = GameProfile.Cod4 with { };
+        GameProfile copy = GameProfile.Cod4 with { };
+
+        Assert.Equal(original, copy);
+
+        // Only `original` builds its lazy keyword index cache here.
+        Assert.True(original.IsKeyword("if"));
+
+        Assert.Equal(original, copy);
+        Assert.Equal(original.GetHashCode(), copy.GetHashCode());
+    }
 }

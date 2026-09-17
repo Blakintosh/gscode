@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -35,8 +36,14 @@ public sealed class SignatureEngine
     }
 
     /// <summary>Resolves signature help at a position, or null when not inside a call.</summary>
-    public SignatureResult? Resolve(ParseResult result, string contextId, Position position)
+    /// <param name="profile">
+    /// The dialect to resolve for; defaults to the active one. Explicit for the same reason
+    /// <c>CompletionEngine.Complete</c> takes it — a test naming its dialect does not have to
+    /// mutate process-global state.
+    /// </param>
+    public SignatureResult? Resolve(ParseResult result, string contextId, Position position, GameProfile? profile = null)
     {
+        GameProfile game = profile ?? GameProfile.Active;
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
         int offset = result.Text.GetOffset(position);
 
@@ -77,7 +84,7 @@ public sealed class SignatureEngine
         }
 
         SignatureResult? scriptSignature = TryScriptFunction(
-            result, contextId, namespaceName, calleeName, site.Value.ActiveParameter, position, arrow);
+            result, contextId, namespaceName, calleeName, site.Value.ActiveParameter, position, arrow, game);
         if ( scriptSignature is not null )
         {
             return scriptSignature;
@@ -150,7 +157,7 @@ public sealed class SignatureEngine
 
     private SignatureResult? TryScriptFunction(
         ParseResult result, string contextId, string? namespaceName, string calleeName, int activeParameter,
-        Position position, ArrowReceiver arrow)
+        Position position, ArrowReceiver arrow, GameProfile game)
     {
         LanguageStore store = _database.StoreFor(result.Language);
         string keyName = calleeName.ToLowerInvariant();
@@ -192,10 +199,35 @@ public sealed class SignatureEngine
             return null;
         }
 
-        ImmutableArray<ResolvedFunction> functions = namespaceName is not null
-            ? DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: DatabaseQueries.DeclaredNamespaces(result))
-            : LookupUnqualified(result, store, contextId, keyName);
+        if ( namespaceName is not null )
+        {
+            ImmutableArray<ResolvedFunction> qualified = DatabaseQueries.LookupFunctions(
+                store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: DatabaseQueries.DeclaredNamespaces(result));
 
+            return qualified.Length == 0 ? null : BuildSignature(qualified[0].Function, qualified[0].OwnerClass, activeParameter);
+        }
+
+        // A merge dialect (#include: CoD4/WaW/MW2/BO1) has no #namespace, so SymbolExtractor
+        // defaults every function's namespace to its FILE NAME STEM — a resolution fallback that
+        // names no scope anybody wrote. Asking by declared (stem) namespace here, as the namespace
+        // dialect does below, would miss every function reached only through #include, which is how
+        // these games bring another file's functions into scope. Mirrors the split completion
+        // already makes in CompletionEngine.Producers.cs.
+        if ( !game.ResolvesByNamespace )
+        {
+            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInIncludeScope(
+                store, contextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result)) )
+            {
+                if ( string.Equals(function.KeyName, keyName, StringComparison.Ordinal) )
+                {
+                    return BuildSignature(function, null, activeParameter);
+                }
+            }
+
+            return null;
+        }
+
+        ImmutableArray<ResolvedFunction> functions = LookupUnqualified(result, store, contextId, keyName);
         if ( functions.Length == 0 )
         {
             return null;

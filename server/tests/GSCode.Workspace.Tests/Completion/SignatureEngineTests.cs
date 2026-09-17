@@ -1,4 +1,5 @@
 using GSCode.Core;
+using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
@@ -212,6 +213,50 @@ public class SignatureEngineTests
         Position afterParen = new(3, 23);
 
         Assert.Null(engine.Resolve(result, "raw", afterParen));
+    }
+
+    // --- Merge dialects (#include) ---
+    //
+    // CoD4/WaW/MW2 have no #namespace: SymbolExtractor defaults every function's namespace to the
+    // file's own name stem, which names no scope anybody wrote. LookupUnqualified only ever asked
+    // the file's OWN declared (stem) namespaces, so a function reached only through #include never
+    // resolved here — unlike completion, which asks FunctionsInIncludeScope for exactly this case.
+
+    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
+
+    [Fact]
+    public void AFunctionReachedOnlyThroughInclude_StillGetsSignatureHelp()
+    {
+        const string includedFile = "exploder_playSound( alias )\n{\n}\n";
+        const string editedFile =
+            "#include common_scripts\\utility;\n"
+            + "\n"
+            + "run()\n"
+            + "{\n"
+            + "    exploder_playSound( \n"
+            + "}\n";
+
+        string raw = @"C:\iw4";
+        string editedPath = @$"{raw}\maps\main.gsc";
+
+        TestWorkspace.Built workspace = TestWorkspace.Build(
+            Mw2,
+            raw,
+            (@$"{raw}\common_scripts\utility.gsc", includedFile),
+            (editedPath, editedFile));
+
+        string api = Path.Combine(AppContext.BaseDirectory, "Api");
+        SignatureEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, Mw2));
+
+        ParseResult result = ScriptAnalysis.Analyze(
+            editedPath, ScriptLanguage.Gsc, SourceText.From(editedFile), NullInsertProvider.Instance, new NameTable(), Mw2);
+
+        // Line 4, right after the open paren.
+        SignatureResult? signature = engine.Resolve(result, "raw", new Position(4, 24), Mw2);
+
+        Assert.NotNull(signature);
+        Assert.Single(signature!.Parameters);
+        Assert.Equal("alias", signature.Parameters[0].Label);
     }
 }
 

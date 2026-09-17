@@ -124,6 +124,24 @@ public class SqliteCacheTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Microsoft.Data.Sqlite pools connections by default: disposing one returns it to the pool
+    /// rather than closing the OS file handle. On Windows that leaves the database file locked
+    /// after DisposeAsync, so a clear-cache command run right after closing the workspace deletes
+    /// nothing and reports the file "already absent or still locked" while it is neither.
+    /// </summary>
+    [Fact]
+    public async Task AfterDispose_TheDatabaseFileCanActuallyBeDeleted()
+    {
+        await using ( SqliteCache cache = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            cache.Enqueue(SampleRecord(@"c:\ws\scripts\sample.gsc", 1));
+        }
+
+        Assert.True(SqliteCache.DeleteDatabase(_dbPath));
+        Assert.False(File.Exists(_dbPath));
+    }
+
     [Fact]
     public async Task IdentityMismatch_WipesTheCache()
     {

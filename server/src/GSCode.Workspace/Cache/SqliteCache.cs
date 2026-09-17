@@ -131,6 +131,13 @@ public sealed class SqliteCache : IAsyncDisposable
         {
             DataSource = databasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
+
+            // Microsoft.Data.Sqlite pools connections by default: DisposeAsync would return this
+            // one to the pool rather than closing its OS file handle, leaving the database file
+            // locked on Windows. There is exactly one connection per SqliteCache and it is never
+            // reopened, so pooling buys nothing here — only the surprise that DeleteDatabase can
+            // fail right after DisposeAsync.
+            Pooling = false,
         }.ToString());
         connection.Open();
 

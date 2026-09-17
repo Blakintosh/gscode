@@ -229,6 +229,22 @@ public sealed partial class CompletionEngine
             int nsIndex = PreviousSignificant(tokens, triggerIndex);
             if ( nsIndex >= 0 && tokens[nsIndex].Kind == TokenKind.Identifier )
             {
+                // An inline path call writes its qualifier as a whole PATH
+                // (`maps\mp\_utility::`), not a single identifier — but the token right before
+                // '::' is still just its LAST segment, and these dialects have no #namespace, so
+                // SymbolExtractor defaults every function's namespace to its own file's name
+                // stem. Asking by that bare stem alone reaches every file sharing it, which is
+                // exactly MW2's own shape: `maps\_utility.gsc` and `maps\mp\_utility.gsc`.
+                if ( game.HasInlinePathCalls )
+                {
+                    string writtenPath = InlinePathBefore(result.Text, tokens[nsIndex].End);
+                    if ( writtenPath.Length > 0 )
+                    {
+                        return InlinePathFunctionCompletions(
+                            result, contextId, writtenPath, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);
+                    }
+                }
+
                 string ns = tokens[nsIndex].GetText(result.Text).ToString().ToLowerInvariant();
                 return NamespaceFunctionCompletions(
                     result, contextId, ns, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);

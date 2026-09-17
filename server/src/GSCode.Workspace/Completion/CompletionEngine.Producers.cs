@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -375,6 +376,44 @@ public sealed partial class CompletionEngine
             if ( seen.Add(method.Method.KeyName) )
             {
                 entries.Add(MethodEntry(method, callSuffix, parameterHints));
+            }
+        }
+
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// What may follow an inline path qualifier (<c>maps\mp\_utility::</c>) on a merge dialect: the
+    /// functions of the ONE file that path names, by relative path rather than by bare name stem.
+    ///
+    /// Namespace matching would ask for functions by the qualifier's LAST segment alone
+    /// (<c>_utility</c>), which reaches every file sharing that stem — exactly MW2's own shape,
+    /// where <c>maps\_utility.gsc</c> and <c>maps\mp\_utility.gsc</c> both default their functions'
+    /// namespace to the name they share.
+    /// </summary>
+    private ImmutableArray<CompletionEntry> InlinePathFunctionCompletions(
+        ParseResult result, string contextId, string writtenPath, string callSuffix, bool parameterHints)
+    {
+        LanguageStore store = _database.StoreFor(result.Language);
+        string normalizedWritten = PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(writtenPath));
+
+        ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach ( ScriptRecord record in store.AllRecords )
+        {
+            if ( !ScriptDatabase.CanSee(contextId, record.ContextId)
+                || PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(record.RelativePath)) != normalizedWritten )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                if ( seen.Add(function.KeyName) )
+                {
+                    entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                }
             }
         }
 

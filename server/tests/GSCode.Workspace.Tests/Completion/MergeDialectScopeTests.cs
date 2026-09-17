@@ -122,4 +122,47 @@ public class MergeDialectScopeTests
         // exactly like a local one.
         Assert.Equal(1, CountOf(CompleteInMpUtility(), "exploder_playSound"));
     }
+
+    /// <summary>
+    /// MW2's own shape: `maps\_utility.gsc` and `maps\mp\_utility.gsc` share a stem and no
+    /// #include reaches between them, but a THIRD file can still name either one directly by its
+    /// full inline path — `maps\_utility::is_coop()` — with no import at all.
+    /// </summary>
+    private static ImmutableArray<CompletionEntry> CompleteAfterInlinePathQualifier()
+    {
+        string editedPath = @$"{Raw}\maps\mp\gametypes\_globallogic.gsc";
+        const string editedFile = "run()\n{\n    maps\\_utility::\n}\n";
+
+        TestWorkspace.Built workspace = TestWorkspace.Build(
+            Mw2,
+            Raw,
+            (@$"{Raw}\maps\_utility.gsc", SameStemOtherFile),
+            (@$"{Raw}\maps\mp\_utility.gsc", IncludedFile),
+            (editedPath, editedFile));
+
+        string api = Path.Combine(AppContext.BaseDirectory, "Api");
+        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, Mw2), ObjectFields.Load(api, Mw2));
+
+        // Line 2, right after "maps\_utility::".
+        return engine.Complete(
+            Analyze(editedPath, editedFile), "raw", new Position(2, 19), profile: Mw2);
+    }
+
+    [Fact]
+    public void AnInlinePathQualifier_OffersTheFileItNames()
+    {
+        Assert.Equal(1, CountOf(CompleteAfterInlinePathQualifier(), "is_coop"));
+    }
+
+    [Fact]
+    public void AnInlinePathQualifier_DoesNotReachTheOtherFileSharingItsStem()
+    {
+        // The reported false positive, confirmed: `ns::` reads its qualifier as a single
+        // identifier token — the LAST segment of the path — and asks for functions by that bare
+        // stem. Since these dialects have no #namespace, SymbolExtractor defaults every
+        // function's namespace to its own file's name stem, so `maps\_utility::` offered
+        // `exploder_playSound` from the unrelated `maps\mp\_utility.gsc` as readily as `is_coop`
+        // from the file actually named.
+        Assert.Equal(0, CountOf(CompleteAfterInlinePathQualifier(), "exploder_playSound"));
+    }
 }

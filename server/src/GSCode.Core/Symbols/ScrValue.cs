@@ -547,7 +547,19 @@ public readonly record struct ScrValue
         };
     }
 
-    /// <summary>Removes types from the set — the <c>isdefined</c>-style narrowing primitive.</summary>
+    /// <summary>
+    /// Removes types from the set — the <c>isdefined</c>-style narrowing primitive.
+    ///
+    /// Every field that depended on the removed bits is recomputed or cleared for the narrower
+    /// set, not merely carried over: Truthiness used to be kept as-is unless the value became
+    /// impossible, so narrowing `Struct|Undefined` down to `Struct` alone stayed at its old
+    /// uncertain `null` instead of becoming the definite `true` a fresh Struct value would have —
+    /// removing what made truthiness UNCERTAIN can make it certain, and the old code never
+    /// re-asked the question. EntityKinds/InstanceClass/FunctionTarget carry a value's IDENTITY
+    /// and are meaningless once their own type bit (Entity/Instance/Function) is gone, but stayed
+    /// populated regardless, so a value narrowed away from Entity could still answer
+    /// <c>EntityKinds == ["player"]</c> despite no longer being an entity at all.
+    /// </summary>
     public ScrValue Without(ScrTypeSet removed)
     {
         ScrTypeSet remaining = Types & ~removed;
@@ -560,7 +572,10 @@ public readonly record struct ScrValue
         {
             Types = remaining,
             Constant = Constant is { } constant && (constant.Type & removed) != ScrTypeSet.None ? null : Constant,
-            Truthiness = remaining == ScrTypeSet.None ? null : Truthiness,
+            Truthiness = TruthinessOf(remaining),
+            EntityKinds = (remaining & ScrTypeSet.Entity) == ScrTypeSet.None ? ImmutableArray<string>.Empty : EntityKinds,
+            InstanceClass = (remaining & ScrTypeSet.Instance) == ScrTypeSet.None ? null : InstanceClass,
+            FunctionTarget = (remaining & ScrTypeSet.Function) == ScrTypeSet.None ? null : FunctionTarget,
         };
     }
 

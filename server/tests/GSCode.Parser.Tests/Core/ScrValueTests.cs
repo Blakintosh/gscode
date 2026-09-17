@@ -185,6 +185,42 @@ public class ScrValueTests
         Assert.NotNull(four.Without(ScrTypeSet.String).Constant);
     }
 
+    /// <summary>
+    /// Removing what made a value's truthiness UNCERTAIN can make it certain — narrowing
+    /// `Struct|Undefined` down to just `Struct` should read as definitely truthy, the same as any
+    /// other value built fresh as a pure Struct. `Without` kept whatever Truthiness the wider value
+    /// had (null, since Struct is truthy but Undefined is not) instead of recomputing it for the
+    /// narrower Types that remained.
+    /// </summary>
+    [Fact]
+    public void WithoutRecomputesTruthinessRatherThanKeepingTheWiderValues()
+    {
+        ScrValue maybeUnassignedStruct = ScrValue.Union(ScrValue.Of(ScrTypeSet.Struct), ScrValue.Of(ScrTypeSet.Undefined));
+        Assert.Null(maybeUnassignedStruct.Truthiness);
+
+        Assert.True(maybeUnassignedStruct.Without(ScrTypeSet.Undefined).Truthiness);
+    }
+
+    /// <summary>
+    /// <see cref="ScrValue.EntityKinds"/>, <see cref="ScrValue.InstanceClass"/> and
+    /// <see cref="ScrValue.FunctionTarget"/> carry the IDENTITY of a value whose Types includes
+    /// Entity/Instance/Function respectively — and <c>Without</c> stripped the type bit while
+    /// leaving the identity field behind, so a value narrowed away from Entity could still answer
+    /// `EntityKinds == ["player"]` despite no longer being an entity at all.
+    /// </summary>
+    [Fact]
+    public void WithoutClearsTheIdentityFieldItsTypeNoLongerAllows()
+    {
+        ScrValue entity = ScrValue.OfEntity(["player"]);
+        Assert.True(entity.Without(ScrTypeSet.Entity).EntityKinds.IsDefaultOrEmpty);
+
+        ScrValue instance = ScrValue.Of(ScrTypeSet.Instance) with { InstanceClass = "Foo" };
+        Assert.Null(instance.Without(ScrTypeSet.Instance).InstanceClass);
+
+        ScrValue pointer = ScrValue.Of(ScrTypeSet.Function) with { FunctionTarget = new ScrFunctionRef(null, "helper") };
+        Assert.Null(pointer.Without(ScrTypeSet.Function).FunctionTarget);
+    }
+
     // --- truthiness ---
 
     [Theory]

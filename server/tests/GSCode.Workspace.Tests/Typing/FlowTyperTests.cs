@@ -308,6 +308,29 @@ public class FlowTyperTests
     }
 
     [Fact]
+    public void InsideAnArm_AnAssignmentInTheConditionIsSeen()
+    {
+        // `if ( ( n = 5 ) )` is the deliberate form that suppresses 3013 (see
+        // TypeExpressionForEffects's own comment on ParenNode), and the condition's effects apply
+        // on every path — the NORMAL join already types it before cloning into each arm. The
+        // cursor shortcut for "inside one arm" skipped straight to narrowing and walking the arm,
+        // never typing the condition at all, so `n` had no entry in the environment whatsoever.
+        string source = "function f()\n{\n\tif ( ( n = 5 ) )\n\t{\n\t\tuse( n );\n\t}\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 7), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void InsideTheElseArm_AnAssignmentInTheConditionIsSeen()
+    {
+        string source = "function f()\n{\n\tif ( ( n = 5 ) )\n\t{\n\t}\n\telse\n\t{\n\t\tuse( n );\n\t}\n}\n";
+
+        Assert.True(HoverAt(source, new Position(7, 7), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
     public void InsideALoopBody_TheBodyHasRun()
     {
         // The zero-iteration alternative is not a possibility the code inside the body allows for.

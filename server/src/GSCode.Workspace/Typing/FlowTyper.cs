@@ -370,6 +370,10 @@ public sealed class FlowTyper
                 // Walking the containing arm directly is what makes the answer the arm's own.
                 if ( ContainsCursor(ifNode.Then) )
                 {
+                    // The condition runs on every path, including this one — an assignment inside
+                    // it (the deliberate `if ( ( x = f() ) )` form) was never typed here, so `x`
+                    // had no entry in the environment at all inside the arm that reads it.
+                    TypeExpressionForEffects(ifNode.Condition, environment, hinted, hints, writes);
                     ApplyIsDefinedNarrowing(ifNode.Condition, environment, Clone(environment));
                     WalkStatement(ifNode.Then, environment, hinted, hints, writes);
                     return;
@@ -377,6 +381,7 @@ public sealed class FlowTyper
 
                 if ( ifNode.Else is not null && ContainsCursor(ifNode.Else) )
                 {
+                    TypeExpressionForEffects(ifNode.Condition, environment, hinted, hints, writes);
                     ApplyIsDefinedNarrowing(ifNode.Condition, Clone(environment), environment);
                     WalkStatement(ifNode.Else, environment, hinted, hints, writes);
                     return;

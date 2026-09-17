@@ -733,9 +733,11 @@ are out.
 - `readonly record struct LocalTypeHover(Name, Range, Value)` — the value of the local identifier
   under a cursor, consumed by hover. Same `Type`/`Display` split, for the same reason.
 - `readonly record struct FieldWrite(NameRange, FieldName, OwnerType, Value)` — one `owner.field = …`
-  write with the owner's inferred type at that point, consumed by `ReadOnlyWriteLint` and
-  `PreferBooleanLiteralLint`. `Value` is null for a compound write or `++`/`--`, which have no single
-  assigned value.
+  write with the owner's inferred VALUE at that point (a whole `ScrValue`, not the coarse `ScrType`
+  — `self` is a real `Entity|Struct` union with no single projection, so a consumer needs
+  `MayBe`/`IsUnknown` rather than exact equality to still recognise it as a possible entity),
+  consumed by `ReadOnlyWriteLint` and `PreferBooleanLiteralLint`. `Value` is null for a compound
+  write or `++`/`--`, which have no single assigned value.
 - `sealed class FlowTyper` — a deliberately-small forward type-flow pass, per function.
   `InferAssignments(ParseResult)` walks each function/method body with a per-function
   local environment (`name → ScrValue`), recording every assignment that resolves to a concrete

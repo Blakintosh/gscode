@@ -145,8 +145,10 @@ public class FlowTyperTests
     [Fact]
     public void Globals_AreTyped()
     {
-        Dictionary<string, ScrType> types = InferByFirstToken("    e = self;\n    l = level;\n    g = game;");
-        Assert.Equal(ScrType.Entity, types["e"]);
+        // self is deliberately excluded here — it is a real Entity|Struct|Array union (whichever
+        // object the caller threaded the function onto, which this pass does not track), so it
+        // produces no hint at all rather than a single ScrType. See SelfHasNoConcreteHintedType.
+        Dictionary<string, ScrType> types = InferByFirstToken("    l = level;\n    g = game;");
         Assert.Equal(ScrType.Struct, types["l"]);
         Assert.Equal(ScrType.Array, types["g"]);
     }

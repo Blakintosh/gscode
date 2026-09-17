@@ -71,16 +71,23 @@ public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrVa
 }
 
 /// <summary>
-/// One write to `owner.field`, carrying the owner's inferred type AT THAT POINT. Lets a lint decide
-/// whether a field is read-only without re-deriving types: `SpawnStruct()` gives Struct, `self`
-/// gives Entity, and an owner the flow cannot type gives Unknown.
+/// One write to `owner.field`, carrying the owner's inferred value AT THAT POINT. Lets a lint decide
+/// whether a field is read-only without re-deriving types: `SpawnStruct()` gives an exact Struct,
+/// `self` gives the honest `Entity|Struct` union (see
+/// <see cref="ScrImprecision.CallerBoundObject"/>), and an owner the flow truly cannot type gives
+/// the full Unknown union.
+///
+/// Carries the whole <see cref="ScrValue"/> rather than the coarse <see cref="ScrType"/> precisely
+/// so a consumer can ask <c>MayBe</c> instead of exact equality — `self`'s union has no single
+/// projection (<c>ToScrType()</c> collapses it to Unknown), so a consumer still comparing against
+/// one exact <see cref="ScrType"/> would silently stop seeing `self` as a possible entity at all.
 ///
 /// <paramref name="Value"/> is the assigned expression for a plain `=`, and null for a compound
 /// assignment or `++`/`--` — those have no single assigned value, and a rule about what was
 /// assigned must not fire on them.
 /// </summary>
 public readonly record struct FieldWrite(
-    TextRange NameRange, string FieldName, ScrType OwnerType, ExprNode? Value = null);
+    TextRange NameRange, string FieldName, ScrValue OwnerType, ExprNode? Value = null);
 
 /// <summary>
 /// A deliberately-small forward type-flow pass, per function. It types each assignment's
@@ -809,7 +816,7 @@ public sealed class FlowTyper
             writes.Add(new FieldWrite(
                 incremented.NameToken.RootRange,
                 incremented.NameToken.Text,
-                TypeOf(incremented.Object, environment).ToScrType()));
+                TypeOf(incremented.Object, environment)));
             return;
         }
 
@@ -837,7 +844,7 @@ public sealed class FlowTyper
             writes.Add(new FieldWrite(
                 member.NameToken.RootRange,
                 member.NameToken.Text,
-                TypeOf(member.Object, environment).ToScrType(),
+                TypeOf(member.Object, environment),
                 assignment.Operator == TokenKind.Assign ? assignment.Value : null));
 
             // A field assignment is an assignment: `level.foo = "text"` says as much about foo as
@@ -1166,8 +1173,16 @@ public sealed class FlowTyper
 
         switch ( name.ToLowerInvariant() )
         {
+            // self is whichever object the CALLER threaded the function onto, which this
+            // per-function pass has no way to see — usually an entity (including a sentient AI),
+            // but GSC also allows threading onto a struct (including level itself); never an
+            // array, and never a primitive. Honest about that instead of asserting Entity: the
+            // union still lets a consumer ask
+            // MayBe(Entity), which is what ReadOnlyWriteLint/PreferBooleanLiteralLint need to keep
+            // firing on self.field without falsely asserting self IS always an entity.
             case "self":
-                return ScrValue.Of(ScrTypeSet.Entity);
+                return ScrValue.Of(
+                    ScrTypeSet.Entity | ScrTypeSet.Struct, ScrImprecision.CallerBoundObject);
             // world is a BO3+ global; where the dialect has no world, a bare "world" is an ordinary
             // name (the case falls through to default), so it isn't mistyped as the world struct.
             case "world" when _game.HasWorldObject:

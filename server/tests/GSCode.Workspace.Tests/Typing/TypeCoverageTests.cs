@@ -217,10 +217,18 @@ public class TypeCoverageTests
         Assert.Equal(ScrType.Struct, TypeOf("    v = spawnstruct();", "v"));
     }
 
+    /// <summary>
+    /// self is whichever object the CALLER threaded the function onto — usually an entity
+    /// (including a sentient AI), but GSC also allows threading onto a struct (level itself
+    /// included); never an array. This per-function pass has no way to see which of the two a
+    /// given call site used. Honestly typed as that union (Entity|Struct, see
+    /// ScrImprecision.CallerBoundObject) rather than asserted Entity, so it produces no hint at
+    /// all — a union has no single projection.
+    /// </summary>
     [Fact]
-    public void SelfIsAnEntity()
+    public void SelfHasNoConcreteHintedType()
     {
-        Assert.Equal(ScrType.Entity, TypeOf("    v = self;", "v"));
+        Assert.False(HasHint("    v = self;", "v"));
     }
 
     [Fact]

@@ -151,6 +151,15 @@ public enum ScrImprecision
     /// always among the possibilities.
     /// </summary>
     EngineBound,
+
+    /// <summary>
+    /// <c>self</c>: whichever object the current function was called or threaded ON, which this
+    /// pass does not track across call sites. GSC allows threading onto an entity (including a
+    /// sentient AI) or a struct — never an array, and never a primitive — so the type is that
+    /// union rather than the full universe; it is still imprecise because which ONE of the two a
+    /// given call site actually used is a fact this per-function pass has no way to see.
+    /// </summary>
+    CallerBoundObject,
 }
 
 /// <summary>

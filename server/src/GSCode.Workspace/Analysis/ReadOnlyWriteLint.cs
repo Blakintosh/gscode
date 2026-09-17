@@ -60,7 +60,7 @@ public static class ReadOnlyWriteLint
     /// </summary>
     private static void InspectSizeWrite(FieldWrite write, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        if ( write.OwnerType is not (ScrType.Array or ScrType.String) )
+        if ( !write.OwnerType.MustBe(ScrTypeSet.Array | ScrTypeSet.String) )
         {
             return;
         }
@@ -70,9 +70,15 @@ public static class ReadOnlyWriteLint
     }
 
     /// <summary>
-    /// Engine object fields belong to entities, so only an owner known to be one is reported.
-    /// The field must also be read-only on EVERY entity kind that declares it: the owner's exact
-    /// kind is not inferred, so disagreement between kinds means we cannot be sure.
+    /// Engine object fields belong to entities, so only an owner that MAY be one is reported — an
+    /// owner CONFIRMED to be something else (a struct from `SpawnStruct()`, an array literal) is
+    /// excluded, and so is an owner the flow truly could not type at all (`IsUnknown`), which is
+    /// the "silence beats a false error" case this rule exists to protect. `self` sits in between:
+    /// it is never confirmed to be one specific thing (GSC allows threading onto an entity or a
+    /// struct — see `ScrImprecision.CallerBoundObject`), but it is also never the
+    /// TOTAL uncertainty an untyped parameter or an unresolved call result carries, so it still
+    /// passes this gate. The field must also be read-only on EVERY entity kind that declares it:
+    /// the owner's exact kind is not inferred, so disagreement between kinds means we cannot be sure.
     ///
     /// Weapon declarations are excluded outright. Weapon fields ARE documented read-only, but on
     /// the weapon value `GetWeapon()` returns — and a weapon is not an entity, so that fact says
@@ -91,7 +97,13 @@ public static class ReadOnlyWriteLint
         ObjectFields objectFields,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        if ( write.OwnerType != ScrType.Entity )
+        // MayBe rather than exact equality, so `self` (Entity|Struct — see
+        // ScrImprecision.CallerBoundObject) still counts as a possible entity. IsUnknown excluded
+        // separately: an owner the flow truly could not type (mystery_function()'s return, an
+        // untyped parameter) is the full universe too, and MayBe(Entity) would be trivially true
+        // for it as well — the lint's whole design is silence on that genuine uncertainty, so it
+        // must stay excluded even though self, structurally, ends up MayBe-ing the same bit.
+        if ( !write.OwnerType.MayBe(ScrTypeSet.Entity) || write.OwnerType.IsUnknown )
         {
             return;
         }

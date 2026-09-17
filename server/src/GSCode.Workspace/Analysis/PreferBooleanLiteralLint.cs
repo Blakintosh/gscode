@@ -24,8 +24,10 @@ namespace GSCode.Workspace.Analysis;
 /// suggestion is worth making at all.
 ///
 /// Field writes are scoped exactly as <see cref="ReadOnlyWriteLint"/> scopes its own: the owner
-/// must be a known entity, weapon declarations do not speak for entity owners, and every entity
-/// kind declaring the name must agree it is bool. A field name is not evidence on its own.
+/// must be a POSSIBLE entity (never confirmed something else, and never the total uncertainty an
+/// untyped owner carries — <c>self</c> sits in exactly that middle ground), weapon declarations
+/// do not speak for entity owners, and every entity kind declaring the name must agree it is
+/// bool. A field name is not evidence on its own.
 /// </summary>
 public static class PreferBooleanLiteralLint
 {
@@ -40,7 +42,11 @@ public static class PreferBooleanLiteralLint
         foreach ( FieldWrite write in writes )
         {
             // Value is null for `+=` and `++`, which have no single assigned value to judge.
-            if ( write.Value is null || write.OwnerType != ScrType.Entity )
+            // MayBe rather than exact equality (with IsUnknown excluded separately) is the same
+            // gate ReadOnlyWriteLint uses and for the same reason: `self` is never confirmed to be
+            // exactly Entity (see ScrImprecision.CallerBoundObject), but it is not the total
+            // uncertainty of an untyped owner either, and must keep triggering this rule.
+            if ( write.Value is null || !write.OwnerType.MayBe(ScrTypeSet.Entity) || write.OwnerType.IsUnknown )
             {
                 continue;
             }

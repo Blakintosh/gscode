@@ -119,6 +119,25 @@ public class ScrOperatorsTests
         Assert.NotEqual(ScrTypeSet.String, result.Value.Types);
     }
 
+    /// <summary>
+    /// The vector-plus-scalar check used <c>MustBe(Vector)</c> on ONE side to decide the shape,
+    /// then judged the OTHER side by nothing sharper than "is it the full universe" — so a right
+    /// operand that MAY be a vector but is not CERTAIN to be one (e.g. narrowed by <c>isdefined</c>
+    /// to <c>Vector|Undefined</c>) reported UnsupportedOperands, even though the analysis cannot
+    /// rule out this being a legal vector + vector. Rule 2 of this file's own header comment says
+    /// to match with MayBe/MustBe rather than exact equality; this check broke that rule on the
+    /// side it left unexamined.
+    /// </summary>
+    [Fact]
+    public void AVectorPlusAPossiblyVectorValueIsNotFlaggedUnsupported()
+    {
+        ScrValue maybeVector = ScrValue.Union(Vector(), Type(ScrTypeSet.Undefined));
+
+        ScrOperatorResult result = Apply(ScrBinaryOp.Add, Vector(), maybeVector);
+
+        Assert.Equal(ScrOperandDiagnosis.Fine, result.Diagnosis);
+    }
+
     [Fact]
     public void VectorRulesSurviveAUnionFlowingIn()
     {

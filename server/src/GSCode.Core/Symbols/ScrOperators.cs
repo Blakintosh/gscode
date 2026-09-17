@@ -200,13 +200,24 @@ public static class ScrOperators
             return ScrOperatorResult.Ok(FoldVectorPair(op, left, right));
         }
 
-        // A vector on exactly one side. Adding a scalar to a vector is not a thing the engine does,
-        // and v1.5 returned `string` for it through a mask that asked whether one side carried both
-        // the Vector and Number bits.
-        if ( leftVector != rightVector && (leftVector || rightVector)
-            && !left.IsUnknown && !right.IsUnknown )
+        // A vector CERTAINLY on exactly one side. Adding a scalar to a vector is not a thing the
+        // engine does, and v1.5 returned `string` for it through a mask that asked whether one
+        // side carried both the Vector and Number bits.
+        if ( leftVector != rightVector )
         {
-            return new ScrOperatorResult(ScrValue.Of(ScrTypeSet.Vector), ScrOperandDiagnosis.UnsupportedOperands);
+            ScrValue other = leftVector ? right : left;
+
+            // The other side is judged by MayBe/MustBe too, per this file's own rule 2 — matching
+            // it only against "is it the full universe" reported UnsupportedOperands on anything
+            // short of Unknown, INCLUDING a value that may itself be a vector (e.g. Vector|Undefined
+            // from an isdefined narrowing), where the analysis cannot rule out a legal vector+vector.
+            // Report only when the other side definitely cannot be a vector AND definitely is one
+            // of the kinds a vector genuinely does not combine with.
+            if ( !other.MayBe(ScrTypeSet.Vector)
+                && other.MustBe(ScrTypeSet.Number | ScrTypeSet.Bool | ScrTypeSet.AnyString) )
+            {
+                return new ScrOperatorResult(ScrValue.Of(ScrTypeSet.Vector), ScrOperandDiagnosis.UnsupportedOperands);
+            }
         }
 
         if ( op == ScrBinaryOp.Add && (left.MustBe(ScrTypeSet.AnyString) || right.MustBe(ScrTypeSet.AnyString)) )

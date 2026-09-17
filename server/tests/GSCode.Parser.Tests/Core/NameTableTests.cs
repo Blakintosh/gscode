@@ -37,6 +37,23 @@ public class NameTableTests
         Assert.Same(canonical, table.InternLower("getplayername".AsSpan()));
     }
 
+    /// <summary>
+    /// The "already lowercase" fast path scans with <c>char.IsUpper</c>, but that only catches
+    /// Unicode category Lu (uppercase). A TITLECASE letter (Lt, e.g. U+01C5 'ǅ') is neither upper
+    /// nor lower — IsUpper returns false for it — yet ToLowerInvariant still changes it (to 'ǆ',
+    /// U+01C6). The fast path mistook IsUpper()==false for "already canonical" and skipped the
+    /// lowercase pass entirely, so the interned string was not actually lowercase-canonical.
+    /// </summary>
+    [Fact]
+    public void InternLower_LowercasesATitlecaseLetterTheFastPathWouldOtherwiseMiss()
+    {
+        NameTable table = new();
+
+        string canonical = table.InternLower("ǅxyz".AsSpan());
+
+        Assert.Equal("ǆxyz", canonical);
+    }
+
     [Fact]
     public void PathUtil_NormalizeAbsolute_CanonicalizesCaseAndTrims()
     {

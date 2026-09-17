@@ -343,10 +343,27 @@ public sealed class WorkspaceIndexer
             return ValueTask.CompletedTask;
         }).ConfigureAwait(false);
 
-        // Phase two: re-parse restored files whose inserted headers actually changed.
-        if ( !changedHeaders.IsEmpty )
+        // Phase two: re-parse restored files whose inserted headers actually changed — including a
+        // header CREATED or DELETED between sessions, or one that now resolves to a different file
+        // (a mod copy that started or stopped shadowing raw). A restored record's insert edge
+        // carries the RESOLUTION FROM LAST SESSION: comparing against that stored resolution rather
+        // than a freshly computed one misses exactly these cases. An insert that failed to resolve
+        // last session stores "" as its ResolvedPath, which is never a real header's path — so a
+        // header appearing never matched, and a header vanishing never even reached changedHeaders,
+        // since a deleted file is no longer among the targets this pass sees at all.
+        if ( restoredRecords.Count > 0 )
         {
             List<ScriptRecord> restoredList = [.. restoredRecords];
+
+            // Whether this insert edge's target has changed since last session: its resolved path
+            // moved (created, deleted, or now shadowed differently), or it resolves to a header this
+            // pass freshly analysed. Resolve() is memoized per (context, path), so re-resolving costs
+            // nothing beyond the first insert edge naming a given header.
+            bool EdgeChanged(ScriptRecord record, DependencyEdge edge)
+            {
+                string fresh = Resolver.Resolve(Resolver.GetContext(record.Path), edge.RawPath) ?? "";
+                return fresh != edge.ResolvedPath || changedHeaders.ContainsKey(fresh);
+            }
 
             // A restored header that inserts a changed one changes too — its own bytes are
             // identical, which is exactly why it restored, but what it contributes is not. Close
@@ -367,7 +384,7 @@ public sealed class WorkspaceIndexer
 
                     foreach ( DependencyEdge edge in record.Dependencies )
                     {
-                        if ( edge.IsInsert && changedHeaders.ContainsKey(edge.ResolvedPath) )
+                        if ( edge.IsInsert && EdgeChanged(record, edge) )
                         {
                             changedHeaders.TryAdd(record.Path, 0);
                             grew = true;
@@ -382,7 +399,7 @@ public sealed class WorkspaceIndexer
             {
                 foreach ( DependencyEdge edge in record.Dependencies )
                 {
-                    if ( edge.IsInsert && changedHeaders.ContainsKey(edge.ResolvedPath) )
+                    if ( edge.IsInsert && EdgeChanged(record, edge) )
                     {
                         stale.Add(record.Path);
                         break;

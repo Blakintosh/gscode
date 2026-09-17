@@ -370,4 +370,38 @@ public class FlowTyperTests
         Assert.True(typer.TryGetLocalTypeAt(Reassigned(), new Position(2, 5), out LocalTypeHover hover));
         Assert.Equal(ScrType.Int, hover.Type);
     }
+
+    // --- Subscript writes: `a[i] = v` says as much about `a` as `a = value` does ---
+
+    [Fact]
+    public void ASubscriptWrite_MakesTheBaseAnArray()
+    {
+        // The reported gap: `a[i] = v` never touched `a`'s entry in the environment at all, so a
+        // variable that started life as `undefined` stayed `undefined` for the rest of the flow —
+        // even though a subscript write is exactly how GSC creates or grows an array.
+        string source = "function f()\n{\n\tspots = undefined;\n\tspots[ 0 ] = 1;\n\tuse( spots );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Array, hover.Type);
+    }
+
+    [Fact]
+    public void ASubscriptWrite_OnAnAlreadyKnownArray_KeepsItAnArray()
+    {
+        string source = "function f()\n{\n\tspots = [];\n\tspots[ 0 ] = 1;\n\tuse( spots );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Array, hover.Type);
+    }
+
+    [Fact]
+    public void ASubscriptWrite_OnAChainedIndex_StillBindsTheOuterBase()
+    {
+        // `a[ i ][ j ] = v` chains through more than one IndexNode before reaching the identifier
+        // that is actually being grown — the walk must not stop at the first level.
+        string source = "function f()\n{\n\ta = undefined;\n\ta[ 0 ][ 1 ] = 1;\n\tuse( a );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Array, hover.Type);
+    }
 }

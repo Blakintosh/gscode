@@ -872,6 +872,38 @@ public sealed class FlowTyper
             return;
         }
 
+        // `a[ i ] = v` is how GSC creates or grows an array — the target being written through is
+        // exactly as informative about `a` as `a = value` is about `a` itself, and the base was
+        // previously left untouched: a variable that started as `undefined` stayed `undefined` for
+        // the rest of the flow, which made 5033 (CannotEnumerateType) warn on code like
+        // `spots = undefined; spots[ spots.size ] = s; foreach ( p in spots ) {}`.
+        if ( assignment.Operator == TokenKind.Assign && assignment.Target is IndexNode indexTarget )
+        {
+            // Every index expression along an `a[ i ][ j ]` chain is an ordinary expression and
+            // must still be walked for its own effects (a call, a nested field write) even though
+            // only the chain's base identifier is bound below.
+            ExprNode chainBase = indexTarget;
+            while ( chainBase is IndexNode chainIndex )
+            {
+                TypeOf(chainIndex.Index, environment);
+                chainBase = chainIndex.Object;
+            }
+
+            TypeOf(chainBase, environment);
+            TypeOf(assignment.Value, environment);
+
+            // Only a chain bottoming out at a plain local binds anything — `a.b[ i ] = v` and
+            // `foo()[ i ] = v` say nothing about a local the environment tracks.
+            if ( chainBase is IdentifierNode baseIdentifier )
+            {
+                string baseName = baseIdentifier.Token.Text;
+                ScrValue previous = environment.TryGetValue(baseName, out ScrValue existing) ? existing : ScrValue.Unknown;
+                environment[baseName] = ScrValue.Union(previous.Without(ScrTypeSet.Undefined), ScrValue.Of(ScrTypeSet.Array));
+            }
+
+            return;
+        }
+
         // Only plain `local = value` (the '=' operator) yields a type; compound ops keep
         // the existing type.
         if ( assignment.Operator != TokenKind.Assign || assignment.Target is not IdentifierNode target )

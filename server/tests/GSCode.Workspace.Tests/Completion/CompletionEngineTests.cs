@@ -1782,6 +1782,19 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void SlashHash_TheDevBlockOpener_IsNotADirectiveContext()
+    {
+        // IsAfterDirectiveHash only checked that the character right before the cursor is '#' —
+        // which is also true one character into typing the dev-block opener `/#`, and '#' is a
+        // completion trigger character, so every `/#` narrowed the list to directives only, the
+        // same as a genuine bare '#' does (see BareHash_OffersEveryDirective) — losing "function"
+        // and everything else a bare top-level position legitimately offers.
+        ImmutableArray<CompletionEntry> entries = CompleteAfter("/#");
+
+        Assert.True(HasLabel(entries, "function"));
+    }
+
+    [Fact]
     public void MemberAccess_OffersFieldsAndSize()
     {
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");

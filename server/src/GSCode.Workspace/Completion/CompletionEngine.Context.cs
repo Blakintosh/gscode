@@ -264,7 +264,15 @@ public sealed partial class CompletionEngine
             cursor--;
         }
 
-        return cursor > 0 && text.Text[cursor - 1] == '#';
+        if ( cursor == 0 || text.Text[cursor - 1] != '#' )
+        {
+            return false;
+        }
+
+        // `/#` opens a dev block, not a directive — and '#' is a completion trigger character, so
+        // every dev block opened would otherwise pop the top-level directive list right as it was
+        // typed.
+        return cursor < 2 || text.Text[cursor - 2] != '/';
     }
 
     private static bool IsWordChar(char c)

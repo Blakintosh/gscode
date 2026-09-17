@@ -110,6 +110,34 @@ public class SourceTextTests
         Assert.Equal(new Position(1, 2), text.GetPosition(99, ref hint));
     }
 
+    /// <summary>
+    /// A position whose character is past its own line's content still clamps WITHIN that line —
+    /// it must never bleed into a following line. The LSP spec says a character past line-end
+    /// means the line end, and <c>DocumentStore</c> applies incremental edits at exactly these
+    /// offsets, so a bled-through clamp corrupts the server's copy of the document instead of only
+    /// mis-locating a caret.
+    /// </summary>
+    [Theory]
+    [InlineData("ab\ncd\nef", 0, 99, 2)] // LF: line 0 is "ab", ends right before the '\n'.
+    [InlineData("ab\r\ncd\r\nef", 0, 99, 2)] // CRLF: the break is two units, not one.
+    [InlineData("ab\rcd\ref", 0, 99, 2)] // Lone CR.
+    [InlineData("ab\ncd\nef", 1, 99, 5)] // A middle line, not just the first.
+    public void GetOffset_ClampsCharacterToItsOwnLineEnd(string source, int line, int character, int expectedOffset)
+    {
+        SourceText text = SourceText.From(source);
+
+        Assert.Equal(expectedOffset, text.GetOffset(new Position(line, character)));
+    }
+
+    /// <summary>The LAST line has no following break to stop at, so it still clamps to the document end.</summary>
+    [Fact]
+    public void GetOffset_OnTheLastLine_ClampsToDocumentEnd()
+    {
+        SourceText text = SourceText.From("ab\ncd");
+
+        Assert.Equal(5, text.GetOffset(new Position(1, 99)));
+    }
+
     [Fact]
     public void Range_Contains_IsHalfOpen()
     {

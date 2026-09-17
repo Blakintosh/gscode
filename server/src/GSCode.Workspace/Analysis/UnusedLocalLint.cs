@@ -41,7 +41,7 @@ public static class UnusedLocalLint
     {
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        CollectFromDeclaration(result.Tree.Root, diagnostics);
+        CollectFromDeclaration(result.Tree.Root, diagnostics, insideClass: false);
 
         return diagnostics.ToImmutable();
     }
@@ -52,34 +52,48 @@ public static class UnusedLocalLint
     /// rather than naming each container, so a container added later is searched without this rule
     /// having to learn about it.
     ///
-    /// A CONSTRUCTOR and a DESTRUCTOR are deliberately not inspected, and this is not an oversight.
-    /// This rule scopes names per body, with no model of a class's <c>var</c> members, and inside a
-    /// class method a bare name may be a member rather than a local. A constructor exists to
-    /// initialise members it never itself reads, so every such write looks exactly like a dead
-    /// store. Inspecting them added 103 findings over BO3's scripts, and the first one sampled —
-    /// <c>id = undefined;</c> in <c>_driving_fx.csc</c>'s <c>GroundFx</c> constructor — is a member
-    /// declared <c>var id;</c> and read by that class's <c>play()</c>. Reaching them needs member
+    /// Nothing inside a CLASS is inspected — every method, not only a constructor or destructor —
+    /// and this is not an oversight. This rule scopes names per body, with no model of a class's
+    /// <c>var</c> members, and inside a class method a bare name may be a member rather than a
+    /// local; a member write that no method IN THIS BODY reads back looks exactly like a dead
+    /// store. Real BO3 code hits this on an ordinary setter —
+    /// <c>function set_door_paths( p ) { m_n_door_connect_paths = p; }</c> in
+    /// <c>scripts\shared\doors_shared.gsc</c> — where the member is read by another method
+    /// entirely. Constructors were the first case found (<c>id = undefined;</c> in
+    /// <c>_driving_fx.csc</c>'s <c>GroundFx</c> constructor, read by that class's <c>play()</c>),
+    /// but the same reasoning always applied to every method — reaching a member needs member
     /// resolution first, not a wider walk.
     ///
-    /// <see cref="UnusedBindingLint"/> does inspect all three, which is not a contradiction: it asks
-    /// about PARAMETERS, and a parameter is scoped to its own body whatever the class holds.
+    /// <see cref="UnassignedVariableLint"/> already takes this same all-or-nothing view of a class,
+    /// via its own <c>insideClass</c>. <see cref="UnusedBindingLint"/> does inspect every method,
+    /// which is not a contradiction: it asks about PARAMETERS, and a parameter is scoped to its own
+    /// body whatever the class holds.
     /// </summary>
-    private static void CollectFromDeclaration(AstNode element, ImmutableArray<Diagnostic>.Builder diagnostics)
+    private static void CollectFromDeclaration(AstNode element, ImmutableArray<Diagnostic>.Builder diagnostics, bool insideClass)
     {
         switch ( element )
         {
-            case FunctionNode function:
+            case FunctionNode function when !insideClass:
                 InspectBody(function.Parameters, function.Body, diagnostics);
                 return;
 
+            case FunctionNode:
             case ConstructorNode:
             case DestructorNode:
+                return;
+
+            case ClassNode classNode:
+                foreach ( AstNode member in classNode.Members )
+                {
+                    CollectFromDeclaration(member, diagnostics, insideClass: true);
+                }
+
                 return;
 
             default:
                 foreach ( AstNode child in AstSearch.ChildrenOf(element) )
                 {
-                    CollectFromDeclaration(child, diagnostics);
+                    CollectFromDeclaration(child, diagnostics, insideClass);
                 }
 
                 return;

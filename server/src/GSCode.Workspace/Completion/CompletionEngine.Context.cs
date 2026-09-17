@@ -543,7 +543,6 @@ public sealed partial class CompletionEngine
         }
     }
 
-    /// <summary>Index of the identifier token the cursor is inside or just after, else -1.</summary>
     /// <summary>
     /// Whether the offset sits strictly inside a comment token. Comments are TRIVIA, so the trigger
     /// scan below (<see cref="PreviousSignificant"/>) skips right over them — by design, so the rest
@@ -565,6 +564,7 @@ public sealed partial class CompletionEngine
         return false;
     }
 
+    /// <summary>Index of the identifier token the cursor is inside or just after, else -1.</summary>
     private static int FindCurrentWordIndex(ImmutableArray<Token> tokens, int offset)
     {
         for ( int index = 0; index < tokens.Length; index++ )

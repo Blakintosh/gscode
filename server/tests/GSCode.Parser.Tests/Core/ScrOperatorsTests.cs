@@ -194,6 +194,36 @@ public class ScrOperatorsTests
         Assert.True(result.MayBe(ScrTypeSet.Number));
     }
 
+    /// <summary>
+    /// An operand nothing is known about must not make the RESULT read as a known `float`. The
+    /// fallback for "not enough is known" used to be a bare `Number`, which is exactly the one
+    /// union <see cref="ScrValue.ToScrType"/> widens to `float` (the special case that keeps a
+    /// genuine int/float branch join showing correctly) — so `param + 1` hovered as `float` for a
+    /// completely untyped parameter, and `param + "x"`/`param + someVector` are just as legal in
+    /// GSC and would have shown the same wrong `float`. Widening the fallback with String (Add
+    /// only) and Vector whenever the unknown operand MAY be one breaks that accidental collapse:
+    /// the union is no longer exactly `Number`, so it projects to Unknown instead.
+    /// </summary>
+    [Theory]
+    [InlineData(ScrBinaryOp.Add)]
+    [InlineData(ScrBinaryOp.Subtract)]
+    [InlineData(ScrBinaryOp.Multiply)]
+    [InlineData(ScrBinaryOp.Divide)]
+    public void ArithmeticOnAWhollyUnknownOperandDoesNotProjectToFloat(ScrBinaryOp op)
+    {
+        ScrValue result = Apply(op, ScrValue.Unknown, Int(1)).Value;
+
+        Assert.Equal(ScrType.Unknown, result.ToScrType());
+    }
+
+    [Fact]
+    public void NegatingAWhollyUnknownOperandDoesNotProjectToFloat()
+    {
+        ScrValue result = ScrOperators.Apply(ScrUnaryOp.Negate, ScrValue.Unknown).Value;
+
+        Assert.Equal(ScrType.Unknown, result.ToScrType());
+    }
+
     // --- constant folding, which v1.5 had none of ---
 
     [Fact]

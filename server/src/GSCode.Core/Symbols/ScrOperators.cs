@@ -342,9 +342,27 @@ public static class ScrOperators
 
         if ( !leftNumeric || !rightNumeric )
         {
-            // Not enough is known to name a type. Number is the widest honest answer, since a
-            // division always produces one and anything else here is an operand we cannot see.
-            return ScrValue.Of(ScrTypeSet.Number, ScrImprecision.UnsupportedExpression);
+            // Not enough is known to name a type — but bare Number is not the honest answer it
+            // looks like: it is the ONE union ToScrType widens back to `float` (the special case
+            // that keeps a genuine int/float branch join showing correctly), so returning it here
+            // claimed a value was a known float when nothing established that at all. An
+            // untyped parameter is MayBe(Universe) — every bit — so `param + 1` hovered `float`
+            // for a parameter that could just as legally be `param + "x"` or a vector add gone
+            // wrong. Widened with every OTHER type the unmeasured operand might actually turn out
+            // to be, the union stops being exactly Number and projects to Unknown instead.
+            ScrTypeSet fallback = ScrTypeSet.Number;
+
+            if ( op == ScrBinaryOp.Add && (left.MayBe(ScrTypeSet.AnyString) || right.MayBe(ScrTypeSet.AnyString)) )
+            {
+                fallback |= ScrTypeSet.String;
+            }
+
+            if ( left.MayBe(ScrTypeSet.Vector) || right.MayBe(ScrTypeSet.Vector) )
+            {
+                fallback |= ScrTypeSet.Vector;
+            }
+
+            return ScrValue.Of(fallback, ScrImprecision.UnsupportedExpression);
         }
 
         // Division always produces a float, even between two ints.
@@ -531,8 +549,22 @@ public static class ScrOperators
 
     private static ScrValue NumericOrUnknown(ScrValue operand)
     {
-        return operand.MayBe(ScrTypeSet.Number)
-            ? ScrValue.Of(ScrTypeSet.Number, ScrImprecision.UnsupportedExpression)
-            : ScrValue.Unknown;
+        if ( !operand.MayBe(ScrTypeSet.Number) )
+        {
+            return ScrValue.Unknown;
+        }
+
+        // Same widening as Arithmetic's fallback, and for the same reason: bare Number is the one
+        // union that projects back to `float`, so an operand that MAY be a vector (a union the
+        // MustBe(Vector) check above does not catch) must keep Vector in the result or `-x` on it
+        // would hover `float` for something that could legally negate to a vector.
+        ScrTypeSet fallback = ScrTypeSet.Number;
+
+        if ( operand.MayBe(ScrTypeSet.Vector) )
+        {
+            fallback |= ScrTypeSet.Vector;
+        }
+
+        return ScrValue.Of(fallback, ScrImprecision.UnsupportedExpression);
     }
 }

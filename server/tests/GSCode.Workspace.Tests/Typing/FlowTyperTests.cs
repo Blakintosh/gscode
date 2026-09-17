@@ -245,6 +245,19 @@ public class FlowTyperTests
         Assert.False(found);
     }
 
+    [Fact]
+    public void ArithmeticOnAnUntypedParameterHasNoHoverType()
+    {
+        // `amount` is never given a concrete type, so `amount + 1` used to fold to the operator
+        // table's fallback for "not enough is known" — a bare Number, which ToScrType widens back
+        // to `float` (the one special case that keeps a real int/float branch join showing
+        // correctly). Hover therefore showed `float` for a value nothing established was even
+        // numeric: `amount` could just as legally have been a string, making this a concatenation.
+        string source = "function f( amount )\n{\n\tb = amount + 1;\n\tuse( b );\n}\n";
+
+        Assert.False(HoverAt(source, new Position(3, 6), out _));
+    }
+
     // --- Branches: the environment at the cursor, not the last arm written ---
 
     private static bool HoverAt(string source, Position position, out LocalTypeHover hover)

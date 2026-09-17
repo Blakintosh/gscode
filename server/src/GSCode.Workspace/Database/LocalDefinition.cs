@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -29,7 +31,7 @@ public static class LocalDefinition
     /// jumping to the first would send you somewhere the value no longer comes from, and the two
     /// surfaces disagreeing about the same variable is worse than either answer alone.
     /// </summary>
-    public static TextRange? Find(ParseResult result, Position position)
+    public static TextRange? Find(ParseResult result, Position position, GameProfile? profile = null)
     {
         if ( !AstSearch.TryFindLocalContext(
             result.Tree.Root, position, out IdentifierNode identifier, out FunctionNode function) )
@@ -47,39 +49,31 @@ public static class LocalDefinition
             }
         }
 
+        // The occurrence list, not the parser's raw AssignmentSymbols: those skip `a[ 0 ] = x`
+        // (which CREATES `a` when it does not exist — how every array in the stock scripts is
+        // built) and never reach a class method's body at all, since `result.Extraction.Functions`
+        // holds only top-level functions. LocalReferences already gets both right for the same
+        // variable, and disagreeing with it is exactly the reported symptom.
+        ImmutableArray<LocalOccurrence> occurrences = LocalReferences.Find(result, position, profile);
+
         TextRange? best = null;
-        foreach ( FunctionSymbol declared in result.Extraction.Functions )
+        foreach ( LocalOccurrence occurrence in occurrences )
         {
-            if ( !declared.FullRange.Contains(position) )
+            if ( !occurrence.IsWrite )
             {
                 continue;
             }
 
-            foreach ( AssignmentSymbol assignment in declared.Assignments )
+            // At or before the cursor. An occurrence further down says nothing about where the
+            // value being read here came from.
+            if ( occurrence.Range.Start.Line > position.Line
+                || (occurrence.Range.Start.Line == position.Line
+                    && occurrence.Range.Start.Character > position.Character) )
             {
-                // Locals only. `self.count = 1` introduces a FIELD on an entity that outlives this
-                // function, so it is not what a bare `count` here refers to.
-                if ( assignment.OwnerName.Length > 0 )
-                {
-                    continue;
-                }
-
-                if ( !string.Equals(assignment.Name, name, StringComparison.OrdinalIgnoreCase) )
-                {
-                    continue;
-                }
-
-                // At or before the cursor. An assignment further down says nothing about where the
-                // value being read here came from.
-                if ( assignment.Range.Start.Line > position.Line
-                    || (assignment.Range.Start.Line == position.Line
-                        && assignment.Range.Start.Character > position.Character) )
-                {
-                    continue;
-                }
-
-                best = assignment.Range;
+                continue;
             }
+
+            best = occurrence.Range;
         }
 
         return best;

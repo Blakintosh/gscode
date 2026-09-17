@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core;
+using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -510,8 +511,22 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>Index of the string/istring/hash literal the cursor is typing inside, else -1.</summary>
-    private static int FindLiteralAtOffset(ImmutableArray<Token> tokens, int offset)
+    private static int FindLiteralAtOffset(ParseResult result, ImmutableArray<Token> tokens, int offset)
     {
+        // Strings cannot span lines, so the lexer reports EXACTLY the unterminated ones — over a
+        // range starting at the same offset as the token itself — which settles "is this one still
+        // open" without guessing from its trailing character. A guess trips on an escaped quote
+        // landing right at the end of an unterminated string, or on the bare opening quote alone
+        // (nothing to actually close) reading as if it were its own closing one.
+        HashSet<int> unterminatedStarts = [];
+        foreach ( Diagnostic diagnostic in result.AllDiagnostics )
+        {
+            if ( diagnostic.Code == GscDiagnosticCode.UnterminatedString )
+            {
+                unterminatedStarts.Add(result.Text.GetOffset(diagnostic.Range.Start));
+            }
+        }
+
         for ( int index = 0; index < tokens.Length; index++ )
         {
             Token token = tokens[index];
@@ -519,9 +534,17 @@ public sealed partial class CompletionEngine
                 || token.Kind == TokenKind.LocalizedString
                 || token.Kind == TokenKind.HashString;
 
-            // Strictly past the opening quote, up to and including the end (handles a still-open
-            // string that runs to the end of the line).
-            if ( isLiteral && offset > token.Start && offset <= token.End )
+            if ( !isLiteral || offset <= token.Start )
+            {
+                continue;
+            }
+
+            // Up to and INCLUDING the end is right for a still-open string running to the end of
+            // the line — there is no closing quote to stop before. A CLOSED one's closing quote IS
+            // its last character, so the position right after it (typing the quote is itself a
+            // completion trigger) is one past where the literal actually ends, and must not count.
+            bool closed = !unterminatedStarts.Contains(token.Start);
+            if ( closed ? offset < token.End : offset <= token.End )
             {
                 return index;
             }

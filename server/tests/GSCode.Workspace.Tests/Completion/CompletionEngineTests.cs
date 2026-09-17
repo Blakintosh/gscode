@@ -128,6 +128,28 @@ public class CompletionEngineTests
         Assert.All(entries, e => Assert.Equal(CompletionKind.Literal, e.Kind));
     }
 
+    [Fact]
+    public void RightAfterAClosedStringLiteral_LiteralCompletionDoesNotFire()
+    {
+        // FindLiteralAtOffset accepted `offset <= token.End`, which is right for a still-OPEN
+        // string running to the end of the line, but the same test also matches the position
+        // right after a CLOSED string's own closing quote — one past where the literal actually
+        // ends. Typing the closing quote itself (a completion trigger character), or asking for
+        // completion right after one, offered every known string literal in the workspace instead
+        // of nothing.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\events.gsc", "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        // Right after the closing quote of the (empty) string literal.
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 10));
+
+        Assert.False(HasLabel(entries, "player_spawned"));
+    }
+
     // --- Concatenated message fragments are not names ---
     //
     // The reported noise: the list filled with things like "already exists. Proceeding with

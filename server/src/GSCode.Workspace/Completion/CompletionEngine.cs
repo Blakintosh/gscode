@@ -62,7 +62,7 @@ public sealed partial class CompletionEngine
 
         // Inside a string/istring/hash literal: offer known literals of that kind (or nothing,
         // since statement-scope suggestions never make sense inside a string).
-        int literalIndex = FindLiteralAtOffset(tokens, offset);
+        int literalIndex = FindLiteralAtOffset(result, tokens, offset);
         if ( literalIndex >= 0 )
         {
             // `#precache( "<here>"` is an asset TYPE, not free text. The quote is a completion

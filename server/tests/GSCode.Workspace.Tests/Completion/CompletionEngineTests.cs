@@ -1883,6 +1883,26 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void MemberAccess_OnAMemberOfAMember_WidensRatherThanScopingToTheMiddleName()
+    {
+        // `self.owner.` — the field OwnerBefore reads is "owner", the token right before the dot,
+        // as though `owner` were a plain local. But `owner` here is itself a MEMBER of `self`, and
+        // nested writes like `self.owner.field = value` are never recorded as assignments at all —
+        // there is no real "owner" to scope by, so narrowing to that name found nothing genuine
+        // and returned a near-empty list instead of the honestly-unknown-owner's full one.
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    abc.other_field = 1;\n    x = self.owner.\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterOwnerDot = new(3, 19); // just past "self.owner."
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterOwnerDot);
+
+        Assert.True(HasLabel(entries, "other_field"));
+    }
+
+    [Fact]
     public void MemberAccess_AllScope_OffersFieldsFromEveryOwner()
     {
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");

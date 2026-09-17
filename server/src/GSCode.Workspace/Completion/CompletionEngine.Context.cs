@@ -338,6 +338,18 @@ public sealed partial class CompletionEngine
             return "";
         }
 
+        // A member OF a member — `self.owner.` — reads the SAME as a plain local before the dot:
+        // "owner" is an Identifier token here too. But it names a field on `self`, not a local,
+        // and a nested write like `self.owner.field = value` is never recorded as an assignment at
+        // all, so there is no genuine "owner" to scope by. Narrowing to it anyway found nothing and
+        // returned a near-empty list where the honestly-unknown-owner case (an index or call
+        // result, just above) already knows to widen instead.
+        int beforeOwner = PreviousSignificant(tokens, ownerIndex);
+        if ( beforeOwner >= 0 && tokens[beforeOwner].Kind is TokenKind.Dot or TokenKind.CloseBracket )
+        {
+            return "";
+        }
+
         return tokens[ownerIndex].GetText(result.Text).ToString().ToLowerInvariant();
     }
 

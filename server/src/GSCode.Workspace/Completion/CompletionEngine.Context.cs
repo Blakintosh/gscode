@@ -544,6 +544,27 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>Index of the identifier token the cursor is inside or just after, else -1.</summary>
+    /// <summary>
+    /// Whether the offset sits strictly inside a comment token. Comments are TRIVIA, so the trigger
+    /// scan below (<see cref="PreviousSignificant"/>) skips right over them — by design, so the rest
+    /// of completion can read the token stream as if they were not there — but nothing upstream
+    /// checked for this FIRST, so the trigger character landed on whatever code precedes the
+    /// comment.
+    /// </summary>
+    private static bool IsInsideComment(ImmutableArray<Token> tokens, int offset)
+    {
+        foreach ( Token token in tokens )
+        {
+            if ( token.Kind is TokenKind.LineComment or TokenKind.BlockComment or TokenKind.DocComment
+                && offset > token.Start && offset <= token.End )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static int FindCurrentWordIndex(ImmutableArray<Token> tokens, int offset)
     {
         for ( int index = 0; index < tokens.Length; index++ )

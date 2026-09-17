@@ -1795,6 +1795,40 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void InsideALineComment_NothingIsOffered()
+    {
+        // Neither FindLiteralAtOffset nor the trigger-token scan (PreviousSignificant skips
+        // trivia) ever checked for a comment, so typing inside one landed on whatever code
+        // precedes it — every '/', '.', ':', '#' and '\' typed while writing a comment popped
+        // statement-scope, member, or path completion over the top of it.
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    // see level.foo\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        // Right after "level." inside the comment.
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 17));
+
+        Assert.Empty(entries);
+    }
+
+    [Fact]
+    public void InsideABlockComment_NothingIsOffered()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "function run()\n{\n    /* level.foo */\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+
+        // Right after "level." inside the comment.
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 13));
+
+        Assert.Empty(entries);
+    }
+
+    [Fact]
     public void MemberAccess_OffersFieldsAndSize()
     {
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");

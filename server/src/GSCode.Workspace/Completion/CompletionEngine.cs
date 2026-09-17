@@ -50,6 +50,16 @@ public sealed partial class CompletionEngine
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
         int offset = result.Text.GetOffset(position);
 
+        // Inside a comment: nothing legally goes here. Neither FindLiteralAtOffset nor the
+        // trigger-token scan below (PreviousSignificant skips trivia, by design, so the rest of
+        // this method can read the token stream as if comments were not there) ever checked for
+        // one, so the trigger character landed on whatever code precedes the comment instead —
+        // every '/', '.', ':', '#' and '\' typed while writing one popped a completion list.
+        if ( IsInsideComment(tokens, offset) )
+        {
+            return [];
+        }
+
         // Inside a string/istring/hash literal: offer known literals of that kind (or nothing,
         // since statement-scope suggestions never make sense inside a string).
         int literalIndex = FindLiteralAtOffset(tokens, offset);

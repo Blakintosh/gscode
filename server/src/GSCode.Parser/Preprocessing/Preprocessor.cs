@@ -66,6 +66,7 @@ public sealed class Preprocessor
     private readonly ImmutableArray<InsertEdge>.Builder _inserts = ImmutableArray.CreateBuilder<InsertEdge>();
     private readonly ImmutableArray<MacroDefinition>.Builder _allDefinitions = ImmutableArray.CreateBuilder<MacroDefinition>();
     private readonly ImmutableArray<MacroInvocation>.Builder _invocations = ImmutableArray.CreateBuilder<MacroInvocation>();
+    private readonly ImmutableArray<BuiltinExpansion>.Builder _builtinExpansions = ImmutableArray.CreateBuilder<BuiltinExpansion>();
     private readonly ImmutableArray<TextRange>.Builder _disabledRegions = ImmutableArray.CreateBuilder<TextRange>();
 
     // Guards: inserts currently on the splice stack (cycle detection), and macros
@@ -182,6 +183,7 @@ public sealed class Preprocessor
             preprocessor._macros,
             preprocessor._allDefinitions.ToImmutable(),
             preprocessor._invocations.ToImmutable(),
+            preprocessor._builtinExpansions.ToImmutable(),
             preprocessor._inserts.ToImmutable(),
             preprocessor._disabledRegions.ToImmutable(),
             preprocessor._diagnostics.ToImmutable());
@@ -926,27 +928,36 @@ public sealed class Preprocessor
                 // stock scripts use it exactly once — spawner_shared.gsc:517 writes
                 // `assert( ..., __FUNCTION__ + " only supports actors and vehicles." )` — which is
                 // why it expands to a String token rather than getting special-cased downstream:
-                // everything after this (typing, concatenation, literal completion, hover) then
-                // treats it as the string it becomes, with no rule of its own.
-                sink.Add(new PToken(
-                    TokenKind.String,
-                    _names.Intern("\"" + QualifiedFunctionNameAt(frame, index) + "\""),
-                    range,
-                    frame.Provenance));
-
+                // everything after this (typing, concatenation, literal completion) then treats it
+                // as the string it becomes, with no rule of its own. Hover is the one exception —
+                // see BuiltinExpansions — since the reader is looking at the literal text
+                // "__FUNCTION__", not at whatever it resolved to.
+                string qualifiedName = QualifiedFunctionNameAt(frame, index);
+                PToken token = new(TokenKind.String, _names.Intern("\"" + qualifiedName + "\""), range, frame.Provenance);
+                sink.Add(token);
+                _builtinExpansions.Add(new BuiltinExpansion(name, token.RootRange, qualifiedName));
                 return true;
             }
             case "__LINE__":
             {
                 // 1-based, matching how compilers report line numbers to users.
                 string line = (range.Start.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                sink.Add(new PToken(TokenKind.Integer, _names.Intern(line), range, frame.Provenance));
+                PToken token = new(TokenKind.Integer, _names.Intern(line), range, frame.Provenance);
+                sink.Add(token);
+                _builtinExpansions.Add(new BuiltinExpansion(name, token.RootRange, line));
                 return true;
             }
             case "__FILE__":
             {
-                string path = frame.SourceFile ?? _rootFilePath;
-                sink.Add(new PToken(TokenKind.String, _names.Intern("\"" + path + "\""), range, frame.Provenance));
+                // Always the ROOT file being compiled — never frame.SourceFile. #insert splices a
+                // header's declarations as if written inline in the including file, so __FILE__
+                // inside one names the script it ends up part of, not the .gsh that happens to hold
+                // the text; frame.SourceFile answered the latter question for any code physically
+                // written inside an inserted header, which is wrong for the same reason a header's
+                // own line numbers are not renumbered against the file they are inserted into.
+                PToken token = new(TokenKind.String, _names.Intern("\"" + _rootFilePath + "\""), range, frame.Provenance);
+                sink.Add(token);
+                _builtinExpansions.Add(new BuiltinExpansion(name, token.RootRange, _rootFilePath));
                 return true;
             }
             case "FASTFILE":

@@ -123,6 +123,11 @@ public sealed class HoverHandler : HoverHandlerBase
             case SymbolKind.Field:
                 return RenderField(key.Name, target.Language, target);
             case SymbolKind.StringLiteral:
+                // The one shape a plain string literal reference is not: __FUNCTION__/__FILE__
+                // already expanded to a string before parsing, so the reader looking at the literal
+                // text on screen needs to be told what it resolved to — an ordinary string has
+                // nothing to add beyond what is already on screen, so this is the only case here.
+                return FindBuiltinExpansion(target, hitRange);
             case SymbolKind.HashString:
             case SymbolKind.LocalizedString:
             case SymbolKind.AnimReference:
@@ -130,6 +135,25 @@ public sealed class HoverHandler : HoverHandlerBase
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// What a <c>__FUNCTION__</c>/<c>__FILE__</c>/<c>__LINE__</c> use at <paramref name="hitRange"/>
+    /// expanded to, or null when the hover is on an ordinary string. <c>BuiltinExpansions</c> is
+    /// scoped to this same file's own preprocessing run, so a range match cannot land on another
+    /// document's entry.
+    /// </summary>
+    private static string? FindBuiltinExpansion(NavigationTarget target, TextRange hitRange)
+    {
+        foreach ( GSCode.Parser.Preprocessing.BuiltinExpansion expansion in target.Result.Preprocessed.BuiltinExpansions )
+        {
+            if ( expansion.Range.Contains(hitRange.Start) )
+            {
+                return $"```gsc\n{expansion.Name}\n```\nExpands to: `{expansion.ExpandedText}`";
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -20,6 +20,16 @@ public sealed record InsertEdge(string RawPath, string? ResolvedPath, TextRange 
 public sealed record MacroInvocation(string Name, string? SourceFile, TextRange Range, MacroDefinition Definition);
 
 /// <summary>
+/// One use of a predefined macro (<c>__FUNCTION__</c>, <c>__FILE__</c>, <c>__LINE__</c>) and what it
+/// expanded to. By the time extraction runs, the token these produced is an ordinary literal — a
+/// String or an Integer — with nothing left marking where it came from, so hover has nowhere else to
+/// read the resolved value back from. <see cref="Range"/> is root-file coordinates (the token's own
+/// <c>RootRange</c>), matching how a literal reference is keyed, so a hover position can be matched
+/// against this list directly.
+/// </summary>
+public sealed record BuiltinExpansion(string Name, TextRange Range, string ExpandedText);
+
+/// <summary>
 /// The preprocessor's complete output: the trivia-free parse stream (EndOfFile-terminated),
 /// every macro visible at end of file, every <c>#define</c> site seen (win or lose), use
 /// sites, insert edges, the root-file regions disabled by inactive #if branches (grey-out),
@@ -39,6 +49,7 @@ public sealed record PreprocessResult(
     MacroTable Macros,
     ImmutableArray<MacroDefinition> AllMacroDefinitions,
     ImmutableArray<MacroInvocation> MacroInvocations,
+    ImmutableArray<BuiltinExpansion> BuiltinExpansions,
     ImmutableArray<InsertEdge> Inserts,
     ImmutableArray<TextRange> DisabledRegions,
     ImmutableArray<Diagnostic> Diagnostics);

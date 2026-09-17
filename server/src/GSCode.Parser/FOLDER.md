@@ -277,7 +277,12 @@ LSP types anywhere.
   one #insert dependency edge (ResolvedPath null on failure).
 - `sealed record MacroInvocation(Name, SourceFile, Range, Definition)` — one macro use
   site; powers references/hover/signature help for macros.
-- `sealed record PreprocessResult(Tokens, Macros, AllMacroDefinitions, MacroInvocations, Inserts, DisabledRegions, Diagnostics)`
+- `sealed record BuiltinExpansion(Name, Range, ExpandedText)` — one `__FUNCTION__`/`__FILE__`/
+  `__LINE__` use and what it expanded to. By the time extraction runs the token is an
+  ordinary literal with nothing marking where it came from, so hover reads this list
+  (matched by range containment) to show the resolved value instead of a plain string's
+  usual no-op.
+- `sealed record PreprocessResult(Tokens, Macros, AllMacroDefinitions, MacroInvocations, BuiltinExpansions, Inserts, DisabledRegions, Diagnostics)`
   — the full output: trivia-free EndOfFile-terminated parse stream, all macros, use
   sites, insert edges, root-file ranges disabled by inactive #if branches, diagnostics.
   `Macros` is the SURVIVING definition per name (last one wins); `AllMacroDefinitions` is
@@ -336,13 +341,17 @@ LSP types anywhere.
     64`) on how deeply a call SITE may nest a function-like macro's own name
     (`F(F(F(…`) — unlike the self-recursion guard, that shape is bounded only by how much
     text the site writes, not by the file's macro count, and 20,000 levels of it overflowed
-    the stack before the cap existed; `__LINE__` (1-based), `__FILE__` (real path string),
+    the stack before the cap existed; `__LINE__` (1-based), `__FILE__` (always
+    `_rootFilePath` — the compiled script, never `frame.SourceFile`, since `#insert`
+    splices a header's own code as if written inline in the including file, so `__FILE__`
+    inside one names the script it ends up part of, not the `.gsh` holding the text),
     `__FUNCTION__` (the enclosing `namespace::function`, found by scanning backward for
     the nearest `function` keyword and `#namespace` — a known simplification: it
     therefore finds nothing in a dialect without the `function` keyword, and can
     misattribute to an earlier function when used outside any function, both accepted
     since across the whole stock corpus this is written once), `FASTFILE`
-    (`__fastfile__` placeholder).
+    (`__fastfile__` placeholder). `__FUNCTION__`/`__FILE__`/`__LINE__` each record a
+    `BuiltinExpansion` too, so hover on the literal text can show what it resolved to.
   - Passes `#using`/`#namespace`/`#precache`/animtree directives through — those belong
     to the parser.
 

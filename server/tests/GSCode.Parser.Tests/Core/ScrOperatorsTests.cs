@@ -29,6 +29,16 @@ public class ScrOperatorsTests
         return ScrValue.OfConstant(ScrConstant.OfString(value));
     }
 
+    /// <summary>
+    /// A string constant shaped like a REAL literal token — quotes included, exactly what
+    /// FlowTyper.TypeOfLiteral builds from a TokenKind.String's raw text (see
+    /// ScrConstant.Text's own doc: it is kept raw, quotes and all).
+    /// </summary>
+    private static ScrValue StrLiteral(string content)
+    {
+        return ScrValue.OfConstant(ScrConstant.OfString($"\"{content}\""));
+    }
+
     private static ScrValue Vector()
     {
         return ScrValue.Of(ScrTypeSet.Vector);
@@ -312,6 +322,22 @@ public class ScrOperatorsTests
     {
         Assert.True(Apply(ScrBinaryOp.Equal, Int(1), Float(1)).Value.Constant!.Value.Boolean);
         Assert.False(Apply(ScrBinaryOp.StrictEqual, Int(1), Float(1)).Value.Constant!.Value.Boolean);
+    }
+
+    /// <summary>
+    /// A folded concatenation ("a" + "b") must equal an equivalent literal ("ab"), even though the
+    /// folded constant's Text has no quotes (it is built from Content, see Additive) while a real
+    /// literal token's Text keeps them. Equality has to compare CONTENT, not the raw Text — record
+    /// equality on ScrConstant does not, so `("a" + "b") == "ab"` folded to false.
+    /// </summary>
+    [Fact]
+    public void AFoldedConcatenationEqualsAnEquivalentLiteral()
+    {
+        ScrValue folded = Apply(ScrBinaryOp.Add, StrLiteral("a"), StrLiteral("b")).Value;
+        ScrValue literal = StrLiteral("ab");
+
+        Assert.True(Apply(ScrBinaryOp.Equal, folded, literal).Value.Constant!.Value.Boolean);
+        Assert.True(Apply(ScrBinaryOp.StrictEqual, folded, literal).Value.Constant!.Value.Boolean);
     }
 
     [Fact]

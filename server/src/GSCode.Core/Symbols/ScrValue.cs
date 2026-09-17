@@ -289,7 +289,63 @@ public readonly record struct ScrConstant
             case ScrTypeSet.Int: return Integer.ToString(System.Globalization.CultureInfo.InvariantCulture);
             case ScrTypeSet.Float: return Real.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
             case ScrTypeSet.Vector: return Vector.ToString();
-            default: return Text is null ? "" : "\"" + Text + "\"";
+            // Content, not Text: a literal's Text already carries its own quotes, and wrapping
+            // those in another pair produced `""foo""` instead of `"foo"`.
+            default: return Content is null ? "" : "\"" + Content + "\"";
+        }
+    }
+
+    /// <summary>
+    /// Structural equality by VALUE, not by the raw <see cref="Text"/> a string-kind constant
+    /// happens to carry.
+    ///
+    /// Two string constants can mean the same thing while spelling it differently: a real literal
+    /// token's <see cref="Text"/> keeps its quotes, while a folded concatenation's does not (see
+    /// <see cref="Text"/>'s own doc — it is built from <see cref="Content"/> in
+    /// <c>ScrOperators.Additive</c>, precisely to avoid producing quotes-within-quotes). The
+    /// compiler-generated record equality compared <see cref="Text"/> directly, so
+    /// <c>("a" + "b") == "ab"</c> folded to <c>false</c> and a Union that agreed on the same string
+    /// from two differently-spelled sources dropped its constant. Comparing <see cref="Content"/>
+    /// for the three string-ish kinds is the fix; every other kind still compares its own payload,
+    /// where there is no such spelling ambiguity.
+    /// </summary>
+    public bool Equals(ScrConstant other)
+    {
+        if ( Type != other.Type )
+        {
+            return false;
+        }
+
+        switch ( Type )
+        {
+            case ScrTypeSet.Int: return Integer == other.Integer;
+            case ScrTypeSet.Float: return Real.Equals(other.Real);
+            case ScrTypeSet.Bool: return Boolean == other.Boolean;
+            case ScrTypeSet.Vector: return Vector == other.Vector;
+            case ScrTypeSet.String:
+            case ScrTypeSet.IString:
+            case ScrTypeSet.HashString:
+                return string.Equals(Content, other.Content, StringComparison.Ordinal);
+            // Undefined, or any future single-bit kind this switch does not yet know: Type
+            // equality (checked above) is the whole answer, since no payload field is meaningful.
+            default: return true;
+        }
+    }
+
+    /// <summary>Agrees with <see cref="Equals(ScrConstant)"/> — hashes by value, not by raw Text.</summary>
+    public override int GetHashCode()
+    {
+        switch ( Type )
+        {
+            case ScrTypeSet.Int: return HashCode.Combine(Type, Integer);
+            case ScrTypeSet.Float: return HashCode.Combine(Type, Real);
+            case ScrTypeSet.Bool: return HashCode.Combine(Type, Boolean);
+            case ScrTypeSet.Vector: return HashCode.Combine(Type, Vector);
+            case ScrTypeSet.String:
+            case ScrTypeSet.IString:
+            case ScrTypeSet.HashString:
+                return HashCode.Combine(Type, Content is null ? 0 : StringComparer.Ordinal.GetHashCode(Content));
+            default: return Type.GetHashCode();
         }
     }
 }

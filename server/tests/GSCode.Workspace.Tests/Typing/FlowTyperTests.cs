@@ -329,6 +329,53 @@ public class FlowTyperTests
         Assert.False(HoverAt(source, new Position(7, 6), out _));
     }
 
+    // --- switch: a cursor inside one case is on THAT path, and fallthrough carries effects ---
+
+    [Fact]
+    public void InsideACase_TheCaseOwnValueIsReported_NotTheMergeOfEveryCase()
+    {
+        // The reported gap: WalkSwitch always finished by overwriting the shared environment with
+        // the JOIN of every case, however the cursor's own case walked it moment-to-moment — so
+        // `x` at the marked spot showed `string|int`, projecting to Unknown, instead of the case's
+        // own `int`.
+        string source =
+            "function f( k )\n{\n\tswitch ( k )\n\t{\n\tcase 1:\n\t\tx = \"a\";\n\t\tbreak;\n\tcase 2:\n\t\tx = 5;\n\t\tuse( x );\n\t\tbreak;\n\t}\n}\n";
+
+        Assert.True(HoverAt(source, new Position(9, 7), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void FallthroughCase_InheritsTheEffectsOfTheCaseAbove()
+    {
+        // A case with no leading break/return/continue is reached by falling through from the one
+        // above it as much as by matching its own label — but it was always walked from the
+        // PRE-SWITCH environment, losing every effect the case above had. Case 2 is ALSO reachable
+        // directly (jumping straight to its own label with case 1 never having run), so the honest
+        // answer is a union — x MAY be int, it is not CERTAINLY int, and asserting the stronger
+        // claim would be exactly the kind of guess this pass refuses to make. Before the fix `x`
+        // had no entry in the environment here at all, since case 1's effects never reached it.
+        string source =
+            "function f( k )\n{\n\tswitch ( k )\n\t{\n\tcase 1:\n\t\tx = 5;\n\tcase 2:\n\t\tuse( x );\n\t\tbreak;\n\t}\n}\n";
+
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        Assert.True(NewTyper().TryGetValueAt(result, new Position(7, 7), out ScrValue value));
+        Assert.True(value.MayBe(ScrTypeSet.Int));
+    }
+
+    [Fact]
+    public void ACaseThatBreaks_DoesNotLeakIntoTheNextCase()
+    {
+        // The mirror of the fallthrough case: a case that DOES break must not hand its effects to
+        // the one after it.
+        string source =
+            "function f( k )\n{\n\tswitch ( k )\n\t{\n\tcase 1:\n\t\tx = 5;\n\t\tbreak;\n\tcase 2:\n\t\tuse( x );\n\t\tbreak;\n\t}\n}\n";
+
+        Assert.False(HoverAt(source, new Position(8, 7), out _));
+    }
+
     // --- The type AT the cursor, not the type it started as ---
 
     private static ParseResult Reassigned()

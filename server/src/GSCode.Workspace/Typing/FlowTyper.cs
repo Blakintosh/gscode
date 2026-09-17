@@ -613,8 +613,15 @@ public sealed class FlowTyper
     }
 
     /// <summary>
-    /// Walks each case group as its own alternative path. Without a default label no group
-    /// need run at all, so the pre-switch environment joins in as a further alternative.
+    /// Walks each case group as its own alternative path, chaining a group with no leading
+    /// break/return/continue onto the group above it — which reaches it exactly as much as
+    /// matching its own label does. Without a default label the pre-switch environment joins in
+    /// as a further alternative, for the same reason an if with no else does.
+    ///
+    /// A cursor inside one group is on THAT path, not at the merge of every path the switch could
+    /// take, the same shortcut <c>IfNode</c> and foreach already take — and here it also has to
+    /// honour fallthrough up to the cursor's own group rather than starting from the pre-switch
+    /// environment.
     /// </summary>
     private void WalkSwitch(
         SwitchNode switchNode,
@@ -623,17 +630,52 @@ public sealed class FlowTyper
         ImmutableArray<InferredAssignment>.Builder hints,
         ImmutableArray<FieldWrite>.Builder writes)
     {
+        // The subject is evaluated once, before any case is tested, and every case label's own
+        // value is an ordinary expression too (even one that never matches) — both were simply
+        // never walked, leaving a hole in the per-node map for each.
+        TypeExpressionForEffects(switchNode.Subject, environment, hinted, hints, writes);
+        foreach ( CaseGroupNode labelGroup in switchNode.Cases )
+        {
+            foreach ( CaseLabel label in labelGroup.Labels )
+            {
+                if ( label.Value is not null )
+                {
+                    TypeOf(label.Value, environment);
+                }
+            }
+        }
+
         List<Dictionary<string, ScrValue>> paths = new();
+        Dictionary<string, ScrValue>? previousExit = null;
+        bool previousFallsThrough = false;
 
         foreach ( CaseGroupNode group in switchNode.Cases )
         {
             Dictionary<string, ScrValue> caseEnvironment = Clone(environment);
+            if ( previousFallsThrough && previousExit is not null )
+            {
+                MergeAlternatives(caseEnvironment, caseEnvironment, previousExit);
+            }
+
+            if ( ContainsCursor(group) )
+            {
+                foreach ( AstNode child in group.Statements )
+                {
+                    WalkStatement(child, caseEnvironment, hinted, hints, writes);
+                }
+
+                CopyInto(environment, caseEnvironment);
+                return;
+            }
+
             foreach ( AstNode child in group.Statements )
             {
                 WalkStatement(child, caseEnvironment, hinted, hints, writes);
             }
 
             paths.Add(caseEnvironment);
+            previousExit = caseEnvironment;
+            previousFallsThrough = !EndsInTerminator(group.Statements);
         }
 
         if ( !HasDefaultLabel(switchNode) )
@@ -652,10 +694,21 @@ public sealed class FlowTyper
             MergeAlternatives(merged, merged, paths[index]);
         }
 
-        environment.Clear();
-        foreach ( KeyValuePair<string, ScrValue> entry in merged )
+        CopyInto(environment, merged);
+    }
+
+    /// <summary>Whether a case group's own statements end without falling through to the next one.</summary>
+    private static bool EndsInTerminator(ImmutableArray<AstNode> statements)
+    {
+        return statements.Length > 0 && statements[^1] is ReturnNode or BreakNode or ContinueNode;
+    }
+
+    private static void CopyInto(Dictionary<string, ScrValue> destination, Dictionary<string, ScrValue> source)
+    {
+        destination.Clear();
+        foreach ( KeyValuePair<string, ScrValue> entry in source )
         {
-            environment[entry.Key] = entry.Value;
+            destination[entry.Key] = entry.Value;
         }
     }
 

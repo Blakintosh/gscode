@@ -104,9 +104,63 @@ public sealed class SignatureEngine
             {
                 return BuildBuiltinSignature(builtin, site.Value.ActiveParameter);
             }
+
+            // Call-shaped keywords (`waittill`, `isdefined`, ...) are absent from the API
+            // library — GSCode's gsc-dialect-facts skill names the whole family — so the builtin
+            // lookup above finds nothing for them and help fell silent on the one form its own
+            // class doc promises to cover.
+            SignatureResult? keywordSignature = TryKeywordCall(calleeName, site.Value.ActiveParameter);
+            if ( keywordSignature is not null )
+            {
+                return keywordSignature;
+            }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Parameter names for the call-shaped keywords, since none of them are in the API library to
+    /// ask. `waittill`'s and `notify`'s trailing arguments have no fixed name to show — they are
+    /// arbitrary variable names the author chooses, unlike a real parameter — so only the one
+    /// documented, always-present slot is offered; a caret past it still clamps to it.
+    /// </summary>
+    private static readonly ImmutableDictionary<string, ImmutableArray<string>> s_keywordCallParameters =
+        new Dictionary<string, ImmutableArray<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["isdefined"] = ["value"],
+            ["notify"] = ["event"],
+            ["endon"] = ["event"],
+            ["waittill"] = ["event"],
+            ["waittillmatch"] = ["event"],
+            ["wait"] = ["seconds"],
+            ["waitrealtime"] = ["seconds"],
+        }.ToImmutableDictionary(StringComparer.OrdinalIgnoreCase);
+
+    private static SignatureResult? TryKeywordCall(string calleeName, int activeParameter)
+    {
+        if ( !s_keywordCallParameters.TryGetValue(calleeName, out ImmutableArray<string> parameterNames) )
+        {
+            return null;
+        }
+
+        ImmutableArray<SignatureParameter>.Builder parameters = ImmutableArray.CreateBuilder<SignatureParameter>();
+        foreach ( string parameterName in parameterNames )
+        {
+            parameters.Add(new SignatureParameter(parameterName, ""));
+        }
+
+        return new SignatureResult(
+            BuildLabel(calleeName, parameters),
+            parameters.ToImmutable(),
+            ClampActive(activeParameter, parameters.Count),
+            KeywordDocs.Find(calleeName) ?? "");
+    }
+
+    private static bool IsCallShapedKeyword(TokenKind kind)
+    {
+        return kind is TokenKind.Wait or TokenKind.WaitRealTime or TokenKind.WaitTill
+            or TokenKind.WaitTillMatch or TokenKind.Notify or TokenKind.Endon or TokenKind.IsDefined;
     }
 
     /// <summary>
@@ -495,9 +549,14 @@ public sealed class SignatureEngine
             {
                 if ( depth == 0 )
                 {
-                    // Found the enclosing open paren; the callee is just before it.
+                    // Found the enclosing open paren; the callee is just before it. A call-shaped
+                    // keyword (`waittill`, `isdefined`, ...) is a KEYWORD token, not an Identifier
+                    // — the class doc's own "call-shaped keyword" promise needs both accepted. Not
+                    // every keyword: `if (` must not be read as a call named "if".
                     int calleeIndex = PreviousSignificant(tokens, index);
-                    if ( calleeIndex < 0 || tokens[calleeIndex].Kind != TokenKind.Identifier )
+                    if ( calleeIndex < 0
+                        || tokens[calleeIndex].Kind != TokenKind.Identifier
+                            && !IsCallShapedKeyword(tokens[calleeIndex].Kind) )
                     {
                         return null;
                     }

@@ -215,6 +215,45 @@ public class SignatureEngineTests
         Assert.Null(engine.Resolve(result, "raw", afterParen));
     }
 
+    // --- Call-shaped keywords (waittill, isdefined, ...) ---
+    //
+    // Absent from the API library — GSCode's gsc-dialect-facts skill names the whole family — so
+    // the builtin lookup found nothing for them, and FindEnclosingCall rejected the callee before
+    // even getting that far: it lexes as a KEYWORD token, not an Identifier.
+
+    [Fact]
+    public void WaittillKeyword_ResolvesSignature()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+
+        string text = "function run()\n{\n    self waittill( \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterParen = new(2, 19);
+
+        SignatureResult? signature = engine.Resolve(result, "raw", afterParen);
+
+        Assert.NotNull(signature);
+        Assert.StartsWith("waittill(", signature!.Label, StringComparison.Ordinal);
+        Assert.Contains("binding", signature.Documentation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void IsDefinedKeyword_ResolvesSignature()
+    {
+        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        SignatureEngine engine = BuildEngine(files);
+
+        string text = "function run()\n{\n    x = isdefined( \n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position afterParen = new(2, 19);
+
+        SignatureResult? signature = engine.Resolve(result, "raw", afterParen);
+
+        Assert.NotNull(signature);
+        Assert.Equal("isdefined(value)", signature!.Label);
+    }
+
     // --- Merge dialects (#include) ---
     //
     // CoD4/WaW/MW2 have no #namespace: SymbolExtractor defaults every function's namespace to the

@@ -36,7 +36,12 @@ public sealed class InsertCache : IHeaderMacroCache
 {
     private sealed record Entry(InsertedFile File, DateTime LastWriteUtc);
 
-    private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
+    // Ordinal, not OrdinalIgnoreCase: PathUtil.NormalizeAbsolute keeps exact case on Linux (a
+    // case-sensitive filesystem, where two names differing only by case really are two different
+    // files), lowercasing only on Windows/macOS — so an ignore-case comparer here would collide
+    // two DISTINCT headers on Linux into one cache entry, silently serving one file's content
+    // for the other. Matches LanguageStore's own key comparer for the same reason.
+    private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
 
     private long _generation;
 
@@ -118,7 +123,7 @@ public sealed class InsertCache : IHeaderMacroCache
     /// timestamp moved drops both together.
     /// </summary>
     private readonly ConcurrentDictionary<string, HeaderContribution> _contributions =
-        new(StringComparer.OrdinalIgnoreCase);
+        new(StringComparer.Ordinal);
 
     public bool TryGet(string resolvedPath, out HeaderContribution contribution)
     {
@@ -161,7 +166,7 @@ public sealed class InsertCache : IHeaderMacroCache
     /// </summary>
     private bool DropContributionsIncluding(string resolvedPath)
     {
-        HashSet<string> dropped = new(StringComparer.OrdinalIgnoreCase) { resolvedPath };
+        HashSet<string> dropped = new(StringComparer.Ordinal) { resolvedPath };
         bool any = false;
 
         bool grew = true;

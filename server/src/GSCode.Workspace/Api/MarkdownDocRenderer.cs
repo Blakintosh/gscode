@@ -83,13 +83,15 @@ public static class MarkdownDocRenderer
         AppendBuiltinParameters(markdown, primary);
         AppendBuiltinReturn(markdown, primary);
 
-        // Additional overloads listed compactly under the primary prototype.
+        // Additional overloads listed compactly under the primary prototype — starting at 1,
+        // since index 0 IS primary and is already the fenced signature above. Iterating the
+        // whole array here repeated it as the list's own first bullet.
         if ( builtin.Overloads.Length > 1 )
         {
             markdown.Append("\n\nOverloads:\n");
-            foreach ( BuiltinOverload overload in builtin.Overloads )
+            for ( int index = 1; index < builtin.Overloads.Length; index++ )
             {
-                markdown.Append("* `").Append(BuiltinSignature(builtin, overload)).Append("`\n");
+                markdown.Append("* `").Append(BuiltinSignature(builtin, builtin.Overloads[index])).Append("`\n");
             }
         }
 

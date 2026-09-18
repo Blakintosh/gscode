@@ -95,6 +95,26 @@ public class ApiLoaderTests
     }
 
     [Fact]
+    public void RenderBuiltin_TheOverloadsListDoesNotRepeatThePrimaryPrototype()
+    {
+        // The comment above the loop says "additional overloads listed... under the primary
+        // prototype" — but the loop iterated every overload, the primary included, so a
+        // two-overload builtin showed its first signature twice: once in the fenced code block
+        // at the top and again as the first bullet of its own "Overloads:" list.
+        BuiltinOverload first = new("player", [new BuiltinParameter("origin", "", true, "vector")], "", false);
+        BuiltinOverload second = new(
+            "player", [new BuiltinParameter("origin", "", true, "vector"), new BuiltinParameter("angles", "", true, "vector")], "", false);
+        BuiltinFunction builtin = new("SpawnSpectator", "", [first, second], "");
+
+        string markdown = MarkdownDocRenderer.RenderBuiltin(builtin);
+        int overloadsIndex = markdown.IndexOf("Overloads:", StringComparison.Ordinal);
+        string overloadsSection = markdown[overloadsIndex..];
+
+        Assert.DoesNotContain("* `<player> SpawnSpectator(origin)`", overloadsSection, StringComparison.Ordinal);
+        Assert.Contains("* `<player> SpawnSpectator(origin, angles)`", overloadsSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RenderFunction_IncludesNamespaceParamsAndDoc()
     {
         FunctionSymbol function = new()

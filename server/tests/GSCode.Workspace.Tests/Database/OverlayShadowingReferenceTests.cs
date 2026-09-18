@@ -118,6 +118,27 @@ public class OverlayShadowingReferenceTests
         Assert.Equal(2, kept.Parameters.Length);
     }
 
+    /// <summary>
+    /// The gap the per-name check left open: the raw copy declared `foo`, but the overlay REPLACING
+    /// it no longer does — the engine still never loads the raw file, but nothing in `matches` ever
+    /// contained the overlay's record to compare against, since a lookup for "foo" specifically
+    /// never finds a file that does not declare it.
+    /// </summary>
+    [Fact]
+    public void LookupFunctions_HidesTheWholeRawFile_EvenWhenTheOverlayNoLongerDeclaresTheName()
+    {
+        LanguageStore store = new();
+        store.Upsert(FunctionRecord(@"C:\raw0\maps\_utility.gsc", "raw", @"maps\_utility", "foo", paramCount: 1));
+        // The overlay replaces the whole file; its own copy dropped `foo` and declares `bar` instead.
+        store.Upsert(FunctionRecord(
+            @"C:\mods0\zm_grief\maps\_utility.gsc", "mod:zm_grief", @"maps\_utility", "bar", paramCount: 0));
+
+        ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
+            store, "mod:zm_grief", askingPath: "", namespaceName: "", keyName: "foo", includePrivate: true);
+
+        Assert.Empty(found);
+    }
+
     private static ScriptRecord ClassRecord(
         string path, string contextId, string relativePath, string keyName, string? parentKeyName)
     {

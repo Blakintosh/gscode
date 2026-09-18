@@ -101,12 +101,23 @@ public static class DatabaseQueries
         return ApplyShadowing(
             matches.ToImmutable(),
             static match => match.Record,
-            static match => match.Function.KeyName);
+            static match => match.Function.KeyName,
+            store,
+            askingContextId);
     }
 
     /// <summary>
-    /// Overlay shadowing: when a mod/workspace copy and the raw copy of the SAME
-    /// script-relative file both match, the overlay wins and the raw copy drops out.
+    /// Overlay shadowing: when a mod/workspace copy exists at the SAME script-relative path as a
+    /// raw record, the engine loads ONLY the overlay — replacing the raw file WHOLESALE, whatever
+    /// each copy individually declares — so every raw-context match at that path drops out, not
+    /// only the ones the overlay happens to also declare under the same name.
+    ///
+    /// A per-NAME check here used to stand in for that (the overlay had to contribute a match under
+    /// the same name for the raw one to be dropped), which is right when both copies declare the
+    /// name but silently wrong when the overlay's copy deletes it: <paramref name="matches"/> is
+    /// already narrowed to one name by the caller, so an overlay that no longer declares it never
+    /// appears here to be compared against — the raw declaration survived, resolving to code the
+    /// engine never loads.
     ///
     /// Applies to functions and to classes alike, hence the selectors — the rule is one rule, and
     /// the two were previously typed out separately, which meant a change to it had to be made
@@ -117,12 +128,26 @@ public static class DatabaseQueries
     /// enumeration order, so the same edit can resolve to the raw base class one moment and the
     /// overridden one the next.
     /// </summary>
+    /// <param name="store">
+    /// Where <see cref="LanguageStore.HasOverlayAt"/> is asked — the fix for the gap above. Optional
+    /// because one caller (<see cref="FindAllReferences"/>) aggregates across GSC, CSC and the GSH
+    /// store together, none of which is uniquely "the" store its matches came from; that caller
+    /// already sidesteps the per-name gap by keying <paramref name="keyNameOf"/> to a constant, so
+    /// nothing here loses correctness by leaving it out.
+    /// </param>
+    /// <param name="askingContextId">
+    /// Required whenever <paramref name="store"/> is given — <see cref="LanguageStore.HasOverlayAt"/>
+    /// is a visibility question, not a bare existence one: mod_a's overlay shadows raw only when
+    /// mod_a itself is asking, never a sibling mod or raw asking about its own file.
+    /// </param>
     public static ImmutableArray<T> ApplyShadowing<T>(
         ImmutableArray<T> matches,
         Func<T, ScriptRecord> recordOf,
-        Func<T, string> keyNameOf)
+        Func<T, string> keyNameOf,
+        LanguageStore? store = null,
+        string askingContextId = "")
     {
-        if ( matches.Length < 2 )
+        if ( matches.Length == 0 )
         {
             return matches;
         }
@@ -137,17 +162,17 @@ public static class DatabaseQueries
             }
         }
 
-        if ( overlayIdentities.Count == 0 )
-        {
-            return matches;
-        }
-
         ImmutableArray<T>.Builder kept = ImmutableArray.CreateBuilder<T>();
         foreach ( T match in matches )
         {
             ScriptRecord record = recordOf(match);
+
+            // Either the overlay declared this exact name too, or — whatever it declares — an
+            // overlay exists at this file's path at all, which is what actually decides whether
+            // the engine ever loads the raw copy.
             bool shadowedOut = record.ContextId == "raw"
-                && overlayIdentities.Contains(record.RelativePath + "|" + keyNameOf(match));
+                && (overlayIdentities.Contains(record.RelativePath + "|" + keyNameOf(match))
+                    || (store?.HasOverlayAt(record.RelativePath, askingContextId) ?? false));
 
             if ( !shadowedOut )
             {
@@ -785,7 +810,7 @@ public static class DatabaseQueries
         // enumerated first — dead-code raw signature or live overlay one, by dictionary luck.
         Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
         foreach ( (ScriptRecord _, FunctionSymbol function) in ApplyShadowing(
-            matches.ToImmutable(), static m => m.Record, static m => m.Function.KeyName) )
+            matches.ToImmutable(), static m => m.Record, static m => m.Function.KeyName, store, askingContextId) )
         {
             byName.TryAdd(function.KeyName, function);
         }
@@ -852,7 +877,7 @@ public static class DatabaseQueries
         // pick away from offering the raw base's members instead of the ones the mod actually ships.
         Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
         foreach ( (ScriptRecord _, ClassSymbol classSymbol) in ApplyShadowing(
-            matches.ToImmutable(), static m => m.Record, static m => m.Class.KeyName) )
+            matches.ToImmutable(), static m => m.Record, static m => m.Class.KeyName, store, askingContextId) )
         {
             byName.TryAdd(classSymbol.KeyName, classSymbol);
         }
@@ -902,7 +927,9 @@ public static class DatabaseQueries
         return ApplyShadowing(
             matches.ToImmutable(),
             static match => match.Record,
-            static match => match.Class.KeyName);
+            static match => match.Class.KeyName,
+            store,
+            askingContextId);
     }
 
     /// <summary>

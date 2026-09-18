@@ -21,6 +21,17 @@ public sealed class LanguageStore
     private readonly ClassGraph _classGraph = new();
 
     /// <summary>
+    /// How many non-raw (mod/workspace) records currently sit at each script-relative path, broken
+    /// down by WHICH context — see <see cref="HasOverlayAt"/>. The context matters as much as the
+    /// count: mod_a's overlay of a file must shadow that file only when asked FROM mod_a, never from
+    /// mod_b (siblings are isolated) or from raw itself (raw loads its own copy regardless of what
+    /// any mod does), so a bare "does an overlay exist anywhere" would shadow raw's view of its own
+    /// file the moment an unrelated mod happened to touch the same relative path.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, int>> _overlayContextsByRelativePath =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Serialises writes TO ONE PATH so a record swap and the index diffs that describe it land
     /// together. Indexing runs <c>Parallel.ForEachAsync</c>, so without this the read-previous and
     /// the swap below are separate steps: two upserts of the same file could each read the same
@@ -104,6 +115,7 @@ public sealed class LanguageStore
         {
             _records.TryGetValue(record.Path, out ScriptRecord? previous);
             _records[record.Path] = record;
+            AdjustOverlayCount(previous, record);
 
             // The OLD sets still have to be built here: `previous` is only knowable under the gate,
             // and reading it outside would let two upserts of one file diff against the same
@@ -163,12 +175,65 @@ public sealed class LanguageStore
         {
             if ( _records.TryRemove(normalizedPath, out ScriptRecord? previous) )
             {
+                AdjustOverlayCount(previous, next: null);
                 _referenceIndex.Apply(normalizedPath, ReferenceIndex.KeysOf(previous.References), []);
                 _declarationIndex.Apply(normalizedPath, DeclarationIndex.NamesOf(previous.Functions), []);
                 _namespaceIndex.Apply(normalizedPath, NamespaceIndex.NamespacesOf(previous.Functions), []);
                 _classGraph.Remove(normalizedPath);
             }
         }
+    }
+
+    /// <summary>Keeps <see cref="_overlayContextsByRelativePath"/> correct across an upsert or removal.</summary>
+    private void AdjustOverlayCount(ScriptRecord? previous, ScriptRecord? next)
+    {
+        if ( previous is not null && previous.ContextId != "raw" && previous.RelativePath.Length > 0 )
+        {
+            AdjustOverlayCount(previous.RelativePath, previous.ContextId, -1);
+        }
+
+        if ( next is not null && next.ContextId != "raw" && next.RelativePath.Length > 0 )
+        {
+            AdjustOverlayCount(next.RelativePath, next.ContextId, 1);
+        }
+    }
+
+    private void AdjustOverlayCount(string relativePath, string contextId, int delta)
+    {
+        ConcurrentDictionary<string, int> byContext = _overlayContextsByRelativePath.GetOrAdd(
+            relativePath, static _ => new ConcurrentDictionary<string, int>(StringComparer.Ordinal));
+
+        byContext.AddOrUpdate(contextId, delta, (_, count) => count + delta);
+    }
+
+    /// <summary>
+    /// Whether a mod or workspace copy VISIBLE TO <paramref name="askingContextId"/> currently sits
+    /// at this script-relative path — the engine loads ONLY that copy, replacing the raw one
+    /// wholesale, whatever the two copies individually declare. See
+    /// <see cref="DatabaseQueries.ApplyShadowing"/>, the caller this exists for.
+    ///
+    /// Visibility is <see cref="ScriptDatabase.CanSee"/>'s, asked of each context that has an
+    /// overlay here: mod_a's own overlay counts when mod_a is asking, mod_b's does not (siblings
+    /// are isolated), and raw asking sees no overlay at all, since <c>CanSee("raw", "mod:x")</c> is
+    /// false — raw loads its own file regardless of what any mod does with the same relative path.
+    /// </summary>
+    public bool HasOverlayAt(string relativePath, string askingContextId)
+    {
+        if ( relativePath.Length == 0
+            || !_overlayContextsByRelativePath.TryGetValue(relativePath, out ConcurrentDictionary<string, int>? byContext) )
+        {
+            return false;
+        }
+
+        foreach ( KeyValuePair<string, int> entry in byContext )
+        {
+            if ( entry.Value > 0 && ScriptDatabase.CanSee(askingContextId, entry.Key) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Paths of the files DECLARING a function key name — see <see cref="DeclarationIndex"/>.</summary>

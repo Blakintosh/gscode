@@ -113,13 +113,18 @@ public class ScriptDatabaseTests
     {
         (ScriptDatabase database, _) = await IndexFixtureAsync();
 
-        // struct.gsc exists in raw and in mod_a's overlay: from mod_a, the raw copy of
-        // that relative file must not surface its (differently-named) functions when
-        // both would match — here we assert the mod sees ITS struct and raw's function
-        // from the SAME relative path is dropped only when identities collide. Names
-        // differ in fixture, so check both resolve independently first:
+        // struct.gsc exists in both raw and mod_a's overlay, under DIFFERENT function names —
+        // mod_a's copy replaces the raw file WHOLESALE, so from mod_a, only its own mod_struct is
+        // reachable; raw_struct is dead code the running mod never loads, whatever name it has.
         Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "mod:mod_a", "", null, "mod_struct"));
-        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "mod:mod_a", "", null, "raw_struct"));
+        Assert.Empty(DatabaseQueries.LookupFunctions(database.Gsc, "mod:mod_a", "", null, "raw_struct"));
+
+        // raw itself still sees its own file: raw does not know or care that some mod exists.
+        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", "", null, "raw_struct"));
+
+        // mod_b never touched struct.gsc, so it still resolves through raw's copy — mod_a's
+        // overlay of the SAME relative path is invisible to its sibling.
+        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "mod:mod_b", "", null, "raw_struct"));
     }
 
     [Fact]

@@ -6,7 +6,11 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Run Extension",
+			// Debug server. SHOULD_TEST_IN_RELEASE is set here rather than left to
+			// client/.env: dotenv.config() does not overwrite variables that are
+			// already in process.env, so the launch config wins and the two F5
+			// entries below stay honest about which build they spawn.
+			"name": "Run Extension (Debug server)",
 			"type": "extensionHost",
 			"request": "launch",
 			"args": [
@@ -15,9 +19,28 @@
 			"outFiles": [
 				"${workspaceFolder}/client/out/**/*.js"
 			],
-			"preLaunchTask": "${defaultBuildTask}",
+			"preLaunchTask": "build: debug",
 			"env": {
-				"VSCODE_DEBUG": "true"
+				"VSCODE_DEBUG": "true",
+				"SHOULD_TEST_IN_RELEASE": "false"
+			}
+		},
+		{
+			// Release server — the configuration users actually get. Reads
+			// SERVER_LOCATION from client/.env.
+			"name": "Run Extension (Release server)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/client"
+			],
+			"outFiles": [
+				"${workspaceFolder}/client/out/**/*.js"
+			],
+			"preLaunchTask": "build: release",
+			"env": {
+				"VSCODE_DEBUG": "true",
+				"SHOULD_TEST_IN_RELEASE": "true"
 			}
 		},
 		{
@@ -31,7 +54,7 @@
 			"outFiles": [
 				"${workspaceFolder}/client/out/test/**/*.js"
 			],
-			"preLaunchTask": "${defaultBuildTask}"
+			"preLaunchTask": "build: debug"
 		}
 	]
 }

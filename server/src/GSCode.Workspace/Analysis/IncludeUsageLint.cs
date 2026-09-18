@@ -261,10 +261,12 @@ public static class IncludeUsageLint
 
         // Capped: a name shared by hundreds of files would otherwise attach hundreds of links to a
         // single squiggle, and a list that long tells the reader nothing the first few do not.
+        // DeclaringPath, not Record.Path: a candidate reached through #insert has a NameRange
+        // that is a true position in the HEADER, not in the record that merely spliced it in.
         ImmutableArray<DiagnosticRelation> related =
         [
             .. declaring.Take(8).Select(resolved => new DiagnosticRelation(
-                resolved.Record.Path, resolved.Function.NameRange, "Also declared here.")),
+                resolved.DeclaringPath, resolved.Function.NameRange, "Also declared here.")),
         ];
 
         return missing with { RelatedInformation = related };

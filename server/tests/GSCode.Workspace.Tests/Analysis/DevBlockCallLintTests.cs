@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -328,5 +329,27 @@ public class DevBlockCallLintTests
 
         Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
         Assert.Contains("dump_state", diagnostic.Message);
+    }
+
+    [Fact]
+    public void TheRelation_PointsAtTheHeaderWhenTheDevOnlyFunctionArrivedThroughAnInsert()
+    {
+        // scripts\devbase.gsc does not write `dump_state` itself — it #inserts a header that
+        // does. The resulting FunctionSymbol's NameRange is a TRUE position in THAT header, not
+        // in scripts\devbase.gsc, so the related-information path has to follow DeclaringPath
+        // there too: pairing the header-true range with the including file's path pointed the
+        // relation at whatever text happens to sit at that line and column in devbase.gsc —
+        // nothing to do with where `dump_state` is actually declared.
+        string headerPath = @$"{Raw}\scripts\devbase_impl.gsh";
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(headerPath, "#namespace devbase;\n/#\nfunction dump_state()\n{\n}\n#/\n")
+            .AddFile(@$"{Raw}\scripts\devbase.gsc", "#insert scripts\\devbase_impl.gsh;\n");
+
+        string source = "#using scripts\\devbase;\n#namespace game;\n"
+            + "function run()\n{\n    devbase::dump_state();\n}\n";
+
+        DiagnosticRelation relation = Assert.Single(Assert.Single(Lint(source, files)).RelatedInformation);
+
+        Assert.Equal(PathUtil.NormalizeAbsolute(headerPath), relation.FilePath, ignoreCase: true);
     }
 }

@@ -101,8 +101,11 @@ public static class PrivateAccessLint
                     candidate.Function.Name,
                     candidate.Function.Namespace);
 
+                // DeclaringPath, not Record.Path: a candidate reached through #insert has a
+                // NameRange that is a true position in the HEADER, not in the record that merely
+                // spliced it in.
                 DiagnosticRelation declaredAt = new(
-                    candidate.Record.Path, candidate.Function.NameRange, "Declared private here.");
+                    candidate.DeclaringPath, candidate.Function.NameRange, "Declared private here.");
 
                 if ( MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
                 {

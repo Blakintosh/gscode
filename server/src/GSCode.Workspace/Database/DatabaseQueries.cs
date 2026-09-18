@@ -14,6 +14,22 @@ public sealed record ResolvedFunction(FunctionSymbol Function, ScriptRecord Reco
     /// existing <c>new ResolvedFunction(function, record)</c> sites keep compiling unchanged.
     /// </summary>
     public ClassSymbol? OwnerClass { get; init; }
+
+    /// <summary>
+    /// The file <see cref="FunctionSymbol.NameRange"/> is actually a position IN —
+    /// <see cref="Record"/>'s path, unless the function arrived through <c>#insert</c>, in which
+    /// case NameRange is a true
+    /// position in the header named by <see cref="FunctionSymbol.SourceFile"/> instead. A caller
+    /// building a diagnostic relation or similar file+range pair from a
+    /// <see cref="ResolvedFunction"/> must use THIS as the file, not <c>Record.Path</c> directly —
+    /// pairing the header-true range with the including file's path points at whatever text
+    /// happens to sit at that line and column over there, which has nothing to do with where the
+    /// function is actually declared.
+    /// </summary>
+    public string DeclaringPath
+    {
+        get { return Function.SourceFile.Length > 0 ? Function.SourceFile : Record.Path; }
+    }
 }
 
 /// <summary>A resolved class with its declaring record.</summary>

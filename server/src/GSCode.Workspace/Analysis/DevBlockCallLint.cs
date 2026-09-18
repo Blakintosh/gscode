@@ -134,8 +134,11 @@ public static class DevBlockCallLint
                 GscDiagnosticCode.DevOnlyFunctionCalledFromRelease,
                 resolved[0].Function.Name);
 
+            // DeclaringPath, not Record.Path: a dev-only function reached through #insert has a
+            // NameRange that is a true position in the HEADER, not in the record that merely
+            // spliced it in.
             DiagnosticRelation declaredAt = new(
-                resolved[0].Record.Path, resolved[0].Function.NameRange, "Declared inside a dev block here.");
+                resolved[0].DeclaringPath, resolved[0].Function.NameRange, "Declared inside a dev block here.");
 
             diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
         }

@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -155,5 +156,38 @@ public class PrivateAccessLintTests
             "#using scripts\\util;\n#define HELP() util::hidden(); util::hidden()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
 
         Assert.Single(Lint(source));
+    }
+
+    [Fact]
+    public async Task ARelation_PointsAtTheHeaderWhenThePrivateFunctionArrivedThroughAnInsert()
+    {
+        // scripts\util.gsc does not write `hidden` itself — it #inserts a header that does. The
+        // resulting FunctionSymbol's NameRange is a TRUE position in THAT header, not in
+        // scripts\util.gsc, so the related-information path has to follow DeclaringPath there
+        // too: pairing the header-true range with the including file's path pointed the relation
+        // at whatever text happens to sit at that line and column in scripts\util.gsc — nothing
+        // to do with where `hidden` is actually declared.
+        string headerPath = @$"{Raw}\scripts\util_impl.gsh";
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(headerPath, "#namespace util;\nfunction private hidden()\n{\n}\n")
+            .AddFile(@$"{Raw}\scripts\util.gsc", "#insert scripts\\util_impl.gsh;\nfunction shown()\n{\n}\n");
+
+        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        PathResolver resolver = new(config, files);
+        ScriptDatabase database = new();
+        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
+        await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+
+        string askingPath = @$"{Raw}\scripts\main.gsc";
+        string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
+        ParseResult result = ScriptAnalysis.Analyze(
+            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+
+        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
+        Diagnostic diagnostic = Assert.Single(PrivateAccessLint.Analyze(
+            result, database.Gsc, "raw", askingPath, builtins.For(ScriptLanguage.Gsc)));
+
+        DiagnosticRelation relation = Assert.Single(diagnostic.RelatedInformation);
+        Assert.Equal(PathUtil.NormalizeAbsolute(headerPath), relation.FilePath, ignoreCase: true);
     }
 }

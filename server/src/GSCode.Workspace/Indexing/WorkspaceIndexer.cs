@@ -559,9 +559,26 @@ public sealed class WorkspaceIndexer
                 // Null when the blob is corrupt, which falls through to a normal analysis below
                 // rather than failing the file — the same outcome a missing cache entry has.
                 restored = cached.Materialize();
-                if ( restored is not null && !ownedByOpenDocument )
+                if ( restored is not null )
                 {
-                    _database.CommitRecord(restored);
+                    // Both are pure functions of (path, current RootConfig), same as the
+                    // fresh-analysis path below always computes — recomputed here too, since a
+                    // workspace-folder or setting change between sessions can reclassify a file
+                    // whose bytes never changed (raw becoming a mod, one mod folder becoming
+                    // another), and the cached blob only ever carries LAST session's answer.
+                    ResolutionContext restoredContext = Resolver.GetContext(normalized);
+                    string freshContextId = ScriptDatabase.ContextIdOf(restoredContext);
+                    string freshRelativePath = Resolver.GetScriptRelativePath(normalized, restoredContext);
+
+                    if ( restored.ContextId != freshContextId || restored.RelativePath != freshRelativePath )
+                    {
+                        restored = restored with { ContextId = freshContextId, RelativePath = freshRelativePath };
+                    }
+
+                    if ( !ownedByOpenDocument )
+                    {
+                        _database.CommitRecord(restored);
+                    }
                 }
             }
 

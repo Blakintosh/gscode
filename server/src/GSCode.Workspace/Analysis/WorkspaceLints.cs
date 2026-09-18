@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Instrumentation;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Extraction;
@@ -84,6 +83,12 @@ public static class WorkspaceLints
     /// they do buy is abandoning the pass BEFORE its expensive stretches — the import resolution
     /// and the shared node walk — which is where a superseded analysis wastes its time.
     /// </param>
+    /// <param name="timings">
+    /// Optional per-rule stopwatch, for a caller that wants one file's profile in an ORDINARY
+    /// build — the corpus budget gate. Null on every production path, where the scopes are the
+    /// instrumented build's <c>PerfTracker</c> ones and nothing else. See <see cref="LintTimings"/>
+    /// for why the gate cannot read PerfTracker instead.
+    /// </param>
     public static ImmutableArray<Diagnostic> LintsOnly(
         ParseResult result,
         ScriptLanguage language,
@@ -92,7 +97,8 @@ public static class WorkspaceLints
         PathResolver resolver,
         BuiltinApiSet builtins,
         ObjectFields objectFields,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        LintTimings? timings = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -111,9 +117,11 @@ public static class WorkspaceLints
         // The file's imports, resolved ONCE for the four lints that each used to resolve them
         // again. Every resolve is a filesystem probe per configured root, and this runs on every
         // keystroke — on a BO3 file the same #using list was being walked three times over.
-        PerfTracker.Begin("lint.FileImports.Resolve");
-        FileImports imports = FileImports.Resolve(result, store, language, resolver, path);
-        PerfTracker.End();
+        FileImports imports;
+        using ( LintScope.For("lint.FileImports.Resolve", timings) )
+        {
+            imports = FileImports.Resolve(result, store, language, resolver, path);
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -121,70 +129,88 @@ public static class WorkspaceLints
         // without this a typo silences them and says nothing about why. It deliberately does NOT
         // share the resolution above: it asks whether the target exists on DISK, which is what
         // decides whether the script links, rather than whether the index has reached it yet.
-        PerfTracker.Begin("lint.UsingNotFoundLint");
-        lints.AddRange(UsingNotFoundLint.Analyze(result, language, resolver, path));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.NamespaceUsageLint");
-        lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path, contextId, imports: imports));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.UnusedUsingLint");
-        lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path, imports));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.UnusedIncludeLint");
-        lints.AddRange(UnusedIncludeLint.Analyze(result, store, language, resolver, path, imports));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.AmbiguousFunctionLint");
-        lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path, imports));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.UnusedLocalLint");
-        lints.AddRange(UnusedLocalLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ThreadedResultLint");
-        lints.AddRange(ThreadedResultLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.UnassignedVariableLint");
-        lints.AddRange(UnassignedVariableLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.DuplicateImportLint");
-        lints.AddRange(DuplicateImportLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.UnusedBindingLint");
-        lints.AddRange(UnusedBindingLint.Analyze(result));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ClassCycleLint");
-        lints.AddRange(ClassCycleLint.Analyze(result, store, contextId));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ArgumentCountLint");
-        lints.AddRange(ArgumentCountLint.Analyze(result, store, contextId, path, languageBuiltins));
-        PerfTracker.End();
+        using ( LintScope.For("lint.UsingNotFoundLint", timings) )
+        {
+            lints.AddRange(UsingNotFoundLint.Analyze(result, language, resolver, path));
+        }
+        using ( LintScope.For("lint.NamespaceUsageLint", timings) )
+        {
+            lints.AddRange(NamespaceUsageLint.Analyze(result, store, language, resolver, path, contextId, imports: imports));
+        }
+        using ( LintScope.For("lint.UnusedUsingLint", timings) )
+        {
+            lints.AddRange(UnusedUsingLint.Analyze(result, store, language, resolver, path, imports));
+        }
+        using ( LintScope.For("lint.UnusedIncludeLint", timings) )
+        {
+            lints.AddRange(UnusedIncludeLint.Analyze(result, store, language, resolver, path, imports));
+        }
+        using ( LintScope.For("lint.AmbiguousFunctionLint", timings) )
+        {
+            lints.AddRange(AmbiguousFunctionLint.Analyze(result, store, language, resolver, path, imports));
+        }
+        using ( LintScope.For("lint.UnusedLocalLint", timings) )
+        {
+            lints.AddRange(UnusedLocalLint.Analyze(result));
+        }
+        using ( LintScope.For("lint.ThreadedResultLint", timings) )
+        {
+            lints.AddRange(ThreadedResultLint.Analyze(result));
+        }
+        using ( LintScope.For("lint.UnassignedVariableLint", timings) )
+        {
+            lints.AddRange(UnassignedVariableLint.Analyze(result));
+        }
+        using ( LintScope.For("lint.DuplicateImportLint", timings) )
+        {
+            lints.AddRange(DuplicateImportLint.Analyze(result));
+        }
+        using ( LintScope.For("lint.UnusedBindingLint", timings) )
+        {
+            lints.AddRange(UnusedBindingLint.Analyze(result));
+        }
+        using ( LintScope.For("lint.ClassCycleLint", timings) )
+        {
+            lints.AddRange(ClassCycleLint.Analyze(result, store, contextId));
+        }
+        using ( LintScope.For("lint.ArgumentCountLint", timings) )
+        {
+            lints.AddRange(ArgumentCountLint.Analyze(result, store, contextId, path, languageBuiltins));
+        }
         // One typer for all three rules that read it, and — because InferValues memoises per parse
         // — one inference walk between them. Each used to run its own: two InferAssignments and an
         // InferValues over the same tree, which was 30% of BO3's lint pass and is now 20%.
         // Whichever rule runs first pays for the walk; the other two read the same ScriptTypes.
-        PerfTracker.Begin("lint.FlowTyper.ctor");
-        FlowTyper typer = new(languageBuiltins, objectFields);
-        PerfTracker.End();
+        FlowTyper typer;
+        using ( LintScope.For("lint.FlowTyper.ctor", timings) )
+        {
+            typer = new FlowTyper(languageBuiltins, objectFields);
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
         // The nine rules whose judgement is about one node, in ONE descent of the tree rather than
         // nine. Run here because two of them read the flow typer, whose answer has to exist first;
         // everything else in the pass is order-independent now that the result is sorted.
-        PerfTracker.Begin("lint.NodeLintPass");
-        NodeLintPass.Run(result, languageBuiltins, typer.InferValues(result), lints);
-        PerfTracker.End();
+        using ( LintScope.For("lint.NodeLintPass", timings) )
+        {
+            NodeLintPass.Run(result, languageBuiltins, typer.InferValues(result), lints);
+        }
 
         // What those rules do that is NOT per-node, and so has no place in the shared walk: the
         // field writes the typer collected, and the declaration-level constant checks.
-        PerfTracker.Begin("lint.PreferBooleanLiteralLint.FieldWrites");
-        PreferBooleanLiteralLint.InspectRest(result, objectFields, typer, lints);
-        PerfTracker.End();
-        PerfTracker.Begin("lint.ConstDeclarationLint.Declarations");
-        ConstDeclarationLint.InspectRest(result, lints);
-        PerfTracker.End();
-        PerfTracker.Begin("lint.PrivateAccessLint");
-        lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
-        PerfTracker.End();
+        using ( LintScope.For("lint.PreferBooleanLiteralLint.FieldWrites", timings) )
+        {
+            PreferBooleanLiteralLint.InspectRest(result, objectFields, typer, lints);
+        }
+        using ( LintScope.For("lint.ConstDeclarationLint.Declarations", timings) )
+        {
+            ConstDeclarationLint.InspectRest(result, lints);
+        }
+        using ( LintScope.For("lint.PrivateAccessLint", timings) )
+        {
+            lints.AddRange(PrivateAccessLint.Analyze(result, store, contextId, path, languageBuiltins));
+        }
         // Only once the workspace has been indexed. Every other lint degrades gracefully on a
         // partial index — a lookup that finds nothing simply offers nothing — but this one reports
         // a name as nonexistent, and before indexing finishes every script function in the
@@ -197,10 +223,11 @@ public static class WorkspaceLints
 
         if ( database.HasCompletedIndex )
         {
-            PerfTracker.Begin("lint.FunctionResolutionLint");
-            lints.AddRange(FunctionResolutionLint.Analyze(
-                result, store, contextId, path, languageBuiltins, resolver: resolver));
-            PerfTracker.End();
+            using ( LintScope.For("lint.FunctionResolutionLint", timings) )
+            {
+                lints.AddRange(FunctionResolutionLint.Analyze(
+                    result, store, contextId, path, languageBuiltins, resolver: resolver));
+            }
 
             // Same precondition, one step further along: this one asserts a name is not merged into
             // scope, and before indexing finishes no file's includes have contributed anything, so
@@ -211,20 +238,22 @@ public static class WorkspaceLints
             // one is whether a name could be an engine function — a question CoD4's list answers for
             // it. Everything else here keeps reading languageBuiltins, since a signature or an
             // argument count borrowed from another game would be a confident lie.
-            PerfTracker.Begin("lint.IncludeUsageLint");
-            lints.AddRange(IncludeUsageLint.Analyze(
-                result, store, language, resolver, path, builtins.EngineNamesFor(language), contextId,
-                imports: imports));
-            PerfTracker.End();
-
+            using ( LintScope.For("lint.IncludeUsageLint", timings) )
+            {
+                lints.AddRange(IncludeUsageLint.Analyze(
+                    result, store, language, resolver, path, builtins.EngineNamesFor(language), contextId,
+                    imports: imports));
+            }
         }
-        PerfTracker.Begin("lint.ReadOnlyWriteLint");
-        lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));
-        PerfTracker.End();
-        PerfTracker.Begin("lint.DevBlockCallLint");
-        lints.AddRange(DevBlockCallLint.Analyze(
-            result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));
-        PerfTracker.End();
+        using ( LintScope.For("lint.ReadOnlyWriteLint", timings) )
+        {
+            lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));
+        }
+        using ( LintScope.For("lint.DevBlockCallLint", timings) )
+        {
+            lints.AddRange(DevBlockCallLint.Analyze(
+                result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));
+        }
 
         return InReadingOrder(lints);
     }

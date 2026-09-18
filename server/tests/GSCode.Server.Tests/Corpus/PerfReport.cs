@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using GSCode.Server.Handlers;
 
 namespace GSCode.Server.Tests.Corpus;
 
@@ -22,9 +23,53 @@ internal sealed record GameSummary(
     List<SubPhaseRow> SubPhases,
     List<FileRow> TopFiles);
 
-internal sealed record SubPhaseRow(string Name, double Milliseconds, long Count);
+/// <summary>
+/// One scope's cost across a run — the corpus-wide sum AND the distribution over the files it ran
+/// in.
+///
+/// The sum is what a phase table is read against; the distribution is what a DEBOUNCE is read
+/// against. A rule reading 144 ms over 980 files says nothing about what one keystroke pays, and
+/// the keystroke is the only thing a user waits for, so <see cref="Max"/> — the worst single file —
+/// is the number the budget gate in <c>CorpusTests</c> asserts on.
+///
+/// <see cref="Files"/> counts the files the scope actually ran in, which is not the corpus size: a
+/// rule that stands down on a dialect or behind an unfinished index is ABSENT from those files
+/// rather than zero in them, and counting the absences would halve every statistic here.
+/// </summary>
+internal sealed record SubPhaseRow(
+    string Name,
+    double Milliseconds,
+    long Count,
+    int Files,
+    double Median,
+    double P90,
+    double P99,
+    double Max);
 
 internal sealed record FileRow(string Path, double Milliseconds, long Bytes);
+
+/// <summary>One rule's cost over a corpus, keeping the file that produced its worst reading.</summary>
+internal sealed record LintRuleCost(string Name, double Max, string WorstPath, double Total, int Files);
+
+/// <summary>One file's whole lint pass, split by rule.</summary>
+internal sealed record LintFileCost(
+    string Path,
+    double Milliseconds,
+    IReadOnlyList<(string Name, double Milliseconds)> Rules);
+
+/// <summary>Everything the lint budget page shows, gathered by the gate that asserts on it.</summary>
+internal sealed record LintBudgetReport(
+    string Game,
+    string CorpusRoot,
+    double DebounceMilliseconds,
+    double PerRuleBudgetMilliseconds,
+    double WatchMilliseconds,
+    int FileCount,
+    double Median,
+    double P99,
+    double Max,
+    IReadOnlyList<LintRuleCost> Rules,
+    IReadOnlyList<LintFileCost> SlowestFiles);
 
 /// <summary>
 /// The per-file timing sweep as a standalone HTML page, written beside the diagnostic sweep but
@@ -55,13 +100,17 @@ internal static class PerfReport
     }
 
     /// <summary>
-    /// Sums each named scope across every file, so the corpus-wide breakdown is comparable with the
-    /// phase table above it. Returns empty when nothing was instrumented.
+    /// Each named scope's corpus-wide sum and its per-file distribution, ordered by total time.
+    /// Returns empty when nothing was instrumented.
+    ///
+    /// The per-file samples come from <see cref="Item.SubPhases"/>, which the sweep fills by
+    /// resetting the tracker before each file and snapshotting after it — so one entry is one
+    /// file's cost for that scope, and a percentile over them is a percentile over FILES.
     /// </summary>
-    public static IReadOnlyList<(string Name, double Milliseconds, long Count)> SubPhaseTotals(
-        IReadOnlyList<Item> items)
+    public static IReadOnlyList<SubPhaseRow> SubPhaseStats(IReadOnlyList<Item> items)
     {
         Dictionary<string, (double Milliseconds, long Count)> totals = new(StringComparer.Ordinal);
+        Dictionary<string, List<double>> perFile = new(StringComparer.Ordinal);
 
         foreach ( Item item in items )
         {
@@ -74,12 +123,34 @@ internal static class PerfReport
             {
                 totals.TryGetValue(scope.Key, out (double Milliseconds, long Count) running);
                 totals[scope.Key] = (running.Milliseconds + scope.Value.Milliseconds, running.Count + scope.Value.Count);
+
+                if ( !perFile.TryGetValue(scope.Key, out List<double>? samples) )
+                {
+                    samples = [];
+                    perFile[scope.Key] = samples;
+                }
+
+                samples.Add(scope.Value.Milliseconds);
             }
         }
 
-        return [.. totals
-            .Select(static pair => (pair.Key, pair.Value.Milliseconds, pair.Value.Count))
-            .OrderByDescending(static row => row.Milliseconds)];
+        List<SubPhaseRow> rows = [];
+        foreach ( KeyValuePair<string, (double Milliseconds, long Count)> total in totals )
+        {
+            List<double> sorted = [.. perFile[total.Key].Order()];
+
+            rows.Add(new SubPhaseRow(
+                total.Key,
+                total.Value.Milliseconds,
+                total.Value.Count,
+                sorted.Count,
+                Percentile(sorted, 0.50),
+                Percentile(sorted, 0.90),
+                Percentile(sorted, 0.99),
+                sorted.Count > 0 ? sorted[^1] : 0));
+        }
+
+        return [.. rows.OrderByDescending(static row => row.Milliseconds)];
     }
 
     /// <summary>A snapshot of the pools that actually decide the server's footprint.</summary>
@@ -181,7 +252,7 @@ internal static class PerfReport
         // Sub-phases sit UNDER the four phases: extract.declarations contains extract.doc and
         // extract.body, so these do not sum to their parent and are not meant to.
         html.AppendLine("<h2>Sub-phases</h2>");
-        IReadOnlyList<(string Name, double Milliseconds, long Count)> subPhases = SubPhaseTotals(items);
+        IReadOnlyList<SubPhaseRow> subPhases = SubPhaseStats(items);
         if ( subPhases.Count == 0 )
         {
             html.AppendLine("<div class=\"sub\">Not instrumented. Rebuild with "
@@ -192,14 +263,23 @@ internal static class PerfReport
         {
             html.AppendLine("<div class=\"sub\">Nested inside the phases above, so they do not sum to "
                 + "the total. <code>mean</code> is per call, which is where a per-declaration cost "
-                + "that scales with FILE size shows up.</div>");
-            html.AppendLine("<table><tr><th>scope</th><th>ms</th><th>calls</th><th>mean ms</th></tr>");
-            foreach ( (string name, double milliseconds, long count) in subPhases )
+                + "that scales with FILE size shows up. <code>median</code> through <code>max</code> "
+                + "are per FILE, over the files the scope ran in; "
+                + $"<code>max % debounce</code> reads that worst file against the {AnalysisTiming.DebounceMilliseconds} ms "
+                + "keystroke debounce, which is the only budget an interactive path has.</div>");
+            html.AppendLine("<table><tr><th>scope</th><th>ms</th><th>calls</th><th>mean ms</th>"
+                + "<th>files</th><th>median ms</th><th>p90 ms</th><th>p99 ms</th><th>max ms</th>"
+                + "<th>max % debounce</th></tr>");
+            foreach ( SubPhaseRow scope in subPhases )
             {
-                double mean = count == 0 ? 0 : milliseconds / count;
-                html.AppendLine($"<tr><td><code>{Escape(name)}</code></td>"
-                    + $"<td class=\"n\">{milliseconds:F0}</td><td class=\"n\">{count:N0}</td>"
-                    + $"<td class=\"n\">{mean:F4}</td></tr>");
+                double mean = scope.Count == 0 ? 0 : scope.Milliseconds / scope.Count;
+                html.AppendLine($"<tr><td><code>{Escape(scope.Name)}</code></td>"
+                    + $"<td class=\"n\">{scope.Milliseconds:F0}</td><td class=\"n\">{scope.Count:N0}</td>"
+                    + $"<td class=\"n\">{mean:F4}</td>"
+                    + $"<td class=\"n\">{scope.Files:N0}</td>"
+                    + $"<td class=\"n\">{scope.Median:F3}</td><td class=\"n\">{scope.P90:F3}</td>"
+                    + $"<td class=\"n\">{scope.P99:F2}</td><td class=\"n\">{scope.Max:F2}</td>"
+                    + $"<td class=\"n\">{scope.Max / AnalysisTiming.DebounceMilliseconds * 100:F1}%</td></tr>");
             }
 
             html.AppendLine("</table>");
@@ -304,7 +384,7 @@ internal static class PerfReport
     /// </summary>
     private static void WriteSummary(
         string outputPath, string game, IReadOnlyList<Item> items, string root,
-        List<double> sorted, IReadOnlyList<(string Name, double Milliseconds, long Count)> subPhases)
+        List<double> sorted, IReadOnlyList<SubPhaseRow> subPhases)
     {
         double lex = items.Sum(static i => i.Lex);
         double pre = items.Sum(static i => i.Preprocess);
@@ -322,7 +402,7 @@ internal static class PerfReport
             Percentile(sorted, 0.99),
             sorted.Count > 0 ? sorted[^1] : 0,
             lex, pre, par, ext,
-            [.. subPhases.Select(static s => new SubPhaseRow(s.Name, s.Milliseconds, s.Count))],
+            [.. subPhases],
             // Enough to find a file that is a hotspot in more than one game without carrying the
             // whole run; the per-game page already holds every row.
             [.. items.OrderByDescending(static i => i.Milliseconds).Take(50)
@@ -452,7 +532,8 @@ internal static class PerfReport
         else
         {
             html.AppendLine("<table><tr><th>game</th><th>scope</th><th>ms</th><th>calls</th>"
-                + "<th>mean ms</th></tr>");
+                + "<th>mean ms</th><th>median ms</th><th>p99 ms</th><th>max ms</th>"
+                + "<th>max % debounce</th></tr>");
             foreach ( GameSummary game in games )
             {
                 foreach ( SubPhaseRow scope in game.SubPhases )
@@ -462,7 +543,11 @@ internal static class PerfReport
                         + $"<td><code>{Escape(scope.Name)}</code></td>"
                         + $"<td class=\"n\">{scope.Milliseconds:F0}</td>"
                         + $"<td class=\"n\">{scope.Count:N0}</td>"
-                        + $"<td class=\"n\">{mean:F4}</td></tr>");
+                        + $"<td class=\"n\">{mean:F4}</td>"
+                        + $"<td class=\"n\">{scope.Median:F3}</td>"
+                        + $"<td class=\"n\">{scope.P99:F2}</td>"
+                        + $"<td class=\"n\">{scope.Max:F2}</td>"
+                        + $"<td class=\"n\">{scope.Max / AnalysisTiming.DebounceMilliseconds * 100:F1}%</td></tr>");
                 }
             }
 
@@ -558,6 +643,86 @@ internal static class PerfReport
 
         int index = (int)Math.Clamp(Math.Round(fraction * (sorted.Count - 1)), 0, sorted.Count - 1);
         return sorted[index];
+    }
+
+    /// <summary>
+    /// The per-lint keystroke budget as a page, written by <c>LintBudgetTests</c>.
+    ///
+    /// A separate page from the perf sweep's, because it answers a different question with
+    /// different data. The sweep's sub-phase table is fed by <c>PerfTracker</c> and is therefore
+    /// EMPTY without the instrumentation flag; this is fed by <c>LintTimings</c> and is always
+    /// there. It also carries what an aggregate cannot: which FILE produced each rule's worst
+    /// reading, so a budget failure can be opened rather than only read.
+    /// </summary>
+    public static void WriteLintBudget(string outputPath, LintBudgetReport report)
+    {
+        StringBuilder html = new();
+        Head(html, $"GSCode lint budget - {report.Game}");
+
+        html.AppendLine($"<h1>Per-lint keystroke budget - {Escape(report.Game)}</h1>");
+        html.AppendLine($"<div class=\"sub\">{report.FileCount:N0} files from "
+            + $"<code>{Escape(report.CorpusRoot)}</code>. Each file's lint pass timed once after a warm "
+            + "pass, per rule. Every figure is one FILE's cost - the quantity a keystroke pays - not a "
+            + "corpus total.</div>");
+
+        html.AppendLine("<div class=\"stats\">");
+        Stat(html, "debounce", $"{report.DebounceMilliseconds:F0} ms");
+        Stat(html, "per-rule budget", $"{report.PerRuleBudgetMilliseconds:F0} ms");
+        Stat(html, "watch line", $"{report.WatchMilliseconds:F0} ms");
+        Stat(html, "pass median", $"{report.Median:F2} ms");
+        Stat(html, "pass p99", $"{report.P99:F2} ms");
+        Stat(html, "pass max", $"{report.Max:F2} ms");
+        html.AppendLine("</div>");
+
+        html.AppendLine("<h2>Rules, by worst single file</h2>");
+        html.AppendLine("<div class=\"sub\">The budget is on <code>max</code>: a rule is allowed to be "
+            + "slow in total across a corpus and is not allowed to be slow on one keystroke. "
+            + "<code>total</code> is there for contrast - the two disagree often, and the ranking by "
+            + "total is the one that used to be the only one recorded.</div>");
+        html.AppendLine("<table><tr><th>rule</th><th>max ms</th><th>% of debounce</th><th>status</th>"
+            + "<th>worst file</th><th>total ms</th><th>files</th></tr>");
+
+        foreach ( LintRuleCost rule in report.Rules )
+        {
+            string status = rule.Max > report.PerRuleBudgetMilliseconds
+                ? "OVER BUDGET"
+                : rule.Max > report.WatchMilliseconds ? "watch" : "ok";
+
+            html.AppendLine($"<tr><td><code>{Escape(rule.Name)}</code></td>"
+                + $"<td class=\"n\">{rule.Max:F2}</td>"
+                + $"<td class=\"n\">{rule.Max / report.DebounceMilliseconds * 100:F1}%</td>"
+                + $"<td>{Escape(status)}</td>"
+                + $"<td><code>{Escape(Relative(rule.WorstPath, report.CorpusRoot))}</code></td>"
+                + $"<td class=\"n\">{rule.Total:F0}</td>"
+                + $"<td class=\"n\">{rule.Files:N0}</td></tr>");
+        }
+
+        html.AppendLine("</table>");
+
+        html.AppendLine("<h2>Slowest files, and where their time went</h2>");
+        html.AppendLine("<div class=\"sub\">The whole pass for one file, with its three most expensive "
+            + "rules. This is where a rule's worst reading can be checked against the file that "
+            + "produced it.</div>");
+        html.AppendLine("<table><tr><th>ms</th><th>% of debounce</th><th>file</th>"
+            + "<th>where it went</th></tr>");
+
+        foreach ( LintFileCost file in report.SlowestFiles )
+        {
+            string breakdown = string.Join(", ", file.Rules
+                .OrderByDescending(static rule => rule.Milliseconds)
+                .Take(3)
+                .Select(static rule => $"{rule.Name} {rule.Milliseconds:F2} ms"));
+
+            html.AppendLine($"<tr><td class=\"n\">{file.Milliseconds:F2}</td>"
+                + $"<td class=\"n\">{file.Milliseconds / report.DebounceMilliseconds * 100:F1}%</td>"
+                + $"<td><code>{Escape(Relative(file.Path, report.CorpusRoot))}</code></td>"
+                + $"<td>{Escape(breakdown)}</td></tr>");
+        }
+
+        html.AppendLine("</table>");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, html.ToString());
     }
 
     private static string Escape(string text)

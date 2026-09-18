@@ -239,6 +239,14 @@ line means "suppressed on this game" rather than "run twice".
   the mistake is always a real rule meeting a corpus shape nobody pictured.
 - `GameCorpusTests` — the same three properties per game, and the evidence behind
   `GameProfile.Verified`.
+- `LintBudgetTests` — the only TIMING gate in the suite: no cross-file lint may cost more than 40%
+  of `AnalysisTiming.DebounceMilliseconds` on its worst single file, and the whole pass no more than
+  25% at p99. bo3 and cod4, since the two dialects run different rules — the include rules are free
+  on the namespace dialect and among the most expensive on the merge one. It times through
+  `LintTimings` rather than `PerfTracker`, because the tracker is `[Conditional]` and a gate that
+  reads it would assert over an empty set in an ordinary build and pass by measuring nothing. The
+  bound is deliberately several times the measurement; PERF.md's per-lint budget section holds the
+  numbers and the reasoning. Writes `temp/gscode-lint-budget-<game>.html`.
 - `ClassResolutionCorpusTests` — class inheritance and method calls across the shipped corpus,
   including cases where a receiver's concrete class is unknown. Every lookup passes the context of
   the record the symbol came from, never the literal `"raw"`: the fixture indexes the mods folder

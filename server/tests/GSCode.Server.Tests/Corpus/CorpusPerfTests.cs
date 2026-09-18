@@ -15,6 +15,7 @@ using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
+using GSCode.Server.Handlers;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -626,6 +627,7 @@ public class CorpusPerfTests
             ObjectFields objectFields = ObjectFields.Load(apiDirectory);
 
             List<PerfReport.Item> timings = [];
+            LintTimings ruleTimings = new();
 
             foreach ( string path in scriptsFactory() )
             {
@@ -643,12 +645,26 @@ public class CorpusPerfTests
                     // turns the global aggregate into a per-file profile, and is only sound because
                     // this sweep is sequential. Empty unless built with GSCODE_INSTRUMENTATION.
                     PerfTracker.Reset();
+                    ruleTimings.Clear();
 
                     Stopwatch watch = Stopwatch.StartNew();
-                    WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
+                    WorkspaceLints.LintsOnly(
+                        parsed, language, path, database, resolver, builtins, objectFields,
+                        cancellationToken: CancellationToken.None, timings: ruleTimings);
                     watch.Stop();
 
+                    // The per-rule sink first, then the tracker over the top of it. LintTimings is
+                    // not [Conditional], so the rule breakdown is in the report from an ORDINARY
+                    // build — which is what the sweep's "not instrumented" notice used to mean was
+                    // missing. An instrumented run overwrites those entries with the tracker's own
+                    // and adds the scopes only it has, so the flag still buys something and the two
+                    // never double-count one rule.
                     Dictionary<string, (double Milliseconds, long Count)> scopes = [];
+                    foreach ( KeyValuePair<string, double> rule in ruleTimings.Milliseconds )
+                    {
+                        scopes[rule.Key] = (rule.Value, 1);
+                    }
+
                     PerfTracker.Snapshot(scopes);
 
                     timings.Add(new PerfReport.Item(
@@ -1058,17 +1074,22 @@ public class CorpusPerfTests
                 + $"parse {par / phases * 100:F0}% | extract {ext / phases * 100:F0}%");
         }
 
-        IReadOnlyList<(string Name, double Milliseconds, long Count)> subPhases = PerfReport.SubPhaseTotals(timings);
+        IReadOnlyList<SubPhaseRow> subPhases = PerfReport.SubPhaseStats(timings);
         if ( subPhases.Count == 0 )
         {
             _output.WriteLine("    sub-phases: not instrumented (rebuild with -p:GscodeInstrumentation=true)");
         }
         else
         {
-            foreach ( (string name, double milliseconds, long count) in subPhases )
+            // The per-file columns are the ones a debounce is read against; the total is the one a
+            // phase share is read against. Both, because either alone has misled here before.
+            foreach ( SubPhaseRow scope in subPhases )
             {
-                double mean = count == 0 ? 0 : milliseconds / count;
-                _output.WriteLine($"    {name,-24} {milliseconds,8:F0} ms  {count,8:N0} calls  {mean:F4} ms mean");
+                double mean = scope.Count == 0 ? 0 : scope.Milliseconds / scope.Count;
+                _output.WriteLine(
+                    $"    {scope.Name,-40} {scope.Milliseconds,8:F0} ms  {scope.Count,8:N0} calls  {mean:F4} ms mean  "
+                    + $"| per file: median {scope.Median:F3} | p99 {scope.P99:F2} | max {scope.Max:F2} ms "
+                    + $"({scope.Max / AnalysisTiming.DebounceMilliseconds * 100:F1}% of debounce)");
             }
         }
 

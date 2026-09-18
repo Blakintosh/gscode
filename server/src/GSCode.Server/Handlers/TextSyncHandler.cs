@@ -45,8 +45,6 @@ public sealed record GameMismatchParams(
 /// </summary>
 public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 {
-    private const int DebounceMilliseconds = 250;
-
     private readonly DocumentStore _documents;
     private readonly DiagnosticsPublisher _diagnostics;
     private readonly ScriptDatabase _database;
@@ -330,7 +328,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     {
         try
         {
-            await Task.Delay(DebounceMilliseconds, cancellationToken);
+            await Task.Delay(AnalysisTiming.DebounceMilliseconds, cancellationToken);
         }
         catch ( OperationCanceledException )
         {
@@ -436,14 +434,14 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         // expected to fire on ordinary scripts — it exists to turn "we assume every file is fast
         // enough" into evidence from a real workspace where the assumption is wrong, rather than a
         // silent pile-up of overlapping analyses (see AnalysisGate) that nobody gets told about.
-        if ( elapsedMilliseconds >= DebounceMilliseconds )
+        if ( elapsedMilliseconds >= AnalysisTiming.DebounceMilliseconds )
         {
             Log.Warning(
                 "Analysis of {Path} took {Elapsed:F0}ms, at or past the {Debounce}ms debounce — "
                 + "sustained editing of this file may overlap several analyses in flight",
                 document.Path,
                 elapsedMilliseconds,
-                DebounceMilliseconds);
+                AnalysisTiming.DebounceMilliseconds);
         }
     }
 

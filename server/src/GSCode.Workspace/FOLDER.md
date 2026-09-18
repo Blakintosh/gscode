@@ -677,6 +677,12 @@ are out.
 - `GameShapeDetector` — not a lint but the mismatch check behind it: reads a file's directives to
   judge which family it looks like, and reports when the selected profile disagrees.
 - `WorkspaceLints` — the composition point that runs the cross-file rules for a document.
+- `LintScope` / `LintTimings` — one timing wrapper per rule, opening the instrumented build's
+  `PerfTracker` scope and, when a caller passes a sink, recording the same span in an ordinary
+  build. The second half exists because `PerfTracker` is `[Conditional]`: the corpus budget gate
+  that asserts no rule crosses its share of the keystroke debounce runs in a normal Release build,
+  where a tracker-based measurement would silently be no measurement at all. `LintScope` is a
+  struct, and a null sink costs a null check per rule.
 
 ## Resolution/InsertCache.cs
 

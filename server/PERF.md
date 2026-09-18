@@ -15,6 +15,8 @@ new result with these numbers.
 | Warm start (cache hit) | < 5 s | SQLite restore of unchanged files; only changed files re-parse. |
 | Steady-state memory | < 400 MB | Records-only retention for closed files; NameTable interning. |
 | Keystroke re-analysis | interactive | Debounced ~250 ms, per-document cancellation; a single file lexes+parses in low single-digit ms. |
+| One lint rule, one keystroke | < 40% of the debounce | Worst SINGLE FILE on bo3 or cod4. Measured 9–17%; asserted by `LintBudgetTests`, not scored by hand. |
+| The whole lint pass, one keystroke | < 25% of the debounce at p99 | Same gate. Catches twenty rules each growing a little, which no per-rule bound sees. |
 
 ## Which corpora to sweep
 
@@ -701,6 +703,72 @@ sweep itself is affordable; what that entry's second objection (stale results af
 correctly identifies as the hard part is INVALIDATION, which is solved separately by reusing
 `ReferenceIndex`/`DeclarationIndex` rather than by re-sweeping — see the `workspaceIndexingMode:
 full` feature this measurement unblocked.
+
+### 2026-09-18: the per-lint keystroke budget, which is now asserted rather than assumed
+
+Everything above this line measures lint cost as a corpus TOTAL — `ArgumentCountLint` at 144 ms,
+the pass at 1,168 ms. None of those is a quantity anybody waits for. A keystroke pays ONE FILE's
+lint pass, inside a 250 ms debounce, so the number that decides whether a rule is affordable is its
+worst single file, and nothing in this file recorded that until now.
+
+`LintBudgetTests` (`Category=Corpus`, bo3 and cod4) times every rule on every script and fails when
+one crosses its share of `AnalysisTiming.DebounceMilliseconds`. That constant is now the single
+place the 250 ms lives — `TextSyncHandler` waits on it, the gate is a percentage of it, so
+shortening the debounce tightens the budget instead of silently outdating it.
+
+**It does not measure through `PerfTracker`, and that is the point.** Every method on the tracker is
+`[Conditional("GSCODE_INSTRUMENTATION")]`, so a gate reading it would collect nothing in the ordinary
+Release build this category runs in, assert over an empty set and pass having measured nothing —
+the same shape as a corpus sweep that finishes in milliseconds. `WorkspaceLints.LintsOnly` now takes
+an optional `LintTimings` sink instead, filled by the `LintScope` that also opens the tracker's
+scope, so there is one wrapper per rule rather than two. The sweep next door reads it too, which is
+why its per-rule table is now populated WITHOUT the instrumentation flag; the flag still adds the
+nested parse and extract scopes that only the tracker has.
+
+Measured on bo3 (862 linted files) and cod4 (894), uninstrumented, run alone, three runs:
+
+| worst single file | run 1 | run 2 | run 3 |
+|---|---:|---:|---:|
+| bo3 `lint.NodeLintPass` | 36.0 ms (14.4%) | 22.9 ms (9.2%) | 28.1 ms (11.2%) |
+| bo3 `lint.FunctionResolutionLint` | 12.4 ms (5.0%) | 14.3 ms (5.7%) | 13.2 ms (5.3%) |
+| bo3 `lint.DevBlockCallLint` | 11.7 ms (4.7%) | 13.0 ms (5.2%) | 12.3 ms (4.9%) |
+| cod4 `lint.NodeLintPass` | 17.1 ms (6.8%) | 18.5 ms (7.4%) | 24.0 ms (9.6%) |
+| bo3 whole pass, median / p99 / max | 0.58 / 28.0 / 61.4 ms | 0.43 / 24.3 / 70.7 ms | 0.51 / 31.1 / 85.0 ms |
+| cod4 whole pass, median / p99 / max | 0.44 / 12.4 / 24.4 ms | 0.40 / 12.8 / 20.3 ms | 0.42 / 12.4 / 30.8 ms |
+
+**Every rule is inside a tenth of the debounce except the fused node pass, and it is inside a
+seventh.** Fourteen of bo3's twenty-two scopes never reach 5 ms on any file, and nine never reach
+0.25 ms. The claim this file could not make before — that the lints are far enough inside the
+debounce for the tail not to matter — is now a measurement rather than an inference from a total.
+
+**The budget is 40% and the measurement is 9–17%, and the gap is deliberate.** The same three runs
+put one rule's worst file anywhere in a 23–36 ms band on code that did not change, which is the
+run-to-run spread this file documents everywhere else arriving again. A bound near the measurement
+would fail on the machine rather than on the code, and a flaky gate gets deleted — after which
+nothing is bounded at all. 40% catches a rule that has become several times more expensive, which is
+the shape of every regression recorded above. A 20% WATCH line is printed beside each rule so the
+gap is visible rather than silent.
+
+**Read these run-alone, because the invocation mode moves them more than any change here did.**
+Inside a full `Category=Corpus` run, cod4's `lint.NodeLintPass` read **41.8 ms** against the
+17–24 ms it reads alone — the same effect the type-lattice section below records (1,595 ms inside a
+Perf run against 2,811 ms alone), in the opposite direction. The gate runs inside that full sweep, so
+its budget has to clear the noisier reading; 41.8 against 100 is the headroom that actually matters.
+
+Two things the gate deliberately does NOT do:
+
+- **It does not budget the nine fused rules individually.** `lint.NodeLintPass` is one walk asking
+  nine questions per node, and timing each rule separately would mean a `Begin`/`End` pair per rule
+  per node over bo3's ~1M nodes — an instrument costing more than what it measures. It is budgeted
+  as the one walk it is, and it is the most expensive scope on both dialects.
+- **It does not bound the whole pass's MAX.** bo3's ranges 37–85 ms run to run, which is a fact
+  about one file and the machine rather than about the pass. `TextSyncHandler` already logs a
+  Warning when a whole analysis reaches the debounce on a real workspace, which is the same question
+  asked where it can be answered honestly.
+
+The page is `temp/gscode-lint-budget-<game>.html`: every rule with its worst file named, and the
+twenty-five slowest files with the three rules that made them slow. It is written on every run, pass
+or fail, since the numbers are worth reading when nothing is wrong.
 
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
@@ -1713,6 +1781,11 @@ same one. Those two took the sweep from 13 minutes to 5.9, and the lint indexing
 their own when the corpus is absent). Four checks: every script analyses without throwing,
 lex/parse errors stay under 1% of the corpus, and the formatter's two property gates —
 token-stream equality and idempotence — hold over a 250-file sample.
+
+`LintBudgetTests` is the fifth and the only one of them that is a TIMING gate — see the per-lint
+budget section above for what it asserts and why its bound is loose. It runs bo3 and cod4, since the
+two dialects run different rules, and it needs no build flag: the per-rule timings come from
+`LintTimings`, not from the conditional tracker.
 
 First run, 980 scripts: **zero crashes**, formatter gates clean, and **4 files with lex/parse
 errors (0.41%)** — three distinct genuine grammar gaps. One (`&"..."` parsing as address-of

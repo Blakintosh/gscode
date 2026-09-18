@@ -29,6 +29,14 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   one is built at initialize when settings + workspace folders exist). Consumers read
   `Current` at call time, so swaps/rebuilds need no re-wiring.
 
+## Handlers/AnalysisTiming.cs
+
+- The 250 ms keystroke debounce, in one place. `TextSyncHandler` waits on it and warns against it;
+  the corpus `LintBudgetTests` gate asserts each lint rule against a percentage of it. Two readers
+  is why it is not a private constant any more — a budget written against a hardcoded 250 would keep
+  passing if the debounce were shortened, which is when it would need to fail.
+  `DependentDiagnosticsRefresher`'s 900 ms fan-out debounce is a different quantity and stays its own.
+
 ## Handlers/TextSyncHandler.cs
 
 - Incremental text sync. didOpen → scheduled onto the thread pool (`Task.Run`, no delay — a file

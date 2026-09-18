@@ -75,7 +75,27 @@ there is either a real defect in code that shipped and works, or a false positiv
 
 See the `build-and-test` skill for the environment variables and the duration check.
 
-## 7. Suppression comes for free
+## 7. It has to fit inside the keystroke debounce
+
+A new rule runs on every keystroke, inside `AnalysisTiming.DebounceMilliseconds` (250 ms), alongside
+every rule already there. `LintBudgetTests` in the same `Category=Corpus` run asserts the bound:
+
+- **no single rule over 40% of the debounce** on its worst file, bo3 or cod4
+- **the whole pass under 25% at p99**
+
+Nothing to add for a new rule — wrap its call in `WorkspaceLints` in a `using ( LintScope.For(...) )`
+like its neighbours and it is measured. The failure names the rule, the milliseconds and the file.
+
+Read the per-rule table it prints even when it passes: rules over a 20% WATCH line are called out
+without failing, and `temp/gscode-lint-budget-<game>.html` names each rule's worst file. Measured
+today, every rule sits at 9–17% of the debounce or below, so a new rule landing near the bound is an
+outlier by an order of magnitude and worth a second look rather than a shrug. PERF.md's per-lint
+budget section is where those numbers live.
+
+A rule that cannot fit usually wants an INDEX rather than a faster walk — that is what took the
+whole pass from 22 s to 1.4 s, and what `DeclarationIndex` and `NamespaceIndex` exist for.
+
+## 8. Suppression comes for free
 
 `WorkspaceLints.ApplyPragmas` filters the combined set, so `// #pragma disable NNNN` already works
 for a new code — at any severity, including an Error. Do not add per-lint suppression.

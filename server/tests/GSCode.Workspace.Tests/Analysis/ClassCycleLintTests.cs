@@ -69,6 +69,25 @@ public class ClassCycleLintTests
     }
 
     [Fact]
+    public void TheMessage_NamesTheFullChainInTheAuthorsOwnCasing()
+    {
+        // The chain used to be built from KeyName (lowercase-canonical) and dropped both endpoints,
+        // so "class Foo inherits from itself" reported only "through bar" — neither the case the
+        // author wrote nor either class the reader actually needs to see the loop close.
+        ImmutableArray<Diagnostic> diagnostics = Lint("class Foo : Bar\n{\n}\nclass Bar : Foo\n{\n}\n");
+
+        Assert.Contains("Foo -> Bar -> Foo", diagnostics[0].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheDirectSelfInheritanceMessage_NamesTheClassOnBothEnds()
+    {
+        Diagnostic diagnostic = Assert.Single(Lint("class Foo : Foo\n{\n}\n"));
+
+        Assert.Contains("Foo -> Foo", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CycleThroughAnotherFile_IsReported()
     {
         ImmutableArray<Diagnostic> diagnostics = Lint(

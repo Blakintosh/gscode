@@ -71,47 +71,6 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// </summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AnalysisGate> _analysisGates = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// Coalesces concurrent analysis requests for one document into: whichever is already
-    /// running, plus at most one more queued to run immediately after against whatever text is
-    /// current by then. <see cref="OpenDocument.Publish"/>'s version CAS already decides which
-    /// analysis's RESULT wins when two somehow still overlap (a request thread's
-    /// <see cref="DocumentStore.AnalyzeIfStale"/> can still run concurrently with this), so this
-    /// gate is purely about not PAYING for more analyses in flight than the debounce intended,
-    /// not about correctness of the published result.
-    /// </summary>
-    private sealed class AnalysisGate
-    {
-        private int _running;
-        private int _rerunRequested;
-
-        /// <summary>
-        /// True when the caller should run now; false when another run is already in flight and
-        /// has been told to loop once more instead.
-        /// </summary>
-        public bool TryStart()
-        {
-            if ( Interlocked.Exchange(ref _running, 1) == 0 )
-            {
-                return true;
-            }
-
-            Volatile.Write(ref _rerunRequested, 1);
-            return false;
-        }
-
-        /// <summary>Clears any rerun request and reports whether one had been made.</summary>
-        public bool ConsumeRerunRequest()
-        {
-            return Interlocked.Exchange(ref _rerunRequested, 0) != 0;
-        }
-
-        public void Finish()
-        {
-            Volatile.Write(ref _running, 0);
-        }
-    }
-
     public TextSyncHandler(
         DocumentStore documents,
         DiagnosticsPublisher diagnostics,
@@ -400,6 +359,15 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         {
             do
             {
+                // The document this run captured may have been closed, or replaced by a second
+                // didOpen, while the previous pass was running. Nothing inside the loop would
+                // otherwise notice, and an orphan that keeps analysing publishes and commits for a
+                // document nothing can reach any more.
+                if ( !AnalysisGate.IsStillLive(_documents, document) )
+                {
+                    return;
+                }
+
                 try
                 {
                     AnalyzeAndPublish(document, cancellationToken);
@@ -441,8 +409,13 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         // Last look before anything leaves this method. A pass superseded during the lint must not
         // publish, and — more importantly — must not COMMIT: a record written from a parse of text
         // the user has already replaced is what every other file's diagnostics are then computed
-        // against.
+        // against. Same for a document that stopped being the open one while this ran.
         cancellationToken.ThrowIfCancellationRequested();
+
+        if ( !AnalysisGate.IsStillLive(_documents, document) )
+        {
+            return;
+        }
 
         _diagnostics.Publish(document.Path, snapshot.Version, diagnostics);
         CommitAndRefreshLenses(document, result);

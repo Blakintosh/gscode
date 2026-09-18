@@ -121,6 +121,14 @@ public static class FunctionResolutionLint
         // the actual problem under thousands of identical errors (4,824 for one WaW file), so the
         // MISSING FILE is reported once and its calls are left alone: one cause, one diagnostic.
         HashSet<string> missingTargets = new(StringComparer.OrdinalIgnoreCase);
+
+        // What each path call's TARGET FILE itself declares — a path call still only ever runs the
+        // function that SPECIFIC file declares, whatever #include merges into ordinary scope.
+        // Neither "this file happens to declare the same name" nor "some unrelated file in the
+        // workspace declares it" make the call resolve, and the lookup below asks a NAME-only
+        // question that cannot tell those apart from the one thing that actually matters: does the
+        // file named on the call have it.
+        Dictionary<string, HashSet<string>> targetFunctionNames = new(StringComparer.OrdinalIgnoreCase);
         if ( resolver is not null && pathCallTargets.Count > 0 )
         {
             ResolutionContext context = resolver.GetContext(askingPath);
@@ -134,15 +142,23 @@ public static class FunctionResolutionLint
                     continue;
                 }
 
-                if ( resolver.Resolve(context, call.Value + extension) is null )
+                string? resolved = resolver.Resolve(context, call.Value + extension);
+                if ( resolved is null )
                 {
                     missingTargets.Add(call.Value);
-                    firstSite[call.Value] = call.Key;
                 }
-                else
+                else if ( store.TryGet(resolved, out ScriptRecord targetRecord) )
                 {
-                    firstSite[call.Value] = call.Key;
+                    HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+                    foreach ( FunctionSymbol function in targetRecord.Functions )
+                    {
+                        names.Add(function.KeyName);
+                    }
+
+                    targetFunctionNames[call.Value] = names;
                 }
+
+                firstSite[call.Value] = call.Key;
             }
 
             foreach ( string target in missingTargets )
@@ -197,6 +213,31 @@ public static class FunctionResolutionLint
 
             if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key, entry.Kind), ref seenFromMacros) )
             {
+                continue;
+            }
+
+            // A path call names its file OUTRIGHT — `#include` merges scope, but the call itself
+            // still only ever runs the function that SPECIFIC file declares. Checked before every
+            // other exemption below, none of which apply to it: this file happening to declare the
+            // same name, or a class method of that name, or ANY other file in the workspace
+            // declaring it, none of that makes `maps\mp\_util::foo()` resolve — only
+            // `maps\mp\_util.gsc` actually declaring `foo` does.
+            if ( pathCallTargets.TryGetValue(entry.Range, out string? pathTarget) )
+            {
+                if ( missingTargets.Contains(pathTarget) )
+                {
+                    // Already reported once, for the missing file itself.
+                    continue;
+                }
+
+                if ( targetFunctionNames.TryGetValue(pathTarget, out HashSet<string>? declared)
+                    && declared.Contains(entry.Key.Name) )
+                {
+                    continue;
+                }
+
+                diagnostics.Add(Diagnostic.Create(
+                    entry.Range, DiagnosticSeverity.Error, GscDiagnosticCode.ScriptFunctionNotFound, entry.Key.Name));
                 continue;
             }
 
@@ -259,18 +300,10 @@ public static class FunctionResolutionLint
                 continue;
             }
 
-            bool isPathCall = pathCallTargets.TryGetValue(entry.Range, out string? target);
-
-            // The target file itself is missing and has already been reported once; naming every
-            // function inside it adds nothing the user can act on.
-            if ( isPathCall && target is not null && missingTargets.Contains(target) )
-            {
-                continue;
-            }
-
-            // An explicitly script-targeted call: a path call, or a namespace this file does not
-            // declare (so it was written ns::foo, not left unqualified). Neither could be a builtin.
-            if ( isPathCall || (canonical.Namespace is not null && !DeclaresNamespace(ownNamespaces, canonical.Namespace)) )
+            // An explicitly script-targeted call: a namespace this file does not declare (so it
+            // was written ns::foo, not left unqualified — a path call was already handled above
+            // and never reaches here). Could not be a builtin either way.
+            if ( canonical.Namespace is not null && !DeclaresNamespace(ownNamespaces, canonical.Namespace) )
             {
                 diagnostics.Add(Diagnostic.Create(
                     entry.Range,

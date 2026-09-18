@@ -305,4 +305,79 @@ public class FunctionResolutionLintTests
 
         Assert.Empty(Lint(source));
     }
+
+    // --- Path calls (`maps\mp\_util::foo()`) name a FILE outright ---
+    //
+    // #include merges scope, but the call itself still only ever runs the function that SPECIFIC
+    // file declares. Neither the broad by-name lookup (which searches every file the merge dialect
+    // scope reaches) nor the own-file shortcut (which exists for an UNQUALIFIED call) should be
+    // able to make a path call resolve on anyone else's say-so.
+
+    private const string Iw4Raw = @"C:\iw4";
+
+    private static ImmutableArray<Diagnostic> LintPathCall(
+        string askingSource, params (string Path, string Text)[] otherFiles)
+    {
+        GameProfile mw2 = GameProfile.ByName("mw2")!;
+        string askingPath = @$"{Iw4Raw}\maps\main.gsc";
+
+        FakeFileSystem files = new FakeFileSystem().AddFile(askingPath, askingSource);
+        foreach ( (string path, string text) in otherFiles )
+        {
+            files.AddFile(path, text);
+        }
+
+        RootConfig config = RootConfig.Create(true, Iw4Raw, null, [], files);
+        PathResolver resolver = new(config, files);
+        ScriptDatabase database = new();
+        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable(), profile: mw2);
+        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        ParseResult result = ScriptAnalysis.Analyze(
+            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable(), mw2);
+
+        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory, mw2);
+        return FunctionResolutionLint.Analyze(
+            result, database.Gsc, "raw", askingPath, builtins.For(ScriptLanguage.Gsc), mw2, resolver: resolver);
+    }
+
+    [Fact]
+    public void APathCall_ToAFunctionAnUnrelatedFileHappensToDeclare_IsStillAMiss()
+    {
+        // The target file EXISTS and is not missing, but does not declare `foo` — a totally
+        // unrelated file elsewhere in the workspace does. The broad by-name lookup used to find
+        // that unrelated declaration and call the reference resolved.
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(LintPathCall(
+            source,
+            (@$"{Iw4Raw}\maps\mp\_util.gsc", "bar()\n{\n}\n"),
+            (@$"{Iw4Raw}\scripts\unrelated.gsc", "foo()\n{\n}\n")));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
+        Assert.Contains("foo", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APathCall_ToAFunctionTheTargetFileDoesDeclare_IsSilent()
+    {
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
+
+        Assert.Empty(LintPathCall(source, (@$"{Iw4Raw}\maps\mp\_util.gsc", "foo()\n{\n}\n")));
+    }
+
+    [Fact]
+    public void APathCall_ToAnotherFile_IsNotSatisfiedByThisFileDeclaringTheSameName()
+    {
+        // The own-file shortcut exists for an UNQUALIFIED call. It must not also excuse a path
+        // call that explicitly named a different file, just because this one happens to declare a
+        // function of the same spelling.
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\nfoo()\n{\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(LintPathCall(
+            source, (@$"{Iw4Raw}\maps\mp\_util.gsc", "bar()\n{\n}\n")));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
+    }
 }

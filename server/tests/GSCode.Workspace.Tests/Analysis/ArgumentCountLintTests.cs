@@ -167,4 +167,39 @@ public class ArgumentCountLintTests
 
         Assert.Empty(Lint(source));
     }
+
+    [Fact]
+    public void ANonSelfArrowCall_StandsDownWhenATopLevelFunctionSharesTheName()
+    {
+        // FunctionResolutionLint documents the real shape: `[[self.classObj]]->onBeginUse( player )`
+        // calls a top-level function that other files assign to that field with `&onBeginUse` — the
+        // arrow form dispatches through a function-POINTER field as much as through a class. Here
+        // exactly one class ALSO declares a method of that name, so Canonicalize resolved to IT
+        // alone and the call was judged against a 1-parameter method that might not be the target
+        // the pointer actually reaches.
+        string source = "#namespace zm;\n"
+            + "class cFoo\n{\n"
+            + "    function onBeginUse( player )\n    {\n    }\n"
+            + "}\n"
+            + "function onBeginUse( player, extra )\n{\n}\n"
+            + "function respawn()\n{\n    [[ level.classObj ]]->onBeginUse( player, extra );\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void ANonSelfArrowCall_IsStillJudgedWhenNoTopLevelFunctionSharesTheName()
+    {
+        // The control: without a same-named top-level function, exactly one class declaring the
+        // name is still the unambiguous case the rule exists to judge.
+        string source = "#namespace zm;\n"
+            + "class cFoo\n{\n"
+            + "    function onBeginUse( player )\n    {\n    }\n"
+            + "}\n"
+            + "function respawn()\n{\n    [[ level.classObj ]]->onBeginUse( player, extra );\n}\n";
+
+        Diagnostic reported = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.TooManyArguments, reported.Code);
+    }
 }

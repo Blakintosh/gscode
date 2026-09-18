@@ -292,6 +292,21 @@ public static class ArgumentCountLint
             return;
         }
 
+        // A non-self receiver resolved through "exactly one class in the workspace declares this
+        // name" alone (see Canonicalize) — but the arrow form also dispatches through a FIELD
+        // holding a raw function POINTER assigned with `&name`, which FunctionResolutionLint
+        // documents reaching the same way: `[[self.classObj]]->onBeginUse( player )` calls a
+        // top-level function three shipped files assign to that field with `&onBeginUse`. If a
+        // top-level function shares the name, the call is genuinely ambiguous between the two, and
+        // judging the class method's arity would be a guess that can land on the wrong signature —
+        // not checked for `[[self]]->`, whose receiver's class is already known rather than guessed.
+        if ( !isSelf && DatabaseQueries.LookupFunctions(
+                store, contextId, askingPath: "", namespaceName: null, name.ToLowerInvariant(), includePrivate: true)
+            .Length > 0 )
+        {
+            return;
+        }
+
         InspectAgainstMethod(
             store, contextId, canonical, name, arrow.Arguments.Length, arrow.MethodToken.RootRange, diagnostics);
     }

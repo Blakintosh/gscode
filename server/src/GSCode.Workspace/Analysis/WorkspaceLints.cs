@@ -33,10 +33,11 @@ public static class WorkspaceLints
         ScriptDatabase database,
         PathResolver resolver,
         BuiltinApiSet builtins,
-        ObjectFields objectFields)
+        ObjectFields objectFields,
+        CancellationToken cancellationToken = default)
     {
         ImmutableArray<Diagnostic> lints = LintsOnly(
-            result, language, path, database, resolver, builtins, objectFields);
+            result, language, path, database, resolver, builtins, objectFields, cancellationToken);
 
         ImmutableArray<Diagnostic> all =
             lints.IsEmpty ? result.AllDiagnostics : result.AllDiagnostics.AddRange(lints);
@@ -76,6 +77,13 @@ public static class WorkspaceLints
     /// Just the lints, without the file's own parse diagnostics — for callers reporting on the
     /// lints alone.
     /// </summary>
+    /// <param name="cancellationToken">
+    /// Abandons a pass whose diagnostics nobody will publish. Checked at the boundaries between
+    /// the pass's phases rather than before every rule: the rules are individually small, and a
+    /// check per rule would be twenty identical lines buying nothing the four below do not. What
+    /// they do buy is abandoning the pass BEFORE its expensive stretches — the import resolution
+    /// and the shared node walk — which is where a superseded analysis wastes its time.
+    /// </param>
     public static ImmutableArray<Diagnostic> LintsOnly(
         ParseResult result,
         ScriptLanguage language,
@@ -83,8 +91,11 @@ public static class WorkspaceLints
         ScriptDatabase database,
         PathResolver resolver,
         BuiltinApiSet builtins,
-        ObjectFields objectFields)
+        ObjectFields objectFields,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // GSH fragments have no language store of their own and no #using semantics to lint.
         if ( language != ScriptLanguage.Gsc && language != ScriptLanguage.Csc )
         {
@@ -103,6 +114,8 @@ public static class WorkspaceLints
         PerfTracker.Begin("lint.FileImports.Resolve");
         FileImports imports = FileImports.Resolve(result, store, language, resolver, path);
         PerfTracker.End();
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         // First: the other #using lints abandon their pass when an import will not resolve, so
         // without this a typo silences them and says nothing about why. It deliberately does NOT
@@ -152,6 +165,8 @@ public static class WorkspaceLints
         FlowTyper typer = new(languageBuiltins, objectFields);
         PerfTracker.End();
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         // The nine rules whose judgement is about one node, in ONE descent of the tree rather than
         // nine. Run here because two of them read the flow typer, whose answer has to exist first;
         // everything else in the pass is order-independent now that the result is sorted.
@@ -178,6 +193,8 @@ public static class WorkspaceLints
         //
         // Cannot double-report with the lint above either: this one looks up with includePrivate,
         // so a private function counts as EXISTING and only 5003 speaks for it.
+        cancellationToken.ThrowIfCancellationRequested();
+
         if ( database.HasCompletedIndex )
         {
             PerfTracker.Begin("lint.FunctionResolutionLint");

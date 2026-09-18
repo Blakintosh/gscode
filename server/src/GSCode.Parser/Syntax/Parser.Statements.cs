@@ -16,6 +16,8 @@ public sealed partial class Parser
 
         while ( Kind != TokenKind.CloseBrace && Kind != TokenKind.EndOfFile )
         {
+            _cancellation.ThrowIfCancellationRequested();
+
             int before = _index;
             statements.Add(ParseStatement());
 

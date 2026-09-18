@@ -47,16 +47,26 @@ public sealed partial class Parser
     /// </summary>
     private const int MaxNestingDepth = 512;
 
-    private Parser(ImmutableArray<PToken> tokens, GameProfile profile)
+    /// <summary>
+    /// Stops a parse whose result nobody wants any more. Read inside the two loops that are
+    /// unbounded in the size of the file — the top-level declaration loop and the statement loop —
+    /// which is where all the time goes; the expression parsers are bounded by
+    /// <see cref="MaxNestingDepth"/> and need no check of their own.
+    /// </summary>
+    private readonly CancellationToken _cancellation;
+
+    private Parser(ImmutableArray<PToken> tokens, GameProfile profile, CancellationToken cancellation)
     {
         _tokens = tokens;
         _profile = profile;
+        _cancellation = cancellation;
     }
 
     /// <summary>Parses a preprocessed token stream into a syntax tree for the given game's dialect.</summary>
-    public static ParseTree Parse(ImmutableArray<PToken> tokens, GameProfile profile)
+    public static ParseTree Parse(
+        ImmutableArray<PToken> tokens, GameProfile profile, CancellationToken cancellationToken = default)
     {
-        Parser parser = new(tokens, profile);
+        Parser parser = new(tokens, profile, cancellationToken);
         ScriptNode root = parser.ParseScript();
         return new ParseTree(root, parser._diagnostics.ToImmutable());
     }

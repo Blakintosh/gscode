@@ -33,6 +33,13 @@ public sealed record ParseResult(
 /// </summary>
 public static class ScriptAnalysis
 {
+    /// <param name="cancellationToken">
+    /// Stops an analysis nobody is waiting for any more. Checked at each STAGE boundary and inside
+    /// the parser's two unbounded loops — enough to abandon the expensive part of a superseded
+    /// pass, and cheap enough not to show on the per-file timings, without threading a token
+    /// through every parser body. A cancelled call throws rather than returning a partial result:
+    /// there is no such thing as half a parse, and every caller's answer is "drop it".
+    /// </param>
     public static ParseResult Analyze(
         string filePath,
         ScriptLanguage language,
@@ -40,15 +47,25 @@ public static class ScriptAnalysis
         IInsertProvider insertProvider,
         NameTable names,
         GameProfile? profile = null,
-        IHeaderMacroCache? headerCache = null)
+        IHeaderMacroCache? headerCache = null,
+        CancellationToken cancellationToken = default)
     {
         GameProfile game = profile ?? GameProfile.Active;
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         LexResult lexed = Lexer.Lex(text, game);
+        cancellationToken.ThrowIfCancellationRequested();
+
         PreprocessResult preprocessed =
             Preprocessor.Process(filePath, lexed.Tokens, text, insertProvider, names, game, headerCache);
-        ParseTree tree = Syntax.Parser.Parse(preprocessed.Tokens, game);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        ParseTree tree = Syntax.Parser.Parse(preprocessed.Tokens, game, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
         ExtractionResult extraction = SymbolExtractor.Extract(filePath, tree, preprocessed, lexed.Tokens, text, names, game);
+        cancellationToken.ThrowIfCancellationRequested();
 
         bool lenient = language == ScriptLanguage.Gsh;
 

@@ -240,22 +240,24 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         return Unit.Task;
     }
 
-    public override async Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
+    public override Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
     {
         // Saves bypass the debounce: dependents and the cache (P5/P6) key off saved state.
         if ( _documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
         {
-            if ( document.PendingAnalysis is not null )
-            {
-                await document.PendingAnalysis.CancelAsync();
-            }
-
-            AnalyzeAndPublish(document);
+            // Scheduled like every other analysis rather than run right here. Two things were wrong
+            // with running it inline: it was a full parse and lint ON THE LSP HANDLER THREAD, the
+            // same cost didOpen was moved off; and it went around AnalysisGate, so a save landing
+            // while the debounced pass was still running gave one document two concurrent analyses
+            // — the exact pile-up the gate exists to prevent. Cancelling the pending analysis is
+            // now part of scheduling, and unlike the await it replaces it actually STOPS a run that
+            // is already past the debounce.
+            ScheduleImmediateAnalysis(document);
             RefreshDependentsOfSavedHeader(document);
             WarnIfProtectedRawFile(document);
         }
 
-        return Unit.Value;
+        return Unit.Task;
     }
 
     /// <summary>
@@ -353,7 +355,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             return;
         }
 
-        RunAnalysisSingleFlight(document);
+        RunAnalysisSingleFlight(document, cancellationToken);
     }
 
     private void ScheduleDebouncedAnalysis(OpenDocument document)
@@ -377,7 +379,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             return;
         }
 
-        RunAnalysisSingleFlight(document);
+        RunAnalysisSingleFlight(document, cancellationToken);
     }
 
     /// <summary>
@@ -386,7 +388,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// while it was busy) here and now; otherwise queues the rerun and returns immediately,
     /// leaving the in-flight call to pick it up.
     /// </summary>
-    private void RunAnalysisSingleFlight(OpenDocument document)
+    private void RunAnalysisSingleFlight(OpenDocument document, CancellationToken cancellationToken)
     {
         AnalysisGate gate = _analysisGates.GetOrAdd(document.Path, static _ => new AnalysisGate());
         if ( !gate.TryStart() )
@@ -400,7 +402,14 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             {
                 try
                 {
-                    AnalyzeAndPublish(document);
+                    AnalyzeAndPublish(document, cancellationToken);
+                }
+                catch ( OperationCanceledException )
+                {
+                    // A newer edit arrived and this pass was abandoned partway. Not a failure, and
+                    // nothing to publish: the run that superseded it publishes for the text that
+                    // replaced this one's.
+                    return;
                 }
                 catch ( Exception exception )
                 {
@@ -415,7 +424,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         }
     }
 
-    private void AnalyzeAndPublish(OpenDocument document)
+    private void AnalyzeAndPublish(OpenDocument document, CancellationToken cancellationToken)
     {
         long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
 
@@ -424,9 +433,16 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         // parse actually stands, and a caller stamping diagnostics with the LIVE version would
         // describe even a superseded analysis as being about text the client has already moved
         // past — which defeats the version's whole purpose (see AnalysisSnapshot/AnalyzeSnapshot).
-        AnalysisSnapshot snapshot = _documents.AnalyzeSnapshot(document);
+        AnalysisSnapshot snapshot = _documents.AnalyzeSnapshot(document, cancellationToken);
         ParseResult result = snapshot.Result;
-        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics = _linter.Analyze(document, result);
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics =
+            _linter.Analyze(document, result, cancellationToken);
+
+        // Last look before anything leaves this method. A pass superseded during the lint must not
+        // publish, and — more importantly — must not COMMIT: a record written from a parse of text
+        // the user has already replaced is what every other file's diagnostics are then computed
+        // against.
+        cancellationToken.ThrowIfCancellationRequested();
 
         _diagnostics.Publish(document.Path, snapshot.Version, diagnostics);
         CommitAndRefreshLenses(document, result);

@@ -19,6 +19,8 @@ public sealed partial class Parser
 
         while ( Kind != TokenKind.EndOfFile )
         {
+            _cancellation.ThrowIfCancellationRequested();
+
             switch ( Kind )
             {
                 case TokenKind.UsingDirective:

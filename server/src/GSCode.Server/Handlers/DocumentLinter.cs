@@ -44,9 +44,10 @@ public sealed class DocumentLinter
     /// produced it, and re-reading <c>LatestResult</c> here would let a concurrent analysis swap it
     /// for a different parse than the one they published a version number for.
     /// </param>
-    public ImmutableArray<Diagnostic> Analyze(OpenDocument document, ParseResult result)
+    public ImmutableArray<Diagnostic> Analyze(
+        OpenDocument document, ParseResult result, CancellationToken cancellationToken = default)
     {
-        return Analyze(document.Language, document.Path, result);
+        return Analyze(document.Language, document.Path, result, cancellationToken);
     }
 
     /// <summary>
@@ -55,8 +56,10 @@ public sealed class DocumentLinter
     /// from disk and needs exactly the two facts an <see cref="OpenDocument"/> would otherwise
     /// have supplied.
     /// </summary>
-    public ImmutableArray<Diagnostic> Analyze(ScriptLanguage language, string path, ParseResult result)
+    public ImmutableArray<Diagnostic> Analyze(
+        ScriptLanguage language, string path, ParseResult result, CancellationToken cancellationToken = default)
     {
-        return WorkspaceLints.Analyze(result, language, path, _database, _resolver.Current, _builtins, _objectFields);
+        return WorkspaceLints.Analyze(
+            result, language, path, _database, _resolver.Current, _builtins, _objectFields, cancellationToken);
     }
 }

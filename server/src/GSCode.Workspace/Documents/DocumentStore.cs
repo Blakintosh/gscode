@@ -235,9 +235,9 @@ public sealed class DocumentStore
     }
 
     /// <summary>Runs the full per-file pipeline on the document's current text.</summary>
-    public ParseResult Analyze(OpenDocument document)
+    public ParseResult Analyze(OpenDocument document, CancellationToken cancellationToken = default)
     {
-        return AnalyzeSnapshot(document).Result;
+        return AnalyzeSnapshot(document, cancellationToken).Result;
     }
 
     /// <summary>
@@ -255,7 +255,7 @@ public sealed class DocumentStore
     /// the newest text's version — which is exactly the version a client uses to discard
     /// diagnostics that describe text it has already moved past.
     /// </summary>
-    public AnalysisSnapshot AnalyzeSnapshot(OpenDocument document)
+    public AnalysisSnapshot AnalyzeSnapshot(OpenDocument document, CancellationToken cancellationToken = default)
     {
         // Read the version and the text TOGETHER, before anything slow, and analyse those: an edit
         // arriving mid-analysis must leave the document marked stale, not stamped with a version
@@ -276,7 +276,8 @@ public sealed class DocumentStore
             _insertProviderFactory(document.Path),
             _names,
             profile: null,
-            headerCache: _headerCache);
+            headerCache: _headerCache,
+            cancellationToken);
 
         return document.Publish(result, version, headerGeneration);
     }
@@ -305,9 +306,9 @@ public sealed class DocumentStore
     /// those parses report themselves current forever, which is why a macro's value in a GSC
     /// updated only once something was typed into the GSC.
     /// </summary>
-    public ParseResult AnalyzeIfStale(OpenDocument document)
+    public ParseResult AnalyzeIfStale(OpenDocument document, CancellationToken cancellationToken = default)
     {
-        return AnalyzeSnapshotIfStale(document).Result;
+        return AnalyzeSnapshotIfStale(document, cancellationToken).Result;
     }
 
     /// <summary>
@@ -320,7 +321,8 @@ public sealed class DocumentStore
     /// of older text with the newest version, which is the one stamp a client uses to decide a set
     /// is still current.
     /// </summary>
-    public AnalysisSnapshot AnalyzeSnapshotIfStale(OpenDocument document)
+    public AnalysisSnapshot AnalyzeSnapshotIfStale(
+        OpenDocument document, CancellationToken cancellationToken = default)
     {
         // One read of the published pair, not a staleness check followed by a separate fetch: the
         // two reads could straddle a concurrent publish and return a result from a version other
@@ -334,6 +336,6 @@ public sealed class DocumentStore
             return analysis;
         }
 
-        return AnalyzeSnapshot(document);
+        return AnalyzeSnapshot(document, cancellationToken);
     }
 }

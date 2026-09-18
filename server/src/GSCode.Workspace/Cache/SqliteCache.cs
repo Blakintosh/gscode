@@ -290,10 +290,14 @@ public sealed class SqliteCache : IAsyncDisposable
             {
                 ApplyBatch(batch);
             }
-            catch ( SqliteException )
+            catch ( Exception exception ) when ( exception is not OutOfMemoryException )
             {
-                // A failed cache write must never take the server down; the file will
-                // simply be re-analysed next cold start.
+                // A failed cache write must never take the server down; the file will simply be
+                // re-analysed next cold start. Not just SqliteException: a bug in
+                // RecordSerializer.Serialize, or anything else ApplyBatch can throw, used to fault
+                // this whole loop permanently — the `await foreach` exits, nothing drains the
+                // channel again for the rest of the session, and every later write silently piles
+                // up as a dropped write. One bad batch degraded the entire run's cache.
             }
             finally
             {
@@ -448,9 +452,19 @@ public sealed class SqliteCache : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _writes.Writer.TryComplete();
-        await _writerLoop.ConfigureAwait(false);
 
-        Execute(_connection, "PRAGMA wal_checkpoint(FULL);");
-        await _connection.DisposeAsync().ConfigureAwait(false);
+        try
+        {
+            // The writer loop no longer faults on an ordinary write failure, but awaiting it is
+            // still the one place a truly unexpected exception (a cancellation, an OOM) could
+            // surface — and even then the checkpoint and the connection dispose below must still
+            // run, or a crash here leaks the connection on every shutdown that hits it.
+            await _writerLoop.ConfigureAwait(false);
+        }
+        finally
+        {
+            Execute(_connection, "PRAGMA wal_checkpoint(FULL);");
+            await _connection.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

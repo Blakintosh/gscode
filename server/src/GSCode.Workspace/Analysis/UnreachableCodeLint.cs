@@ -51,34 +51,44 @@ public static class UnreachableCodeLint
     {
         if ( node is BlockNode block )
         {
-            ReportAfterTerminator(block, diagnostics);
+            ReportAfterTerminator(block.Statements, diagnostics);
+        }
+        else if ( node is CaseGroupNode caseGroup )
+        {
+            // A case's own statement list, exactly like a block's — CaseGroupNode.Statements is a
+            // flat array rather than a nested BlockNode, since GSC's switch needs no braces per
+            // case, and that shape is why this needed its own branch rather than falling out of
+            // the BlockNode one above: nothing here was ever a BlockNode to begin with, so a
+            // `break;` followed by dead code in a case body was never reported.
+            ReportAfterTerminator(caseGroup.Statements, diagnostics);
         }
     }
 
     /// <summary>
-    /// Reports the run of statements after the first terminator in a block, if any.
+    /// Reports the run of statements after the first terminator in a block or case body, if any.
     ///
     /// A DEV BLOCK is skipped: <c>/# … #/</c> is compiled out of a release build, so a statement
     /// after a return inside one is a debugging aid the author put there knowingly, and greying it
     /// out would be reporting the dev block itself rather than a mistake.
     /// </summary>
-    private static void ReportAfterTerminator(BlockNode block, ImmutableArray<Diagnostic>.Builder diagnostics)
+    private static void ReportAfterTerminator(
+        ImmutableArray<AstNode> statements, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        for ( int index = 0; index < block.Statements.Length - 1; index++ )
+        for ( int index = 0; index < statements.Length - 1; index++ )
         {
-            if ( !IsTerminator(block.Statements[index]) )
+            if ( !IsTerminator(statements[index]) )
             {
                 continue;
             }
 
-            AstNode first = block.Statements[index + 1];
-            AstNode last = block.Statements[^1];
+            AstNode first = statements[index + 1];
+            AstNode last = statements[^1];
 
             diagnostics.Add(Diagnostic.Create(
                 new TextRange(first.Range.Start, last.Range.End),
                 DiagnosticSeverity.Information,
                 GscDiagnosticCode.UnreachableCode,
-                DescribeTerminator(block.Statements[index])));
+                DescribeTerminator(statements[index])));
             return;
         }
     }

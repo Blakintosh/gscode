@@ -93,6 +93,19 @@ public class UnreachableCodeLintTests
     }
 
     [Fact]
+    public void DeadCodeAfterABreakInsideACase_IsReported()
+    {
+        // A case's own statement list is a flat array (CaseGroupNode.Statements), never wrapped
+        // in a BlockNode the way an ordinary `{ }` body is — so a rule that only ever looked for a
+        // BlockNode never saw a `break;` followed by dead code sitting directly in a case.
+        Diagnostic diagnostic = Assert.Single(Lint(
+            "\tswitch ( x )\n\t{\n\t\tcase 1:\n\t\t\tbreak;\n\t\t\tuse( 1 );\n\t}"));
+
+        Assert.Equal(GscDiagnosticCode.UnreachableCode, diagnostic.Code);
+        Assert.Contains("break", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NestedFunctionsAndClassesAreWalked()
     {
         ParseResult result = ScriptAnalysis.Analyze(

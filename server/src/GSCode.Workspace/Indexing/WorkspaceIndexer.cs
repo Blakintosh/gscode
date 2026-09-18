@@ -417,6 +417,30 @@ public sealed class WorkspaceIndexer
         PerfTracker.End();
         progress.Completed(completed, targets.Count, stopwatch.Elapsed);
 
+        // Every cache row for a file this pass did NOT find on disk: deleted, renamed, or moved
+        // out from under a resolver whose roots changed, while the server was not running to see
+        // the watcher event that would otherwise have pruned it via RemoveFile. EnumerateIndexTargets
+        // always returns the workspace's COMPLETE file set — Off is the only mode this method treats
+        // differently, so this is safe on every pass that reaches here — so anything in _restored
+        // that is not in it is stale in every one of them, not just a cold one, and would otherwise
+        // sit in the database forever: nothing else ever asks this question.
+        if ( _cache is not null && _restored.Count > 0 )
+        {
+            HashSet<string> currentPaths = new(StringComparer.Ordinal);
+            foreach ( string path in targets )
+            {
+                currentPaths.Add(PathUtil.NormalizeAbsolute(path));
+            }
+
+            foreach ( string cachedPath in _restored.Keys )
+            {
+                if ( !currentPaths.Contains(cachedPath) )
+                {
+                    _cache.EnqueueDelete(cachedPath);
+                }
+            }
+        }
+
         // Restored files that phase two re-parsed were analysed after all, so they count as
         // analysed rather than restored — the split is what tells a cold run from a warm one.
         int restored = restoredRecords.Count - reparsedAfterHeaderChange;

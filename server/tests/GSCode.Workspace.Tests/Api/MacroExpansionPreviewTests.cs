@@ -87,6 +87,18 @@ public class MacroExpansionPreviewTests
         Assert.Contains("b", preview);
     }
 
+    /// <summary>Where the invocation's own name ends — <see cref="MacroExpansionPreview.ArgumentsFollowing"/>'s entry point.</summary>
+    private static int AfterName(string invocation)
+    {
+        int index = 0;
+        while ( index < invocation.Length && invocation[index] != '(' && !char.IsWhiteSpace(invocation[index]) )
+        {
+            index++;
+        }
+
+        return index;
+    }
+
     [Theory]
     [InlineData("IS_TRUE( foo )", new[] { "foo" })]
     [InlineData("PAIR( a, b )", new[] { "a", "b" })]
@@ -100,13 +112,14 @@ public class MacroExpansionPreviewTests
         // and neither does one inside a STRING LITERAL, which is text rather than a delimiter.
         // `FOO( ")" )` is the sharpest case: without skipping the quoted content, the ')' inside
         // it closes the argument list one token early.
-        Assert.Equal(expected, MacroExpansionPreview.ParseArguments(invocation));
+        Assert.Equal(expected, MacroExpansionPreview.ArgumentsFollowing(invocation, AfterName(invocation)));
     }
 
     [Fact]
     public void AnObjectLikeMacroHasNoArgumentList()
     {
-        Assert.Empty(MacroExpansionPreview.ParseArguments("MAX_PLAYERS"));
+        string invocation = "MAX_PLAYERS";
+        Assert.Empty(MacroExpansionPreview.ArgumentsFollowing(invocation, AfterName(invocation)));
     }
 
     [Fact]

@@ -209,22 +209,6 @@ public sealed class ScriptDatabase
         }
     }
 
-    /// <summary>Normalized paths of every non-GSH file that #inserts the given GSH.</summary>
-    public IEnumerable<string> FilesInserting(string normalizedGshPath)
-    {
-        foreach ( ScriptRecord record in Gsc.AllRecords.Concat(Csc.AllRecords) )
-        {
-            foreach ( DependencyEdge edge in record.Dependencies )
-            {
-                if ( edge.IsInsert && string.Equals(edge.ResolvedPath, normalizedGshPath, StringComparison.Ordinal) )
-                {
-                    yield return record.Path;
-                    break;
-                }
-            }
-        }
-    }
-
     /// <summary>Stores a completed analysis as the file's current record.</summary>
     public ScriptRecord Commit(ParseResult result, ResolutionContext context, bool isDirty, string relativePath = "")
     {
@@ -260,21 +244,6 @@ public sealed class ScriptDatabase
         {
             StoreFor(record.Language).Upsert(record);
         }
-    }
-
-    /// <summary>
-    /// The distinct files a script reaches by path call. Records do not keep the ParseResult, so
-    /// these are lifted out here or they are lost — and reference scoping on the merge dialects
-    /// needs them: a path call reaches another file's function without importing it.
-    /// </summary>
-    private static ImmutableArray<GSCode.Parser.Extraction.PathCallReference> PathCallTargetsOf(ParseResult result)
-    {
-        if ( result.Extraction.PathCalls.Length == 0 )
-        {
-            return [];
-        }
-
-        return result.Extraction.PathCalls;
     }
 
     /// <summary>Builds the immutable record from a pipeline result.</summary>
@@ -335,7 +304,10 @@ public sealed class ScriptDatabase
             Classes = result.Extraction.Classes,
             Macros = macros.ToImmutable(),
             Dependencies = dependencies.ToImmutable(),
-            PathCallTargets = PathCallTargetsOf(result),
+            // Records do not keep the ParseResult, so these are lifted out here or they are
+            // lost — reference scoping on the merge dialects needs them: a path call reaches
+            // another file's function without importing it.
+            PathCallTargets = result.Extraction.PathCalls,
             References = result.Extraction.References,
             Diagnostics = result.AllDiagnostics,
             IsDirty = isDirty,

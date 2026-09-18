@@ -411,7 +411,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `WatchedFileChange` (Created/Changed/Deleted) + `sealed class WatchedFileUpdater` —
   applies on-disk changes to the database: re-index created/changed files, drop deleted
   ones, and when a GSH changes invalidate its lex cache and re-index every file that
-  #inserts it (via `ScriptDatabase.FilesInserting`) so macro edits propagate. Returns
+  #inserts it (via `ReindexInserters`) so macro edits propagate. Returns
   the touched paths for diagnostic republishing. Takes an `ownedByEditor` predicate and
   skips every record it would rewrite for a file that is OPEN — the changed file and any
   dependent alike — because this reads disk and a buffer may hold unsaved edits.

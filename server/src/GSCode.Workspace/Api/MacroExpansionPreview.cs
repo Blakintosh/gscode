@@ -176,24 +176,6 @@ public static class MacroExpansionPreview
         return SpansFrom(text, scan);
     }
 
-    /// <summary>
-    /// The argument list written at a call site, split on top-level commas.
-    ///
-    /// Read from the call site's text because a MacroInvocation records WHERE it is and WHAT it
-    /// calls, but not what it was passed. Nesting is respected, so
-    /// <c>OUTER( inner( a, b ), c )</c> yields two arguments rather than three.
-    /// </summary>
-    public static ImmutableArray<string> ParseArguments(string invocationText)
-    {
-        int open = invocationText.IndexOf('(');
-        if ( open < 0 )
-        {
-            return [];
-        }
-
-        return Texts(invocationText, SpansFrom(invocationText, open));
-    }
-
     /// <summary>The text each span covers.</summary>
     private static ImmutableArray<string> Texts(string text, ImmutableArray<MacroArgumentSpan> spans)
     {

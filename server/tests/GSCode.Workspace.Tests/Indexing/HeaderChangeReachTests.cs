@@ -15,9 +15,9 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// The startup index already closes the changed set over the header insert graph, and its comment
 /// names the exact chain that forced it: base.gsh -> wrapper.gsh -> script.gsc, where the script
 /// keeps a record built against the OLD macro values because the change reaches one hop only. The
-/// watch path answers the same question with <see cref="ScriptDatabase.FilesInserting"/>, which
-/// walks the GSC and CSC stores — headers live in a store of their own — so it reaches direct
-/// non-header inserters and stops.
+/// watch path answers the same question with <see cref="WatchedFileUpdater"/>'s own
+/// ReindexInserters, which walks the GSC and CSC stores — headers live in a store of their own —
+/// so it reaches direct non-header inserters and stops.
 ///
 /// Observed through a macro that names a function, since a record carries the functions a file
 /// declares but not the macros a header handed it.

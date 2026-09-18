@@ -259,6 +259,6 @@ public sealed class DependentDiagnosticsRefresher
 
         ImmutableArray<Diagnostic> diagnostics = _linter.Analyze(document, result);
 
-        _diagnostics.Publish(DocumentUri.FromFileSystemPath(document.Path), document.Version, diagnostics);
+        _diagnostics.Publish(document.Path, document.Version, diagnostics);
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Paths;
 using GSCode.Server.Configuration;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
@@ -44,11 +45,15 @@ public sealed class WorkspaceDiagnosticsPublisher
     private readonly object _gate = new();
 
     /// <summary>
-    /// Every URI this publisher has pushed a non-empty set to, so it can take them back.
+    /// Every PATH this publisher has pushed a non-empty set to, so it can take them back.
     /// Diagnostics are sticky in the client: without this, narrowing the scope or fixing a file
     /// would leave the old problems on screen forever.
+    ///
+    /// Paths rather than URIs, so a take-back resolves through the same seam the publish went
+    /// through (<see cref="DiagnosticsPublisher.UriFor"/>) and cannot address a spelling the
+    /// client was never told.
     /// </summary>
-    private readonly HashSet<DocumentUri> _published = [];
+    private readonly HashSet<string> _published = new(StringComparer.Ordinal);
 
     public WorkspaceDiagnosticsPublisher(
         ScriptDatabase database,
@@ -105,7 +110,7 @@ public sealed class WorkspaceDiagnosticsPublisher
 
         lock ( _gate )
         {
-            HashSet<DocumentUri> stillPublished = [];
+            HashSet<string> stillPublished = new(StringComparer.Ordinal);
 
             foreach ( ScriptRecord record in _database.AllRecords )
             {
@@ -120,17 +125,16 @@ public sealed class WorkspaceDiagnosticsPublisher
                     continue;
                 }
 
-                DocumentUri uri = DocumentUri.FromFileSystemPath(record.Path);
-                _publisher.Publish(uri, version: null, record.Diagnostics);
-                stillPublished.Add(uri);
+                _publisher.Publish(record.Path, version: null, record.Diagnostics);
+                stillPublished.Add(record.Path);
             }
 
             // Anything published last time and not this time has to be taken back explicitly.
-            foreach ( DocumentUri uri in _published )
+            foreach ( string path in _published )
             {
-                if ( !stillPublished.Contains(uri) )
+                if ( !stillPublished.Contains(path) )
                 {
-                    _publisher.Clear(uri);
+                    _publisher.Clear(path);
                 }
             }
 
@@ -161,13 +165,37 @@ public sealed class WorkspaceDiagnosticsPublisher
             return;
         }
 
-        DocumentUri uri = DocumentUri.FromFileSystemPath(record.Path);
-        _publisher.Publish(uri, version: null, record.Diagnostics);
+        _publisher.Publish(record.Path, version: null, record.Diagnostics);
 
         lock ( _gate )
         {
-            _published.Add(uri);
+            _published.Add(record.Path);
         }
+    }
+
+    /// <summary>
+    /// Takes back what this publisher pushed for a file that has just been opened.
+    ///
+    /// The mirror of <see cref="OnDocumentClosed"/>, and needed for the same reason it is: the
+    /// sync handler owns open documents and publishes a richer set for them, but nothing removed
+    /// the set the index had already pushed. Both sets then stood — the client does not treat a
+    /// newer publish as replacing an older one unless it names the same document — so a file with
+    /// indexed problems showed them twice from the moment it was opened until the next
+    /// <see cref="Refresh"/> happened to prune it.
+    /// </summary>
+    public void OnDocumentOpened(string path)
+    {
+        string key = PathUtil.NormalizeAbsolute(path);
+
+        lock ( _gate )
+        {
+            if ( !_published.Remove(key) )
+            {
+                return;
+            }
+        }
+
+        _publisher.Clear(key);
     }
 
 }

@@ -57,7 +57,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/DiagnosticsPublisher.cs
 
-- `Publish`/`Clear` — push-model publishDiagnostics wrapper.
+- `Publish`/`Clear` — push-model publishDiagnostics wrapper, addressed by PATH. `Remember`/`Forget`
+  keep each open document's client-side URI spelling and `UriFor` is the one seam that resolves one,
+  so a file is never published under two spellings (the normalized path lowercases on Windows).
+  Push because closed files have no puller; open documents are a migration candidate to LSP 3.17
+  `textDocument/diagnostic`.
 
 ## Handlers/DocumentSymbolHandler.cs
 

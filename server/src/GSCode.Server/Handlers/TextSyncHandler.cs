@@ -170,12 +170,20 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             request.TextDocument.Text,
             request.TextDocument.Version ?? 0);
 
+        // Take back the workspace publisher's set BEFORE the client's spelling is remembered: it
+        // published under the on-disk one, which is what the fallback still resolves to here. Then
+        // remember, so everything published from now on addresses the tab the user is looking at.
+        // Both halves matter — without the take-back, a file with indexed problems that is then
+        // opened carries the index's set AND this handler's until the next workspace refresh.
+        _workspaceDiagnostics.OnDocumentOpened(document.Path);
+        _diagnostics.Remember(document.Path, request.TextDocument.Uri);
+
         // Off the handler thread, not inline: a window's worth of restored tabs used to run N
         // full parse-plus-lint passes back to back ON THIS THREAD, one per didOpen, contending
         // with a cold index that is already using every other core for the same work. Nothing
         // here needs to finish before the handler returns — analysis publishes its own
         // diagnostics once it does, exactly like the debounced edit path already does.
-        ScheduleImmediateAnalysis(document, request.TextDocument.Uri);
+        ScheduleImmediateAnalysis(document);
         WarnIfGameLooksWrong(document);
         return Unit.Task;
     }
@@ -228,7 +236,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             _documents.ApplyChange(document, change.Range?.ToCore(), change.Text, request.TextDocument.Version ?? document.Version + 1);
         }
 
-        ScheduleDebouncedAnalysis(document, request.TextDocument.Uri);
+        ScheduleDebouncedAnalysis(document);
         return Unit.Task;
     }
 
@@ -242,7 +250,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
                 await document.PendingAnalysis.CancelAsync();
             }
 
-            AnalyzeAndPublish(document, request.TextDocument.Uri);
+            AnalyzeAndPublish(document);
             RefreshDependentsOfSavedHeader(document);
             WarnIfProtectedRawFile(document);
         }
@@ -307,7 +315,8 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         string path = request.TextDocument.Uri.GetFileSystemPath();
 
         _documents.Close(path);
-        _diagnostics.Clear(request.TextDocument.Uri);
+        _diagnostics.Clear(path);
+        _diagnostics.Forget(path);
         _analysisGates.TryRemove(PathUtil.NormalizeAbsolute(path), out _);
 
         // Clearing is right for what THIS handler published, but the file may still be in the
@@ -327,16 +336,16 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// caller's thread exactly like today's bug — so this uses <see cref="Task.Run(Action)"/>
     /// instead, which is the one thing here that actually guarantees a different thread.
     /// </summary>
-    private void ScheduleImmediateAnalysis(OpenDocument document, DocumentUri uri)
+    private void ScheduleImmediateAnalysis(OpenDocument document)
     {
         document.PendingAnalysis?.Cancel();
         CancellationTokenSource pending = new();
         document.PendingAnalysis = pending;
 
-        _ = Task.Run(() => RunImmediate(document, uri, pending.Token), pending.Token);
+        _ = Task.Run(() => RunImmediate(document, pending.Token), pending.Token);
     }
 
-    private void RunImmediate(OpenDocument document, DocumentUri uri, CancellationToken cancellationToken)
+    private void RunImmediate(OpenDocument document, CancellationToken cancellationToken)
     {
         if ( cancellationToken.IsCancellationRequested )
         {
@@ -344,19 +353,19 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             return;
         }
 
-        RunAnalysisSingleFlight(document, uri);
+        RunAnalysisSingleFlight(document);
     }
 
-    private void ScheduleDebouncedAnalysis(OpenDocument document, DocumentUri uri)
+    private void ScheduleDebouncedAnalysis(OpenDocument document)
     {
         document.PendingAnalysis?.Cancel();
         CancellationTokenSource pending = new();
         document.PendingAnalysis = pending;
 
-        _ = RunDebouncedAsync(document, uri, pending.Token);
+        _ = RunDebouncedAsync(document, pending.Token);
     }
 
-    private async Task RunDebouncedAsync(OpenDocument document, DocumentUri uri, CancellationToken cancellationToken)
+    private async Task RunDebouncedAsync(OpenDocument document, CancellationToken cancellationToken)
     {
         try
         {
@@ -368,7 +377,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             return;
         }
 
-        RunAnalysisSingleFlight(document, uri);
+        RunAnalysisSingleFlight(document);
     }
 
     /// <summary>
@@ -377,7 +386,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// while it was busy) here and now; otherwise queues the rerun and returns immediately,
     /// leaving the in-flight call to pick it up.
     /// </summary>
-    private void RunAnalysisSingleFlight(OpenDocument document, DocumentUri uri)
+    private void RunAnalysisSingleFlight(OpenDocument document)
     {
         AnalysisGate gate = _analysisGates.GetOrAdd(document.Path, static _ => new AnalysisGate());
         if ( !gate.TryStart() )
@@ -391,7 +400,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             {
                 try
                 {
-                    AnalyzeAndPublish(document, uri);
+                    AnalyzeAndPublish(document);
                 }
                 catch ( Exception exception )
                 {
@@ -406,7 +415,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         }
     }
 
-    private void AnalyzeAndPublish(OpenDocument document, DocumentUri uri)
+    private void AnalyzeAndPublish(OpenDocument document)
     {
         long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
 
@@ -419,7 +428,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         ParseResult result = snapshot.Result;
         ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics = _linter.Analyze(document, result);
 
-        _diagnostics.Publish(uri, snapshot.Version, diagnostics);
+        _diagnostics.Publish(document.Path, snapshot.Version, diagnostics);
         CommitAndRefreshLenses(document, result);
 
         double elapsedMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;

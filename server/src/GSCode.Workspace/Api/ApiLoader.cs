@@ -71,6 +71,20 @@ public static class ApiLoader
             onParseFailure?.Invoke(path, exception);
             return BuiltinApi.Empty;
         }
+        catch ( IOException exception )
+        {
+            // The file EXISTS (checked above) but could not be read — locked by another process,
+            // an AV scan, a sharing violation. That is corrupt-or-unreadable bundled data exactly
+            // as much as a JSON parse failure is, and deserves the same "report it, carry on empty"
+            // treatment rather than taking down whatever called Load.
+            onParseFailure?.Invoke(path, exception);
+            return BuiltinApi.Empty;
+        }
+        catch ( UnauthorizedAccessException exception )
+        {
+            onParseFailure?.Invoke(path, exception);
+            return BuiltinApi.Empty;
+        }
 
         if ( file?.Api is null )
         {

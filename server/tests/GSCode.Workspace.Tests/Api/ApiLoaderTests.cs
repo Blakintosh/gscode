@@ -120,6 +120,33 @@ public class ApiLoaderTests
     }
 
     [Fact]
+    public void LoadFile_ALockedFile_ReportsFailureRatherThanThrowing()
+    {
+        // Only JsonException was caught, so a file that EXISTS but cannot be READ — locked by
+        // another process, an AV scan, a permissions problem — crashed whatever called Load
+        // instead of being treated as one more "could not parse this bundled data" case.
+        string path = Path.Combine(Path.GetTempPath(), $"gscode_api_locked_{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{}");
+
+        try
+        {
+            using FileStream exclusiveLock = new(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+            List<(string Path, Exception Exception)> failures = [];
+            BuiltinApi api = ApiLoader.LoadFile(path, (failedPath, exception) => failures.Add((failedPath, exception)));
+
+            Assert.Equal(0, api.Count);
+            Assert.Single(failures);
+            Assert.Equal(path, failures[0].Path);
+            Assert.IsType<IOException>(failures[0].Exception);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void RenderMacro_ShowsDefineAndDoc()
     {
         MacroRecord macro = new("MAX_HEALTH", false, [], TextRange.Empty, "// the cap");

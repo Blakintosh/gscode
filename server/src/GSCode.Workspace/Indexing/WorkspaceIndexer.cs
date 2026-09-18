@@ -575,7 +575,13 @@ public sealed class WorkspaceIndexer
                         restored = restored with { ContextId = freshContextId, RelativePath = freshRelativePath };
                     }
 
-                    if ( !ownedByOpenDocument )
+                    // See DiskStillMatches: a full cold-start pass runs on a background task while
+                    // the server keeps handling watched-file events, so disk can move again while
+                    // this call is still in flight. Skipping the store write here, not the whole
+                    // restore, is what keeps this call from winning a last-write race against a
+                    // fresher commit the corresponding watched-file event already made (or is
+                    // about to make) for this exact path.
+                    if ( !ownedByOpenDocument && DiskStillMatches(normalized, content) )
                     {
                         _database.CommitRecord(restored);
                     }
@@ -621,7 +627,15 @@ public sealed class WorkspaceIndexer
         // overwriting. BuildRecord does the same work Commit does, minus the store write; the
         // watched-file path skips the same way for the same reason (WatchedFileUpdater.Apply).
         PerfTracker.Begin("index.commit");
-        ScriptRecord record = ownedByOpenDocument
+        // Same race as the restore branch above, but the window is far wider here: lex, parse
+        // and extract sit between the read at the top of this call and this commit, so a file
+        // that changes again during that stretch is not a corner case on a slow cold index. A
+        // mismatch here does not mean this call FAILED to index the file — it means the fresher
+        // watched-file event for that later change already committed (or is about to), and this
+        // now-stale analysis must not win a last-write race against it. Building rather than
+        // committing keeps the record usable by this call's own caller without touching the
+        // store the fresher event owns.
+        ScriptRecord record = ownedByOpenDocument || !DiskStillMatches(normalized, content)
             ? ScriptDatabase.BuildRecord(result, context, isDirty: false, relativePath)
             : _database.Commit(result, context, isDirty: false, relativePath);
         PerfTracker.End();
@@ -631,6 +645,36 @@ public sealed class WorkspaceIndexer
         PerfTracker.End();
 
         return new FileOutcome(Restored: false, Record: record);
+    }
+
+    /// <summary>
+    /// Whether disk still holds the exact bytes an analysis was built from — checked immediately
+    /// before that analysis is committed to the store, never before. Startup indexing runs on a
+    /// background task while the server keeps handling watched-file events (see Program.cs), so
+    /// a file can change again while one <see cref="ProcessFile"/> call is still in flight; the
+    /// watched-file event for that later change applies (or will apply) on its own thread, with
+    /// no gate between it and a concurrent indexing pass. Without this check, the store's
+    /// last-write-wins Upsert means whichever call reaches it LAST wins regardless of
+    /// which one read the fresher content — so this call's own now-stale write can silently
+    /// clobber a commit the fresher event already made.
+    ///
+    /// A mismatch is not this call failing to index the file: the change that caused it is
+    /// exactly the change the other event exists to apply, so skipping the store write here
+    /// leaves that file no less indexed than it already is (or is about to be) on that thread.
+    /// </summary>
+    private bool DiskStillMatches(string normalizedPath, string analysedContent)
+    {
+        try
+        {
+            return _fileSystem.ReadAllText(normalizedPath) == analysedContent;
+        }
+        catch ( Exception exception ) when ( exception is IOException or UnauthorizedAccessException )
+        {
+            // An unreadable recheck almost always means "deleted mid-analysis" — and a genuine
+            // deletion is caught by its own watched-file event regardless of what this call does,
+            // so there is nothing safer to do here than let the commit through as analysed.
+            return true;
+        }
     }
 
     /// <summary>

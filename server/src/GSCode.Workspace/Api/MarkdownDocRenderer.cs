@@ -291,6 +291,14 @@ public static class MarkdownDocRenderer
                 }
             }
         }
+        else
+        {
+            // No overload data at all — 270 of BO1's 1,377 GSC builtins, 222 of WAW's, 55 of
+            // MW2's, 43 of CoD4's (BO3's own library documents every one). Leaving this empty
+            // read as "takes nothing", which is a claim the data never made; "..." says the
+            // truth instead, that the signature just is not known.
+            signature.Append("...");
+        }
 
         signature.Append(')');
         return signature.ToString();

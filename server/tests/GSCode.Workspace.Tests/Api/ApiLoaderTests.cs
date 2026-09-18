@@ -115,6 +115,17 @@ public class ApiLoaderTests
     }
 
     [Fact]
+    public void RenderBuiltin_WithNoOverloadData_ShowsUnknownRatherThanZeroParameters()
+    {
+        // 270 of BO1's 1,377 GSC builtins carry no overload data at all (222 for WAW, 55 for
+        // MW2, 43 for CoD4). The signature line rendered them as `Name()`, which claims the
+        // function takes nothing — a fact the data never stated.
+        BuiltinFunction noData = new("AddTestClient", "", [], "");
+
+        Assert.Contains("AddTestClient(...)", MarkdownDocRenderer.RenderBuiltin(noData), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RenderFunction_IncludesNamespaceParamsAndDoc()
     {
         FunctionSymbol function = new()

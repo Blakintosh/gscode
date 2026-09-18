@@ -92,9 +92,14 @@ public class MacroExpansionPreviewTests
     [InlineData("PAIR( a, b )", new[] { "a", "b" })]
     [InlineData("OUTER( inner( a, b ), c )", new[] { "inner( a, b )", "c" })]
     [InlineData("INDEXED( things[0, 1], c )", new[] { "things[0, 1]", "c" })]
+    [InlineData("FOO( \"a,b\", c )", new[] { "\"a,b\"", "c" })]
+    [InlineData("FOO( \")\" )", new[] { "\")\"" })]
     public void ArgumentsAreSplitOnTopLevelCommas(string invocation, string[] expected)
     {
-        // Nesting matters: a comma inside a nested call belongs to that call, not to this one.
+        // Nesting matters: a comma inside a nested call belongs to that call, not to this one —
+        // and neither does one inside a STRING LITERAL, which is text rather than a delimiter.
+        // `FOO( ")" )` is the sharpest case: without skipping the quoted content, the ')' inside
+        // it closes the argument list one token early.
         Assert.Equal(expected, MacroExpansionPreview.ParseArguments(invocation));
     }
 

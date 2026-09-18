@@ -206,6 +206,9 @@ public static class MacroExpansionPreview
     ///
     /// Depth counts brackets as well as parentheses, so <c>things[0, 1]</c> stays one argument. An
     /// unterminated list — the normal state while typing — yields what has been written so far.
+    /// A string literal is skipped whole: <c>FOO( "a,b", c )</c> has two arguments, not three, and
+    /// <c>FOO( ")" )</c> has one — a comma or bracket character INSIDE quotes is text, not a
+    /// delimiter.
     /// </summary>
     private static ImmutableArray<MacroArgumentSpan> SpansFrom(string text, int open)
     {
@@ -216,6 +219,12 @@ public static class MacroExpansionPreview
         for ( int index = open; index < text.Length; index++ )
         {
             char c = text[index];
+
+            if ( c == '"' )
+            {
+                index = SkipStringLiteral(text, index);
+                continue;
+            }
 
             if ( c is '(' or '[' )
             {
@@ -240,6 +249,33 @@ public static class MacroExpansionPreview
 
         AddSpan(spans, text, start, text.Length, keepEmpty: spans.Count > 0);
         return spans.ToImmutable();
+    }
+
+    /// <summary>
+    /// The index of a string literal's closing quote, given the index of its opening one — or the
+    /// last index in the text when it never closes, the same "unterminated is the normal state
+    /// while typing" treatment the caller gives an unclosed argument list.
+    /// </summary>
+    private static int SkipStringLiteral(string text, int openQuote)
+    {
+        int index = openQuote + 1;
+        while ( index < text.Length )
+        {
+            if ( text[index] == '\\' && index + 1 < text.Length )
+            {
+                index += 2;
+                continue;
+            }
+
+            if ( text[index] == '"' )
+            {
+                return index;
+            }
+
+            index++;
+        }
+
+        return text.Length - 1;
     }
 
     /// <summary>Adds [start, end) with its surrounding whitespace trimmed off both ends.</summary>

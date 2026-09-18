@@ -307,15 +307,33 @@ public sealed class DocumentStore
     /// </summary>
     public ParseResult AnalyzeIfStale(OpenDocument document)
     {
+        return AnalyzeSnapshotIfStale(document).Result;
+    }
+
+    /// <summary>
+    /// Same work as <see cref="AnalyzeIfStale"/>, returning the parse and the version it describes
+    /// together — the <see cref="AnalyzeSnapshot"/> to <see cref="Analyze"/> relationship, applied
+    /// to the freshening path.
+    ///
+    /// For the same reason: a caller that PUBLISHES something version-stamped must stamp it with
+    /// the version this parse describes. Reading <c>document.Version</c> afterwards stamps a parse
+    /// of older text with the newest version, which is the one stamp a client uses to decide a set
+    /// is still current.
+    /// </summary>
+    public AnalysisSnapshot AnalyzeSnapshotIfStale(OpenDocument document)
+    {
         // One read of the published pair, not a staleness check followed by a separate fetch: the
         // two reads could straddle a concurrent publish and return a result from a version other
         // than the one just found to be current.
         AnalysisSnapshot? analysis = document.Analysis;
         if ( analysis is not null && analysis.Version == document.Version && analysis.HeaderGeneration == HeaderGeneration )
         {
-            return analysis.Result;
+            // The published snapshot itself, so the cached path keeps handing back the SAME parse
+            // instance — callers assert on that to prove an untouched document cost no second
+            // analysis.
+            return analysis;
         }
 
-        return Analyze(document);
+        return AnalyzeSnapshot(document);
     }
 }

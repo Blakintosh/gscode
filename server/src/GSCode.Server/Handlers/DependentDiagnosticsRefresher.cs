@@ -252,13 +252,19 @@ public sealed class DependentDiagnosticsRefresher
         return dependents;
     }
 
-    private void RefreshOne(OpenDocument document)
+    internal void RefreshOne(OpenDocument document)
     {
         // Reuses the cached parse — the text has not changed, only the world around it.
-        ParseResult result = _documents.AnalyzeIfStale(document);
+        //
+        // The SNAPSHOT's version, not document.Version read afterwards. This is the same defect the
+        // sync handler was fixed for: an edit landing while this analysis runs would stamp a parse
+        // of the older text with the newest version, telling the client a stale set describes text
+        // it has already moved past. The staleness check in ShouldRefresh narrows the window but
+        // cannot close it — it is checked before the analysis, and the edit arrives during it.
+        AnalysisSnapshot snapshot = _documents.AnalyzeSnapshotIfStale(document);
 
-        ImmutableArray<Diagnostic> diagnostics = _linter.Analyze(document, result);
+        ImmutableArray<Diagnostic> diagnostics = _linter.Analyze(document, snapshot.Result);
 
-        _diagnostics.Publish(document.Path, document.Version, diagnostics);
+        _diagnostics.Publish(document.Path, snapshot.Version, diagnostics);
     }
 }

@@ -138,4 +138,33 @@ public class ArgumentCountLintTests
 
         Assert.Equal(GscDiagnosticCode.TooManyArguments, reported.Code);
     }
+
+    // --- CameFromMacro only checked an IdentifierNode callee and IdentifierNode arguments ---
+
+    [Fact]
+    public void AMacroExpandingToAQualifiedCall_StandsDownTheRule()
+    {
+        // `util::helper` lexes as a QualifiedNode, not an IdentifierNode — CameFromMacro's callee
+        // check only matched the latter, so a macro whose body calls a qualified name was never
+        // recognised as the source of the call at all.
+        string source = "#namespace zm;\n#define CALL_HELPER() util::helper( 1, 2, 3 )\n"
+            + "function respawn()\n{\n    CALL_HELPER();\n}\n";
+        string other = "#namespace util;\nfunction helper( a )\n{\n}\n";
+
+        Assert.Empty(Lint(source, other));
+    }
+
+    [Fact]
+    public void AMacroExpandingToALiteralArgumentList_StandsDownTheRule()
+    {
+        // An object-like macro's body substitutes verbatim wherever it is written, so
+        // `helper( DEFAULTS )` becomes `helper( 1, 2 )` after expansion — two LITERAL arguments the
+        // author never wrote, neither of them an IdentifierNode, so CameFromMacro's argument check
+        // never saw them either.
+        string source = "#namespace zm;\n#define DEFAULTS 1, 2\n"
+            + "function helper( a )\n{\n}\n"
+            + "function respawn()\n{\n    helper( DEFAULTS );\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
 }

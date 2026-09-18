@@ -428,19 +428,40 @@ public static class ArgumentCountLint
     /// Whether any part of this call's text arrived through a macro expansion. Checked on the
     /// ARGUMENTS as well as the callee, because a macro supplying arguments changes the count while
     /// the author wrote none of them.
+    ///
+    /// Recurses through every node the callee and each argument contain, checking every
+    /// token-bearing shape — not only <see cref="IdentifierNode"/> — because a macro's expansion is
+    /// not restricted to that shape: `util::helper(...)` calls a QUALIFIED name (a
+    /// <see cref="QualifiedNode"/>), and an object-like macro whose body is a literal list —
+    /// `#define DEFAULTS 1, 2` used as `helper( DEFAULTS )` — substitutes verbatim into TWO
+    /// <see cref="LiteralNode"/> arguments the author never wrote at all. Missing either left the
+    /// rule judging a call whose real shape the source does not show.
     /// </summary>
     private static bool CameFromMacro(CallNode call)
     {
-        if ( call.Callee is IdentifierNode identifier
-            && identifier.Token.Provenance.DefinitionSite is not null )
+        return NodeCameFromMacro(call.Callee) || call.Arguments.Any(NodeCameFromMacro);
+    }
+
+    private static bool NodeCameFromMacro(AstNode node)
+    {
+        bool thisNode = node switch
+        {
+            IdentifierNode identifier => identifier.Token.Provenance.DefinitionSite is not null,
+            LiteralNode literal => literal.Token.Provenance.DefinitionSite is not null,
+            QualifiedNode qualified => qualified.NameToken.Provenance.DefinitionSite is not null,
+            PathQualifiedNode path => path.NameToken.Provenance.DefinitionSite is not null,
+            MemberNode member => member.NameToken.Provenance.DefinitionSite is not null,
+            _ => false,
+        };
+
+        if ( thisNode )
         {
             return true;
         }
 
-        foreach ( AstNode child in AstSearch.ChildrenOf(call) )
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
         {
-            if ( child is IdentifierNode argument
-                && argument.Token.Provenance.DefinitionSite is not null )
+            if ( NodeCameFromMacro(child) )
             {
                 return true;
             }

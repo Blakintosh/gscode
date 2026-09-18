@@ -73,6 +73,17 @@ public sealed class DependentDiagnosticsRefresher
     private readonly object _gate = new();
     private CancellationTokenSource? _pending;
 
+    /// <summary>
+    /// Every origin scheduled since the last pass ran, taken and cleared when it does.
+    ///
+    /// One debounce, many origins. It used to be one origin and one token source, so a refresh
+    /// scheduled for file A was cancelled outright by one scheduled for file B a moment later and
+    /// A's dependents were never refreshed at all — a burst of edits across two files left the
+    /// first file's callers showing diagnostics computed against exports it no longer has. A token
+    /// source per origin would mean a timer per origin; accumulating costs one set.
+    /// </summary>
+    private readonly HashSet<string> _origins = new(StringComparer.Ordinal);
+
     public DependentDiagnosticsRefresher(
         DocumentStore documents,
         DiagnosticsPublisher diagnostics,
@@ -91,7 +102,8 @@ public sealed class DependentDiagnosticsRefresher
 
     /// <summary>
     /// Queues a refresh of every open document except <paramref name="originPath"/>, which the
-    /// caller is already publishing for. Supersedes any refresh still waiting.
+    /// caller is already publishing for. Restarts the wait; the origin joins the ones already
+    /// waiting rather than replacing them.
     /// </summary>
     /// <param name="originPath">
     /// The document the caller publishes itself, or "" when there is none — an on-disk change
@@ -103,20 +115,36 @@ public sealed class DependentDiagnosticsRefresher
 
         lock ( _gate )
         {
+            _origins.Add(originPath);
             _pending?.Cancel();
             _pending = pending;
         }
 
-        _ = RunAsync(originPath, pending.Token);
+        _ = RunAsync(pending.Token);
     }
 
-    private async Task RunAsync(string originPath, CancellationToken cancellationToken)
+    private async Task RunAsync(CancellationToken cancellationToken)
     {
         try
         {
             await Task.Delay(DebounceMilliseconds, cancellationToken);
-            Refresh(originPath, cancellationToken);
-            await RefreshClosedDependentsAsync(originPath, cancellationToken).ConfigureAwait(false);
+
+            // Taken after the wait, not before it: everything scheduled during the window belongs
+            // to this pass. A cancelled pass never gets here, so its origins stay in the set and
+            // are picked up by the pass that superseded it.
+            HashSet<string> origins;
+            lock ( _gate )
+            {
+                origins = new HashSet<string>(_origins, StringComparer.Ordinal);
+                _origins.Clear();
+            }
+
+            Refresh(origins, cancellationToken);
+
+            foreach ( string originPath in origins )
+            {
+                await RefreshClosedDependentsAsync(originPath, cancellationToken).ConfigureAwait(false);
+            }
         }
         catch ( OperationCanceledException )
         {
@@ -124,7 +152,7 @@ public sealed class DependentDiagnosticsRefresher
         }
         catch ( Exception exception )
         {
-            Log.Error(exception, "Dependent diagnostics refresh failed after {Path}", originPath);
+            Log.Error(exception, "Dependent diagnostics refresh failed");
         }
     }
 
@@ -170,7 +198,7 @@ public sealed class DependentDiagnosticsRefresher
         }
     }
 
-    private void Refresh(string originPath, CancellationToken cancellationToken)
+    private void Refresh(IReadOnlySet<string> origins, CancellationToken cancellationToken)
     {
         long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         int refreshed = 0;
@@ -179,7 +207,7 @@ public sealed class DependentDiagnosticsRefresher
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if ( !ShouldRefresh(document, originPath) )
+            if ( !ShouldRefresh(document, origins) )
             {
                 continue;
             }
@@ -191,10 +219,10 @@ public sealed class DependentDiagnosticsRefresher
         if ( refreshed > 0 )
         {
             Log.Verbose(
-                "Re-linted {Count} open document(s) in {Elapsed:F1}ms after {Path} changed its exports",
+                "Re-linted {Count} open document(s) in {Elapsed:F1}ms after {Origins} changed their exports",
                 refreshed,
                 System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
-                originPath);
+                string.Join(", ", origins));
         }
     }
 
@@ -210,7 +238,16 @@ public sealed class DependentDiagnosticsRefresher
     /// </remarks>
     internal static bool ShouldRefresh(OpenDocument document, string originPath)
     {
-        return !string.Equals(document.Path, originPath, StringComparison.Ordinal) && !document.IsStale;
+        return ShouldRefresh(document, new HashSet<string>(StringComparer.Ordinal) { originPath });
+    }
+
+    /// <summary>
+    /// The same question for a pass that coalesced several origins: a document is refreshed unless
+    /// it is one of them.
+    /// </summary>
+    internal static bool ShouldRefresh(OpenDocument document, IReadOnlySet<string> origins)
+    {
+        return !origins.Contains(document.Path) && !document.IsStale;
     }
 
     /// <summary>

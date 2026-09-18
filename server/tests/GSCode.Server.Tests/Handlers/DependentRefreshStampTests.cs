@@ -139,4 +139,35 @@ public sealed class DependentRefreshStampTests : IDisposable
         PublishDiagnosticsParams published = Assert.Single(sink.Sent);
         Assert.Equal(2, published.Version);
     }
+
+    [Fact]
+    public async Task ARefreshForOneFileIsNotCancelledByAScheduleForAnother()
+    {
+        // One token source served every origin, so scheduling B cancelled A's pass outright and
+        // A's dependents were never refreshed — the callers of the file edited first kept
+        // diagnostics computed against exports it no longer has.
+        RecordingSink sink = new();
+        using ManualResetEventSlim entered = new();
+        using ManualResetEventSlim release = new();
+        release.Set();
+
+        DependentDiagnosticsRefresher refresher = Build(sink, entered, release, out DocumentStore documents);
+
+        OpenDocument first = documents.Open(Path.Combine(_root, "first.gsc"), Source, version: 1);
+        OpenDocument second = documents.Open(Path.Combine(_root, "second.gsc"), Source, version: 1);
+        OpenDocument bystander = documents.Open(Path.Combine(_root, "bystander.gsc"), Source, version: 1);
+        documents.Analyze(first);
+        documents.Analyze(second);
+        documents.Analyze(bystander);
+
+        refresher.Schedule(first.Path);
+        refresher.Schedule(second.Path);
+
+        // Long enough for the 900 ms fan-out debounce, with room for a slow machine.
+        await Task.Delay(TimeSpan.FromSeconds(2.5));
+
+        // The bystander once, and neither origin: both are excluded, not just the last one queued.
+        PublishDiagnosticsParams published = Assert.Single(sink.Sent);
+        Assert.Equal(bystander.Path, published.Uri.GetFileSystemPath());
+    }
 }

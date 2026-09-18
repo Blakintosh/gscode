@@ -380,4 +380,22 @@ public class FunctionResolutionLintTests
 
         Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
     }
+
+    [Fact]
+    public void APathCall_ToAMissingFile_IsReportedOnce_EvenWhenCalledAgainWithDifferentCasing()
+    {
+        // The whole point of reporting the missing FILE rather than every call into it: a
+        // distribution not shipping a file is one problem, not one per call site — and that has to
+        // hold across a spelling difference too, since two calls naming the same file by different
+        // casing are still naming the same file. The dedup set that decides this is
+        // case-insensitive on purpose; this pins that down with a test, since nothing did before.
+        string source = "run()\n{\n"
+            + "    maps\\mp\\_missing::foo();\n"
+            + "    Maps\\MP\\_missing::bar();\n"
+            + "}\n";
+
+        Diagnostic diagnostic = Assert.Single(LintPathCall(source));
+
+        Assert.Equal(GscDiagnosticCode.UsingNotFound, diagnostic.Code);
+    }
 }

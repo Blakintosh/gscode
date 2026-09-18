@@ -146,6 +146,19 @@ public sealed class DocumentStore
             Version = version,
         };
 
+        // A second didOpen for a path already open — a client re-sending one on tab focus, or a
+        // race during a restored session — used to replace the entry outright while whatever the
+        // FIRST open's own immediate analysis was still running kept a direct reference to that
+        // now-unreachable OLD document, not to whatever TryGet would find. It ran to completion
+        // regardless, publishing diagnostics and committing a record from an object nothing else
+        // could ever point at again — an orphan able to overwrite this call's own fresher publish
+        // with a stale one, purely by finishing after it. Cancelling it here is the same defence
+        // Close already gives a document that stops being open outright.
+        if ( _documents.TryGetValue(normalized, out OpenDocument? previous) )
+        {
+            previous.PendingAnalysis?.Cancel();
+        }
+
         _documents[normalized] = document;
         return document;
     }

@@ -348,45 +348,63 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private void RunAnalysisSingleFlight(OpenDocument document, CancellationToken cancellationToken)
     {
         AnalysisGate gate = _analysisGates.GetOrAdd(document.Path, static _ => new AnalysisGate());
-        if ( !gate.TryStart() )
+        if ( !gate.TryStart(cancellationToken) )
         {
             return;
         }
 
+        // Reassigned per pass: a queued rerun runs under the token of the edit that asked for it,
+        // not under this caller's. They are rarely the same one — the usual way a rerun gets
+        // queued is an edit arriving mid-analysis, and that edit CANCELS the running pass on its
+        // way past. Reusing the running pass's token abandoned every rerun before it began.
+        CancellationToken token = cancellationToken;
+        bool released = false;
+
         try
         {
-            do
+            // The document this run captured may have been closed, or replaced by a second
+            // didOpen, while the previous pass was running. Nothing inside the loop would
+            // otherwise notice, and an orphan that keeps analysing publishes and commits for a
+            // document nothing can reach any more.
+            while ( AnalysisGate.IsStillLive(_documents, document) )
             {
-                // The document this run captured may have been closed, or replaced by a second
-                // didOpen, while the previous pass was running. Nothing inside the loop would
-                // otherwise notice, and an orphan that keeps analysing publishes and commits for a
-                // document nothing can reach any more.
-                if ( !AnalysisGate.IsStillLive(_documents, document) )
-                {
-                    return;
-                }
-
                 try
                 {
-                    AnalyzeAndPublish(document, cancellationToken);
+                    AnalyzeAndPublish(document, token);
                 }
                 catch ( OperationCanceledException )
                 {
                     // A newer edit arrived and this pass was abandoned partway. Not a failure, and
                     // nothing to publish: the run that superseded it publishes for the text that
                     // replaced this one's.
-                    return;
+                    //
+                    // Swallowed rather than returned on, which is the whole bug this shape fixes.
+                    // The edit that cancelled this pass is also the one that QUEUED the rerun, so
+                    // returning here skipped the only check that would have run it — and since
+                    // cancellation is the common way a rerun gets queued, the rerun path was dead
+                    // in its ordinary case. The file then kept diagnostics for text the user had
+                    // already replaced until something else was typed.
                 }
                 catch ( Exception exception )
                 {
                     Log.Error(exception, "Analysis failed for {Path}", document.Path);
                 }
+
+                // Releasing the gate and taking a queued rerun are ONE step. As two, a request
+                // arriving between them set a flag with nobody left to read it.
+                if ( !gate.TryContinue(out token) )
+                {
+                    released = true;
+                    return;
+                }
             }
-            while ( gate.ConsumeRerunRequest() );
         }
         finally
         {
-            gate.Finish();
+            if ( !released )
+            {
+                gate.Release();
+            }
         }
     }
 

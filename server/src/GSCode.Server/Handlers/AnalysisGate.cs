@@ -17,33 +17,89 @@ namespace GSCode.Server.Handlers;
 /// </summary>
 internal sealed class AnalysisGate
 {
-    private int _running;
-    private int _rerunRequested;
+    /// <summary>
+    /// A lock rather than two interlocked flags, because RELEASING the gate and checking for a
+    /// queued rerun have to be one step. As two they leave a window: a request arriving after the
+    /// check and before the release sets a flag nobody is left to read, and the keystroke that
+    /// asked for it is never analysed.
+    ///
+    /// The token has to live in here for the same reason it cannot be an interlocked word. It is
+    /// the queueing request's own token, not the running pass's — the pass in flight is normally
+    /// CANCELLED by the very edit that queues the rerun, so reusing its token would abandon the
+    /// rerun before it started.
+    /// </summary>
+    private readonly Lock _gate = new();
+
+    private bool _running;
+    private bool _rerunRequested;
+    private CancellationToken _rerunToken;
 
     /// <summary>
-    /// True when the caller should run now; false when another run is already in flight and has
-    /// been told to loop once more instead.
+    /// True when the caller should run now; false when another run is already in flight and this
+    /// request has been queued behind it instead.
     /// </summary>
-    public bool TryStart()
+    /// <param name="cancellationToken">
+    /// The caller's token, kept when the request is queued so the rerun runs under the token of the
+    /// edit that asked for it.
+    /// </param>
+    public bool TryStart(CancellationToken cancellationToken)
     {
-        if ( Interlocked.Exchange(ref _running, 1) == 0 )
+        lock ( _gate )
         {
-            return true;
+            if ( !_running )
+            {
+                _running = true;
+                return true;
+            }
+
+            // The newest request wins the slot. An older queued token belongs to an edit that has
+            // since been superseded, and its source was cancelled by the edit replacing it here.
+            _rerunRequested = true;
+            _rerunToken = cancellationToken;
+            return false;
         }
-
-        Volatile.Write(ref _rerunRequested, 1);
-        return false;
     }
 
-    /// <summary>Clears any rerun request and reports whether one had been made.</summary>
-    public bool ConsumeRerunRequest()
+    /// <summary>
+    /// Either hands the running caller a queued rerun to perform (keeping the gate held), or
+    /// releases the gate. One operation, because the two cannot be separated without dropping a
+    /// request that arrives between them.
+    /// </summary>
+    public bool TryContinue(out CancellationToken rerunToken)
     {
-        return Interlocked.Exchange(ref _rerunRequested, 0) != 0;
+        lock ( _gate )
+        {
+            if ( _rerunRequested )
+            {
+                _rerunRequested = false;
+                rerunToken = _rerunToken;
+                _rerunToken = CancellationToken.None;
+                return true;
+            }
+
+            _running = false;
+            rerunToken = CancellationToken.None;
+            return false;
+        }
     }
 
-    public void Finish()
+    /// <summary>
+    /// Releases the gate and abandons anything queued behind it.
+    ///
+    /// For the paths that stop without asking for more work: the document is no longer the one the
+    /// store holds, or something unexpected escaped the run. A rerun dropped here is a rerun for a
+    /// document nothing can reach, or one whose caller has already failed — either way, leaving the
+    /// gate held would stop that path analysing for the rest of the session, which is worse than
+    /// losing one pass.
+    /// </summary>
+    public void Release()
     {
-        Volatile.Write(ref _running, 0);
+        lock ( _gate )
+        {
+            _running = false;
+            _rerunRequested = false;
+            _rerunToken = CancellationToken.None;
+        }
     }
 
     /// <summary>

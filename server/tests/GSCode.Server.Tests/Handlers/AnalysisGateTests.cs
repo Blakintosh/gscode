@@ -30,10 +30,10 @@ public class AnalysisGateTests
     {
         AnalysisGate gate = new();
 
-        Assert.True(gate.TryStart());
-        Assert.False(gate.TryStart());
-        Assert.True(gate.ConsumeRerunRequest());
-        Assert.False(gate.ConsumeRerunRequest());
+        Assert.True(gate.TryStart(CancellationToken.None));
+        Assert.False(gate.TryStart(CancellationToken.None));
+        Assert.True(gate.TryContinue(out CancellationToken _));
+        Assert.False(gate.TryContinue(out CancellationToken _));
     }
 
     [Fact]
@@ -43,12 +43,12 @@ public class AnalysisGateTests
         // against whatever text is current by the time that one starts.
         AnalysisGate gate = new();
 
-        Assert.True(gate.TryStart());
-        Assert.False(gate.TryStart());
-        Assert.False(gate.TryStart());
+        Assert.True(gate.TryStart(CancellationToken.None));
+        Assert.False(gate.TryStart(CancellationToken.None));
+        Assert.False(gate.TryStart(CancellationToken.None));
 
-        Assert.True(gate.ConsumeRerunRequest());
-        Assert.False(gate.ConsumeRerunRequest());
+        Assert.True(gate.TryContinue(out CancellationToken _));
+        Assert.False(gate.TryContinue(out CancellationToken _));
     }
 
     [Fact]
@@ -56,10 +56,63 @@ public class AnalysisGateTests
     {
         AnalysisGate gate = new();
 
-        Assert.True(gate.TryStart());
-        gate.Finish();
+        Assert.True(gate.TryStart(CancellationToken.None));
+        Assert.False(gate.TryContinue(out CancellationToken _));
 
-        Assert.True(gate.TryStart());
+        Assert.True(gate.TryStart(CancellationToken.None));
+    }
+
+    [Fact]
+    public void TakingAQueuedRerunKeepsTheGateHeld()
+    {
+        // The release and the queue check are one operation precisely so that a request landing
+        // between them cannot be dropped. Taking a rerun must therefore NOT open the gate: if it
+        // did, a third request could start a concurrent run beside the rerun about to happen.
+        AnalysisGate gate = new();
+
+        Assert.True(gate.TryStart(CancellationToken.None));
+        Assert.False(gate.TryStart(CancellationToken.None));
+
+        Assert.True(gate.TryContinue(out CancellationToken _));
+        Assert.False(gate.TryStart(CancellationToken.None));
+    }
+
+    [Fact]
+    public void AQueuedRerunCarriesTheQueueingRequestsToken()
+    {
+        // The running pass is normally CANCELLED by the very edit that queues the rerun, so a
+        // rerun handed the running pass's token would be abandoned before it started. It runs
+        // under the token of the edit that asked for it instead.
+        AnalysisGate gate = new();
+
+        using CancellationTokenSource running = new();
+        using CancellationTokenSource queued = new();
+
+        Assert.True(gate.TryStart(running.Token));
+        Assert.False(gate.TryStart(queued.Token));
+
+        running.Cancel();
+
+        Assert.True(gate.TryContinue(out CancellationToken rerun));
+        Assert.Equal(queued.Token, rerun);
+        Assert.False(rerun.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void ReleaseAbandonsAQueuedRerun()
+    {
+        // Release is the path taken when the document is no longer the one the store holds, or
+        // when something unexpected escaped the run. A rerun for a document nothing can reach is
+        // not worth holding the gate for.
+        AnalysisGate gate = new();
+
+        Assert.True(gate.TryStart(CancellationToken.None));
+        Assert.False(gate.TryStart(CancellationToken.None));
+
+        gate.Release();
+
+        Assert.True(gate.TryStart(CancellationToken.None));
+        Assert.False(gate.TryContinue(out CancellationToken _));
     }
 
     [Fact]

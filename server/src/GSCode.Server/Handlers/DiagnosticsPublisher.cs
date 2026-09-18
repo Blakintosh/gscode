@@ -6,6 +6,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
+using Serilog;
 
 namespace GSCode.Server.Handlers;
 
@@ -63,6 +64,29 @@ public sealed class DiagnosticsPublisher
     /// </summary>
     private readonly ConcurrentDictionary<string, DocumentUri> _clientUris = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The newest document version each file has on screen, so a set that describes older text
+    /// cannot land on top of it.
+    ///
+    /// Analyses do not finish in the order they started: the debounced pass, the save path and a
+    /// request thread's freshen can all be running at once, and the version CAS in
+    /// <c>OpenDocument.Publish</c> only decides which PARSE stands — it does not stop the
+    /// losing caller from pushing its own, correctly stamped, older set afterwards. That is what
+    /// put problems for text the user had already undone back in front of them.
+    ///
+    /// Not a substitute for the client honouring <c>PublishDiagnosticsParams.Version</c>; it is what
+    /// makes the answer right regardless of whether the client does.
+    /// </summary>
+    private readonly Dictionary<string, int> _lastPublishedVersion = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Held across the ledger check AND the send, not just the check. Two threads that each decide
+    /// they are newest and then race into the send reorder on the wire in exactly the way this
+    /// exists to stop. Nothing slow happens under it: the payload is converted before it is taken,
+    /// and a send is one write to the connection.
+    /// </summary>
+    private readonly object _gate = new();
+
     public DiagnosticsPublisher(ILanguageServerFacade server)
         : this(new LanguageServerDiagnosticsSink(server))
     {
@@ -102,25 +126,65 @@ public sealed class DiagnosticsPublisher
         return DocumentUri.FromFileSystemPath(key);
     }
 
+    /// <summary>
+    /// Pushes a set, unless one describing newer text is already on screen.
+    ///
+    /// An EQUAL version passes rather than being treated as stale: the dependent refresher
+    /// republishes the same version with a RICHER set once a neighbour's exports move, which is the
+    /// whole reason it exists. A NULL version passes too, and is not recorded — that is the
+    /// workspace publisher speaking for a closed file, where a document version means nothing, so
+    /// it must neither join the ordering nor be blocked by it.
+    /// </summary>
     public void Publish(string path, int? version, ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics)
     {
+        string key = PathUtil.NormalizeAbsolute(path);
         Container<Diagnostic> converted = new(diagnostics.Select(diagnostic => diagnostic.ToLsp()));
 
-        _sink.Send(new PublishDiagnosticsParams
+        lock ( _gate )
         {
-            Uri = UriFor(path),
-            Version = version,
-            Diagnostics = converted,
-        });
+            if ( version is int stamped )
+            {
+                if ( _lastPublishedVersion.TryGetValue(key, out int current) && stamped < current )
+                {
+                    Log.Verbose(
+                        "Dropped a v{Stale} diagnostic publish for {Path}; v{Current} is already on screen",
+                        stamped,
+                        key,
+                        current);
+                    return;
+                }
+
+                _lastPublishedVersion[key] = stamped;
+            }
+
+            Send(key, version, converted);
+        }
     }
 
-    /// <summary>Clears diagnostics when a document closes.</summary>
+    /// <summary>
+    /// Clears diagnostics when a document closes.
+    ///
+    /// Forgets the version alongside them: a reopened document starts again at version 0 or 1, and
+    /// a ledger that still remembered v68 would silence it for the rest of the session.
+    /// </summary>
     public void Clear(string path)
+    {
+        string key = PathUtil.NormalizeAbsolute(path);
+
+        lock ( _gate )
+        {
+            _lastPublishedVersion.Remove(key);
+            Send(key, version: null, new Container<Diagnostic>());
+        }
+    }
+
+    private void Send(string key, int? version, Container<Diagnostic> diagnostics)
     {
         _sink.Send(new PublishDiagnosticsParams
         {
-            Uri = UriFor(path),
-            Diagnostics = new Container<Diagnostic>(),
+            Uri = UriFor(key),
+            Version = version,
+            Diagnostics = diagnostics,
         });
     }
 }

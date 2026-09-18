@@ -54,6 +54,7 @@ public static class AmbiguousFunctionLint
         FileImports? imports = null)
     {
         string askingNormalized = PathUtil.NormalizeAbsolute(askingPath);
+        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 
         // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
         // back to resolving here keeps this callable on its own, which the tests rely on.
@@ -72,7 +73,7 @@ public static class AmbiguousFunctionLint
                 continue;
             }
 
-            Collect(imported.Record, providers);
+            Collect(imported.Record, providers, askingNormalized, askingNamespaces);
         }
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
@@ -133,12 +134,28 @@ public static class AmbiguousFunctionLint
         return diagnostics.ToImmutable();
     }
 
-    private static void Collect(ScriptRecord record, Dictionary<string, List<ScriptRecord>> providers)
+    private static void Collect(
+        ScriptRecord record,
+        Dictionary<string, List<ScriptRecord>> providers,
+        string askingNormalized,
+        ImmutableArray<string> askingNamespaces)
     {
         foreach ( FunctionSymbol function in record.Functions )
         {
             // Inserted declarations belong to the header that holds them, not to this record.
             if ( function.SourceFile.Length > 0 || function.Namespace.Length == 0 )
+            {
+                continue;
+            }
+
+            // A PRIVATE declaration the asking file cannot see is not a candidate the linker could
+            // ever pick for the call: two files declaring a name is not ambiguous when one of the
+            // two declarations is invisible from here, whatever the count would otherwise say. GSC
+            // scopes privacy to the namespace, not the file — see DatabaseQueries.CanSeePrivate,
+            // which this mirrors since that method is private to its own file.
+            if ( function.IsPrivate
+                && record.Path != askingNormalized
+                && !askingNamespaces.Contains(function.Namespace, StringComparer.Ordinal) )
             {
                 continue;
             }

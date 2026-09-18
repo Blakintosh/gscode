@@ -144,6 +144,40 @@ public class AmbiguousFunctionLintTests
     }
 
     [Fact]
+    public void APrivateDeclarationTheAskingFileCannotSee_DoesNotCountAsAProvider()
+    {
+        // Collect never checked IsPrivate at all. A private declaration in an imported file is not
+        // a candidate the linker could ever pick for THIS file's call — GSC scopes privacy to the
+        // namespace, and this asking file declares a different one — so counting it made a call
+        // that unambiguously resolves to the one PUBLIC declaration look like it reached two.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction private helper()\n{\n}\n")
+            .AddFile(@$"{Raw}\scripts\mp\_util.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+
+        Assert.Empty(Lint(
+            files,
+            "#namespace game;\n#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n"
+            + "function run()\n{\n    util::helper();\n}\n"));
+    }
+
+    [Fact]
+    public void APrivateDeclarationTheAskingFileCanSee_StillCountsAsAProvider()
+    {
+        // The asking file declares INTO the same namespace as the private declaration, so it can
+        // see it — the ambiguity is real, and the fix must not swing the other way and hide it.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction private helper()\n{\n}\n")
+            .AddFile(@$"{Raw}\scripts\mp\_util.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+
+        Diagnostic ambiguous = Assert.Single(Lint(
+            files,
+            "#namespace util;\n#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n"
+            + "function run()\n{\n    util::helper();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.AmbiguousFunction, ambiguous.Code);
+    }
+
+    [Fact]
     public void AnAmbiguousCallAMacroMakesTwice_WarnsOnce()
     {
         ImmutableArray<Diagnostic> diagnostics = Lint(

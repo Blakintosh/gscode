@@ -29,6 +29,12 @@ using Serilog.Events;
 // "GSCode Server" output channel, and stdout must stay clean for the stdio transport.
 LoggingLevelSwitch levelSwitch = new(LogEventLevel.Information);
 
+// Where the channel settles once startup has said what it has to say. Until then it runs at the
+// startup FLOOR instead (see ServerLogLevel.StartupFloor): the lines a bug report needs are written
+// at Information, the client's default is "warning", and lowering the switch the moment initialize
+// arrives discarded every one of them.
+LogEventLevel requestedLogLevel = LogEventLevel.Information;
+
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.ControlledBy(levelSwitch)
     .WriteTo.Console(standardErrorFromLevel: LogEventLevel.Verbose)
@@ -203,13 +209,17 @@ LanguageServer server = await LanguageServer.From(options =>
             if ( request.InitializationOptions is JToken initializationOptions )
             {
                 settings.Apply(initializationOptions);
-                levelSwitch.MinimumLevel = ServerLogLevel.FromSetting(settings.ServerLogLevel);
 
                 // A safety net for hosts that do not pass --game: the profile is normally chosen
                 // from the command line before the container is built, because the bundled data
                 // resolves during construction and would otherwise load for the default game.
                 GameProfile.Select(settings.Game);
             }
+
+            // Outside the branch above, so a host that sends no initialization options cannot leave
+            // the switch and ServerSettings.ServerLogLevel disagreeing about what the level is.
+            requestedLogLevel = ServerLogLevel.FromSetting(settings.ServerLogLevel);
+            levelSwitch.MinimumLevel = ServerLogLevel.StartupFloor(requestedLogLevel);
 
             List<string> workspaceFolders = [];
             if ( request.WorkspaceFolders is not null )
@@ -356,6 +366,10 @@ LanguageServer server = await LanguageServer.From(options =>
                 // waits for one — the non-Off path starts this only once indexing finishes,
                 // exactly to avoid sampling that climb; see the call site below.
                 _ = languageServer.Services.GetRequiredService<ServerStatusNotifier>().RunAsync(indexingLifetime.Token);
+
+                // Startup is over the moment OnStarted returns when there is no index to run, so
+                // this is where the channel drops to what the client asked for.
+                SettleLogLevel();
             }
 
             if ( mode != IndexingMode.Off )
@@ -525,6 +539,12 @@ LanguageServer server = await LanguageServer.From(options =>
                         // client can tell "nothing to index" from "something broke".
                         notifier.Failed(exception.Message);
                     }
+                    finally
+                    {
+                        // Startup ends here, however it ended: everything above this line is what a
+                        // bug report is attached for, and everything after it is steady state.
+                        SettleLogLevel();
+                    }
                 }, indexingLifetime.Token);
 
                 indexingLifetime.SetTask(indexingTask);
@@ -550,6 +570,13 @@ await cacheHolder.CloseAsync();
 transport.Owner?.Dispose();
 Log.Information("GSCode {Version} server exited", ServerVersion());
 await Log.CloseAndFlushAsync();
+
+// Drops the channel to the level the client asked for, now that startup has finished writing the
+// lines a bug report needs. Called once, from whichever path startup actually ends on.
+void SettleLogLevel()
+{
+    levelSwitch.MinimumLevel = requestedLogLevel;
+}
 
 // Logs a formatted breakdown of what the index holds: per-language file counts with a
 // raw/mod/workspace split, plus total declared functions, classes, macros, and distinct

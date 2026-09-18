@@ -72,34 +72,22 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             return Task.FromResult<Container<CallHierarchyIncomingCall>?>(null);
         }
 
-        // Callers: group non-definition references of this function by their containing file.
-        Dictionary<string, (ScriptRecord Record, List<LspRange> Ranges)> byCaller = new(StringComparer.Ordinal);
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, key.Value) )
-        {
-            if ( entry.Kind == ReferenceKind.Definition )
-            {
-                continue;
-            }
-
-            if ( !byCaller.TryGetValue(record.Path, out (ScriptRecord Record, List<LspRange> Ranges) group) )
-            {
-                group = (record, []);
-                byCaller[record.Path] = group;
-            }
-
-            group.Ranges.Add(entry.Range.ToLsp());
-        }
-
         List<CallHierarchyIncomingCall> incoming = [];
-        foreach ( (ScriptRecord record, List<LspRange> ranges) in byCaller.Values )
+        foreach ( IncomingGroup group in GroupIncomingCalls(_support.FindAllReferences(target, key.Value)) )
         {
-            // Attribute the call to the function whose body contains the first call range.
-            FunctionSymbol? caller = ContainingFunction(record, ranges[0]);
-            CallHierarchyItem item = caller is not null
-                ? MakeItem(new SymbolKey(caller.Namespace.Length > 0 ? caller.Namespace : null, caller.KeyName, SymbolKind.Function), record, caller.NameRange.ToLsp())
-                : MakeFileItem(record);
+            // A call outside every function body — a file-scope constant's initialiser, say — has
+            // no calling function to name, so the file stands in for it.
+            CallHierarchyItem item = group.Caller is not null
+                ? MakeItem(
+                    new SymbolKey(
+                        group.Caller.Namespace.Length > 0 ? group.Caller.Namespace : null,
+                        group.Caller.KeyName,
+                        SymbolKind.Function),
+                    group.Record,
+                    group.Caller.NameRange.ToLsp())
+                : MakeFileItem(group.Record);
 
-            incoming.Add(new CallHierarchyIncomingCall { From = item, FromRanges = new Container<LspRange>(ranges) });
+            incoming.Add(new CallHierarchyIncomingCall { From = item, FromRanges = new Container<LspRange>(group.Ranges) });
         }
 
         return Task.FromResult<Container<CallHierarchyIncomingCall>?>(new Container<CallHierarchyIncomingCall>(incoming));
@@ -159,9 +147,55 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         return Task.FromResult<Container<CallHierarchyOutgoingCall>?>(new Container<CallHierarchyOutgoingCall>(outgoing));
     }
 
-    private static FunctionSymbol? ContainingFunction(ScriptRecord record, LspRange range)
+    /// <summary>One caller entry: the file, the function inside it that makes the calls, and where.</summary>
+    internal readonly record struct IncomingGroup(ScriptRecord Record, FunctionSymbol? Caller, List<LspRange> Ranges);
+
+    /// <summary>
+    /// Groups a function's call sites by the function that CONTAINS each one, not by the file it
+    /// sits in.
+    ///
+    /// Grouping by file alone produced ONE entry per file, named after whichever function held the
+    /// first range, with every other function's call sites hung off it — so a file where both a()
+    /// and b() call the target reported a single caller a(), and clicking b()'s range under it
+    /// jumped into a body that does not contain it. The protocol models one entry per calling
+    /// FUNCTION, which is also what the UI draws its tree from.
+    ///
+    /// Keyed by the caller's declaration position rather than by its name: a name is not unique
+    /// across a file's classes, and the position is what the item is about to point at anyway.
+    ///
+    /// A pure static so the decision is testable without protocol objects, for the same reason
+    /// <c>WorkspaceFoldersHandler.NextFolderSet</c> is one.
+    /// </summary>
+    internal static List<IncomingGroup> GroupIncomingCalls(
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references)
     {
-        Position start = range.Start.ToCore();
+        Dictionary<string, IncomingGroup> byCaller = new(StringComparer.Ordinal);
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
+        {
+            if ( entry.Kind == ReferenceKind.Definition )
+            {
+                continue;
+            }
+
+            FunctionSymbol? caller = ContainingFunction(record, entry.Range.Start);
+            string groupKey = caller is null
+                ? record.Path
+                : $"{record.Path}\u0000{caller.NameRange.Start.Line}:{caller.NameRange.Start.Character}";
+
+            if ( !byCaller.TryGetValue(groupKey, out IncomingGroup group) )
+            {
+                group = new IncomingGroup(record, caller, []);
+                byCaller[groupKey] = group;
+            }
+
+            group.Ranges.Add(entry.Range.ToLsp());
+        }
+
+        return [.. byCaller.Values];
+    }
+
+    private static FunctionSymbol? ContainingFunction(ScriptRecord record, Position start)
+    {
         foreach ( FunctionSymbol function in record.Functions )
         {
             if ( function.FullRange.Contains(start) )

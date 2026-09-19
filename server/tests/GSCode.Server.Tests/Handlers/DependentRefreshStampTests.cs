@@ -109,7 +109,8 @@ public sealed class DependentRefreshStampTests : IDisposable
         WorkspaceLintSweep sweep = new(database, documents, indexer, linter);
 
         return new DependentDiagnosticsRefresher(
-            documents, publisher, linter, database, sweep, workspaceDiagnostics);
+            documents, publisher, linter, database, sweep, workspaceDiagnostics,
+            NullCodeLensRefreshSink.Instance, new ServerSettings());
     }
 
     [Fact]

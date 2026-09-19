@@ -464,14 +464,19 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     }
 
     /// <summary>
-    /// Folds the edited file's symbols back into the database and asks the client to re-request
-    /// code lenses.
+    /// Folds the edited file's symbols back into the database, and schedules the fan-out that
+    /// republishes what this edit changed for everyone else.
     ///
     /// Without the commit, the reference index still held whatever the last INDEX pass saw, so
-    /// adding or removing a call left "N references" showing the old number until a reindex. The
-    /// refresh is needed on top: a lens count depends on every file that references the symbol,
-    /// which the client has no way to know changed, so editing file A never re-requested the
-    /// lenses shown in file B.
+    /// adding or removing a call left "N references" showing the old number until a reindex.
+    ///
+    /// The code-lens refresh the client needs on top of that is the fan-out's job rather than this
+    /// method's. It used to be sent from here, once per analysis, undebounced: typing a function's
+    /// name changes the export signature on EVERY keystroke, so a client with lenses on re-requested
+    /// them for every visible document about four times a second — and one such request measured
+    /// 164 ms on the densest cod4 script (see HandlerCostTests). The refresher already coalesces
+    /// exactly this event, over exactly this trigger, and it also covers the on-disk-change case
+    /// this method could not see.
     /// </summary>
     private void CommitAndRefreshLenses(OpenDocument document, ParseResult result)
     {
@@ -493,15 +498,5 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         {
             _dependents.Schedule(document.Path);
         }
-
-        if ( !_settings.CodeLensEnabled )
-        {
-            return;
-        }
-
-        // Fire-and-forget: a failed refresh is cosmetic, and this runs on the analysis path.
-        _ = _server.SendRequest("workspace/codeLens/refresh")
-            .ReturningVoid(CancellationToken.None)
-            .ContinueWith(static _ => { }, TaskScheduler.Default);
     }
 }

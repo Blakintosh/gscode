@@ -1859,6 +1859,78 @@ Note the invocation mode matters more than the change did: the same test reports
 full `Category=Perf` run and 2,811 ms run alone, because the suite warms the process first. Compare
 like with like or the noise swamps the signal.
 
+## Measured: the HANDLERS, which nothing had ever timed
+
+Everything above measures the analysis pipeline, the cross-file lints and indexing. The LSP handlers
+themselves were never measured, and three of them do work whose shape suggested it mattered:
+
+- **CodeLens** builds one lens per function, class, method and file-local macro, and each lens runs
+  the full shared workspace reference query — then keeps a count and throws the array away.
+- **Inlay hints** type the whole file with the flow typer on every request, and the client sends one
+  request per visible range, so scrolling produces a request per frame.
+- **Formatting** lexes the document up to four times and line-splits it about six, and on-type
+  formatting runs the whole chain on every `;` and `}`.
+
+`HandlerCostTests` (`Category=Corpus`, bo3 and cod4) times all three on the 25 most
+declaration-dense files of each game, which is where these costs live: they are paid per
+declaration and per call site, so the rest of the corpus only demonstrates that small files are
+small. It reports rather than asserts — a budget is worth setting once there is a measurement to
+set it from. Like `LintBudgetTests` it does NOT measure through `PerfTracker`, since every method
+there is `[Conditional("GSCODE_INSTRUMENTATION")]` and a Release corpus run would print an empty
+table that looks like success.
+
+### 2026-09-18: first run, and the spread is wide
+
+| worst single file | run 1 | run 2 |
+|---|---:|---:|
+| bo3 codeLens | 47.4 ms (`shared.gsh`, 627 decls) | 59.6 ms |
+| bo3 inlayHint | 53.5 ms (`_zm.gsc`) | 49.3 ms |
+| bo3 format | 31.2 ms (`vehicle_ai_shared.gsc`) | 42.0 ms |
+| cod4 codeLens | 163.8 ms (`maps\_utility.gsc`, 465 decls) | 94.6 ms |
+| cod4 inlayHint | 55.7 ms (`_utility.gsc`) | 52.6 ms |
+| cod4 format | 51.0 ms (`killhouse_code.gsc`) | 47.2 ms |
+
+**One code-lens request on cod4's `maps\_utility.gsc` is a large fraction of the 250 ms keystroke
+debounce**, and the two runs put it anywhere between 95 and 164 ms on code that did not change — the
+same run-to-run spread this file documents everywhere else. The handler's own comment called these
+counts "cheap"; that is what this contradicts.
+
+### Where the code-lens time actually goes, which was not where it was expected
+
+Measured on cod4's `maps\_utility.gsc`, 465 function declarations, one query per lens:
+
+| | ms |
+|---|---:|
+| `NavigationSupport.FindAllReferences` ×465 | 85–105 |
+|  of which `DatabaseQueries.FindAllReferences` | 46–49 |
+|  of which `NavigationSupport.DeclaringFile` | **1.3–1.4** |
+|  of which `MethodResolution.Canonicalize` | 0.0 |
+
+**The narrowing is not the cost.** `DeclaringFile` recomputes the include-graph reachability per
+lens, and the obvious fix — hoisting it to once per request — was written down as the first thing to
+do. It is 1.4 ms of 85. Over half the time is the raw reference query in `DatabaseQueries`, and the
+remainder is `MethodResolution.FindReferencesForCall`, which is asked for every key before the
+ordinary lookup and answers nothing for a plain function.
+
+That puts the real fix in `GSCode.Workspace`: one batched query that counts every key of one file in
+a single pass over the referencing records, instead of 465 passes. It has to produce narrowing
+identical to `FindAllReferences`, because the lens count and the peek list run the same query
+precisely so they cannot disagree — so it is its own change, with its own evidence, and not folded
+into a server pass.
+
+### What the server could fix, and did
+
+The refresh was the server's half. `TextSyncHandler` sent `workspace/codeLens/refresh` once per
+ANALYSIS, undebounced, whenever the edited file's export signature moved — and typing a function's
+name moves it on every keystroke. A client with lenses on therefore re-requested them for every
+visible document about four times a second, each request costing the figures above.
+
+It now rides `DependentDiagnosticsRefresher`, which already coalesces that exact event over that
+exact trigger, and which also covers the on-disk-change case the sync handler could not see. The
+per-request cost is unchanged; what changed is how often it is paid.
+
+`codeLens.enabled` is off by default, which is why none of this had been noticed.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

@@ -142,11 +142,26 @@ public class DependentDiagnosticsTests
         }
     }
 
+    private sealed class CountingCodeLensSink : ICodeLensRefreshSink
+    {
+        public int Requests { get; private set; }
+
+        public void Request()
+        {
+            Requests++;
+        }
+    }
+
     /// <summary>
     /// A refresher over an empty workspace. Every collaborator is a real but empty instance, which
     /// is all the queueing question needs: the pass is cancelled before it reaches any of them.
     /// </summary>
     private static DependentDiagnosticsRefresher EmptyRefresher()
+    {
+        return EmptyRefresher(NullCodeLensRefreshSink.Instance, new ServerSettings());
+    }
+
+    private static DependentDiagnosticsRefresher EmptyRefresher(ICodeLensRefreshSink codeLenses, ServerSettings settings)
     {
         PhysicalFileSystem fileSystem = new();
         ResolverHolder resolverHolder = new(fileSystem);
@@ -164,7 +179,7 @@ public class DependentDiagnosticsTests
         WorkspaceLintSweep sweep = new(database, documents, indexer, linter);
 
         return new DependentDiagnosticsRefresher(
-            documents, publisher, linter, database, sweep, workspaceDiagnostics);
+            documents, publisher, linter, database, sweep, workspaceDiagnostics, codeLenses, settings);
     }
 
     [Fact]
@@ -196,5 +211,39 @@ public class DependentDiagnosticsTests
         await refresher.RunPassAsync(CancellationToken.None);
 
         Assert.Empty(refresher.PendingOrigins);
+    }
+
+    [Fact]
+    public async Task ThreeOriginsInOneFanOutAskForOneCodeLensRefresh()
+    {
+        // It used to be sent from TextSyncHandler per ANALYSIS and undebounced. Typing a function's
+        // name moves the export signature on every keystroke, so a client with lenses on
+        // re-requested them for every visible document about four times a second — and one such
+        // request measured 164 ms on the densest cod4 script.
+        CountingCodeLensSink lenses = new();
+        DependentDiagnosticsRefresher refresher = EmptyRefresher(lenses, new ServerSettings { CodeLensEnabled = true });
+
+        refresher.Schedule(@"c:\ws\a.gsc");
+        refresher.Schedule(@"c:\ws\b.gsc");
+        refresher.Schedule(@"c:\ws\c.gsc");
+
+        await refresher.RunPassAsync(CancellationToken.None);
+
+        Assert.Equal(1, lenses.Requests);
+    }
+
+    [Fact]
+    public async Task NoRefreshIsAskedForWhenLensesAreOff()
+    {
+        // codeLens.enabled is off by default, and a client that shows no lenses has none to
+        // re-request.
+        CountingCodeLensSink lenses = new();
+        DependentDiagnosticsRefresher refresher = EmptyRefresher(lenses, new ServerSettings { CodeLensEnabled = false });
+
+        refresher.Schedule(@"c:\ws\a.gsc");
+
+        await refresher.RunPassAsync(CancellationToken.None);
+
+        Assert.Equal(0, lenses.Requests);
     }
 }

@@ -6,6 +6,8 @@ using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using Serilog;
+using GSCode.Server.Configuration;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 
 namespace GSCode.Server.Handlers;
 
@@ -69,6 +71,8 @@ public sealed class DependentDiagnosticsRefresher
     private readonly ScriptDatabase _database;
     private readonly WorkspaceLintSweep _lintSweep;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
+    private readonly ICodeLensRefreshSink _codeLenses;
+    private readonly ServerSettings _settings;
 
     private readonly object _gate = new();
     private CancellationTokenSource? _pending;
@@ -90,8 +94,33 @@ public sealed class DependentDiagnosticsRefresher
         DocumentLinter linter,
         ScriptDatabase database,
         WorkspaceLintSweep lintSweep,
-        WorkspaceDiagnosticsPublisher workspaceDiagnostics)
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics,
+        ILanguageServerFacade server,
+        ServerSettings settings)
+        : this(
+            documents,
+            diagnostics,
+            linter,
+            database,
+            lintSweep,
+            workspaceDiagnostics,
+            new LanguageServerCodeLensRefreshSink(server),
+            settings)
     {
+    }
+
+    internal DependentDiagnosticsRefresher(
+        DocumentStore documents,
+        DiagnosticsPublisher diagnostics,
+        DocumentLinter linter,
+        ScriptDatabase database,
+        WorkspaceLintSweep lintSweep,
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics,
+        ICodeLensRefreshSink codeLenses,
+        ServerSettings settings)
+    {
+        _codeLenses = codeLenses;
+        _settings = settings;
         _documents = documents;
         _diagnostics = diagnostics;
         _linter = linter;
@@ -180,6 +209,8 @@ public sealed class DependentDiagnosticsRefresher
                 await RefreshClosedDependentsAsync(originPath, cancellationToken).ConfigureAwait(false);
                 outstanding.Remove(originPath);
             }
+
+            RequestCodeLensRefresh();
         }
         catch ( OperationCanceledException )
         {
@@ -201,6 +232,27 @@ public sealed class DependentDiagnosticsRefresher
                 return new HashSet<string>(_origins, StringComparer.Ordinal);
             }
         }
+    }
+
+    /// <summary>
+    /// Asks the client to re-request its code lenses, once per coalesced pass.
+    ///
+    /// A lens count depends on every file that references the symbol, which the client has no way
+    /// to know changed, so editing file A never re-requested the lenses shown in file B. It used to
+    /// be sent from <c>TextSyncHandler</c> per ANALYSIS and undebounced — typing a function's name
+    /// moves the export signature on every keystroke, so a client with lenses on re-requested them
+    /// about four times a second, and one such request measured 164 ms on the densest cod4 script
+    /// (<c>HandlerCostTests</c>). Here it rides the fan-out that already coalesces this exact
+    /// event, and it also covers the on-disk-change case, which the sync handler could not see.
+    /// </summary>
+    private void RequestCodeLensRefresh()
+    {
+        if ( !_settings.CodeLensEnabled )
+        {
+            return;
+        }
+
+        _codeLenses.Request();
     }
 
     /// <summary>

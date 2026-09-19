@@ -100,7 +100,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - Maps indexer progress onto the gscode/indexingStarted|Progress|Complete notifications
   (concrete record payloads), coalesced to ≤1 per ~40 ms so the status-bar counter
-  races without flooding the pipe; the final count always sends. `SendNothingBefore` is handed
+  races without flooding the pipe; the final count always sends.
+- The coalescing lives in `ProgressThrottle`, which is interlocked rather than a `Stopwatch` and a
+  comparison: `Progressed` is called from inside the indexer's `Parallel.ForEachAsync` on every
+  worker thread, a `Stopwatch` is not thread-safe, and check-then-`Restart` is not atomic, so
+  several workers used to pass the gate together. It also refuses a count LOWER than the last one
+  sent — a parallel walk reports out of order, and the status-bar counter visibly ran backwards. `SendNothingBefore` is handed
   `ConnectionSettleGate.Settled` rather than starting its own timer. `Failed(reason)` is the other
   notification that may not be dropped: it sends `gscode/indexingFailed` (not a fabricated
   `indexingComplete`, which would read as success) when the startup pass throws instead of
@@ -528,7 +533,10 @@ that chose it. These are the pieces that implement it:
   the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
   the editor says "cannot rename here" instead of prompting and then failing. Shares
   `RenameHandler.IsRenameable`, so the preview and the rename cannot disagree.
-- `ServerStatusNotifier` — keeps the status-bar tooltip's memory figure current. It was previously
+- `ServerStatusNotifier` — keeps the status-bar tooltip's memory figure current. The megabyte
+  divisor is its own constant rather than the reporting threshold reused: the threshold is a tuning
+  knob and the divisor is a unit, and as one constant, raising the threshold would silently have
+  changed what the number MEANT. It was previously
   set once from the `gscode/indexingComplete` payload and never updated again. Starts immediately
   when `workspaceIndexingMode: off` (nothing to wait for), or after indexing finishes otherwise, on
   `IndexingLifetime.Token` rather than `CancellationToken.None` — shutdown now actually stops it.

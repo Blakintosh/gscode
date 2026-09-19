@@ -56,7 +56,12 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
     private const long ThrottleMilliseconds = 40;
 
     private readonly ILanguageServerFacade _server;
-    private readonly Stopwatch _sinceLastSend = Stopwatch.StartNew();
+
+    /// <summary>
+    /// Which progress reports actually go out. See <see cref="ProgressThrottle"/> for why this is
+    /// not a Stopwatch and a comparison.
+    /// </summary>
+    private readonly ProgressThrottle _throttle = new(ThrottleMilliseconds);
 
     /// <summary>
     /// Completes when the connection's output pump has settled enough for a notification to
@@ -178,12 +183,11 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
         }
 
         bool isFinal = filesIndexed == totalFiles;
-        if ( !isFinal && _sinceLastSend.ElapsedMilliseconds < ThrottleMilliseconds )
+        if ( !_throttle.ShouldSend(filesIndexed, isFinal) )
         {
             return;
         }
 
-        _sinceLastSend.Restart();
         _server.SendNotification("gscode/indexingProgress", new IndexingProgressParams(filesIndexed, totalFiles));
     }
 

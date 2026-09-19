@@ -30,7 +30,15 @@ public sealed class ServerStatusNotifier
     /// Movement worth telling the client about. Below this the number would not change the
     /// rounded megabytes the tooltip prints, so the notification would say nothing.
     /// </summary>
-    private const long ReportThresholdBytes = 1024 * 1024;
+    private const long ReportThresholdBytes = BytesPerMegabyte;
+
+    /// <summary>
+    /// The unit the tooltip prints in. Separate from the threshold above even though the two are
+    /// equal today: the threshold answers "is this worth sending" and is a tuning knob, while this
+    /// is a unit conversion and is not. They were one constant, so raising the reporting threshold
+    /// would silently have changed what the number MEANT.
+    /// </summary>
+    private const long BytesPerMegabyte = 1024 * 1024;
 
     private readonly ILanguageServerFacade _server;
 
@@ -57,7 +65,7 @@ public sealed class ServerStatusNotifier
                     // result ever reaches the double it is assigned to, so this disagreed with
                     // gscode/indexingComplete's WorkingSetMegabytes (Environment.WorkingSet /
                     // (1024.0 * 1024.0)) by up to a megabyte on the same tooltip.
-                    double megabytes = workingSetBytes / (double)ReportThresholdBytes;
+                    double megabytes = workingSetBytes / (double)BytesPerMegabyte;
 
                     _server.SendNotification("gscode/serverStatus", new ServerStatusParams(megabytes));
                 }

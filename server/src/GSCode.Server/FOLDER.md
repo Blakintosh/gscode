@@ -399,42 +399,84 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Program.cs
 
-Top-level entry point. Configures Serilog to STDERR (stdout must stay clean for the
-stdio transport; the pipe-transport client shows stderr in the "GSCode Server" output
-channel) behind a `LoggingLevelSwitch`, parses transport options, connects the
-transport, and starts the OmniSharp `LanguageServer` with `OnInitialize` and
-`OnInitialized` hooks. Returns a non-zero exit code for a bad command line or a transport that
-never connected, and silences CommandLineParser's own `HelpWriter` because it writes to STDOUT,
-which is the stdio transport's wire.
-
-The level switch takes `ServerLogLevel.StartupFloor` at initialize and settles to what the
-client asked for only once startup is over — at the end of the indexing task, or at the end of
-`OnStarted` when indexing is off. The startup lines are written at Information and the client's
-default is `warning`, so lowering the switch as soon as initialize arrived discarded every one
-of them: the roots, the effective settings, the index breakdown and how long the server took to
-be ready. The assignment sits outside the `InitializationOptions` branch so the switch and
-`ServerSettings.ServerLogLevel` cannot disagree for a host that sends no options.
-
-`OnStarted` sends `gscode/serverReady` through `ConnectionSettleGate`, opens the persistent cache
-(regardless of `workspaceIndexingMode`, so `gscode/clearCache` and `ServerStatusNotifier` both have
-something to act on even with indexing off), and — when the mode is not `off` — launches the
-startup index as a `Task` held by `IndexingLifetime` rather than fire-and-forget, cancellable by
-shutdown and by `gscode/clearCache`. When the mode is `full`, `WorkspaceLintSweep.RunFullSweepAsync`
-runs after the index and before `WorkspaceDiagnosticsPublisher.Refresh()`, so a closed file's
-Problems entry is upgraded before anything republishes it. On indexing completion it logs
-`Workspace indexing complete: N files in X.Xs` (info), a `full`-mode sweep its own
-`Workspace lint sweep complete` line, then a formatted `LogIndexBreakdown` block — per-language
-file counts (`GSC`/`CSC`/`GSH`) each split by raw/mod/workspace context (`CategorizeContext` +
-`FormatLanguageLine`), and a totals line of functions · classes · macros · distinct namespaces —
-and then starts `ServerStatusNotifier.RunAsync`, a background loop (on `IndexingLifetime.Token`,
-so shutdown stops it) that samples the working set every 3 s and pushes a `gscode/serverStatus`
-notification only on >= 1 MB changes (so a stable process stays quiet). It does NOT log: the status
-bar is the readout. A failure anywhere in the startup task sends `gscode/indexingFailed` instead of
-leaving the client's progress UI spinning forever.
+Top-level entry point and LIFECYCLE only — composition and startup used to live here too, as
+roughly 900 lines of top-level statements that could not be unit tested at all. Both moved out
+into `Composition/ServerServices.cs` and `Startup/`; what is left is what genuinely has to run at
+the top level: Serilog setup to STDERR (stdout must stay clean for the stdio transport; the
+pipe-transport client shows stderr in the "GSCode Server" output channel), argument parsing,
+connecting the transport, handing everything else to `ServerServices.Configure`, and teardown.
+Returns a non-zero exit code for a bad command line or a transport that never connected, and
+silences CommandLineParser's own `HelpWriter` because it writes to STDOUT, which is the stdio
+transport's wire.
 
 Waits for exit, cancels and bounded-awaits `IndexingLifetime` BEFORE `CacheHolder.CloseAsync()` (so
 an in-flight cache write is not silently dropped by closing out from under it), then disposes the
 transport owner and flushes logs.
+
+## Logging/StartupLogController.cs
+
+- `sealed class StartupLogController` — the level switch's startup-floor state, shared between
+  `ServerServices.OnInitializeAsync` (which learns the requested level and calls `SetRequested`,
+  applying `ServerLogLevel.StartupFloor` immediately) and `StartupIndexRunner` (which calls
+  `Settle()` once startup is over — at the end of the indexing task, or at the end of `OnStarted`
+  when indexing is off). Exists so those two files, on opposite sides of the `Program.cs` split,
+  can agree on the level without a top-level local either of them could close over. The startup
+  lines are written at Information and the client's default is `warning`, so settling to the
+  requested level any earlier discarded every one of them: the roots, the effective settings, the
+  index breakdown and how long the server took to be ready.
+
+## Composition/ServerServices.cs
+
+- `internal static class ServerServices` — `Configure(options, …)` registers every singleton the
+  handlers resolve, then the full `AddHandler<T>()` chain, then wires `OnInitialize`,
+  `OnInitialized` and `OnStarted`. `OnStarted` itself is one line handing off to
+  `StartupIndexRunner.RunAsync` — see `Startup/StartupIndex.cs` — because it needs the cache and
+  indexing machinery this class has no other reason to touch.
+- `OnInitializeAsync` applies the client's settings, selects the game profile as a safety net for a
+  host that did not pass `--game`, builds the `PathResolver` from the resolved workspace folders,
+  and logs the roots and the effective settings. `OnInitializedAsync` declares UTF-16 position
+  encoding explicitly — every range this server produces comes from `SourceText`, which indexes
+  UTF-16 code units, so a client negotiating UTF-8 offsets would silently mis-place ranges in any
+  file containing astral characters.
+- `RootSource`, `LogEffectiveSettings` and the three `Load*` data-file factories
+  (`LoadBuiltinApi`/`LoadObjectFields`/`LoadStockScripts`, each wrapped by `LogDataFile`) are
+  private here rather than in `Startup/IndexReporting.cs`: they are read once, by the registrations
+  and the initialize hook right beside them, and nothing outside this file calls them.
+
+## Startup/StartupIndex.cs
+
+- `internal sealed class StartupIndexRunner` — the whole `OnStarted` body: sends `gscode/serverReady`
+  through `ConnectionSettleGate`, opens the persistent cache (regardless of `workspaceIndexingMode`,
+  so `gscode/clearCache` and `ServerStatusNotifier` both have something to act on even with indexing
+  off), and — when the mode is not `off` — launches the startup index as a `Task` held by
+  `IndexingLifetime` rather than fire-and-forget, cancellable by shutdown and by `gscode/clearCache`.
+  When the mode is `full`, `WorkspaceLintSweep.RunFullSweepAsync` runs after the index and before
+  `WorkspaceDiagnosticsPublisher.Refresh()`, so a closed file's Problems entry is upgraded before
+  anything republishes it. On indexing completion it logs `Workspace indexing complete: N files in
+  X.Xs` (info), a `full`-mode sweep its own `Workspace lint sweep complete` line, then
+  `IndexReporting.LogIndexBreakdown`, and then starts `ServerStatusNotifier.RunAsync`. A failure
+  anywhere in the startup task sends `gscode/indexingFailed` instead of leaving the client's
+  progress UI spinning forever; either way, the `finally` block calls
+  `StartupLogController.Settle()` — startup is over however it ended.
+- Constructed with an `IServiceProvider` and an `ILanguageServerFacade` rather than whatever type
+  OmniSharp's `OnStarted` hands the caller — both are ordinary types already used elsewhere in this
+  project (every handler resolves the facade the same way), so `RunAsync` depends on nothing this
+  call site would need to learn a new name for.
+- `Compact()` — the one compacting collection at the indexing-to-serving transition. Lives here
+  rather than in `IndexReporting.cs` because it is a GC operation the startup task performs, not a
+  log line it prints; `IndexReporting.LogMemoryReport`, called before and after it, is what reports
+  the effect.
+
+## Startup/IndexReporting.cs
+
+- `internal static class IndexReporting` — startup-time logging helpers with no state of their own:
+  `LogIndexBreakdown` (per-language file counts split by raw/mod/workspace context, via
+  `CategorizeContext` + `FormatLanguageLine`, plus a totals line of functions · classes · macros ·
+  distinct namespaces), `LogMemoryReport` (the managed-heap-vs-working-set breakdown, via
+  `AppendGenerations` for the per-generation fragmentation), `BundledDataFilePaths` (feeds the
+  cache's build-identity hash), and `ServerVersion` (read from the assembly so it cannot drift from
+  what actually shipped). `ServerVersion` is `internal` because `Program.cs` itself calls it twice,
+  at the top and bottom of the process; the rest are called only from `StartupIndexRunner`.
 
 ## Transport/TransportOptions.cs
 

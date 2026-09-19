@@ -355,24 +355,16 @@ public sealed class DependentDiagnosticsRefresher
     }
 
     /// <summary>
-    /// Whether one open document needs re-linting because <paramref name="originPath"/> changed.
+    /// Whether one open document needs re-linting, given the origins a coalesced pass is refreshing
+    /// for. A document is refreshed unless it is one of them.
     /// </summary>
     /// <remarks>
-    /// Two exclusions, for opposite reasons. The ORIGIN is already being published by the handler
-    /// that ran the edit, so refreshing it would only race that. A STALE document has text newer
-    /// than anything committed and a debounced analysis of its own already queued — that pass runs
-    /// after this one and against the same database, so it produces the same answer; doing it here
-    /// as well would publish diagnostics for text the user has already replaced.
+    /// Two exclusions, for opposite reasons. An ORIGIN is already being published by the handler
+    /// that ran its edit, so refreshing it here would only race that. A STALE document has text
+    /// newer than anything committed and a debounced analysis of its own already queued — that pass
+    /// runs after this one and against the same database, so it produces the same answer; doing it
+    /// here as well would publish diagnostics for text the user has already replaced.
     /// </remarks>
-    internal static bool ShouldRefresh(OpenDocument document, string originPath)
-    {
-        return ShouldRefresh(document, new HashSet<string>(StringComparer.Ordinal) { originPath });
-    }
-
-    /// <summary>
-    /// The same question for a pass that coalesced several origins: a document is refreshed unless
-    /// it is one of them.
-    /// </summary>
     internal static bool ShouldRefresh(OpenDocument document, IReadOnlySet<string> origins)
     {
         return !origins.Contains(document.Path) && !document.IsStale;

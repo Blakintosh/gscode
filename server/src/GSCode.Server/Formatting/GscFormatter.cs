@@ -29,64 +29,15 @@ public static class GscFormatter
     public readonly record struct FormatEdit(TextRange Range, string NewText);
 
     /// <summary>
-    /// Formats the document and returns the MINIMAL edit that turns the original into the
-    /// formatted text (common leading/trailing characters are trimmed), or null when there is
-    /// nothing to change or formatting is refused. All three formatting requests (whole,
-    /// range, on-type) share this so edits stay small and churn-free.
-    /// </summary>
-    public static FormatEdit? FormatMinimal(ParseResult result, FormatOptions? options = null)
-    {
-        // A file with a format pragma has to go through the per-region path: a single edit spanning
-        // the first change to the last would cover the protected lines as collateral, and there is
-        // no way to carve a hole out of one replacement.
-        if ( HasFormatPragma(result) )
-        {
-            ImmutableArray<FormatEdit> edits = FormatMinimalEdits(result, options);
-            return edits.Length == 1 ? edits[0] : null;
-        }
-
-        string? formatted = Format(result, options);
-        if ( formatted is null )
-        {
-            return null;
-        }
-
-        string original = result.Text.Text;
-        if ( string.Equals(original, formatted, StringComparison.Ordinal) )
-        {
-            return null;
-        }
-
-        // Trim the common prefix and suffix so the edit spans only what actually changed.
-        int start = 0;
-        int maxPrefix = Math.Min(original.Length, formatted.Length);
-        while ( start < maxPrefix && original[start] == formatted[start] )
-        {
-            start++;
-        }
-
-        int originalEnd = original.Length;
-        int formattedEnd = formatted.Length;
-        while ( originalEnd > start && formattedEnd > start && original[originalEnd - 1] == formatted[formattedEnd - 1] )
-        {
-            originalEnd--;
-            formattedEnd--;
-        }
-
-        TextRange range = new(result.Text.GetPosition(start), result.Text.GetPosition(originalEnd));
-        string replacement = formatted.Substring(start, formattedEnd - start);
-        return new FormatEdit(range, replacement);
-    }
-
-    /// <summary>
     /// The formatting result as a set of PER-REGION edits — one small edit for each run of changed
-    /// lines, with unchanged lines left out entirely.
+    /// lines, with unchanged lines left out entirely, so edits stay small and churn-free. All three
+    /// formatting requests (whole, range, on-type) share this.
     ///
-    /// <see cref="FormatMinimal"/> returns a single edit spanning the first change to the last. For
-    /// a document-wide reindent that is nearly the whole file, and an editor preserves the caret by
-    /// mapping its offset through the edits — so a caret sitting inside that one big replacement has
-    /// nowhere to map to and snaps to the edit's end. Diffing by LINES instead keeps every
-    /// unchanged line, and the caret resting on one, untouched.
+    /// Diffing by LINES rather than returning one edit spanning the first change to the last: a
+    /// document-wide reindent is nearly the whole file, and an editor preserves the caret by mapping
+    /// its offset through the edits — so a caret sitting inside one big replacement has nowhere to
+    /// map to and snaps to the edit's end. Keeping every unchanged line out of the edit set instead
+    /// keeps a caret resting on one untouched.
     ///
     /// The edits together reproduce <see cref="Format"/>'s output exactly, are ordered, and never
     /// overlap — a matched (unchanged) line always sits between two hunks — so they satisfy the

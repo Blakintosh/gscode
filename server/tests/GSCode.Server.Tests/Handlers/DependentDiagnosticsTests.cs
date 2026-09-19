@@ -48,12 +48,18 @@ public class DependentDiagnosticsTests
         return document;
     }
 
+    /// <summary>One origin, as the set ShouldRefresh's production overload actually takes.</summary>
+    private static IReadOnlySet<string> OneOrigin(string path)
+    {
+        return new HashSet<string>(StringComparer.Ordinal) { path };
+    }
+
     [Fact]
     public void ANeighbourIsRefreshed()
     {
         // The whole point: another open file's diagnostics were computed against the edited one.
         Assert.True(DependentDiagnosticsRefresher.ShouldRefresh(
-            Document(@"c:\ws\caller.gsc"), originPath: @"c:\ws\util.gsc"));
+            Document(@"c:\ws\caller.gsc"), OneOrigin(@"c:\ws\util.gsc")));
     }
 
     [Fact]
@@ -61,7 +67,7 @@ public class DependentDiagnosticsTests
     {
         // Its own handler is publishing it; doing it here as well would only race that.
         Assert.False(DependentDiagnosticsRefresher.ShouldRefresh(
-            Document(@"c:\ws\util.gsc"), originPath: @"c:\ws\util.gsc"));
+            Document(@"c:\ws\util.gsc"), OneOrigin(@"c:\ws\util.gsc")));
     }
 
     [Fact]
@@ -72,7 +78,7 @@ public class DependentDiagnosticsTests
         OpenDocument typing = Document(@"c:\ws\caller.gsc", version: 7, analyzedVersion: 4);
 
         Assert.True(typing.IsStale);
-        Assert.False(DependentDiagnosticsRefresher.ShouldRefresh(typing, originPath: @"c:\ws\util.gsc"));
+        Assert.False(DependentDiagnosticsRefresher.ShouldRefresh(typing, OneOrigin(@"c:\ws\util.gsc")));
     }
 
     // --- ClosedDependentsOf (F7: the full-mode closed-file half) ---

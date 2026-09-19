@@ -314,9 +314,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/DocumentFormattingHandler.cs
 
-- Whole-document formatting: runs `GscFormatter.FormatMinimal` over the open document and
-  returns its minimal edit (common prefix/suffix trimmed). Syntax errors or an unsafe reflow
-  (see the formatter's corruption guard) yield no edits.
+- Whole-document formatting: runs `GscFormatter.FormatMinimalEdits` over the open document and
+  returns its per-region edits (one small edit per run of changed lines, so a caret on an
+  unchanged line stays put rather than snapping to the end of one giant replacement). Syntax
+  errors or an unsafe reflow (see the formatter's corruption guard) yield no edits.
 
 ## Handlers/DocumentRangeFormattingHandler.cs
 
@@ -381,9 +382,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Formatting/GscFormatter.cs
 
-- `FormatMinimal(ParseResult)` returns a `FormatEdit` (range + replacement) that trims the
-  common leading/trailing characters so the edit spans only what changed; all three formatting
-  handlers share it. `Format(ParseResult)` returns the full formatted text (or null).
+- `FormatMinimalEdits(ParseResult)` returns the formatting result as per-region `FormatEdit`s —
+  one small edit per run of changed lines, unchanged lines left out entirely — which all three
+  formatting handlers share. `Format(ParseResult)` returns the full formatted text (or null).
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
   every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman
   braces, one statement per line, one `FormatOptions.IndentUnit` per brace/dev-block level (a tab

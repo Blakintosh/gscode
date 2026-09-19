@@ -9,9 +9,10 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 namespace GSCode.Server.Handlers;
 
 /// <summary>
-/// Whole-document formatting. Runs GscFormatter over the open document and, when it produces
-/// a change, returns a single full-range text edit. Refused formatting (syntax errors or an
-/// unsafe reflow) yields no edits.
+/// Whole-document formatting. Runs GscFormatter over the open document and returns its per-region
+/// edits (see FormatMinimalEdits) rather than one edit spanning the whole file, so the caret stays
+/// put on every unchanged line. Refused formatting (syntax errors or an unsafe reflow) yields no
+/// edits.
 /// </summary>
 public sealed class DocumentFormattingHandler : DocumentFormattingHandlerBase
 {

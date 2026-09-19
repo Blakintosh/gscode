@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -11,11 +12,11 @@ namespace GSCode.Server.Tests.Formatting;
 /// <summary>
 /// A formatting edit is only valid against the text it was computed from.
 ///
-/// FormatMinimal trims the common prefix and suffix so the edit spans only what changed, which
-/// makes its range a set of offsets INTO that text. Analysis is debounced 250 ms behind the
-/// keystrokes, so a format arriving in that window (format-on-save fires right after edits, and
-/// on-type formatting fires mid-word) would apply a range computed against text that is no longer
-/// there. Every other stale read shows something wrong; this one writes something wrong.
+/// FormatMinimalEdits diffs the formatted output against the analysed text, so its ranges are
+/// offsets INTO that text. Analysis is debounced 250 ms behind the keystrokes, so a format arriving
+/// in that window (format-on-save fires right after edits, and on-type formatting fires mid-word)
+/// would apply ranges computed against text that is no longer there. Every other stale read shows
+/// something wrong; this one writes something wrong.
 /// </summary>
 public class StaleFormatEditTests
 {
@@ -26,18 +27,26 @@ public class StaleFormatEditTests
         return new DocumentStore(static _ => NullInsertProvider.Instance, new NameTable());
     }
 
-    /// <summary>Applies an edit the way an editor would, to prove the result is the formatted text.</summary>
-    private static string Apply(SourceText text, GscFormatter.FormatEdit edit)
+    /// <summary>Applies edits the way an editor would, to prove the result is the formatted text.</summary>
+    private static string Apply(SourceText text, ImmutableArray<GscFormatter.FormatEdit> edits)
     {
-        int start = text.GetOffset(edit.Range.Start);
-        int end = text.GetOffset(edit.Range.End);
-        string original = text.Text;
+        string result = text.Text;
 
-        return string.Concat(original.AsSpan(0, start), edit.NewText, original.AsSpan(end));
+        // Applied back to front so an earlier edit's offsets are not shifted by a later one —
+        // FormatMinimalEdits returns them in document order, front to back.
+        for ( int index = edits.Length - 1; index >= 0; index-- )
+        {
+            GscFormatter.FormatEdit edit = edits[index];
+            int start = text.GetOffset(edit.Range.Start);
+            int end = text.GetOffset(edit.Range.End);
+            result = string.Concat(result.AsSpan(0, start), edit.NewText, result.AsSpan(end));
+        }
+
+        return result;
     }
 
     [Fact]
-    public void AnEditFromStaleTextCorruptsTheLiveDocument()
+    public void EditsFromStaleTextCorruptTheLiveDocument()
     {
         // The bug being fixed, demonstrated directly. The analysed text is badly indented near
         // the TOP; the live text has had a long line inserted above it, so every offset has
@@ -48,15 +57,15 @@ public class StaleFormatEditTests
 
         store.ApplyChange(document, range: null, "// a newly typed comment line\nfunction f()\n{\nx = 1;\n}\n", version: 2);
 
-        GscFormatter.FormatEdit edit = GscFormatter.FormatMinimal(stale)!.Value;
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(stale);
 
-        // Applying the stale edit to the live text does NOT produce correctly formatted source.
-        string wrong = Apply(document.Text, edit);
+        // Applying the stale edits to the live text does NOT produce correctly formatted source.
+        string wrong = Apply(document.Text, edits);
         Assert.NotEqual(GscFormatter.Format(store.Analyze(document)), wrong);
     }
 
     [Fact]
-    public void AnalyzingFirst_ProducesAnEditThatAppliesCleanly()
+    public void AnalyzingFirst_ProducesEditsThatApplyCleanly()
     {
         DocumentStore store = NewStore();
         OpenDocument document = store.Open(Path, "function f()\n{\nx = 1;\n}\n", version: 1);
@@ -66,13 +75,13 @@ public class StaleFormatEditTests
 
         // What the handlers now do.
         ParseResult fresh = store.AnalyzeIfStale(document);
-        GscFormatter.FormatEdit edit = GscFormatter.FormatMinimal(fresh)!.Value;
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(fresh);
 
-        Assert.Equal(GscFormatter.Format(fresh), Apply(document.Text, edit));
+        Assert.Equal(GscFormatter.Format(fresh), Apply(document.Text, edits));
     }
 
     [Fact]
-    public void TheEditRangeIsWithinTheLiveText()
+    public void TheEditRangesAreWithinTheLiveText()
     {
         // The concrete danger: a range past the end of the live document, or spanning characters
         // that moved. Offsets from a fresh analysis are always in bounds by construction.
@@ -83,8 +92,12 @@ public class StaleFormatEditTests
         store.ApplyChange(document, range: null, "function f()\n{\nx = 1;\n}\n", version: 2);
 
         ParseResult fresh = store.AnalyzeIfStale(document);
-        GscFormatter.FormatEdit edit = GscFormatter.FormatMinimal(fresh)!.Value;
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(fresh);
 
-        Assert.True(document.Text.GetOffset(edit.Range.End) <= document.Text.Length);
+        Assert.NotEmpty(edits);
+        foreach ( GscFormatter.FormatEdit edit in edits )
+        {
+            Assert.True(document.Text.GetOffset(edit.Range.End) <= document.Text.Length);
+        }
     }
 }

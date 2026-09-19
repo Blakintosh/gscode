@@ -38,7 +38,7 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
             return Task.FromResult<LocationContainer?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
 
         bool includeDeclaration = request.Context?.IncludeDeclaration ?? true;
 

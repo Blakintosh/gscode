@@ -199,6 +199,26 @@ public sealed class NavigationSupport
     }
 
     /// <summary>
+    /// What the reference index knows about the symbol under a cursor — a function, class, macro,
+    /// field, or one of the literal kinds — or <see cref="PositionHit.None"/> when nothing does.
+    ///
+    /// The one entry point every position-based handler used to call <c>SymbolAtPosition.Resolve</c>
+    /// for directly — nine identical copies of one line, across hover, definition, references,
+    /// rename, prepare-rename, highlight, both hierarchies, and <c>gscode/builtinAt</c>. "Nothing
+    /// does" is ALSO the answer for a
+    /// LOCAL, since the index is keyed by <c>SymbolKey</c> and shared workspace-wide — every caller
+    /// here falls through to <see cref="LocalOccurrencesAt"/> for that case, which is why the two
+    /// methods are written as companions rather than merged into one: what a hit and a local each
+    /// resolve TO is different enough per feature (a single range, a list of locations honouring
+    /// <c>includeDeclaration</c>, Read/Write highlight kinds, rename edits) that unifying the
+    /// fallthrough itself would cost more than the one shared resolve call is worth.
+    /// </summary>
+    public PositionHit ResolveHit(NavigationTarget target, GSCode.Core.Text.Position position)
+    {
+        return SymbolAtPosition.Resolve(target.Result, position);
+    }
+
+    /// <summary>
     /// Every occurrence of the LOCAL under a position, within the function that scopes it.
     ///
     /// The local counterpart of <c>FindAllReferences</c>, and shared for the same reason:
@@ -207,7 +227,7 @@ public sealed class NavigationSupport
     ///
     /// Empty when the position is not on a local — which is also the answer for everything the
     /// reference index DOES know, so a caller can reach here unconditionally after a failed
-    /// <see cref="SymbolAtPosition"/> lookup.
+    /// <see cref="ResolveHit"/>.
     /// </summary>
     public ImmutableArray<LocalOccurrence> LocalOccurrencesAt(
         NavigationTarget target, GSCode.Core.Text.Position position)

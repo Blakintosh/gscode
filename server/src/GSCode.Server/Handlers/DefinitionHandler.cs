@@ -43,7 +43,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             return Task.FromResult<LocationOrLocationLinks?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
 
         if ( hit.Kind == HitKind.DependencyPath )
         {

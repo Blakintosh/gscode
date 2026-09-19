@@ -44,7 +44,7 @@ public sealed class HoverHandler : HoverHandlerBase
             return Task.FromResult<Hover?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
         if ( hit.Kind == HitKind.Reference )
         {
             string? markdown = RenderHover(target, hit.Key, hit.Range, hit.ReferenceKind);

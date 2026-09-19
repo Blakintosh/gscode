@@ -41,7 +41,7 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
             return Task.FromResult<Container<TypeHierarchyItem>?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
         if ( hit.Kind != HitKind.Reference || hit.Key.Kind != SymbolKind.Class )
         {
             return Task.FromResult<Container<TypeHierarchyItem>?>(null);

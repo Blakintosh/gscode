@@ -41,7 +41,7 @@ public sealed class PrepareRenameHandler : IPrepareRenameHandler
             return Task.FromResult<RangeOrPlaceholderRange?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
         if ( !RenameHandler.IsRenameable(hit, _builtins.For(target.Language), _objectFields) )
         {
             // A local is renameable but invisible to IsRenameable, which reads the reference index

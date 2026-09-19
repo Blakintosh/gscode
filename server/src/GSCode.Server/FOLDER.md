@@ -144,6 +144,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   read path with no debounce in front of it, so a request the client had already cancelled used to
   be analysed to the end anyway. `Resolve` takes one too so a handler cannot silently pick the
   uncancellable overload when it meant the freshening one.
+- `ResolveHit(target, position)` — the one entry point for `SymbolAtPosition.Resolve`, which every
+  position-based handler (hover, definition, references, rename, prepare-rename, highlight, both
+  hierarchies, and `BuiltinAtHandler`) used to call directly: nine copies of one line. A hit's
+  fallthrough on failure — `LocalOccurrencesAt`, since the reference index knows nothing about a
+  local — stays written out per handler, because what each one does with a local differs too much
+  per feature to be worth unifying (a single range, a location list honouring `includeDeclaration`,
+  Read/Write highlight kinds, rename edits).
 - `ResolveDirectivePath(target, path)` — the file a `#using`/`#include` names, with the extension
   taken from the ASKING document's language. Go-to-definition and ctrl-click ask this same
   question; with a copy each, a new directive form had to be found twice.
@@ -187,7 +194,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/DocumentHighlightHandler.cs
 
 - Highlights every occurrence of the symbol under the cursor within the current file
-  (definition sites as Write, others as Read).
+  (definition sites as Write, others as Read). Goes through `NavigationSupport.FindAllReferences` —
+  the same shared query find-references and the CodeLens count use — filtered to this file's own
+  path afterwards, rather than a raw key comparison over this file's own `Extraction.References`.
+  The raw comparison could not canonicalize a method key the way the shared query does, which is
+  exactly the kind of drift the shared query exists to prevent.
 - Locals take the same `LocalReferences` fallthrough, with assignments, loop bindings, `waittill`
   outputs and the parameter all highlighted as Write.
 

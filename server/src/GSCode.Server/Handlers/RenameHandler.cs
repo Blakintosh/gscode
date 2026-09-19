@@ -49,7 +49,7 @@ public sealed class RenameHandler : RenameHandlerBase
             return Task.FromResult<WorkspaceEdit?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
         if ( !IsRenameable(hit, _builtins.For(target.Language), _objectFields) )
         {
             // A local is always the script's to rename — the engine defines no locals — but it is

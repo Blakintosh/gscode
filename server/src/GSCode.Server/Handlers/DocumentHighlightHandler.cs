@@ -32,7 +32,7 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
             return Task.FromResult<DocumentHighlightContainer?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
         if ( hit.Kind != HitKind.Reference )
         {
             // Every LOCAL lands here: the reference index is keyed by SymbolKey and shared
@@ -41,19 +41,27 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
             return Task.FromResult(LocalHighlightsAt(target, request.Position.ToCore()));
         }
 
+        // The shared query, not a raw scan of this file's own Extraction.References: a method hit
+        // is keyed by its OWNER at the cursor, and only MethodResolution.Canonicalize (inside
+        // FindAllReferences) knows to widen that to the declaring class — the raw key comparison
+        // this replaced missed a highlight on an inherited method's call sites whenever the owner
+        // at the cursor was not the declaring class. Filtered to THIS file afterwards, since a
+        // highlight is same-file by definition where find-references is workspace-wide.
         List<DocumentHighlight> highlights = [];
-        foreach ( ReferenceEntry entry in target.Result.Extraction.References )
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, hit.Key, hit.ReferenceKind) )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if ( entry.Key == hit.Key )
+            if ( record.Path != target.Path )
             {
-                highlights.Add(new DocumentHighlight
-                {
-                    Range = entry.Range.ToLsp(),
-                    Kind = entry.Kind == ReferenceKind.Definition ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
-                });
+                continue;
             }
+
+            highlights.Add(new DocumentHighlight
+            {
+                Range = entry.Range.ToLsp(),
+                Kind = entry.Kind == ReferenceKind.Definition ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
+            });
         }
 
         return Task.FromResult<DocumentHighlightContainer?>(new DocumentHighlightContainer(highlights));

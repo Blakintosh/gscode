@@ -60,8 +60,8 @@ public sealed class BuiltinAtHandler : IJsonRpcRequestHandler<BuiltinAtParams, B
             return Task.FromResult(none);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(
-            target.Result, new GSCode.Core.Text.Position(request.Line, request.Character));
+        PositionHit hit = _support.ResolveHit(
+            target, new GSCode.Core.Text.Position(request.Line, request.Character));
 
         if ( hit.Kind != HitKind.Reference || hit.Key.Kind != SymbolKind.Function )
         {

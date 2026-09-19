@@ -44,7 +44,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             return Task.FromResult<Container<CallHierarchyItem>?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
         if ( hit.Kind != HitKind.Reference || hit.Key.Kind != SymbolKind.Function )
         {
             return Task.FromResult<Container<CallHierarchyItem>?>(null);

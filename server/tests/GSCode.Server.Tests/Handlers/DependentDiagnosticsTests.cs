@@ -5,6 +5,10 @@ using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Server.Handlers;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using GSCode.Workspace.Indexing;
+using GSCode.Workspace.Api;
+using GSCode.Server.Configuration;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
@@ -129,5 +133,68 @@ public class DependentDiagnosticsTests
         HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(origin, database.Gsc, noOpenDocuments);
 
         Assert.DoesNotContain(PathUtil.NormalizeAbsolute(LibPath), dependents);
+    }
+
+    private sealed class DiscardingSink : IDiagnosticsSink
+    {
+        public void Send(PublishDiagnosticsParams parameters)
+        {
+        }
+    }
+
+    /// <summary>
+    /// A refresher over an empty workspace. Every collaborator is a real but empty instance, which
+    /// is all the queueing question needs: the pass is cancelled before it reaches any of them.
+    /// </summary>
+    private static DependentDiagnosticsRefresher EmptyRefresher()
+    {
+        PhysicalFileSystem fileSystem = new();
+        ResolverHolder resolverHolder = new(fileSystem);
+        NameTable names = new();
+        ScriptDatabase database = new();
+        DocumentStore documents = new(static _ => NullInsertProvider.Instance, names);
+        WorkspaceIndexer indexer = new(database, () => resolverHolder.Current, fileSystem, names);
+
+        string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
+        DocumentLinter linter = new(
+            database, resolverHolder, BuiltinApiSet.Load(apiDirectory), ObjectFields.Load(apiDirectory));
+
+        DiagnosticsPublisher publisher = new(new DiscardingSink());
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics = new(database, documents, publisher, new ServerSettings());
+        WorkspaceLintSweep sweep = new(database, documents, indexer, linter);
+
+        return new DependentDiagnosticsRefresher(
+            documents, publisher, linter, database, sweep, workspaceDiagnostics);
+    }
+
+    [Fact]
+    public async Task AnOriginAbandonedAfterTheTakeGoesBackInTheQueue()
+    {
+        // The set is cleared the moment a pass takes it, so a pass cancelled AFTER that point used
+        // to drop every origin it had not finished with. Nothing else re-lints a closed dependent,
+        // so those files kept diagnostics computed against exports the origin no longer has until
+        // some unrelated later edit happened to name the same file.
+        DependentDiagnosticsRefresher refresher = EmptyRefresher();
+        refresher.Schedule(@"c:\ws\util.gsc");
+
+        using CancellationTokenSource cancelled = new();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresher.RunPassAsync(cancelled.Token));
+
+        Assert.Contains(@"c:\ws\util.gsc", refresher.PendingOrigins);
+    }
+
+    [Fact]
+    public async Task AFinishedPassLeavesTheQueueEmpty()
+    {
+        // The control: an uncancelled pass over an empty workspace consumes its origins rather than
+        // handing them back, so the case above cannot pass by nothing ever being taken.
+        DependentDiagnosticsRefresher refresher = EmptyRefresher();
+        refresher.Schedule(@"c:\ws\util.gsc");
+
+        await refresher.RunPassAsync(CancellationToken.None);
+
+        Assert.Empty(refresher.PendingOrigins);
     }
 }

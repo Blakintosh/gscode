@@ -529,6 +529,10 @@ that chose it. These are the pieces that implement it:
   ORIGIN declares, and `WorkspaceLintSweep.RelintClosedFilesAsync` re-lints just those — a rename
   costs the files that mention the name, not the workspace. Only fires for a caller-named origin
   (not the on-disk-change case) and only covers function declarations, not classes — stated gaps.
+  Origins a pass does not finish with are handed BACK when it is cancelled: the set is cleared
+  the moment a pass takes it, so cancellation after that point used to drop them, and nothing
+  else re-lints a closed dependent. Cancellation only — returning them after a FAILURE would
+  reschedule the same failing pass every 900 ms for the rest of the session.
 - `PrepareRenameHandler` — validates a rename before the UI opens: the symbol's range for anything
   the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
   the editor says "cannot rename here" instead of prompting and then failing. Shares

@@ -128,32 +128,108 @@ public sealed class DependentDiagnosticsRefresher
         try
         {
             await Task.Delay(DebounceMilliseconds, cancellationToken);
+            await RunPassAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch ( OperationCanceledException )
+        {
+            // Superseded by a later edit — the newer pass covers this one, and now covers whatever
+            // this one had left.
+        }
+        catch ( Exception exception )
+        {
+            Log.Error(exception, "Dependent diagnostics refresh failed");
+        }
+    }
 
-            // Taken after the wait, not before it: everything scheduled during the window belongs
-            // to this pass. A cancelled pass never gets here, so its origins stay in the set and
-            // are picked up by the pass that superseded it.
-            HashSet<string> origins;
-            lock ( _gate )
-            {
-                origins = new HashSet<string>(_origins, StringComparer.Ordinal);
-                _origins.Clear();
-            }
+    /// <summary>
+    /// One fan-out: take the origins scheduled since the last pass, re-lint the open documents that
+    /// can see them, then the closed dependents of each.
+    ///
+    /// Separate from the debounce above so a test can run a pass without waiting 900 ms for one.
+    /// </summary>
+    internal async Task RunPassAsync(CancellationToken cancellationToken)
+    {
+        // Taken after the wait, not before it: everything scheduled during the window belongs
+        // to this pass. A pass cancelled DURING the wait never gets here, so its origins stay in
+        // the set and the pass that superseded it picks them up.
+        HashSet<string> origins;
+        lock ( _gate )
+        {
+            origins = new HashSet<string>(_origins, StringComparer.Ordinal);
+            _origins.Clear();
+        }
+
+        // What this pass has not finished with. Cancellation after the take is the case the
+        // comment above did NOT cover: the set has already been cleared, so an origin abandoned
+        // mid-Refresh, or part-way down the loop below, was known to nobody. Nothing else
+        // re-lints a CLOSED dependent, so that file kept diagnostics computed against exports
+        // the origin no longer has until the next unrelated edit happened to name it.
+        HashSet<string> outstanding = new(origins, StringComparer.Ordinal);
+
+        try
+        {
+            // Before any of the work, not only inside the loops. A pass superseded while it
+            // waited for the lock has nothing to contribute, and an empty workspace would
+            // otherwise reach the end of both loops without ever consulting the token.
+            cancellationToken.ThrowIfCancellationRequested();
 
             Refresh(origins, cancellationToken);
 
             foreach ( string originPath in origins )
             {
                 await RefreshClosedDependentsAsync(originPath, cancellationToken).ConfigureAwait(false);
+                outstanding.Remove(originPath);
             }
         }
         catch ( OperationCanceledException )
         {
-            // Superseded by a later edit — the newer pass covers this one.
+            // Cancellation only. A pass that FAILED is a defect rather than a supersession, and
+            // handing its origins back would reschedule the same failing pass every 900 ms for
+            // the rest of the session; RunAsync logs it instead.
+            ReturnOrigins(outstanding);
+            throw;
         }
-        catch ( Exception exception )
+    }
+
+    /// <summary>The origins waiting for the next pass. For tests; the live set is private.</summary>
+    internal IReadOnlySet<string> PendingOrigins
+    {
+        get
         {
-            Log.Error(exception, "Dependent diagnostics refresh failed");
+            lock ( _gate )
+            {
+                return new HashSet<string>(_origins, StringComparer.Ordinal);
+            }
         }
+    }
+
+    /// <summary>
+    /// Puts origins this pass did not finish with back in the queue.
+    ///
+    /// Scheduled rather than merely added: the pass that superseded this one may already be past
+    /// its own take, in which case nothing would come along to look at the set again.
+    /// </summary>
+    private void ReturnOrigins(IReadOnlySet<string> outstanding)
+    {
+        if ( outstanding.Count == 0 )
+        {
+            return;
+        }
+
+        CancellationTokenSource pending = new();
+
+        lock ( _gate )
+        {
+            foreach ( string originPath in outstanding )
+            {
+                _origins.Add(originPath);
+            }
+
+            _pending?.Cancel();
+            _pending = pending;
+        }
+
+        _ = RunAsync(pending.Token);
     }
 
     /// <summary>

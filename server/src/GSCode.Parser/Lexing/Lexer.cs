@@ -22,8 +22,6 @@ public sealed class Lexer
     /// </summary>
     private static readonly SearchValues<char> s_spacesAndTabs = SearchValues.Create(" \t");
     private static readonly SearchValues<char> s_lineBreaks = SearchValues.Create("\r\n");
-    private static readonly SearchValues<char> s_wordChars = SearchValues.Create(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_");
     private static readonly SearchValues<char> s_digits = SearchValues.Create("0123456789");
     private static readonly SearchValues<char> s_hexDigits = SearchValues.Create("0123456789abcdefABCDEF");
 
@@ -184,7 +182,7 @@ public sealed class Lexer
                 break;
         }
 
-        if ( IsWordStart(current) )
+        if ( GscIdentifier.IsWordStart(current) )
         {
             LexIdentifierOrKeyword();
             return;
@@ -230,7 +228,7 @@ public sealed class Lexer
     private void LexIdentifierOrKeyword()
     {
         int start = _offset;
-        _offset = SkipWhile(s_wordChars, _offset);
+        _offset = SkipWhile(GscIdentifier.WordChars, _offset);
 
         ReadOnlySpan<char> word = _source.AsSpan(start, _offset - start);
         if ( Keywords.TryMatchKeyword(word, _profile, out TokenKind keywordKind) )
@@ -492,7 +490,7 @@ public sealed class Lexer
         // Whole-word directive match, so "#iffoo" is an unknown directive rather than
         // silently lexing as "#if" + "foo".
         int wordStart = _offset + 1;
-        int wordEnd = SkipWhile(s_wordChars, wordStart);
+        int wordEnd = SkipWhile(GscIdentifier.WordChars, wordStart);
 
         if ( wordEnd == wordStart )
         {
@@ -553,10 +551,10 @@ public sealed class Lexer
         // after = ( , : ? return, or at the very start. Everywhere else % is modulo.
         int nameStart = AnimReferenceNameStart();
 
-        if ( nameStart < _source.Length && IsWordStart(_source[nameStart]) && IsAnimReferenceContext() )
+        if ( nameStart < _source.Length && GscIdentifier.IsWordStart(_source[nameStart]) && IsAnimReferenceContext() )
         {
             int start = _offset;
-            _offset = SkipWhile(s_wordChars, nameStart);
+            _offset = SkipWhile(GscIdentifier.WordChars, nameStart);
 
             // One token covering the % AND the name, spaces included, so the reference has a single
             // range to hover, rename and report at. Consumers take the name with
@@ -795,11 +793,6 @@ public sealed class Lexer
         }
 
         return _source[index];
-    }
-
-    private static bool IsWordStart(char character)
-    {
-        return char.IsAsciiLetter(character) || character == '_';
     }
 
     private static bool IsNewline(char character)

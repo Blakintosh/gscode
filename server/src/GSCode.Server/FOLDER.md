@@ -243,6 +243,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   reference index. BOTH handlers take the `LocalReferences` fallthrough, so the preview and the
   rename still cannot disagree — which is the whole reason `IsRenameable` is shared. Refused when
   the function already binds the new name: that case does not fail, it merges two variables.
+- `IsLegalNewName` checks the name being renamed TO, which nothing did. An identifier kind takes an
+  identifier, judged by `GscIdentifier` — the LEXER's own rule, so it cannot drift from what would
+  actually parse; the literals the scripts coin are string content and may hold anything that does
+  not end the literal early. Refused silently, like the name-collision case: no rename is
+  recoverable, half a rename across every file the symbol reaches is not.
 
 ## Handlers/CallHierarchyHandler.cs
 

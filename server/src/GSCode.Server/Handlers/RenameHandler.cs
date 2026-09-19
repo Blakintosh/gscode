@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using GSCode.Parser.Lexing;
+using System.Buffers;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -57,6 +59,11 @@ public sealed class RenameHandler : RenameHandlerBase
             return Task.FromResult(RenameLocal(target, request));
         }
 
+        if ( !IsLegalNewName(hit.Key.Kind, request.NewName) )
+        {
+            return Task.FromResult<WorkspaceEdit?>(null);
+        }
+
         Dictionary<DocumentUri, List<TextEdit>> edits = new();
         // The full visible set: a header macro renamed in GSC alone would leave CSC broken.
         foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, hit.Key, hit.ReferenceKind) )
@@ -103,6 +110,13 @@ public sealed class RenameHandler : RenameHandlerBase
             return null;
         }
 
+        // A local has no SymbolKey and so no kind to ask about — it is always an identifier, so the
+        // lexer's rule is asked directly. See IsLegalNewName for why this is refused silently.
+        if ( !GscIdentifier.IsIdentifier(request.NewName) )
+        {
+            return null;
+        }
+
         if ( LocalReferences.BindsName(target.Result, position, request.NewName) )
         {
             return null;
@@ -119,6 +133,45 @@ public sealed class RenameHandler : RenameHandlerBase
 
         return new WorkspaceEdit { Changes = changes };
     }
+
+    /// <summary>
+    /// Whether the new name is one the scripts can actually carry for a symbol of this kind.
+    ///
+    /// Nothing checked it. The name arrives from a text box and was written straight into every
+    /// reference range, so renaming a function to <c>my func</c> or <c>2fast</c> rewrote the whole
+    /// workspace into text that no longer lexes as one token — across as many files as the symbol
+    /// reaches, in one undo-less edit. <c>PrepareRenameHandler</c> cannot help: prepare runs before
+    /// the name is typed.
+    ///
+    /// Two rules, because the renameable kinds are not all identifiers. A function, class, macro,
+    /// field or local is one, judged by the LEXER's rule so this cannot drift from what would
+    /// actually parse. The literals the scripts coin — notify strings, hashes, localized strings,
+    /// anim references — are string CONTENT and may hold spaces and punctuation; what they may not
+    /// hold is a character that ends the literal early.
+    ///
+    /// Refused silently, with no edit, for the same reason the name-collision check below is: the
+    /// editor asked for a rename and got none, which is recoverable, where half a rename is not.
+    /// </summary>
+    internal static bool IsLegalNewName(SymbolKind kind, string newName)
+    {
+        switch ( kind )
+        {
+            case SymbolKind.StringLiteral:
+            case SymbolKind.HashString:
+            case SymbolKind.LocalizedString:
+            case SymbolKind.AnimReference:
+                return newName.Length > 0 && !newName.AsSpan().ContainsAny(s_literalStoppers);
+
+            default:
+                return GscIdentifier.IsIdentifier(newName);
+        }
+    }
+
+    /// <summary>
+    /// What a literal's replacement text may not contain: the closing quote, the escape that would
+    /// consume it, and the line breaks no literal survives.
+    /// </summary>
+    private static readonly SearchValues<char> s_literalStoppers = SearchValues.Create("\"\\\r\n");
 
     /// <summary>
     /// Whether the thing under the cursor is the SCRIPT'S to rename.

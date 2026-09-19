@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser;
+using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
@@ -780,23 +781,14 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// Whether the text is a bare identifier. Guards the create-function fix against ever writing a
     /// declaration out of something that is not a name — a stale diagnostic range against an edited
     /// buffer is the way that happens.
+    ///
+    /// Answered by the LEXER's rule rather than a local one. The copy that used to live here tested
+    /// <c>char.IsLetterOrDigit</c>, which is Unicode-wide and so accepted names the lexer would
+    /// split into two tokens, and it indexed <c>text[0]</c> without checking the text was not empty.
     /// </summary>
     private static bool IsIdentifier(string text)
     {
-        if ( char.IsDigit(text[0]) )
-        {
-            return false;
-        }
-
-        foreach ( char character in text )
-        {
-            if ( !char.IsLetterOrDigit(character) && character != '_' )
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return GscIdentifier.IsIdentifier(text);
     }
 
     /// <summary>An import already made earlier in the file, and so removable.</summary>

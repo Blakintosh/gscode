@@ -44,7 +44,8 @@ public sealed class DocumentFormattingHandler : DocumentFormattingHandlerBase
         FormatOptions options = FormatOptions.From(
             (int)request.Options.TabSize, request.Options.InsertSpaces, _settings);
 
-        if ( FormattingSupport.Prepare(_documents, _resolver, _stockScripts, request.TextDocument.Uri, options) is not FormatRequest prepared
+        if ( FormattingSupport.Prepare(
+                _documents, _resolver, _stockScripts, request.TextDocument.Uri, options, cancellationToken) is not FormatRequest prepared
             || prepared.Edits.IsEmpty )
         {
             return Task.FromResult<TextEditContainer?>(null);

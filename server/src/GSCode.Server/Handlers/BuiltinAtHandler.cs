@@ -54,7 +54,7 @@ public sealed class BuiltinAtHandler : IJsonRpcRequestHandler<BuiltinAtParams, B
     {
         BuiltinAtResponse none = new();
 
-        NavigationTarget? target = _support.Resolve(DocumentUri.Parse(request.Uri));
+        NavigationTarget? target = _support.Resolve(DocumentUri.Parse(request.Uri), cancellationToken);
         if ( target is null )
         {
             return Task.FromResult(none);

@@ -38,7 +38,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 
     public override Task<Container<CallHierarchyItem>?> Handle(CallHierarchyPrepareParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<Container<CallHierarchyItem>?>(null);
@@ -65,7 +65,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 
     public override Task<Container<CallHierarchyIncomingCall>?> Handle(CallHierarchyIncomingCallsParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(new Uri(request.Item.Uri.ToString()));
+        NavigationTarget? target = _support.Resolve(new Uri(request.Item.Uri.ToString()), cancellationToken);
         SymbolKey? key = KeyFromData(request.Item);
         if ( target is null || key is null )
         {
@@ -95,7 +95,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 
     public override Task<Container<CallHierarchyOutgoingCall>?> Handle(CallHierarchyOutgoingCallsParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(new Uri(request.Item.Uri.ToString()));
+        NavigationTarget? target = _support.Resolve(new Uri(request.Item.Uri.ToString()), cancellationToken);
         SymbolKey? key = KeyFromData(request.Item);
         if ( target is null || key is null )
         {

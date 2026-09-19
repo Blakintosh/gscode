@@ -53,7 +53,7 @@ public sealed class SignatureHelpHandler : SignatureHelpHandlerBase
 
         // Fresh: the active argument is derived from the cursor, which moves with every
         // keystroke while analysis is debounced.
-        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri);
+        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<SignatureHelp?>(null);

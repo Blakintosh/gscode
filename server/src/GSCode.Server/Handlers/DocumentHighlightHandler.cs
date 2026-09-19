@@ -26,7 +26,7 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
 
     public override Task<DocumentHighlightContainer?> Handle(DocumentHighlightParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<DocumentHighlightContainer?>(null);
@@ -44,6 +44,8 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
         List<DocumentHighlight> highlights = [];
         foreach ( ReferenceEntry entry in target.Result.Extraction.References )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if ( entry.Key == hit.Key )
             {
                 highlights.Add(new DocumentHighlight

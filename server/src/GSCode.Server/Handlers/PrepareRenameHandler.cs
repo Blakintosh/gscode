@@ -35,7 +35,7 @@ public sealed class PrepareRenameHandler : IPrepareRenameHandler
 
     public Task<RangeOrPlaceholderRange?> Handle(PrepareRenameParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<RangeOrPlaceholderRange?>(null);

@@ -119,8 +119,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/NavigationSupport.cs
 
-- `NavigationTarget` + `NavigationSupport.Resolve(uri)` — shared plumbing turning a
-  document URI into its live analysis + the language store and context id to query.
+- `NavigationTarget` + `NavigationSupport.Resolve(uri, cancellationToken)` — shared plumbing
+  turning a document URI into its live analysis + the language store and context id to query.
+- Both overloads take a `CancellationToken`, and it is REQUIRED rather than defaulted. `ResolveFresh`
+  runs a full lex, preprocess, parse and extract on the request thread, and every caller of it is a
+  read path with no debounce in front of it, so a request the client had already cancelled used to
+  be analysed to the end anyway. `Resolve` takes one too so a handler cannot silently pick the
+  uncancellable overload when it meant the freshening one.
 - `ResolveDirectivePath(target, path)` — the file a `#using`/`#include` names, with the extension
   taken from the ASKING document's language. Go-to-definition and ctrl-click ask this same
   question; with a copy each, a new directive form had to be found twice.

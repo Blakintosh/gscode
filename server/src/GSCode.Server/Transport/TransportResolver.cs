@@ -83,15 +83,32 @@ public static class TransportResolver
             Console.OpenStandardInput(), Console.OpenStandardOutput(), Owner: null, Description: "stdio");
     }
 
+    /// <summary>
+    /// The name <see cref="NamedPipeClientStream"/> wants, from the name VSCode passes.
+    ///
+    /// VSCode on Windows passes the fully-qualified path (<c>\\.\pipe\vscode-jsonrpc-…</c>) and the
+    /// pipe client wants the bare name; handed the qualified one it looks for a pipe whose name
+    /// contains the prefix twice, which nothing is ever listening on. Split out and made internal
+    /// because there was no test on it: the strip is one string literal whose own backslashes are
+    /// the thing most likely to go wrong, and getting it wrong costs a server that starts, waits,
+    /// and never connects.
+    /// </summary>
+    internal static string BarePipeName(string pipeName)
+    {
+        const string windowsPipePrefix = @"\\.\pipe\";
+
+        string trimmed = pipeName.Trim();
+        if ( trimmed.StartsWith(windowsPipePrefix, StringComparison.Ordinal) )
+        {
+            return trimmed[windowsPipePrefix.Length..];
+        }
+
+        return trimmed;
+    }
+
     private static async Task<ResolvedTransport> ConnectPipeAsync(string pipeName, CancellationToken cancellationToken)
     {
-        // VSCode on Windows passes the fully-qualified pipe path; NamedPipeClientStream wants the bare name.
-        const string windowsPipePrefix = @"\.\pipe\";
-        string bareName = pipeName.Trim();
-        if ( bareName.StartsWith(windowsPipePrefix, StringComparison.Ordinal) )
-        {
-            bareName = bareName[windowsPipePrefix.Length..];
-        }
+        string bareName = BarePipeName(pipeName);
 
         NamedPipeClientStream pipe = new(".", bareName, PipeDirection.InOut, PipeOptions.Asynchronous);
 

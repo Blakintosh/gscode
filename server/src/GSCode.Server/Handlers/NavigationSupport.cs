@@ -61,9 +61,14 @@ public sealed class NavigationSupport
     }
 
     /// <summary>Resolves an open document, or null when it is unknown or not yet analysed.</summary>
-    public NavigationTarget? Resolve(DocumentUri uri)
+    /// <param name="cancellationToken">
+    /// Taken even though this path does no slow work itself, so that a handler cannot silently pick
+    /// the uncancellable overload when it meant the freshening one. Required rather than defaulted
+    /// for the same reason.
+    /// </param>
+    public NavigationTarget? Resolve(DocumentUri uri, CancellationToken cancellationToken)
     {
-        return Resolve(uri, freshen: false);
+        return Resolve(uri, freshen: false, cancellationToken);
     }
 
     /// <summary>
@@ -75,12 +80,18 @@ public sealed class NavigationSupport
     /// check reads the wrong characters, and completion falls back to statement scope and offers
     /// `private`. That it worked whenever the user paused is exactly the tell.
     /// </summary>
-    public NavigationTarget? ResolveFresh(DocumentUri uri)
+    /// <param name="cancellationToken">
+    /// Reaches <see cref="DocumentStore.AnalyzeIfStale"/>, which is the whole point: this runs a
+    /// full lex, preprocess, parse and extract on the REQUEST thread, and every caller of it is a
+    /// read path with no debounce in front of it. Without the token a completion, code lens or
+    /// inlay-hint request the client had already cancelled was analysed to the end regardless.
+    /// </param>
+    public NavigationTarget? ResolveFresh(DocumentUri uri, CancellationToken cancellationToken)
     {
-        return Resolve(uri, freshen: true);
+        return Resolve(uri, freshen: true, cancellationToken);
     }
 
-    private NavigationTarget? Resolve(DocumentUri uri, bool freshen)
+    private NavigationTarget? Resolve(DocumentUri uri, bool freshen, CancellationToken cancellationToken)
     {
         string path = uri.GetFileSystemPath();
         if ( !_documents.TryGet(path, out OpenDocument document) )
@@ -88,7 +99,10 @@ public sealed class NavigationSupport
             return null;
         }
 
-        ParseResult? result = freshen ? _documents.AnalyzeIfStale(document) : document.LatestResult;
+        ParseResult? result = freshen
+            ? _documents.AnalyzeIfStale(document, cancellationToken)
+            : document.LatestResult;
+
         if ( result is null )
         {
             return null;

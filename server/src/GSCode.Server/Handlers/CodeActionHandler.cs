@@ -74,7 +74,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 ReportedAt(request, GscDiagnosticCode.DuplicateImport, duplicate.Range))));
         }
 
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is not null )
         {
             Position insertAt = ImportInsertionPoint<UsingNode>(result);

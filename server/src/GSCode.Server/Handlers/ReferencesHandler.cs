@@ -32,7 +32,7 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
 
     public override Task<LocationContainer?> Handle(ReferenceParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<LocationContainer?>(null);
@@ -60,8 +60,12 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found =
             _support.FindAllReferences(target, hit.Key, hit.ReferenceKind);
 
+        // Per entry, because each builds a DocumentUri: the shared query's own comment names a
+        // 1,970-reference case, and find-references is one of the requests a client re-sends.
         foreach ( (ScriptRecord record, ReferenceEntry entry) in found )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if ( !includeDeclaration && entry.Kind == ReferenceKind.Definition )
             {
                 continue;

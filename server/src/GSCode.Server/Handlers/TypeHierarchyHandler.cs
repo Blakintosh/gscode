@@ -34,7 +34,7 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
 
     public override Task<Container<TypeHierarchyItem>?> Handle(TypeHierarchyPrepareParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<Container<TypeHierarchyItem>?>(null);
@@ -58,7 +58,7 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
 
     public override Task<Container<TypeHierarchyItem>?> Handle(TypeHierarchySupertypesParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = ResolveFromItem(request.Item);
+        NavigationTarget? target = ResolveFromItem(request.Item, cancellationToken);
         ClassSymbol? self = ClassFromItem(request.Item, target);
         if ( target is null || self?.ParentKeyName is null )
         {
@@ -72,7 +72,7 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
 
     public override Task<Container<TypeHierarchyItem>?> Handle(TypeHierarchySubtypesParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = ResolveFromItem(request.Item);
+        NavigationTarget? target = ResolveFromItem(request.Item, cancellationToken);
         ClassSymbol? self = ClassFromItem(request.Item, target);
         if ( target is null || self is null )
         {
@@ -94,9 +94,9 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
         return Task.FromResult<Container<TypeHierarchyItem>?>(new Container<TypeHierarchyItem>(items));
     }
 
-    private NavigationTarget? ResolveFromItem(TypeHierarchyItem item)
+    private NavigationTarget? ResolveFromItem(TypeHierarchyItem item, CancellationToken cancellationToken)
     {
-        return _support.Resolve(item.Uri);
+        return _support.Resolve(item.Uri, cancellationToken);
     }
 
     private ClassSymbol? ClassFromItem(TypeHierarchyItem item, NavigationTarget? target)

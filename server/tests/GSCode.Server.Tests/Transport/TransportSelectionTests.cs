@@ -35,6 +35,26 @@ public class TransportSelectionTests
     }
 
     [Fact]
+    public void TheWindowsPipePathIsStrippedToTheBareName()
+    {
+        // VSCode passes the fully-qualified path and NamedPipeClientStream wants the bare name.
+        // Handed the qualified one it looks for a pipe whose name contains the prefix twice, which
+        // nothing is ever listening on: the server starts, waits, and never connects.
+        //
+        // Pinned because the strip is one string literal whose own backslashes are the thing most
+        // likely to go wrong, and nothing was checking it.
+        Assert.Equal(
+            "vscode-jsonrpc-abc123-sock",
+            TransportResolver.BarePipeName(@"\\.\pipe\vscode-jsonrpc-abc123-sock"));
+    }
+
+    [Fact]
+    public void ABareNameIsLeftAlone()
+    {
+        Assert.Equal("gscode-pipe", TransportResolver.BarePipeName("  gscode-pipe  "));
+    }
+
+    [Fact]
     public async Task NamingTwoTransportsIsRefused()
     {
         TransportOptions both = new() { Stdio = true, PipeName = "gscode-test" };

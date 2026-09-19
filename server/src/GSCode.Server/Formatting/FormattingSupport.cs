@@ -39,8 +39,18 @@ internal static class FormattingSupport
     /// characters and corrupts the file. Every other stale read in this server shows something
     /// wrong; this one writes something wrong.
     /// </remarks>
+    /// <param name="cancellationToken">
+    /// Reaches the fresh analysis below, which is a full lex, preprocess, parse and extract on the
+    /// request thread. On-type formatting runs this on every <c>;</c> and <c>}</c>, so an abandoned
+    /// request is one the user has already typed past.
+    /// </param>
     public static FormatRequest? Prepare(
-        DocumentStore documents, ResolverHolder resolver, StockScripts stockScripts, DocumentUri uri, FormatOptions options)
+        DocumentStore documents,
+        ResolverHolder resolver,
+        StockScripts stockScripts,
+        DocumentUri uri,
+        FormatOptions options,
+        CancellationToken cancellationToken)
     {
         string path = uri.GetFileSystemPath();
 
@@ -63,7 +73,7 @@ internal static class FormattingSupport
             return null;
         }
 
-        ParseResult analysis = documents.AnalyzeIfStale(document);
+        ParseResult analysis = documents.AnalyzeIfStale(document, cancellationToken);
 
         return new FormatRequest(document, GscFormatter.FormatMinimalEdits(analysis, options));
     }

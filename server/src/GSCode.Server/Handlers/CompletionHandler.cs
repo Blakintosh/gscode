@@ -108,7 +108,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
         cancellationToken.ThrowIfCancellationRequested();
 
         // Fresh: the cursor position is live, so it only means anything against live text.
-        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri);
+        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult(new CompletionList());
@@ -150,7 +150,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
             return Task.FromResult(request);
         }
 
-        NavigationTarget? target = _support.Resolve(uri);
+        NavigationTarget? target = _support.Resolve(uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult(request);

@@ -80,7 +80,7 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
         // and a token is a LINE, CHARACTER and LENGTH, so colouring computed against stale text
         // lands on the wrong characters. It then looks correct again after the next edit, when a
         // fresh analysis happens to have caught up, which is exactly how the desync presented.
-        ParseResult? result = _documents.AnalyzeIfStale(document);
+        ParseResult? result = _documents.AnalyzeIfStale(document, cancellationToken);
         if ( result is null )
         {
             return Task.CompletedTask;
@@ -113,6 +113,12 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
             int lineCompare = left.Line.CompareTo(right.Line);
             return lineCompare != 0 ? lineCompare : left.StartChar.CompareTo(right.StartChar);
         });
+
+        // Checked before the push loop rather than inside it: the two producers above and the sort
+        // are the cost, and a token set is pushed as a unit — half a file's colouring is worse than
+        // none. Semantic tokens are requested on every keystroke and the client cancels the one it
+        // has superseded, so an abandoned request used to freshen and colour a whole file anyway.
+        cancellationToken.ThrowIfCancellationRequested();
 
         foreach ( GscToken token in tokens )
         {

@@ -56,7 +56,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     {
         // ResolveFresh for the same reason CodeLens uses it: hints are positional, and stale
         // analysis painted them one edit behind the buffer.
-        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri);
+        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<InlayHintContainer?>(null);
@@ -91,6 +91,8 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         {
             foreach ( InferredAssignment inferred in assignments )
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 // First assignment only: a `: int` label repeated at every reassignment is noise.
                 // The list itself carries them all, because hover needs the later ones.
                 if ( inferred.IsFirstForName && window.Contains(inferred.NameRange.Start) )
@@ -108,12 +110,12 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
 
         if ( _settings.InlayParameterNames )
         {
-            AddParameterNameHints(target, types, window, hints);
+            AddParameterNameHints(target, types, window, hints, cancellationToken);
         }
 
         if ( _settings.InlayMacroParameterNames )
         {
-            AddMacroParameterNameHints(target, window, hints);
+            AddMacroParameterNameHints(target, window, hints, cancellationToken);
         }
 
         return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
@@ -132,12 +134,15 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// macro's implementation rather than for its caller — <c>__a</c>, <c>__b</c> — so unlike a
     /// function's parameters the name is often worth less than the space it takes.
     /// </summary>
-    private static void AddMacroParameterNameHints(NavigationTarget target, TextRange window, List<InlayHint> hints)
+    private static void AddMacroParameterNameHints(
+        NavigationTarget target, TextRange window, List<InlayHint> hints, CancellationToken cancellationToken)
     {
         string text = target.Result.Text.Text;
 
         foreach ( MacroInvocation invocation in target.Result.Preprocessed.MacroInvocations )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Only invocations written in THIS file: one reached through an #insert has its range
             // in the header's coordinates, which here would land on unrelated lines.
             if ( invocation.SourceFile is not null || !window.Contains(invocation.Range.Start) )
@@ -195,10 +200,20 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         }
     }
 
-    private void AddParameterNameHints(NavigationTarget target, ScriptTypes types, TextRange window, List<InlayHint> hints)
+    private void AddParameterNameHints(
+        NavigationTarget target,
+        ScriptTypes types,
+        TextRange window,
+        List<InlayHint> hints,
+        CancellationToken cancellationToken)
     {
+        // Per call site, because resolving one can run a store lookup per declared namespace. The
+        // client sends one of these per visible range, so scrolling produces a request per frame
+        // and cancels the ones it has scrolled past.
         foreach ( ExprNode node in CollectCalls(target.Result.Tree.Root) )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             ImmutableArray<ExprNode> arguments = node switch
             {
                 CallNode call => call.Arguments,

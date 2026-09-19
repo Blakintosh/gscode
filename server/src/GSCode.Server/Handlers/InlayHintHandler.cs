@@ -1,6 +1,8 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
+using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
@@ -31,6 +33,20 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     private readonly ObjectFields _objectFields;
     private readonly ServerSettings _settings;
     private readonly TextDocumentSelector _selector;
+
+    /// <summary>
+    /// One flow-typing pass per document VERSION, not per request.
+    ///
+    /// The client sends one <c>inlayHint</c> request per visible range, so scrolling fires one per
+    /// frame — and each used to build a fresh <see cref="FlowTyper"/> and re-walk the whole file,
+    /// throwing away <c>FlowTyper.InferValues</c>'s OWN per-instance memoisation by discarding the
+    /// instance that held it. Keyed by <see cref="ParseResult"/> reference rather than path+version:
+    /// <c>AnalyzeIfStale</c> already guarantees an unchanged document hands back the SAME instance,
+    /// which is the fact the memoisation this replaces relied on too. A ConditionalWeakTable needs
+    /// no eviction — an entry is collectible the moment nothing else holds its ParseResult, which is
+    /// when the document closes or is next edited.
+    /// </summary>
+    private readonly ConditionalWeakTable<ParseResult, ScriptTypes> _typesCache = new();
 
     public InlayHintHandler(NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields, ServerSettings settings, TextDocumentSelector selector)
     {
@@ -65,26 +81,18 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         TextRange window = request.Range.ToCore();
         List<InlayHint> hints = [];
 
-        // Per-expression values are needed only by the parameter-name pass, which has to ask what a
-        // `[[ ptr ]]` holds to know whose parameters to name. The type-hint pass wants assignment
-        // sites alone, so it runs the cheaper walk that records nothing else. The macro pass reads
-        // the preprocessor's invocation list and needs neither, so it pays for no flow analysis.
+        // Both families that need the flow pass read the SAME cached ScriptTypes now — the
+        // parameter-name pass for what a `[[ ptr ]]` holds, the type-hint pass for
+        // `types.Assignments`, which InferValues computes as part of the same walk it memoises
+        // (see _typesCache). The macro pass reads the preprocessor's invocation list and needs
+        // neither, so it pays for no flow analysis at all.
         ScriptTypes types = ScriptTypes.Empty;
         ImmutableArray<InferredAssignment> assignments = [];
 
         if ( _settings.InlayInferredTypes || _settings.InlayParameterNames )
         {
-            FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
-
-            if ( _settings.InlayParameterNames )
-            {
-                types = typer.InferValues(target.Result);
-                assignments = types.Assignments;
-            }
-            else
-            {
-                assignments = typer.InferAssignments(target.Result);
-            }
+            types = InferTypes(target);
+            assignments = types.Assignments;
         }
 
         if ( _settings.InlayInferredTypes )
@@ -119,6 +127,27 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         }
 
         return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
+    }
+
+    /// <summary>
+    /// The cached flow-typing pass over a document, computing it once per <see cref="ParseResult"/>
+    /// instance. See <see cref="_typesCache"/> for why a request-scoped cache is not enough.
+    /// </summary>
+    internal ScriptTypes InferTypes(NavigationTarget target)
+    {
+        if ( _typesCache.TryGetValue(target.Result, out ScriptTypes? cached) )
+        {
+            return cached;
+        }
+
+        ScriptTypes computed = new FlowTyper(_builtins.For(target.Language), _objectFields).InferValues(target.Result);
+
+        // AddOrUpdate rather than Add: two requests for the same unchanged document can race this
+        // miss (a scroll firing two ranges before either returns), and InferValues is pure, so the
+        // race costs a duplicate computation rather than a wrong answer. Add would throw on the
+        // loser instead.
+        _typesCache.AddOrUpdate(target.Result, computed);
+        return computed;
     }
 
     /// <summary>

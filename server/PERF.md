@@ -1931,6 +1931,39 @@ per-request cost is unchanged; what changed is how often it is paid.
 
 `codeLens.enabled` is off by default, which is why none of this had been noticed.
 
+### Inlay hints: the flow pass paid once per version instead of once per scroll
+
+The other half of `HandlerCostTests` — inlay hints — had the same shape as codeLens's refresh bug
+but on the READ side. `InlayHintHandler` built a fresh `FlowTyper` on every request and called
+`InferValues`, which THROWS AWAY the memoisation `FlowTyper` already carries per instance
+(`_typed`/`_typedParse`, checked by `ReferenceEquals` against the `ParseResult`) — because a fresh
+instance has no memory to throw away in the first place. The client sends one `inlayHint` request
+per visible range, so scrolling fires one per frame, and each one re-walked the whole file.
+
+Fixed by keeping the `ScriptTypes` result in a `ConditionalWeakTable<ParseResult, ScriptTypes>` on
+the handler itself, keyed by `ParseResult` reference — the same identity `AnalyzeIfStale` already
+uses to decide "has this document actually changed". No manual eviction: an entry is collectible
+the moment nothing else holds its `ParseResult`, which is when the document closes or is next
+edited. This also let the "cheaper walk for type-hints-only" branch be dropped: `InferValues` is a
+superset of `InferAssignments` and is now paid once regardless of which families are on, so there
+is no longer a reason to pick the narrower call.
+
+Measured on `HandlerCostTests`'s window, which is deliberately the WHOLE FILE (see its own comment)
+so it exercises "the work done regardless of range" rather than a realistic viewport — the
+per-call-site parameter resolution that remains is legitimate work proportional to what a request
+actually asks to hint, correctly gated behind the window check before `ResolveParameterNames` runs
+(confirmed by reading `AddParameterNameHints`: the filter is already before the expensive step, not
+after it, so no separate fix was needed there):
+
+| worst single file, whole-file window | before caching | after |
+|---|---:|---:|
+| bo3 inlayHint | 53.5 ms | 16.4 ms |
+| cod4 inlayHint | 55.7 ms | 39.6 ms |
+
+A real request's window is a screenful, not a whole 465-declaration file, so the per-request cost
+in the editor is smaller than either column — these are the same upper-bound sample the codeLens
+numbers above are, not a steady-state estimate.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

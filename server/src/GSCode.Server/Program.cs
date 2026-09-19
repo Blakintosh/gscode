@@ -1,4 +1,5 @@
 using CommandLine;
+using CommandLine.Text;
 using System.Diagnostics;
 using System.Runtime;
 using GSCode.Core;
@@ -54,8 +55,50 @@ Log.Information(
     AppContext.GetData("System.GC.HeapCount") ?? "one per core",
     Environment.ProcessorCount);
 
+// HelpWriter is silenced because the default one writes to STDOUT, and stdout is the stdio
+// transport's wire. A --help that corrupts the protocol is worse than no --help, so the text is
+// rendered to stderr below instead.
 TransportOptions transportOptions = new();
-CommandLine.Parser.Default.ParseArguments<TransportOptions>(args).WithParsed(parsed => transportOptions = parsed);
+bool argumentsUsable = false;
+bool helpRequested = false;
+
+using ( CommandLine.Parser argumentParser = new(config => config.HelpWriter = null) )
+{
+    ParserResult<TransportOptions> parseResult = argumentParser.ParseArguments<TransportOptions>(args);
+
+    parseResult
+        .WithParsed(parsed =>
+        {
+            transportOptions = parsed;
+            argumentsUsable = true;
+        })
+        .WithNotParsed(errors =>
+        {
+            // Anything unrecognised used to leave transportOptions at its defaults and fall through
+            // to the stdio branch, so a typo — or a flag a newer client passes to an older server —
+            // silently produced a stdio server while the client waited on a named pipe. Nothing was
+            // logged, and the symptom was a language server that never answered.
+            helpRequested = errors.Any(static error =>
+                error is HelpRequestedError or HelpVerbRequestedError or VersionRequestedError);
+
+            if ( helpRequested )
+            {
+                Console.Error.WriteLine(HelpText.AutoBuild(parseResult, static help => help, static example => example));
+                return;
+            }
+
+            foreach ( Error error in errors )
+            {
+                Log.Fatal("Bad command line: {Error}", error.ToString());
+            }
+        });
+}
+
+if ( !argumentsUsable )
+{
+    await Log.CloseAndFlushAsync();
+    return helpRequested ? 0 : 1;
+}
 
 // Before anything resolves the bundled data: those singletons read whichever game is active when
 // they are first requested, and that happens during container construction.
@@ -74,7 +117,24 @@ if ( !string.IsNullOrWhiteSpace(transportOptions.Game) )
     Log.Information("Game profile: {Game} ({Display})", GameProfile.Active.ShortName, GameProfile.Active.DisplayName);
 }
 
-TransportResolver.ResolvedTransport transport = await TransportResolver.ResolveAsync(transportOptions, CancellationToken.None);
+// Wrapped, because everything below this line depends on it and nothing above it logs. An
+// exception escaping here used to reach the top level unlogged, past the flush at the end of the
+// file, so the one message explaining why the server did not start was the one message lost.
+TransportResolver.ResolvedTransport transport;
+try
+{
+    transport = await TransportResolver.ResolveAsync(transportOptions, CancellationToken.None);
+}
+catch ( Exception exception )
+{
+    Log.Fatal(exception, "Could not connect the transport");
+    await Log.CloseAndFlushAsync();
+    return 1;
+}
+
+// Which transport is in use is the first thing a "the extension says the server never started"
+// report needs, and nothing said it.
+Log.Information("Transport: {Transport}", transport.Description);
 
 ServerSettings settings = new();
 PhysicalFileSystem fileSystem = new();
@@ -570,6 +630,10 @@ await cacheHolder.CloseAsync();
 transport.Owner?.Dispose();
 Log.Information("GSCode {Version} server exited", ServerVersion());
 await Log.CloseAndFlushAsync();
+
+// An explicit exit code, because the failure paths above return 1 — a bad command line, or a
+// transport that never connected. Without one the process reports success for both.
+return 0;
 
 // Drops the channel to the level the client asked for, now that startup has finished writing the
 // lines a bug report needs. Called once, from whichever path startup actually ends on.

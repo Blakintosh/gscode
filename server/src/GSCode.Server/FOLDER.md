@@ -370,9 +370,18 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 Top-level entry point. Configures Serilog to STDERR (stdout must stay clean for the
 stdio transport; the pipe-transport client shows stderr in the "GSCode Server" output
 channel) behind a `LoggingLevelSwitch`, parses transport options, connects the
-transport, and starts the OmniSharp `LanguageServer` with `OnInitialize` (reads
-`initializationOptions.gscode.serverLogLevel` into the level switch) and
-`OnInitialized` hooks.
+transport, and starts the OmniSharp `LanguageServer` with `OnInitialize` and
+`OnInitialized` hooks. Returns a non-zero exit code for a bad command line or a transport that
+never connected, and silences CommandLineParser's own `HelpWriter` because it writes to STDOUT,
+which is the stdio transport's wire.
+
+The level switch takes `ServerLogLevel.StartupFloor` at initialize and settles to what the
+client asked for only once startup is over — at the end of the indexing task, or at the end of
+`OnStarted` when indexing is off. The startup lines are written at Information and the client's
+default is `warning`, so lowering the switch as soon as initialize arrived discarded every one
+of them: the roots, the effective settings, the index breakdown and how long the server took to
+be ready. The assignment sits outside the `InitializationOptions` branch so the switch and
+`ServerSettings.ServerLogLevel` cannot disagree for a host that sends no options.
 
 `OnStarted` sends `gscode/serverReady` through `ConnectionSettleGate`, opens the persistent cache
 (regardless of `workspaceIndexingMode`, so `gscode/clearCache` and `ServerStatusNotifier` both have
@@ -398,16 +407,25 @@ transport owner and flushes logs.
 ## Transport/TransportOptions.cs
 
 - `class TransportOptions` — CommandLineParser options: `--pipe <name>` (VSCode default),
-  `--socket <port>`, `--stdio` (also the fallback when nothing is given).
+  `--socket <port>`, `--stdio` (also the fallback when nothing is given), `--game <short name>`.
 
 ## Transport/TransportResolver.cs
 
 - `static class TransportResolver`
-  - `record ResolvedTransport(Stream Input, Stream Output, IDisposable? Owner)` — the
-    connected streams; `Owner` (pipe/tcp client) must be disposed on shutdown.
+  - `record ResolvedTransport(Stream Input, Stream Output, IDisposable? Owner, string Description)`
+    — the connected streams; `Owner` (pipe/tcp client) must be disposed on shutdown.
+    `Description` is what `Program.cs` logs, since which transport is in use is the first thing a
+    "the server never started" report needs.
   - `ResolveAsync(TransportOptions, CancellationToken)` — connects the selected
     transport. Strips the Windows `\\.\pipe\` prefix VSCode puts on pipe names before
     handing the bare name to `NamedPipeClientStream`.
+  - Transports are COUNTED rather than tested in precedence order, so naming two
+    (`--stdio --pipe x`) is refused instead of silently using one of them, and `--stdio` is read
+    rather than working only by falling through. An empty `--pipe` is refused here rather than
+    inside the BCL.
+  - Both connects are bounded (30 s). The client creates its pipe and then spawns us, so a wait
+    that reaches the bound means the other end is gone; unbounded, a client that died between
+    spawn and listen left an orphaned server waiting forever.
 
 ## Logging/ServerLogLevel.cs
 

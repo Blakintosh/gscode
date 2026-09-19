@@ -2,6 +2,7 @@ using System.Diagnostics;
 using GSCode.Workspace.Indexing;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using Serilog;
+using GSCode.Server.Configuration;
 
 namespace GSCode.Server.Handlers;
 
@@ -204,11 +205,8 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
         // waited for — this runs on the indexing path and must not block it.
         if ( !_settled.IsCompleted )
         {
-            _ = _settled.ContinueWith(
-                _ => SendCompleted(filesIndexed, totalFiles, elapsed),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+            ConnectionSettleGate.RunOnceSettled(
+                _settled, () => SendCompleted(filesIndexed, totalFiles, elapsed));
 
             return;
         }
@@ -245,11 +243,7 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
         // this would otherwise be the same failure twice in two different shapes.
         if ( !_settled.IsCompleted )
         {
-            _ = _settled.ContinueWith(
-                _ => SendFailed(reason),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+            ConnectionSettleGate.RunOnceSettled(_settled, () => SendFailed(reason));
 
             return;
         }

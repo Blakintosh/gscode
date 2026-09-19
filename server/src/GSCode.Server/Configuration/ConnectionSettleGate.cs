@@ -1,3 +1,5 @@
+using Serilog;
+
 namespace GSCode.Server.Configuration;
 
 /// <summary>
@@ -46,17 +48,48 @@ public sealed class ConnectionSettleGate
     /// </summary>
     public void SendOnceSettled(Action send)
     {
-        Task settled = Settled;
+        RunOnceSettled(Settled, send);
+    }
+
+    /// <summary>
+    /// The same deferral against a clock the caller already holds, for
+    /// <see cref="GSCode.Server.Handlers.IndexProgressNotifier"/>, which is handed the task rather
+    /// than the gate. Shared so the two cannot drift on either of the properties below.
+    /// </summary>
+    public static void RunOnceSettled(Task settled, Action send)
+    {
         if ( settled.IsCompleted )
         {
-            send();
+            Send(send);
             return;
         }
 
+        // NOT ExecuteSynchronously, which is what this used to be. Task.Delay completes on a timer
+        // thread, so running the send inline there serialised a notification and wrote it to the
+        // pipe ahead of every other timer in the process.
         _ = settled.ContinueWith(
-            _ => send(),
+            _ => Send(send),
             CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
+            TaskContinuationOptions.None,
             TaskScheduler.Default);
+    }
+
+    /// <summary>
+    /// Sends, and keeps a failure to itself.
+    ///
+    /// The deferred call has no caller left to throw to: the continuation task is discarded, so an
+    /// exception out of it became an unobserved task exception that nothing reported. A lost
+    /// notification is worth a line in the log and nothing more.
+    /// </summary>
+    private static void Send(Action send)
+    {
+        try
+        {
+            send();
+        }
+        catch ( Exception exception )
+        {
+            Log.Error(exception, "A deferred notification could not be sent");
+        }
     }
 }

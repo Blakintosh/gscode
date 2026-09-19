@@ -491,6 +491,11 @@ transport owner and flushes logs.
   `gscode/gameMismatch` went out unprotected. `SendOnceSettled(Action)` runs a send once settled
   (or immediately, if already settled) via a continuation rather than an awaited `Task`, so a
   synchronous LSP handler can use it without becoming async.
+  `RunOnceSettled(Task, Action)` is the same deferral against a clock the caller already holds,
+  which is how `IndexProgressNotifier` defers its two terminal sends — one shape rather than four
+  copies. Not `ExecuteSynchronously`: `Task.Delay` completes on a TIMER thread, and running the
+  send inline there serialised a notification and wrote it to the pipe ahead of every other timer
+  in the process. A failed send is logged rather than becoming an unobserved task exception.
 
 ## Formatting/
 

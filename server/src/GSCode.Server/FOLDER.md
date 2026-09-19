@@ -132,6 +132,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - `NavigationTarget` + `NavigationSupport.Resolve(uri, cancellationToken)` — shared plumbing
   turning a document URI into its live analysis + the language store and context id to query.
+- `SymbolQueryContext` + `ResolveForQuery(uri, cancellationToken)` — the same thing WITHOUT a parse,
+  answering from the file's record when it is not open. For the hierarchies: expanding an incoming
+  call or a supertype names another file, and that file is normally not one the user has open, so
+  requiring an open document answered those with null — which the protocol reads as "there are
+  none". A record already states its context id and declared namespaces, so the fallback costs no
+  resolver call and no re-parse; nothing a hierarchy asks needs a syntax tree. `FindAllReferences`
+  takes either.
 - Both overloads take a `CancellationToken`, and it is REQUIRED rather than defaulted. `ResolveFresh`
   runs a full lex, preprocess, parse and extract on the request thread, and every caller of it is a
   read path with no debounce in front of it, so a request the client had already cancelled used to
@@ -264,6 +271,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - prepare → the function at the cursor; incoming → callers (grouped by containing function);
   outgoing → the functions called inside the body. All from the reference index.
+- Incoming and outgoing resolve their item through `ResolveForQuery`, so a caller or callee in a
+  file the user does not have open still answers, and they read the item's own `DocumentUri` rather
+  than round-tripping it through `new Uri(string)` — which throws `UriFormatException` on input
+  `DocumentUri.Parse` accepts, out of a handler that catches nothing.
 
 ## Handlers/TypeHierarchyHandler.cs
 

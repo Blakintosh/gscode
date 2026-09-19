@@ -53,12 +53,12 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
         }
 
         return Task.FromResult<Container<TypeHierarchyItem>?>(
-            new Container<TypeHierarchyItem>(MakeItem(classes[0].Class, classes[0].Record, target)));
+            new Container<TypeHierarchyItem>(MakeItem(classes[0].Class, classes[0].Record)));
     }
 
     public override Task<Container<TypeHierarchyItem>?> Handle(TypeHierarchySupertypesParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = ResolveFromItem(request.Item, cancellationToken);
+        SymbolQueryContext? target = ResolveFromItem(request.Item, cancellationToken);
         ClassSymbol? self = ClassFromItem(request.Item, target);
         if ( target is null || self?.ParentKeyName is null )
         {
@@ -66,13 +66,13 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
         }
 
         ImmutableArray<ResolvedClass> parents = DatabaseQueries.LookupClasses(target.Store, target.ContextId, null, self.ParentKeyName);
-        List<TypeHierarchyItem> items = [.. parents.Select(parent => MakeItem(parent.Class, parent.Record, target))];
+        List<TypeHierarchyItem> items = [.. parents.Select(parent => MakeItem(parent.Class, parent.Record))];
         return Task.FromResult<Container<TypeHierarchyItem>?>(new Container<TypeHierarchyItem>(items));
     }
 
     public override Task<Container<TypeHierarchyItem>?> Handle(TypeHierarchySubtypesParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = ResolveFromItem(request.Item, cancellationToken);
+        SymbolQueryContext? target = ResolveFromItem(request.Item, cancellationToken);
         ClassSymbol? self = ClassFromItem(request.Item, target);
         if ( target is null || self is null )
         {
@@ -87,19 +87,25 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
             foreach ( ResolvedClass child in DatabaseQueries.LookupClasses(
                 target.Store, target.ContextId, namespaceName: null, childName) )
             {
-                items.Add(MakeItem(child.Class, child.Record, target));
+                items.Add(MakeItem(child.Class, child.Record));
             }
         }
 
         return Task.FromResult<Container<TypeHierarchyItem>?>(new Container<TypeHierarchyItem>(items));
     }
 
-    private NavigationTarget? ResolveFromItem(TypeHierarchyItem item, CancellationToken cancellationToken)
+    /// <summary>
+    /// The file an item names, open or not.
+    ///
+    /// A supertype or subtype almost never lives in a file the user has open, and resolving through
+    /// the document store returned null for those — which the protocol reads as "there are none".
+    /// </summary>
+    private SymbolQueryContext? ResolveFromItem(TypeHierarchyItem item, CancellationToken cancellationToken)
     {
-        return _support.Resolve(item.Uri, cancellationToken);
+        return _support.ResolveForQuery(item.Uri, cancellationToken);
     }
 
-    private ClassSymbol? ClassFromItem(TypeHierarchyItem item, NavigationTarget? target)
+    private static ClassSymbol? ClassFromItem(TypeHierarchyItem item, SymbolQueryContext? target)
     {
         if ( target is null )
         {
@@ -111,7 +117,7 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
         return classes.Length > 0 ? classes[0].Class : null;
     }
 
-    private static TypeHierarchyItem MakeItem(ClassSymbol classSymbol, ScriptRecord record, NavigationTarget target)
+    private static TypeHierarchyItem MakeItem(ClassSymbol classSymbol, ScriptRecord record)
     {
         LspRange nameRange = classSymbol.NameRange.ToLsp();
         return new TypeHierarchyItem

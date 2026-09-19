@@ -65,7 +65,14 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 
     public override Task<Container<CallHierarchyIncomingCall>?> Handle(CallHierarchyIncomingCallsParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(new Uri(request.Item.Uri.ToString()), cancellationToken);
+        // The item's own DocumentUri, not a round trip through System.Uri: DocumentUri.ToString
+        // followed by new Uri(string) throws UriFormatException on input DocumentUri.Parse accepts,
+        // out of a handler that catches nothing.
+        //
+        // ResolveForQuery rather than Resolve, because a caller is normally in a file the user does
+        // NOT have open, and requiring an open document answered those with null — which the
+        // protocol reads as "there are no incoming calls".
+        SymbolQueryContext? target = _support.ResolveForQuery(request.Item.Uri, cancellationToken);
         SymbolKey? key = KeyFromData(request.Item);
         if ( target is null || key is null )
         {
@@ -95,7 +102,9 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 
     public override Task<Container<CallHierarchyOutgoingCall>?> Handle(CallHierarchyOutgoingCallsParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(new Uri(request.Item.Uri.ToString()), cancellationToken);
+        // The item's own DocumentUri, and ResolveForQuery so a file that is not open still answers.
+        // See the incoming handler above for both.
+        SymbolQueryContext? target = _support.ResolveForQuery(request.Item.Uri, cancellationToken);
         SymbolKey? key = KeyFromData(request.Item);
         if ( target is null || key is null )
         {

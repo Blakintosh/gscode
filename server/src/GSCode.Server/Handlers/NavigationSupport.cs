@@ -34,6 +34,23 @@ public sealed record NavigationTarget(
     ImmutableArray<string> Namespaces);
 
 /// <summary>
+/// Everything a symbol query needs about the file doing the asking, with no parse attached.
+///
+/// <see cref="NavigationTarget"/> is this plus the file's live analysis, and most handlers need
+/// both. The hierarchies do not: expanding a caller or a supertype asks the reference index and the
+/// class graph, which are record-level facts. Splitting the two is what lets those answers come
+/// from a file that is not OPEN — which is the normal case for a caller, and which the hierarchies
+/// used to report as "no incoming calls" because resolution required an open document.
+/// </summary>
+public sealed record SymbolQueryContext(
+    string Path,
+    ScriptLanguage Language,
+    LanguageStore Store,
+    ImmutableArray<LanguageStore> Stores,
+    string ContextId,
+    ImmutableArray<string> Namespaces);
+
+/// <summary>
 /// Shared plumbing for the navigation handlers: turns a document URI into its live
 /// analysis plus the language store and resolution context to query against.
 /// </summary>
@@ -121,6 +138,48 @@ public sealed class NavigationSupport
     }
 
     /// <summary>
+    /// The query context for a file, whether or not it is open.
+    ///
+    /// An open document answers from its live analysis, as <see cref="Resolve(DocumentUri, CancellationToken)"/>
+    /// does. A file that is merely INDEXED answers from its record, which carries the context id and
+    /// the declared namespaces outright — no resolver call and no parse, because nothing here needs
+    /// a syntax tree.
+    ///
+    /// For the hierarchies. Expanding an incoming call or a supertype names another file, and that
+    /// file is usually not one the user has open; resolving through the document store returned null
+    /// for it, which the protocol reads as "there are none".
+    /// </summary>
+    public SymbolQueryContext? ResolveForQuery(DocumentUri uri, CancellationToken cancellationToken)
+    {
+        NavigationTarget? open = Resolve(uri, cancellationToken);
+        if ( open is not null )
+        {
+            return ContextOf(open);
+        }
+
+        string path = PathUtil.NormalizeAbsolute(uri.GetFileSystemPath());
+        if ( !_database.TryGetAnyRecord(path, out ScriptRecord record) )
+        {
+            return null;
+        }
+
+        return new SymbolQueryContext(
+            record.Path,
+            record.Language,
+            _database.StoreFor(record.Language),
+            _database.StoresFor(record.Language),
+            record.ContextId,
+            record.DeclaredNamespaces);
+    }
+
+    /// <summary>The query half of a resolved open document.</summary>
+    public static SymbolQueryContext ContextOf(NavigationTarget target)
+    {
+        return new SymbolQueryContext(
+            target.Path, target.Language, target.Store, target.Stores, target.ContextId, target.Namespaces);
+    }
+
+    /// <summary>
     /// The file a <c>#using</c> or <c>#include</c> path names, or null when nothing resolves.
     ///
     /// The extension comes from the ASKING document, not the path: a <c>.csc</c> writing
@@ -142,7 +201,7 @@ public sealed class NavigationSupport
     /// <summary>
     /// Every occurrence of the LOCAL under a position, within the function that scopes it.
     ///
-    /// The local counterpart of <see cref="FindAllReferences"/>, and shared for the same reason:
+    /// The local counterpart of <c>FindAllReferences</c>, and shared for the same reason:
     /// find-references, highlight and rename must agree about what a variable's occurrences are,
     /// and three copies of the walk is how they stop agreeing.
     ///
@@ -168,6 +227,15 @@ public sealed class NavigationSupport
     /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+    {
+        return FindAllReferences(ContextOf(target), key, referenceKind);
+    }
+
+    /// <summary>
+    /// The same query for a file that need not be open. See <see cref="SymbolQueryContext"/>.
+    /// </summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
+        SymbolQueryContext target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
     {
         // A method is not reachable under one key the way a function is — inheritance, the
         // Class::method form and untyped arrow calls each name it differently — so it resolves to
@@ -219,7 +287,7 @@ public sealed class NavigationSupport
     /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
     /// recoverable and a confidently wrong narrow one is not.
     /// </summary>
-    private string DeclaringFile(NavigationTarget target, SymbolKey key)
+    private string DeclaringFile(SymbolQueryContext target, SymbolKey key)
     {
         if ( key.Kind != SymbolKind.Function )
         {

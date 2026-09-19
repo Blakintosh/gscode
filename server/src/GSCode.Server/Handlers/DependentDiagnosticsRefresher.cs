@@ -74,7 +74,7 @@ public sealed class DependentDiagnosticsRefresher
     private readonly ICodeLensRefreshSink _codeLenses;
     private readonly ServerSettings _settings;
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private CancellationTokenSource? _pending;
 
     /// <summary>

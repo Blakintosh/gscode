@@ -14,6 +14,7 @@ using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using GSCode.Core;
 
 // The implicit string -> InlayHint.Label conversion is nullable-annotated, so assigning a
 // non-null string trips CS8601; suppressed for this file (the values are always non-null).
@@ -304,7 +305,11 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
 
             return MethodParameterNames(
                 target,
-                new SymbolKey(null, arrowCall.MethodToken.Text.ToLowerInvariant(), GSCode.Core.Symbols.SymbolKind.Function, instanceClass.ToLowerInvariant()),
+                new SymbolKey(
+                    null,
+                    NameTable.Shared.InternLower(arrowCall.MethodToken.Text),
+                    GSCode.Core.Symbols.SymbolKind.Function,
+                    NameTable.Shared.InternLower(instanceClass)),
                 ReferenceKind.Call);
         }
 
@@ -340,7 +345,8 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             if ( enclosingClass is not null )
             {
                 ImmutableArray<string> method = MethodParameterNames(
-                    target, new SymbolKey(null, identifier.Token.Text.ToLowerInvariant(), GSCode.Core.Symbols.SymbolKind.Function, enclosingClass),
+                    target, new SymbolKey(
+                        null, NameTable.Shared.InternLower(identifier.Token.Text), GSCode.Core.Symbols.SymbolKind.Function, enclosingClass),
                     ReferenceKind.Call);
 
                 if ( !method.IsDefault )
@@ -364,12 +370,16 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// <summary>A bare name: a script function in one of the file's namespaces, else a builtin.</summary>
     private ImmutableArray<string> UnqualifiedParameterNames(NavigationTarget target, string name)
     {
+        // Interned once outside the loop below, not recomputed per namespace tried — a file
+        // importing several namespaces was lowercasing the same name once per candidate.
+        string keyName = NameTable.Shared.InternLower(name);
+
         // The DECLARED namespace set, not the spans — a phantom span cost a full store scan here on
         // every hint.
         foreach ( string declared in target.Result.Extraction.DeclaredNamespaces )
         {
             ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                target.Store, target.ContextId, target.Path, declared, name.ToLowerInvariant(), askingNamespaces: target.Namespaces);
+                target.Store, target.ContextId, target.Path, declared, keyName, askingNamespaces: target.Namespaces);
             if ( found.Length > 0 )
             {
                 return [.. found[0].Function.Parameters.Select(static p => p.Name)];
@@ -388,9 +398,14 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// <summary>A <c>ns::name</c> reference, where the qualifier may name a namespace or a class.</summary>
     private ImmutableArray<string> QualifiedParameterNames(NavigationTarget target, string qualifier, string name)
     {
+        // Interned once, not once per candidate below — the qualifier is tried as both a
+        // namespace and a class name, and both ask the same lowercase form.
+        string qualifierKey = NameTable.Shared.InternLower(qualifier);
+        string nameKey = NameTable.Shared.InternLower(name);
+
         ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
             target.Store, target.ContextId, target.Path,
-            qualifier.ToLowerInvariant(), name.ToLowerInvariant(), askingNamespaces: target.Namespaces);
+            qualifierKey, nameKey, askingNamespaces: target.Namespaces);
         if ( found.Length > 0 )
         {
             return [.. found[0].Function.Parameters.Select(static p => p.Name)];
@@ -400,7 +415,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         // so a name that is both, which BO3 ships, keeps meaning the namespace.
         return MethodParameterNames(
             target,
-            new SymbolKey(qualifier.ToLowerInvariant(), name.ToLowerInvariant(), GSCode.Core.Symbols.SymbolKind.Function),
+            new SymbolKey(qualifierKey, nameKey, GSCode.Core.Symbols.SymbolKind.Function),
             ReferenceKind.Call);
     }
 

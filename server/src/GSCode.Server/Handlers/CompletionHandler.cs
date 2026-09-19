@@ -9,6 +9,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using GSCode.Core;
 
 namespace GSCode.Server.Handlers;
 
@@ -225,7 +226,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
                     target.ContextId,
                     target.Path,
                     ns.Length > 0 ? ns : null,
-                    name.ToLowerInvariant(),
+                    NameTable.Shared.InternLower(name),
                     askingNamespaces: target.Namespaces);
 
                 if ( functions.Length > 0 )
@@ -239,7 +240,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
             case nameof(CompletionKind.Class):
             {
                 ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
-                    target.Store, target.ContextId, ns.Length > 0 ? ns : null, name.ToLowerInvariant());
+                    target.Store, target.ContextId, ns.Length > 0 ? ns : null, NameTable.Shared.InternLower(name));
 
                 return classes.Length > 0 ? MarkdownDocRenderer.RenderClass(classes[0].Class) : null;
             }
@@ -332,7 +333,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
             FilterText = label.FilterText,
             SortText = SortText(entry),
             InsertTextFormat = isSnippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
-            Command = entry.RetriggerCompletion ? RetriggerCommand : null,
+            Command = entry.RetriggerCompletion ? s_retriggerCommand : null,
             Data = IsResolvable(entry.Kind) ? ResolveData(entry, uri) : null,
         };
     }
@@ -345,7 +346,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// '"' trigger character again. This is the editor's own built-in command; a client that does
     /// not have it simply does nothing, which is the behaviour we already had.
     /// </summary>
-    private static readonly Command RetriggerCommand = new()
+    private static readonly Command s_retriggerCommand = new()
     {
         Name = "editor.action.triggerSuggest",
         Title = "Suggest",

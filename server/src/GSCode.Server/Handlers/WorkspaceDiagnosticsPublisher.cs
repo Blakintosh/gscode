@@ -42,7 +42,7 @@ public sealed class WorkspaceDiagnosticsPublisher
     private readonly DiagnosticsPublisher _publisher;
     private readonly ServerSettings _settings;
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     /// <summary>
     /// Every PATH this publisher has pushed a non-empty set to, so it can take them back.

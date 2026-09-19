@@ -17,6 +17,7 @@ using Position = GSCode.Core.Text.Position;
 using ReferenceEntry = GSCode.Core.Symbols.ReferenceEntry;
 using ReferenceKind = GSCode.Core.Symbols.ReferenceKind;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
+using GSCode.Core.Paths;
 
 namespace GSCode.Server.Handlers;
 
@@ -251,7 +252,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             if ( !_declaring.TryGetValue(name, out ImmutableArray<ResolvedFunction> found) )
             {
                 found = DatabaseQueries.LookupFunctions(
-                    Store, ContextId, AskingPath, null, name.ToLowerInvariant());
+                    Store, ContextId, AskingPath, null, NameTable.Shared.InternLower(name));
 
                 _declaring[name] = found;
             }
@@ -294,7 +295,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             {
                 if ( element is UsingNode usingNode )
                 {
-                    paths.Add(StripExtension(NormalizePath(usingNode.Path)));
+                    paths.Add(StripExtension(PathUtil.NormalizeScriptPath(usingNode.Path)));
                 }
             }
 
@@ -539,7 +540,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            string usingPath = StripExtension(NormalizePath(resolved.Record.RelativePath));
+            string usingPath = StripExtension(PathUtil.NormalizeScriptPath(resolved.Record.RelativePath));
 
             // One offer per namespace+file pair. The same namespace spread over several files is
             // normal, and each file is a genuinely different import.
@@ -627,7 +628,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            string includePath = StripExtension(NormalizePath(resolved.Record.RelativePath));
+            string includePath = StripExtension(PathUtil.NormalizeScriptPath(resolved.Record.RelativePath));
             if ( !existingIncludes.Contains(includePath) )
             {
                 candidates.Add(includePath);
@@ -834,7 +835,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
 
             // Only the second-and-later occurrences of a path are redundant.
-            if ( seen.Add(NormalizePath(path)) )
+            if ( seen.Add(PathUtil.NormalizeScriptPath(path)) )
             {
                 continue;
             }
@@ -924,7 +925,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                     continue;
                 }
 
-                string usingPath = StripExtension(NormalizePath(resolved.Record.RelativePath));
+                string usingPath = StripExtension(PathUtil.NormalizeScriptPath(resolved.Record.RelativePath));
                 if ( existingUsings.Contains(usingPath) || !offered.Add(usingPath) )
                 {
                     continue;
@@ -1073,21 +1074,22 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             title, uri, edits, diagnostic is null ? null : new Container<LspDiagnostic>(diagnostic), preferred);
     }
 
-    private static string NormalizePath(string path)
-    {
-        return path.Replace('/', '\\').ToLowerInvariant();
-    }
-
     private static string StripExtension(string path)
     {
         // Scripts are reached by #using, which names them without extension. Strip the server
-        // or client extension; headers keep theirs (#insert names them in full).
-        foreach ( string extension in new[] { GameProfile.Active.ServerScriptExtension, GameProfile.Active.ClientScriptExtension } )
+        // or client extension; headers keep theirs (#insert names them in full). Two checks
+        // rather than a loop over an array literal built fresh per call — GameProfile.Active can
+        // change mid-session, so the two extensions cannot be cached, and there are only ever two.
+        string serverExtension = GameProfile.Active.ServerScriptExtension;
+        if ( path.EndsWith(serverExtension, StringComparison.Ordinal) )
         {
-            if ( path.EndsWith(extension, StringComparison.Ordinal) )
-            {
-                return path[..^extension.Length];
-            }
+            return path[..^serverExtension.Length];
+        }
+
+        string clientExtension = GameProfile.Active.ClientScriptExtension;
+        if ( path.EndsWith(clientExtension, StringComparison.Ordinal) )
+        {
+            return path[..^clientExtension.Length];
         }
 
         return path;

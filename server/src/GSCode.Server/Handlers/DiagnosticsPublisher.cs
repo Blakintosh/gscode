@@ -104,7 +104,7 @@ public sealed class DiagnosticsPublisher
     /// exists to stop. Nothing slow happens under it: the payload is converted before it is taken,
     /// and a send is one write to the connection.
     /// </summary>
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     public DiagnosticsPublisher(ILanguageServerFacade server)
         : this(new LanguageServerDiagnosticsSink(server))

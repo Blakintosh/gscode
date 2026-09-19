@@ -24,7 +24,7 @@ namespace GSCode.Server.Handlers;
 public sealed class ServerStatusNotifier
 {
     /// <summary>How often to sample. Slow enough to be free, fast enough to feel live.</summary>
-    private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan s_sampleInterval = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// Movement worth telling the client about. Below this the number would not change the
@@ -70,7 +70,7 @@ public sealed class ServerStatusNotifier
                     _server.SendNotification("gscode/serverStatus", new ServerStatusParams(megabytes));
                 }
 
-                await Task.Delay(SampleInterval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(s_sampleInterval, cancellationToken).ConfigureAwait(false);
             }
         }
         catch ( OperationCanceledException )

@@ -129,7 +129,17 @@ internal static class ServerServices
             // many, which is the whole reason the cache exists.
             InsertCache inserts = provider.GetRequiredService<InsertCache>();
             return new DocumentStore(
-                path => new ResolverInsertProvider(holder.Current, holder.Current.GetContext(path), files, inserts),
+                path =>
+                {
+                    // Read ONCE per file rather than twice: a swap landing between two reads of a
+                    // volatile field paired a resolver with a DIFFERENT resolver's context, which
+                    // is wrong in the specific way that matters here — the context decides how the
+                    // path resolves. Reading it into a local before either use is what makes the
+                    // two agree, however many workspace-folder or clearCache events land in between
+                    // one file's open and the next.
+                    PathResolver current = holder.Current;
+                    return new ResolverInsertProvider(current, current.GetContext(path), files, inserts);
+                },
                 provider.GetRequiredService<NameTable>(),
                 inserts);
         });

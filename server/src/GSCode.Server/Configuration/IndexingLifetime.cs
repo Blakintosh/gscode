@@ -18,7 +18,7 @@ namespace GSCode.Server.Configuration;
 /// </summary>
 public sealed class IndexingLifetime
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly CancellationTokenSource _cancellation = new();
     private Task? _task;
 

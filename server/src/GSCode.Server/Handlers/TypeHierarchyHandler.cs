@@ -9,6 +9,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 using LspSymbolKind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
+using GSCode.Core;
 
 namespace GSCode.Server.Handlers;
 
@@ -112,7 +113,7 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
             return null;
         }
 
-        string keyName = item.Name.ToLowerInvariant();
+        string keyName = NameTable.Shared.InternLower(item.Name);
         ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(target.Store, target.ContextId, null, keyName);
         return classes.Length > 0 ? classes[0].Class : null;
     }

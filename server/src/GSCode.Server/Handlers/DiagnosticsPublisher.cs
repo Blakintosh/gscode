@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using GSCode.Core.Paths;
 using GSCode.Server.Mapping;
@@ -62,7 +61,27 @@ public sealed class DiagnosticsPublisher
     /// URI the client recognises — an <c>untitled:</c> buffer normalizes to a synthetic path whose
     /// <c>file:</c> URI names nothing that exists.
     /// </summary>
-    private readonly ConcurrentDictionary<string, DocumentUri> _clientUris = new(StringComparer.Ordinal);
+    /// <remarks>
+    /// Guarded by <see cref="_gate"/> rather than concurrent, so that opening and closing a
+    /// document are ordered against the publishes they decide: the check and the send have to be
+    /// one step, or they straddle the close.
+    /// </remarks>
+    private readonly Dictionary<string, DocumentUri> _clientUris = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Documents that have CLOSED and not been reopened.
+    ///
+    /// A versioned set describes an open document — only the sync handler and the dependent
+    /// refresher stamp one — and an analysis in flight when the document closes still finishes.
+    /// Its caller checks that the document is still live before publishing, but the check and the
+    /// publish are two steps: a didClose landing between them runs Clear and Forget FIRST, and the
+    /// late publish then puts diagnostics back on a closed file under the normalized URI, where
+    /// nothing ever takes them away again.
+    ///
+    /// A record of what CLOSED rather than a test of what is open, so a path the publisher was
+    /// never told about still publishes. Only the close is evidence; silence is not.
+    /// </summary>
+    private readonly HashSet<string> _closed = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The newest document version each file has on screen, so a set that describes older text
@@ -100,13 +119,25 @@ public sealed class DiagnosticsPublisher
     /// <summary>Records how the client spelled a document it just opened.</summary>
     public void Remember(string path, DocumentUri uri)
     {
-        _clientUris[PathUtil.NormalizeAbsolute(path)] = uri;
+        string key = PathUtil.NormalizeAbsolute(path);
+
+        lock ( _gate )
+        {
+            _clientUris[key] = uri;
+            _closed.Remove(key);
+        }
     }
 
     /// <summary>Drops a closed document's spelling. Call after <see cref="Clear"/>, not before.</summary>
     public void Forget(string path)
     {
-        _clientUris.TryRemove(PathUtil.NormalizeAbsolute(path), out _);
+        string key = PathUtil.NormalizeAbsolute(path);
+
+        lock ( _gate )
+        {
+            _clientUris.Remove(key);
+            _closed.Add(key);
+        }
     }
 
     /// <summary>
@@ -118,6 +149,15 @@ public sealed class DiagnosticsPublisher
     {
         string key = PathUtil.NormalizeAbsolute(path);
 
+        lock ( _gate )
+        {
+            return UriForKey(key);
+        }
+    }
+
+    /// <summary>The same answer for an already-normalized key, with the gate already held.</summary>
+    private DocumentUri UriForKey(string key)
+    {
         if ( _clientUris.TryGetValue(key, out DocumentUri? remembered) )
         {
             return remembered;
@@ -144,6 +184,15 @@ public sealed class DiagnosticsPublisher
         {
             if ( version is int stamped )
             {
+                // See _closed: an analysis that was in flight when the document closed must not
+                // put its diagnostics back afterwards, and the caller cannot rule that out because
+                // its liveness check and its publish are two steps.
+                if ( _closed.Contains(key) )
+                {
+                    Log.Verbose("Dropped a v{Stale} diagnostic publish for {Path}; it has closed", stamped, key);
+                    return;
+                }
+
                 if ( _lastPublishedVersion.TryGetValue(key, out int current) && stamped < current )
                 {
                     Log.Verbose(
@@ -182,7 +231,7 @@ public sealed class DiagnosticsPublisher
     {
         _sink.Send(new PublishDiagnosticsParams
         {
-            Uri = UriFor(key),
+            Uri = UriForKey(key),
             Version = version,
             Diagnostics = diagnostics,
         });

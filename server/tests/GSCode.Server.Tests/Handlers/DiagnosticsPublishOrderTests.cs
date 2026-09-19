@@ -3,6 +3,7 @@ using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Text;
 using GSCode.Server.Handlers;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using Diagnostic = GSCode.Core.Diagnostics.Diagnostic;
@@ -151,5 +152,61 @@ public class DiagnosticsPublishOrderTests
         publisher.Publish(other, version: 2, Diagnostics(1));
 
         Assert.Equal(2, sink.Sent.Count);
+    }
+
+    [Fact]
+    public void ALatePublishForAClosedDocumentIsDropped()
+    {
+        // An analysis in flight when the document closes still finishes. Its caller checks the
+        // document is still live before publishing, but the check and the publish are two steps: a
+        // didClose landing between them runs Clear and Forget FIRST, and this publish then puts
+        // diagnostics back on a closed file under the normalized URI, where nothing takes them away
+        // again — the file shows problems for the rest of the session.
+        RecordingSink sink = new();
+        DiagnosticsPublisher publisher = new(sink);
+
+        publisher.Remember(Path, DocumentUri.FromFileSystemPath(Path));
+        publisher.Publish(Path, version: 4, Diagnostics(1));
+
+        publisher.Clear(Path);
+        publisher.Forget(Path);
+
+        int sentBeforeTheLatePublish = sink.Sent.Count;
+        publisher.Publish(Path, version: 5, Diagnostics(1));
+
+        Assert.Equal(sentBeforeTheLatePublish, sink.Sent.Count);
+    }
+
+    [Fact]
+    public void AReopenedDocumentPublishesAgain()
+    {
+        // The control. A close is remembered only until the document comes back, or reopening a
+        // file would leave it permanently silent.
+        RecordingSink sink = new();
+        DiagnosticsPublisher publisher = new(sink);
+
+        publisher.Remember(Path, DocumentUri.FromFileSystemPath(Path));
+        publisher.Clear(Path);
+        publisher.Forget(Path);
+
+        publisher.Remember(Path, DocumentUri.FromFileSystemPath(Path));
+
+        int sentBeforeTheReopenPublish = sink.Sent.Count;
+        publisher.Publish(Path, version: 1, Diagnostics(1));
+
+        Assert.Equal(sentBeforeTheReopenPublish + 1, sink.Sent.Count);
+    }
+
+    [Fact]
+    public void ADocumentThePublisherWasNeverToldAboutStillPublishes()
+    {
+        // Only a CLOSE is evidence that a versioned publish is stale. Silence is not: a path the
+        // publisher has never seen is not a closed one.
+        RecordingSink sink = new();
+        DiagnosticsPublisher publisher = new(sink);
+
+        publisher.Publish(Path, version: 1, Diagnostics(1));
+
+        Assert.Single(sink.Sent);
     }
 }

@@ -68,6 +68,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - `Publish`/`Clear` — push-model publishDiagnostics wrapper, addressed by PATH. `Remember`/`Forget`
   keep each open document's client-side URI spelling and `UriFor` is the one seam that resolves one,
   so a file is never published under two spellings (the normalized path lowercases on Windows).
+- `Forget` also records the CLOSE, and a versioned publish for a closed document is dropped. An
+  analysis in flight when a document closes still finishes, and its caller's liveness check and its
+  publish are two steps — a `didClose` landing between them ran `Clear` and `Forget` first, and the
+  late publish put diagnostics back on a closed file under the normalized URI, where nothing takes
+  them away again. A close is remembered only until the document is reopened, and a path the
+  publisher was never told about still publishes: only a close is evidence, silence is not.
   Push because closed files have no puller; open documents are a migration candidate to LSP 3.17
   `textDocument/diagnostic`.
 

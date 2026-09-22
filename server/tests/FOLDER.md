@@ -77,10 +77,12 @@ are deliberately different filenames, so a perf run never overwrites a diagnosti
 far larger than any game ships out of the real scripts — the game's raw tree stays raw, and a
 generated workspace folder holds copies, one subfolder per copy, `#namespace` suffixed per copy on
 bo3, about three quarters of them at or above the median file size — and reuses it once marked
-complete. `ScalePerfTests` (with its `.Handlers` partial) measures each size in a fresh database:
+complete. `ScalePerfTests` (with its `.Handlers` and `.Lookups` partials) measures each size in a fresh database:
 cold and warm start, dropped cache writes, retained memory, the compaction pause, completion (call
 site, literal, field), one file's lint pass with a per-rule breakdown, the full-mode sweep, and
-CodeLens / references / rename over 50 stock and 50 copied files, each printed beside its budget and
+CodeLens / references / rename over 50 stock and 50 copied files, and the narrower lookups
+(directive path completion, a changed header's dependents, a rename's directive edits, class
+lookups, header macro references, `ArgumentCountLint` alone), each printed beside its budget and
 written to `temp/gscode-scale.md`. The per-request rows must stay FLAT as the workspace grows; one
 that climbs means something on that path walks the store. PERF.md's scale section holds the numbers.
 
@@ -253,6 +255,9 @@ completion · `DeclarationIndexTests` the bare-name, `(namespace, name)` and dev
 edits and removals · `RelativePathIndexTests` · `VocabularyIndexTests` literals and fields, visible
 files only, never a macro body's · `BoundedLookupTests` `LookupFunctions`' per-record shadowing
 against the old two-pass rule, and that a capped answer is the front of the full one ·
+`DirectiveIndexTests`, `PathTreeIndexTests`, `QualifiedClassLookupTests`, `VisibleClassesTests` and
+`HeaderReferenceIndexTests` each keep the walk an index replaced as a reference and require its
+answer, across overlays, sibling mods, edits and removals ·
 `ReferencesReachingTests` the scoped reference query's overlay case, which stock corpora cannot
 exercise · `InsertCacheTests` two headers differing only by case on Linux ·
 `PhysicalFileSystemTests` that the byte-level read returns what `File.ReadAllText` does.
@@ -340,6 +345,10 @@ line means "suppressed on this game" rather than "run twice".
   record a little wrong rather than failing.
 - `ReferenceScopeCorpusTests` — the scoped reference query against the old collect-then-scope path,
   for every function declared in a real bo3 and cod4 index (28,808 declarations): identical answers.
+- `IndexedQueryCorpusTests` — the same check for every query that moved from a walk to an index:
+  header dependents, rename plans, directive folder listings, class lookups, visible classes and
+  header references, each asked every question of its kind a real bo3 and cod4 index allows, against
+  the old walk kept in the test.
 - `ClientArityHarvestTests` — what a game's SERVER library gets wrong against its CLIENT scripts, the
   input for building a CSC library from the GSC one. `StockScriptListTests` generates the per-game
   stock lists behind the raw-folder save warning.

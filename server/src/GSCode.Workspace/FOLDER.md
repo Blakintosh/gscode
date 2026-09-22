@@ -24,6 +24,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `ClassGraph` — the per-language reverse index of class declarations, parent links, and method
   names. Replaces repeated workspace-wide scans with path-valued buckets that can be updated or
   removed exactly when one file changes.
+- Class declarers are bucketed twice, by bare name and by `(namespace, name)`, in the same `Apply`.
+  `LookupClasses` reads the qualified bucket whenever it is given a namespace: in a workspace of
+  per-copy namespaces every copy of a class-declaring file shares the bare-name bucket, and a
+  qualified lookup read all of them to keep one.
 
 ## Database/ExportSignature.cs
 
@@ -35,7 +39,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 - `sealed class LanguageStore` — ONE language world: path-keyed record map + the indexes that
   answer its questions without walking it — `ReferenceIndex`, `DeclarationIndex`, `NamespaceIndex`,
-  `ClassGraph`, `RelativePathIndex`, `DependentsIndex`, `VocabularyIndex` — and the overlay counts
+  `ClassGraph`, `RelativePathIndex`, `DependentsIndex`, `DirectiveIndex`, `PathTreeIndex`,
+  `VocabularyIndex` — and the overlay counts
   behind `HasOverlayAt`. Upsert swaps records atomically and diffs every index; GSC/CSC isolation is
   two instances of this class, never a filter. Every index key set is built OUTSIDE the write gate,
   from the incoming record alone; only the previous record's is built inside.
@@ -45,6 +50,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   that …" wants an index here, maintained in the same diff, not a loop.
 - Queries answered here: `FilesDeclaring(name)` and `FilesDeclaring(namespace, name)`,
   `FilesDeclaringInto(namespace)`, `FilesReferencing(key)`, `FilesAt(path)`, `FilesNaming(path)`,
+  `FilesWriting(writtenKey)`, `FilesInserting(headerPath)`, `PathChildren(folder, context)`,
   `MayBeDevOnly(name)`, `VisibleLiterals(kind, context)`, `VisibleFieldNames(owner, context)`,
   `HasOverlayAt(path, context)`.
 - The write gates are STRIPED by path, 64 of them, not one for the store. The race they stop is
@@ -64,7 +70,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 - `internal sealed class PackedInvertedIndex<TKey>` — key→files storage plus the per-file diff,
   shared by every key→files index here (`ReferenceIndex`, the three halves of `DeclarationIndex`,
-  `RelativePathIndex`, `DependentsIndex`, both halves of `VocabularyIndex`). It started as two
+  `RelativePathIndex`, `DependentsIndex`, both halves of `DirectiveIndex`, both halves of
+  `VocabularyIndex`). It started as two
   classes that were the same class twice — same packing, same remove-then-add diff, same snapshot
   read — and had already drifted.
 - `FilesFor(key)` is the files behind one key; `CollectKeys(keyFilter, fileFilter, into)` is the
@@ -139,6 +146,29 @@ lints, `Completion/` and `Typing/` the information surfaces.
   It is what `FindReferencesReaching` reads: scoping keeps a reference only when its file is the
   declaring file or names it, so those files are all that can contribute.
 
+## Database/DirectiveIndex.cs
+
+- `sealed class DirectiveIndex` — every record's directives, reversed two ways: by the path as
+  written (`WrittenKey`) and, for insert edges, by the header the edge resolved to. It is what
+  `DatabaseQueries.ScriptsInserting` (a changed header's dependents, through header-to-header
+  inserts) and `DependencyRewrite.PlanRename` read; both used to test every record's edges.
+- `WrittenKey` folds separators, case, surrounding whitespace and leading backslashes, which makes
+  it LOOSER than either caller's comparison — the watcher's `NormalizeScriptPath` equality and the
+  planner's canonical form. The index only narrows where to look; both callers still run their own
+  test on what it returns. Not `DependentsIndex`, which leaves insert edges out on purpose.
+- Kept by each `LanguageStore` and by the header store in `ScriptDatabase`.
+
+## Database/PathTreeIndex.cs
+
+- `sealed class PathTreeIndex` — for each script-relative folder, the segments directly under it and
+  whether each is a folder or a file, counted PER CONTEXT: what a folder lists depends on who asks,
+  and a segment is listed when any context the asker can see holds a file under it. Path completion
+  inside `#using`/`#include`/`#insert` reads it; it used to rewrite every record's path per
+  keystroke. Folders and segments compare ignoring case, as that walk did; the spelling kept for a
+  segment is the first one indexed.
+- Built with `keepExtension: false` in each language store (the form `#using` names a script in)
+  and `true` in the header store (`#insert` writes the `.gsh`).
+
 ## Database/VocabularyIndex.cs
 
 - `sealed class VocabularyIndex` — the workspace's distinct literals (by `SymbolKey`) and assigned
@@ -151,7 +181,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Database/ScriptDatabase.cs
 
 - `sealed class ScriptDatabase` — the façade: `Gsc`/`Csc` stores + the shared GSH
-  record map (headers serve both worlds). `Commit` builds and stores a record from a
+  record map (headers serve both worlds). The header store keeps its own `DirectiveIndex`,
+  `PathTreeIndex` and `ReferenceIndex`, diffed in `UpsertGsh`/`RemoveGsh` under ONE gate — headers
+  are a few hundred files, so the per-path striping the script stores need buys nothing — and read
+  through `GshFilesWriting`, `GshFilesInserting`, `GshPathChildren` and `GshFilesReferencing`. `Commit` builds and stores a record from a
   ParseResult; `BuildRecord` is the pure builder (macros filtered to file-local,
   dependency edges from inserts + usings, xxHash64 content hash). `CanSee` encodes the
   visibility rule (raw←raw; mod M←{M,raw}; workspace←{workspaces,raw}); `ContextIdOf`
@@ -187,7 +220,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `"..."`/`&"..."`/`#"..."` literal it offers the known literals of that kind from the store's
   `VocabularyIndex` (gated by `includeLiterals` = the completion.literals setting; disabled →
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
-  `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
+  `#using`/`#insert` path segments (from the stores' `PathTreeIndex`), `ns::` (that namespace's functions only), `owner.` fields
   (+ `.size`; also from `VocabularyIndex`), and statement scope (keywords, the dialect's global objects and snippets,
   the enclosing function's parameters and locals, every macro in scope, namespace functions,
   visible classes, namespace-less builtins as call snippets).
@@ -333,7 +366,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   live parse result so unsaved edits count), and one that cannot falls back to same-file
   visibility. `FindGshReferences` is the deliberate language-guard exception: a `.gsh` serves
   both languages, so macros declared in headers live in the shared GSH store and are
-  unreachable from either LanguageStore. `FindAllReferences` extends that exception to the
+  unreachable from either LanguageStore; it reads the header store's reference index.
+  `ScriptsInserting(header)` is the GSC/CSC records a header's analysis decides — inserting it
+  directly or through other headers, or waiting on its path unresolved — read from the
+  `DirectiveIndex`es. `FindAllReferences` extends that exception to the
   language stores themselves — a MACRO key is answered against BOTH worlds whoever asks, because a
   header is inserted into `.gsc` and `.csc` alike and the asking file's language decides nothing
   about where its uses are. Scoped to the asking store, a rename started in a `.gsc` left every
@@ -485,7 +521,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `WatchedFileChange` (Created/Changed/Deleted) + `sealed class WatchedFileUpdater` —
   applies on-disk changes to the database: re-index created/changed files, drop deleted
   ones, and when a GSH changes invalidate its lex cache and re-index every file that
-  #inserts it (via `ReindexInserters`) so macro edits propagate. Returns
+  #inserts it (via `ReindexInserters`, which asks `DatabaseQueries.ScriptsInserting`) so macro
+  edits propagate. Returns
   the touched paths for diagnostic republishing. Takes an `ownedByEditor` predicate and
   skips every record it would rewrite for a file that is OPEN — the changed file and any
   dependent alike — because this reads disk and a buffer may hold unsaved edits.
@@ -807,8 +844,8 @@ are out.
   rename implies, so renaming a script does not silently break its importers. `PlanRename`
   matches on the path AS WRITTEN rather than a resolved absolute path, because `#using` edges
   carry no resolved path (they resolve lazily per asking context, so the same text can mean
-  different files in different contexts). Scans both language stores plus the shared headers,
-  since a `.gsh` can insert another. `ToDirectivePath` encodes the asymmetry that `#using` names
+  different files in different contexts). Reads the files writing the path from both language
+  stores' and the header store's `DirectiveIndex`, since a `.gsh` can insert another. `ToDirectivePath` encodes the asymmetry that `#using` names
   a script without its extension while `#insert` keeps the `.gsh`.
 
 ## Typing/BuiltinEmulations.cs

@@ -2116,6 +2116,62 @@ so `ReferencesReachingTests` pins the overlay case by hand.
 With this, every row of the scale table is inside its budget on both dialects at 50,000 files, and
 nothing a keystroke or a request pays grows with the workspace except the answers themselves.
 
+### 2026-09-22: the reads that still filtered a broad list
+
+After the namespace-keyed declaration index, a search for the same shape — read a list far wider
+than the answer, then filter it — found six more. None was on the scale table, so the sweep gained a
+`.Lookups` partial timing each one first (50 stock and 50 copied files, 40 stock headers, every class
+in 50 class-declaring files), and each index went in only against that baseline.
+
+p99, one run each, same machine; the answer counts printed beside them match before and after:
+
+| | bo3 10K before | bo3 10K after | bo3 50K before | bo3 50K after | cod4 50K before | cod4 50K after |
+|---|---:|---:|---:|---:|---:|---:|
+| `#using` / `#include` path completion | 1.94 ms | 0.17 ms | 6.43 ms | **0.09 ms** | 9.74 ms | **0.19 ms** |
+| `#insert` path completion | 0.24 ms | 0.15 ms | 0.43 ms | 0.06 ms | — | — |
+| a changed header's dependents | 6.94 ms | 0.71 ms | 41.4 ms | **3–11 ms** | — | — |
+| a file rename's directive edits | 4.95 ms | 1.98 ms | 33.5 ms | **9–12 ms** | 9.97 ms | 0.02 ms |
+| `LookupClasses`, qualified | 2 µs | 1 µs | 15 µs | 1 µs | — | — |
+| `AllVisibleClasses` | 32 µs | 6 µs | 246 µs | 5 µs | — | — |
+| header macro references | 0.23 ms | 0.04 ms | 1.51 ms | 0.14 ms | — | — |
+
+What each was, and what replaced it:
+
+- **Path completion** rewrote every record's relative path and tested it against the typed folder,
+  per keystroke — cod4 at 50K sat at the completion budget. `PathTreeIndex` keeps each folder's
+  children counted per context, since what a folder lists depends on who is asking.
+- **A changed header's dependents** tested every script's edges, after testing every header's once
+  per round of the header-to-header closure. **A rename's directive edits** tested every record in all
+  three stores. `DirectiveIndex` reverses every directive by written path and, for inserts, by the
+  header it resolved to; the header store keeps one too. What is left on bo3 is the answer: a stock
+  header is inserted by every copy, ~450 files per header asked here, and the 50K figure moves between
+  3 and 11 ms from run to run.
+- **`LookupClasses`** read the bare-name bucket and filtered the namespace, the shape
+  `LookupFunctions` had before; `ClassGraph` now also buckets by `(namespace, name)`.
+  **`AllVisibleClasses`** read every class-declaring file to keep the imported ones, and every copy of
+  one is one; it now reads the asker and `RecordsAt(imports)`.
+- **Header references** were a scan of every header, justified by header counts being small — true
+  of a game, not of a workspace that carries its own. The header store keeps a `ReferenceIndex`.
+
+Every one is proven against the walk it replaced, not argued: each has a unit test holding the old
+walk as a reference across overlays, sibling mods, edits and removals, and `IndexedQueryCorpusTests`
+asks both of them every question a real bo3 and cod4 index allows — every header, every file's rename,
+every folder, every class, every file's visible classes, every macro key — 14,821 questions. None
+differ. The indexes cost about 50 MB retained at bo3 50K, against 2.3 GB.
+
+**Checked, and deliberately not changed:**
+
+- **`ArgumentCountLint`'s own-namespace set.** It builds every function in the namespaces the file
+  declares into, once per file, which looked like the same shape. It is flat — 2.1 → 1.1 ms p99 on
+  bo3 and 1.4 → 2.7 ms on cod4 from 10K to 50K, where cod4 declares no namespaces at all — because a
+  namespace is declared into by one file and its copies carry their own. A mod with thousands of files
+  in ONE namespace would change that; nothing measured here does.
+- **Literal completion on cod4 at 10K**, run in a fresh process, reads 16–27 ms p99 against its 10 ms
+  budget, while 50K in the same runs reads 7–13 ms. Identical at the commit before any of this, so it
+  is not these changes; it is the next thing to read on that row.
+- **Workspace symbol search** walks every record, but it is a substring match over every name: a
+  different index (prefix or trigram), not a narrower key.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

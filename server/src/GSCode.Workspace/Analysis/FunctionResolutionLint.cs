@@ -274,7 +274,7 @@ public static class FunctionResolutionLint
 
             // Resolves to a script function (private included) — nothing to report.
             ImmutableArray<ResolvedFunction> found =
-                lookups.Lookup(canonical.Namespace, canonical.Name, includePrivate: true);
+                lookups.Lookup(canonical.Namespace, canonical.Name, includePrivate: true, limit: 1);
             if ( found.Length > 0 )
             {
                 continue;

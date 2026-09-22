@@ -57,6 +57,13 @@ public static class DatabaseQueries
     /// lifts it entirely, which the private-access lint uses to tell "no such function" apart
     /// from "exists but is private".
     /// </summary>
+    /// <param name="limit">
+    /// Stop once this many functions are found - the first <paramref name="limit"/> of the full
+    /// answer, in the same order. For callers that only ask whether a name resolves (1) or resolves
+    /// to exactly one declaration (2). A bare name on a merge dialect has thousands of declarations
+    /// at 50,000 files - every <c>main</c> - and building all of them to answer "yes" was what kept
+    /// two lints growing with the workspace (PERF.md, the scale section).
+    /// </param>
     public static ImmutableArray<ResolvedFunction> LookupFunctions(
         LanguageStore store,
         string askingContextId,
@@ -64,7 +71,8 @@ public static class DatabaseQueries
         string? namespaceName,
         string keyName,
         bool includePrivate = false,
-        ImmutableArray<string> askingNamespaces = default)
+        ImmutableArray<string> askingNamespaces = default,
+        int limit = int.MaxValue)
     {
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
 
@@ -99,6 +107,17 @@ public static class DatabaseQueries
                 continue;
             }
 
+            // Overlay shadowing, decided per RECORD rather than in a second pass over the finished
+            // list, so the walk can stop early. It is ApplyShadowing's rule with a store: a raw
+            // record is dropped when an overlay visible to the asker sits at its relative path. The
+            // rule's other half - an overlay among the matches declaring the same name - adds
+            // nothing, since such an overlay is visible, non-raw and at that path, which is exactly
+            // what HasOverlayAt counts.
+            if ( record.ContextId == "raw" && store.HasOverlayAt(record.RelativePath, askingContextId) )
+            {
+                continue;
+            }
+
             foreach ( FunctionSymbol function in record.Functions )
             {
                 if ( function.KeyName != keyName )
@@ -118,15 +137,14 @@ public static class DatabaseQueries
                 }
 
                 matches.Add(new ResolvedFunction(function, record));
+                if ( matches.Count >= limit )
+                {
+                    return matches.ToImmutable();
+                }
             }
         }
 
-        return ApplyShadowing(
-            matches.ToImmutable(),
-            static match => match.Record,
-            static match => match.Function.KeyName,
-            store,
-            askingContextId);
+        return matches.ToImmutable();
     }
 
     /// <summary>

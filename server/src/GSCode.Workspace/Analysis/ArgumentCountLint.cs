@@ -226,8 +226,11 @@ public static class ArgumentCountLint
         // ordinally. Passing the source spelling meant this lookup found nothing for any call not
         // written in lower case, so the script half of the rule — 5022 — silently never fired on a
         // camelCase name, which in GSC is most of them.
+        //
+        // Capped at two: all this asks is whether there is exactly one, and a bare name can have
+        // thousands of declarations at scale.
         ImmutableArray<ResolvedFunction> candidates = lookups.Lookup(
-            game.KeyNamespace(namespaceName ?? ""), name.ToLowerInvariant(), includePrivate: true);
+            game.KeyNamespace(namespaceName ?? ""), name.ToLowerInvariant(), includePrivate: true, limit: 2);
 
         // Nothing found, or several possibilities: 5013/5014 report the first and 5007 the second,
         // and picking one of several signatures to judge against would be a guess.
@@ -301,7 +304,8 @@ public static class ArgumentCountLint
         // judging the class method's arity would be a guess that can land on the wrong signature —
         // not checked for `[[self]]->`, whose receiver's class is already known rather than guessed.
         if ( !isSelf && DatabaseQueries.LookupFunctions(
-                store, contextId, askingPath: "", namespaceName: null, name.ToLowerInvariant(), includePrivate: true)
+                store, contextId, askingPath: "", namespaceName: null, name.ToLowerInvariant(), includePrivate: true,
+                limit: 1)
             .Length > 0 )
         {
             return;

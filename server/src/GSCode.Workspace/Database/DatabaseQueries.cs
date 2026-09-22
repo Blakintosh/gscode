@@ -1141,30 +1141,80 @@ public static class DatabaseQueries
     public static List<ScriptRecord> ScriptsInserting(
         ScriptDatabase database, string normalizedGshPath, string headerRelativePath)
     {
+        // Candidates come from the directive index — the files inserting a header by its resolved
+        // path, plus those writing its path — and each is still put to InsertsAny, since the
+        // written-path key is looser than the comparison. It used to test every record's edges.
+        string writtenKey = headerRelativePath.Length > 0 ? DirectiveIndex.WrittenKey(headerRelativePath) : "";
+
         HashSet<string> changed = new(StringComparer.Ordinal) { normalizedGshPath };
+        Queue<string> pending = new();
+        pending.Enqueue(normalizedGshPath);
 
         // Close over the header graph first: a header that inserts a changed one contributes
-        // something different now, even though its own bytes did not move.
-        bool grew = true;
-        while ( grew )
+        // something different now, even though its own bytes did not move. A header whose only
+        // link is a written path qualifies from the start; one linked by resolved path is found
+        // when the header it inserts joins.
+        List<string> headerCandidates = [];
+        if ( writtenKey.Length > 0 )
         {
-            grew = false;
-            foreach ( ScriptRecord header in database.AllGshRecords.ToList() )
+            headerCandidates.AddRange(database.GshFilesWriting(writtenKey));
+        }
+
+        while ( true )
+        {
+            while ( pending.Count > 0 )
             {
-                if ( !changed.Contains(header.Path) && InsertsAny(header, changed, headerRelativePath) )
+                headerCandidates.AddRange(database.GshFilesInserting(pending.Dequeue()));
+            }
+
+            if ( headerCandidates.Count == 0 )
+            {
+                break;
+            }
+
+            List<string> asking = headerCandidates;
+            headerCandidates = [];
+            foreach ( string path in asking )
+            {
+                if ( changed.Contains(path) || !database.TryGetGsh(path, out ScriptRecord header) )
+                {
+                    continue;
+                }
+
+                if ( InsertsAny(header, changed, headerRelativePath) )
                 {
                     changed.Add(header.Path);
-                    grew = true;
+                    pending.Enqueue(header.Path);
                 }
             }
         }
 
         List<ScriptRecord> inserting = [];
-        foreach ( ScriptRecord record in database.Gsc.AllRecords.Concat(database.Csc.AllRecords).ToList() )
+        foreach ( LanguageStore store in database.BothLanguageStores )
         {
-            if ( InsertsAny(record, changed, headerRelativePath) )
+            HashSet<string> seen = new(StringComparer.Ordinal);
+            List<string> candidates = [];
+            foreach ( string header in changed )
             {
-                inserting.Add(record);
+                candidates.AddRange(store.FilesInserting(header));
+            }
+
+            if ( writtenKey.Length > 0 )
+            {
+                candidates.AddRange(store.FilesWriting(writtenKey));
+            }
+
+            foreach ( string path in candidates )
+            {
+                if ( !seen.Add(path) || !store.TryGet(path, out ScriptRecord record) )
+                {
+                    continue;
+                }
+
+                if ( InsertsAny(record, changed, headerRelativePath) )
+                {
+                    inserting.Add(record);
+                }
             }
         }
 

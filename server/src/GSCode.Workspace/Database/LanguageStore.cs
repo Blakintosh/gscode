@@ -21,6 +21,7 @@ public sealed class LanguageStore
     private readonly ClassGraph _classGraph = new();
     private readonly RelativePathIndex _relativePathIndex = new();
     private readonly DependentsIndex _dependents = new();
+    private readonly DirectiveIndex _directives = new();
     private readonly VocabularyIndex _vocabulary = new();
 
     /// <summary>
@@ -115,6 +116,7 @@ public sealed class LanguageStore
         HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
         string? newRelativeKey = RelativePathIndex.KeyOf(record);
         HashSet<string> newDependencyKeys = DependentsIndex.KeysOf(record);
+        DirectiveIndex.Contribution newDirectives = DirectiveIndex.Of(record);
         VocabularyIndex.Contribution newVocabulary = VocabularyIndex.Of(record);
 
         lock ( GateFor(record.Path) )
@@ -144,6 +146,7 @@ public sealed class LanguageStore
 
             _relativePathIndex.Apply(record.Path, RelativePathIndex.KeyOf(previous), newRelativeKey);
             _dependents.Apply(record.Path, DependentsIndex.KeysOf(previous), newDependencyKeys);
+            _directives.Apply(record.Path, DirectiveIndex.Of(previous), newDirectives);
 
             PerfTracker.Begin("upsert.vocabulary");
             _vocabulary.Apply(record.Path, VocabularyIndex.Of(previous), newVocabulary);
@@ -195,6 +198,7 @@ public sealed class LanguageStore
                 _classGraph.Remove(normalizedPath);
                 _relativePathIndex.Apply(normalizedPath, RelativePathIndex.KeyOf(previous), null);
                 _dependents.Apply(normalizedPath, DependentsIndex.KeysOf(previous), []);
+                _directives.Apply(normalizedPath, DirectiveIndex.Of(previous), DirectiveIndex.Contribution.None);
                 _vocabulary.Apply(normalizedPath, VocabularyIndex.Of(previous), VocabularyIndex.Contribution.None);
             }
         }
@@ -297,6 +301,21 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesNaming(string normalizedScriptPath)
     {
         return _dependents.FilesNaming(normalizedScriptPath);
+    }
+
+    /// <summary>
+    /// Paths of the files writing a directive path, in <see cref="DirectiveIndex.WrittenKey"/>'s
+    /// form — see <see cref="DirectiveIndex"/>.
+    /// </summary>
+    public ImmutableArray<string> FilesWriting(string writtenKey)
+    {
+        return _directives.FilesWriting(writtenKey);
+    }
+
+    /// <summary>Paths of the files inserting the header that resolved to this path — see <see cref="DirectiveIndex"/>.</summary>
+    public ImmutableArray<string> FilesInserting(string resolvedHeaderPath)
+    {
+        return _directives.FilesInserting(resolvedHeaderPath);
     }
 
     /// <summary>

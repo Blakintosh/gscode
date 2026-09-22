@@ -74,6 +74,15 @@ public sealed class ScriptDatabase
     /// <summary>GSH records (macros/dependencies), shared by both languages.</summary>
     private readonly ConcurrentDictionary<string, ScriptRecord> _gshRecords = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The header store's own indexes, as <see cref="LanguageStore"/> keeps them for scripts. One
+    /// gate for every header write: headers are a few hundred files against tens of thousands of
+    /// scripts, so the striping the script stores need buys nothing here.
+    /// </summary>
+    private readonly DirectiveIndex _gshDirectives = new();
+
+    private readonly Lock _gshGate = new();
+
     /// <summary>The store for a language; GSH callers use the dedicated methods below.</summary>
     public LanguageStore StoreFor(ScriptLanguage language)
     {
@@ -135,7 +144,14 @@ public sealed class ScriptDatabase
 
     public void UpsertGsh(ScriptRecord record)
     {
-        _gshRecords[record.Path] = record;
+        DirectiveIndex.Contribution newDirectives = DirectiveIndex.Of(record);
+
+        lock ( _gshGate )
+        {
+            _gshRecords.TryGetValue(record.Path, out ScriptRecord? previous);
+            _gshRecords[record.Path] = record;
+            _gshDirectives.Apply(record.Path, DirectiveIndex.Of(previous), newDirectives);
+        }
     }
 
     /// <summary>
@@ -159,7 +175,25 @@ public sealed class ScriptDatabase
 
     public void RemoveGsh(string normalizedPath)
     {
-        _gshRecords.TryRemove(normalizedPath, out _);
+        lock ( _gshGate )
+        {
+            if ( _gshRecords.TryRemove(normalizedPath, out ScriptRecord? previous) )
+            {
+                _gshDirectives.Apply(normalizedPath, DirectiveIndex.Of(previous), DirectiveIndex.Contribution.None);
+            }
+        }
+    }
+
+    /// <summary>Headers writing a directive path — <see cref="LanguageStore.FilesWriting"/> for the header store.</summary>
+    public ImmutableArray<string> GshFilesWriting(string writtenKey)
+    {
+        return _gshDirectives.FilesWriting(writtenKey);
+    }
+
+    /// <summary>Headers inserting the header resolved to this path — <see cref="LanguageStore.FilesInserting"/> for the header store.</summary>
+    public ImmutableArray<string> GshFilesInserting(string resolvedHeaderPath)
+    {
+        return _gshDirectives.FilesInserting(resolvedHeaderPath);
     }
 
     public IEnumerable<ScriptRecord> AllGshRecords

@@ -1259,8 +1259,9 @@ public static class DatabaseQueries
     /// deliberate exception to the language-guard rule, and the only way a macro defined in a
     /// header is reachable from the <c>.gsc</c>/<c>.csc</c> that inserts it.
     ///
-    /// Scans linearly: the GSH store carries no reference index, and header counts are small
-    /// next to script counts. Callers should only reach for this on macro keys.
+    /// Read through the header store's reference index. It used to scan every header, on the
+    /// grounds that header counts are small next to script counts — true of a game, but a large
+    /// workspace carries its own headers too, and the scan grew with it (PERF.md, the scale section).
     /// </summary>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindGshReferences(
         ScriptDatabase database,
@@ -1270,8 +1271,13 @@ public static class DatabaseQueries
         ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
-        foreach ( ScriptRecord record in database.AllGshRecords )
+        foreach ( string path in database.GshFilesReferencing(key) )
         {
+            if ( !database.TryGetGsh(path, out ScriptRecord record) )
+            {
+                continue;
+            }
+
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
             {
                 continue;

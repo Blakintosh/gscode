@@ -75,6 +75,7 @@ public class IndexedQueryCorpusTests
             Report(profile, "path children", CheckPathChildren(database));
             Report(profile, "class lookups", CheckClassLookups(database));
             Report(profile, "visible classes", CheckVisibleClasses(database));
+            Report(profile, "header references", CheckHeaderReferences(database));
         }
         finally
         {
@@ -366,6 +367,73 @@ public class IndexedQueryCorpusTests
         }
 
         return [.. names.Order(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// Every key any header or script mentions as a macro, and every key any header mentions at
+    /// all, asked from each context that holds a header.
+    /// </summary>
+    private static Tally CheckHeaderReferences(ScriptDatabase database)
+    {
+        HashSet<SymbolKey> keys = [];
+        HashSet<string> contexts = new(StringComparer.Ordinal) { "raw" };
+        foreach ( ScriptRecord record in database.AllRecords.ToList() )
+        {
+            bool isHeader = record.Language == ScriptLanguage.Gsh;
+            if ( isHeader )
+            {
+                contexts.Add(record.ContextId);
+            }
+
+            foreach ( ReferenceEntry entry in record.References )
+            {
+                if ( isHeader || entry.Key.Kind == SymbolKind.Macro )
+                {
+                    keys.Add(entry.Key);
+                }
+            }
+        }
+
+        Tally tally = new();
+        foreach ( SymbolKey key in keys )
+        {
+            foreach ( string context in contexts )
+            {
+                List<string> expected = [];
+                foreach ( ScriptRecord record in database.AllGshRecords )
+                {
+                    if ( !ScriptDatabase.CanSee(context, record.ContextId) )
+                    {
+                        continue;
+                    }
+
+                    foreach ( ReferenceEntry entry in record.References )
+                    {
+                        if ( entry.Key == key )
+                        {
+                            expected.Add($"{record.Path}@{entry.Range}");
+                        }
+                    }
+                }
+
+                List<string> actual = [];
+                foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in DatabaseQueries.FindGshReferences(database, context, key) )
+                {
+                    actual.Add($"{reference.Record.Path}@{reference.Entry.Range}");
+                }
+
+                expected.Sort(StringComparer.Ordinal);
+                actual.Sort(StringComparer.Ordinal);
+                tally.Asked++;
+                tally.Answers += actual.Count;
+                if ( !expected.SequenceEqual(actual) )
+                {
+                    tally.Differing.Add($"{key} as {context}: expected {expected.Count}, got {actual.Count}");
+                }
+            }
+        }
+
+        return tally;
     }
 
     /// <summary>The read LookupClasses replaced: every declarer of the bare name, filtered by namespace.</summary>

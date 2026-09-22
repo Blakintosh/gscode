@@ -83,6 +83,8 @@ public sealed class ScriptDatabase
 
     private readonly PathTreeIndex _gshPathTree = new(keepExtension: true);
 
+    private readonly ReferenceIndex _gshReferences = new();
+
     private readonly Lock _gshGate = new();
 
     /// <summary>The store for a language; GSH callers use the dedicated methods below.</summary>
@@ -147,6 +149,7 @@ public sealed class ScriptDatabase
     public void UpsertGsh(ScriptRecord record)
     {
         DirectiveIndex.Contribution newDirectives = DirectiveIndex.Of(record);
+        HashSet<SymbolKey> newReferenceKeys = ReferenceIndex.KeysOf(record.References);
 
         lock ( _gshGate )
         {
@@ -154,6 +157,7 @@ public sealed class ScriptDatabase
             _gshRecords[record.Path] = record;
             _gshDirectives.Apply(record.Path, DirectiveIndex.Of(previous), newDirectives);
             _gshPathTree.Apply(previous, record);
+            _gshReferences.Apply(record.Path, ReferenceIndex.KeysOf(previous?.References ?? []), newReferenceKeys);
         }
     }
 
@@ -184,6 +188,7 @@ public sealed class ScriptDatabase
             {
                 _gshDirectives.Apply(normalizedPath, DirectiveIndex.Of(previous), DirectiveIndex.Contribution.None);
                 _gshPathTree.Apply(previous, null);
+                _gshReferences.Apply(normalizedPath, ReferenceIndex.KeysOf(previous.References), []);
             }
         }
     }
@@ -195,6 +200,12 @@ public sealed class ScriptDatabase
     public List<(string Segment, bool IsFolder)> GshPathChildren(string directory, string askingContextId)
     {
         return _gshPathTree.Children(directory, askingContextId);
+    }
+
+    /// <summary>Headers mentioning a key — <see cref="LanguageStore.FilesReferencing"/> for the header store.</summary>
+    public ImmutableArray<string> GshFilesReferencing(SymbolKey key)
+    {
+        return _gshReferences.FilesFor(key);
     }
 
     /// <summary>Headers writing a directive path — <see cref="LanguageStore.FilesWriting"/> for the header store.</summary>

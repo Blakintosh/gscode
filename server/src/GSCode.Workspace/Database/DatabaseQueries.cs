@@ -1081,8 +1081,13 @@ public static class DatabaseQueries
         ImmutableArray<ResolvedClass>.Builder matches = ImmutableArray.CreateBuilder<ResolvedClass>();
 
         // Routed through the class graph rather than scanned: this runs once per parent link on
-        // every chain walk, and method resolution walks a chain per call site.
-        foreach ( string path in store.Classes.PathsDeclaring(keyName) )
+        // every chain walk, and method resolution walks a chain per call site. With a namespace,
+        // the files declaring the class INTO it — the subset the namespace filter below keeps.
+        ImmutableArray<string> declaringPaths = namespaceName is null
+            ? store.Classes.PathsDeclaring(keyName)
+            : store.Classes.PathsDeclaring(namespaceName, keyName);
+
+        foreach ( string path in declaringPaths )
         {
             if ( !store.TryGet(path, out ScriptRecord record) )
             {

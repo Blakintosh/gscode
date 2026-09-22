@@ -30,6 +30,13 @@ public sealed class ClassGraph
 {
     private readonly Dictionary<string, ImmutableArray<ClassSymbol>> _classesByPath = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _pathsByClassName = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The same as <see cref="_pathsByClassName"/>, keyed by namespace as well. A qualified lookup
+    /// read the bare-name list and dropped every other namespace's declarer; see
+    /// <see cref="PathsDeclaring(string, string)"/>.
+    /// </summary>
+    private readonly Dictionary<(string Namespace, string KeyName), HashSet<string>> _pathsByQualifiedName = new();
     private readonly Dictionary<string, HashSet<string>> _pathsByParentName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _pathsByMethodName = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
@@ -48,6 +55,7 @@ public sealed class ClassGraph
                 foreach ( ClassSymbol classSymbol in previous )
                 {
                     Detach(_pathsByClassName, classSymbol.KeyName, path);
+                    Detach(_pathsByQualifiedName, (classSymbol.Namespace, classSymbol.KeyName), path);
 
                     if ( classSymbol.ParentKeyName is not null )
                     {
@@ -72,6 +80,7 @@ public sealed class ClassGraph
             foreach ( ClassSymbol classSymbol in classes )
             {
                 Attach(_pathsByClassName, classSymbol.KeyName, path);
+                Attach(_pathsByQualifiedName, (classSymbol.Namespace, classSymbol.KeyName), path);
 
                 if ( classSymbol.ParentKeyName is not null )
                 {
@@ -98,6 +107,25 @@ public sealed class ClassGraph
         lock ( _gate )
         {
             if ( !_pathsByClassName.TryGetValue(classKeyName, out HashSet<string>? paths) )
+            {
+                return [];
+            }
+
+            return [.. paths];
+        }
+    }
+
+    /// <summary>
+    /// Paths of files declaring a class of this name INTO this namespace (snapshot) — the subset of
+    /// <see cref="PathsDeclaring(string)"/> a namespace filter would keep. In a workspace where many
+    /// copies of a class-declaring file each carry their own namespace, the bare-name list holds
+    /// every copy, and a qualified parent link or <c>ns::Class</c> read all of them to keep one.
+    /// </summary>
+    public ImmutableArray<string> PathsDeclaring(string namespaceName, string classKeyName)
+    {
+        lock ( _gate )
+        {
+            if ( !_pathsByQualifiedName.TryGetValue((namespaceName, classKeyName), out HashSet<string>? paths) )
             {
                 return [];
             }
@@ -201,7 +229,8 @@ public sealed class ClassGraph
         }
     }
 
-    private static void Attach(Dictionary<string, HashSet<string>> index, string key, string path)
+    private static void Attach<TKey>(Dictionary<TKey, HashSet<string>> index, TKey key, string path)
+        where TKey : notnull
     {
         if ( !index.TryGetValue(key, out HashSet<string>? paths) )
         {
@@ -212,7 +241,8 @@ public sealed class ClassGraph
         paths.Add(path);
     }
 
-    private static void Detach(Dictionary<string, HashSet<string>> index, string key, string path)
+    private static void Detach<TKey>(Dictionary<TKey, HashSet<string>> index, TKey key, string path)
+        where TKey : notnull
     {
         if ( !index.TryGetValue(key, out HashSet<string>? paths) )
         {

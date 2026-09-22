@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
@@ -72,6 +73,7 @@ public class IndexedQueryCorpusTests
             Report(profile, "header inserters", CheckHeaderInserters(database));
             Report(profile, "rename plans", CheckRenamePlans(database));
             Report(profile, "path children", CheckPathChildren(database));
+            Report(profile, "class lookups", CheckClassLookups(database));
         }
         finally
         {
@@ -257,6 +259,72 @@ public class IndexedQueryCorpusTests
         }
 
         return listing;
+    }
+
+    /// <summary>Every class declared anywhere, looked up by bare name and qualified, from the declaring file's context.</summary>
+    private static Tally CheckClassLookups(ScriptDatabase database)
+    {
+        Tally tally = new();
+        foreach ( LanguageStore store in database.BothLanguageStores )
+        {
+            foreach ( ScriptRecord record in store.AllRecords.ToList() )
+            {
+                foreach ( ClassSymbol classSymbol in record.Classes )
+                {
+                    foreach ( string? namespaceName in new[] { null, classSymbol.Namespace } )
+                    {
+                        List<string> expected = WalkLookupClasses(store, record.ContextId, namespaceName, classSymbol.KeyName);
+                        List<string> actual = DescribeClasses(
+                            DatabaseQueries.LookupClasses(store, record.ContextId, namespaceName, classSymbol.KeyName));
+
+                        tally.Asked++;
+                        tally.Answers += actual.Count;
+                        if ( !expected.SequenceEqual(actual) )
+                        {
+                            tally.Differing.Add($"{namespaceName}::{classSymbol.KeyName}: expected {expected.Count}, got {actual.Count}");
+                        }
+                    }
+                }
+            }
+        }
+
+        return tally;
+    }
+
+    /// <summary>The read LookupClasses replaced: every declarer of the bare name, filtered by namespace.</summary>
+    private static List<string> WalkLookupClasses(LanguageStore store, string contextId, string? namespaceName, string keyName)
+    {
+        ImmutableArray<ResolvedClass>.Builder matches = ImmutableArray.CreateBuilder<ResolvedClass>();
+        foreach ( string path in store.Classes.PathsDeclaring(keyName) )
+        {
+            if ( !store.TryGet(path, out ScriptRecord record) || !ScriptDatabase.CanSee(contextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            foreach ( ClassSymbol classSymbol in record.Classes )
+            {
+                if ( classSymbol.KeyName == keyName && (namespaceName is null || classSymbol.Namespace == namespaceName) )
+                {
+                    matches.Add(new ResolvedClass(classSymbol, record));
+                }
+            }
+        }
+
+        return DescribeClasses(DatabaseQueries.ApplyShadowing(
+            matches.ToImmutable(), static match => match.Record, static match => match.Class.KeyName, store, contextId));
+    }
+
+    private static List<string> DescribeClasses(ImmutableArray<ResolvedClass> classes)
+    {
+        List<string> described = [];
+        foreach ( ResolvedClass resolved in classes )
+        {
+            described.Add($"{resolved.Record.Path}:{resolved.Class.Namespace}::{resolved.Class.KeyName}@{resolved.Class.NameRange}");
+        }
+
+        described.Sort(StringComparer.Ordinal);
+        return described;
     }
 
     /// <summary>The walk ScriptsInserting replaced: every header per round of the closure, then every script.</summary>

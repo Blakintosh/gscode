@@ -154,6 +154,27 @@ foo_that_exists_only_in_a_custom_engine_build();
 the line below the line it closes on. Prefer `#pragma disable` in new code — it names the
 code it suppresses and says where it stops.
 
+### Editor feature settings
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `gscode.codeLens.enabled` | `false` | "N references" above each function and class declaration. |
+| `gscode.inlayHints.parameterNames` | `true` | Parameter-name hints before arguments at call sites. |
+| `gscode.inlayHints.inferredTypes` | `true` | Inferred-type hints on local variable assignments. |
+| `gscode.inlayHints.macroParameterNames` | `false` | Parameter-name hints inside a `#define` invocation. Off because macro parameters are named for the macro's body, not the caller. |
+| `gscode.completion.literals` | `true` | Offer the workspace's known strings, localized strings and hash strings while typing inside a literal — notify and waittill names especially. |
+| `gscode.completion.fieldScope` | `owner` | After a `.`, offer fields assigned on that owner (`owner`) or on anything (`all`). |
+| `gscode.completion.callPunctuation` | `parensAndSemicolon` | What completing a function call inserts with it: `off`, `parens`, or `parensAndSemicolon`. |
+| `gscode.completion.parameterHints` | `true` | Show a function's parameters beside its name in the suggestion list. |
+| `gscode.outline.showAssignments` | `true` | Show variable and field assignments under their function in the outline. |
+| `gscode.format.padParens` | `true` | `if ( x )` rather than `if (x)`. |
+| `gscode.format.padCallParens` | `true` | `foo( a, b )` rather than `foo(a, b)`. |
+| `gscode.format.padBrackets` | `true` | `a[ i ]` rather than `a[i]`. |
+| `gscode.format.spaceBeforeControlParen` | `true` | `if (` rather than `if(`; independent of `padParens`. |
+| `gscode.format.maxBlankLines` | `2` | The longest run of blank lines the formatter keeps. |
+| `gscode.format.sortDirectives` | `true` | Group and sort the directive block at the top of a file. |
+| `gscode.format.alignConsecutive` | `true` | Line up the `=` of consecutive assignments. |
+
 ### Commands and useful editor features
 
 - **GSCode: Show Server Output** opens the language-server log.

@@ -4,6 +4,48 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- **GSCode: Select Game** can be opened on purpose from the Command Palette, and lists only the games
+  the server has a dialect for, ticking the one actually in force.
+- `workspaceIndexingMode: "full"` now runs the cross-file lints over every indexed file, not just
+  open ones, and re-lints only the closed files an edit reaches.
+- Macros: signature help on a macro invocation shows what it expands to; macro parameter-name inlay
+  hints (`gscode.inlayHints.macroParameterNames`, off by default); hover follows a chain of macros;
+  `__FUNCTION__` and `__FILE__` hover where they are written; keyword-shaped macro names such as
+  `DEFAULT` get the macro colour.
+- Organize Imports removes every unused `#using` in the file, not only the one under the cursor.
+- A status-bar warning when indexing fails, instead of a spinner that never stops.
+- The lints now see through macros: a private, dev-only, ambiguous or unresolved call that a macro
+  expands to is reported at the invocation, and a missing `#using`/`#include` it needs is asked for.
+
+### Changed
+- Large workspaces stay fast. Measured on generated 50,000-file workspaces: a warm start is about
+  4 seconds, and completion, one file's lint pass, CodeLens and find-references cost the same as in
+  a 1,000-file one. The workspace cache uses a new binary format, so it rebuilds once on first start.
+- `gscode.serverLogLevel` defaults to `warning` rather than `off`.
+- Diagnostics for closed files are only re-sent when they change.
+
+### Fixed
+- Diagnostics from an older analysis no longer replace newer ones, reappear on a closed file, or
+  show twice under two spellings of the same path.
+- The startup index no longer overwrites an open document, runs twice at once, or survives
+  **Clear Cache and Reindex**; clearing the cache now actually deletes it on Windows.
+- A cache restored in a new session picks up headers created or deleted in between, files deleted
+  in between, and a workspace-folder change.
+- A mod overlay now hides the raw file it replaces everywhere: references, completion, workspace
+  symbols, and declarations it no longer contains.
+- Type inference: subscript writes, compound assignments, `++`/`--`, loops, `switch` and `if`
+  conditions now update what a variable is known to hold.
+- Completion no longer pops up inside comments or right after a closed string, offers functions
+  from unrelated files sharing a name stem, or misses a function just written.
+- Signature help on merge dialects (`#include`) and on call-shaped keywords; go-to-definition on
+  locals created by a subscript write; call hierarchy lists each calling function separately; a
+  rename refuses a name that is not a valid identifier.
+- Argument counts, ambiguous-call and unused-binding lints: several false positives on shipped
+  scripts, including `waittillmatch`'s trailing argument read as an output.
+
 ## 2.0.2
 
 ### Changed

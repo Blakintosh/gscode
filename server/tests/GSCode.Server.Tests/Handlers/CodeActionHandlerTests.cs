@@ -175,6 +175,40 @@ public class CodeActionHandlerTests
 
         CodeActionHandler.AddDiagnosticFixes(request, result, actions);
 
+        // QuickFix only — every assertion below is about the diagnostic-driven fixes this method
+        // existed to test. AddDiagnosticFixes also adds one SourceOrganizeImports action alongside
+        // them when there is an unused import to remove; OrganizeImportsAction_HasItsOwnKind below
+        // covers that one on its own terms, with its own edit count.
+        List<CodeAction> fixes = [];
+        foreach ( CommandOrCodeAction action in actions )
+        {
+            if ( action.IsCodeAction && action.CodeAction is not null && action.CodeAction.Kind == CodeActionKind.QuickFix )
+            {
+                fixes.Add(action.CodeAction);
+            }
+        }
+
+        return fixes;
+    }
+
+    /// <summary>Every action AddDiagnosticFixes returns, quickfix and source alike — for the one test that wants both.</summary>
+    private static List<CodeAction> AllActionsFor(string source, params LspDiagnostic[] reported)
+    {
+        ParseResult result = Analyze(source);
+        List<CommandOrCodeAction> actions = [];
+
+        CodeActionParams request = new()
+        {
+            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(@"c:\ws\scripts\t.gsc") },
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(0, 0, 1000, 0),
+            Context = new CodeActionContext
+            {
+                Diagnostics = new Container<LspDiagnostic>(reported),
+            },
+        };
+
+        CodeActionHandler.AddDiagnosticFixes(request, result, actions);
+
         List<CodeAction> fixes = [];
         foreach ( CommandOrCodeAction action in actions )
         {
@@ -282,6 +316,53 @@ public class CodeActionHandlerTests
         List<CodeAction> fixes = FixesFor(source, Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17));
 
         Assert.DoesNotContain(fixes, f => f.Title.StartsWith("Remove all", StringComparison.Ordinal));
+    }
+
+    // --- Organize Imports (source.organizeImports) ---
+    //
+    // VS Code's "Source Action..." and "Organize Imports" commands ask for this kind specifically;
+    // CodeActionHandler.CreateRegistrationOptions has to list it or neither menu ever reaches the
+    // server at all, and AddDiagnosticFixes has to hand back an action carrying it or the menu that
+    // does reach the server finds nothing to run.
+
+    [Fact]
+    public void UnusedImport_OffersAnOrganizeImportsAction_EvenJustOne()
+    {
+        // Unlike the QuickFix bulk action (OneUnusedUsing_DoesNotOfferABulkFix, above), Organize
+        // Imports has no per-line neighbour to be redundant with — it is offered from one unused
+        // import already.
+        string source = "#using scripts\\a;\nfunction f(){}\n";
+
+        CodeAction organize = Assert.Single(
+            AllActionsFor(source, Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17)),
+            f => f.Kind == CodeActionKind.SourceOrganizeImports);
+
+        Assert.Equal("", SingleEditOf(organize).NewText);
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_CombinesEveryUnusedImportIntoOneEdit()
+    {
+        string source = "#using scripts\\a;\n#using scripts\\b;\nfunction f(){}\n";
+
+        CodeAction organize = Assert.Single(
+            AllActionsFor(
+                source,
+                Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17),
+                Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 17)),
+            f => f.Kind == CodeActionKind.SourceOrganizeImports);
+
+        Assert.Equal(2, Assert.Single(organize.Edit!.Changes!).Value.Count());
+        Assert.Equal(2, organize.Diagnostics!.Count());
+    }
+
+    [Fact]
+    public void NoUnusedImports_OffersNoOrganizeImportsAction()
+    {
+        string source = "function f(){}\n";
+
+        Assert.DoesNotContain(
+            AllActionsFor(source), f => f.Kind == CodeActionKind.SourceOrganizeImports);
     }
 
     [Theory]

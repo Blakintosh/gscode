@@ -9,6 +9,7 @@ using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
+using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
@@ -31,6 +32,8 @@ public class NamespaceImportFixTests
 {
     private const string AskingPath = @"c:\bo3\share\raw\scripts\main.gsc";
     private const string UtilPath = @"c:\bo3\share\raw\scripts\util.gsc";
+
+    private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static ParseResult AnalyzeAt(string source, string path)
     {
@@ -62,8 +65,10 @@ public class NamespaceImportFixTests
 
         ResolverHolder holder = new(new PhysicalFileSystem());
         NavigationSupport support = new(documents, database, holder);
+        DocumentLinter linter = new(
+            database, holder, BuiltinApiSet.Load(ApiDirectory), ObjectFields.Load(ApiDirectory));
 
-        return new CodeActionHandler(documents, support, TextDocumentSelector.ForLanguage("gsc"));
+        return new CodeActionHandler(documents, support, linter, TextDocumentSelector.ForLanguage("gsc"));
     }
 
     private static async Task<List<CodeAction>> ActionsAtAsync(CodeActionHandler handler, int line, int start, int end)
@@ -95,6 +100,64 @@ public class NamespaceImportFixTests
         }
 
         return fixes;
+    }
+
+    // --- "Quick Fix..." from the right-click menu: no reported diagnostics, just a cursor ---
+    //
+    // VS Code's context-menu "Quick Fix..." sends whatever the CURSOR overlaps, which can be an
+    // empty Context.Diagnostics even though a diagnostic sits elsewhere on the same line — unlike
+    // the lightbulb or hover Quick Fix, both anchored ON the marker. The reported symptom was
+    // "right click -> fix doesn't show".
+
+    // UsingAfterDeclaration (a parser-level diagnostic, always in ParseResult.AllDiagnostics — no
+    // database or physical filesystem resolution needed) on line 2: `#using scripts\late;`.
+    private const string UsingAfterDeclarationSource = "#using scripts\\a;\nfunction f(){}\n#using scripts\\late;\n";
+
+    [Fact]
+    public async Task EmptyContextDiagnostics_StillFindsAFixReportedElsewhereOnTheLine()
+    {
+        CodeActionHandler handler = BuildHandlerWith(new ScriptDatabase(), UsingAfterDeclarationSource);
+
+        CodeActionParams request = new()
+        {
+            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(AskingPath) },
+            // A zero-width cursor at the very START of line 2, left of where the diagnostic itself
+            // is reported (over the `#using scripts\late;` text starting at character 0 too, but a
+            // real cursor position need not land inside a squiggle's exact bounds to be "on the
+            // line") — with no diagnostics reported for it, the way a context-menu Quick Fix
+            // arrives when the client decided the cursor was not on the marker.
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(2, 0, 2, 0),
+            Context = new CodeActionContext { Diagnostics = new Container<LspDiagnostic>() },
+        };
+
+        CommandOrCodeActionContainer? container = await handler.Handle(request, CancellationToken.None);
+
+        CodeAction fix = Assert.Single(
+            [.. (container ?? []).Where(a => a.IsCodeAction).Select(a => a.CodeAction!)],
+            f => f.Title!.Contains("Move", StringComparison.Ordinal));
+        Assert.Equal((int)GscDiagnosticCode.UsingAfterDeclaration, Assert.Single(fix.Diagnostics!).Code!.Value.Long);
+    }
+
+    [Fact]
+    public async Task EmptyContextDiagnostics_OffersNothingFromADifferentLine()
+    {
+        // The recomputed fallback is scoped to the requested LINE, not the whole file — otherwise
+        // every Quick Fix request would offer every fix in the document regardless of where it was
+        // asked.
+        CodeActionHandler handler = BuildHandlerWith(new ScriptDatabase(), UsingAfterDeclarationSource);
+
+        CodeActionParams request = new()
+        {
+            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(AskingPath) },
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(1, 0, 1, 0),
+            Context = new CodeActionContext { Diagnostics = new Container<LspDiagnostic>() },
+        };
+
+        CommandOrCodeActionContainer? container = await handler.Handle(request, CancellationToken.None);
+
+        Assert.DoesNotContain(
+            (container ?? []).Where(a => a.IsCodeAction).Select(a => a.CodeAction!),
+            f => f.Title!.Contains("Move", StringComparison.Ordinal));
     }
 
     [Fact]

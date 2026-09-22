@@ -32,12 +32,14 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 {
     private readonly DocumentStore _documents;
     private readonly NavigationSupport _support;
+    private readonly DocumentLinter _linter;
     private readonly TextDocumentSelector _selector;
 
-    public CodeActionHandler(DocumentStore documents, NavigationSupport support, TextDocumentSelector selector)
+    public CodeActionHandler(DocumentStore documents, NavigationSupport support, DocumentLinter linter, TextDocumentSelector selector)
     {
         _documents = documents;
         _support = support;
+        _linter = linter;
         _selector = selector;
     }
 
@@ -47,7 +49,15 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return new CodeActionRegistrationOptions
         {
             DocumentSelector = _selector,
-            CodeActionKinds = new Container<CodeActionKind>(CodeActionKind.QuickFix),
+
+            // SourceOrganizeImports alongside QuickFix. VS Code's "Source Action..." and "Organize
+            // Imports" context-menu entries ask the client's own capability negotiation whether a
+            // server offers that KIND before ever sending a request — with only QuickFix
+            // registered, both menus showed nothing to pick, not an empty result from an actual
+            // request. This server never had a "source" action to offer before the organize-imports
+            // one below existed, which is why the registration stopped at QuickFix in the first
+            // place; Refactor stays unregistered for the same reason — nothing here refactors.
+            CodeActionKinds = new Container<CodeActionKind>(CodeActionKind.QuickFix, CodeActionKind.SourceOrganizeImports),
         };
     }
 
@@ -59,11 +69,15 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
     public override Task<CommandOrCodeActionContainer?> Handle(CodeActionParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGetAnalyzed(
-            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
+        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
         {
             return Task.FromResult<CommandOrCodeActionContainer?>(null);
         }
+
+        // Freshened, not TryGetAnalyzed's cached snapshot — see DocumentSymbolHandler's comment on
+        // the same fix. A file opened while startup indexing is still running otherwise offers no
+        // fixes at all until the next edit.
+        ParseResult result = _documents.AnalyzeIfStale(document, cancellationToken);
 
         TextRange selection = request.Range.ToCore();
         List<CommandOrCodeAction> actions = [];
@@ -102,15 +116,61 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        AddDiagnosticFixes(request, result, actions, target);
+        AddDiagnosticFixes(request, result, actions, DiagnosticsForFixes(request, result, document, cancellationToken), target);
 
         return Task.FromResult<CommandOrCodeActionContainer?>(new CommandOrCodeActionContainer(actions));
     }
 
     /// <summary>
-    /// Fixes driven by the diagnostics the client reported for the selection. Keyed off the
-    /// request's context rather than re-derived, because the workspace lints run in
-    /// TextSyncHandler and are not recomputable from the ParseResult alone.
+    /// Diagnostics on the request's LINE, so "Quick Fix..." from the right-click context menu
+    /// finds a fix even when the CURSOR (what that command anchors on) sits somewhere else on the
+    /// same line than the squiggle.
+    ///
+    /// <c>request.Context.Diagnostics</c> is exactly what VS Code computed overlapped the request's
+    /// own range, and is used as-is whenever it is non-empty — this never second-guesses a set the
+    /// client actually sent, so the lightbulb, hover "Quick Fix" and the Problems panel (each
+    /// already anchored ON a marker) see no change at all. It is empty specifically for the
+    /// cursor-not-on-the-squiggle case, and that is the one this exists for: the workspace lints
+    /// (unused #using, PreferBooleanLiteral, an unresolved call, …) are not recomputable from the
+    /// ParseResult alone — they run in TextSyncHandler/DocumentLinter — so answering the same
+    /// question the client would have takes running that same pipeline here, once, and keeping only
+    /// what lands on this line.
+    /// </summary>
+    private IEnumerable<LspDiagnostic> DiagnosticsForFixes(
+        CodeActionParams request, ParseResult result, OpenDocument document, CancellationToken cancellationToken)
+    {
+        if ( request.Context.Diagnostics.Count() > 0 )
+        {
+            return request.Context.Diagnostics;
+        }
+
+        // _linter.Analyze already returns result.AllDiagnostics plus the cross-file lints layered
+        // on top (WorkspaceLints.Analyze's own doc: "the file's own diagnostics plus every
+        // cross-file lint"), so this is the one call that needs making, not two — a second pass
+        // over result.AllDiagnostics on its own duplicated every parser-level diagnostic here.
+        int requestedLine = request.Range.Start.Line;
+        List<LspDiagnostic> onThisLine = [];
+
+        foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in _linter.Analyze(document, result, cancellationToken) )
+        {
+            // LINE MEMBERSHIP, not TextRange.Overlaps: Overlaps compares positions inclusively
+            // (Start <= other.End), so a range built from LineRangeOf's (line, 0)-(line+1, 0) —
+            // meant for a whole-line DELETE edit, where touching the next line's start is exactly
+            // the point — touches a diagnostic that starts at column 0 of the FOLLOWING line too.
+            // Asking whether the line sits between a diagnostic's own start and end line avoids
+            // that boundary entirely.
+            if ( diagnostic.Range.Start.Line <= requestedLine && requestedLine <= diagnostic.Range.End.Line )
+            {
+                onThisLine.Add(diagnostic.ToLsp());
+            }
+        }
+
+        return onThisLine;
+    }
+
+    /// <summary>
+    /// Fixes driven by the diagnostics the client reported for the selection, or
+    /// <see cref="DiagnosticsForFixes"/>'s line-scoped recomputation of them.
     /// </summary>
     /// <param name="target">
     /// The workspace view, when there is one. Only the unresolved-call fixes need it — everything
@@ -121,6 +181,21 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         CodeActionParams request,
         ParseResult result,
         List<CommandOrCodeAction> actions,
+        NavigationTarget? target = null)
+    {
+        AddDiagnosticFixes(request, result, actions, request.Context.Diagnostics, target);
+    }
+
+    /// <summary>
+    /// Same as the four-argument overload, but over an EXPLICIT diagnostic list rather than
+    /// <c>request.Context.Diagnostics</c> — see <see cref="DiagnosticsForFixes"/>, the only caller
+    /// that needs the difference.
+    /// </summary>
+    internal static void AddDiagnosticFixes(
+        CodeActionParams request,
+        ParseResult result,
+        List<CommandOrCodeAction> actions,
+        IEnumerable<LspDiagnostic> diagnostics,
         NavigationTarget? target = null)
     {
         DocumentUri uri = request.TextDocument.Uri;
@@ -136,7 +211,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         List<LspDiagnostic> unusedUsings = [];
         List<LspDiagnostic> unusedIncludes = [];
 
-        foreach ( LspDiagnostic diagnostic in request.Context.Diagnostics )
+        foreach ( LspDiagnostic diagnostic in diagnostics )
         {
             switch ( CodeOf(diagnostic) )
             {
@@ -186,6 +261,14 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                     continue;
             }
         }
+
+        // One SOURCE action covering both directives together, for VS Code's "Organize Imports"
+        // command and "Source Action..." menu — see the registration comment for why neither could
+        // find this server at all before SourceOrganizeImports joined QuickFix there. A combined
+        // action rather than two: "Organize Imports" is one command, and no dialect has both
+        // directives at once regardless (#include is gated by import style), so this never actually
+        // spans two kinds of line.
+        AddOrganizeImportsAction(uri, unusedUsings, unusedIncludes, actions);
 
         // One click for the common cleanup, rather than N separate fixes.
         AddRemoveAllUnusedAction(uri, unusedUsings, "#using", actions);
@@ -313,6 +396,44 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         {
             actions.Add(new CommandOrCodeAction(BuildRemoveAllUnusedAction(uri, unused, directive)));
         }
+    }
+
+    /// <summary>
+    /// The one SourceOrganizeImports action: every unused #using/#include on this file, in a
+    /// single edit. Offered whenever there is at least one — unlike the QuickFix bulk action above,
+    /// which only shows once there are two, because a lone unused import already has its own
+    /// per-line QuickFix and a "remove all 1" button next to it would be redundant there. Organize
+    /// Imports has no such neighbour: it is the one command a user reaches for regardless of count.
+    /// </summary>
+    private static void AddOrganizeImportsAction(
+        DocumentUri uri,
+        List<LspDiagnostic> unusedUsings,
+        List<LspDiagnostic> unusedIncludes,
+        List<CommandOrCodeAction> actions)
+    {
+        List<LspDiagnostic> all = [.. unusedUsings, .. unusedIncludes];
+        if ( all.Count == 0 )
+        {
+            return;
+        }
+
+        HashSet<int> lines = [];
+        List<TextEdit> edits = [];
+        foreach ( LspDiagnostic diagnostic in all )
+        {
+            TextRange range = diagnostic.Range.ToCore();
+            if ( lines.Add(range.Start.Line) )
+            {
+                edits.Add(new TextEdit { Range = LineRangeOf(range).ToLsp(), NewText = "" });
+            }
+        }
+
+        actions.Add(new CommandOrCodeAction(BuildAction(
+            "Organize imports (remove " + edits.Count + " unused)",
+            uri,
+            edits,
+            new Container<LspDiagnostic>(all),
+            CodeActionKind.SourceOrganizeImports)));
     }
 
     private static GscDiagnosticCode? CodeOf(LspDiagnostic diagnostic)
@@ -1046,12 +1167,26 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         Container<LspDiagnostic>? diagnostics,
         bool preferred = false)
     {
+        return BuildAction(title, uri, edits, diagnostics, CodeActionKind.QuickFix, preferred);
+    }
+
+    /// <summary>What <see cref="QuickFix(string, DocumentUri, IEnumerable{TextEdit}, Container{LspDiagnostic}, bool)"/>
+    /// builds, generalised over the action's <see cref="CodeActionKind"/> — every quick fix in this
+    /// file is one, and <see cref="AddOrganizeImportsAction"/> is the one caller that is not.</summary>
+    private static CodeAction BuildAction(
+        string title,
+        DocumentUri uri,
+        IEnumerable<TextEdit> edits,
+        Container<LspDiagnostic>? diagnostics,
+        CodeActionKind kind,
+        bool preferred = false)
+    {
         Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
 
         return new CodeAction
         {
             Title = title,
-            Kind = CodeActionKind.QuickFix,
+            Kind = kind,
             Diagnostics = diagnostics,
             IsPreferred = preferred,
             Edit = new WorkspaceEdit { Changes = changes },

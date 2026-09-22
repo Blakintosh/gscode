@@ -19,6 +19,7 @@ public sealed class LanguageStore
     private readonly DeclarationIndex _declarationIndex = new();
     private readonly NamespaceIndex _namespaceIndex = new();
     private readonly ClassGraph _classGraph = new();
+    private readonly RelativePathIndex _relativePathIndex = new();
 
     /// <summary>
     /// How many non-raw (mod/workspace) records currently sit at each script-relative path, broken
@@ -110,6 +111,7 @@ public sealed class LanguageStore
         HashSet<SymbolKey> newKeys = ReferenceIndex.KeysOf(record.References);
         DeclarationIndex.DeclaredKeys newNames = DeclarationIndex.KeysOf(record.Functions);
         HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
+        string? newRelativeKey = RelativePathIndex.KeyOf(record);
 
         lock ( GateFor(record.Path) )
         {
@@ -135,6 +137,8 @@ public sealed class LanguageStore
             PerfTracker.Begin("upsert.class");
             _classGraph.Apply(record.Path, record.Classes);
             PerfTracker.End();
+
+            _relativePathIndex.Apply(record.Path, RelativePathIndex.KeyOf(previous), newRelativeKey);
         }
     }
 
@@ -180,6 +184,7 @@ public sealed class LanguageStore
                 _declarationIndex.Apply(normalizedPath, DeclarationIndex.KeysOf(previous.Functions), DeclarationIndex.DeclaredKeys.None);
                 _namespaceIndex.Apply(normalizedPath, NamespaceIndex.NamespacesOf(previous.Functions), []);
                 _classGraph.Remove(normalizedPath);
+                _relativePathIndex.Apply(normalizedPath, RelativePathIndex.KeyOf(previous), null);
             }
         }
     }
@@ -254,6 +259,15 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesDeclaringInto(string namespaceName)
     {
         return _namespaceIndex.FilesDeclaringInto(namespaceName);
+    }
+
+    /// <summary>
+    /// Paths of the files at a script-relative path, in <see cref="RelativePathIndex.Normalize"/>'s
+    /// form — see <see cref="RelativePathIndex"/>.
+    /// </summary>
+    public ImmutableArray<string> FilesAt(string normalizedScriptPath)
+    {
+        return _relativePathIndex.FilesAt(normalizedScriptPath);
     }
 
     /// <summary>Paths of every file that mentions the key (definition sites included).</summary>

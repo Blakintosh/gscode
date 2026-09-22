@@ -346,14 +346,11 @@ public static class DatabaseQueries
     {
         HashSet<string> names = new(StringComparer.Ordinal);
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // The files each import names, from the relative-path index, rather than every record's
+        // path normalized and compared — see RelativePathIndex for what that walk cost at scale.
+        foreach ( ScriptRecord record in RecordsAt(store, importedPaths) )
         {
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
-            if ( !importedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
             {
                 continue;
             }
@@ -368,6 +365,38 @@ public static class DatabaseQueries
         }
 
         return [.. names];
+    }
+
+    /// <summary>
+    /// The records at each of <paramref name="normalizedPaths"/> (already in
+    /// <see cref="RelativePathIndex.Normalize"/>'s form), each path asked once.
+    /// </summary>
+    public static List<ScriptRecord> RecordsAt(LanguageStore store, ImmutableArray<string> normalizedPaths)
+    {
+        List<ScriptRecord> records = [];
+        if ( normalizedPaths.IsDefaultOrEmpty )
+        {
+            return records;
+        }
+
+        HashSet<string> asked = new(StringComparer.Ordinal);
+        foreach ( string normalizedPath in normalizedPaths )
+        {
+            if ( !asked.Add(normalizedPath) )
+            {
+                continue;
+            }
+
+            foreach ( string path in store.FilesAt(normalizedPath) )
+            {
+                if ( store.TryGet(path, out ScriptRecord record) )
+                {
+                    records.Add(record);
+                }
+            }
+        }
+
+        return records;
     }
 
     /// <summary>
@@ -807,17 +836,20 @@ public static class DatabaseQueries
         ImmutableArray<(ScriptRecord Record, FunctionSymbol Function)>.Builder matches =
             ImmutableArray.CreateBuilder<(ScriptRecord, FunctionSymbol)>();
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // The asking file itself, then the files its includes name — read from the relative-path
+        // index rather than found by normalizing every record's path, which is what this walked.
+        List<ScriptRecord> inScope = [];
+        if ( normalizedAskingPath.Length > 0 && store.TryGet(normalizedAskingPath, out ScriptRecord self) )
         {
-            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
+            inScope.Add(self);
+        }
 
-            bool sameFile = normalizedAskingPath.Length > 0
-                && string.Equals(record.Path, normalizedAskingPath, StringComparison.OrdinalIgnoreCase);
+        inScope.AddRange(RecordsAt(store, includedPaths));
 
-            if ( !sameFile && !includedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( ScriptRecord record in inScope )
+        {
+            if ( !visited.Add(record.Path) || !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
             {
                 continue;
             }

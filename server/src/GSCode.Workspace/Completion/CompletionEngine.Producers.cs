@@ -400,10 +400,11 @@ public sealed partial class CompletionEngine
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // The files at that path, from the relative-path index — the normalization it keys on is
+        // the one this used to apply to every record in the store to find them.
+        foreach ( ScriptRecord record in DatabaseQueries.RecordsAt(store, [normalizedWritten]) )
         {
-            if ( !ScriptDatabase.CanSee(contextId, record.ContextId)
-                || PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(record.RelativePath)) != normalizedWritten )
+            if ( !ScriptDatabase.CanSee(contextId, record.ContextId) )
             {
                 continue;
             }

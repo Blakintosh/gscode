@@ -55,6 +55,7 @@ $env:GSCODE_CORPUS_BO3='...\share\raw'; dotnet test tests\GSCode.Server.Tests\..
 | `Category!=Corpus&Category!=Perf` | the unit tests. This is the everyday run, and what CI uses |
 | `Category=Corpus` | the sweep over five games' real scripts. The arbiter for any diagnostic change |
 | `Category=Perf` | per-file timing and the lex/preprocess/parse/extract split |
+| `Category=Scale` | generated 10K–50K-file workspaces: cold/warm start, memory, completion and lint against budgets. No-op unless `GSCODE_SCALE_SIZES` is set (e.g. `10000,25000,50000`) |
 
 Note the everyday filter excludes BOTH. `Category!=Corpus` alone now picks up the perf sweep, which
 needs the game installs and takes a second pass over every script.

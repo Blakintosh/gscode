@@ -176,43 +176,13 @@ public class CodeActionHandlerTests
         CodeActionHandler.AddDiagnosticFixes(request, result, actions);
 
         // QuickFix only — every assertion below is about the diagnostic-driven fixes this method
-        // existed to test. AddDiagnosticFixes also adds one SourceOrganizeImports action alongside
-        // them when there is an unused import to remove; OrganizeImportsAction_HasItsOwnKind below
-        // covers that one on its own terms, with its own edit count.
+        // returns. Organize Imports is NOT one of them any more (see AddOrganizeImportsAction's
+        // own doc comment): it is built separately in Handle(), from a file-wide scan rather than
+        // this method's request-scoped diagnostics, and is tested on its own below.
         List<CodeAction> fixes = [];
         foreach ( CommandOrCodeAction action in actions )
         {
             if ( action.IsCodeAction && action.CodeAction is not null && action.CodeAction.Kind == CodeActionKind.QuickFix )
-            {
-                fixes.Add(action.CodeAction);
-            }
-        }
-
-        return fixes;
-    }
-
-    /// <summary>Every action AddDiagnosticFixes returns, quickfix and source alike — for the one test that wants both.</summary>
-    private static List<CodeAction> AllActionsFor(string source, params LspDiagnostic[] reported)
-    {
-        ParseResult result = Analyze(source);
-        List<CommandOrCodeAction> actions = [];
-
-        CodeActionParams request = new()
-        {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(@"c:\ws\scripts\t.gsc") },
-            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(0, 0, 1000, 0),
-            Context = new CodeActionContext
-            {
-                Diagnostics = new Container<LspDiagnostic>(reported),
-            },
-        };
-
-        CodeActionHandler.AddDiagnosticFixes(request, result, actions);
-
-        List<CodeAction> fixes = [];
-        foreach ( CommandOrCodeAction action in actions )
-        {
-            if ( action.IsCodeAction && action.CodeAction is not null )
             {
                 fixes.Add(action.CodeAction);
             }
@@ -322,8 +292,17 @@ public class CodeActionHandlerTests
     //
     // VS Code's "Source Action..." and "Organize Imports" commands ask for this kind specifically;
     // CodeActionHandler.CreateRegistrationOptions has to list it or neither menu ever reaches the
-    // server at all, and AddDiagnosticFixes has to hand back an action carrying it or the menu that
-    // does reach the server finds nothing to run.
+    // server at all. The action itself is built by AddOrganizeImportsAction in Handle(), from
+    // AllUnusedImportDiagnostics' file-wide scan rather than the request's own scoped diagnostics
+    // — the reported bug was Organize Imports on a multi-import file offering to remove only the
+    // ONE unused import that happened to be on the line the menu was opened from. These tests pin
+    // AddOrganizeImportsAction's own half directly: given a set of unused-import diagnostics —
+    // wherever they came from — it combines every one of them into a single edit with no scoping
+    // of its own. (AllUnusedImportDiagnostics' half — that the scan really is file-wide — needs a
+    // real resolvable #using, which needs a workspace with a filesystem behind it; that is proven
+    // by inspection instead: it takes no range/line parameter at all, unlike DiagnosticsForFixes.)
+
+    private static DocumentUri TestUri => DocumentUri.FromFileSystemPath(@"c:\ws\scripts\t.gsc");
 
     [Fact]
     public void UnusedImport_OffersAnOrganizeImportsAction_EvenJustOne()
@@ -331,27 +310,31 @@ public class CodeActionHandlerTests
         // Unlike the QuickFix bulk action (OneUnusedUsing_DoesNotOfferABulkFix, above), Organize
         // Imports has no per-line neighbour to be redundant with — it is offered from one unused
         // import already.
-        string source = "#using scripts\\a;\nfunction f(){}\n";
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(
+            TestUri, [Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17)], actions);
 
-        CodeAction organize = Assert.Single(
-            AllActionsFor(source, Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17)),
-            f => f.Kind == CodeActionKind.SourceOrganizeImports);
-
+        CodeAction organize = Assert.Single(actions, a => a.IsCodeAction).CodeAction!;
+        Assert.Equal(CodeActionKind.SourceOrganizeImports, organize.Kind);
         Assert.Equal("", SingleEditOf(organize).NewText);
     }
 
     [Fact]
     public void OrganizeImportsAction_CombinesEveryUnusedImportIntoOneEdit()
     {
-        string source = "#using scripts\\a;\n#using scripts\\b;\nfunction f(){}\n";
-
-        CodeAction organize = Assert.Single(
-            AllActionsFor(
-                source,
+        // Two diagnostics on DIFFERENT lines — proving the action combines whatever set it is
+        // given rather than assuming they share a line, which is exactly what a file-wide scan
+        // (several imports, scattered through the file) hands it in practice.
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(
+            TestUri,
+            [
                 Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17),
-                Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 17)),
-            f => f.Kind == CodeActionKind.SourceOrganizeImports);
+                Reported(GscDiagnosticCode.UnusedUsing, 5, 0, 17),
+            ],
+            actions);
 
+        CodeAction organize = Assert.Single(actions, a => a.IsCodeAction).CodeAction!;
         Assert.Equal(2, Assert.Single(organize.Edit!.Changes!).Value.Count());
         Assert.Equal(2, organize.Diagnostics!.Count());
     }
@@ -359,10 +342,10 @@ public class CodeActionHandlerTests
     [Fact]
     public void NoUnusedImports_OffersNoOrganizeImportsAction()
     {
-        string source = "function f(){}\n";
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(TestUri, [], actions);
 
-        Assert.DoesNotContain(
-            AllActionsFor(source), f => f.Kind == CodeActionKind.SourceOrganizeImports);
+        Assert.Empty(actions);
     }
 
     [Theory]

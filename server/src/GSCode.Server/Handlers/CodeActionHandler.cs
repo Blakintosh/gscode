@@ -118,6 +118,16 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         AddDiagnosticFixes(request, result, actions, DiagnosticsForFixes(request, result, document, cancellationToken), target);
 
+        // Same TriggerKind gate as DiagnosticsForFixes: VS Code never polls a Source Action
+        // request the way it polls QuickFix for the lightbulb, so this only ever runs on an
+        // explicit ask — but the gate is kept anyway rather than assumed, for the same
+        // defend-against-an-unusual-client reason DiagnosticsForFixes keeps its own.
+        if ( (request.Context.TriggerKind ?? CodeActionTriggerKind.Invoked) == CodeActionTriggerKind.Invoked )
+        {
+            AddOrganizeImportsAction(
+                request.TextDocument.Uri, AllUnusedImportDiagnostics(document, result, cancellationToken), actions);
+        }
+
         return Task.FromResult<CommandOrCodeActionContainer?>(new CommandOrCodeActionContainer(actions));
     }
 
@@ -276,13 +286,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        // One SOURCE action covering both directives together, for VS Code's "Organize Imports"
-        // command and "Source Action..." menu — see the registration comment for why neither could
-        // find this server at all before SourceOrganizeImports joined QuickFix there. A combined
-        // action rather than two: "Organize Imports" is one command, and no dialect has both
-        // directives at once regardless (#include is gated by import style), so this never actually
-        // spans two kinds of line.
-        AddOrganizeImportsAction(uri, unusedUsings, unusedIncludes, actions);
+        // Organize Imports is NOT built here — see BuildOrganizeImportsAction's own call site in
+        // Handle(). This method only ever sees whatever unusedUsings/unusedIncludes the REQUEST's
+        // own diagnostics carried (the client's selection, or DiagnosticsForFixes' one-line
+        // fallback), and "Organize Imports" is a whole-DOCUMENT command by convention — scoping it
+        // to wherever the cursor happened to be when the menu opened read as "1 unused" on a file
+        // that actually had several.
 
         // One click for the common cleanup, rather than N separate fixes.
         AddRemoveAllUnusedAction(uri, unusedUsings, "#using", actions);
@@ -419,21 +428,25 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// per-line QuickFix and a "remove all 1" button next to it would be redundant there. Organize
     /// Imports has no such neighbour: it is the one command a user reaches for regardless of count.
     /// </summary>
-    private static void AddOrganizeImportsAction(
+    /// <summary>
+    /// Builds the one Organize Imports action from an already-gathered set of unused-import
+    /// diagnostics. <c>internal</c> so a test can pin that it combines whatever it is GIVEN into
+    /// one edit with no scoping of its own — the file-wide-versus-current-line distinction lives
+    /// entirely in what <see cref="AllUnusedImportDiagnostics"/> gathers, not here.
+    /// </summary>
+    internal static void AddOrganizeImportsAction(
         DocumentUri uri,
-        List<LspDiagnostic> unusedUsings,
-        List<LspDiagnostic> unusedIncludes,
+        IReadOnlyCollection<LspDiagnostic> unused,
         List<CommandOrCodeAction> actions)
     {
-        List<LspDiagnostic> all = [.. unusedUsings, .. unusedIncludes];
-        if ( all.Count == 0 )
+        if ( unused.Count == 0 )
         {
             return;
         }
 
         HashSet<int> lines = [];
         List<TextEdit> edits = [];
-        foreach ( LspDiagnostic diagnostic in all )
+        foreach ( LspDiagnostic diagnostic in unused )
         {
             TextRange range = diagnostic.Range.ToCore();
             if ( lines.Add(range.Start.Line) )
@@ -446,8 +459,34 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             "Organize imports (remove " + edits.Count + " unused)",
             uri,
             edits,
-            new Container<LspDiagnostic>(all),
+            new Container<LspDiagnostic>(unused),
             CodeActionKind.SourceOrganizeImports)));
+    }
+
+    /// <summary>
+    /// Every unused <c>#using</c>/<c>#include</c> in the WHOLE document, regardless of the
+    /// request's own range — "Organize Imports" is a whole-file command by convention, unlike
+    /// every other fix in this handler, which only ever needs to answer for the requested
+    /// selection. Runs the same DocumentLinter pipeline <see cref="DiagnosticsForFixes"/> falls
+    /// back to; the two are not combined into one call because that fallback is deliberately
+    /// scoped to one LINE and this deliberately is not.
+    /// </summary>
+    private ImmutableArray<LspDiagnostic> AllUnusedImportDiagnostics(
+        OpenDocument document, ParseResult result, CancellationToken cancellationToken)
+    {
+        ImmutableArray<LspDiagnostic>.Builder unused = ImmutableArray.CreateBuilder<LspDiagnostic>();
+
+        foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in _linter.Analyze(document, result, cancellationToken) )
+        {
+            LspDiagnostic converted = diagnostic.ToLsp();
+            GscDiagnosticCode? code = CodeOf(converted);
+            if ( code is GscDiagnosticCode.UnusedUsing or GscDiagnosticCode.UnusedInclude )
+            {
+                unused.Add(converted);
+            }
+        }
+
+        return unused.ToImmutable();
     }
 
     private static GscDiagnosticCode? CodeOf(LspDiagnostic diagnostic)

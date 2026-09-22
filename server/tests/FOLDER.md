@@ -44,6 +44,7 @@ both — `--filter "Category!=Corpus&Category!=Perf"`, which is what CI uses:
 | `Category!=Corpus&Category!=Perf` | the ordinary unit-test suite. Seconds, no game install needed |
 | `Category=Corpus` | the diagnostic/formatter sweep over five games. Minutes |
 | `Category=Perf` | per-file timing and the phase breakdown. Writes `temp/gscode-perf-<game>.html` |
+| `Category=Scale` | generated 10K–50K-file workspaces. No-op unless `GSCODE_SCALE_SIZES` is set; see below |
 
 `CorpusPerfTests` holds every half. The two parse sweeps time `ScriptAnalysis.Analyze` and split it
 into lex/preprocess/parse/extract; `WorkspaceLints_WhereTheTimeGoes` times the CROSS-FILE LINTS,
@@ -72,6 +73,23 @@ Add `-p:GscodeInstrumentation=true` for the per-lint breakdown; the `PerfTracker
 `GSCODE_PERF_REPORT` overrides where the perf pages are written, matching `GSCODE_SWEEP_REPORT`. They
 are deliberately different filenames, so a perf run never overwrites a diagnostic report.
 
+`Category=Scale` is the fourth, and costs minutes per size. `ScaleCorpusFixture` builds a workspace
+far larger than any game ships out of the real scripts — the game's raw tree stays raw, and a
+generated workspace folder holds copies, one subfolder per copy, `#namespace` suffixed per copy on
+bo3, about three quarters of them at or above the median file size — and reuses it once marked
+complete. `ScalePerfTests` (with its `.Handlers` partial) measures each size in a fresh database:
+cold and warm start, dropped cache writes, retained memory, the compaction pause, completion (call
+site, literal, field), one file's lint pass with a per-rule breakdown, the full-mode sweep, and
+CodeLens / references / rename over 50 stock and 50 copied files, each printed beside its budget and
+written to `temp/gscode-scale.md`. The per-request rows must stay FLAT as the workspace grows; one
+that climbs means something on that path walks the store. PERF.md's scale section holds the numbers.
+
+| Variable | Meaning |
+|---|---|
+| `GSCODE_SCALE_SIZES` | Totals to build and measure, e.g. `10000,25000,50000`. Unset = no-op |
+| `GSCODE_SCALE_GAMES` | Which games, default `bo3`; each needs its `GSCODE_CORPUS_<GAME>` |
+| `GSCODE_SCALE_ROOT` | Where the generated workspaces go, default `%TEMP%\gscode-scale` |
+
 ---
 
 ## GSCode.Parser.Tests
@@ -81,15 +99,22 @@ No workspace, no database — a source string in, tokens or a tree out.
 **Lexing.** `LexerBasicsTests` tokens and spans · `LexerStringTests` strings, localized `&"…"`, hash
 `#"…"` · `LexerTriviaTests` whitespace, comments, doc comments · `LexerDirectiveTests` `#`-directive
 recognition · `LexerAnimContextTests` `%anim` references against modulo, the rule being that `%`
-divides only when the token to its left can end an operand · `TokenCursorTests` trivia-skipping
-cursor · `KeywordDialectTests` which words are keywords per game (`foreach`, `do`, `class`,
+divides only when the token to its left can end an operand · `TokenFactsTests` that every keyword
+kind sits inside the range `IsKeyword` checks · `TokenWidthTests` the two token structs' byte width,
+which decides how long a script can be before its token array lands on the large-object heap ·
+`KeywordDialectTests` which words are keywords per game (`foreach`, `do`, `class`,
 `childthread`, `call`, `const`) · `DialectLexingTests` per-dialect lexing at large.
 
 **Preprocessing.** `DefineTests` object- and function-like macros · `BuiltinMacroTests` engine-defined
 macros · `ConditionalTests` `#if`/`#elif`/`#else`/`#endif` · `InactiveBranchHintTests` the greyed-out
 branch hint · `InsertTests` `#insert`, including cycles and depth limits · `MacrosNotInDialectTests`
 that `#define` and the `#if` chain are BO3's alone, that the directive is reported once per file and
-still EXPANDS, and that an orphan `#endif` gets the dialect answer rather than "unexpected".
+still EXPANDS, and that an orphan `#endif` gets the dialect answer rather than "unexpected" ·
+`DuplicateMacroTests` a duplicate macro parameter and a duplicate definition — two rules, not one ·
+`HeaderContributionCacheTests` a header's replayed definitions, in pairs of runs sharing one cache ·
+`MacroExpansionDepthTests` the cap on argument-collection recursion ·
+`NestedMacroBodyExpansionTests` a macro name written as a nested call's argument inside another
+macro's body. `PreprocessTestHelper` is an in-memory insert provider.
 
 **Syntax.** `DeclarationTests`, `StatementTests`, `ExpressionTests` the core grammar ·
 `RecoveryTests` error recovery and resync · `LocalizedStringTests` · `StrayDevBlockCloseTests` an
@@ -98,7 +123,12 @@ declarations · `DialectExpressionTests` path calls `maps\mp\_util::foo()`, `chi
 anim references, dev blocks holding whole functions, keywords as field names ·
 `DialectImportTests` `#include` against `#using` · `ParserTerminationTests` that the parser always
 terminates, under a timeout so a regression fails the suite instead of eating all available memory
-on half-typed text.
+on half-typed text · `ParserDepthTests` the nesting ceiling, since the alternative is an uncatchable
+`StackOverflowException` · `ParseCancellationTests` a superseded analysis stops rather than
+finishing · `SyntaxDiagnosticTests` what syntax alone decides (assignment for comparison, a
+parameter twice, `#insert` of a non-header) · `ChildEnumerationTests` what `AstSearch.ChildrenOf`
+yields and in what order — every AST walk in the server goes through it — and that a whole-tree
+walk allocates nothing. `ParserTestHelper`/`LexTestHelper` run a snippet through the pipeline.
 
 **Extraction.** `ExtractionTests` symbols and references · `ClassExtractionTests` class members,
 methods, and constructors · `DuplicateFunctionTests` ·
@@ -107,11 +137,16 @@ are BOUND, not read — the only place those names come into existence ·
 `MacroDefaultParameterTests`, `MacroExpansionReferenceTests`
 macro provenance · `SemanticTokenBuilderTests`, which pins what is deliberately NOT emitted (comments, keywords,
 strings and numbers all belong to the grammar) · `TripleSlashScriptDocTests` ScriptDoc on the pre-BO3
-games · `DialectResolutionTests` per-dialect symbol keys.
+games · `DialectResolutionTests` per-dialect symbol keys · `MacroBodyReferenceTests` a macro name
+inside another macro's `#define` body recorded as a `MacroUse` · `MacroGeneratedDeclarationTests` a
+declaration a macro produces anchored at the INVOCATION, not inside the `#define`.
 
 **Other.** `GameProfileTests` the profile registry — the 18-game lineage, which games are Supported
 and Verified, keyword sets, and every capability flag · `NameTableTests` interning ·
-`SourceTextTests`, `SurrogatePairPositionTests` offsets and positions across surrogate pairs.
+`SourceTextTests`, `SurrogatePairPositionTests` offsets and positions across surrogate pairs ·
+`ScrValueTests` the union type lattice, written against v1.5's mistakes · `ScrOperatorsTests`
+operator semantics over it, the vector rows especially · `DiagnosticMessagesTests` that every code
+has a template.
 
 ---
 
@@ -147,14 +182,25 @@ distribution does not ship, reported once for the file rather than once per call
 NOT mistakes — each appeared in code that ships and works · `PragmaDirectiveTests` in-comment
 suppression · `IgnoreCommentTests` 1.5's `// gscode ignore` alias, which suppresses the line below
 it alone · `GameShapeDetectorTests` inferring a workspace's game · `WorkspaceDiagnosticBatchTests`
-the batching and stored-diagnostic path used for indexed files.
+the batching and stored-diagnostic path used for indexed files · `ArithmeticLintTests` 5031, the
+literal-zero case only · `ConstDeclarationLintTests` 5029/5030 and what counts as "known" ·
+`ExpressionStatementLintTests` 5032, reported only when NOTHING in the expression has an effect ·
+`ThreadedResultLintTests` 5028 · `TypeMismatchLintTests` 5033/5034, which report nothing on any
+corpus, so these controls are all that stands between them and being silently broken ·
+`ClassCycleLintTests` 5021, including a cycle crossing a file boundary · `UnusedBindingLintTests`
+5020, and `waittillmatch`'s trailing argument being a READ. `NodeLintHarness` runs one per-node rule
+the way `NodeLintPass` runs all nine.
 
 **Api.** `ApiLoaderTests` the builtin library · `ClientApiTests` client-library derivation ·
 `ObjectFieldsTests` engine fields, and that only
 weapon fields are read-only · `RadiantKeyVisibilityTests` client-side keys — hidden from GSC, offered
 to CSC — covering both how BO3 marks them (a `client` prefix) and how WaW/BO1 do (a second
 `clientkeys.txt`) · `Cod4DataTests` CoD4's bundled data · `MacroExpansionPreviewTests`,
-`MacroHoverProbeTests` macro hover.
+`MacroHoverProbeTests` macro hover · `ApiTypeParsingTests` the declared types the loader used to
+flatten and drop · `BundledDataTests` that every data file a profile CLAIMS to ship exists ·
+`EmpiricalBuiltinCoverageTests` the WaW/BO1 libraries against their corpus harvests ·
+`KeywordDocsTests` the two halves keyword hover needs · `MacroArgumentSpanTests` the positions behind
+macro parameter-name inlay hints · `StockScriptsTests` a locked list file reads as empty.
 
 **Completion.** `CompletionEngineTests` the surface at large · `SignatureEngineTests` signature help ·
 `RealisticKeystrokeTests` completion mid-typing rather than at tidy boundaries ·
@@ -163,7 +209,8 @@ for unknown-receiver method calls · `DialectCompletionTests` that a dialect is 
 own keywords, global objects, snippets and DIRECTIVES — including the reported case end to end, a
 `#` at file scope under CoD4 returning exactly `#include` and `#using_animtree`, that `#animtree` is
 a body position in every game, and that a CoD4 file-scope list carries no macro rows for a
-preprocessor that game does not have.
+preprocessor that game does not have · `MergeDialectScopeTests` what a merge dialect puts in scope:
+this file and its `#include`s, never every file sharing a name stem.
 
 `LocalScopeCompletionTests` also holds the FILE-SCOPE cases: the macros an `#insert`ed header
 supplies offered outside a body, the functions in scope and the expression atoms a macro
@@ -199,14 +246,41 @@ does not carry · `LocalReferencesTests` the occurrence list behind find-referen
 rename on a variable — what counts as a WRITE, and the names a per-function answer must refuse
 (globals, IW file-scope constants, class members) · `RootDerivationTests` finding the game when
 nothing is configured ·
-`ServerBuildIdentityTests` that two games can never share a cache.
+`ServerBuildIdentityTests` that two games can never share a cache · `ExportSignatureTests` what an
+edit must NOT fan out on · `LocalSemanticTokensTests` parameters and locals for highlighting ·
+`OverlayShadowingReferenceTests` a mod overlay hiding the raw copy it replaces, in references and
+completion · `DeclarationIndexTests` the bare-name, `(namespace, name)` and dev-only lists across
+edits and removals · `RelativePathIndexTests` · `VocabularyIndexTests` literals and fields, visible
+files only, never a macro body's · `BoundedLookupTests` `LookupFunctions`' per-record shadowing
+against the old two-pass rule, and that a capped answer is the front of the full one ·
+`ReferencesReachingTests` the scoped reference query's overlay case, which stock corpora cannot
+exercise · `InsertCacheTests` two headers differing only by case on Linux ·
+`PhysicalFileSystemTests` that the byte-level read returns what `File.ReadAllText` does.
+`CountingFileSystem` counts probes so a test can assert on work done.
 
-**Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` · `StaleAnalysisTests` edits
+**Indexing.** `CacheRowPruningTests` a file deleted between sessions loses its cache row ·
+`HeaderChangeReachTests` everything a watched header's change must reach, not one hop ·
+`IndexerInsertCacheTests` the indexer and the editor sharing ONE header cache ·
+`RestoredContextIdentityTests` a restored record gets this session's context and relative path ·
+`RestoredInsertResolutionTests` a header created or deleted between sessions reaching the restored
+scripts that insert it · `WatcherRaceTests` a slow index commit never clobbering a fresher
+watched-file one.
+
+**Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` · `RecordSerializerTests` the
+binary record layout: every settable property of every record type pinned, a fully populated round
+trip, and corrupt, truncated and old-format blobs reading as null · `StaleAnalysisTests` edits
 racing analysis, including that `AnalyzeSnapshot` stamps the WINNING version on a superseded
 caller's own result rather than its own · `WatchedFileUpdaterTests` · `FlowTyperTests`, `TypeFlowConvergenceTests` local type
 inference and that the walk terminates · `ValueIdentityTests` the two facts the `ScrType` projection
 cannot hold — which class an instance is, which function a pointer holds — including the guard that
-no OTHER label moved when display stopped going through the projection.
+no OTHER label moved when display stopped going through the projection · `DocumentStoreTests` a
+second `didOpen` for an open path · `AnalysisCancellationTests` a superseded analysis stops ·
+`HeaderEditRefreshTests` an open document going stale when a header it inserts changes ·
+`ParameterTypesTests` parameter types read off the arguments callers pass · `ScriptTypesTests` the
+per-node query surface a transpiler consumes · `TypeCoverageTests` the expression and statement
+forms the pass used not to reach · `VectorArithmeticTests` vector arithmetic end to end.
+`TestParallelism` serializes this assembly's collections, since one class switches the active
+dialect.
 
 ---
 
@@ -261,6 +335,17 @@ line means "suppressed on this game" rather than "run twice".
 - `UnassignedVariableSweepTests` — measures 5016's false-positive RATE on shipped scripts rather
   than gating on a count. It went 2,742 reports on CoD4 alone down to 17 across all 7,309 scripts
   as each dialect fact was learned, so a jump means a gap in the rule's exclusions.
+- `RecordFormatCorpusTests` — every record a real bo3 and cod4 index produces survives the cache's
+  binary layout with its JSON unchanged. The layout is positional, so a dropped field restores a
+  record a little wrong rather than failing.
+- `ReferenceScopeCorpusTests` — the scoped reference query against the old collect-then-scope path,
+  for every function declared in a real bo3 and cod4 index (28,808 declarations): identical answers.
+- `ClientArityHarvestTests` — what a game's SERVER library gets wrong against its CLIENT scripts, the
+  input for building a CSC library from the GSC one. `StockScriptListTests` generates the per-game
+  stock lists behind the raw-folder save warning.
+- `HandlerCostTests` — what one CodeLens, inlay-hint and format request costs on the densest
+  files. `MemoryProbeTests` (`Perf`) — what a full index RETAINS, watched for fifteen seconds, built
+  to be carried onto older commits for bisecting. `PerfReport` / `SweepReport` write the HTML pages.
 
 **Samples.** `SampleScriptTests` — the hand-written worked example per game per language world in
 `server/samples`, run through the whole diagnostic pipeline and checked against the `// expect`
@@ -300,11 +385,34 @@ command payload, which must be primitives so no serializer can case-mangle it ·
 request · `OnTypeBlockScopeTests` · `UntitledDocumentTests` documents with no path ·
 `WorkspaceFoldersHandlerTests` · `IndexProgressNotifierTests`, `ServerStatusNotifierTests` ·
 `DocumentSymbolNamelessTests` a half-typed declaration, which used to fail the WHOLE outline
-request · `RenameScopeTests` what may be renamed, drawn on ownership rather than kind.
+request · `RenameScopeTests` what may be renamed, drawn on ownership rather than kind ·
+`RenameNameValidationTests` what a rename may rename TO · `MacroRenameAcrossLanguagesTests` a macro
+rename reaching both language worlds · `MacroReferenceScopeTests`, `DefinitionHandlerMacroScopeTests`
+two same-named macros in sibling `.gsc`/`.csc` files staying apart · `DocumentHighlightSameFileTests`
+highlight on the shared reference query · `CallHierarchyGroupingTests` one incoming entry per calling
+FUNCTION · `ResolveForQueryTests` hierarchies for files not open · `NamespaceImportFixTests` the
+add-`#using` fix driven through the handler · `WorkspaceSymbolShadowingTests` · `KeywordHoverTests`,
+`BuiltinMacroHoverTests` (`__FUNCTION__`/`__FILE__` where written) · `CompletionLabelDetailsTests`,
+`CompletionSortTextTests` · `InlayHintMacroTests`, `InlayHintTypeCacheTests` one flow pass per version.
+
+**Analysis ordering and publishing.** `AnalysisGateTests`, `SingleFlightAnalysisTests` one analysis
+in flight per document and none for a document nothing holds · `DiagnosticsPublishOrderTests` the
+newest analysis wins whatever order they finish in · `DependentRefreshStampTests` a refresh publishes
+the version it ANALYSED · `DiagnosticsUriTests` one file, one URI spelling ·
+`WorkspaceDiagnosticsRefreshTests` a closed file resent only when its diagnostics changed ·
+`ResolveFreshCancellationTests`, `SignatureHelpCancellationTests` read paths dropping a cancelled
+request · `StartupRacePreAnalysisTests` folding and selection answered before any analysis
+published.
 
 **Configuration and mapping.** `SettingsReachTheServerTests` that a setting actually arrives ·
 `SupportedGamesHandlerTests` the game picker's roster — exactly the supported profiles, the tick on
 what the server SELECTED rather than what was asked for, and the two cross-file checks that close
 the gap the original bug lived in: that the roster and the `gscode.game` enum are the same list,
 and that `gscode.selectGame` is both declared in the manifest and registered in `extension.ts` ·
-`EffectiveSummaryTests` · `DiagnosticMappingTests` our diagnostics to LSP.
+`EffectiveSummaryTests` · `DiagnosticMappingTests` our diagnostics to LSP · `SettingsSnapshotTests` a
+settings push applied all at once · `InlayFamiliesTests` the change detector behind the inlay refresh ·
+`StartupLogControllerTests`, `StartupLogLevelTests` the startup log channel · `TransportSelectionTests`
+a command line naming a transport badly is refused, not turned into stdio · `PaddingOptionsTests` the
+three padding knobs · `SourceEncodingTests` the repository gate on charset and line endings, including
+the carriage returns git's own policy does not catch. `AssemblyInfo` runs this assembly's collections
+one at a time — see the samples note above.

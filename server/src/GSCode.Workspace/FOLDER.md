@@ -33,9 +33,20 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Database/LanguageStore.cs
 
-- `sealed class LanguageStore` — ONE language world: path-keyed record map + its
-  ReferenceIndex, DeclarationIndex, NamespaceIndex and ClassGraph. Upsert swaps records atomically
-  and diffs all four; GSC/CSC isolation is two instances of this class, never a filter.
+- `sealed class LanguageStore` — ONE language world: path-keyed record map + the indexes that
+  answer its questions without walking it — `ReferenceIndex`, `DeclarationIndex`, `NamespaceIndex`,
+  `ClassGraph`, `RelativePathIndex`, `DependentsIndex`, `VocabularyIndex` — and the overlay counts
+  behind `HasOverlayAt`. Upsert swaps records atomically and diffs every index; GSC/CSC isolation is
+  two instances of this class, never a filter. Every index key set is built OUTSIDE the write gate,
+  from the incoming record alone; only the previous record's is built inside.
+- The rule the indexes exist for: nothing a keystroke or a request pays may walk `AllRecords`. At
+  50,000 files each walk that did became a per-request cost growing with the workspace — completion,
+  one file's lint pass, CodeLens (PERF.md, the scale section). A new query that needs "every record
+  that …" wants an index here, maintained in the same diff, not a loop.
+- Queries answered here: `FilesDeclaring(name)` and `FilesDeclaring(namespace, name)`,
+  `FilesDeclaringInto(namespace)`, `FilesReferencing(key)`, `FilesAt(path)`, `FilesNaming(path)`,
+  `MayBeDevOnly(name)`, `VisibleLiterals(kind, context)`, `VisibleFieldNames(owner, context)`,
+  `HasOverlayAt(path, context)`.
 - The write gates are STRIPED by path, 64 of them, not one for the store. The race they stop is
   between two writers of the SAME file — read-previous and swap are separate steps — and two writers
   of different files share nothing here, because each index below serialises its own dictionary.
@@ -52,9 +63,13 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Database/PackedInvertedIndex.cs
 
 - `internal sealed class PackedInvertedIndex<TKey>` — key→files storage plus the per-file diff,
-  shared by `ReferenceIndex` and `DeclarationIndex`. They were the same class twice: same packing,
-  same remove-then-add diff, same snapshot read, differing only in what a key is. Keeping them apart
-  meant a change to the diff had to land in both, and they had already drifted.
+  shared by every key→files index here (`ReferenceIndex`, the three halves of `DeclarationIndex`,
+  `RelativePathIndex`, `DependentsIndex`, both halves of `VocabularyIndex`). It started as two
+  classes that were the same class twice — same packing, same remove-then-add diff, same snapshot
+  read — and had already drifted.
+- `FilesFor(key)` is the files behind one key; `CollectKeys(keyFilter, fileFilter, into)` is the
+  other direction, the keys at least one accepted file carries — a vocabulary, read one shard at a
+  time. Its file filter runs under the shard gate, so it must take no lock of its own.
 - Packed: a bare `string` while exactly one file carries a key, promoted to a `HashSet<string>` only
   once a second appears. Most keys are carried by one file and a HashSet holding one reference costs
   ~150 bytes to carry 8 — on BO1 that is the declaration index costing 5.1 MB against well under
@@ -81,6 +96,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
   symbols on BO3) once per CALL SITE, which made four lints 97% of the cross-file lint cost. It
   narrows WHERE to look and decides nothing: visibility, namespace, privacy and overlay shadowing
   all still apply after it. See `PERF.md`.
+- Kept three ways, all from one `KeysOf(record)`: by bare name; by `(namespace, name)`, which a
+  namespaced lookup reads instead of the bare list (every bo3 system file declares `__init__`, so
+  `util::__init__` used to walk all of them); and the names with a DEV-ONLY declaration among the
+  file's functions and class methods, behind `MayBeDevOnly` — case-insensitive, so it can only
+  answer "maybe" too often, which is the safe direction for the prefilter `DevBlockCallLint` uses.
 
 ## Database/NamespaceIndex.cs
 
@@ -97,10 +117,36 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Database/FunctionLookupCache.cs
 
 - `sealed class FunctionLookupCache` — a memo over `LookupFunctions` for the span of ONE file's
-  analysis. Scripts call the same handful of names repeatedly, so the same question was asked dozens
+  analysis. The lookup's `limit` is part of the memo key, so a capped answer is never served to a
+  caller that asked for the whole one. Scripts call the same handful of names repeatedly, so the same question was asked dozens
   of times per file. Per file and discarded with it, deliberately: a longer-lived cache would need
   invalidating on every edit anywhere in the workspace, since an unqualified call under a merge
   dialect resolves by name across everything indexed — a subscription problem, not a dictionary.
+
+## Database/RelativePathIndex.cs
+
+- `sealed class RelativePathIndex` — script-relative path (`Normalize`: lowercase, backslashed, no
+  extension — the form `#using`/`#include` write) → the files AT that path; more than one when an
+  overlay shadows a raw file, so callers still apply visibility and shadowing. Replaced the store
+  walks that normalized every record's path per request to find the handful an import list names
+  (`ImportedNamespaces`, `FunctionsInIncludeScope`, inline `path::` completion), reached through
+  `DatabaseQueries.RecordsAt`.
+
+## Database/DependentsIndex.cs
+
+- `sealed class DependentsIndex` — script path → the files that NAME it through a non-insert import
+  edge or an inline path call: the reverse of the dependency graph, in `RelativePathIndex`'s form.
+  It is what `FindReferencesReaching` reads: scoping keeps a reference only when its file is the
+  declaring file or names it, so those files are all that can contribute.
+
+## Database/VocabularyIndex.cs
+
+- `sealed class VocabularyIndex` — the workspace's distinct literals (by `SymbolKey`) and assigned
+  fields (by owner and name), each → the files using it, for literal and field completion. Both
+  lists used to walk every reference / assignment of every record per request; occurrences grow
+  with the workspace, distinct names barely do. A literal is indexed only when the old walk could
+  have offered it (a plain `ReferenceKind.Literal`, not from a macro body); the name-shape filter
+  stays at the query. Read through `LanguageStore.VisibleLiterals` / `VisibleFieldNames`.
 
 ## Database/ScriptDatabase.cs
 
@@ -138,11 +184,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 - `sealed partial class CompletionEngine.Complete(result, contextId, position, includeLiterals)` —
   context-aware completion driven by the tokens around the cursor: inside a
-  `"..."`/`&"..."`/`#"..."` literal it offers the known literals of that kind from the visible
-  reference index (gated by `includeLiterals` = the completion.literals setting; disabled →
+  `"..."`/`&"..."`/`#"..."` literal it offers the known literals of that kind from the store's
+  `VocabularyIndex` (gated by `includeLiterals` = the completion.literals setting; disabled →
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments, `ns::` (that namespace's functions only), `owner.` fields
-  (+ `.size`), and statement scope (keywords, the dialect's global objects and snippets,
+  (+ `.size`; also from `VocabularyIndex`), and statement scope (keywords, the dialect's global objects and snippets,
   the enclosing function's parameters and locals, every macro in scope, namespace functions,
   visible classes, namespace-less builtins as call snippets).
 - **File scope gets that same list.** It used to be keywords and snippets alone — a
@@ -294,7 +340,13 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `.csc` use spelled the old way. Functions keep the isolation: a same-named function in the other
   world is a different function.
 - `LookupFunctions` asks `DeclarationIndex` for its candidate files rather than scanning every
-  record; everything it does with them is unchanged. `IncludeClosure` walks the `#include` graph
+  record — the `(namespace, name)` list when a namespace is given. It applies overlay shadowing PER
+  RECORD inside the walk (a raw record is skipped when `HasOverlayAt` its path — `ApplyShadowing`'s
+  rule with a store, whose other half is implied), which is what lets `limit` stop the walk early:
+  a caller asking whether a name resolves passes 1, one asking whether it resolves to exactly one
+  passes 2. A bare name on a merge dialect has thousands of declarations at scale; building all of
+  them to answer "yes" was two lints' whole cost. `BoundedLookupTests` keeps the old two-pass rule
+  as a reference implementation. `IncludeClosure` walks the `#include` graph
   TRANSITIVELY — the compiler flattens the chain, which the corpus settled — and reports whether the
   walk saw everything, since a rule may only assert a name is out of scope against a complete one.
   The direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
@@ -305,6 +357,13 @@ lints, `Completion/` and `Typing/` the information surfaces.
   which stay public for the cases that genuinely mean one directive: asking for the wrong one returns
   an EMPTY array rather than throwing, and an empty scope reads downstream as "nothing matched" and
   silently falls back to the unnarrowed set.
+- `FindReferencesReaching(stores, context, key, declaringRelativePath)` — exactly
+  `ScopeToIncludeGraph(FindAllReferences(...), declaring)` for a function key, read from the files at
+  the declaring path plus the files naming it (`DependentsIndex`) instead of every file mentioning
+  the key, walking whichever of that set and `FilesReferencing(key)` is shorter. Shadowing is applied
+  as `FindAllReferences` applies it, BEFORE scoping: a raw file drops when a visible overlay at its
+  exact path references the key at all. On cod4 at 50K this took a whole-file CodeLens from 707 ms
+  to 3 ms; `ReferenceScopeCorpusTests` proves it identical over every stock declaration.
 - `PreferIncludeScope` and `ScopeToIncludeGraph` narrow definitions and references to what the asking
   file can reach, and neither is conditional on the dialect any more. A namespace does not pin a
   file — the `mp` and `zm` copies of a script share one `#namespace` — so a namespace-driven key
@@ -343,7 +402,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `RemoveFile` drops a deleted file from the database, the cache, and the GSH lex cache.
   The restore snapshot is held for one pass only: `IndexAsync` releases it in a `finally`, so a
   server-lifetime singleton does not carry 21 MB (bo3) or 64 MB (bo1) of gzipped blobs for the
-  session. `ReloadRestoreSnapshot` re-reads it for the one caller that indexes twice — the
+  session (now binary, ~7 KB a file). `ReloadRestoreSnapshot` re-reads it for the one caller that indexes twice — the
   workspace-folder handler — and swallows a read failure, since a cache closed by
   `gscode/clearCache` should give a cold index rather than an exception.
 - `IndexAsync` takes an internal `SemaphoreSlim` (`_passGate`), held for the whole pass: the
@@ -380,9 +439,17 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Cache/RecordSerializer.cs
 
-- Source-generated STJ context (`CacheJsonContext`) + `Serialize`/`Deserialize` — a
-  ScriptRecord to/from a gzipped JSON blob (no runtime reflection). Deserialize returns
-  null on a corrupt blob so one bad row never fails the restore.
+- `static RecordSerializer.Serialize`/`Deserialize` — a ScriptRecord to/from a compact binary
+  blob: the record's fields in declaration order with no names, integers as LEB128 varints, strings
+  through a per-blob table (written once, then by index), a leading format byte, the body deflated.
+  It replaced gzipped JSON when the scale sweep showed restoring a JSON record cost MORE than
+  re-parsing the source (bo3: 12.5 s of `index.restore` thread-time against 7.9 s to analyse and
+  commit); binary is ~8x cheaper and made the warm start beat the cold one.
+- Positional, so a new field is dropped silently unless it is added to BOTH halves in the same
+  place and `RecordFormatVersion` is bumped. `RecordSerializerTests` fails when any record type
+  gains or loses a settable property, and `RecordFormatCorpusTests` round-trips every record a real
+  index produces and compares their JSON. Deserialize returns null on anything malformed — truncated,
+  corrupted, or another layout — so one bad row costs one re-analysis.
 
 ## Cache/CachedEntry.cs
 
@@ -402,9 +469,16 @@ lints, `Completion/` and `Typing/` the information surfaces.
   (deletes the old single-file gzip-JSON cache), `Open` (WAL + busy_timeout, creates
   tables, wipes on version/identity mismatch), `LoadAll` (warm-restore input, as `CachedEntry`
   rows rather than records — see below),
-  `Enqueue`/`EnqueueDelete` (never block — a single background writer drains a bounded
-  channel, coalescing batches into transactions; dirty records are skipped), and
+  `Enqueue`/`EnqueueDelete` (never block; `Enqueue` SERIALIZES on the calling thread, so the work
+  runs across every indexing core, and hands an unbounded channel the blob — a single background
+  writer is left with only the SQL, coalescing batches into transactions; dirty records are skipped
+  before paying for it), and
   `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing).
+- The channel used to be bounded at 4,096 with the writer doing the serializing: at 50,000 files it
+  refused 82% of writes and the next "warm" start re-analysed four files in five. Unbounded now, so
+  a backlog costs memory (the compressed blobs, until written) rather than data; it is not marked
+  `SingleReader`, because that channel cannot report the `Count` `WaitForIdleAsync` needs.
+  `DroppedWrites` now counts only writes after `DisposeAsync`.
 
 ## Indexing/WatchedFileUpdater.cs
 
@@ -552,6 +626,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   normal lookup finds nothing AND a privacy-ignoring lookup finds a private declaration
   elsewhere; builtin names are skipped so a same-named private script function cannot make a
   working builtin call look broken. Carries related information pointing at the declaration.
+- Returns before resolving anything on a dialect without `private` (`GameProfile.HasPrivateFunctions`,
+  derived from the keyword set — BO3 only). Nothing there can carry the flag, and on a merge dialect
+  the two lookups per call were the most expensive thing in a 50,000-file lint pass while reporting
+  nothing.
 
 ## Analysis/ReadOnlyWriteLint.cs
 
@@ -643,7 +721,24 @@ are out.
 - `CaseLabelLint` (5010/5011/5017) — a `case` on an undefined value, a non-constant label, and the
   same label twice in one switch. The third found a real duplicate `case 1:` in shipped BO3 code.
 - `ClassCycleLint` (5021) — a class inheritance cycle, which would otherwise recurse forever.
-- `DevBlockCallLint` (5006) — calling a `/# #/`-only function from release code.
+- `DevBlockCallLint` (5006) — calling a `/# #/`-only function from release code. Resolves a call only
+  when its name COULD be dev-only — `LanguageStore.MayBeDevOnly`, or a dev-only builtin — since for
+  any other name neither half of the rule can report; the prefilter is what stopped it resolving
+  every bare-name call on a merge dialect at scale.
+- `ArithmeticLint` (5031, Warning) — division by a divisor WRITTEN as zero. No constant propagation:
+  the literal case is the one that needs no data flow to be certain. A `NodeLintPass` rule.
+- `ConstDeclarationLint` (5029/5030, Warning) — a `const` whose value is not a compile-time constant,
+  and a later write to one. The per-node half rides `NodeLintPass`; `InspectRest` does the
+  declaration-level half.
+- `ExpressionStatementLint` (5032, Warning) — a statement whose expression cannot do anything
+  (`a + b;`, `self.health;`, `x == 1;`) — usually a lost `=` or lost parentheses. The weakest test
+  that still catches those. A `NodeLintPass` rule.
+- `ThreadedResultLint` (5028, Warning) — the value of a `thread` call used for something: a threaded
+  call hands back control at the first `wait`, so the caller gets whatever existed by then. Walks on
+  its own because it threads a "value is consumed" flag down the descent.
+- `TypeMismatchLint` (5033/5034, Warning) — a non-array enumerated, and a vector component that cannot
+  be a number: the two findings the union type lattice made answerable. Reads the flow typer's shared
+  inference; a `NodeLintPass` rule.
 - `DuplicateImportLint` (5018) — the same file imported twice, tagged `Unnecessary` so the line
   greys out. Separator and case differences do not make it a different file.
 - `UnassignedVariableLint` (5016/5024) — a local read that nothing in the function writes. Excludes
@@ -723,6 +818,14 @@ are out.
   Deliberately two entries: of the keywords absent from the API, only `isdefined` (bool) and
   `vectorscale` (vector) yield a value worth typing; the rest are statement-shaped, and in this
   lattice a void result is indistinguishable from Unknown.
+
+## Typing/ParameterTypes.cs
+
+- `static ParameterTypes` — what a function's parameters hold, inferred from the arguments its
+  callers pass (the flow pass types a function in isolation, so a parameter otherwise starts unknown).
+  SAME FILE ONLY, structurally: a call site's arguments live in the caller's syntax tree, and the
+  database stores records, not trees. The question it exists for is whether a parameter is an array,
+  which decides the one behavioural difference a dialect transpiler has to preserve.
 
 ## Typing/FlowTyper.cs
 

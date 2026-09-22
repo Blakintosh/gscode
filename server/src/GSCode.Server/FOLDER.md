@@ -160,6 +160,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   what it reaches. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
   copies of a script, so counts there merged both game modes' callers until it did. Matches on the
   whole key, namespace included, or a file's own unrelated same-named function would claim the lens.
+- When `DeclaringFile` names one file, the query is `DatabaseQueries.FindReferencesReaching` — the
+  files that can reach it, not every file mentioning the key — and only an unnarrowed key collects
+  everything and scopes afterwards. Same answer (`ReferenceScopeCorpusTests`); on a merge dialect,
+  where `main`'s key is every `main`, it took a whole-file CodeLens at 50,000 files from 707 ms to
+  3 ms.
 
 ## Handlers/HoverHandler.cs
 
@@ -239,6 +244,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge. An
   `autoexec` function reads "autoexec entry point" when the count is zero: the engine calls it on
   load, so its call sites are in no script and a bare "0 references" reads as dead code.
+- Counts are computed in `Handle`, one `FindAllReferences` per declaration in the file — so the cost
+  of the whole request is that query times the file's declaration count, and it is why the query
+  must never walk the workspace. `ResolveProvider` is false: there is no lazy resolve step.
 
 ## Handlers/WorkspaceFoldersHandler.cs
 
@@ -589,6 +597,10 @@ that chose it. These are the pieces that implement it:
 
 - `BuiltinAtHandler` — serves the `gscode/builtinAt` request behind `shift+f1`, since the client has
   no symbol knowledge of its own and cannot tell a builtin from a script function.
+- `CodeLensRefresh` — `ICodeLensRefreshSink`, the one thing the dependent refresher asks of the
+  connection (tell the client its lenses are stale), plus the real and null sinks. A seam for the same
+  reason `IDiagnosticsSink` is one: a test that only checks whether a refresh was asked for should not
+  implement `ILanguageServerFacade`.
 - `ClearCacheHandler` — cancels the startup indexing task (`IndexingLifetime.CancelAndWaitAsync`,
   so it stops enqueueing into a cache about to close) THEN drains the cache and deletes only THIS
   workspace's database, server-side where the paths are known.
@@ -613,6 +625,15 @@ that chose it. These are the pieces that implement it:
   the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
   the editor says "cannot rename here" instead of prompting and then failing. Shares
   `RenameHandler.IsRenameable`, so the preview and the rename cannot disagree.
+- `SingleFlightAnalysis` — one analysis in flight per document: runs now if nothing is, otherwise
+  queues a rerun for the running call to pick up. Pulled out of `TextSyncHandler` with no dependency
+  beyond `DocumentStore`, so the races against a document being CLOSED or REPLACED by a second
+  `didOpen` mid-analysis can be tested directly. The liveness check sits INSIDE the loop, guarding
+  only the analysis: a rerun queued before the loop's first check is still serviced.
+- `SupportedGamesHandler` + `GameRoster` — the games a picker may offer, in release order, and the
+  one in force. One list with two callers (the picker command, and `gscode/gameMismatch`'s payload),
+  because only the server knows which profiles are `Supported` — the client's own copy had drifted to
+  nine games, four of them cores whose selection the server resolved back to Black Ops III.
 - `ServerStatusNotifier` — keeps the status-bar tooltip's memory figure current. The megabyte
   divisor is its own constant rather than the reporting threshold reused: the threshold is a tuning
   knob and the divisor is a unit, and as one constant, raising the threshold would silently have
@@ -631,6 +652,11 @@ that chose it. These are the pieces that implement it:
   `gscode.diagnostics.scope`. It skips open documents deliberately, since `TextSyncHandler` owns
   those and publishes a richer set for them — which is why every caller of its `Refresh()` has to
   pair it with `DependentDiagnosticsRefresher.Schedule()` to cover the other half.
+- `Refresh()` sends a file only when its diagnostics differ from what was last sent — it remembers
+  the array per path and compares by reference, since a record's diagnostics are replaced wholesale
+  whenever they are recomputed (erring toward resending, never toward staleness). It runs after
+  every re-lint of an edit's closed dependents, and used to resend every file with a problem each
+  time. Files no longer reported are still taken back.
 
 ## .editorconfig
 

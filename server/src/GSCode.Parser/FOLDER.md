@@ -384,6 +384,14 @@ LSP types anywhere.
   operators, punctuation, directives — or null when the source span must be sliced). Lets
   fixed-text tokens materialize their text without allocating.
 
+## Lexing/GscIdentifier.cs
+
+- `static class GscIdentifier` — what counts as an identifier, in one place: `WordChars` (a
+  `SearchValues<char>`), `IsWordStart`, `IsIdentifier`. The lexer reads its rule from here, and so
+  does anything else asking "is this a name" — a name the lexer would split in two is not a name.
+  Deliberately ASCII: a Unicode-flavoured second copy had grown up in the server's code-action fixes
+  and accepted names the lexer does not.
+
 ## Lexing/Keywords.cs
 
 - `static class Keywords` — frozen lookup tables with span-based (allocation-free) lookup.

@@ -63,8 +63,33 @@ needs the game installs and takes a second pass over every script.
 ## Read the duration, not just the word "Passed"
 
 This is the trap worth internalising. A `Category=Corpus` run over five games takes **two to three
-minutes**. If it finishes in milliseconds, every corpus test no-opped because the variables were
-not visible — and the run proved nothing while looking exactly like success.
+minutes**; the usual cod4 + bo3 pair about **thirty seconds**. If it finishes in milliseconds, every
+corpus test no-opped because the variables were not visible — and the run proved nothing while
+looking exactly like success. `--logger "console;verbosity=detailed"` prints each test's own lines
+(`bo3: 980 files …`), which is the quickest proof a corpus was actually read.
+
+**Sweep cod4 and bo3**, the two dialect families, unless a change is specific to another game. The
+variables are usually set at user scope, so clear the ones you are not sweeping inline:
+`GSCODE_CORPUS_BO1= GSCODE_CORPUS_WAW= GSCODE_CORPUS_MW2= dotnet test …`.
+
+## Files a run writes back
+
+- `Category=Corpus` REWRITES `tests/GSCode.Server.Tests/harvest/*.json` and the per-game
+  `Api/<game>_stock_scripts.txt` from what it just swept. A diff there after an unrelated change is
+  the committed file being stale, not your change — confirm on the base commit (a throwaway
+  `git worktree`) and revert it rather than committing it with your work.
+- Reports land in `temp/` (`gscode-perf-*.html`, `gscode-lint-budget-*.html`, `gscode-scale.md`),
+  which is not committed.
+- `Category=Scale` generates its workspaces under `%TEMP%\gscode-scale` (or `GSCODE_SCALE_ROOT`) —
+  gigabytes at 50K, reused between runs, never cleaned up by the suite.
+
+## The encoding gate
+
+`SourceEncodingTests` (in the everyday run) fails on any tracked text file holding a byte-order mark
+or a carriage return — `.gitattributes` says LF and git only enforces that on the way IN, so a CRLF
+written to disk is invisible to `git diff` and caught only here. Scripts that write source files
+must write UTF-8, no BOM, `\n` line endings: PowerShell's `Set-Content` and Python's text mode on
+Windows are the usual culprits.
 
 ## Before committing a diagnostic change
 

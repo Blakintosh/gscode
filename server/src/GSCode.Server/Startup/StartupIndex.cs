@@ -251,7 +251,10 @@ internal sealed class StartupIndexRunner
                     // and switching to it appeared to fix the problem: that switch was the
                     // didOpen. Same reasoning as an on-disk change: the world moved under every
                     // open document and none of them owns the event, so all of them are
-                    // dependents. Costs a lint pass each, not a re-parse.
+                    // dependents. Costs a lint pass each, not a re-parse. The no-origin call below
+                    // is why the verbose log for this pass reads "after an on-disk change" even
+                    // though nothing on disk moved — Schedule("") means "no single caller", and
+                    // that is exactly this case too.
                     services.GetRequiredService<DependentDiagnosticsRefresher>().Schedule();
 
                     // Sampled before the monitor starts, so the number reflects the state

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Linq;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -326,10 +327,13 @@ public sealed class DependentDiagnosticsRefresher
         }
     }
 
+    /// <summary>Verbose document listing caps here — enough to name the tabs without flooding the log.</summary>
+    private const int MaxLoggedDocuments = 5;
+
     private void Refresh(IReadOnlySet<string> origins, CancellationToken cancellationToken)
     {
         long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-        int refreshed = 0;
+        List<string> refreshedPaths = new();
 
         foreach ( OpenDocument document in _documents.OpenDocuments )
         {
@@ -341,17 +345,51 @@ public sealed class DependentDiagnosticsRefresher
             }
 
             RefreshOne(document);
-            refreshed++;
+            refreshedPaths.Add(document.Path);
         }
 
-        if ( refreshed > 0 )
+        if ( refreshedPaths.Count > 0 )
         {
             Log.Verbose(
-                "Re-linted {Count} open document(s) in {Elapsed:F1}ms after {Origins} changed their exports",
-                refreshed,
+                "Re-linted {Count} open document(s) in {Elapsed:F1}ms after {Origins} changed their exports: {Documents}",
+                refreshedPaths.Count,
                 System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
-                string.Join(", ", origins));
+                DescribeOrigins(origins),
+                DescribeDocuments(refreshedPaths));
         }
+    }
+
+    /// <summary>
+    /// Names what triggered this pass. Origins carries "" for an on-disk change with no editor
+    /// caller (see <see cref="Schedule"/>) — left unnamed, that printed as a blank in the log
+    /// ("after  changed its exports"), which read like a missing value rather than the documented
+    /// no-origin case. Startup's own no-origin <c>Schedule()</c> call, once indexing completes,
+    /// prints the same "on-disk change" label — the reasoning is identical (see the call site in
+    /// <c>StartupIndex</c>), not a second unlabelled case.
+    /// </summary>
+    private static string DescribeOrigins(IReadOnlySet<string> origins)
+    {
+        List<string> named = origins.Where(static origin => origin.Length > 0).ToList();
+        bool diskChange = origins.Contains("");
+
+        if ( named.Count == 0 )
+        {
+            return "an on-disk change";
+        }
+
+        string joined = string.Join(", ", named);
+        return diskChange ? $"{joined} and an on-disk change" : joined;
+    }
+
+    /// <summary>Which documents were re-linted, capped at <see cref="MaxLoggedDocuments"/>.</summary>
+    private static string DescribeDocuments(IReadOnlyList<string> paths)
+    {
+        if ( paths.Count <= MaxLoggedDocuments )
+        {
+            return string.Join(", ", paths);
+        }
+
+        return string.Join(", ", paths.Take(MaxLoggedDocuments)) + $", and {paths.Count - MaxLoggedDocuments} more";
     }
 
     /// <summary>

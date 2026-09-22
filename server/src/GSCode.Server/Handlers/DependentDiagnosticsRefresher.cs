@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Linq;
+using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -421,12 +422,16 @@ public sealed class DependentDiagnosticsRefresher
     {
         HashSet<string> dependents = new(StringComparer.Ordinal);
 
+        // KeyNamespace, not the declared namespace: on a merge dialect a function is declared into
+        // the file stem but every call to it is keyed with no namespace, so a key rebuilt from the
+        // declaration matched no reference and no closed caller was ever re-linted.
+        GameProfile game = GameProfile.Active;
+
         foreach ( FunctionSymbol function in origin.Functions )
         {
             SymbolKey key = function.OwnerClassKeyName is string ownerClass
                 ? new SymbolKey(null, function.KeyName, SymbolKind.Function, ownerClass)
-                : new SymbolKey(
-                    function.Namespace.Length == 0 ? null : function.Namespace, function.KeyName, SymbolKind.Function);
+                : new SymbolKey(game.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
 
             foreach ( string path in store.FilesReferencing(key) )
             {

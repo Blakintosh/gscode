@@ -2014,7 +2014,60 @@ JSON record costs about what analysing the source does. So once the dropped writ
 start will land near the cold index — ~21 s at 50K against a 10 s budget — and the record format is
 on the critical path rather than optional.
 
+### 2026-09-21: after, and what did it
+
+Same harness, same machine, one run of each. bo3 at all three sizes, cod4 at two:
+
+| | bo3 10K | bo3 25K | bo3 50K | cod4 50K | 50K budget |
+|---|---:|---:|---:|---:|---:|
+| cold index | 3.7 s | 18.9 s * | 11.5 s | 13.4 s | 35 s |
+| warm start | 0.8 s | 2.0 s | **4.1 s** | 4.0 s | 10 s |
+| dropped writes / files restored | 0 / all | 0 / all | **0 / all** | 0 / all | 0 / all |
+| retained memory | 483 MB | 1,194 MB | 2,257 MB | 2,430 MB | ~3 GB (soft) |
+| completion p99 | 2.4 ms | 1.7 ms | **1.7 ms** | 0.9 ms | 10 ms, flat |
+| literal completion p99 | 7.0 ms | 3.6 ms | **3.5 ms** | 8.5 ms | 10 ms, flat |
+| field completion p99 | 5.9 ms | 1.1 ms | **0.8 ms** | 1.3 ms | 10 ms, flat |
+| one file's lint pass, p99 | 25.2 ms | 8.9 ms | **12.6 ms** | 54.1 ms | 100 ms, flat |
+| full-mode lint sweep | 3.5 s | 9.1 s | **22.8 s** | 36.4 s | 60 s |
+
+\* Interference, not the code: the 25K cache populate is a cold index with a cache attached and
+took 5.1 s in the same run, and earlier runs put 25K cold between the 10K and 50K figures. The same
+thing produced a 37 s cold reading at 50K once. Read the cold row across sizes, not one cell.
+
+Every per-request row is now flat in the workspace size, which was the property being bought. Each
+change, in the order it landed, with the figure that validated it BEFORE it was made:
+
+| change | what it was | 50K before | 50K after |
+|---|---|---:|---:|
+| serialize on the producer, unbounded write channel | 82% of cache writes refused | 40,889 dropped | 0 |
+| binary record format | a restored JSON record cost more than re-parsing: `index.restore` 12.5 s vs analyse+commit 7.9 s of thread-time on bo3 | warm 18.0 s | 4.0 s |
+| `(namespace, name)` declaration index | four lints walked every file declaring a bare name to find one namespace's | lint p99 136 ms | 13 ms |
+| `RelativePathIndex` | statement-scope completion normalized every record's path per request | 19.8 ms | 2.3 ms |
+| `VocabularyIndex` | literal and field completion walked every reference / assignment | 189 / 101 ms | 3.5 / 0.8 ms |
+| diagnostics sent only when changed | `Refresh` resent every file with a problem after each dependent re-lint | — | — |
+| `PrivateAccessLint` dialect gate, `DevBlockCallLint` dev-only prefilter | cod4 resolves by bare name; both rules resolved calls that could not report | cod4 lint p99 174 ms | 54 ms |
+
+The binary format also shrank the 50K cache file from 929 MB to 384 MB and bo3's warm start at
+stock size from 676 ms to about 155 ms, now under the cold index rather than level with it.
+
+**Checked, and deliberately not changed:**
+
+- **Stat-first freshness and the second read on restore** (the old plan's first warm-start lever).
+  After the format change `index.read` is 40% of warm thread-time, so it is now the largest part —
+  but the warm start is at 40% of its budget. Worth doing when that moves, not before.
+- **Streaming `LoadAll`.** 305 ms and 333 MB at 50K, transient, released after the pass.
+- **Re-linting an edit's closed dependents** (full mode). Debounced 900 ms, cancelled by the next
+  edit, parallel; its worst case — an export every file uses — is one full sweep, 23 s at 50K, in
+  the background. Correctness needs those re-lints.
+- **The post-index compaction pause**: 1.8 s at 50K, once, at the end of indexing. It is a blocking
+  gen2, so requests arriving in that window wait for it.
+- **`ArgumentCountLint` still grows with the workspace** — 2 → 11 ms p99 on bo3 and 7 → 27 ms on
+  cod4 from 10K to 50K. Inside its budget. It is the next rule to read if the one-file row moves.
+- **Enumeration** was 0.1 s at 50K with a warm OS cache, and cannot be told apart from noise here.
+
 ## Results
+
+Measured on the local BO3-tools machine (corpus not committed):
 
 Measured on the local BO3-tools machine (corpus not committed):
 

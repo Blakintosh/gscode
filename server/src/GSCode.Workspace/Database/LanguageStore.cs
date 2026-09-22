@@ -20,6 +20,7 @@ public sealed class LanguageStore
     private readonly NamespaceIndex _namespaceIndex = new();
     private readonly ClassGraph _classGraph = new();
     private readonly RelativePathIndex _relativePathIndex = new();
+    private readonly VocabularyIndex _vocabulary = new();
 
     /// <summary>
     /// How many non-raw (mod/workspace) records currently sit at each script-relative path, broken
@@ -112,6 +113,7 @@ public sealed class LanguageStore
         DeclarationIndex.DeclaredKeys newNames = DeclarationIndex.KeysOf(record.Functions);
         HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
         string? newRelativeKey = RelativePathIndex.KeyOf(record);
+        VocabularyIndex.Contribution newVocabulary = VocabularyIndex.Of(record);
 
         lock ( GateFor(record.Path) )
         {
@@ -139,6 +141,10 @@ public sealed class LanguageStore
             PerfTracker.End();
 
             _relativePathIndex.Apply(record.Path, RelativePathIndex.KeyOf(previous), newRelativeKey);
+
+            PerfTracker.Begin("upsert.vocabulary");
+            _vocabulary.Apply(record.Path, VocabularyIndex.Of(previous), newVocabulary);
+            PerfTracker.End();
         }
     }
 
@@ -185,6 +191,7 @@ public sealed class LanguageStore
                 _namespaceIndex.Apply(normalizedPath, NamespaceIndex.NamespacesOf(previous.Functions), []);
                 _classGraph.Remove(normalizedPath);
                 _relativePathIndex.Apply(normalizedPath, RelativePathIndex.KeyOf(previous), null);
+                _vocabulary.Apply(normalizedPath, VocabularyIndex.Of(previous), VocabularyIndex.Contribution.None);
             }
         }
     }
@@ -268,6 +275,30 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesAt(string normalizedScriptPath)
     {
         return _relativePathIndex.FilesAt(normalizedScriptPath);
+    }
+
+    /// <summary>
+    /// The distinct literals of one kind used in a file <paramref name="askingContextId"/> can see —
+    /// see <see cref="VocabularyIndex"/>.
+    /// </summary>
+    public List<string> VisibleLiterals(SymbolKind kind, string askingContextId)
+    {
+        return _vocabulary.Literals(kind, path => IsVisibleTo(path, askingContextId));
+    }
+
+    /// <summary>
+    /// The distinct field names assigned in a file <paramref name="askingContextId"/> can see, on one
+    /// owner when <paramref name="ownerName"/> is given — see <see cref="VocabularyIndex"/>.
+    /// </summary>
+    public List<string> VisibleFieldNames(string? ownerName, string askingContextId)
+    {
+        return _vocabulary.FieldNames(ownerName, path => IsVisibleTo(path, askingContextId));
+    }
+
+    private bool IsVisibleTo(string path, string askingContextId)
+    {
+        return _records.TryGetValue(path, out ScriptRecord? record)
+            && ScriptDatabase.CanSee(askingContextId, record.ContextId);
     }
 
     /// <summary>Paths of every file that mentions the key (definition sites included).</summary>

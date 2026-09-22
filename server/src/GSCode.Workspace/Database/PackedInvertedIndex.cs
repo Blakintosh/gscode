@@ -170,4 +170,47 @@ internal sealed class PackedInvertedIndex<TKey>
             return existing is HashSet<string> many ? [.. many] : [(string)existing];
         }
     }
+
+    /// <summary>
+    /// Every key <paramref name="keyFilter"/> accepts that at least one file
+    /// <paramref name="fileFilter"/> accepts carries — for the callers that want the KEYS
+    /// (a vocabulary) rather than the files behind one of them.
+    ///
+    /// One shard at a time, each under its own gate, so a concurrent diff can land between shards:
+    /// the answer is a snapshot per shard rather than of the whole index, which is all a completion
+    /// list needs. <paramref name="fileFilter"/> runs under the gate, so it must take no lock of
+    /// its own that a writer could hold while waiting on this one.
+    /// </summary>
+    public void CollectKeys(Func<TKey, bool> keyFilter, Func<string, bool> fileFilter, List<TKey> into)
+    {
+        foreach ( Shard shard in _shards )
+        {
+            lock ( shard.Gate )
+            {
+                foreach ( KeyValuePair<TKey, object> entry in shard.Entries )
+                {
+                    if ( !keyFilter(entry.Key) )
+                    {
+                        continue;
+                    }
+
+                    if ( entry.Value is HashSet<string> many )
+                    {
+                        foreach ( string path in many )
+                        {
+                            if ( fileFilter(path) )
+                            {
+                                into.Add(entry.Key);
+                                break;
+                            }
+                        }
+                    }
+                    else if ( fileFilter((string)entry.Value) )
+                    {
+                        into.Add(entry.Key);
+                    }
+                }
+            }
+        }
+    }
 }

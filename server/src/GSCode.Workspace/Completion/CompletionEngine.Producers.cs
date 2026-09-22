@@ -230,12 +230,13 @@ public sealed partial class CompletionEngine
         // are already excluded upstream: a string spliced into a `+` chain is recorded as
         // ConcatenatedLiteral, and this only accepts ReferenceKind.Literal.
         CollectLiterals(result.Extraction.References, literalKind, seen, entries, quoted);
-        foreach ( ScriptRecord record in store.AllRecords )
+
+        // The workspace's DISTINCT literals, from the store's vocabulary, rather than every
+        // reference of every record — see VocabularyIndex for what that walk cost at scale.
+        string detail = LiteralDetail(literalKind);
+        foreach ( string name in store.VisibleLiterals(literalKind, contextId) )
         {
-            if ( ScriptDatabase.CanSee(contextId, record.ContextId) )
-            {
-                CollectLiterals(record.References, literalKind, seen, entries, quoted);
-            }
+            AddLiteral(name, detail, seen, entries, quoted);
         }
 
         return entries.ToImmutable();
@@ -258,20 +259,23 @@ public sealed partial class CompletionEngine
                 continue;
             }
 
-            if ( !IsNameLike(entry.Key.Name) )
-            {
-                continue;
-            }
-
-            if ( seen.Add(entry.Key.Name) )
-            {
-                entries.Add(new CompletionEntry(
-                    entry.Key.Name,
-                    CompletionKind.Literal,
-                    detail,
-                    quoted ? "\"" + entry.Key.Name + "\"" : ""));
-            }
+            AddLiteral(entry.Key.Name, detail, seen, entries, quoted);
         }
+    }
+
+    private static void AddLiteral(
+        string name, string detail, HashSet<string> seen, ImmutableArray<CompletionEntry>.Builder entries, bool quoted)
+    {
+        if ( !IsNameLike(name) || !seen.Add(name) )
+        {
+            return;
+        }
+
+        entries.Add(new CompletionEntry(
+            name,
+            CompletionKind.Literal,
+            detail,
+            quoted ? "\"" + name + "\"" : ""));
     }
 
     /// <summary>The shortest run of letters and digits a literal must have to read as a name.</summary>
@@ -526,12 +530,14 @@ public sealed partial class CompletionEngine
         // record — a field assigned on `level` in one file is reachable from all of them.
         CollectAssignedFields(result.Extraction.Functions, scopeToOwner, ownerName, seen, entries);
 
+        // Then the workspace's distinct assigned fields, from the store's vocabulary rather than
+        // every function of every record — see VocabularyIndex.
         LanguageStore fieldStore = _database.StoreFor(result.Language);
-        foreach ( ScriptRecord record in fieldStore.AllRecords )
+        foreach ( string fieldName in fieldStore.VisibleFieldNames(scopeToOwner ? ownerName : null, contextId) )
         {
-            if ( ScriptDatabase.CanSee(contextId, record.ContextId) )
+            if ( seen.Add(fieldName) )
             {
-                CollectAssignedFields(record.Functions, scopeToOwner, ownerName, seen, entries);
+                entries.Add(new CompletionEntry(fieldName, CompletionKind.Field, "field"));
             }
         }
 

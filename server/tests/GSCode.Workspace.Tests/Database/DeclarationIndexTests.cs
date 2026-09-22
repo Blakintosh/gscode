@@ -83,6 +83,40 @@ public class DeclarationIndexTests
     }
 
     [Fact]
+    public void ADevOnlyFunctionOrMethod_MakesItsNameMaybeDevOnly_UntilAnEditTakesItOut()
+    {
+        LanguageStore store = new();
+        ScriptRecord record = Declaring(@"c:\raw\a.gsc", ("alpha", "debug_draw"), ("alpha", "normal"));
+        FunctionSymbol devFunction = record.Functions[0] with { IsDevOnly = true };
+        FunctionSymbol devMethod = record.Functions[1] with { Name = "trace", KeyName = "trace", IsDevOnly = true };
+        store.Upsert(record with
+        {
+            Functions = [devFunction, record.Functions[1]],
+            Classes =
+            [
+                new ClassSymbol
+                {
+                    Name = "cthing",
+                    KeyName = "cthing",
+                    Namespace = "alpha",
+                    Methods = [devMethod],
+                    NameRange = SomeRange,
+                    FullRange = SomeRange,
+                },
+            ],
+        });
+
+        Assert.True(store.MayBeDevOnly("debug_draw"));
+        Assert.True(store.MayBeDevOnly("DEBUG_DRAW"));
+        Assert.True(store.MayBeDevOnly("trace"));
+        Assert.False(store.MayBeDevOnly("normal"));
+
+        store.Upsert(record);
+        Assert.False(store.MayBeDevOnly("debug_draw"));
+        Assert.False(store.MayBeDevOnly("trace"));
+    }
+
+    [Fact]
     public void LookupFunctions_WithANamespace_FindsTheSameFunctionsItAlwaysDid()
     {
         LanguageStore store = new();

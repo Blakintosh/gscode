@@ -79,6 +79,17 @@ public static class DevBlockCallLint
                 continue;
             }
 
+            // Only a name that COULD be dev-only is worth resolving: one some file declares inside a
+            // dev block, or a dev-only builtin. For every other name no resolution can end in a
+            // report — the script half needs every candidate dev-only, the builtin half needs a
+            // dev-only builtin — and resolving a merge-dialect call by bare name at 50,000 files
+            // means reading every one of the thousands of files declaring `main` (PERF.md, the
+            // scale section).
+            if ( !store.MayBeDevOnly(entry.Key.Name) && builtins.Find(entry.Key.Name) is not { IsDevOnly: true } )
+            {
+                continue;
+            }
+
             if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
             {
                 continue;

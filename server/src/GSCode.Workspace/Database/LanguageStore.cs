@@ -110,7 +110,7 @@ public sealed class LanguageStore
         // thread's hashing, which made this stage 22% of CoD4's cold-index thread-time at 21x
         // parallelism. The gate now covers only the swap and the dictionary mutations it orders.
         HashSet<SymbolKey> newKeys = ReferenceIndex.KeysOf(record.References);
-        DeclarationIndex.DeclaredKeys newNames = DeclarationIndex.KeysOf(record.Functions);
+        DeclarationIndex.DeclaredKeys newNames = DeclarationIndex.KeysOf(record);
         HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
         string? newRelativeKey = RelativePathIndex.KeyOf(record);
         VocabularyIndex.Contribution newVocabulary = VocabularyIndex.Of(record);
@@ -129,7 +129,7 @@ public sealed class LanguageStore
             PerfTracker.End();
 
             PerfTracker.Begin("upsert.declaration");
-            _declarationIndex.Apply(record.Path, DeclarationIndex.KeysOf(previous?.Functions ?? []), newNames);
+            _declarationIndex.Apply(record.Path, DeclarationIndex.KeysOf(previous), newNames);
             PerfTracker.End();
 
             PerfTracker.Begin("upsert.namespace");
@@ -187,7 +187,7 @@ public sealed class LanguageStore
             {
                 AdjustOverlayCount(previous, next: null);
                 _referenceIndex.Apply(normalizedPath, ReferenceIndex.KeysOf(previous.References), []);
-                _declarationIndex.Apply(normalizedPath, DeclarationIndex.KeysOf(previous.Functions), DeclarationIndex.DeclaredKeys.None);
+                _declarationIndex.Apply(normalizedPath, DeclarationIndex.KeysOf(previous), DeclarationIndex.DeclaredKeys.None);
                 _namespaceIndex.Apply(normalizedPath, NamespaceIndex.NamespacesOf(previous.Functions), []);
                 _classGraph.Remove(normalizedPath);
                 _relativePathIndex.Apply(normalizedPath, RelativePathIndex.KeyOf(previous), null);
@@ -252,6 +252,15 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesDeclaring(string keyName)
     {
         return _declarationIndex.FilesDeclaring(keyName);
+    }
+
+    /// <summary>
+    /// Whether any file declares a function or method of this name inside a dev block — see
+    /// <see cref="DeclarationIndex.MayBeDevOnly"/>.
+    /// </summary>
+    public bool MayBeDevOnly(string keyName)
+    {
+        return _declarationIndex.MayBeDevOnly(keyName);
     }
 
     /// <summary>Paths of the files declaring a function key name INTO one namespace.</summary>

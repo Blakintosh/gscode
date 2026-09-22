@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -30,8 +31,20 @@ public static class PrivateAccessLint
         LanguageStore store,
         string askingContextId,
         string askingPath,
-        BuiltinApi builtins)
+        BuiltinApi builtins,
+        GameProfile? profile = null)
     {
+        // Nothing to find on a dialect with no `private`: no declaration there can carry the flag,
+        // so this rule cannot report — yet it would still resolve every call in the file to find
+        // that out, twice. On a merge dialect a call resolves by bare name, and at 50,000 files
+        // `main` alone has thousands of declarations, which made this the most expensive rule in a
+        // cod4 lint pass while reporting nothing (PERF.md, the scale section).
+        GameProfile game = profile ?? GameProfile.Active;
+        if ( !game.HasPrivateFunctions )
+        {
+            return [];
+        }
+
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 

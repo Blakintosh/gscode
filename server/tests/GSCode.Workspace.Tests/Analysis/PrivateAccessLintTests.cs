@@ -62,6 +62,32 @@ public class PrivateAccessLintTests
     }
 
     [Fact]
+    public void OnADialectWithoutPrivate_TheRuleStandsDownBeforeResolvingAnything()
+    {
+        // The same call that is reported above. Under a profile whose keyword set has no `private`
+        // no declaration can carry the flag, so the rule returns before resolving a single call —
+        // which on a merge dialect at scale was the most expensive thing in the lint pass.
+        string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
+        ScriptDatabase database = BuildWorkspace();
+        string askingPath = @$"{Raw}\scripts\main.gsc";
+        ParseResult result = ScriptAnalysis.Analyze(
+            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
+
+        Assert.Empty(PrivateAccessLint.Analyze(
+            result, database.Gsc, "raw", askingPath, builtins.For(ScriptLanguage.Gsc), GameProfile.Cod4));
+    }
+
+    [Fact]
+    public void OnlyBlackOps3_CanDeclareAPrivateFunction()
+    {
+        foreach ( GameProfile profile in GameProfile.All )
+        {
+            Assert.Equal(profile.ShortName == "bo3", profile.HasPrivateFunctions);
+        }
+    }
+
+    [Fact]
     public void CallingAPrivateFunctionFromAnotherFileInTheSameNamespace_IsFine()
     {
         // The core rule: private is scoped to the namespace, not the file. main.gsc declares

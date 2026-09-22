@@ -328,6 +328,13 @@ public sealed partial record GameProfile
     /// </summary>
     public bool HasVarargBinding => HasKeyword("vararg");
 
+    /// <summary>
+    /// Whether a function can be declared <c>private</c>. BO3 only: in every other dialect the word
+    /// is not a keyword, so it lexes as an identifier and no declaration ever carries the flag.
+    /// Derived from the keyword set.
+    /// </summary>
+    public bool HasPrivateFunctions => HasKeyword("private");
+
     /// <summary>Whether a function declaration begins with the <c>function</c> keyword. IW omits it. Derived from the keyword set.</summary>
     public bool HasFunctionKeyword => HasKeyword("function");
 

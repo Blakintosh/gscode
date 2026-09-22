@@ -37,17 +37,22 @@ public sealed class DeclarationIndex
     /// <summary>What one file contributes, built outside the caller's write gate.</summary>
     public sealed class DeclaredKeys
     {
-        public static DeclaredKeys None { get; } = new([], []);
+        public static DeclaredKeys None { get; } = new([], [], []);
 
-        public DeclaredKeys(HashSet<string> names, HashSet<(string Namespace, string KeyName)> qualified)
+        public DeclaredKeys(
+            HashSet<string> names, HashSet<(string Namespace, string KeyName)> qualified, HashSet<string> devOnlyNames)
         {
             Names = names;
             Qualified = qualified;
+            DevOnlyNames = devOnlyNames;
         }
 
         public HashSet<string> Names { get; }
 
         public HashSet<(string Namespace, string KeyName)> Qualified { get; }
+
+        /// <summary>Names of the functions AND class methods declared inside a dev block.</summary>
+        public HashSet<string> DevOnlyNames { get; }
     }
 
     private readonly PackedInvertedIndex<string> _byName = new(StringComparer.Ordinal);
@@ -60,25 +65,48 @@ public sealed class DeclarationIndex
         new(EqualityComparer<(string Namespace, string KeyName)>.Default);
 
     /// <summary>
-    /// The distinct names, bare and qualified, a function list declares. Built outside the caller's
-    /// write gate for the same reason as <see cref="ReferenceIndex.KeysOf"/>.
+    /// Every name that has a dev-only declaration somewhere — see <see cref="MayBeDevOnly"/>.
+    /// Case-insensitive, so it can only ever answer "maybe" more often than an exact match would.
     /// </summary>
-    public static DeclaredKeys KeysOf(ImmutableArray<FunctionSymbol> functions)
+    private readonly PackedInvertedIndex<string> _devOnlyByName = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The distinct names, bare and qualified, a file's functions declare, and the dev-only ones
+    /// among its functions and class methods. Built outside the caller's write gate for the same
+    /// reason as <see cref="ReferenceIndex.KeysOf"/>.
+    /// </summary>
+    public static DeclaredKeys KeysOf(ScriptRecord? record)
     {
-        if ( functions.IsDefaultOrEmpty )
+        if ( record is null || (record.Functions.IsDefaultOrEmpty && record.Classes.IsDefaultOrEmpty) )
         {
             return DeclaredKeys.None;
         }
 
         HashSet<string> names = new(StringComparer.Ordinal);
         HashSet<(string Namespace, string KeyName)> qualified = [];
-        foreach ( FunctionSymbol function in functions )
+        HashSet<string> devOnlyNames = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( FunctionSymbol function in record.Functions )
         {
             names.Add(function.KeyName);
             qualified.Add((function.Namespace, function.KeyName));
+            if ( function.IsDevOnly )
+            {
+                devOnlyNames.Add(function.KeyName);
+            }
         }
 
-        return new DeclaredKeys(names, qualified);
+        foreach ( ClassSymbol classSymbol in record.Classes )
+        {
+            foreach ( FunctionSymbol method in classSymbol.Methods )
+            {
+                if ( method.IsDevOnly )
+                {
+                    devOnlyNames.Add(method.KeyName);
+                }
+            }
+        }
+
+        return new DeclaredKeys(names, qualified, devOnlyNames);
     }
 
     /// <summary>Replaces one file's contribution: removes names it no longer declares, adds the rest.</summary>
@@ -86,6 +114,16 @@ public sealed class DeclarationIndex
     {
         _byName.Apply(path, oldKeys.Names, newKeys.Names);
         _byQualifiedName.Apply(path, oldKeys.Qualified, newKeys.Qualified);
+        _devOnlyByName.Apply(path, oldKeys.DevOnlyNames, newKeys.DevOnlyNames);
+    }
+
+    /// <summary>
+    /// Whether any file declares a function or class method of this name inside a dev block. False
+    /// means no call to the name can reach a dev-only script declaration, however it resolves.
+    /// </summary>
+    public bool MayBeDevOnly(string keyName)
+    {
+        return !_devOnlyByName.FilesFor(keyName).IsEmpty;
     }
 
     /// <summary>Paths of the files declaring this key name in any namespace (snapshot).</summary>

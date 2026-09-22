@@ -120,10 +120,26 @@ public static class SemanticTokenBuilder
                 return null;
             }
             default:
-                // Keywords included — see above. What is left for this pass is the one thing a
-                // grammar genuinely cannot do: decide what an IDENTIFIER means. Whether `foo` is a
-                // function, a macro or a field is a question about the workspace, not about the
-                // characters, and that is the whole reason semantic tokens exist.
+                // Keywords included — see above, with one exception: a keyword-shaped MACRO name.
+                // Keywords match case-insensitively (Keywords.cs), so `DEFAULT` lexes as
+                // TokenKind.Default rather than Identifier even though the preprocessor accepts it
+                // as a macro name (BO3's own DEFAULT() in shared.gsh) and records a MacroUse
+                // reference at that position. Falling through to `return null` left that reference
+                // classified but never painted, so the grammar's `default` keyword colour — purple
+                // — stood uncontested. Every other keyword still stands down for the reasons above:
+                // this only fires when the classified map disagrees with the lexer's own keyword
+                // read, which happens for a macro and nothing else ClassifyReference can produce.
+                if ( TokenFacts.IsKeyword(token.Kind)
+                    && classified.TryGetValue((token.Range.Start.Line, token.Range.Start.Character), out SemanticTokenType keywordType)
+                    && keywordType == SemanticTokenType.Macro )
+                {
+                    return keywordType;
+                }
+
+                // What is left for this pass is the one thing a grammar genuinely cannot do: decide
+                // what an IDENTIFIER means. Whether `foo` is a function, a macro or a field is a
+                // question about the workspace, not about the characters, and that is the whole
+                // reason semantic tokens exist.
                 //
                 // Parameters and locals are NOT among them: SymbolKind has no member for either,
                 // so ClassifyReference has nothing to answer with. Their slots in the legend are

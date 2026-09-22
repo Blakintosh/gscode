@@ -92,6 +92,21 @@ public class SemanticTokenBuilderTests
     }
 
     [Fact]
+    public void KeywordNamedMacro_IsClassifiedAsMacro()
+    {
+        // DEFAULT is a real BO3 macro (shared.gsh) whose name collides with the `default` keyword,
+        // matched case-insensitively by the lexer (Keywords.cs). The invocation still resolves to a
+        // MacroUse reference — the preprocessor accepts keywords as macro names — but ClassifyToken
+        // only consulted the classified-position map for TokenKind.Identifier, so a keyword-shaped
+        // macro name never got repainted and stayed whatever colour the grammar's `default` rule
+        // gave it.
+        ImmutableArray<SemanticToken> tokens = Build(
+            "#define DEFAULT(a,b) if(!isdefined(a))a=b\nfunction f( x )\n{\n    DEFAULT( x, 1 );\n}\n");
+
+        Assert.True(HasTypeOnLine(tokens, 3, SemanticTokenType.Macro));
+    }
+
+    [Fact]
     public void Comments_AreLeftToTheGrammar()
     {
         // A semantic token OVERRIDES the TextMate scopes across the range it covers, so emitting

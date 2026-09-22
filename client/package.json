@@ -49,6 +49,9 @@
 					],
 					"variable.defaultLibrary": [
 						"variable.language"
+					],
+					"macro": [
+						"entity.name.function.preprocessor"
 					]
 				}
 			},
@@ -60,6 +63,9 @@
 					],
 					"variable.defaultLibrary": [
 						"variable.language"
+					],
+					"macro": [
+						"entity.name.function.preprocessor"
 					]
 				}
 			},
@@ -71,6 +77,9 @@
 					],
 					"variable.defaultLibrary": [
 						"variable.language"
+					],
+					"macro": [
+						"entity.name.function.preprocessor"
 					]
 				}
 			}

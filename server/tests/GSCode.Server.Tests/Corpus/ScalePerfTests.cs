@@ -88,6 +88,9 @@ public class ScalePerfTests
         public int WarmTotal { get; set; }
         public double DatabaseMegabytes { get; set; }
 
+        /// <summary>Per lint rule: the worst single file and the p99, so a rule that grows with the workspace is named.</summary>
+        public List<(string Rule, double Max, double P99)> LintRules { get; } = [];
+
         public double WarmSeconds
         {
             get { return LoadAllMilliseconds / 1000.0 + WarmIndexSeconds; }
@@ -261,6 +264,8 @@ public class ScalePerfTests
         List<double> completions = [];
         List<double> literals = [];
         List<double> lints = [];
+        Dictionary<string, List<double>> ruleTimes = new(StringComparer.Ordinal);
+        LintTimings ruleTimings = new();
 
         foreach ( string path in sample )
         {
@@ -298,10 +303,24 @@ public class ScalePerfTests
             if ( language is ScriptLanguage.Gsc or ScriptLanguage.Csc )
             {
                 WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
+                ruleTimings.Clear();
                 Stopwatch lint = Stopwatch.StartNew();
-                WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
+                WorkspaceLints.LintsOnly(
+                    parsed, language, path, database, resolver, builtins, objectFields,
+                    cancellationToken: CancellationToken.None, timings: ruleTimings);
                 lint.Stop();
                 lints.Add(lint.Elapsed.TotalMilliseconds);
+
+                foreach ( KeyValuePair<string, double> rule in ruleTimings.Milliseconds )
+                {
+                    if ( !ruleTimes.TryGetValue(rule.Key, out List<double>? times) )
+                    {
+                        times = [];
+                        ruleTimes[rule.Key] = times;
+                    }
+
+                    times.Add(rule.Value);
+                }
             }
         }
 
@@ -317,6 +336,14 @@ public class ScalePerfTests
         row.LiteralMax = literals.Count == 0 ? 0 : literals[^1];
         row.LintP99 = Percentile(lints, 0.99);
         row.LintMax = lints.Count == 0 ? 0 : lints[^1];
+
+        foreach ( KeyValuePair<string, List<double>> rule in ruleTimes )
+        {
+            rule.Value.Sort();
+            row.LintRules.Add((rule.Key, rule.Value[^1], Percentile(rule.Value, 0.99)));
+        }
+
+        row.LintRules.Sort(static (left, right) => right.P99.CompareTo(left.P99));
     }
 
     /// <summary>
@@ -524,6 +551,11 @@ public class ScalePerfTests
         _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, max {row.LiteralMax:F1})");
         _output.WriteLine($"     one-file lint max {row.LintMax,8:F1} ms  budget {LintBudgetMilliseconds,6:F1} ms  {Verdict(row.LintMax, LintBudgetMilliseconds)}  (p99 {row.LintP99:F1})");
         _output.WriteLine($"     cache populate    {row.PopulateSeconds,8:F1} s   + drain {row.DrainSeconds:F1} s, db {row.DatabaseMegabytes:F0} MB");
+
+        foreach ( (string Rule, double Max, double P99) rule in row.LintRules.Take(6) )
+        {
+            _output.WriteLine($"       lint rule {rule.Rule,-36} p99 {rule.P99,7:F1} ms  max {rule.Max,7:F1} ms");
+        }
 
         if ( row.DroppedWrites > 0 )
         {

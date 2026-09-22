@@ -237,6 +237,21 @@ public sealed class SymbolExtractor
                 parameter.NameToken.Text, parameter.ByRef, DefaultValueText(parameter.DefaultValue, sourceFile)));
         }
 
+        // A name token whose text came out of a MACRO BODY (DefinitionSite set) does not really
+        // live where its own Range sits — that is a position inside the #define, e.g. the line in
+        // shared.gsh where REGISTER_SYSTEM's own `function autoexec __init__sytem__()` is written.
+        // The declaration belongs to whoever INVOKED the macro, so its RootRange (the invocation
+        // site) is what NameRange and SourceFile must agree with FullRange on, which was already
+        // built from RootRange (see RangeFrom in Parser.cs). Left as .Range/.Provenance.SourceFile,
+        // a CodeLens or go-to-definition landed inside the header on whatever line the macro
+        // happens to be defined at — reported as an "autoexec entry point" lens on an unrelated
+        // `else`. A function written directly IN a header (no macro involved) has no
+        // DefinitionSite, and keeps reporting that header as its home — that one really is where
+        // it lives.
+        bool fromMacroBody = function.NameToken.Provenance.DefinitionSite is not null;
+        TextRange nameRange = fromMacroBody ? function.NameToken.RootRange : function.NameToken.Range;
+        string declaredIn = fromMacroBody ? "" : sourceFile ?? "";
+
         return new FunctionSymbol
         {
             Name = function.NameToken.Text,
@@ -248,9 +263,9 @@ public sealed class SymbolExtractor
             IsDevOnly = _devBlockDepth > 0,
             Parameters = parameters.ToImmutable(),
             HasVarargs = function.HasVarargs,
-            NameRange = function.NameToken.Range,
+            NameRange = nameRange,
             FullRange = function.Range,
-            SourceFile = function.NameToken.Provenance.SourceFile ?? "",
+            SourceFile = declaredIn,
             Doc = FindDocComment(function.Range.Start.Line, function.NameToken.Provenance.SourceFile),
             Assignments = assignments.ToImmutable(),
         };
@@ -355,6 +370,10 @@ public sealed class SymbolExtractor
 
         _currentClass = enclosingClass;
 
+        // Same reasoning as ExtractFunction: a class NAMED by a macro body belongs at the
+        // invocation, not at the #define's own position.
+        bool classFromMacroBody = classNode.NameToken.Provenance.DefinitionSite is not null;
+
         _classes.Add(new ClassSymbol
         {
             Name = classNode.NameToken.Text,
@@ -367,9 +386,9 @@ public sealed class SymbolExtractor
             HasDestructor = destructorSymbol is not null,
             Constructor = constructorSymbol,
             Destructor = destructorSymbol,
-            NameRange = classNode.NameToken.Range,
+            NameRange = classFromMacroBody ? classNode.NameToken.RootRange : classNode.NameToken.Range,
             FullRange = classNode.Range,
-            SourceFile = classNode.NameToken.Provenance.SourceFile ?? "",
+            SourceFile = classFromMacroBody ? "" : classNode.NameToken.Provenance.SourceFile ?? "",
         });
     }
 
@@ -387,6 +406,10 @@ public sealed class SymbolExtractor
         ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
         WalkStatement(body, assignments);
 
+        // Same reasoning as ExtractFunction: a constructor/destructor produced by a macro body
+        // belongs at the invocation, not at the #define's own position.
+        bool fromMacroBody = keywordToken.Provenance.DefinitionSite is not null;
+
         return new FunctionSymbol
         {
             Name = keywordToken.Text,
@@ -394,9 +417,9 @@ public sealed class SymbolExtractor
             Namespace = "",
             OwnerClassKeyName = ownerClass,
             IsDevOnly = _devBlockDepth > 0,
-            NameRange = keywordToken.Range,
+            NameRange = fromMacroBody ? keywordToken.RootRange : keywordToken.Range,
             FullRange = fullRange,
-            SourceFile = keywordToken.Provenance.SourceFile ?? "",
+            SourceFile = fromMacroBody ? "" : keywordToken.Provenance.SourceFile ?? "",
             Assignments = assignments.ToImmutable(),
         };
     }

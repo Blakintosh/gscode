@@ -1964,6 +1964,56 @@ A real request's window is a screenful, not a whole 465-declaration file, so the
 in the editor is smaller than either column — these are the same upper-bound sample the codeLens
 numbers above are, not a steady-state estimate.
 
+## Measured: SCALE, 10,000 to 50,000 files
+
+Every figure above comes from a stock corpus, and the largest is bo1's 2,963 files. A mod workspace
+is not bounded by that, so `ScalePerfTests` (`Category=Scale`, `GSCODE_SCALE_SIZES=10000,25000,50000`)
+builds bigger ones out of the real scripts: bo3's raw tree stays raw, and a generated workspace
+folder holds copies — one subfolder per copy, `#namespace` suffixed per copy, imports left to resolve
+against raw. About three quarters of the copied files are at or above the corpus's median size.
+
+The budgets are the ones this pass set out to hold. Startup grows roughly linearly with the
+workspace; completion and one file's lint pass are **flat**, since a keystroke touches one file and a
+figure that climbs with the total means something on that path walks the store. Memory is a soft
+ceiling — holding 50,000 files' symbols costs something — as long as the pause it brings stays bounded.
+
+### 2026-09-21: baseline, before any change
+
+One run, 24 cores, uninstrumented.
+
+| | 10,000 | 25,000 | 50,000 | 50K budget |
+|---|---:|---:|---:|---:|
+| cold index | 6.3 s | 10.8 s | 21.3 s | 35 s |
+| warm start | 5.0 s | 9.2 s | 18.0 s | **10 s** |
+| cache writes dropped while populating | 4,999 | 18,292 | **40,889** | 0 |
+| files a warm start actually restored | 5,106 / 10,105 | 6,813 / 25,105 | **9,216 / 50,105** | all |
+| retained memory | 447 MB | 1,120 MB | 2,128 MB | ~3 GB (soft) |
+| post-index compaction pause | 588 ms | 1,132 ms | 1,800 ms | — |
+| completion p99 (file scope + call sites) | 9.8 ms | 19.1 ms | **40.7 ms** | 10 ms, flat |
+| completion p99, inside a string literal | 65 ms | 144 ms | **297 ms** | 10 ms, flat |
+| one file's lint pass, p99 | 42.8 ms | 86.9 ms | **304.6 ms** | 100 ms, flat |
+| full-mode lint sweep | 9.6 s | 46.0 s | **206 s** | 60 s |
+
+What it confirms, and what it adds to what was predicted from per-file averages:
+
+- **The cache loses most of what it is handed.** `Enqueue` is a `TryWrite` on a channel bounded at
+  4,096, drained by one writer that serializes and gzips each record itself. At 50,000 files 82% of
+  the writes are refused, so the next "warm" start re-analyses four files in five. The warm row above
+  is therefore mostly a cold index, and says nothing yet about the restore path.
+- **Completion scales with the workspace.** The statement-scope arm's p99 doubles with each doubling
+  of files, and the literal arm — which walks every record's references — is 30x its budget at 50K.
+- **One file's lint pass scales with the workspace too.** This was not predicted. Its p99 at 50K is
+  past the 250 ms debounce, and because the full-mode sweep runs that pass once per file, the sweep
+  is quadratic: 9.6 → 46 → 206 s.
+- **Cold indexing, memory and enumeration hold.** Cold stays at 22–23x parallel and linear. Retained
+  memory is ~43 KB per file at every size, inside the soft ceiling. The compaction pause grows with
+  the heap, to 1.8 s at 50K; it runs once, off the request path.
+
+The warm-start section above also still applies: with every file restored, inflating and parsing a
+JSON record costs about what analysing the source does. So once the dropped writes are fixed, the warm
+start will land near the cold index — ~21 s at 50K against a 10 s budget — and the record format is
+on the critical path rather than optional.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

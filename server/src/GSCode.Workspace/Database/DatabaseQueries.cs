@@ -992,14 +992,34 @@ public static class DatabaseQueries
     /// drifted apart — the CodeLens count queried a single store while clicking the lens went
     /// through the client's reference provider, so the number and the peek list disagreed.
     /// </summary>
+    /// <param name="macroSpansLanguages">
+    /// Whether a MACRO key widens to both language stores. Defaults true, which is right for a
+    /// macro genuinely reached through a shared <c>.gsh</c> — declared once, <c>#insert</c>ed into
+    /// <c>.gsc</c> and <c>.csc</c> alike, so a use in either world is a use of the same symbol and
+    /// the asking file's own language decides nothing (a rename started in a .gsc must still reach
+    /// every <c>.csc</c> use, or it expands to nothing — see <c>MacroRenameAcrossLanguagesTests</c>).
+    ///
+    /// Pass false when the CALLER already knows this key is a macro this file defines LOCALLY, no
+    /// <c>#insert</c> involved — the server's navigation layer is the one caller that can know
+    /// this, from the asking file's own <c>Preprocessed.Macros</c>. Left
+    /// true unconditionally, two independent same-named macros — one per language file, e.g.
+    /// <c>CF_CRACKS_ALL</c> separately <c>#define</c>d in <c>animation_shared.gsc</c> and its
+    /// sibling <c>.csc</c> — were conflated into one: the CodeLens on the .gsc's own definition
+    /// counted the .csc's unrelated one, and the peek list showed both. Ignored for anything but
+    /// <see cref="SymbolKind.Macro"/>, where the isolation between language worlds is never in
+    /// question — a same-named FUNCTION in the other world is a different function regardless.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         ScriptDatabase database,
         ImmutableArray<LanguageStore> stores,
         string askingContextId,
-        SymbolKey key)
+        SymbolKey key,
+        bool macroSpansLanguages = true)
     {
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        bool wideMacro = key.Kind == SymbolKind.Macro && macroSpansLanguages;
 
         // A MACRO is not a symbol of one language world. It is declared in a .gsh, which is
         // inserted into .gsc and .csc alike, so a use in either world is a use of the same name and
@@ -1008,9 +1028,7 @@ public static class DatabaseQueries
         // way — expanding to nothing — which is the failure RenameHandler's own comment says it
         // exists to avoid. Everything else keeps the isolation: a same-named FUNCTION in the other
         // world is a different function, and conflating the two is what the split is for.
-        ImmutableArray<LanguageStore> scope = key.Kind == SymbolKind.Macro
-            ? database.BothLanguageStores
-            : stores;
+        ImmutableArray<LanguageStore> scope = wideMacro ? database.BothLanguageStores : stores;
 
         foreach ( LanguageStore store in scope )
         {
@@ -1018,8 +1036,11 @@ public static class DatabaseQueries
         }
 
         // A macro declared in a .gsh lives in the shared GSH store, which serves both languages,
-        // so its declaration and any header-to-header uses are invisible to a store query.
-        if ( key.Kind == SymbolKind.Macro )
+        // so its declaration and any header-to-header uses are invisible to a store query. Gated
+        // the same way as the store widening above: a macro this file defines LOCALLY has nothing
+        // in the GSH store under its name regardless, so this would return empty either way — the
+        // explicit gate is about intent, not about a result this changes.
+        if ( wideMacro )
         {
             results.AddRange(FindGshReferences(database, askingContextId, key));
         }

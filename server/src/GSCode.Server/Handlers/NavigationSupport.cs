@@ -3,6 +3,7 @@ using GSCode.Core.Paths;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
+using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
@@ -248,14 +249,57 @@ public sealed class NavigationSupport
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
     {
-        return FindAllReferences(ContextOf(target), key, referenceKind);
+        return FindAllReferences(ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key));
+    }
+
+    /// <summary>
+    /// False when <paramref name="key"/> is a macro this file defines LOCALLY — no <c>#insert</c>
+    /// involved — so <see cref="GSCode.Workspace.Database.DatabaseQueries.FindAllReferences"/> can
+    /// be told not to widen it to both language stores. True for everything else, including a
+    /// macro this file has no answer for (defensive — a real <c>MacroUse</c>/<c>Definition</c> key
+    /// should always resolve here).
+    ///
+    /// <c>DatabaseQueries.FindAllReferences</c> widens every macro key to both language stores
+    /// unconditionally by default, which is right for a macro actually reached through a shared
+    /// <c>.gsh</c> (a rename started in either world has to reach the other — see
+    /// <c>MacroRenameAcrossLanguagesTests</c>) but wrong for two macros that merely share a NAME —
+    /// <c>CF_CRACKS_ALL</c> independently <c>#define</c>d in <c>animation_shared.gsc</c> and its
+    /// sibling <c>.csc</c>, with no header between them. Left unanswered, the CodeLens count and
+    /// the peek list on the <c>.gsc</c>'s own definition both counted the <c>.csc</c>'s unrelated
+    /// one — the same conflation
+    /// <see cref="GSCode.Server.Handlers.DefinitionHandler.MacroDefinitionAt"/> answers for
+    /// go-to-definition, here for every OTHER caller of <see cref="FindAllReferences(NavigationTarget, SymbolKey, ReferenceKind)"/>
+    /// (CodeLens, Find References, Document Highlight, rename).
+    ///
+    /// Answered from THIS FILE's own preprocessor result, matching go-to-definition exactly: a
+    /// macro whose entry here has no <c>SourceFile</c> was written directly in this file, and a
+    /// same-named local <c>#define</c> in the other language world is a different macro. One with
+    /// a <c>SourceFile</c> came from an <c>#insert</c>, so it keeps the full cross-language width —
+    /// that IS the shared case the wide search exists for.
+    /// </summary>
+    private static bool MacroSpansLanguages(NavigationTarget target, SymbolKey key)
+    {
+        if ( key.Kind != SymbolKind.Macro )
+        {
+            return true;
+        }
+
+        return !(target.Result.Preprocessed.Macros.TryGet(key.Name, out MacroDefinition definition)
+            && definition.SourceFile is null);
     }
 
     /// <summary>
     /// The same query for a file that need not be open. See <see cref="SymbolQueryContext"/>.
     /// </summary>
+    /// <param name="macroSpansLanguages">
+    /// See <see cref="GSCode.Workspace.Database.DatabaseQueries.FindAllReferences"/>'s own
+    /// parameter of the same name. Defaults true — this overload has no open document's own parse
+    /// to answer <see cref="MacroSpansLanguages"/> from, so it keeps the wide, always-correct-if-
+    /// imprecise answer rather than guessing.
+    /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
-        SymbolQueryContext target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+        SymbolQueryContext target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call,
+        bool macroSpansLanguages = true)
     {
         // A method is not reachable under one key the way a function is — inheritance, the
         // Class::method form and untyped arrow calls each name it differently — so it resolves to
@@ -278,7 +322,7 @@ public sealed class NavigationSupport
         }
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
-            DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key);
+            DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key, macroSpansLanguages);
 
         // Narrowing happens HERE, in the one query both the CodeLens count and the peek list run,
         // so the number and the list cannot disagree. Scoping only the lens once produced a count of

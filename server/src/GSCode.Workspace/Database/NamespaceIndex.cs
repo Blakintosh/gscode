@@ -24,7 +24,7 @@ public sealed class NamespaceIndex
 
     /// <summary>
     /// The distinct namespaces a function list declares into. Built outside the caller's write gate,
-    /// like <see cref="DeclarationIndex.NamesOf"/>.
+    /// like <see cref="DeclarationIndex.KeysOf"/>.
     /// </summary>
     public static HashSet<string> NamespacesOf(ImmutableArray<FunctionSymbol> functions)
     {

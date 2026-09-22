@@ -80,7 +80,14 @@ public static class DatabaseQueries
         //
         // It is here because this method is called once per CALL SITE by four separate lints, and
         // walking thirty thousand symbols each time made those four 97% of the cross-file lint cost.
-        foreach ( string declaringPath in store.FilesDeclaring(keyName) )
+        //
+        // With a namespace, the files declaring the name INTO it — the subset the namespace filter
+        // below would keep anyway. See DeclarationIndex for what the bare-name list cost at scale.
+        ImmutableArray<string> declaringPaths = namespaceName is null
+            ? store.FilesDeclaring(keyName)
+            : store.FilesDeclaring(namespaceName, keyName);
+
+        foreach ( string declaringPath in declaringPaths )
         {
             if ( !store.TryGet(declaringPath, out ScriptRecord record) )
             {

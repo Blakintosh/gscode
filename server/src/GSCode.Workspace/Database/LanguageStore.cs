@@ -108,7 +108,7 @@ public sealed class LanguageStore
         // thread's hashing, which made this stage 22% of CoD4's cold-index thread-time at 21x
         // parallelism. The gate now covers only the swap and the dictionary mutations it orders.
         HashSet<SymbolKey> newKeys = ReferenceIndex.KeysOf(record.References);
-        HashSet<string> newNames = DeclarationIndex.NamesOf(record.Functions);
+        DeclarationIndex.DeclaredKeys newNames = DeclarationIndex.KeysOf(record.Functions);
         HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
 
         lock ( GateFor(record.Path) )
@@ -125,7 +125,7 @@ public sealed class LanguageStore
             PerfTracker.End();
 
             PerfTracker.Begin("upsert.declaration");
-            _declarationIndex.Apply(record.Path, DeclarationIndex.NamesOf(previous?.Functions ?? []), newNames);
+            _declarationIndex.Apply(record.Path, DeclarationIndex.KeysOf(previous?.Functions ?? []), newNames);
             PerfTracker.End();
 
             PerfTracker.Begin("upsert.namespace");
@@ -177,7 +177,7 @@ public sealed class LanguageStore
             {
                 AdjustOverlayCount(previous, next: null);
                 _referenceIndex.Apply(normalizedPath, ReferenceIndex.KeysOf(previous.References), []);
-                _declarationIndex.Apply(normalizedPath, DeclarationIndex.NamesOf(previous.Functions), []);
+                _declarationIndex.Apply(normalizedPath, DeclarationIndex.KeysOf(previous.Functions), DeclarationIndex.DeclaredKeys.None);
                 _namespaceIndex.Apply(normalizedPath, NamespaceIndex.NamespacesOf(previous.Functions), []);
                 _classGraph.Remove(normalizedPath);
             }
@@ -240,6 +240,12 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesDeclaring(string keyName)
     {
         return _declarationIndex.FilesDeclaring(keyName);
+    }
+
+    /// <summary>Paths of the files declaring a function key name INTO one namespace.</summary>
+    public ImmutableArray<string> FilesDeclaring(string namespaceName, string keyName)
+    {
+        return _declarationIndex.FilesDeclaring(namespaceName, keyName);
     }
 
     /// <summary>

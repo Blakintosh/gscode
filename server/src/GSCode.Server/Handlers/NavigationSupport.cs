@@ -321,13 +321,23 @@ public sealed class NavigationSupport
                 target.Store, target.ContextId, key, referenceKind, key.Namespace ?? "");
         }
 
-        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
-            DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key, macroSpansLanguages);
-
         // Narrowing happens HERE, in the one query both the CodeLens count and the peek list run,
         // so the number and the list cannot disagree. Scoping only the lens once produced a count of
         // 0 beside a list of 1,970.
-        return DatabaseQueries.ScopeToIncludeGraph(all, DeclaringFile(target, key));
+        //
+        // When the key names one declaring file, only the files that can reach it are read — the
+        // same answer, without first collecting every reference to a key that on a merge dialect
+        // every `main` in the workspace shares. See FindReferencesReaching.
+        string declaring = DeclaringFile(target, key);
+        if ( declaring.Length > 0 )
+        {
+            return DatabaseQueries.FindReferencesReaching(target.Stores, target.ContextId, key, declaring);
+        }
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
+            DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key, macroSpansLanguages);
+
+        return DatabaseQueries.ScopeToIncludeGraph(all, declaring);
     }
 
     /// <summary>

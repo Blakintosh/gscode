@@ -85,6 +85,7 @@ public partial class ScalePerfTests
         public double RenameP99 { get; set; }
         public double RenameMax { get; set; }
         public int HandlerFiles { get; set; }
+        public int ReferenceResults { get; set; }
         public double LintP99 { get; set; }
         public double LintMax { get; set; }
         public double LintSweepSeconds { get; set; }
@@ -590,7 +591,7 @@ public partial class ScalePerfTests
         _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, max {row.LiteralMax:F1})");
         _output.WriteLine($"     field compl p99   {row.FieldP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.FieldP99, CompletionBudgetMilliseconds)}  ({row.FieldRequests} requests, max {row.FieldMax:F1})");
         _output.WriteLine($"     codeLens p99      {row.LensP99,8:F1} ms  max {row.LensMax,7:F1} ms  ({row.HandlerFiles} files, whole file)");
-        _output.WriteLine($"     references p99    {row.ReferencesP99,8:F1} ms  max {row.ReferencesMax,7:F1} ms");
+        _output.WriteLine($"     references p99    {row.ReferencesP99,8:F1} ms  max {row.ReferencesMax,7:F1} ms  ({row.ReferenceResults:N0} locations returned in all)");
         _output.WriteLine($"     rename p99        {row.RenameP99,8:F1} ms  max {row.RenameMax,7:F1} ms");
         _output.WriteLine($"     one-file lint max {row.LintMax,8:F1} ms  budget {LintBudgetMilliseconds,6:F1} ms  {Verdict(row.LintMax, LintBudgetMilliseconds)}  (p99 {row.LintP99:F1})");
         _output.WriteLine($"     cache populate    {row.PopulateSeconds,8:F1} s   + drain {row.DrainSeconds:F1} s, db {row.DatabaseMegabytes:F0} MB");

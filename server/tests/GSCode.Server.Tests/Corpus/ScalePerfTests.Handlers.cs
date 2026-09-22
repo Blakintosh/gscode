@@ -76,14 +76,18 @@ public partial class ScalePerfTests
                 FunctionSymbol first = parsed.Extraction.Functions[0];
                 LspPosition at = new(first.NameRange.Start.Line, first.NameRange.Start.Character);
 
-                referenceTimes.Add(await TimeTwiceAsync(() => references.Handle(
-                    new ReferenceParams
-                    {
-                        TextDocument = identifier,
-                        Position = at,
-                        Context = new ReferenceContext { IncludeDeclaration = true },
-                    },
-                    CancellationToken.None)));
+                ReferenceParams referenceRequest = new()
+                {
+                    TextDocument = identifier,
+                    Position = at,
+                    Context = new ReferenceContext { IncludeDeclaration = true },
+                };
+                referenceTimes.Add(await TimeTwiceAsync(() => references.Handle(referenceRequest, CancellationToken.None)));
+
+                // What came back, so a fast answer cannot hide an empty one. With the declaration
+                // included, every sampled function yields at least one location.
+                LocationContainer? locations = await references.Handle(referenceRequest, CancellationToken.None);
+                row.ReferenceResults += locations?.Count() ?? 0;
 
                 renameTimes.Add(await TimeTwiceAsync(() => rename.Handle(
                     new RenameParams { TextDocument = identifier, Position = at, NewName = "scale_renamed" },

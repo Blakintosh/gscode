@@ -20,6 +20,7 @@ public sealed class LanguageStore
     private readonly NamespaceIndex _namespaceIndex = new();
     private readonly ClassGraph _classGraph = new();
     private readonly RelativePathIndex _relativePathIndex = new();
+    private readonly DependentsIndex _dependents = new();
     private readonly VocabularyIndex _vocabulary = new();
 
     /// <summary>
@@ -113,6 +114,7 @@ public sealed class LanguageStore
         DeclarationIndex.DeclaredKeys newNames = DeclarationIndex.KeysOf(record);
         HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
         string? newRelativeKey = RelativePathIndex.KeyOf(record);
+        HashSet<string> newDependencyKeys = DependentsIndex.KeysOf(record);
         VocabularyIndex.Contribution newVocabulary = VocabularyIndex.Of(record);
 
         lock ( GateFor(record.Path) )
@@ -141,6 +143,7 @@ public sealed class LanguageStore
             PerfTracker.End();
 
             _relativePathIndex.Apply(record.Path, RelativePathIndex.KeyOf(previous), newRelativeKey);
+            _dependents.Apply(record.Path, DependentsIndex.KeysOf(previous), newDependencyKeys);
 
             PerfTracker.Begin("upsert.vocabulary");
             _vocabulary.Apply(record.Path, VocabularyIndex.Of(previous), newVocabulary);
@@ -191,6 +194,7 @@ public sealed class LanguageStore
                 _namespaceIndex.Apply(normalizedPath, NamespaceIndex.NamespacesOf(previous.Functions), []);
                 _classGraph.Remove(normalizedPath);
                 _relativePathIndex.Apply(normalizedPath, RelativePathIndex.KeyOf(previous), null);
+                _dependents.Apply(normalizedPath, DependentsIndex.KeysOf(previous), []);
                 _vocabulary.Apply(normalizedPath, VocabularyIndex.Of(previous), VocabularyIndex.Contribution.None);
             }
         }
@@ -284,6 +288,15 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesAt(string normalizedScriptPath)
     {
         return _relativePathIndex.FilesAt(normalizedScriptPath);
+    }
+
+    /// <summary>
+    /// Paths of the files naming a script-relative path through an import edge or a path call —
+    /// see <see cref="DependentsIndex"/>.
+    /// </summary>
+    public ImmutableArray<string> FilesNaming(string normalizedScriptPath)
+    {
+        return _dependents.FilesNaming(normalizedScriptPath);
     }
 
     /// <summary>

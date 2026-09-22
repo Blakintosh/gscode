@@ -685,6 +685,119 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// Exactly <c>ScopeToIncludeGraph(FindAllReferences(...), declaringRelativePath)</c> for a
+    /// function key, read from the files that can reach the declaring file instead of from every
+    /// file mentioning the key.
+    ///
+    /// Scoping keeps a reference only when its file is the declaring file or names it — through an
+    /// import edge or a path call (see <see cref="MeansDeclaringFile"/>) — so no other file can
+    /// contribute, and <see cref="LanguageStore.FilesAt"/> plus <see cref="LanguageStore.FilesNaming"/>
+    /// are all of them. On a merge dialect that is the difference between reading the few files that
+    /// include a script and reading every file with a <c>main</c> in it.
+    ///
+    /// Overlay shadowing is applied as <see cref="FindAllReferences"/> applies it, BEFORE scoping: a
+    /// raw file's references drop out when a visible overlay at the same relative path references
+    /// the key at all, whether or not that overlay reaches the declaring file.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesReaching(
+        ImmutableArray<LanguageStore> stores,
+        string askingContextId,
+        SymbolKey key,
+        string declaringRelativePath,
+        GameProfile? profile = null)
+    {
+        GameProfile game = profile ?? GameProfile.Active;
+        string declaring = NormalizeScriptPath(declaringRelativePath);
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder kept =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        foreach ( LanguageStore store in stores )
+        {
+            HashSet<string> reaching = new(StringComparer.Ordinal);
+            reaching.UnionWith(store.FilesAt(declaring));
+            reaching.UnionWith(store.FilesNaming(declaring));
+
+            // A file must both reach the declaring file AND mention the key, so walk whichever of
+            // the two lists is shorter and test membership in the other. A merge dialect's `main`
+            // is mentioned everywhere and reached from few files; a namespace dialect's shared
+            // utility is reached (#using'd) from nearly every file and one of its functions is
+            // mentioned by far fewer.
+            ImmutableArray<string> mentioning = store.FilesReferencing(key);
+            IEnumerable<string> walk = mentioning.Length < reaching.Count
+                ? mentioning.Where(reaching.Contains)
+                : reaching;
+
+            HashSet<string> visited = new(StringComparer.Ordinal);
+            foreach ( string path in walk )
+            {
+                if ( !visited.Add(path) || !store.TryGet(path, out ScriptRecord record) )
+                {
+                    continue;
+                }
+
+                if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+                {
+                    continue;
+                }
+
+                if ( record.ContextId == "raw" && AnOverlayReferences(stores, askingContextId, record.RelativePath, key) )
+                {
+                    continue;
+                }
+
+                foreach ( ReferenceEntry entry in record.References )
+                {
+                    if ( entry.Key == key && MeansDeclaringFile(game, record, entry, declaring) )
+                    {
+                        kept.Add((record, entry));
+                    }
+                }
+            }
+        }
+
+        return kept.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether a visible non-raw record at exactly this relative path references the key — the
+    /// condition under which <see cref="FindAllReferences"/>' shadowing drops the raw copy's entries.
+    /// </summary>
+    private static bool AnOverlayReferences(
+        ImmutableArray<LanguageStore> stores, string askingContextId, string relativePath, SymbolKey key)
+    {
+        if ( relativePath.Length == 0 )
+        {
+            return false;
+        }
+
+        string normalized = NormalizeScriptPath(relativePath);
+        foreach ( LanguageStore store in stores )
+        {
+            foreach ( string path in store.FilesAt(normalized) )
+            {
+                if ( !store.TryGet(path, out ScriptRecord overlay)
+                    || overlay.ContextId == "raw"
+                    || overlay.RelativePath != relativePath
+                    || !ScriptDatabase.CanSee(askingContextId, overlay.ContextId) )
+                {
+                    continue;
+                }
+
+                foreach ( ReferenceEntry entry in overlay.References )
+                {
+                    if ( entry.Key == key )
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Whether ONE reference means the declaring file's function, decided per reference rather than
     /// per file — because a single file routinely holds references to several different functions
     /// that share the key. corner.gsc calls both <c>combat::main()</c> and

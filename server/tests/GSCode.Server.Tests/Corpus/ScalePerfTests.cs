@@ -75,6 +75,9 @@ public class ScalePerfTests
         public double LiteralP99 { get; set; }
         public double LiteralMax { get; set; }
         public int LiteralRequests { get; set; }
+        public double FieldP99 { get; set; }
+        public double FieldMax { get; set; }
+        public int FieldRequests { get; set; }
         public double LintP99 { get; set; }
         public double LintMax { get; set; }
         public double LintSweepSeconds { get; set; }
@@ -263,6 +266,7 @@ public class ScalePerfTests
         CompletionEngine engine = new(database, builtins, objectFields);
         List<double> completions = [];
         List<double> literals = [];
+        List<double> fields = [];
         List<double> lints = [];
         Dictionary<string, List<double>> ruleTimes = new(StringComparer.Ordinal);
         LintTimings ruleTimings = new();
@@ -300,6 +304,12 @@ public class ScalePerfTests
                 literals.Add(TimeCompletion(engine, parsed, contextId, literal.Value, corpus.Profile));
             }
 
+            Position? field = FieldPosition(parsed);
+            if ( field is not null )
+            {
+                fields.Add(TimeCompletion(engine, parsed, contextId, field.Value, corpus.Profile));
+            }
+
             if ( language is ScriptLanguage.Gsc or ScriptLanguage.Csc )
             {
                 WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
@@ -326,6 +336,7 @@ public class ScalePerfTests
 
         completions.Sort();
         literals.Sort();
+        fields.Sort();
         lints.Sort();
 
         row.CompletionP50 = Percentile(completions, 0.50);
@@ -334,6 +345,9 @@ public class ScalePerfTests
         row.LiteralRequests = literals.Count;
         row.LiteralP99 = Percentile(literals, 0.99);
         row.LiteralMax = literals.Count == 0 ? 0 : literals[^1];
+        row.FieldRequests = fields.Count;
+        row.FieldP99 = Percentile(fields, 0.99);
+        row.FieldMax = fields.Count == 0 ? 0 : fields[^1];
         row.LintP99 = Percentile(lints, 0.99);
         row.LintMax = lints.Count == 0 ? 0 : lints[^1];
 
@@ -424,6 +438,23 @@ public class ScalePerfTests
         }
 
         return positions;
+    }
+
+    /// <summary>
+    /// The end of the first field name written after a dot — <c>self.health|</c> — where the field
+    /// arm runs. It collects every field assigned anywhere visible, so it reads the whole workspace.
+    /// </summary>
+    private static Position? FieldPosition(ParseResult parsed)
+    {
+        foreach ( ReferenceEntry entry in parsed.Extraction.References )
+        {
+            if ( entry.Key.Kind == SymbolKind.Field && !entry.FromMacro && entry.Range.Start.Line == entry.Range.End.Line )
+            {
+                return entry.Range.End;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Just inside the first single-line string literal, where literal completion runs.</summary>
@@ -549,6 +580,7 @@ public class ScalePerfTests
         _output.WriteLine($"     lint sweep        {row.LintSweepSeconds,8:F1} s   budget {sweepBudget,6:F1} s   {Verdict(row.LintSweepSeconds, sweepBudget)}");
         _output.WriteLine($"     completion p99    {row.CompletionP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.CompletionP99, CompletionBudgetMilliseconds)}  (p50 {row.CompletionP50:F2}, max {row.CompletionMax:F1})");
         _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, max {row.LiteralMax:F1})");
+        _output.WriteLine($"     field compl p99   {row.FieldP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.FieldP99, CompletionBudgetMilliseconds)}  ({row.FieldRequests} requests, max {row.FieldMax:F1})");
         _output.WriteLine($"     one-file lint max {row.LintMax,8:F1} ms  budget {LintBudgetMilliseconds,6:F1} ms  {Verdict(row.LintMax, LintBudgetMilliseconds)}  (p99 {row.LintP99:F1})");
         _output.WriteLine($"     cache populate    {row.PopulateSeconds,8:F1} s   + drain {row.DrainSeconds:F1} s, db {row.DatabaseMegabytes:F0} MB");
 
@@ -572,14 +604,14 @@ public class ScalePerfTests
     private void WriteReport(List<ScaleRow> rows)
     {
         StringBuilder table = new();
-        table.AppendLine("| game | files | cold s | warm s | LoadAll ms | retained MB | compact ms | sweep s | compl p99 ms | literal p99 ms | lint max ms | dropped | restored |");
-        table.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        table.AppendLine("| game | files | cold s | warm s | LoadAll ms | retained MB | compact ms | sweep s | compl p99 ms | literal p99 ms | field p99 ms | lint max ms | dropped | restored |");
+        table.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach ( ScaleRow row in rows )
         {
             table.AppendLine(
                 $"| {row.Game} | {row.Total:N0} | {row.ColdSeconds:F1} | {row.WarmSeconds:F1} | {row.LoadAllMilliseconds:F0} | "
                 + $"{row.RetainedMegabytes:F0} | {row.CompactMilliseconds:F0} | {row.LintSweepSeconds:F1} | {row.CompletionP99:F2} | "
-                + $"{row.LiteralP99:F2} | {row.LintMax:F1} | {row.DroppedWrites:N0} | {row.WarmRestored:N0}/{row.WarmTotal:N0} |");
+                + $"{row.LiteralP99:F2} | {row.FieldP99:F2} | {row.LintMax:F1} | {row.DroppedWrites:N0} | {row.WarmRestored:N0}/{row.WarmTotal:N0} |");
         }
 
         string directory = Environment.GetEnvironmentVariable("GSCODE_PERF_REPORT") is string configured && configured.Length > 0

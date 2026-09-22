@@ -243,4 +243,70 @@ public class MacroExpansionPreviewTests
 
         Assert.Equal("```gsc\n#define FEATURE_FLAG\n```", MarkdownDocRenderer.RenderMacro(macro));
     }
+
+    // --- Recursive expansion: a body token that itself names a macro ---
+
+    private static MacroTable MacrosOf(string source)
+    {
+        ParseResult result = ScriptAnalysis.Analyze(
+            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        return result.Preprocessed.Macros;
+    }
+
+    [Fact]
+    public void BodyNamingAnObjectLikeMacro_ExpandsThroughToItsValue()
+    {
+        // The reported want: `#define FOO "something"` then `#define BAR FOO` should preview BAR
+        // as "something", not the bare word FOO.
+        const string source = "#define FOO \"something\"\n#define BAR FOO\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "BAR"), [], [], MacrosOf(source));
+
+        Assert.Equal("\"something\"", preview);
+    }
+
+    [Fact]
+    public void WithNoMacroTable_StaysOneLevel_UnchangedFromBefore()
+    {
+        // The three-argument overload every other test here uses keeps its old behaviour exactly:
+        // no recursion, because it has no table to recurse against.
+        const string source = "#define FOO \"something\"\n#define BAR FOO\n";
+
+        Assert.Equal("FOO", MacroExpansionPreview.Render(BodyOf(source, "BAR")));
+    }
+
+    [Fact]
+    public void BodyNamingAFunctionLikeMacro_IsLeftBare()
+    {
+        // A function-like macro referenced with no call has no arguments to substitute its own
+        // parameters with, so recursing into it would show its raw parameter names — worse than
+        // just leaving the bare reference. HELPER stays HELPER.
+        const string source = "#define HELPER(x) foo(x)\n#define BAR HELPER\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "BAR"), [], [], MacrosOf(source));
+
+        Assert.Equal("HELPER", preview);
+    }
+
+    [Fact]
+    public void ThreeLevelChain_ExpandsAllTheWay()
+    {
+        const string source = "#define FOO \"something\"\n#define BAR FOO\n#define BAZ BAR\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "BAZ"), [], [], MacrosOf(source));
+
+        Assert.Equal("\"something\"", preview);
+    }
+
+    [Fact]
+    public void DefineCycle_UnwindsInsteadOfLoopingForever()
+    {
+        // Not valid GSC, but defensive: A -> B -> A must terminate rather than hang the hover
+        // request. Left as the bare name once the cycle is detected.
+        const string source = "#define A B\n#define B A\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "A"), [], [], MacrosOf(source));
+
+        Assert.Equal("B", preview);
+    }
 }

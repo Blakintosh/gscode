@@ -176,7 +176,8 @@ public sealed class HoverHandler : HoverHandlerBase
             return MacroExpansionPreview.Render(
                 definition.Body,
                 definition.Parameters ?? [],
-                ArgumentsAt(target, hitRange));
+                ArgumentsAt(target, hitRange),
+                target.Result.Preprocessed.Macros);
         }
 
         return "";

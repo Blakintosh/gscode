@@ -47,9 +47,38 @@ public static class MacroExpansionPreview
     /// Substitution is per TOKEN, not textual: a parameter named <c>a</c> replaced by text would
     /// also rewrite the <c>a</c> inside <c>value</c>. Parameters the call did not supply keep
     /// their own names, which is the honest thing to show for a half-written invocation.
+    ///
+    /// One level only: a body token naming another macro is left as that macro's own name. Pass
+    /// <see cref="MacroTable"/> to the other overload for a chain like <c>#define BAR FOO</c> to
+    /// resolve through to what <c>FOO</c> itself means.
     /// </summary>
     public static string Render(
         ImmutableArray<PToken> body, ImmutableArray<string> parameters, ImmutableArray<string> arguments)
+    {
+        return RenderCore(body, parameters, arguments, macros: null, chain: []);
+    }
+
+    /// <summary>
+    /// Same as the three-argument overload, but a body token that itself NAMES another
+    /// OBJECT-LIKE macro is expanded too — <c>#define FOO "something"</c> then
+    /// <c>#define BAR FOO</c> renders BAR's preview as <c>"something"</c>, not the bare word
+    /// <c>FOO</c>. A FUNCTION-like macro referenced bare is left alone: it has parentheses and
+    /// arguments to supply that this position does not have.
+    ///
+    /// <paramref name="macros"/> is the ASKING FILE's own table (<c>ParseResult.Preprocessed.Macros</c>),
+    /// so a chain only ever resolves through what this file can actually see — the same file-local
+    /// answer go-to-definition on a macro now gives.
+    /// </summary>
+    public static string Render(
+        ImmutableArray<PToken> body, ImmutableArray<string> parameters, ImmutableArray<string> arguments,
+        MacroTable macros)
+    {
+        return RenderCore(body, parameters, arguments, macros, chain: []);
+    }
+
+    private static string RenderCore(
+        ImmutableArray<PToken> body, ImmutableArray<string> parameters, ImmutableArray<string> arguments,
+        MacroTable? macros, HashSet<string> chain)
     {
         if ( body.IsDefaultOrEmpty )
         {
@@ -86,7 +115,7 @@ public static class MacroExpansionPreview
                 text.Append(' ');
             }
 
-            text.Append(Substitute(token, parameters, arguments));
+            text.Append(Substitute(token, parameters, arguments, macros, chain));
 
             if ( text.Length > MaxLength )
             {
@@ -119,21 +148,44 @@ public static class MacroExpansionPreview
         return [.. columns];
     }
 
-    /// <summary>The argument this token stands for, or the token's own text.</summary>
-    private static string Substitute(PToken token, ImmutableArray<string> parameters, ImmutableArray<string> arguments)
+    /// <summary>
+    /// The argument this token stands for, the recursively-expanded macro it names, or the
+    /// token's own text.
+    /// </summary>
+    private static string Substitute(
+        PToken token, ImmutableArray<string> parameters, ImmutableArray<string> arguments,
+        MacroTable? macros, HashSet<string> chain)
     {
-        if ( token.Kind != TokenKind.Identifier || parameters.IsDefaultOrEmpty )
+        if ( token.Kind != TokenKind.Identifier )
         {
             return token.Text;
         }
 
-        for ( int index = 0; index < parameters.Length && index < arguments.Length; index++ )
+        if ( !parameters.IsDefaultOrEmpty )
         {
-            // Macro parameter names are case-sensitive, as macro names themselves are.
-            if ( string.Equals(parameters[index], token.Text, StringComparison.Ordinal) )
+            for ( int index = 0; index < parameters.Length && index < arguments.Length; index++ )
             {
-                return arguments[index];
+                // Macro parameter names are case-sensitive, as macro names themselves are.
+                if ( string.Equals(parameters[index], token.Text, StringComparison.Ordinal) )
+                {
+                    return arguments[index];
+                }
             }
+        }
+
+        // Not a parameter: recurse into another macro's own definition. Object-like only — a
+        // function-like macro named bare, with no call following it here, has no arguments to
+        // substitute its own parameters with, so it is left as its own name rather than shown
+        // half-expanded. `chain.Add` both records and GUARDS: a name already on the chain means a
+        // define cycle (A -> B -> A), and returning the bare name there beats recursing forever.
+        if ( macros is not null
+            && macros.TryGet(token.Text, out MacroDefinition nested)
+            && !nested.IsFunctionLike
+            && chain.Add(token.Text) )
+        {
+            string expanded = RenderCore(nested.Body, [], [], macros, chain);
+            chain.Remove(token.Text);
+            return expanded;
         }
 
         return token.Text;

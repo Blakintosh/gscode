@@ -123,16 +123,78 @@ public sealed class SymbolExtractor
             }
         }
 
+        // Positions the loop above already covers, so the body scan below does not double them up.
+        HashSet<(int Line, int Character)> invocationPositions = [];
+
         foreach ( MacroInvocation invocation in preprocessed.MacroInvocations )
         {
             if ( invocation.SourceFile is null )
             {
                 SymbolKey key = new(null, _names.Intern(invocation.Name), SymbolKind.Macro);
                 _references.Add(new ReferenceEntry(key, invocation.Range, ReferenceKind.MacroUse));
+                invocationPositions.Add((invocation.Range.Start.Line, invocation.Range.Start.Character));
+            }
+        }
+
+        // A macro NAME used inside another macro's own #define body — `#define BAR FOO` — is a use
+        // of FOO wherever it sits, whether or not BAR itself is ever invoked. The loop above only
+        // sees this when BAR IS invoked somewhere: the preprocessor walks the body live at
+        // expansion time and records the nested use then (TryExpandBodyToken). An invoked-nowhere
+        // macro's body got no reference at all, so hovering FOO on the #define BAR line — or F12,
+        // or its semantic-token colour — found nothing. Scanning every root-file body directly
+        // answers all three uniformly, whether or not BAR is ever called.
+        foreach ( MacroDefinition macro in preprocessed.AllMacroDefinitions )
+        {
+            if ( macro.SourceFile is not null )
+            {
+                continue;
+            }
+
+            foreach ( PToken bodyToken in macro.Body )
+            {
+                // A parameter reference — `__a` inside IS_TRUE(__a)'s own body — names an
+                // argument, not some other macro that happens to share its spelling.
+                if ( IsMacroParameter(macro.Parameters, bodyToken.Text) )
+                {
+                    continue;
+                }
+
+                if ( !preprocessed.Macros.TryGet(bodyToken.Text, out MacroDefinition _) )
+                {
+                    continue;
+                }
+
+                (int Line, int Character) position = (bodyToken.Range.Start.Line, bodyToken.Range.Start.Character);
+                if ( !invocationPositions.Add(position) )
+                {
+                    continue;
+                }
+
+                SymbolKey key = new(null, _names.Intern(bodyToken.Text), SymbolKind.Macro);
+                _references.Add(new ReferenceEntry(key, bodyToken.Range, ReferenceKind.MacroUse));
             }
         }
 
         PerfTracker.End();
+    }
+
+    /// <summary>True when <paramref name="name"/> is one of a function-like macro's OWN parameter names.</summary>
+    private static bool IsMacroParameter(ImmutableArray<string>? parameters, string name)
+    {
+        if ( parameters is null )
+        {
+            return false;
+        }
+
+        foreach ( string parameter in parameters.Value )
+        {
+            if ( string.Equals(parameter, name, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // --- Namespace span bookkeeping ---

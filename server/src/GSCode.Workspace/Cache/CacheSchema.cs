@@ -23,8 +23,10 @@ public static class CacheSchema
     /// with FromMacro false everywhere, so every reference a macro expanded would read as ordinary
     /// text written in the file — putting go-to-definition and hover on the macro's callee instead
     /// of the macro, at a range that spells the macro's name.
+    /// 6: gzipped JSON replaced by the binary layout in <see cref="RecordSerializer"/>. Nothing in a
+    /// version-5 blob is readable by it.
     /// </remarks>
-    public const int RecordFormatVersion = 5;
+    public const int RecordFormatVersion = 6;
 
     // meta keys.
     public const string MetaSchemaVersion = "schema_version";

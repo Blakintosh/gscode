@@ -2063,7 +2063,56 @@ stock size from 676 ms to about 155 ms, now under the cold index rather than lev
   gen2, so requests arriving in that window wait for it.
 - **`ArgumentCountLint` still grows with the workspace** — 2 → 11 ms p99 on bo3 and 7 → 27 ms on
   cod4 from 10K to 50K. Inside its budget. It is the next rule to read if the one-file row moves.
+  *Done 2026-09-22 — see the next section.*
 - **Enumeration** was 0.1 s at 50K with a warm OS cache, and cannot be told apart from noise here.
+
+### 2026-09-22: the last two growing lints, and the navigation handlers
+
+The per-rule breakdown after the pass above still had two rules growing with the workspace —
+`ArgumentCountLint` and, on cod4, `FunctionResolutionLint` — and CodeLens, find-references and rename
+had never been timed above stock size. The sweep now times all three (100 files, half stock scripts
+since every copy imports them), and prints how many locations references returned so a fast answer
+cannot hide an empty one.
+
+**Both lints, one cause.** Each resolves a call by bare name — every call on cod4, and every
+unqualified call in `ArgumentCountLint` on bo3, since `KeyNamespace("")` is null — and
+`LookupFunctions` built every visible declaration of it before either looked at the answer. One asks
+whether the name resolves, the other whether it resolves to exactly one. `LookupFunctions` now takes
+a limit and applies overlay shadowing per record inside the walk so it can stop there.
+
+**The handlers, one query.** All three collected every reference to the key and then kept those
+whose file can reach the declaring file. On cod4 `main`'s key is every `main`, and CodeLens asks once
+per declaration in the file. A `DependentsIndex` (script path → the files naming it by import edge or
+path call) lets the query read only the files that can contribute, walking whichever is shorter of
+those and the files mentioning the key.
+
+Validated before either change, one run each, p99:
+
+| 50K files | before | after |
+|---|---:|---:|
+| cod4 `ArgumentCountLint` | 26.6 ms | 2.4 ms |
+| cod4 `FunctionResolutionLint` | 13.2 ms | below the top six |
+| bo3 `ArgumentCountLint` | 9.8 ms | 0.9 ms |
+| cod4 one file's lint pass | 47.5 ms | 11.6 ms |
+| cod4 CodeLens, whole file | 707 ms | **2.6 ms** |
+| cod4 references / rename | 212 / 219 ms | 0.3 / 0.3 ms |
+| bo3 CodeLens, whole file | 40 ms | 8.0 ms |
+| bo3 references / rename | 79 / 162 ms | 71 / 124 ms |
+| full-mode lint sweep, bo3 / cod4 | 23 / 36 s | 17 / 17 s |
+
+**bo3's references and rename are the size of their answer, not a walk.** The sampled requests return
+406,326 locations at 50K against 120,991 at 10K — 3.4x more for 5x the time — because in this
+workspace every copy really does call the stock utilities. A mod that calls a function from 4,000
+places will pay for 4,000 locations.
+
+Both changes are proven identical rather than argued: `BoundedLookupTests` keeps the old two-pass
+shadowing as a reference implementation, and `ReferenceScopeCorpusTests` asks the old and new
+reference paths about every function declared in a real bo3 and cod4 index — 28,808 declarations,
+121,359 references — and requires identical answers. None differ. Stock corpora have no mod overlays,
+so `ReferencesReachingTests` pins the overlay case by hand.
+
+With this, every row of the scale table is inside its budget on both dialects at 50,000 files, and
+nothing a keystroke or a request pays grows with the workspace except the answers themselves.
 
 ## Results
 

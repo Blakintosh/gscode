@@ -9,23 +9,18 @@ using Microsoft.Data.Sqlite;
 namespace GSCode.Workspace.Cache;
 
 /// <summary>
-/// Per-workspace SQLite cache of analysed script records. A single background writer
-/// drains a bounded channel, so analysis threads never block on disk. Any version or
+/// Per-workspace SQLite cache of analysed script records. Records are serialized on the thread
+/// that enqueues them and a single background writer persists the blobs, so analysis threads
+/// never block on disk. Any version or
 /// server-identity mismatch wipes the cache on open — no migrations. Records are stored
 /// as gzipped JSON blobs; cold start loads them all and re-parses only stale files.
 /// </summary>
 public sealed class SqliteCache : IAsyncDisposable
 {
     private abstract record WriteCommand;
-    private sealed record UpsertCommand(ScriptRecord Record) : WriteCommand;
+    private sealed record UpsertCommand(
+        string Path, int Language, string ContextId, string RelativePath, ulong ContentHash, byte[] Blob) : WriteCommand;
     private sealed record DeleteCommand(string Path) : WriteCommand;
-
-    /// <summary>
-    /// How many pending writes the queue holds before it starts refusing them. Named because the
-    /// number is a trade — larger costs memory holding records the writer has not reached, smaller
-    /// drops entries sooner under a backlog. See <see cref="Enqueue"/>.
-    /// </summary>
-    private const int WriteQueueCapacity = 4096;
 
     private readonly SqliteConnection _connection;
     private readonly Channel<WriteCommand> _writes;
@@ -34,11 +29,10 @@ public sealed class SqliteCache : IAsyncDisposable
     private SqliteCache(SqliteConnection connection)
     {
         _connection = connection;
-        _writes = Channel.CreateBounded<WriteCommand>(new BoundedChannelOptions(WriteQueueCapacity)
-        {
-            SingleReader = true,
-            FullMode = BoundedChannelFullMode.Wait,
-        });
+        // Unbounded, deliberately — see Enqueue for why a bound here meant losing writes. NOT marked
+        // SingleReader even though there is one: the single-reader unbounded channel cannot report
+        // its Count, and WaitForIdleAsync needs it.
+        _writes = Channel.CreateUnbounded<WriteCommand>();
         _writerLoop = Task.Run(ProcessWritesAsync);
     }
 
@@ -201,7 +195,8 @@ public sealed class SqliteCache : IAsyncDisposable
 
     /// <summary>
     /// Records the channel refused, which is the difference between a warm start and a warm start
-    /// that quietly re-analyses part of the workspace.
+    /// that quietly re-analyses part of the workspace. With an unbounded channel that is only a
+    /// write arriving after <see cref="DisposeAsync"/> closed it.
     /// </summary>
     public int DroppedWrites
     {
@@ -211,23 +206,41 @@ public sealed class SqliteCache : IAsyncDisposable
     private int _dropped;
 
     /// <summary>
-    /// Queues a record to persist (never blocks the caller for disk).
+    /// Serializes a record and queues it to persist. Never blocks the caller on disk, and never
+    /// refuses a write because the writer is behind.
     ///
-    /// <c>TryWrite</c> is the right call here — this runs on the indexing threads and must not block
-    /// on disk — but its RESULT used to be discarded. The channel is bounded at
-    /// <see cref="WriteQueueCapacity"/>, and <c>BoundedChannelFullMode.Wait</c> only applies to
-    /// <c>WriteAsync</c>: on a full channel <c>TryWrite</c> returns false and the record is simply
-    /// gone. With N analysis threads feeding one writer that also serializes and gzips inline, a
-    /// backlog past the bound is reachable on a large corpus — and the only symptom was a later
-    /// "warm" start silently re-analysing those files.
+    /// The channel used to be bounded at 4,096 and fed with <c>TryWrite</c>, and the writer did the
+    /// serializing — JSON into gzip, one record at a time on one thread — while every indexing thread
+    /// produced records. On a stock corpus the backlog never reached the bound. At 50,000 files it
+    /// refused 40,889 of them (see PERF.md's scale section), and the next start re-analysed four
+    /// files in five while reporting itself warm.
     ///
-    /// Counted rather than blocked: dropping a cache entry costs one file's re-analysis next start,
-    /// while blocking an indexing thread on disk costs the whole index. The count is reported when
-    /// indexing finishes, so it can never be silent again.
+    /// Two changes, each needed. The serializing now happens HERE, on the enqueuing thread, so it
+    /// runs across every indexing core instead of one and the writer is left with the SQL alone —
+    /// which is what makes the backlog small. And the channel is unbounded, so a backlog that does
+    /// build (a slow disk, an antivirus scan of the database) costs memory rather than data. What it
+    /// can hold is bounded anyway: the compressed blobs of the workspace, about 7 KB a file, and only
+    /// until the writer reaches them.
+    ///
+    /// Dirty records are skipped before paying for a serialize — unsaved editor state is never
+    /// persisted.
     /// </summary>
     public void Enqueue(ScriptRecord record)
     {
-        if ( !_writes.Writer.TryWrite(new UpsertCommand(record)) )
+        if ( record.IsDirty )
+        {
+            return;
+        }
+
+        UpsertCommand command = new(
+            record.Path,
+            (int)record.Language,
+            record.ContextId,
+            record.RelativePath,
+            record.ContentHash,
+            RecordSerializer.Serialize(record));
+
+        if ( !_writes.Writer.TryWrite(command) )
         {
             Interlocked.Increment(ref _dropped);
         }
@@ -245,9 +258,8 @@ public sealed class SqliteCache : IAsyncDisposable
     /// <summary>
     /// Completes once the writer has nothing left to do.
     ///
-    /// The caller that wants this is the post-index settle step. Indexing hands thousands of records
-    /// to a single writer that serializes and gzips each one, so the writer is still going long after
-    /// IndexAsync returns — and compacting the heap while it works measures a moment that is about to
+    /// The caller that wants this is the post-index settle step. Indexing hands thousands of blobs to
+    /// a single writer, so the writer can still be going after IndexAsync returns — and compacting the heap while it works measures a moment that is about to
     /// be undone, which is exactly the "memory drops then climbs again" the server used to report.
     ///
     /// Polling rather than a signal, deliberately: the alternative is a counter mutated by every
@@ -326,7 +338,7 @@ public sealed class SqliteCache : IAsyncDisposable
             switch ( command )
             {
                 case UpsertCommand upsertCommand:
-                    ApplyUpsert(upsertCommand.Record, upsert);
+                    ApplyUpsert(upsertCommand, upsert);
                     break;
                 case DeleteCommand deleteCommand:
                     ApplyDelete(deleteCommand.Path, delete);
@@ -375,21 +387,15 @@ public sealed class SqliteCache : IAsyncDisposable
         return command;
     }
 
-    private static void ApplyUpsert(ScriptRecord record, SqliteCommand upsert)
+    private static void ApplyUpsert(UpsertCommand command, SqliteCommand upsert)
     {
-        // Unsaved editor state is never persisted.
-        if ( record.IsDirty )
-        {
-            return;
-        }
-
-        upsert.Parameters["$path"].Value = record.Path;
-        upsert.Parameters["$language"].Value = (int)record.Language;
-        upsert.Parameters["$context"].Value = record.ContextId;
-        upsert.Parameters["$relative"].Value = record.RelativePath;
-        upsert.Parameters["$hash"].Value = record.ContentHash.ToString();
+        upsert.Parameters["$path"].Value = command.Path;
+        upsert.Parameters["$language"].Value = command.Language;
+        upsert.Parameters["$context"].Value = command.ContextId;
+        upsert.Parameters["$relative"].Value = command.RelativePath;
+        upsert.Parameters["$hash"].Value = command.ContentHash.ToString();
         upsert.Parameters["$at"].Value = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        upsert.Parameters["$record"].Value = RecordSerializer.Serialize(record);
+        upsert.Parameters["$record"].Value = command.Blob;
         upsert.ExecuteNonQuery();
 
         // The `deps` table is deliberately NOT written. Nothing reads it: the same dependency edges

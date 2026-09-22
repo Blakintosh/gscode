@@ -88,6 +88,31 @@ public class SqliteCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task ABurstFromEveryCore_IsPersistedWhole()
+    {
+        // The shape a cold index produces: every indexing thread enqueueing as fast as it finishes a
+        // file, far faster than one writer can persist. At 50,000 files the old bounded channel
+        // refused 82% of these, and the next start silently re-analysed them. Nothing may be refused
+        // just because the writer is behind.
+        const int records = 20_000;
+
+        await using ( SqliteCache cache = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            Parallel.For(0, records, index =>
+            {
+                cache.Enqueue(SampleRecord(@$"c:\ws\scripts\burst{index}.gsc", (ulong)index));
+            });
+
+            Assert.Equal(0, cache.DroppedWrites);
+        }
+
+        await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            Assert.Equal(records, reopened.LoadAll().Count);
+        }
+    }
+
+    [Fact]
     public async Task RoundTrip_PersistsAndRestoresRecords()
     {
         ScriptRecord record = SampleRecord(@"c:\ws\scripts\sample.gsc", 12345);

@@ -253,7 +253,7 @@ public class CorpusPerfTests
     /// that either half can regress on its own.
     ///
     /// Two indexes per game. The first exists only to leave a populated database behind, and its
-    /// drain is not optional: the writer serializes and gzips on its own thread well after
+    /// drain is not optional: the writer persists on its own thread after
     /// <c>IndexAsync</c> returns, so without <c>WaitForIdleAsync</c> the measured run restores
     /// whatever happened to have been flushed and reports a warm start that is half cold.
     /// </summary>

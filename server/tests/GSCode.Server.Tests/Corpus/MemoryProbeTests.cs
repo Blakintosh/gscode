@@ -196,7 +196,7 @@ public class MemoryProbeTests
         {
             GameProfile.Select(profile.ShortName);
 
-            // Populate, then DRAIN. The writer serializes and gzips on its own thread well after
+            // Populate, then DRAIN. The writer persists on its own thread after
             // IndexAsync returns, so without the wait the measured run restores whatever happened
             // to have been flushed and reports a warm start that is half cold.
             {

@@ -22,6 +22,7 @@ public sealed class LanguageStore
     private readonly RelativePathIndex _relativePathIndex = new();
     private readonly DependentsIndex _dependents = new();
     private readonly DirectiveIndex _directives = new();
+    private readonly PathTreeIndex _pathTree = new(keepExtension: false);
     private readonly VocabularyIndex _vocabulary = new();
 
     /// <summary>
@@ -147,6 +148,7 @@ public sealed class LanguageStore
             _relativePathIndex.Apply(record.Path, RelativePathIndex.KeyOf(previous), newRelativeKey);
             _dependents.Apply(record.Path, DependentsIndex.KeysOf(previous), newDependencyKeys);
             _directives.Apply(record.Path, DirectiveIndex.Of(previous), newDirectives);
+            _pathTree.Apply(previous, record);
 
             PerfTracker.Begin("upsert.vocabulary");
             _vocabulary.Apply(record.Path, VocabularyIndex.Of(previous), newVocabulary);
@@ -199,6 +201,7 @@ public sealed class LanguageStore
                 _relativePathIndex.Apply(normalizedPath, RelativePathIndex.KeyOf(previous), null);
                 _dependents.Apply(normalizedPath, DependentsIndex.KeysOf(previous), []);
                 _directives.Apply(normalizedPath, DirectiveIndex.Of(previous), DirectiveIndex.Contribution.None);
+                _pathTree.Apply(previous, null);
                 _vocabulary.Apply(normalizedPath, VocabularyIndex.Of(previous), VocabularyIndex.Contribution.None);
             }
         }
@@ -316,6 +319,15 @@ public sealed class LanguageStore
     public ImmutableArray<string> FilesInserting(string resolvedHeaderPath)
     {
         return _directives.FilesInserting(resolvedHeaderPath);
+    }
+
+    /// <summary>
+    /// The segments directly under a script-relative folder that a file in
+    /// <paramref name="askingContextId"/> can see — see <see cref="PathTreeIndex"/>.
+    /// </summary>
+    public List<(string Segment, bool IsFolder)> PathChildren(string directory, string askingContextId)
+    {
+        return _pathTree.Children(directory, askingContextId);
     }
 
     /// <summary>

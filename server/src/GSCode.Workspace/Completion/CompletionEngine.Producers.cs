@@ -144,43 +144,13 @@ public sealed partial class CompletionEngine
         int lastSeparator = typed.LastIndexOf('\\');
         string directory = lastSeparator >= 0 ? typed[..(lastSeparator + 1)] : "";
 
-        // Segment -> whether it is a folder (has more path below it).
+        // Segment -> whether it is a folder (has more path below it). Read from the folder index
+        // rather than by rewriting every record's path and testing it against the typed folder,
+        // which made this per-keystroke list grow with the workspace.
         Dictionary<string, bool> segments = new(StringComparer.OrdinalIgnoreCase);
-
-        foreach ( ScriptRecord record in PathCandidates(result, isInsert) )
+        foreach ( (string Segment, bool IsFolder) child in PathChildren(result, isInsert, directory, contextId) )
         {
-            if ( record.RelativePath.Length == 0 || !ScriptDatabase.CanSee(contextId, record.ContextId) )
-            {
-                continue;
-            }
-
-            // #insert writes the extension, #using does not — an asymmetry of the language, not
-            // of this code, and unanimous across the stock scripts: all 2,137 #inserts end in
-            // .gsh and all 7,738 #usings are bare. Keeping the extension for #insert also makes
-            // the segmenting below fall out for free, since the leaf is simply "shared.gsh".
-            string relative = record.RelativePath.Replace('/', '\\');
-            string path = isInsert
-                ? relative
-                : System.IO.Path.ChangeExtension(relative, null) ?? relative;
-
-            if ( !path.StartsWith(directory, StringComparison.OrdinalIgnoreCase) )
-            {
-                continue;
-            }
-
-            string remainder = path[directory.Length..];
-            if ( remainder.Length == 0 )
-            {
-                continue;
-            }
-
-            int separator = remainder.IndexOf('\\');
-            bool isFolder = separator >= 0;
-            string segment = isFolder ? remainder[..separator] : remainder;
-
-            // A name that is both a folder and a file lists as a folder, which is the one with
-            // more below it to reach.
-            segments[segment] = segments.TryGetValue(segment, out bool existing) ? existing || isFolder : isFolder;
+            segments[child.Segment] = segments.TryGetValue(child.Segment, out bool existing) ? existing || child.IsFolder : child.IsFolder;
         }
 
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
@@ -199,17 +169,22 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>
-    /// The records a path directive may name: headers for <c>#insert</c>, this file's own
+    /// What a path directive may name under one folder: headers for <c>#insert</c>, this file's own
     /// language for <c>#using</c>. A <c>.gsc</c> never includes a <c>.csc</c> or vice versa.
+    ///
+    /// <c>#insert</c> writes the extension, <c>#using</c> does not — an asymmetry of the language,
+    /// and unanimous across the stock scripts: all 2,137 <c>#insert</c>s end in <c>.gsh</c> and all
+    /// 7,738 <c>#using</c>s are bare. The two indexes keep their paths in those two forms.
     /// </summary>
-    private IEnumerable<ScriptRecord> PathCandidates(ParseResult result, bool isInsert)
+    private List<(string Segment, bool IsFolder)> PathChildren(
+        ParseResult result, bool isInsert, string directory, string contextId)
     {
         if ( isInsert )
         {
-            return _database.AllGshRecords;
+            return _database.GshPathChildren(directory, contextId);
         }
 
-        return _database.StoreFor(result.Language).AllRecords;
+        return _database.StoreFor(result.Language).PathChildren(directory, contextId);
     }
 
     /// <param name="quoted">

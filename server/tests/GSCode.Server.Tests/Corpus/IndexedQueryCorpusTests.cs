@@ -71,6 +71,7 @@ public class IndexedQueryCorpusTests
 
             Report(profile, "header inserters", CheckHeaderInserters(database));
             Report(profile, "rename plans", CheckRenamePlans(database));
+            Report(profile, "path children", CheckPathChildren(database));
         }
         finally
         {
@@ -148,6 +149,114 @@ public class IndexedQueryCorpusTests
         }
 
         return tally;
+    }
+
+    /// <summary>
+    /// Every folder any indexed file sits under, listed for every context that holds a file, from
+    /// each language store (as <c>#using</c> sees it) and from the header store (as <c>#insert</c> does).
+    /// </summary>
+    private static Tally CheckPathChildren(ScriptDatabase database)
+    {
+        Tally tally = new();
+        CheckPathChildren(tally, database.Gsc.AllRecords.ToList(), keepExtension: false,
+            (directory, context) => database.Gsc.PathChildren(directory, context));
+        CheckPathChildren(tally, database.Csc.AllRecords.ToList(), keepExtension: false,
+            (directory, context) => database.Csc.PathChildren(directory, context));
+        CheckPathChildren(tally, database.AllGshRecords.ToList(), keepExtension: true,
+            (directory, context) => database.GshPathChildren(directory, context));
+        return tally;
+    }
+
+    private static void CheckPathChildren(
+        Tally tally, List<ScriptRecord> records, bool keepExtension,
+        Func<string, string, List<(string Segment, bool IsFolder)>> indexed)
+    {
+        HashSet<string> directories = new(StringComparer.OrdinalIgnoreCase) { "" };
+        HashSet<string> contexts = new(StringComparer.Ordinal);
+        foreach ( ScriptRecord record in records )
+        {
+            contexts.Add(record.ContextId);
+            string path = DirectiveForm(record, keepExtension);
+            for ( int index = 0; index < path.Length; index++ )
+            {
+                if ( path[index] == '\\' )
+                {
+                    directories.Add(path[..(index + 1)]);
+                }
+            }
+        }
+
+        foreach ( string directory in directories )
+        {
+            foreach ( string context in contexts )
+            {
+                SortedDictionary<string, bool> expected = WalkPathChildren(records, keepExtension, directory, context);
+                SortedDictionary<string, bool> actual = Listing(indexed(directory, context));
+
+                tally.Asked++;
+                tally.Answers += actual.Count;
+                if ( !expected.SequenceEqual(actual) )
+                {
+                    tally.Differing.Add($"'{directory}' as {context}: expected {expected.Count}, got {actual.Count}");
+                }
+            }
+        }
+    }
+
+    private static string DirectiveForm(ScriptRecord record, bool keepExtension)
+    {
+        string relative = record.RelativePath.Replace('/', '\\');
+        if ( keepExtension )
+        {
+            return relative;
+        }
+
+        return Path.ChangeExtension(relative, null) ?? relative;
+    }
+
+    /// <summary>The walk path completion replaced: every record's directive form against the typed folder.</summary>
+    private static SortedDictionary<string, bool> WalkPathChildren(
+        List<ScriptRecord> records, bool keepExtension, string directory, string contextId)
+    {
+        Dictionary<string, bool> segments = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( ScriptRecord record in records )
+        {
+            if ( record.RelativePath.Length == 0 || !ScriptDatabase.CanSee(contextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            string path = DirectiveForm(record, keepExtension);
+            if ( !path.StartsWith(directory, StringComparison.OrdinalIgnoreCase) )
+            {
+                continue;
+            }
+
+            string remainder = path[directory.Length..];
+            if ( remainder.Length == 0 )
+            {
+                continue;
+            }
+
+            int separator = remainder.IndexOf('\\');
+            bool isFolder = separator >= 0;
+            string segment = isFolder ? remainder[..separator] : remainder;
+            segments[segment] = segments.TryGetValue(segment, out bool existing) ? existing || isFolder : isFolder;
+        }
+
+        return Listing(segments.Select(static pair => (pair.Key, pair.Value)));
+    }
+
+    /// <summary>Keyed lowercase: the spelling kept for a segment is whichever each path saw first.</summary>
+    private static SortedDictionary<string, bool> Listing(IEnumerable<(string Segment, bool IsFolder)> children)
+    {
+        SortedDictionary<string, bool> listing = new(StringComparer.Ordinal);
+        foreach ( (string Segment, bool IsFolder) child in children )
+        {
+            listing[child.Segment.ToLowerInvariant()] = child.IsFolder;
+        }
+
+        return listing;
     }
 
     /// <summary>The walk ScriptsInserting replaced: every header per round of the closure, then every script.</summary>

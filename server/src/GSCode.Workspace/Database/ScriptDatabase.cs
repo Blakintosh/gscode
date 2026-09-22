@@ -81,6 +81,8 @@ public sealed class ScriptDatabase
     /// </summary>
     private readonly DirectiveIndex _gshDirectives = new();
 
+    private readonly PathTreeIndex _gshPathTree = new(keepExtension: true);
+
     private readonly Lock _gshGate = new();
 
     /// <summary>The store for a language; GSH callers use the dedicated methods below.</summary>
@@ -151,6 +153,7 @@ public sealed class ScriptDatabase
             _gshRecords.TryGetValue(record.Path, out ScriptRecord? previous);
             _gshRecords[record.Path] = record;
             _gshDirectives.Apply(record.Path, DirectiveIndex.Of(previous), newDirectives);
+            _gshPathTree.Apply(previous, record);
         }
     }
 
@@ -180,8 +183,18 @@ public sealed class ScriptDatabase
             if ( _gshRecords.TryRemove(normalizedPath, out ScriptRecord? previous) )
             {
                 _gshDirectives.Apply(normalizedPath, DirectiveIndex.Of(previous), DirectiveIndex.Contribution.None);
+                _gshPathTree.Apply(previous, null);
             }
         }
+    }
+
+    /// <summary>
+    /// The segments directly under a folder of the header tree, extensions kept, that a file in
+    /// <paramref name="askingContextId"/> can see — <see cref="LanguageStore.PathChildren"/> for headers.
+    /// </summary>
+    public List<(string Segment, bool IsFolder)> GshPathChildren(string directory, string askingContextId)
+    {
+        return _gshPathTree.Children(directory, askingContextId);
     }
 
     /// <summary>Headers writing a directive path — <see cref="LanguageStore.FilesWriting"/> for the header store.</summary>

@@ -41,7 +41,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// </summary>
 [Trait("Category", "Scale")]
 [Collection(GameProfileCollection.Name)]
-public class ScalePerfTests
+public partial class ScalePerfTests
 {
     private const string CacheIdentity = "scale-perf-identity";
 
@@ -78,6 +78,13 @@ public class ScalePerfTests
         public double FieldP99 { get; set; }
         public double FieldMax { get; set; }
         public int FieldRequests { get; set; }
+        public double LensP99 { get; set; }
+        public double LensMax { get; set; }
+        public double ReferencesP99 { get; set; }
+        public double ReferencesMax { get; set; }
+        public double RenameP99 { get; set; }
+        public double RenameMax { get; set; }
+        public int HandlerFiles { get; set; }
         public double LintP99 { get; set; }
         public double LintMax { get; set; }
         public double LintSweepSeconds { get; set; }
@@ -176,6 +183,7 @@ public class ScalePerfTests
 
             List<string> sample = Sample(ScaleCorpusFixture.CopiedScripts(corpus), RequestSampleFiles);
             MeasureRequests(row, corpus, sample, database, resolver, names, inserts, builtins, objectFields);
+            await MeasureHandlersAsync(row, corpus, database, resolver, names, builtins, objectFields);
 
             row.LintSweepSeconds = await MeasureLintSweepAsync(database, indexer, resolver, builtins, objectFields);
 
@@ -581,6 +589,9 @@ public class ScalePerfTests
         _output.WriteLine($"     completion p99    {row.CompletionP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.CompletionP99, CompletionBudgetMilliseconds)}  (p50 {row.CompletionP50:F2}, max {row.CompletionMax:F1})");
         _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, max {row.LiteralMax:F1})");
         _output.WriteLine($"     field compl p99   {row.FieldP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.FieldP99, CompletionBudgetMilliseconds)}  ({row.FieldRequests} requests, max {row.FieldMax:F1})");
+        _output.WriteLine($"     codeLens p99      {row.LensP99,8:F1} ms  max {row.LensMax,7:F1} ms  ({row.HandlerFiles} files, whole file)");
+        _output.WriteLine($"     references p99    {row.ReferencesP99,8:F1} ms  max {row.ReferencesMax,7:F1} ms");
+        _output.WriteLine($"     rename p99        {row.RenameP99,8:F1} ms  max {row.RenameMax,7:F1} ms");
         _output.WriteLine($"     one-file lint max {row.LintMax,8:F1} ms  budget {LintBudgetMilliseconds,6:F1} ms  {Verdict(row.LintMax, LintBudgetMilliseconds)}  (p99 {row.LintP99:F1})");
         _output.WriteLine($"     cache populate    {row.PopulateSeconds,8:F1} s   + drain {row.DrainSeconds:F1} s, db {row.DatabaseMegabytes:F0} MB");
 
@@ -604,14 +615,14 @@ public class ScalePerfTests
     private void WriteReport(List<ScaleRow> rows)
     {
         StringBuilder table = new();
-        table.AppendLine("| game | files | cold s | warm s | LoadAll ms | retained MB | compact ms | sweep s | compl p99 ms | literal p99 ms | field p99 ms | lint max ms | dropped | restored |");
-        table.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        table.AppendLine("| game | files | cold s | warm s | LoadAll ms | retained MB | compact ms | sweep s | compl p99 ms | literal p99 ms | field p99 ms | lens p99 ms | refs p99 ms | rename p99 ms | lint max ms | dropped | restored |");
+        table.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach ( ScaleRow row in rows )
         {
             table.AppendLine(
                 $"| {row.Game} | {row.Total:N0} | {row.ColdSeconds:F1} | {row.WarmSeconds:F1} | {row.LoadAllMilliseconds:F0} | "
                 + $"{row.RetainedMegabytes:F0} | {row.CompactMilliseconds:F0} | {row.LintSweepSeconds:F1} | {row.CompletionP99:F2} | "
-                + $"{row.LiteralP99:F2} | {row.FieldP99:F2} | {row.LintMax:F1} | {row.DroppedWrites:N0} | {row.WarmRestored:N0}/{row.WarmTotal:N0} |");
+                + $"{row.LiteralP99:F2} | {row.FieldP99:F2} | {row.LensP99:F1} | {row.ReferencesP99:F1} | {row.RenameP99:F1} | {row.LintMax:F1} | {row.DroppedWrites:N0} | {row.WarmRestored:N0}/{row.WarmTotal:N0} |");
         }
 
         string directory = Environment.GetEnvironmentVariable("GSCODE_PERF_REPORT") is string configured && configured.Length > 0

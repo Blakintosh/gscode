@@ -163,6 +163,12 @@ internal static class ScaleCorpusFixture
         return new PathResolver(config, fileSystem);
     }
 
+    /// <summary>The stock scripts under the raw root, ordered so a sample taken from it reproduces.</summary>
+    public static List<string> StockScripts(ScaleCorpus corpus)
+    {
+        return StockScripts(corpus.Profile, corpus.RawRoot);
+    }
+
     /// <summary>Every generated copy, ordered so a sample taken from it reproduces.</summary>
     public static List<string> CopiedScripts(ScaleCorpus corpus)
     {

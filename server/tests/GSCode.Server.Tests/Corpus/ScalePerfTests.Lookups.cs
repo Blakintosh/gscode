@@ -5,7 +5,12 @@ using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
+using GSCode.Parser.Preprocessing;
+using GSCode.Server.Configuration;
+using GSCode.Server.Handlers;
 using GSCode.Workspace.Completion;
+using GSCode.Workspace.Documents;
+using PublishDiagnosticsParams = OmniSharp.Extensions.LanguageServer.Protocol.Models.PublishDiagnosticsParams;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 
@@ -69,6 +74,7 @@ public partial class ScalePerfTests
         public Distribution ClassLookup { get; } = new();
         public Distribution VisibleClasses { get; } = new();
         public Distribution HeaderMacroReferences { get; } = new();
+        public Distribution WorkspaceDiagnosticsRefresh { get; } = new();
         public int InsertersFound { get; set; }
         public int RenameEdits { get; set; }
     }
@@ -139,6 +145,7 @@ public partial class ScalePerfTests
         MeasureHeaders(lookups, stock, database);
         MeasureRenames(lookups, stock, database, corpus.Profile);
         MeasureClasses(lookups, database);
+        MeasureWorkspaceDiagnosticsRefresh(lookups, database);
 
         return lookups;
     }
@@ -223,6 +230,34 @@ public partial class ScalePerfTests
     }
 
     /// <summary>
+    /// A steady-state <see cref="WorkspaceDiagnosticsPublisher.Refresh"/>, with every file in scope:
+    /// the call that follows each re-lint of an edit's closed dependents. The first call sends
+    /// everything and is not timed; the ones after it send nothing new, so what is timed is the
+    /// walk over the store deciding that.
+    /// </summary>
+    private static void MeasureWorkspaceDiagnosticsRefresh(LookupRow lookups, ScriptDatabase database)
+    {
+        DocumentStore noOpenDocuments = new(static _ => NullInsertProvider.Instance, new NameTable());
+        WorkspaceDiagnosticsPublisher publisher = new(
+            database, noOpenDocuments, new DiagnosticsPublisher(new DiscardingSink()), new ServerSettings { DiagnosticsScope = "all" });
+
+        publisher.Refresh();
+        for ( int run = 0; run < 10; run++ )
+        {
+            long started = Stopwatch.GetTimestamp();
+            publisher.Refresh();
+            lookups.WorkspaceDiagnosticsRefresh.Times.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        }
+    }
+
+    private sealed class DiscardingSink : IDiagnosticsSink
+    {
+        public void Send(PublishDiagnosticsParams parameters)
+        {
+        }
+    }
+
+    /// <summary>
     /// Just after the last separator of the first directive of this kind — <c>#using scripts\shared\|</c> —
     /// where path completion lists one folder. Found in the text, since an <c>#insert</c> never
     /// reaches the tree.
@@ -265,6 +300,7 @@ public partial class ScalePerfTests
         _output.WriteLine($"     class lookup      {lookups.ClassLookup.Describe()}");
         _output.WriteLine($"     visible classes   {lookups.VisibleClasses.Describe()}");
         _output.WriteLine($"     header macro refs {lookups.HeaderMacroReferences.Describe()}");
+        _output.WriteLine($"     workspace diag refresh {lookups.WorkspaceDiagnosticsRefresh.Describe()}");
 
         foreach ( (string Rule, double Max, double P99) rule in row.LintRules )
         {

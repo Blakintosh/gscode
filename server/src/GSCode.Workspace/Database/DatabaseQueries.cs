@@ -1031,24 +1031,26 @@ public static class DatabaseQueries
         ImmutableArray<(ScriptRecord Record, ClassSymbol Class)>.Builder matches =
             ImmutableArray.CreateBuilder<(ScriptRecord, ClassSymbol)>();
 
-        // Only the handful of files that declare a class, not every record: this runs per keystroke
-        // behind statement-scope completion.
-        foreach ( string path in store.Classes.AllDeclaringPaths() )
+        // The asking file and the files it imports, read by path: this runs per keystroke behind
+        // statement-scope completion. It used to read every class-declaring file and keep the
+        // imported ones, and in a large workspace every copy of a class-declaring file is one.
+        List<ScriptRecord> candidates = [];
+        if ( normalizedAskingPath.Length > 0 && store.TryGet(normalizedAskingPath, out ScriptRecord asking) )
         {
-            if ( !store.TryGet(path, out ScriptRecord record) )
+            candidates.Add(asking);
+        }
+
+        candidates.AddRange(RecordsAt(store, importedPaths));
+
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        foreach ( ScriptRecord record in candidates )
+        {
+            if ( record.Classes.IsDefaultOrEmpty || !seen.Add(record.Path) )
             {
                 continue;
             }
 
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
-            bool sameFile = normalizedAskingPath.Length > 0
-                && string.Equals(record.Path, normalizedAskingPath, StringComparison.OrdinalIgnoreCase);
-
-            if ( !sameFile && !importedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
             {
                 continue;
             }

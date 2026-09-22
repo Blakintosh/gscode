@@ -74,6 +74,7 @@ public class IndexedQueryCorpusTests
             Report(profile, "rename plans", CheckRenamePlans(database));
             Report(profile, "path children", CheckPathChildren(database));
             Report(profile, "class lookups", CheckClassLookups(database));
+            Report(profile, "visible classes", CheckVisibleClasses(database));
         }
         finally
         {
@@ -289,6 +290,82 @@ public class IndexedQueryCorpusTests
         }
 
         return tally;
+    }
+
+    /// <summary>
+    /// Every file's visible classes, with its own non-insert directives as the import list — the
+    /// same paths, in the same form, a live parse hands completion.
+    /// </summary>
+    private static Tally CheckVisibleClasses(ScriptDatabase database)
+    {
+        Tally tally = new();
+        foreach ( LanguageStore store in database.BothLanguageStores )
+        {
+            foreach ( ScriptRecord record in store.AllRecords.ToList() )
+            {
+                ImmutableArray<string>.Builder imported = ImmutableArray.CreateBuilder<string>();
+                foreach ( DependencyEdge edge in record.Dependencies )
+                {
+                    string normalized = PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(edge.RawPath));
+                    if ( !edge.IsInsert && normalized.Length > 0 && !imported.Contains(normalized) )
+                    {
+                        imported.Add(normalized);
+                    }
+                }
+
+                List<string> expected = WalkVisibleClasses(store, record.ContextId, record.Path, imported.ToImmutable());
+                List<string> actual = [.. DatabaseQueries.AllVisibleClasses(store, record.ContextId, record.Path, imported.ToImmutable())
+                    .Select(static classSymbol => classSymbol.KeyName)
+                    .Distinct()
+                    .Order(StringComparer.Ordinal)];
+
+                tally.Asked++;
+                tally.Answers += actual.Count;
+                if ( !expected.SequenceEqual(actual) )
+                {
+                    tally.Differing.Add($"{record.Path}: expected {expected.Count}, got {actual.Count}");
+                }
+            }
+        }
+
+        return tally;
+    }
+
+    /// <summary>The filter AllVisibleClasses replaced: every class-declaring file, kept when it is the asker or imported.</summary>
+    private static List<string> WalkVisibleClasses(
+        LanguageStore store, string contextId, string normalizedAskingPath, ImmutableArray<string> imported)
+    {
+        ImmutableArray<(ScriptRecord Record, ClassSymbol Class)>.Builder matches =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ClassSymbol)>();
+
+        foreach ( string path in store.Classes.AllDeclaringPaths() )
+        {
+            if ( !store.TryGet(path, out ScriptRecord record) || !ScriptDatabase.CanSee(contextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            bool sameFile = string.Equals(record.Path, normalizedAskingPath, StringComparison.OrdinalIgnoreCase);
+            string relative = PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(record.RelativePath));
+            if ( !sameFile && !imported.Contains(relative) )
+            {
+                continue;
+            }
+
+            foreach ( ClassSymbol classSymbol in record.Classes )
+            {
+                matches.Add((record, classSymbol));
+            }
+        }
+
+        HashSet<string> names = new(StringComparer.Ordinal);
+        foreach ( (ScriptRecord _, ClassSymbol classSymbol) in DatabaseQueries.ApplyShadowing(
+            matches.ToImmutable(), static m => m.Record, static m => m.Class.KeyName, store, contextId) )
+        {
+            names.Add(classSymbol.KeyName);
+        }
+
+        return [.. names.Order(StringComparer.Ordinal)];
     }
 
     /// <summary>The read LookupClasses replaced: every declarer of the bare name, filtered by namespace.</summary>

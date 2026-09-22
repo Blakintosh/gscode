@@ -52,8 +52,15 @@ public sealed class WorkspaceDiagnosticsPublisher
     /// Paths rather than URIs, so a take-back resolves through the same seam the publish went
     /// through (<see cref="DiagnosticsPublisher.UriFor"/>) and cannot address a spelling the
     /// client was never told.
+    ///
+    /// Keyed to the diagnostics array LAST SENT for each path, not just the path, so a refresh
+    /// sends only what changed. It used to resend every in-scope file on every refresh, and a
+    /// refresh follows every re-lint of an edit's closed dependents: re-linting three files in a
+    /// large workspace sent a notification for every file with a problem. A record's diagnostics
+    /// are replaced wholesale whenever they are recomputed, so a different array is the change
+    /// signal — compared by reference, which errs toward resending, never toward staleness.
     /// </summary>
-    private readonly HashSet<string> _published = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ImmutableArray<Diagnostic>> _published = new(StringComparer.Ordinal);
 
     public WorkspaceDiagnosticsPublisher(
         ScriptDatabase database,
@@ -101,8 +108,10 @@ public sealed class WorkspaceDiagnosticsPublisher
     }
 
     /// <summary>
-    /// Republishes the whole workspace. Called once indexing finishes and again whenever the
-    /// scope setting changes.
+    /// Brings the client up to date with the whole workspace: sends every in-scope file whose
+    /// diagnostics differ from what was last sent, and takes back every file no longer reported.
+    /// Called once indexing finishes, whenever the scope setting changes, and after closed
+    /// dependents are re-linted.
     /// </summary>
     public void Refresh()
     {
@@ -125,21 +134,27 @@ public sealed class WorkspaceDiagnosticsPublisher
                     continue;
                 }
 
-                _publisher.Publish(record.Path, version: null, record.Diagnostics);
                 stillPublished.Add(record.Path);
+
+                // Unchanged since it was last sent: the client already shows exactly this.
+                if ( _published.TryGetValue(record.Path, out ImmutableArray<Diagnostic> sent) && sent == record.Diagnostics )
+                {
+                    continue;
+                }
+
+                _publisher.Publish(record.Path, version: null, record.Diagnostics);
+                _published[record.Path] = record.Diagnostics;
             }
 
             // Anything published last time and not this time has to be taken back explicitly.
-            foreach ( string path in _published )
+            foreach ( string path in _published.Keys.ToList() )
             {
                 if ( !stillPublished.Contains(path) )
                 {
                     _publisher.Clear(path);
+                    _published.Remove(path);
                 }
             }
-
-            _published.Clear();
-            _published.UnionWith(stillPublished);
 
             Log.Information(
                 "Workspace diagnostics: {Count} file(s) with problems (scope: {Scope})", stillPublished.Count, scope);
@@ -169,7 +184,7 @@ public sealed class WorkspaceDiagnosticsPublisher
 
         lock ( _gate )
         {
-            _published.Add(record.Path);
+            _published[record.Path] = record.Diagnostics;
         }
     }
 

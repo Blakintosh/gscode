@@ -30,11 +30,15 @@ public sealed class FoldingRangeHandler : FoldingRangeHandlerBase
 
     public override Task<Container<FoldingRange>?> Handle(FoldingRangeRequestParam request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGetAnalyzed(
-            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
+        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
         {
             return Task.FromResult<Container<FoldingRange>?>(null);
         }
+
+        // Freshened, not TryGetAnalyzed's cached snapshot — see DocumentSymbolHandler's comment on
+        // the same fix. A file opened while startup indexing is still running otherwise stays
+        // unfolded until the next edit, because nothing asks the client to request folding again.
+        ParseResult result = _documents.AnalyzeIfStale(document, cancellationToken);
 
         List<FoldingRange> ranges = [];
         foreach ( FoldingRegion region in FoldingRegions.Compute(result) )

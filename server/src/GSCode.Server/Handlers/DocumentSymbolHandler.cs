@@ -44,11 +44,20 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
     public override Task<SymbolInformationOrDocumentSymbolContainer?> Handle(
         DocumentSymbolParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGetAnalyzed(
-            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
+        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
         {
             return Task.FromResult<SymbolInformationOrDocumentSymbolContainer?>(null);
         }
+
+        // Freshened, not TryGetAnalyzed's cached snapshot. A file opened while startup indexing
+        // is still running has its didOpen analysis queued behind the indexer's own thread-pool
+        // work (see TextSyncHandler.ScheduleImmediateAnalysis), so the outline request routinely
+        // arrived before ANY analysis had published — TryGetAnalyzed answered null, the client has
+        // no "ask again" for document symbols, and the outline stayed empty until the next edit.
+        // Every other read path here (Resolve/ResolveFresh, SemanticTokensHandler, CodeLensHandler)
+        // already parses on the request thread instead of trusting a snapshot that may not exist
+        // yet; this is that same fix.
+        ParseResult result = _documents.AnalyzeIfStale(document, cancellationToken);
 
         List<SymbolInformationOrDocumentSymbol> roots = [];
 

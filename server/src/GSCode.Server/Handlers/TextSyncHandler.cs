@@ -60,14 +60,11 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ConnectionSettleGate _settleGate;
 
     /// <summary>
-    /// One analysis in flight per document, at most — see <see cref="AnalysisGate"/>. The 250 ms
-    /// debounce only guards the WAIT between an edit and analysis STARTING; once analysis has
-    /// started, nothing stopped a second one starting 250 ms later on a file slow enough to still
-    /// be running, each carrying its own token arrays and AST. Keyed by normalized path rather
-    /// than kept on <see cref="OpenDocument"/> itself: this is scheduling state private to how
-    /// THIS handler drives analysis, not a fact about the document.
+    /// Coalesces concurrent analysis requests for one document into one running plus at most one
+    /// queued rerun — see <see cref="SingleFlightAnalysis"/>, which owns the per-path gate state
+    /// this used to keep directly.
     /// </summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AnalysisGate> _analysisGates = new(StringComparer.Ordinal);
+    private readonly SingleFlightAnalysis _singleFlight;
 
     public TextSyncHandler(
         DocumentStore documents,
@@ -97,6 +94,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _settings = settings;
         _stockScripts = stockScripts;
         _server = server;
+        _singleFlight = new SingleFlightAnalysis(documents);
     }
 
     public override TextDocumentAttributes GetTextDocumentAttributes(DocumentUri uri)
@@ -276,7 +274,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _documents.Close(path);
         _diagnostics.Clear(path);
         _diagnostics.Forget(path);
-        _analysisGates.TryRemove(PathUtil.NormalizeAbsolute(path), out _);
+        _singleFlight.Forget(PathUtil.NormalizeAbsolute(path));
 
         // Clearing is right for what THIS handler published, but the file may still be in the
         // workspace scope, where its problems are supposed to stay visible. Without handing it
@@ -312,7 +310,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             return;
         }
 
-        RunAnalysisSingleFlight(document, cancellationToken);
+        _singleFlight.Run(document, cancellationToken, AnalyzeAndPublish);
     }
 
     private void ScheduleDebouncedAnalysis(OpenDocument document)
@@ -336,76 +334,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             return;
         }
 
-        RunAnalysisSingleFlight(document, cancellationToken);
-    }
-
-    /// <summary>
-    /// Runs analysis for a document, coalescing with whatever is already running for it — see
-    /// <see cref="AnalysisGate"/>. If nothing is running, runs (and re-runs, if a request arrived
-    /// while it was busy) here and now; otherwise queues the rerun and returns immediately,
-    /// leaving the in-flight call to pick it up.
-    /// </summary>
-    private void RunAnalysisSingleFlight(OpenDocument document, CancellationToken cancellationToken)
-    {
-        AnalysisGate gate = _analysisGates.GetOrAdd(document.Path, static _ => new AnalysisGate());
-        if ( !gate.TryStart(cancellationToken) )
-        {
-            return;
-        }
-
-        // Reassigned per pass: a queued rerun runs under the token of the edit that asked for it,
-        // not under this caller's. They are rarely the same one — the usual way a rerun gets
-        // queued is an edit arriving mid-analysis, and that edit CANCELS the running pass on its
-        // way past. Reusing the running pass's token abandoned every rerun before it began.
-        CancellationToken token = cancellationToken;
-        bool released = false;
-
-        try
-        {
-            // The document this run captured may have been closed, or replaced by a second
-            // didOpen, while the previous pass was running. Nothing inside the loop would
-            // otherwise notice, and an orphan that keeps analysing publishes and commits for a
-            // document nothing can reach any more.
-            while ( AnalysisGate.IsStillLive(_documents, document) )
-            {
-                try
-                {
-                    AnalyzeAndPublish(document, token);
-                }
-                catch ( OperationCanceledException )
-                {
-                    // A newer edit arrived and this pass was abandoned partway. Not a failure, and
-                    // nothing to publish: the run that superseded it publishes for the text that
-                    // replaced this one's.
-                    //
-                    // Swallowed rather than returned on, which is the whole bug this shape fixes.
-                    // The edit that cancelled this pass is also the one that QUEUED the rerun, so
-                    // returning here skipped the only check that would have run it — and since
-                    // cancellation is the common way a rerun gets queued, the rerun path was dead
-                    // in its ordinary case. The file then kept diagnostics for text the user had
-                    // already replaced until something else was typed.
-                }
-                catch ( Exception exception )
-                {
-                    Log.Error(exception, "Analysis failed for {Path}", document.Path);
-                }
-
-                // Releasing the gate and taking a queued rerun are ONE step. As two, a request
-                // arriving between them set a flag with nobody left to read it.
-                if ( !gate.TryContinue(out token) )
-                {
-                    released = true;
-                    return;
-                }
-            }
-        }
-        finally
-        {
-            if ( !released )
-            {
-                gate.Release();
-            }
-        }
+        _singleFlight.Run(document, cancellationToken, AnalyzeAndPublish);
     }
 
     private void AnalyzeAndPublish(OpenDocument document, CancellationToken cancellationToken)

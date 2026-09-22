@@ -72,6 +72,42 @@ public class DocumentSymbolNamelessTests
     }
 
     [Fact]
+    public async Task OutlinePopulatesBeforeAnyAnalysisHasEverPublished()
+    {
+        // The startup-indexing race: didOpen's own first analysis runs off the request thread
+        // (TextSyncHandler.ScheduleImmediateAnalysis), queued behind the indexer's thread-pool
+        // work, so a documentSymbol request can arrive before OpenDocument.Analysis is anything
+        // but null. The handler used to answer null there via TryGetAnalyzed's cached-snapshot
+        // read, and LSP has no "ask again" for document symbols, so the outline stayed empty until
+        // the user typed something. Deliberately no Analyze/AnalyzeIfStale call before the request
+        // — this is exactly that race, and the handler must parse for itself instead of trusting a
+        // snapshot that has not been published yet.
+        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
+        OpenDocument document = documents.Open(Path, "#namespace vibing3;\nfunction one()\n{\n}\n", version: 1);
+        Assert.Null(document.Analysis);
+
+        DocumentSymbolHandler handler = new(
+            documents,
+            new ServerSettings(),
+            new TextDocumentSelector(new TextDocumentFilter { Pattern = "**/*.gsc" }));
+
+        SymbolInformationOrDocumentSymbolContainer? container = await handler.Handle(
+            new DocumentSymbolParams { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(Path)) },
+            CancellationToken.None);
+
+        List<DocumentSymbol> symbols = [];
+        foreach ( SymbolInformationOrDocumentSymbol entry in container ?? [] )
+        {
+            if ( entry.DocumentSymbol is not null )
+            {
+                symbols.Add(entry.DocumentSymbol);
+            }
+        }
+
+        Assert.Contains(Names(symbols), static name => name == "one");
+    }
+
+    [Fact]
     public async Task ACompleteFileIsUnchanged()
     {
         // The guard must not cost anything in the ordinary case.

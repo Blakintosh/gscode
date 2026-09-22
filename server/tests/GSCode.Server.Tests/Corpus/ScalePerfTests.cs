@@ -99,6 +99,9 @@ public partial class ScalePerfTests
         public int WarmTotal { get; set; }
         public double DatabaseMegabytes { get; set; }
 
+        /// <summary>The broad-list queries — see ScalePerfTests.Lookups.</summary>
+        public LookupRow? Lookups { get; set; }
+
         /// <summary>Per lint rule: the worst single file and the p99, so a rule that grows with the workspace is named.</summary>
         public List<(string Rule, double Max, double P99)> LintRules { get; } = [];
 
@@ -185,6 +188,7 @@ public partial class ScalePerfTests
             List<string> sample = Sample(ScaleCorpusFixture.CopiedScripts(corpus), RequestSampleFiles);
             MeasureRequests(row, corpus, sample, database, resolver, names, inserts, builtins, objectFields);
             await MeasureHandlersAsync(row, corpus, database, resolver, names, builtins, objectFields);
+            row.Lookups = MeasureLookups(corpus, database, resolver, names, inserts, new CompletionEngine(database, builtins, objectFields));
 
             row.LintSweepSeconds = await MeasureLintSweepAsync(database, indexer, resolver, builtins, objectFields);
 
@@ -601,6 +605,11 @@ public partial class ScalePerfTests
             _output.WriteLine($"       lint rule {rule.Rule,-36} p99 {rule.P99,7:F1} ms  max {rule.Max,7:F1} ms");
         }
 
+        if ( row.Lookups is not null )
+        {
+            WriteLookups(row.Lookups, row);
+        }
+
         if ( row.DroppedWrites > 0 )
         {
             _output.WriteLine($"     WARNING: {row.DroppedWrites:N0} cache write(s) dropped while populating");
@@ -624,6 +633,31 @@ public partial class ScalePerfTests
                 $"| {row.Game} | {row.Total:N0} | {row.ColdSeconds:F1} | {row.WarmSeconds:F1} | {row.LoadAllMilliseconds:F0} | "
                 + $"{row.RetainedMegabytes:F0} | {row.CompactMilliseconds:F0} | {row.LintSweepSeconds:F1} | {row.CompletionP99:F2} | "
                 + $"{row.LiteralP99:F2} | {row.FieldP99:F2} | {row.LensP99:F1} | {row.ReferencesP99:F1} | {row.RenameP99:F1} | {row.LintMax:F1} | {row.DroppedWrites:N0} | {row.WarmRestored:N0}/{row.WarmTotal:N0} |");
+        }
+
+        table.AppendLine();
+        table.AppendLine("| game | files | import path p99 ms | insert path p99 ms | header inserters p99 ms | rename plan p99 ms | class lookup p99 ms | visible classes p99 ms | header macro refs p99 ms | ArgumentCountLint p99 ms |");
+        table.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        foreach ( ScaleRow row in rows )
+        {
+            if ( row.Lookups is null )
+            {
+                continue;
+            }
+
+            double argumentCount = 0;
+            foreach ( (string Rule, double Max, double P99) rule in row.LintRules )
+            {
+                if ( rule.Rule.Contains("ArgumentCount", StringComparison.Ordinal) )
+                {
+                    argumentCount = rule.P99;
+                }
+            }
+
+            LookupRow lookups = row.Lookups;
+            table.AppendLine(
+                $"| {row.Game} | {row.Total:N0} | {lookups.ImportPath.P99:F2} | {lookups.InsertPath.P99:F2} | {lookups.HeaderInserters.P99:F2} | "
+                + $"{lookups.RenamePlan.P99:F2} | {lookups.ClassLookup.P99:F3} | {lookups.VisibleClasses.P99:F3} | {lookups.HeaderMacroReferences.P99:F2} | {argumentCount:F2} |");
         }
 
         string directory = Environment.GetEnvironmentVariable("GSCODE_PERF_REPORT") is string configured && configured.Length > 0

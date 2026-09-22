@@ -1119,6 +1119,84 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// The GSC and CSC records whose analysis a header decides: the ones that <c>#insert</c> it,
+    /// directly or through other headers. What a file watcher re-indexes when a header changes.
+    ///
+    /// A file can reach the header THROUGH ANOTHER HEADER. Headers live in a store of their own, so
+    /// a direct query walks scripts alone and stops one hop in: with base.gsh inserted by
+    /// wrapper.gsh inserted by script.gsc, changing base.gsh found nothing and script.gsc kept a
+    /// record built against the old macro values for the rest of the session. The startup index
+    /// closes the same set over the same graph, for the same chain.
+    ///
+    /// And a file can be waiting for a header that RESOLVES NOWHERE YET. Its insert edge records no
+    /// resolved path, so no query keyed on one can find it — which is precisely the file a newly
+    /// created header exists to serve. Matching the written path as well catches it, and catches
+    /// the mod copy that starts shadowing a raw header too, where the dependent's edge names the
+    /// file it used to resolve to rather than the one that now wins.
+    /// </summary>
+    /// <param name="headerRelativePath">
+    /// The header as a directive would write it (<see cref="PathUtil.NormalizeScriptPath"/>'s form),
+    /// or "" to match on resolved paths alone.
+    /// </param>
+    public static List<ScriptRecord> ScriptsInserting(
+        ScriptDatabase database, string normalizedGshPath, string headerRelativePath)
+    {
+        HashSet<string> changed = new(StringComparer.Ordinal) { normalizedGshPath };
+
+        // Close over the header graph first: a header that inserts a changed one contributes
+        // something different now, even though its own bytes did not move.
+        bool grew = true;
+        while ( grew )
+        {
+            grew = false;
+            foreach ( ScriptRecord header in database.AllGshRecords.ToList() )
+            {
+                if ( !changed.Contains(header.Path) && InsertsAny(header, changed, headerRelativePath) )
+                {
+                    changed.Add(header.Path);
+                    grew = true;
+                }
+            }
+        }
+
+        List<ScriptRecord> inserting = [];
+        foreach ( ScriptRecord record in database.Gsc.AllRecords.Concat(database.Csc.AllRecords).ToList() )
+        {
+            if ( InsertsAny(record, changed, headerRelativePath) )
+            {
+                inserting.Add(record);
+            }
+        }
+
+        return inserting;
+    }
+
+    /// <summary>Whether one record inserts any header in the changed set, by resolved or written path.</summary>
+    private static bool InsertsAny(ScriptRecord record, HashSet<string> changed, string headerRelativePath)
+    {
+        foreach ( DependencyEdge edge in record.Dependencies )
+        {
+            if ( !edge.IsInsert )
+            {
+                continue;
+            }
+
+            if ( changed.Contains(edge.ResolvedPath) )
+            {
+                return true;
+            }
+
+            if ( headerRelativePath.Length > 0
+                && string.Equals(PathUtil.NormalizeScriptPath(edge.RawPath), headerRelativePath, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// References to a key inside GSH records. A <c>.gsh</c> serves BOTH languages, so its
     /// records live in the shared GSH store rather than either LanguageStore — this is the
     /// deliberate exception to the language-guard rule, and the only way a macro defined in a

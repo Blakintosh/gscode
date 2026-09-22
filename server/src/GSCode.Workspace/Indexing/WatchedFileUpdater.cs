@@ -141,23 +141,9 @@ public sealed class WatchedFileUpdater
     }
 
     /// <summary>
-    /// Re-indexes every closed file whose analysis this header decides, and reports them for a
-    /// diagnostics republish.
-    ///
-    /// "Decides" is two questions, and answering only the first is what this used to do.
-    ///
-    /// A file can reach the header THROUGH ANOTHER HEADER. Headers live in a store of their own, so
-    /// the direct query walks scripts alone and stops one hop in: with base.gsh inserted by
-    /// wrapper.gsh inserted by script.gsc, changing base.gsh found nothing and script.gsc kept a
-    /// record built against the old macro values for the rest of the session. The startup index
-    /// closes the same set over the same graph, for the same chain, and says so in its own comment;
-    /// this is the watcher paying the debt it left.
-    ///
-    /// And a file can be waiting for a header that RESOLVES NOWHERE YET. Its insert edge records no
-    /// resolved path, so no query keyed on one can find it — which is precisely the file a newly
-    /// created header exists to serve. Matching the written path as well catches it, and catches
-    /// the mod copy that starts shadowing a raw header too, where the dependent's edge names the
-    /// file it used to resolve to rather than the one that now wins.
+    /// Re-indexes every closed file whose analysis this header decides — see
+    /// <see cref="DatabaseQueries.ScriptsInserting"/> for what "decides" covers — and reports them
+    /// for a diagnostics republish.
     /// </summary>
     /// <param name="headerRelativePath">
     /// The header as a directive would write it, or "" to match on resolved paths alone.
@@ -165,32 +151,9 @@ public sealed class WatchedFileUpdater
     private IReadOnlyList<string> ReindexInserters(
         string normalizedGshPath, string headerRelativePath, Func<string, bool>? ownedByEditor)
     {
-        HashSet<string> changed = new(StringComparer.Ordinal) { normalizedGshPath };
-
-        // Close over the header graph first: a header that inserts a changed one contributes
-        // something different now, even though its own bytes did not move.
-        bool grew = true;
-        while ( grew )
-        {
-            grew = false;
-            foreach ( ScriptRecord header in _database.AllGshRecords.ToList() )
-            {
-                if ( !changed.Contains(header.Path) && Reaches(header, changed, headerRelativePath) )
-                {
-                    changed.Add(header.Path);
-                    grew = true;
-                }
-            }
-        }
-
         List<string> touched = [];
-        foreach ( ScriptRecord record in _database.Gsc.AllRecords.Concat(_database.Csc.AllRecords).ToList() )
+        foreach ( ScriptRecord record in DatabaseQueries.ScriptsInserting(_database, normalizedGshPath, headerRelativePath) )
         {
-            if ( !Reaches(record, changed, headerRelativePath) )
-            {
-                continue;
-            }
-
             // The same test the changed file's own record gets, for the same reason: this reads
             // DISK, and a dependent that is open may hold unsaved edits the disk does not have.
             // Its record was committed from the buffer moments ago and replacing it here is the
@@ -206,30 +169,5 @@ public sealed class WatchedFileUpdater
         }
 
         return touched;
-    }
-
-    /// <summary>Whether one record inserts any header in the changed set, by resolved or written path.</summary>
-    private static bool Reaches(ScriptRecord record, HashSet<string> changed, string headerRelativePath)
-    {
-        foreach ( DependencyEdge edge in record.Dependencies )
-        {
-            if ( !edge.IsInsert )
-            {
-                continue;
-            }
-
-            if ( changed.Contains(edge.ResolvedPath) )
-            {
-                return true;
-            }
-
-            if ( headerRelativePath.Length > 0
-                && string.Equals(PathUtil.NormalizeScriptPath(edge.RawPath), headerRelativePath, StringComparison.Ordinal) )
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

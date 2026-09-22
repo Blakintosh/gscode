@@ -144,6 +144,20 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             return request.Context.Diagnostics;
         }
 
+        // Automatic requests are VS Code polling for the LIGHTBULB, not a user action — it fires
+        // on every cursor move/idle pause to decide whether to show the icon at all, far more
+        // often than anyone actually opens the menu. Running a full relint for each one turned
+        // routine cursor movement into continuous background work for no visible benefit: an
+        // automatic request with nothing in Context.Diagnostics already means no lightbulb shows
+        // there, and the fallback below exists for the INVOKED case — the context menu's own
+        // "Quick Fix..." — where the cost is paid once, on an explicit click. Default to Invoked
+        // when the client sends no TriggerKind at all, so an older/other client that never sends
+        // one keeps getting the fallback rather than silently losing it.
+        if ( (request.Context.TriggerKind ?? CodeActionTriggerKind.Invoked) != CodeActionTriggerKind.Invoked )
+        {
+            return request.Context.Diagnostics;
+        }
+
         // _linter.Analyze already returns result.AllDiagnostics plus the cross-file lints layered
         // on top (WorkspaceLints.Analyze's own doc: "the file's own diagnostics plus every
         // cross-file lint"), so this is the one call that needs making, not two — a second pass

@@ -13,7 +13,9 @@ new result with these numbers.
 |---|---|---|
 | Cold index (no cache) | < 60 s | Full `share\raw` + all mods, bounded parallelism (cores − 1). |
 | Warm start (cache hit) | < 5 s | SQLite restore of unchanged files; only changed files re-parse. |
-| Steady-state memory | < 400 MB | Records-only retention for closed files; NameTable interning. |
+| Steady-state memory | < 400 MB | At a stock corpus's size. Records-only retention for closed files; NameTable interning. Grows ~45 KB a file: a soft ~3 GB ceiling at 50K files. |
+| Cold / warm start at 50,000 files | < 35 s / < 10 s | `ScalePerfTests`; budgets for 10K and 25K interpolate. See the scale section. |
+| Any per-request cost at 50,000 files | same as at 10,000 | Completion, one file's lint pass, CodeLens: FLAT in the workspace size. A row that climbs means a path walks the store. |
 | Keystroke re-analysis | interactive | Debounced ~250 ms, per-document cancellation; a single file lexes+parses in low single-digit ms. |
 | One lint rule, one keystroke | < 40% of the debounce | Worst SINGLE FILE on bo3 or cod4. Measured 9–17%; asserted by `LintBudgetTests`, not scored by hand. |
 | The whole lint pass, one keystroke | < 25% of the debounce at p99 | Same gate. Catches twenty rules each growing a little, which no per-rule bound sees. |

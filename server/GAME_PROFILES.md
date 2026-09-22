@@ -40,6 +40,8 @@ HasClasses         => Keywords contains "class"
 HasFunctionKeyword => Keywords contains "function"
 HasForeach         => Keywords contains "foreach"
 HasDoWhile         => Keywords contains "do"
+HasVarargBinding   => Keywords contains "vararg"
+HasPrivateFunctions => Keywords contains "private"
 ```
 
 ### `BaseKeywords` — the true base (CoD4 / WaW / BO1, and every core)
@@ -150,7 +152,7 @@ either side, even there.
 | classes `class`/`new`/`->` (`HasClasses`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `function` keyword on decls (`HasFunctionKeyword`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `const` keyword | ✗ | ✗ | ✗ | ✗ | ✓ |
-| `autoexec` / `private` modifiers | ✗ | ✗ | ✗ | ✗ | ✓ |
+| `autoexec` / `private` modifiers (`HasPrivateFunctions`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `childthread` / `call` | ✗ | ✗ | ✓ | ✗ | ✗ |
 | `thisthread`, the running thread as a value | ✗ | ✗ | ✓ | ✗ | ✗ |
 | file-scope constants `CONST = 4;` (`HasFileScopeConstants`) | ✗ | ✗ | ✓ | ✗ | ✗ |

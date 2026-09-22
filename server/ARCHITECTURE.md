@@ -42,10 +42,18 @@ opts that one project out of CA2007 (ConfigureAwait) per the async rules.
 Per-file analysis: `SourceText → Lexer (Token[]) → Preprocessor (PToken + provenance)
 → Parser (AST records) → Extraction (ScriptRecord)`. Records land in the
 `ScriptDatabase` — two independent language stores (GSC, CSC) plus a shared GSH macro
-store — persisted incrementally to a per-workspace SQLite cache. LSP handlers read
-immutable record snapshots; open documents keep their full `ParseResult` in the
+store — persisted incrementally to a per-workspace SQLite cache as compact binary records. LSP
+handlers read immutable record snapshots; open documents keep their full `ParseResult` in the
 `DocumentStore`. Path/mod-overlay questions (`share\raw` vs `mods\<name>` vs workspace)
 are answered solely by the `PathResolver`.
+
+Each language store keeps a set of inverted indexes beside its records — by reference key,
+declared name (bare and namespace-qualified), namespace, class, script path, the files naming a
+path, and the workspace's literal and field vocabulary — maintained in the same per-file diff that
+swaps a record in. The rule they exist for: **nothing a keystroke or a request pays walks every
+record.** Every walk that did turned into a per-request cost growing with the workspace once it was
+measured at 50,000 files; with the indexes, completion, one file's lint pass and the navigation
+handlers stay flat to that size (`PERF.md`, the scale section).
 
 ## Language features (LSP handlers)
 
@@ -89,7 +97,8 @@ verifying the .NET 10 runtime is installed (prompting a download if missing). Ca
 GSC/CSC/GSH language registrations, TextMate grammar, semantic-token scope mapping, and
 quick-suggestion defaults. Two log channels: "GSCode" (`LogOutputChannel`, extension-host
 lifecycle) and "GSCode Server" (the server's stderr/Serilog). A status-bar item shows the live
-indexing counter driven by `gscode/indexingStarted|Progress|Complete` notifications. Commands:
+indexing counter driven by `gscode/indexingStarted|Progress|Complete` notifications, with
+`gscode/indexingFailed` turning it into a warning rather than a spinner that never stops. Commands:
 `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, `gscode.selectGame`
 (the game picker, whose roster comes from the server over `gscode/supportedGames` so the client
 never keeps its own list of which dialects exist), `gscode.openApiLibrary` (`shift+f1` in GSC,
@@ -100,8 +109,9 @@ CSC, and GSH files), and the `gscode.showReferences` bridge for code-lens clicks
 
 `tools/field-data/` holds ALL engine field data: `sources/originals/` (verbatim game
 files: ScriptObjectFields.xlsx, radiant keys.txt) and `sources/curated/` (editable
-JSON source of truth). A P7 tool converts curated → the bundled runtime artifacts in
-`GSCode.Workspace/Api/`.
+JSON source of truth). The tool converts curated → the bundled runtime artifacts in
+`GSCode.Workspace/Api/`; `tools/field-data/FOLDER.md` covers the layers and the
+`regenerate-game-data` skill the procedure.
 
 ## Documentation convention
 
@@ -120,7 +130,8 @@ heading (`Parser.cs (+ .Declarations / .Statements / .Expressions partials)`,
 be unreadable, so it groups them by area with a keyword-bearing sentence each —
 the point being to find the right class by searching for the construct. It also carries the
 canonical list of ENVIRONMENT VARIABLES (`GSCODE_CORPUS_<GAME>`,
-`GSCODE_COD4_DOCS`, `GSCODE_INSTRUMENTATION`, `GSCODE_PERF_REPORT`, and `GSCODE_SWEEP_REPORT`),
+`GSCODE_COD4_DOCS`, `GSCODE_INSTRUMENTATION`, `GSCODE_PERF_REPORT`, `GSCODE_SWEEP_REPORT`, and the
+`GSCODE_SCALE_*` trio behind the scale sweep),
 since most of them exist to point tests at game data or reports and were otherwise discoverable
 only by reading fixture source.
 

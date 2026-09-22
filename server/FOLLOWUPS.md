@@ -388,11 +388,15 @@ unknown and says so.
 
 **Cross-file is the part left, and the obstacle is structural rather than effort.** A call site's
 ARGUMENTS live in the caller's syntax tree, and `ScriptRecord` stores extraction output — symbols,
-references, dependencies — not trees. Reading arguments from another file means re-parsing it, and
-the measurement already on record is ~44 ms per file, so roughly 43 seconds for BO3's 980 scripts on
-every query. What would make it affordable is an argument index built during indexing and persisted
-with the rest of the record: per call site, the callee key and the typed value of each argument.
-That is a cache-schema change, which is why it is not folded into this.
+references, dependencies — not trees. Reading arguments from another file means re-parsing it.
+This entry used to price that at ~44 ms per file, which was the corpus harness's own wall-clock
+rather than the analysis (PERF.md, 2026-09-15): analysis is ~0.4 ms a file across the indexing cores,
+so re-parsing a function's callers on demand is affordable at stock size. It stops being affordable
+for a shared utility in a large workspace, called from thousands of files — the scale sweep's
+workspaces are exactly that shape. The answer that scales is still an argument index built during
+indexing and persisted with the record: per call site, the callee key and the typed value of each
+argument. That is a record-format change (`RecordSerializer` + `RecordFormatVersion`), which is why
+it is not folded into this.
 
 Worth knowing before starting: the same-file half already covers a helper declared and called in one
 script, which is most of what a per-file rewrite reasons about. The cross-file half matters for
@@ -523,24 +527,20 @@ non-zero exit on errors) and `gscode format --check|--write`, packaged as a dotn
 mod-project CI. Cheap to build because the layering already isolates OmniSharp in
 `GSCode.Server`, so Workspace + Parser are a complete LSP-free engine. Ships only if wanted.
 
-### 4. The site's library browser is Black Ops III's alone
+### 4. The scale levers measured and parked
 
-The extension bundles eight builtin libraries across five games; `gscode.net/library` browses one.
-Two places hardcode it — `site/src/routes/api/getLibrary/+server.ts` dispatches on
-`gameId === "t7"`, and `site/src/routes/(gscode)/library/[languageId]/+layout.ts` sets
-`const gameId = "t7"` — and only the T7 pair is imported under `site/src/lib/apiSource/`.
+The 10K–50K pass (PERF.md, the scale section) brought every row inside its budget and left four
+levers measured but unpulled, each with the condition that would change that:
 
-The seam is already there and is not the hard part: `library.ts`'s
-`getLibrary(fetch, gameId, languageId)` takes the game, and `ApiLibrarian.initialise` is passed
-one. What has to be decided is the URL shape, and it is a one-way door: a game route segment
-(`/library/[gameId]/[languageId]`) is linkable and cacheable per game but moves every existing
-`/library/gsc` URL and needs redirects, while a selector over the current routes keeps those URLs
-and cannot put the game in a link. Sizes, since they land in the site bundle: CoD4 527 KB, WaW
-772 KB (GSC + CSC), MW2 882 KB, BO1 1.23 MB (GSC + CSC) — about 3.3 MB on top of T7's 3.7 MB.
-
-Not a release blocker; the extension has never read this endpoint. It is a claim-versus-reality
-gap on the public site of a five-game release, which is why it is written down rather than left
-to be noticed.
+- **Stat-first freshness on a warm start** — skip reading and hashing a file whose size and mtime
+  match the cache. `index.read` is now 40% of warm thread-time, the largest share; the warm start is
+  4 s at 50K against a 10 s budget. Worth doing when that row moves. A cache-schema change.
+- **Streaming `LoadAll`** — 305 ms and 333 MB at 50K, transient. Only if memory at startup matters.
+- **The post-index compaction pause** — 1.8 s at 50K, once, blocking. Requests arriving in that
+  window wait for it.
+- **bo3 find-references and rename** grow with the size of their ANSWER (406,326 locations in the
+  sampled requests at 50K), not with a walk. A lazier location list is the only lever, and nothing
+  has asked for it.
 
 ---
 

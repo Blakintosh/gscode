@@ -407,6 +407,14 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/CodeActionHandler.cs
 
+- `RequestLints` — the document's lint pass, run at most once per request and only if something
+  asks for it. `DiagnosticsForFixes` wants what lands on the request's LINE and
+  `AllUnusedImportDiagnostics` wants the unused imports in the WHOLE document; both used to call
+  `DocumentLinter.Analyze` themselves, so an invoked "Quick Fix..." with nothing in
+  `Context.Diagnostics` ran twenty-six cross-file rules and a whole-file flow pass twice over one
+  unchanged document. Lazy, because an AUTOMATIC request (the lightbulb poll, on every cursor
+  move) returns before either consumer runs and must keep costing nothing. Per request and
+  dropped with it, the same lifetime rule `CallFixContext` states for itself.
 - `CallFixContext` — the per-REQUEST state both call fixes share: the name→declarations lookup
   (cached even when it finds NOTHING, which is the common case here), the existing `#using` set, the
   included-path list and both insertion points. A request carries every diagnostic overlapping the

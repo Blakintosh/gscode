@@ -85,6 +85,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         TextRange selection = request.Range.ToCore();
         List<CommandOrCodeAction> actions = [];
 
+        // The two consumers of the lint pass below share one run of it. See RequestLints.
+        RequestLints lints = new(_linter, document, result);
+
         foreach ( RedundantImport duplicate in FindRemovableDuplicates(result, selection) )
         {
             actions.Add(new CommandOrCodeAction(BuildRemoveAction(
@@ -119,7 +122,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        AddDiagnosticFixes(request, result, actions, DiagnosticsForFixes(request, result, document, cancellationToken), target);
+        AddDiagnosticFixes(request, result, actions, DiagnosticsForFixes(request, lints, cancellationToken), target);
 
         AddGenerateScriptDocAction(request.TextDocument.Uri, result, selection, actions);
 
@@ -130,7 +133,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         if ( (request.Context.TriggerKind ?? CodeActionTriggerKind.Invoked) == CodeActionTriggerKind.Invoked )
         {
             AddOrganizeImportsAction(
-                request.TextDocument.Uri, AllUnusedImportDiagnostics(document, result, cancellationToken), actions);
+                request.TextDocument.Uri, AllUnusedImportDiagnostics(lints, cancellationToken), actions);
         }
 
         return Task.FromResult<CommandOrCodeActionContainer?>(new CommandOrCodeActionContainer(actions));
@@ -151,8 +154,8 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// question the client would have takes running that same pipeline here, once, and keeping only
     /// what lands on this line.
     /// </summary>
-    private IEnumerable<LspDiagnostic> DiagnosticsForFixes(
-        CodeActionParams request, ParseResult result, OpenDocument document, CancellationToken cancellationToken)
+    private static IEnumerable<LspDiagnostic> DiagnosticsForFixes(
+        CodeActionParams request, RequestLints lints, CancellationToken cancellationToken)
     {
         if ( request.Context.Diagnostics.Count() > 0 )
         {
@@ -173,14 +176,14 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             return request.Context.Diagnostics;
         }
 
-        // _linter.Analyze already returns result.AllDiagnostics plus the cross-file lints layered
-        // on top (WorkspaceLints.Analyze's own doc: "the file's own diagnostics plus every
-        // cross-file lint"), so this is the one call that needs making, not two — a second pass
-        // over result.AllDiagnostics on its own duplicated every parser-level diagnostic here.
+        // The pass already returns result.AllDiagnostics plus the cross-file lints layered on top
+        // (WorkspaceLints.Analyze's own doc: "the file's own diagnostics plus every cross-file
+        // lint"), so this is the one set that needs asking for, not two — a second pass over
+        // result.AllDiagnostics on its own duplicated every parser-level diagnostic here.
         int requestedLine = request.Range.Start.Line;
         List<LspDiagnostic> onThisLine = [];
 
-        foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in _linter.Analyze(document, result, cancellationToken) )
+        foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in lints.All(cancellationToken) )
         {
             // LINE MEMBERSHIP, not TextRange.Overlaps: Overlaps compares positions inclusively
             // (Start <= other.End), so a range built from LineRangeOf's (line, 0)-(line+1, 0) —
@@ -301,6 +304,56 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         // One click for the common cleanup, rather than N separate fixes.
         AddRemoveAllUnusedAction(uri, unusedUsings, "#using", actions);
         AddRemoveAllUnusedAction(uri, unusedIncludes, "#include", actions);
+    }
+
+    /// <summary>
+    /// The document's lint pass, run at most once per request and only if something asks for it.
+    ///
+    /// Two things in one request want it, for different slices of the same answer:
+    /// <see cref="DiagnosticsForFixes"/> keeps what lands on the request's LINE, and
+    /// <see cref="AllUnusedImportDiagnostics"/> keeps the unused imports in the WHOLE document.
+    /// Both used to call <see cref="DocumentLinter.Analyze(OpenDocument, ParseResult, CancellationToken)"/> themselves, so an invoked "Quick
+    /// Fix..." with nothing in <c>Context.Diagnostics</c> ran twenty-six cross-file rules and a
+    /// whole-file flow pass TWICE over one unchanged document — and the second run could not even
+    /// disagree with the first, which is what makes sharing it safe rather than a trade.
+    ///
+    /// Lazy, because the common request asks for neither: an AUTOMATIC request (VS Code polling for
+    /// the lightbulb on every cursor move) returns before either consumer runs, and must keep
+    /// costing nothing.
+    ///
+    /// Per request and dropped with it, deliberately — the same rule
+    /// <see cref="CallFixContext"/> states for itself. A cache that outlived the request could
+    /// answer for a buffer that has since been edited.
+    /// </summary>
+    internal sealed class RequestLints
+    {
+        private readonly DocumentLinter _linter;
+        private readonly OpenDocument _document;
+        private readonly ParseResult _result;
+
+        private ImmutableArray<GSCode.Core.Diagnostics.Diagnostic>? _all;
+
+        public RequestLints(DocumentLinter linter, OpenDocument document, ParseResult result)
+        {
+            _linter = linter;
+            _document = document;
+            _result = result;
+        }
+
+        /// <summary>Every diagnostic the pass reports, in the order it reports them.</summary>
+        public ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> All(CancellationToken cancellationToken)
+        {
+            if ( _all is ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> already )
+            {
+                return already;
+            }
+
+            ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> analyzed =
+                [.. _linter.Analyze(_document, _result, cancellationToken)];
+
+            _all = analyzed;
+            return analyzed;
+        }
     }
 
     /// <summary>
@@ -476,12 +529,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// back to; the two are not combined into one call because that fallback is deliberately
     /// scoped to one LINE and this deliberately is not.
     /// </summary>
-    private ImmutableArray<LspDiagnostic> AllUnusedImportDiagnostics(
-        OpenDocument document, ParseResult result, CancellationToken cancellationToken)
+    private static ImmutableArray<LspDiagnostic> AllUnusedImportDiagnostics(
+        RequestLints lints, CancellationToken cancellationToken)
     {
         ImmutableArray<LspDiagnostic>.Builder unused = ImmutableArray.CreateBuilder<LspDiagnostic>();
 
-        foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in _linter.Analyze(document, result, cancellationToken) )
+        foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in lints.All(cancellationToken) )
         {
             LspDiagnostic converted = diagnostic.ToLsp();
             GscDiagnosticCode? code = CodeOf(converted);

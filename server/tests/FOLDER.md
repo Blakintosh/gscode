@@ -382,7 +382,8 @@ tests, and nothing within a test: the corpus sweeps still parallelise their own 
 `FormatOptionsTests` the settings layer · `FormatPragmaTests` `#pragma disable format` ·
 `GuidelineExampleTests` the examples in `FORMATTING.md`.
 
-**Handlers.** `CodeActionHandlerTests` quick fixes · `DependentDiagnosticsTests` debounced
+**Handlers.** `CodeActionHandlerTests` quick fixes · `CodeActionLintReuseTests` one request runs
+the lint pass once, asserted by array identity rather than by counting calls on a sealed type · `DependentDiagnosticsTests` debounced
 cross-file refreshes for other open documents, plus `ClosedDependentsOf` (the `full`-mode half): a
 closed file referencing the origin's function is named, the origin itself and an open caller are
 not · `WorkspaceLintSweepTests` the `workspaceIndexingMode: full` sweep — a closed record's stored

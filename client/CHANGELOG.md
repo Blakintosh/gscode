@@ -4,6 +4,12 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
+## 2.0.3
+
+### Fixed
+- Typing `func` offered `funcauto` first, so `func` + Tab wrote an autoexec function. The plain
+  function declaration now heads the list, followed by `funcauto` and `funcpriv`.
+
 ## 2.0.2
 
 ### Changed

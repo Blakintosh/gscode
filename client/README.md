@@ -178,7 +178,11 @@ guideline](../server/FORMATTING.md).
 
 ## Release Notes
 
-### 2.0.2 (latest)
+### 2.0.3 (latest)
+
+- Typing `func` offers the plain function declaration first, ahead of `funcauto` and `funcpriv`, so `func` + Tab no longer writes an autoexec function.
+
+### 2.0.2
 
 - `xanim` and `anim` are accepted as `#precache` asset types, and offered in completion.
 - `gscode.format.spaceBeforeControlParen`: turn off for `if(`, `for(`, `while(` instead of `if (`. Independent of `padParens`, so every combination of keyword space and interior padding is reachable.

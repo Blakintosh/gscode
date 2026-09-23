@@ -1732,6 +1732,33 @@ before the first log line appears. Nothing has been attributed inside that yet, 
 different tool than this file's harness — an ETW trace or `DOTNET_JitTimeLogFile`, not a stopwatch
 in a test.
 
+### 2026-09-23: InvariantGlobalization, which is 2% and mostly not a performance change
+
+The first probe into that unattributed 0.3 s. `InvariantGlobalization` stops the runtime loading
+ICU on the way up. Ten alternating runs of each build, framework-dependent, warm cache, bo3's 1,085
+scripts, driving the published server over stdio and timing to its own `Ready` line — wall-clock
+because the log line itself is rounded to a tenth of a second:
+
+| | runs | median | range |
+|---|---:|---:|---|
+| ICU, as shipped before | 10 | 0.980 s | 0.969 – 0.987 |
+| **InvariantGlobalization** | 10 | **0.961 s** | 0.953 – 0.986 |
+
+**About 18 ms, roughly 2%, in the same direction in both rounds** — the distributions barely
+overlap, and the round order was reversed between them to catch the machine drifting. The index
+inside is 0.3 s on both sides, which is what makes it attributable to startup rather than to
+analysis. The bundle does NOT shrink: framework-dependent, ICU comes from the shared runtime, and
+both publishes measure 48 MB.
+
+**Read it as a correctness guard that happens to save 18 ms, not as a performance win.** GSC is
+parsed and rendered the same way whatever machine reads it, and the tree already holds that by hand:
+165 ordinal case-insensitive comparisons, zero `InvariantCultureIgnoreCase` or
+`CurrentCultureIgnoreCase`, no `new CultureInfo`, no `TimeZoneInfo`, no `Encoding.GetEncoding`, and
+every `CultureInfo` reference already naming `InvariantCulture`. The switch makes that an invariant
+the runtime enforces. Its cost is the same thing said the other way: a culture-sensitive comparison
+added later becomes ordinal silently rather than throwing, which is why the test project sets it
+too — the suites then run under the collation the server ships.
+
 ## Reading the reports
 
 Each game writes `temp/gscode-perf-<game>.html`; `GSCODE_PERF_REPORT` overrides the directory.

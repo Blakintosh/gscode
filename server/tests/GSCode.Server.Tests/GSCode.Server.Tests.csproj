@@ -4,6 +4,11 @@
     <IsPackable>false</IsPackable>
     <!-- Inherited transitively from GSCode.Workspace's SQLite dependency; see its csproj. -->
     <NoWarn>$(NoWarn);NU1903</NoWarn>
+
+    <!-- Set here for the same reason runtimeconfig.template.json is duplicated here: the suites run
+         under what the server ships, so a comparison that behaves differently without ICU fails in
+         a test rather than in an editor. See GSCode.Server.csproj. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

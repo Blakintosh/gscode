@@ -44,7 +44,8 @@ public sealed partial class CompletionEngine
         FieldScope fieldScope = FieldScope.Owner,
         CallPunctuation callPunctuation = CallPunctuation.Parens,
         GameProfile? profile = null,
-        bool parameterHints = true)
+        bool parameterHints = true,
+        bool autoImport = true)
     {
         GameProfile game = profile ?? GameProfile.Active;
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
@@ -277,6 +278,30 @@ public sealed partial class CompletionEngine
             enclosingFunction,
             CallSnippet(tokens, currentIndex, offset, punctuation),
             game,
-            parameterHints);
+            parameterHints,
+            autoImport ? WordBefore(result, tokens, currentIndex, offset) : "");
+    }
+    /// <summary>
+    /// The part of the identifier under the cursor that has actually been TYPED — <c>get_pl</c> in
+    /// <c>get_pl|ayers</c>, not the whole word.
+    ///
+    /// Only the auto-import producer asks, and it needs the typed half specifically: the rest of the
+    /// token is text the user is editing over, so matching candidates against the whole word would
+    /// offer nothing the moment the cursor moved into the middle of one.
+    /// </summary>
+    private static string WordBefore(ParseResult result, ImmutableArray<Token> tokens, int currentIndex, int offset)
+    {
+        if ( currentIndex < 0 || tokens[currentIndex].Kind != TokenKind.Identifier )
+        {
+            return "";
+        }
+
+        int start = tokens[currentIndex].Start;
+        if ( offset <= start || offset > tokens[currentIndex].End )
+        {
+            return "";
+        }
+
+        return result.Text.Text[start..offset];
     }
 }

@@ -20,6 +20,7 @@ export interface GscodeSettings {
     "inlayHints.parameterNames": boolean;
     "inlayHints.inferredTypes": boolean;
     "inlayHints.macroParameterNames": boolean;
+    "completion.autoImport": boolean;
     "completion.literals": boolean;
     "completion.fieldScope": string;
     "completion.callPunctuation": string;
@@ -51,6 +52,7 @@ export function readSettings(): GscodeSettings {
         "inlayHints.parameterNames": config.get<boolean>("inlayHints.parameterNames", true),
         "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", true),
         "inlayHints.macroParameterNames": config.get<boolean>("inlayHints.macroParameterNames", false),
+        "completion.autoImport": config.get<boolean>("completion.autoImport", true),
         "completion.literals": config.get<boolean>("completion.literals", true),
         "completion.fieldScope": config.get<string>("completion.fieldScope", "owner"),
         "completion.callPunctuation": config.get<string>("completion.callPunctuation", "parensAndSemicolon"),

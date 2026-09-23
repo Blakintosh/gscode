@@ -412,6 +412,15 @@ public sealed class LanguageStore
         return _vocabulary.FieldNames(ownerName, path => IsVisibleTo(path, askingContextId));
     }
 
+    /// <summary>
+    /// The function names beginning with <paramref name="lowercasePrefix"/> that
+    /// <paramref name="askingContextId"/> can see — see <see cref="DeclarationIndex"/>.
+    /// </summary>
+    public List<string> VisibleDeclaredNames(string lowercasePrefix, string askingContextId)
+    {
+        return _declarationIndex.NamesStartingWith(lowercasePrefix, path => IsVisibleTo(path, askingContextId));
+    }
+
     private bool IsVisibleTo(string path, string askingContextId)
     {
         return _records.TryGetValue(path, out ScriptRecord? record)

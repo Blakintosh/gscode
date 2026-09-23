@@ -257,6 +257,38 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>
+    /// A function this file cannot call yet, offered WITH the import it needs.
+    ///
+    /// The two dialect families differ in exactly the way they already do everywhere else, so the
+    /// shape is the one the in-scope producers use and only the import rides along: a namespace
+    /// dialect inserts the qualified call, because an unqualified one into another namespace does
+    /// not resolve even after the `#using` lands; a merge dialect inserts the bare name, because
+    /// `#include` folds the function into local scope.
+    ///
+    /// The detail says which file, since that is the decision the user is actually making — several
+    /// scripts may declare the name, and the one thing that distinguishes the rows is where each
+    /// would import from. `SortText` puts these last of the function tiers on their own kind, which
+    /// is right: a name already in scope should never be beaten by one that costs a directive.
+    /// </summary>
+    private static CompletionEntry UnimportedFunctionEntry(
+        UnimportedFunction candidate, GameProfile game, string callSuffix, bool parameterHints)
+    {
+        FunctionSymbol function = candidate.Function;
+        bool qualified = game.ResolvesByNamespace && function.Namespace.Length > 0;
+        string insertName = qualified ? function.Namespace + "::" + function.Name : function.Name;
+
+        return new CompletionEntry(
+            function.Name,
+            CompletionKind.Function,
+            (game.ImportStyle == ImportStyle.Namespace ? "#using " : "#include ") + candidate.ImportPath,
+            insertName + callSuffix,
+            Namespace: function.Namespace,
+            ResolveName: function.Name,
+            LabelDetail: parameterHints ? ParameterHint(function.Parameters, function.HasVarargs) : "",
+            ImportPath: candidate.ImportPath);
+    }
+
+    /// <summary>
     /// A macro, which is a call or a constant depending on how it was defined.
     ///
     /// A function-like macro takes the same call punctuation a function does, because at the use

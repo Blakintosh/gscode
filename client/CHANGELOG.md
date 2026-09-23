@@ -18,6 +18,9 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 - Organize Imports removes every unused `#using` in the file, not only the one under the cursor.
 - **Generate ScriptDoc block**, offered on a function that has none: the tags the stock scripts
   use, with the parameters filled in from the signature and marked mandatory or optional.
+- Completion offers functions from scripts you have not imported and writes the `#using` /
+  `#include` for you when you accept one (`gscode.completion.autoImport`, on by default). It waits
+  for three characters, so what is already in scope still comes first.
 - Hovering a script function, class or macro now shows where it is declared, as a link to that
   file and line — the answer a macro's hover could not give before, since an `#insert`ed
   `#define` lives in a header the file never names.

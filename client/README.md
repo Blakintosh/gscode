@@ -162,6 +162,7 @@ code it suppresses and says where it stops.
 | `gscode.inlayHints.parameterNames` | `true` | Parameter-name hints before arguments at call sites. |
 | `gscode.inlayHints.inferredTypes` | `true` | Inferred-type hints on local variable assignments. |
 | `gscode.inlayHints.macroParameterNames` | `false` | Parameter-name hints inside a `#define` invocation. Off because macro parameters are named for the macro's body, not the caller. |
+| `gscode.completion.autoImport` | `true` | Offer functions from scripts this file has not imported, adding the `#using` / `#include` when one is accepted. Waits for three characters, so names already in scope come first. |
 | `gscode.completion.literals` | `true` | Offer the workspace's known strings, localized strings and hash strings while typing inside a literal — notify and waittill names especially. |
 | `gscode.completion.fieldScope` | `owner` | After a `.`, offer fields assigned on that owner (`owner`) or on anything (`all`). |
 | `gscode.completion.callPunctuation` | `parensAndSemicolon` | What completing a function call inserts with it: `off`, `parens`, or `parensAndSemicolon`. |
@@ -230,6 +231,7 @@ A complete ground-up rewrite of the language server and extension for speed, low
 - Centralised everything in one script database with structurally isolated GSC and CSC worlds and a shared GSH (header) store, backed by a persistent SQLite cache so cold starts restore unchanged files in seconds.
 - Full modern LSP suite: live diagnostics, hover, completion, signature help, go-to-definition, go-to-implementation, go-to-type-definition, find-all-references (including string/hash/localized/anim literals), document highlight, semantic tokens, folding, selection ranges, document/workspace symbols, code lens, rename, call and type hierarchy, inlay hints, document links, formatting, and code actions.
 - A hover names where its subject is declared and links to it, so a function or a macro reached through an `#insert` says which file it came from without a jump. **Go to Implementations** answers the question go-to-definition cannot — which subclasses override this method — and **Go to Type Definition** on a local opens the class it holds.
+- Completion offers functions from scripts the file has not imported yet, once three characters have been typed, and adds the `#using` (or `#include`) line when one is accepted — qualified on Black Ops III, bare on the merge dialects, which is what each game actually needs. Turn it off with `gscode.completion.autoImport`.
 - Type-flow inference powers inferred-type inlay hints and local-variable hovers, seeded with engine object-field types.
 - Formatting (whole document, selection, and on-type) is whitespace-only and corruption-proof: it refuses files with syntax errors and re-checks its own output so it can never alter your tokens.
 - Code actions cover remove-duplicate-`#using`, add-missing-`#using`, Organize Imports, and **Generate ScriptDoc block** — a doc block for an undocumented function, with its parameters filled in and written in the dialect's own ScriptDoc form.

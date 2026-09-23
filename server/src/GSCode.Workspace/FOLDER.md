@@ -57,6 +57,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
   since it measures cold-index thread-time and a cold index removes nothing.
 - `Contributions` is the private holder for what one record contributes to all nine, built by
   `Contributions.Of(record)` outside the gate — the shape that keeps the per-file hashing off it.
+- `VisibleDeclaredNames(prefix, contextId)` answers the auto-import producer: the declared function
+  names beginning with a prefix, in files that context can see. It reads the DECLARATION INDEX's
+  keys — which are the distinct lowercase names — so its cost follows how many names share a prefix
+  rather than how many files exist, the same shape `VisibleLiterals` has. Only top-level functions
+  are in that index (`DeclarationIndex.KeysOf`), which is the right set: a method is reached through
+  an instance, never through an import.
 - The rule the indexes exist for: nothing a keystroke or a request pays may walk `AllRecords`. At
   50,000 files each walk that did became a per-request cost growing with the workspace — completion,
   one file's lint pass, CodeLens (PERF.md, the scale section). A new query that needs "every record
@@ -219,7 +225,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Completion/CompletionEntry.cs
 
-- `CompletionKind` + `CompletionEntry` — the LSP-free completion suggestion model.
+- `CompletionKind` + `CompletionEntry` — the LSP-free completion suggestion model. `ImportPath`
+  names the script an entry's symbol lives in when accepting it has to add an import first, and is
+  "" for every entry already in scope. A PATH rather than an edit: where a directive goes is a
+  question about the document, which the handler answers.
 
 ## Completion/GscKeywords.cs
 

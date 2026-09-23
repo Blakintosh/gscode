@@ -32,6 +32,12 @@ public sealed record ResolvedFunction(FunctionSymbol Function, ScriptRecord Reco
     }
 }
 
+/// <summary>
+/// A function this file could call, once it imported the script declaring it: the symbol, and the
+/// script-relative path the import directive would name.
+/// </summary>
+public readonly record struct UnimportedFunction(FunctionSymbol Function, string ImportPath);
+
 /// <summary>A resolved class with its declaring record.</summary>
 public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record)
 {
@@ -344,6 +350,107 @@ public static class DatabaseQueries
         }
 
         return [.. byName.Values];
+    }
+
+    /// <summary>
+    /// Functions whose name begins with <paramref name="prefix"/> and which this file CANNOT call
+    /// yet, paired with the script path an import would have to name.
+    ///
+    /// The set completion offers with the directive attached. Every other producer answers "what is
+    /// in scope here"; this one deliberately answers what is not, which is why it is the only query
+    /// here keyed by a typed prefix rather than by a name or a namespace.
+    ///
+    /// The prefix is not a convenience — it is what makes the query affordable and the list honest.
+    /// Statement scope already returns a median of 1,930 entries, and every function in a 50,000-file
+    /// workspace would swamp both the list and the editor's own scoring. It is matched against the
+    /// DECLARATION INDEX's keys, which are the distinct lowercase names, so the cost follows the
+    /// number of names that share a prefix rather than the number of files, and nothing here walks
+    /// the store.
+    ///
+    /// Reachability is decided by script path, not by namespace: a file is reachable when this file
+    /// links against it (<see cref="LinkedScriptPaths"/>) or IS it. That is deliberately the same
+    /// question in both dialect families — on BO3 an imported file's namespace is callable
+    /// qualified, and on a merge dialect an included file's functions are callable bare — and in
+    /// both, the fix for a function that is not reachable is one directive naming one file.
+    ///
+    /// Private functions are left out. Privacy is per namespace, and a file that has not imported
+    /// the declaring script is not in its namespace by any route that would make the call legal.
+    /// </summary>
+    /// <param name="limit">
+    /// The most candidates to return. The caller marks its list incomplete when this truncates, so
+    /// the editor re-asks as the word narrows rather than filtering a stale page client-side.
+    /// </param>
+    public static ImmutableArray<UnimportedFunction> UnimportedFunctions(
+        LanguageStore store,
+        string askingContextId,
+        string askingPath,
+        GSCode.Parser.ParseResult result,
+        string prefix,
+        int limit,
+        GameProfile? profile = null)
+    {
+        if ( prefix.Length == 0 || limit <= 0 )
+        {
+            return [];
+        }
+
+        GameProfile game = profile ?? GameProfile.Active;
+
+        HashSet<string> reachable = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( string linked in LinkedScriptPaths(result, game) )
+        {
+            reachable.Add(linked);
+        }
+
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
+        ImmutableArray<UnimportedFunction>.Builder found = ImmutableArray.CreateBuilder<UnimportedFunction>();
+
+        foreach ( string name in store.VisibleDeclaredNames(prefix.ToLowerInvariant(), askingContextId) )
+        {
+            foreach ( string declaringPath in store.FilesDeclaring(name) )
+            {
+                if ( string.Equals(declaringPath, normalizedAskingPath, StringComparison.OrdinalIgnoreCase) )
+                {
+                    continue;
+                }
+
+                if ( !store.TryGet(declaringPath, out ScriptRecord record)
+                    || !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+                {
+                    continue;
+                }
+
+                string importPath = RelativePathIndex.Normalize(record.RelativePath);
+                if ( importPath.Length == 0 || reachable.Contains(importPath) )
+                {
+                    continue;
+                }
+
+                // A raw file a mod overlay replaces is never loaded by the engine, so offering an
+                // import of it would offer a file the game does not read.
+                if ( record.ContextId != askingContextId && store.HasOverlayAt(importPath, askingContextId) )
+                {
+                    continue;
+                }
+
+                foreach ( FunctionSymbol function in record.Functions )
+                {
+                    if ( function.IsPrivate
+                        || !string.Equals(function.KeyName, name, StringComparison.Ordinal) )
+                    {
+                        continue;
+                    }
+
+                    found.Add(new UnimportedFunction(function, importPath));
+                    if ( found.Count >= limit )
+                    {
+                        return found.ToImmutable();
+                    }
+                }
+            }
+        }
+
+        return found.ToImmutable();
     }
 
     /// <summary>

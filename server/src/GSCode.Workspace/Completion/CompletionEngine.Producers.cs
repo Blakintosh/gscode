@@ -407,6 +407,57 @@ public sealed partial class CompletionEngine
     /// type is not known, and 155 of the 159 arrow calls in the stock scripts are that shape, so the
     /// wide list is the one that carries the feature.
     /// </summary>
+    /// <summary>
+    /// How much has to be typed before functions this file cannot call yet are offered.
+    ///
+    /// Not a comfort setting. Statement scope already returns a median of 1,930 entries, and the
+    /// candidates here come from the whole workspace rather than from what is in scope — so
+    /// offering them from the first character would bury the names that ARE in scope under names
+    /// that cost a directive, in the position where the user is most likely typing a local.
+    /// Three characters is the point where a name is being reached for rather than begun.
+    /// </summary>
+    private const int MinimumImportPrefix = 3;
+
+    /// <summary>
+    /// The most unimported candidates one list carries. A cap rather than a full answer because the
+    /// user picks from what is on screen — and because the handler marks the list incomplete when
+    /// this truncates, so the next keystroke re-asks with a narrower prefix instead of the editor
+    /// filtering a stale page.
+    /// </summary>
+    private const int MaximumImportCandidates = 50;
+
+    /// <summary>
+    /// Functions in files this one has not imported, offered with the directive they need.
+    ///
+    /// Skipped for any name already in the list: something in scope under that name is what the
+    /// user meant, and a second row that costs an import would be the same word twice.
+    /// </summary>
+    private void AddUnimportedFunctions(
+        ParseResult result,
+        string contextId,
+        GameProfile game,
+        string callSuffix,
+        bool parameterHints,
+        string typedWord,
+        HashSet<string> seenFunctions,
+        ImmutableArray<CompletionEntry>.Builder entries)
+    {
+        if ( typedWord.Length < MinimumImportPrefix )
+        {
+            return;
+        }
+
+        LanguageStore store = _database.StoreFor(result.Language);
+        foreach ( UnimportedFunction candidate in DatabaseQueries.UnimportedFunctions(
+            store, contextId, result.FilePath, result, typedWord, MaximumImportCandidates, game) )
+        {
+            if ( seenFunctions.Add(candidate.Function.KeyName) )
+            {
+                entries.Add(UnimportedFunctionEntry(candidate, game, callSuffix, parameterHints));
+            }
+        }
+    }
+
     private ImmutableArray<CompletionEntry> ArrowMethodCompletions(
         ParseResult result, string contextId, string? receiverClass, string callSuffix, bool parameterHints)
     {
@@ -687,9 +738,13 @@ public sealed partial class CompletionEngine
     /// so the two never disagree — and where it is not null it also names the parameters and locals
     /// that are in scope, which no other input to this method can answer.
     /// </param>
+    /// <param name="typedWord">
+    /// What has been typed of the word under the cursor, or "" when nothing has been or auto-import
+    /// is off. Only the unimported-function arm reads it — see <see cref="MinimumImportPrefix"/>.
+    /// </param>
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(
         ParseResult result, string contextId, int offset, Position position, FunctionSymbol? enclosingFunction,
-        string callSuffix, GameProfile game, bool parameterHints)
+        string callSuffix, GameProfile game, bool parameterHints, string typedWord = "")
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         bool insideFunction = enclosingFunction is not null;
@@ -987,6 +1042,8 @@ public sealed partial class CompletionEngine
                 }
             }
         }
+
+        AddUnimportedFunctions(result, contextId, game, callSuffix, parameterHints, typedWord, seenFunctions, entries);
 
         // Classes this file may name (for `new C()` and `C::`) — its own, plus those in the files
         // it #usings. The file's own come from the live extraction as well as the store, so a

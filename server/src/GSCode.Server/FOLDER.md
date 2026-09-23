@@ -263,6 +263,14 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   trigger characters `. : # & % \ / "` so completion re-fires where it matters (the `"` fires
   literal completion inside a string). Passes the completion.literals setting through to the engine.
 
+- `ImportEditFor(entry, result)` turns a `CompletionEntry.ImportPath` into the entry's
+  `additionalTextEdits` — one `#using`/`#include` line at `ImportEdits.InsertionPoint`, the same
+  helper the code actions write theirs with, so the two cannot spell one directive two ways. The
+  list comes back `isIncomplete` whenever anything in it needed an import: those candidates are
+  matched on the word typed so far and capped, so the page is true for that prefix only and the
+  editor has to re-ask rather than filter it client-side. Everything else in the list is
+  scope-derived and complete, which is why this is not simply always on.
+
 ## Handlers/SignatureHelpHandler.cs
 
 - Maps `SignatureEngine` results to LSP signature help; triggers on `(` and `,` (retrigger `,`).

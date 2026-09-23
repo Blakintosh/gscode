@@ -86,6 +86,14 @@ public enum CompletionKind
 /// undo that with FilterText. Delivered as <c>CompletionItem.labelDetails</c> where the client
 /// supports it, and appended to the label only as a fallback where it does not.
 /// </param>
+/// <param name="ImportPath">
+/// The script this entry's symbol lives in, when accepting it has to add an import first — and ""
+/// for every entry that is already in scope, which is all of them but one producer's.
+///
+/// A PATH rather than an edit: this layer is LSP-free, and where a directive goes in the file is a
+/// question about the document the handler is answering for, not about the suggestion. The handler
+/// turns it into the `additionalTextEdits` the protocol carries.
+/// </param>
 public sealed record CompletionEntry(
     string Label,
     CompletionKind Kind,
@@ -104,4 +112,5 @@ public sealed record CompletionEntry(
     // a second request that has only the row's Data to go on, so a row that does not say which of
     // the two it is gets whichever the NAME resolves to: the builtin row rendered
     // globallogic_spawn::spawnSpectator under a header reading "builtin".
-    bool IsBuiltin = false);
+    bool IsBuiltin = false,
+    string ImportPath = "");

@@ -327,6 +327,12 @@
 						"description": "Show macro parameter-name hints before the arguments of a #define invocation (e.g. IS_TRUE( __a: level.ready )). Off by default: macro parameters are named for the macro's body rather than for the caller.",
 						"scope": "window"
 					},
+					"gscode.completion.autoImport": {
+						"type": "boolean",
+						"default": true,
+						"description": "Offer functions from scripts this file has not imported yet, adding the #using (or #include) line when one is accepted. Only after three characters have been typed, so the names already in scope come first.",
+						"scope": "window"
+					},
 					"gscode.completion.literals": {
 						"type": "boolean",
 						"default": true,

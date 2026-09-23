@@ -33,6 +33,7 @@ public sealed class ServerSettings
         public bool InlayInferredTypes { get; init; } = true;
         public bool InlayMacroParameterNames { get; init; }
         public bool CompletionLiterals { get; init; } = true;
+        public bool CompletionAutoImport { get; init; } = true;
         public string CompletionFieldScope { get; init; } = "owner";
         public string CompletionCallPunctuation { get; init; } = "parensAndSemicolon";
         public bool CompletionParameterHints { get; init; } = true;
@@ -137,6 +138,16 @@ public sealed class ServerSettings
     }
 
     /// <summary>"owner" (default) or "all" — how widely assignment-derived fields are offered.</summary>
+    /// <summary>
+    /// Whether completion offers functions from files this one has not imported, inserting the
+    /// directive with them (the gscode.completion.autoImport setting).
+    /// </summary>
+    public bool CompletionAutoImport
+    {
+        get { return _current.CompletionAutoImport; }
+        set { _current = _current with { CompletionAutoImport = value }; }
+    }
+
     public string CompletionFieldScope
     {
         get { return _current.CompletionFieldScope; }
@@ -339,6 +350,9 @@ public sealed class ServerSettings
             CompletionLiterals = section.Value<bool?>("completion.literals")
                 ?? section["completion"]?.Value<bool?>("literals")
                 ?? current.CompletionLiterals,
+            CompletionAutoImport = section.Value<bool?>("completion.autoImport")
+                ?? section["completion"]?.Value<bool?>("autoImport")
+                ?? current.CompletionAutoImport,
             CompletionFieldScope = section.Value<string>("completion.fieldScope")
                 ?? section["completion"]?.Value<string>("fieldScope")
                 ?? current.CompletionFieldScope,

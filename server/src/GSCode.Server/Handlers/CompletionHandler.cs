@@ -10,6 +10,10 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using GSCode.Core;
+using GSCode.Parser;
+using GSCode.Parser.Syntax.Ast;
+using Position = GSCode.Core.Text.Position;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -116,6 +120,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
         }
 
         List<CompletionItem> items = [];
+        bool offeredAnImport = false;
+
         foreach ( CompletionEntry entry in _engine.Complete(
             target.Result,
             target.ContextId,
@@ -124,13 +130,20 @@ public sealed class CompletionHandler : CompletionHandlerBase
             FieldScopeFromSetting(_settings.CompletionFieldScope),
             CallPunctuationFromSetting(_settings.CompletionCallPunctuation),
             profile: null,
-            parameterHints: _settings.CompletionParameterHints) )
+            parameterHints: _settings.CompletionParameterHints,
+            autoImport: _settings.CompletionAutoImport) )
         {
             cancellationToken.ThrowIfCancellationRequested();
-            items.Add(ToItem(entry, request.TextDocument.Uri));
+            offeredAnImport |= entry.ImportPath.Length > 0;
+            items.Add(ToItem(entry, request.TextDocument.Uri, target.Result));
         }
 
-        return Task.FromResult(new CompletionList(items));
+        // Incomplete once anything in the list needs an import. Those candidates are matched on the
+        // word typed SO FAR and capped, so the answer is only true for that prefix: the editor must
+        // come back on the next keystroke rather than filter this page client-side, which would
+        // leave a narrower word showing whatever the wider one happened to reach first. Everything
+        // else in the list is scope-derived and complete, which is why this is not simply always on.
+        return Task.FromResult(new CompletionList(items, isIncomplete: offeredAnImport));
     }
 
     /// <summary>
@@ -311,7 +324,35 @@ public sealed class CompletionHandler : CompletionHandlerBase
         return new LabelParts(entry.Label + entry.LabelDetail, null, filterText ?? entry.Label);
     }
 
-    private CompletionItem ToItem(CompletionEntry entry, DocumentUri uri)
+    /// <summary>
+    /// The directive an entry needs before its insertion compiles, or null when it needs none.
+    ///
+    /// Built here rather than in the engine because WHERE it goes is a fact about this document —
+    /// after its last import of the same kind — and the completion engine deals in suggestions, not
+    /// in edits. <see cref="ImportEdits"/> is shared with the code actions so the two cannot write
+    /// the same directive two ways.
+    /// </summary>
+    private static TextEditContainer? ImportEditFor(CompletionEntry entry, ParseResult result)
+    {
+        if ( entry.ImportPath.Length == 0 )
+        {
+            return null;
+        }
+
+        bool namespaceStyle = GameProfile.Active.ImportStyle == ImportStyle.Namespace;
+        Position insertAt = namespaceStyle
+            ? ImportEdits.InsertionPoint<UsingNode>(result)
+            : ImportEdits.InsertionPoint<IncludeNode>(result);
+
+        string directive = namespaceStyle ? "#using " : "#include ";
+        return new TextEditContainer(new TextEdit
+        {
+            Range = new TextRange(insertAt, insertAt).ToLsp(),
+            NewText = directive + entry.ImportPath + ";\n",
+        });
+    }
+
+    private CompletionItem ToItem(CompletionEntry entry, DocumentUri uri, ParseResult result)
     {
         // Any tab stop, not just $0: directive snippets place the cursor at $1 first and leave
         // $0 for the end, so checking only for $0 would send them as literal text.
@@ -335,6 +376,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
             InsertTextFormat = isSnippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
             Command = entry.RetriggerCompletion ? s_retriggerCommand : null,
             Data = IsResolvable(entry.Kind) ? ResolveData(entry, uri) : null,
+            AdditionalTextEdits = ImportEditFor(entry, result),
         };
     }
 

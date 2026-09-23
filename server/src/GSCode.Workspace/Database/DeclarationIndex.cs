@@ -126,6 +126,26 @@ public sealed class DeclarationIndex
         return !_devOnlyByName.FilesFor(keyName).IsEmpty;
     }
 
+    /// <summary>
+    /// The declared names beginning with <paramref name="lowercasePrefix"/>, in a file
+    /// <paramref name="visible"/> accepts.
+    ///
+    /// The keys of this index ARE the names — lowercase, since that is what
+    /// <see cref="FunctionSymbol.KeyName"/> holds — so a prefix query costs one pass over the
+    /// distinct names rather than over the records declaring them, and the answer does not grow
+    /// with the size of the workspace the way a scan of every record would. The same shape
+    /// <c>VocabularyIndex</c> uses for literal and field completion.
+    ///
+    /// Only TOP-LEVEL functions are here (see <see cref="KeysOf"/>), which is the right set for the
+    /// one caller: a class method is reached through an instance, never through an import.
+    /// </summary>
+    public List<string> NamesStartingWith(string lowercasePrefix, Func<string, bool> visible)
+    {
+        List<string> names = [];
+        _byName.CollectKeys(key => key.StartsWith(lowercasePrefix, StringComparison.Ordinal), visible, names);
+        return names;
+    }
+
     /// <summary>Paths of the files declaring this key name in any namespace (snapshot).</summary>
     public ImmutableArray<string> FilesDeclaring(string keyName)
     {

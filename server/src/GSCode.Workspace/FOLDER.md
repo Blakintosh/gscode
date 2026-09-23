@@ -423,6 +423,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
   walk saw everything, since a rule may only assert a name is out of scope against a complete one.
   The direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
   completion offering too little is harmless where an Error is not.
+  `FunctionInIncludeScope` is that scope's answer for ONE name, for signature help, which asks per
+  keystroke inside an argument list and was building every function the scope offers in order to read
+  one. It decides shadowing per record rather than over the set, which is sound HERE and not in
+  `ApplyShadowing`'s general case because the scope has already dropped every record the asker cannot
+  see — what is left of the set rule is then exactly what `HasOverlayAt` answers alone.
+  `IncludeScopeLookupTests` keeps the full list as the reference implementation.
 - `LinkedScriptPaths(result, profile)` — the paths a file links against in whichever directive its
   dialect uses (`#using` where namespace-driven, `#include` where merging), and the ONE place that
   fork lives. Scoping callers want this rather than `ImportedScriptPaths`/`IncludedScriptPaths`,

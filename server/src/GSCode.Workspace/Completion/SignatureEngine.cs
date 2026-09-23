@@ -269,16 +269,13 @@ public sealed class SignatureEngine
         // already makes in CompletionEngine.Producers.cs.
         if ( !game.ResolvesByNamespace )
         {
-            foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInIncludeScope(
-                store, contextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result)) )
-            {
-                if ( string.Equals(function.KeyName, keyName, StringComparison.Ordinal) )
-                {
-                    return BuildSignature(function, null, activeParameter);
-                }
-            }
+            // The bounded lookup, not the whole scope: this runs on every keystroke inside an
+            // argument list (`,` is a retrigger character), and building every function the scope
+            // offers in order to read one of them is the cost, not the match.
+            FunctionSymbol? included = DatabaseQueries.FunctionInIncludeScope(
+                store, contextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result), keyName);
 
-            return null;
+            return included is null ? null : BuildSignature(included, null, activeParameter);
         }
 
         ImmutableArray<ResolvedFunction> functions = LookupUnqualified(result, store, contextId, keyName);

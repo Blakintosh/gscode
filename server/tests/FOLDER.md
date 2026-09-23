@@ -255,6 +255,8 @@ completion · `DeclarationIndexTests` the bare-name, `(namespace, name)` and dev
 edits and removals · `RelativePathIndexTests` · `VocabularyIndexTests` literals and fields, visible
 files only, never a macro body's · `BoundedLookupTests` `LookupFunctions`' per-record shadowing
 against the old two-pass rule, and that a capped answer is the front of the full one ·
+`IncludeScopeLookupTests` the one-name include-scope lookup against the whole-scope list, across an
+overlay that re-declares a name, one that drops it, and a sibling mod ·
 `DirectiveIndexTests`, `PathTreeIndexTests`, `QualifiedClassLookupTests`, `VisibleClassesTests` and
 `HeaderReferenceIndexTests` each keep the walk an index replaced as a reference and require its
 answer, across overlays, sibling mods, edits and removals ·

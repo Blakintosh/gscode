@@ -1094,6 +1094,65 @@ public static class DatabaseQueries
     /// be exactly right about scope is the one that reports an Error, and that one asks
     /// <see cref="IncludeClosure"/>.
     /// </summary>
+    /// <summary>
+    /// The ONE function an <c>#include</c> scope gives a bare name, or null when it gives none.
+    ///
+    /// <see cref="FunctionsInIncludeScope"/>'s answer for a single name, without building the
+    /// answer for every other name first. Signature help asks this on a merge dialect for every
+    /// keystroke inside an argument list — <c>,</c> is both a trigger and a retrigger character —
+    /// and it was building every function of the asking file and each file it includes, shadowing
+    /// the whole list and filling a dictionary from it, in order to read one entry. On CoD4 a file
+    /// that includes <c>maps\_utility</c> alone pays for 465 of them.
+    ///
+    /// It must agree with the full list exactly, and does so by making the same decision per record
+    /// rather than over the set. Shadowing can be decided that way HERE, though not in
+    /// <see cref="ApplyShadowing"/>'s general case, because this scope has already dropped every
+    /// record the asker cannot see: what is left of the set rule — a non-raw record at the same
+    /// relative path — is then exactly what <see cref="LanguageStore.HasOverlayAt"/> answers on its
+    /// own. <c>IncludeScopeLookupTests</c> holds the full list as the reference implementation and
+    /// requires the two to agree across overlays, sibling mods and the same name declared twice.
+    /// </summary>
+    public static FunctionSymbol? FunctionInIncludeScope(
+        LanguageStore store,
+        string askingContextId,
+        string askingPath,
+        ImmutableArray<string> includedPaths,
+        string keyName)
+    {
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
+        List<ScriptRecord> inScope = ScopeRecords(store, normalizedAskingPath, includedPaths);
+
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( ScriptRecord record in inScope )
+        {
+            if ( !visited.Add(record.Path) || !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            // The engine never loads a raw file an overlay replaces, so its declarations are not in
+            // scope however early they are reached. This is the per-record half of ApplyShadowing.
+            if ( record.ContextId == "raw"
+                && record.RelativePath.Length > 0
+                && store.HasOverlayAt(record.RelativePath, askingContextId) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                // FIRST wins, which is what the full list's dictionary does with TryAdd over the
+                // same records in the same order.
+                if ( string.Equals(function.KeyName, keyName, StringComparison.Ordinal) )
+                {
+                    return function;
+                }
+            }
+        }
+
+        return null;
+    }
+
     public static ImmutableArray<FunctionSymbol> FunctionsInIncludeScope(
         LanguageStore store,
         string askingContextId,

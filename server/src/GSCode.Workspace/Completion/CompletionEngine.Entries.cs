@@ -115,6 +115,10 @@ public sealed partial class CompletionEngine
     /// The dialect decides the opening: BO3 declares with the `function` keyword, while the merge
     /// dialects open with the bare name. The label stays "function" either way — it is what the
     /// user is looking for, not what gets inserted.
+    ///
+    /// It sorts as "func", so it heads the list over `funcauto` and `funcpriv`. The editor scores a
+    /// typed `func` the same against all three and breaks the tie on sort text. On the label alone,
+    /// `funcauto` came first, and `func` + Tab wrote an autoexec function instead of a plain one.
     /// </summary>
     private static CompletionEntry FunctionDeclarationSnippet(GameProfile game)
     {
@@ -125,7 +129,8 @@ public sealed partial class CompletionEngine
             CompletionKind.Snippet,
             "declaration",
             opening + "${1:name}()\n{\n\t$0\n}",
-            "Declares a function, with the caret on the name.");
+            "Declares a function, with the caret on the name.",
+            SortName: "func");
     }
 
     /// <summary>How much parameter text a label may carry before it is cut short.</summary>

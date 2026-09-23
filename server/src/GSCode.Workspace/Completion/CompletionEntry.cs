@@ -104,4 +104,8 @@ public sealed record CompletionEntry(
     // a second request that has only the row's Data to go on, so a row that does not say which of
     // the two it is gets whichever the NAME resolves to: the builtin row rendered
     // globallogic_spawn::spawnSpectator under a header reading "builtin".
-    bool IsBuiltin = false);
+    bool IsBuiltin = false,
+
+    // SortName: what the row sorts as within its tier, when that should not be its label. Empty
+    // means the label. Only the function declaration sets it — see FunctionDeclarationSnippet.
+    string SortName = "");

@@ -222,6 +222,23 @@ public class DialectCompletionTests
     }
 
     [Fact]
+    public void ThePlainFunctionDeclarationSortsAheadOfTheModifierSnippets()
+    {
+        // Reported: typing `func` and pressing Tab wrote `function autoexec`, because the editor
+        // scores `func` the same against all three labels and `funcauto` wins the tie
+        // alphabetically. The handler's sort text is built from the sort name, so this is the order
+        // the list shows them in.
+        ImmutableArray<CompletionEntry> entries = TopLevelCompletions(Bo3);
+        string[] order = entries
+            .Where(e => e.Label is "function" or "funcauto" or "funcpriv")
+            .OrderBy(e => e.SortName.Length > 0 ? e.SortName : e.Label, StringComparer.Ordinal)
+            .Select(e => e.Label)
+            .ToArray();
+
+        Assert.Equal(["function", "funcauto", "funcpriv"], order);
+    }
+
+    [Fact]
     public void TheImportSnippetFollowsTheDialect()
     {
         // CoD4 merges with #include and BO3 imports with #using; neither has the other's.

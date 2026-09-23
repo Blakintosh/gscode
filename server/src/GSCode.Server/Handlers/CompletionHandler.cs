@@ -398,7 +398,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// </summary>
     internal static string SortText(CompletionEntry entry)
     {
-        return SortTier(entry) + entry.Label.ToLowerInvariant();
+        string name = entry.SortName.Length > 0 ? entry.SortName : entry.Label;
+        return SortTier(entry) + name.ToLowerInvariant();
     }
 
     private static char SortTier(CompletionEntry entry)

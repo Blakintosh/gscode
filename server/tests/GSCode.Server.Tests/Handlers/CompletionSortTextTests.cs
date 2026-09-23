@@ -90,4 +90,18 @@ public class CompletionSortTextTests
         Assert.True(string.CompareOrdinal(
             Sort("Alpha", CompletionKind.Function), Sort("beta", CompletionKind.Function)) < 0);
     }
+
+    /// <summary>
+    /// A sort name stands in for the label within the tier: the function declaration sorts as
+    /// `func`, so a typed `func` heads the list with it rather than with `funcauto`.
+    /// </summary>
+    [Fact]
+    public void ASortNameReplacesTheLabelWithinItsTier()
+    {
+        string declaration = CompletionHandler.SortText(
+            new CompletionEntry("function", CompletionKind.Snippet, SortName: "func"));
+
+        Assert.True(string.CompareOrdinal(declaration, Sort("funcauto", CompletionKind.Snippet)) < 0);
+        Assert.True(string.CompareOrdinal(declaration, Sort("funcpriv", CompletionKind.Snippet)) < 0);
+    }
 }

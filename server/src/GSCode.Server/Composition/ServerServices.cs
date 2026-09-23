@@ -64,6 +64,8 @@ internal static class ServerServices
             .AddHandler<BuiltinAtHandler>()
             .AddHandler<HoverHandler>()
             .AddHandler<DefinitionHandler>()
+            .AddHandler<ImplementationHandler>()
+            .AddHandler<TypeDefinitionHandler>()
             .AddHandler<ReferencesHandler>()
             .AddHandler<DocumentHighlightHandler>()
             .AddHandler<DocumentLinkHandler>()

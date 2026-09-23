@@ -16,6 +16,11 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   `__FUNCTION__` and `__FILE__` hover where they are written; keyword-shaped macro names such as
   `DEFAULT` get the macro colour.
 - Organize Imports removes every unused `#using` in the file, not only the one under the cursor.
+- Hovering a script function, class or macro now shows where it is declared, as a link to that
+  file and line — the answer a macro's hover could not give before, since an `#insert`ed
+  `#define` lives in a header the file never names.
+- **Go to Implementations** on a class method lists the subclasses that override it, and
+  **Go to Type Definition** on a local jumps to the class it holds or the function it points at.
 - A status-bar warning when indexing fails, instead of a spinner that never stops.
 - The lints now see through macros: a private, dev-only, ambiguous or unresolved call that a macro
   expands to is reported at the invocation, and a missing `#using`/`#include` it needs is asked for.

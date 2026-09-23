@@ -175,6 +175,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   cursor is NOT on a classified reference, it renders a documented keyword/directive
   (`TryKeywordDocHover` over `KeywordDocs`: isdefined, notify, `#using`, …), then falls back to
   FlowTyper's `TryGetLocalTypeAt` to show `(local) name: type` for an inferred local variable.
+- `DefinitionLink(path, range)` puts a markdown link to the declaration under the signature of a
+  function, class or macro — a fenced `scripts\zm\_util.gsc:118` linked to `file:///…#L118,10`, the label
+  script-relative and fenced so a path's backslashes and underscores survive markdown, the target a
+  `#L<line>,<column>` fragment because that is how an editor is told to move the caret rather than
+  just open the file. The path is always the DECLARING one (`ResolvedFunction.DeclaringPath`,
+  `ResolvedClass.DeclaringPath`, a macro definition's `SourceFile`): a symbol reached through an
+  `#insert` has a header-true range, and pairing it with the including file's path points at
+  unrelated text. Builtins and keywords get none — the engine declares them — and neither does a
+  field, whose "definition" is every write that agrees rather than one place.
 
 ## Handlers/DefinitionHandler.cs
 
@@ -186,6 +195,29 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   `zm` copies of `_globallogic_utils`) both answered one key, so a ZM caller was offered the MP
   definition too. A PREFERENCE throughout: with nothing in scope the full set comes back, so a
   missing import still lands somewhere useful instead of dead-ending.
+
+## Handlers/ImplementationHandler.cs
+
+- Go-to-implementation for a class method: the methods that OVERRIDE it, found by walking
+  `ClassGraph.DirectChildren` down from the class that declares it and keeping every descendant
+  declaring the same method key. Descendants, not direct children — an override two levels down is
+  still an override — bounded by a visited set and `MaxDepth`, since a class cycle is a state the
+  workspace can be in (`ClassCycleLint` reports it) rather than one the walk may assume away.
+- Whether the name IS a method is answered by `MethodResolution.ResolveCall`, not by the syntax at
+  the cursor: a bare call inside the class writes no receiver.
+- Anything that is not a method returns null rather than the declaration. Falling back would
+  duplicate go-to-definition and hide the fact that the request did not apply.
+
+## Handlers/TypeDefinitionHandler.cs
+
+- Go-to-type-definition for a LOCAL: what the variable holds, from `FlowTyper.TryGetValueAt`.
+  Two values carry an identity a declaration can be found for — `ScrValue.InstanceClass` (produced
+  at one place, a `new Foo()`, and carried forward through the environment) and
+  `ScrValue.FunctionTarget` (`&foo`, a bare qualified name, a pointer dereference).
+- What it deliberately does not answer, both of which look like omissions: an ENTITY has no
+  declaration site at all, being an engine type described by the object-field data and declared in
+  no script; and a FIELD is not a local, since `TryGetValueAt` resolves through
+  `AstSearch.TryFindLocalContext`.
 
 ## Handlers/ReferencesHandler.cs
 

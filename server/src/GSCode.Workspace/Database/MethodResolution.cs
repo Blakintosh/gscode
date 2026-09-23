@@ -409,13 +409,19 @@ public static class MethodResolution
     /// calls, never a declaration, so <c>[[o_obj]]-&gt;play()</c> navigated to nothing while hover,
     /// which resolves by candidate rather than by key, answered correctly.
     /// </summary>
+    /// <param name="onlyPath">
+    /// See <see cref="DatabaseQueries.FindAllReferences"/>'s parameter of the same name. Passed
+    /// through the four collections below rather than applied to their union, so a same-file
+    /// question never reads another file's reference list.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesForCall(
         ScriptDatabase database,
         ImmutableArray<LanguageStore> stores,
         LanguageStore store,
         string askingContextId,
         SymbolKey key,
-        ReferenceKind referenceKind)
+        ReferenceKind referenceKind,
+        string onlyPath = "")
     {
         if ( key.Kind != SymbolKind.Function )
         {
@@ -425,7 +431,7 @@ public static class MethodResolution
         SymbolKey canonical = Canonicalize(store, askingContextId, key, referenceKind, key.Namespace ?? "");
         if ( canonical.OwnerClass is not null )
         {
-            return FindMethodReferences(database, stores, store, askingContextId, canonical);
+            return FindMethodReferences(database, stores, store, askingContextId, canonical, onlyPath);
         }
 
         if ( referenceKind != ReferenceKind.MethodCall )
@@ -446,7 +452,7 @@ public static class MethodResolution
         {
             foreach ( (ScriptRecord Record, ReferenceEntry Entry) hit in FindMethodReferences(
                 database, stores, store, askingContextId,
-                new SymbolKey(null, key.Name, SymbolKind.Function, declarer)) )
+                new SymbolKey(null, key.Name, SymbolKind.Function, declarer), onlyPath) )
             {
                 union[(hit.Record.Path, hit.Entry.Range)] = hit;
             }
@@ -462,12 +468,16 @@ public static class MethodResolution
     /// call site can name it. All four are needed for the CodeLens count and the peek list to be
     /// right — and, because they run through here together, for the two to agree.
     /// </summary>
+    /// <param name="onlyPath">
+    /// See <see cref="DatabaseQueries.FindAllReferences"/>'s parameter of the same name.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindMethodReferences(
         ScriptDatabase database,
         ImmutableArray<LanguageStore> stores,
         LanguageStore store,
         string askingContextId,
-        SymbolKey canonical)
+        SymbolKey canonical,
+        string onlyPath = "")
     {
         // Keyed by SITE, not by key: the four collections below overlap, and one call must not be
         // counted twice because it was reachable two ways.
@@ -476,7 +486,7 @@ public static class MethodResolution
         void Collect(SymbolKey key, Func<ReferenceEntry, bool> accept)
         {
             foreach ( (ScriptRecord Record, ReferenceEntry Entry) hit in
-                DatabaseQueries.FindAllReferences(database, stores, askingContextId, key) )
+                DatabaseQueries.FindAllReferences(database, stores, askingContextId, key, onlyPath: onlyPath) )
             {
                 if ( accept(hit.Entry) )
                 {

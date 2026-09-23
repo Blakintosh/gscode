@@ -237,11 +237,14 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/DocumentHighlightHandler.cs
 
 - Highlights every occurrence of the symbol under the cursor within the current file
-  (definition sites as Write, others as Read). Goes through `NavigationSupport.FindAllReferences` —
-  the same shared query find-references and the CodeLens count use — filtered to this file's own
-  path afterwards, rather than a raw key comparison over this file's own `Extraction.References`.
-  The raw comparison could not canonicalize a method key the way the shared query does, which is
-  exactly the kind of drift the shared query exists to prevent.
+  (definition sites as Write, others as Read). Goes through `NavigationSupport.FindReferencesInFile`
+  — the same shared query find-references and the CodeLens count use, ASKED for one file rather than
+  asked wide and filtered — instead of a raw key comparison over this file's own
+  `Extraction.References`. The raw comparison could not canonicalize a method key the way the shared
+  query does, which is exactly the kind of drift the shared query exists to prevent; filtering
+  afterwards kept that but built every location in the workspace to do it, 406,326 of them in bo3's
+  sampled requests at 50,000 files, on every cursor move. The narrowing is a parameter on the one
+  query, so the key derivation, the method union, the scoping and the shadow rule stay shared.
 - Locals take the same `LocalReferences` fallthrough, with assignments, loop bindings, `waittill`
   outputs and the parameter all highlighted as Write.
 

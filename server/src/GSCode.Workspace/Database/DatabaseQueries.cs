@@ -837,12 +837,20 @@ public static class DatabaseQueries
     /// raw file's references drop out when a visible overlay at the same relative path references
     /// the key at all, whether or not that overlay reaches the declaring file.
     /// </summary>
+    /// <param name="onlyPath">
+    /// When given, only this file's references are collected. Everything else is unchanged: the
+    /// reaching set is still built, because it is what decides whether this file contributes at
+    /// all, and the shadow test is already made per record here. What is skipped is READING every
+    /// other file's reference list — the part that costs, and the part a same-file question never
+    /// wanted. See <see cref="FindAllReferences"/>'s parameter of the same name.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesReaching(
         ImmutableArray<LanguageStore> stores,
         string askingContextId,
         SymbolKey key,
         string declaringRelativePath,
-        GameProfile? profile = null)
+        GameProfile? profile = null,
+        string onlyPath = "")
     {
         GameProfile game = profile ?? GameProfile.Active;
         string declaring = RelativePathIndex.Normalize(declaringRelativePath);
@@ -869,6 +877,11 @@ public static class DatabaseQueries
             HashSet<string> visited = new(StringComparer.Ordinal);
             foreach ( string path in walk )
             {
+                if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
+                {
+                    continue;
+                }
+
                 if ( !visited.Add(path) || !store.TryGet(path, out ScriptRecord record) )
                 {
                     continue;
@@ -1448,16 +1461,23 @@ public static class DatabaseQueries
     /// grounds that header counts are small next to script counts — true of a game, but a large
     /// workspace carries its own headers too, and the scan grew with it (PERF.md, the scale section).
     /// </summary>
+    /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindGshReferences(
         ScriptDatabase database,
         string askingContextId,
-        SymbolKey key)
+        SymbolKey key,
+        string onlyPath = "")
     {
         ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
         foreach ( string path in database.GshFilesReferencing(key) )
         {
+            if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
+            {
+                continue;
+            }
+
             if ( !database.TryGetGsh(path, out ScriptRecord record) )
             {
                 continue;
@@ -1505,12 +1525,26 @@ public static class DatabaseQueries
     /// <see cref="SymbolKind.Macro"/>, where the isolation between language worlds is never in
     /// question — a same-named FUNCTION in the other world is a different function regardless.
     /// </param>
+    /// <param name="onlyPath">
+    /// When given, only this file's references are collected — for a question that is same-file by
+    /// definition, such as document highlight, which used to run the whole workspace query and then
+    /// drop every entry outside the current file.
+    ///
+    /// The ANSWER is the same, and the shadow rule is what makes that non-obvious.
+    /// <see cref="ApplyShadowing"/> decides over the SET: a raw file's entries drop out when some
+    /// visible non-raw record at the same relative path is also in it. Narrowing the set would lose
+    /// that, so it is not narrowed — the same per-record test <see cref="FindReferencesReaching"/>
+    /// already makes is used instead, and it is the same rule rather than a near one: every record
+    /// <see cref="LanguageStore.FilesReferencing"/> returns references the key by construction, so
+    /// "an overlay is in the match set" and "an overlay references the key" are one statement.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         ScriptDatabase database,
         ImmutableArray<LanguageStore> stores,
         string askingContextId,
         SymbolKey key,
-        bool macroSpansLanguages = true)
+        bool macroSpansLanguages = true,
+        string onlyPath = "")
     {
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
@@ -1528,7 +1562,7 @@ public static class DatabaseQueries
 
         foreach ( LanguageStore store in scope )
         {
-            results.AddRange(FindReferences(store, askingContextId, key));
+            results.AddRange(FindReferences(store, askingContextId, key, onlyPath));
         }
 
         // A macro declared in a .gsh lives in the shared GSH store, which serves both languages,
@@ -1538,26 +1572,46 @@ public static class DatabaseQueries
         // explicit gate is about intent, not about a result this changes.
         if ( wideMacro )
         {
-            results.AddRange(FindGshReferences(database, askingContextId, key));
+            results.AddRange(FindGshReferences(database, askingContextId, key, onlyPath));
         }
 
         // Overlay shadowing again: a mod overlay and the raw copy it shadows can both declare (and
         // reference) the SAME key at the SAME script-relative path — the engine only ever loads the
         // overlay, but nothing upstream of here knows that, so both copies' entries are collected.
         // Without this, go-to-definition/find-references on such a key shows both, one of them dead.
-        return ApplyShadowing(results.ToImmutable(), static r => r.Record, static _ => "");
+        if ( onlyPath.Length == 0 )
+        {
+            return ApplyShadowing(results.ToImmutable(), static r => r.Record, static _ => "");
+        }
+
+        // Narrowed: the set ApplyShadowing would have read is gone, so the same question is asked
+        // of the store instead. See the onlyPath parameter for why the two are one rule.
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> narrowed = results.ToImmutable();
+        if ( narrowed.Length == 0 || narrowed[0].Record.ContextId != "raw" )
+        {
+            return narrowed;
+        }
+
+        return AnOverlayReferences(stores, askingContextId, narrowed[0].Record.RelativePath, key) ? [] : narrowed;
     }
 
+    /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferences(
         LanguageStore store,
         string askingContextId,
-        SymbolKey key)
+        SymbolKey key,
+        string onlyPath = "")
     {
         ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
         foreach ( string path in store.FilesReferencing(key) )
         {
+            if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
+            {
+                continue;
+            }
+
             if ( !store.TryGet(path, out ScriptRecord record) )
             {
                 continue;

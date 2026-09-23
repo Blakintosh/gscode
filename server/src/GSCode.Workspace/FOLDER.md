@@ -442,6 +442,14 @@ lints, `Completion/` and `Typing/` the information surfaces.
   as `FindAllReferences` applies it, BEFORE scoping: a raw file drops when a visible overlay at its
   exact path references the key at all. On cod4 at 50K this took a whole-file CodeLens from 707 ms
   to 3 ms; `ReferenceScopeCorpusTests` proves it identical over every stock declaration.
+  Both it and `FindAllReferences` take an `onlyPath`, for a question that is same-file by definition
+  (document highlight): the file list is still built, since it is what decides whether that file
+  contributes, but no other file's reference list is READ. `FindAllReferences` swaps `ApplyShadowing`
+  for the per-record test this one already makes when narrowed — the same rule, not a near one, since
+  every record `FilesReferencing` returns references the key by construction.
+  `SameFileReferenceTests` pins the overlay cases stock corpora have none of, and
+  `ReferenceScopeCorpusTests` proves the narrowed answer equals the filtered wide one over all 28,809
+  declarations of a real bo3 and cod4 index.
 - `PreferIncludeScope` and `ScopeToIncludeGraph` narrow definitions and references to what the asking
   file can reach, and neither is conditional on the dialect any more. A namespace does not pin a
   file — the `mp` and `zm` copies of a script share one `#namespace` — so a namespace-driven key

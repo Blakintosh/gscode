@@ -257,6 +257,8 @@ files only, never a macro body's · `BoundedLookupTests` `LookupFunctions`' per-
 against the old two-pass rule, and that a capped answer is the front of the full one ·
 `IncludeScopeLookupTests` the one-name include-scope lookup against the whole-scope list, across an
 overlay that re-declares a name, one that drops it, and a sibling mod ·
+`SameFileReferenceTests` asking the reference query for ONE file against asking it wide and keeping
+that file, across a mod overlay, a sibling mod and a file nothing references ·
 `DirectiveIndexTests`, `PathTreeIndexTests`, `QualifiedClassLookupTests`, `VisibleClassesTests` and
 `HeaderReferenceIndexTests` each keep the walk an index replaced as a reference and require its
 answer, across overlays, sibling mods, edits and removals ·
@@ -401,7 +403,7 @@ request · `RenameScopeTests` what may be renamed, drawn on ownership rather tha
 `RenameNameValidationTests` what a rename may rename TO · `MacroRenameAcrossLanguagesTests` a macro
 rename reaching both language worlds · `MacroReferenceScopeTests`, `DefinitionHandlerMacroScopeTests`
 two same-named macros in sibling `.gsc`/`.csc` files staying apart · `DocumentHighlightSameFileTests`
-highlight on the shared reference query · `CallHierarchyGroupingTests` one incoming entry per calling
+highlight on the shared reference query, asked for one file · `CallHierarchyGroupingTests` one incoming entry per calling
 FUNCTION · `ResolveForQueryTests` hierarchies for files not open · `NamespaceImportFixTests` the
 add-`#using` fix driven through the handler · `WorkspaceSymbolShadowingTests` · `KeywordHoverTests`,
 `BuiltinMacroHoverTests` (`__FUNCTION__`/`__FILE__` where written), `HoverInferenceReuseTests`

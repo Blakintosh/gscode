@@ -15,6 +15,11 @@ namespace GSCode.Server.Tests.Corpus;
 /// collecting every reference to the key and scoping afterwards. It has to return exactly what the
 /// old two steps did, so this asks both for every function declared anywhere in a real index —
 /// the question a CodeLens asks of each one — and requires the same references back.
+///
+/// The same pass also proves the SAME-FILE narrowing document highlight uses. That question runs
+/// the same query with a path, so the thing worth proving is that narrowing it returns exactly the
+/// entries filtering the wide answer would have kept — over every declaration a real workspace has,
+/// rather than over the handful a fixture can spell.
 /// </summary>
 [Trait("Category", "Corpus")]
 [Collection(GameProfileCollection.Name)]
@@ -67,6 +72,7 @@ public class ReferenceScopeCorpusTests
             int asked = 0;
             int references = 0;
             List<string> differing = [];
+            List<string> differingInFile = [];
 
             foreach ( LanguageStore store in new[] { database.Gsc, database.Csc } )
             {
@@ -98,19 +104,36 @@ public class ReferenceScopeCorpusTests
                         {
                             differing.Add($"{record.RelativePath} {function.Name}: {old.Length} vs {scoped.Length}");
                         }
+
+                        // The narrowing behind document highlight: asking for one file must equal
+                        // asking wide and keeping that file.
+                        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> inFile =
+                            DatabaseQueries.FindReferencesReaching(
+                                stores, record.ContextId, key, record.RelativePath, profile, record.Path);
+
+                        List<string> expectedInFile = Describe(
+                            [.. scoped.Where(hit => hit.Record.Path == record.Path)]);
+
+                        if ( !expectedInFile.SequenceEqual(Describe(inFile)) )
+                        {
+                            differingInFile.Add(
+                                $"{record.RelativePath} {function.Name}: {expectedInFile.Count} vs {inFile.Length}");
+                        }
                     }
                 }
             }
 
             _output.WriteLine(
-                $"{profile.ShortName}: {asked:N0} declarations, {references:N0} references, {differing.Count} differing");
-            foreach ( string line in differing.Take(20) )
+                $"{profile.ShortName}: {asked:N0} declarations, {references:N0} references, "
+                + $"{differing.Count} differing, {differingInFile.Count} differing same-file");
+            foreach ( string line in differing.Concat(differingInFile).Take(20) )
             {
                 _output.WriteLine("  " + line);
             }
 
             Assert.True(asked > 0, "The index produced no declarations, so nothing was compared.");
             Assert.Empty(differing);
+            Assert.Empty(differingInFile);
         }
         finally
         {

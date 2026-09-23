@@ -253,6 +253,27 @@ public sealed class NavigationSupport
     }
 
     /// <summary>
+    /// The same query, answered for ONE FILE — for a question that is same-file by definition.
+    ///
+    /// Document highlight is the caller. It has to run this query rather than read the document's
+    /// own <c>Extraction.References</c>, because a method hit is keyed by its OWNER at the cursor
+    /// and only <c>MethodResolution.Canonicalize</c> (inside the query) knows to widen that to the
+    /// declaring class — but everything the query then reads outside this file is thrown away. On
+    /// bo3 at 50,000 files the sampled reference requests return 406,326 locations (PERF.md, the
+    /// scale section), and highlight fires on every cursor move.
+    ///
+    /// Not a second implementation: the narrowing is a parameter on the one query, so the key
+    /// derivation, the method union, the reachability scoping and the shadow rule are literally the
+    /// same code. <c>SameFileReferenceTests</c> requires the two to agree.
+    /// </summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesInFile(
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+    {
+        return FindAllReferences(
+            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key), target.Path);
+    }
+
+    /// <summary>
     /// False when <paramref name="key"/> is a macro this file defines LOCALLY — no <c>#insert</c>
     /// involved — so <see cref="GSCode.Workspace.Database.DatabaseQueries.FindAllReferences"/> can
     /// be told not to widen it to both language stores. True for everything else, including a
@@ -297,9 +318,14 @@ public sealed class NavigationSupport
     /// to answer <see cref="MacroSpansLanguages"/> from, so it keeps the wide, always-correct-if-
     /// imprecise answer rather than guessing.
     /// </param>
+    /// <param name="onlyPath">
+    /// See <see cref="GSCode.Workspace.Database.DatabaseQueries.FindAllReferences"/>'s parameter of
+    /// the same name, and <see cref="FindReferencesInFile"/> for the caller it exists for.
+    /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         SymbolQueryContext target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call,
-        bool macroSpansLanguages = true)
+        bool macroSpansLanguages = true,
+        string onlyPath = "")
     {
         // A method is not reachable under one key the way a function is — inheritance, the
         // Class::method form and untyped arrow calls each name it differently — so it resolves to
@@ -308,11 +334,24 @@ public sealed class NavigationSupport
         // one query, so they cannot disagree.
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> methodReferences =
             MethodResolution.FindReferencesForCall(
-                _database, target.Stores, target.Store, target.ContextId, key, referenceKind);
+                _database, target.Stores, target.Store, target.ContextId, key, referenceKind, onlyPath);
 
         if ( methodReferences.Length > 0 )
         {
             return methodReferences;
+        }
+
+        // The branch above is chosen on whether the METHOD UNION found anything AT ALL, so a
+        // narrowed union that found nothing in this file cannot decide it: falling through here
+        // would answer a method's cursor from the function query, which is a different answer
+        // rather than a smaller one. Ask the union the question it actually decides on — and only
+        // here, which a cursor sitting on a reference inside this file rarely reaches, since the
+        // site under it is itself one of the entries the union collects.
+        if ( onlyPath.Length > 0
+            && MethodResolution.FindReferencesForCall(
+                _database, target.Stores, target.Store, target.ContextId, key, referenceKind).Length > 0 )
+        {
+            return [];
         }
 
         if ( key.Kind == SymbolKind.Function )
@@ -331,11 +370,13 @@ public sealed class NavigationSupport
         string declaring = DeclaringFile(target, key);
         if ( declaring.Length > 0 )
         {
-            return DatabaseQueries.FindReferencesReaching(target.Stores, target.ContextId, key, declaring);
+            return DatabaseQueries.FindReferencesReaching(
+                target.Stores, target.ContextId, key, declaring, onlyPath: onlyPath);
         }
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
-            DatabaseQueries.FindAllReferences(_database, target.Stores, target.ContextId, key, macroSpansLanguages);
+            DatabaseQueries.FindAllReferences(
+                _database, target.Stores, target.ContextId, key, macroSpansLanguages, onlyPath);
 
         return DatabaseQueries.ScopeToIncludeGraph(all, declaring);
     }

@@ -220,6 +220,47 @@ public class SqliteCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task WaitForIdle_DoesNotReturnUntilEveryQueuedWriteIsReadable()
+    {
+        // The contract the post-index settle step depends on: once this returns, what was enqueued
+        // is IN the database, not merely off the queue.
+        //
+        // It used to be decided by the channel's Count plus a flag the writer raised after taking a
+        // command, and the gap between those two steps was observable — queue empty, flag not yet
+        // set, so a poll landing there called it idle with a transaction still uncommitted. The
+        // symptom was a reader one commit behind: `CacheRowPruningTests` saw a pruned row still
+        // present at roughly one run in seven, and only under enough parallel load to widen the gap.
+        //
+        // A burst per round, because the bug needed the writer to be mid-take rather than idle.
+        await using SqliteCache cache = SqliteCache.Open(_dbPath, "id");
+
+        int written = 0;
+        for ( int round = 0; round < 5; round++ )
+        {
+            List<ScriptRecord> batch = [];
+            for ( int index = 0; index < 32; index++ )
+            {
+                batch.Add(SampleRecord($@"c:\ws\scripts\sample_{round}_{index}.gsc", (ulong)(written + index)));
+            }
+
+            Parallel.ForEach(batch, record => cache.Enqueue(record));
+            written += batch.Count;
+
+            await cache.WaitForIdleAsync(CancellationToken.None);
+
+            IReadOnlyDictionary<string, CachedEntry> stored = cache.LoadAll();
+            foreach ( ScriptRecord record in batch )
+            {
+                Assert.True(
+                    stored.ContainsKey(PathUtil.NormalizeAbsolute(record.Path)),
+                    $"round {round}: WaitForIdleAsync returned before {record.Path} was committed");
+            }
+        }
+
+        Assert.Equal(0, cache.DroppedWrites);
+    }
+
+    [Fact]
     public async Task AMixedBatch_KeepsEachRecordsOwnValues()
     {
         // The upsert and delete statements are built once per BATCH and reused, with only their

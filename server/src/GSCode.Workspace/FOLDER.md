@@ -535,12 +535,20 @@ lints, `Completion/` and `Typing/` the information surfaces.
   runs across every indexing core, and hands an unbounded channel the blob — a single background
   writer is left with only the SQL, coalescing batches into transactions; dirty records are skipped
   before paying for it), and
-  `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing).
+  `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing), and
+  `WaitForIdleAsync` (returns once every enqueued command has COMMITTED, not merely left the queue).
 - The channel used to be bounded at 4,096 with the writer doing the serializing: at 50,000 files it
   refused 82% of writes and the next "warm" start re-analysed four files in five. Unbounded now, so
-  a backlog costs memory (the compressed blobs, until written) rather than data; it is not marked
-  `SingleReader`, because that channel cannot report the `Count` `WaitForIdleAsync` needs.
-  `DroppedWrites` now counts only writes after `DisposeAsync`.
+  a backlog costs memory (the compressed blobs, until written) rather than data. `DroppedWrites`
+  now counts only writes after `DisposeAsync`.
+- `WaitForIdleAsync` waits on ONE counter of outstanding commands, incremented before a command
+  reaches the channel and decremented only after its transaction commits. It used to test the
+  channel's `Count` against a flag the writer raised after taking a command, and the gap between
+  those two steps was observable: queue empty, flag not yet set, so a poll landing there reported
+  idle with a write still in flight and the caller read a database one commit behind.
+  `CacheRowPruningTests` failed on it at roughly one run in seven, and only under enough parallel
+  load to widen the gap. The channel is therefore no longer marked `SingleReader` for `Count`'s
+  sake — nothing reads `Count` now.
 
 ## Indexing/WatchedFileUpdater.cs
 

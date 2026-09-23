@@ -30,8 +30,11 @@ public sealed class SqliteCache : IAsyncDisposable
     {
         _connection = connection;
         // Unbounded, deliberately — see Enqueue for why a bound here meant losing writes. NOT marked
-        // SingleReader even though there is one: the single-reader unbounded channel cannot report
-        // its Count, and WaitForIdleAsync needs it.
+        // SingleReader even though there is one: that was once required, because WaitForIdleAsync
+        // read this channel's Count and the single-reader unbounded channel cannot report it. It no
+        // longer reads Count — idleness is one counter of outstanding commands now — so the option
+        // is merely unused rather than unavailable. Turning it on is a throughput change with no
+        // measurement behind it, which is its own commit.
         _writes = Channel.CreateUnbounded<WriteCommand>();
         _writerLoop = Task.Run(ProcessWritesAsync);
     }
@@ -240,17 +243,32 @@ public sealed class SqliteCache : IAsyncDisposable
             record.ContentHash,
             RecordSerializer.Serialize(record));
 
-        if ( !_writes.Writer.TryWrite(command) )
-        {
-            Interlocked.Increment(ref _dropped);
-        }
+        Submit(command);
     }
 
     /// <summary>Queues a file removal.</summary>
     public void EnqueueDelete(string normalizedPath)
     {
-        if ( !_writes.Writer.TryWrite(new DeleteCommand(normalizedPath)) )
+        Submit(new DeleteCommand(normalizedPath));
+    }
+
+    /// <summary>
+    /// Hands one command to the writer, counting it as outstanding BEFORE it becomes visible to
+    /// the reader.
+    ///
+    /// The order is the whole point. <see cref="_pending"/> is incremented first, so there is no
+    /// instant in which a command is readable but uncounted — which is exactly the instant the old
+    /// idle test could observe. If the channel refuses the write (only possible once
+    /// <see cref="DisposeAsync"/> has closed it) the count is given back, because nothing will ever
+    /// process it.
+    /// </summary>
+    private void Submit(WriteCommand command)
+    {
+        Interlocked.Increment(ref _pending);
+
+        if ( !_writes.Writer.TryWrite(command) )
         {
+            Interlocked.Decrement(ref _pending);
             Interlocked.Increment(ref _dropped);
         }
     }
@@ -262,15 +280,28 @@ public sealed class SqliteCache : IAsyncDisposable
     /// a single writer, so the writer can still be going after IndexAsync returns — and compacting the heap while it works measures a moment that is about to
     /// be undone, which is exactly the "memory drops then climbs again" the server used to report.
     ///
-    /// Polling rather than a signal, deliberately: the alternative is a counter mutated by every
-    /// producer thread on the indexing hot path, and this is called once per index by one caller
-    /// that is already waiting.
+    /// Polling rather than a signal, deliberately: this is called once per index by one caller that
+    /// is already waiting, so a signal would buy nothing it can use.
+    ///
+    /// What it polls is ONE counter of outstanding commands, incremented before a command reaches
+    /// the channel and decremented only after its transaction has committed. It used to be the
+    /// channel's own Count plus a flag the writer raised, and that pair had a hole in it: the writer
+    /// takes a command OFF the channel — dropping Count to zero — and only then raises the flag, so
+    /// for that instant the queue looked empty and nothing looked busy. A poll landing there
+    /// returned "idle" with a write still in flight, and the caller read a database one commit
+    /// behind. `CacheRowPruningTests` caught it at roughly one run in seven, and only when other
+    /// tests were loading the thread pool enough to widen the gap.
+    ///
+    /// The counter is mutated by every producer, which the previous comment here rejected on hot-path
+    /// grounds. That cost is one `Interlocked.Increment` beside the channel's own bookkeeping in
+    /// `TryWrite`, which is already interlocked — the same order of cost, on a path that then
+    /// serializes and gzips a record.
     /// </summary>
     public async Task WaitForIdleAsync(CancellationToken cancellationToken)
     {
         while ( !cancellationToken.IsCancellationRequested )
         {
-            if ( _writes.Reader.Count == 0 && Volatile.Read(ref _writing) == 0 )
+            if ( Volatile.Read(ref _pending) == 0 )
             {
                 return;
             }
@@ -279,14 +310,16 @@ public sealed class SqliteCache : IAsyncDisposable
         }
     }
 
-    private int _writing;
+    /// <summary>
+    /// Commands handed to the writer that have not yet been committed — queued or in flight.
+    /// See <see cref="WaitForIdleAsync"/> for why in-flight has to be part of the same number.
+    /// </summary>
+    private int _pending;
 
     private async Task ProcessWritesAsync()
     {
         await foreach ( WriteCommand first in _writes.Reader.ReadAllAsync().ConfigureAwait(false) )
         {
-            Interlocked.Exchange(ref _writing, 1);
-
             // Coalesce whatever else is queued into one transaction for throughput.
             List<WriteCommand> batch = [first];
             while ( _writes.Reader.TryRead(out WriteCommand? next) )
@@ -313,7 +346,10 @@ public sealed class SqliteCache : IAsyncDisposable
             }
             finally
             {
-                Interlocked.Exchange(ref _writing, 0);
+                // After the transaction, not before: a waiter must not see zero until what it is
+                // waiting for is readable. In the `catch` above the batch is lost on purpose, and
+                // its count still has to come off or nothing would ever look idle again.
+                Interlocked.Add(ref _pending, -batch.Count);
             }
         }
     }

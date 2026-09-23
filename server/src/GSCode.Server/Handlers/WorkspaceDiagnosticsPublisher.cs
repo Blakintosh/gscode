@@ -129,7 +129,7 @@ public sealed class WorkspaceDiagnosticsPublisher
                 }
 
                 // The sync handler owns open documents, and publishes a richer set for them.
-                if ( _documents.TryGet(record.Path, out OpenDocument _) )
+                if ( _documents.IsOpen(record.Path) )
                 {
                     continue;
                 }

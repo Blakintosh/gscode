@@ -82,7 +82,7 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
             IndexOutcome outcome = await _indexer
                 .IndexAsync(
                     IndexingModeFor(_settings), NullIndexProgressListener.Instance, cancellationToken,
-                    reloadSnapshot: true, ownedByEditor: candidate => _documents.TryGet(candidate, out OpenDocument _))
+                    reloadSnapshot: true, ownedByEditor: _documents.IsOpen)
                 .ConfigureAwait(false);
 
             Log.Information(

@@ -32,15 +32,11 @@ public sealed class SelectionRangeHandler : SelectionRangeHandlerBase
 
     public override Task<Container<SelectionRange>?> Handle(SelectionRangeParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
+        if ( !_documents.TryAnalyzeFresh(
+            request.TextDocument.Uri.GetFileSystemPath(), cancellationToken, out OpenDocument _, out ParseResult result) )
         {
             return Task.FromResult<Container<SelectionRange>?>(null);
         }
-
-        // Freshened, not TryGetAnalyzed's cached snapshot — see DocumentSymbolHandler's comment on
-        // the same fix. Without it, a file opened while startup indexing is still running answers
-        // every expand-selection request with null until the next edit.
-        ParseResult result = _documents.AnalyzeIfStale(document, cancellationToken);
 
         ScriptNode root = result.Tree.Root;
         List<SelectionRange> results = [];

@@ -556,7 +556,17 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `TryGetAnalyzed(path, out document, out result)` — the document AND its latest completed
   analysis, false when either is missing. The cheap resolve: it answers only what the store knows,
   where the server's `NavigationSupport.Resolve` also builds the store, context id and declared
-  namespaces. Five handlers wrote the lookup-then-null-check by hand before this existed.
+  namespaces. Formatting is the caller.
+- `TryAnalyzeFresh(path, ct, out document, out result)` — the document and a parse of the text it
+  holds RIGHT NOW, re-analysing when the last one has been overtaken. What the handlers whose
+  client has no "ask again" need (document symbols, folding, selection ranges, semantic tokens,
+  code actions): a file opened during startup indexing has no published analysis yet, and a
+  debounced one describes text the user has already replaced. Five handlers wrote it out by hand,
+  each with its own copy of that reasoning.
+- `IsOpen(path)` — whether the editor's buffer owns this file, which is the question six callers
+  asked as a `TryGet` with a discarded out parameter. Anything that would read the file from disk
+  (the lint sweep, a watched-file re-index, the workspace diagnostics publisher) leaves an open
+  file to the live-analysis path.
 
 ## Resolution/ResolverInsertProvider.cs
 

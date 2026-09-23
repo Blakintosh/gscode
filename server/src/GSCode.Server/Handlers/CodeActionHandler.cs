@@ -69,15 +69,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
     public override Task<CommandOrCodeActionContainer?> Handle(CodeActionParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
+        if ( !_documents.TryAnalyzeFresh(
+            request.TextDocument.Uri.GetFileSystemPath(), cancellationToken, out OpenDocument document, out ParseResult result) )
         {
             return Task.FromResult<CommandOrCodeActionContainer?>(null);
         }
-
-        // Freshened, not TryGetAnalyzed's cached snapshot — see DocumentSymbolHandler's comment on
-        // the same fix. A file opened while startup indexing is still running otherwise offers no
-        // fixes at all until the next edit.
-        ParseResult result = _documents.AnalyzeIfStale(document, cancellationToken);
 
         TextRange selection = request.Range.ToCore();
         List<CommandOrCodeAction> actions = [];
@@ -401,7 +397,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             {
                 if ( element is UsingNode usingNode )
                 {
-                    paths.Add(StripExtension(PathUtil.NormalizeScriptPath(usingNode.Path)));
+                    paths.Add(ImportPathOf(usingNode.Path));
                 }
             }
 
@@ -656,7 +652,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         List<CodeAction> fixes = [];
         TextRange range = diagnostic.Range.ToCore();
         string name = TextAt(result, range);
-        if ( name.Length == 0 || !IsIdentifier(name) )
+        // The lexer's own rule: a stale diagnostic range against an edited buffer is how a fix
+        // would otherwise write a declaration out of something that is not a name.
+        if ( name.Length == 0 || !GscIdentifier.IsIdentifier(name) )
         {
             return fixes;
         }
@@ -714,7 +712,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            string usingPath = StripExtension(PathUtil.NormalizeScriptPath(resolved.Record.RelativePath));
+            string usingPath = ImportPathOf(resolved.Record.RelativePath);
 
             // One offer per namespace+file pair. The same namespace spread over several files is
             // normal, and each file is a genuinely different import.
@@ -779,7 +777,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         ParseResult result = context.Result;
         TextRange range = diagnostic.Range.ToCore();
         string name = TextAt(result, range);
-        if ( name.Length == 0 || !IsIdentifier(name) )
+        // The lexer's own rule: a stale diagnostic range against an edited buffer is how a fix
+        // would otherwise write a declaration out of something that is not a name.
+        if ( name.Length == 0 || !GscIdentifier.IsIdentifier(name) )
         {
             return fixes;
         }
@@ -802,7 +802,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            string includePath = StripExtension(PathUtil.NormalizeScriptPath(resolved.Record.RelativePath));
+            string includePath = ImportPathOf(resolved.Record.RelativePath);
             if ( !existingIncludes.Contains(includePath) )
             {
                 candidates.Add(includePath);
@@ -952,20 +952,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return result.Text.Text[start..end].Trim();
     }
 
-    /// <summary>
-    /// Whether the text is a bare identifier. Guards the create-function fix against ever writing a
-    /// declaration out of something that is not a name — a stale diagnostic range against an edited
-    /// buffer is the way that happens.
-    ///
-    /// Answered by the LEXER's rule rather than a local one. The copy that used to live here tested
-    /// <c>char.IsLetterOrDigit</c>, which is Unicode-wide and so accepted names the lexer would
-    /// split into two tokens, and it indexed <c>text[0]</c> without checking the text was not empty.
-    /// </summary>
-    private static bool IsIdentifier(string text)
-    {
-        return GscIdentifier.IsIdentifier(text);
-    }
-
     /// <summary>An import already made earlier in the file, and so removable.</summary>
     internal sealed record RedundantImport(string Path, string Directive, TextRange Range);
 
@@ -1023,24 +1009,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return duplicates;
     }
 
-    /// <summary>
-    /// Distinct #using paths that would make a qualified call in the selection resolvable but
-    /// aren't imported yet: for each qualified call, the script-relative path of a visible file
-    /// defining that function, minus the extension. Own-namespace calls and already-imported
-    /// files are skipped.
-    /// </summary>
-    internal static List<string> FindMissingUsings(
-        ParseResult result, LanguageStore store, string contextId, string askingPath, TextRange selection)
-    {
-        List<string> paths = [];
-        foreach ( MissingUsing site in FindMissingUsingSites(result, store, contextId, askingPath, selection) )
-        {
-            paths.Add(site.Path);
-        }
-
-        return paths;
-    }
-
     /// <summary>An import that would make one call site resolvable, and the site it belongs to.</summary>
     /// <param name="Range">
     /// The call's NAME range, which is also the range the NamespaceNotImported lint reports over —
@@ -1049,7 +1017,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// </param>
     internal sealed record MissingUsing(string Path, TextRange Range);
 
-    /// <inheritdoc cref="FindMissingUsings"/>
+    /// <summary>
+    /// The imports that would make the qualified calls in the selection resolvable but are not
+    /// there yet: for each such call, the script-relative path of a visible file defining that
+    /// function, minus the extension, paired with the call it answers. Own-namespace calls and
+    /// already-imported files are skipped.
+    /// </summary>
     internal static List<MissingUsing> FindMissingUsingSites(
         ParseResult result, LanguageStore store, string contextId, string askingPath, TextRange selection)
     {
@@ -1099,7 +1072,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                     continue;
                 }
 
-                string usingPath = StripExtension(PathUtil.NormalizeScriptPath(resolved.Record.RelativePath));
+                string usingPath = ImportPathOf(resolved.Record.RelativePath);
                 if ( existingUsings.Contains(usingPath) || !offered.Add(usingPath) )
                 {
                     continue;
@@ -1260,6 +1233,20 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     {
         return QuickFix(
             title, uri, edits, diagnostic is null ? null : new Container<LspDiagnostic>(diagnostic), preferred);
+    }
+
+    /// <summary>
+    /// A path in the form an import directive names a script in: normalized, and without the
+    /// language's own extension. Written once because the set built from the file's OWN directives
+    /// is compared against the ones built from a declaring record's relative path — two spellings
+    /// would offer an import the file already has.
+    ///
+    /// Not <c>RelativePathIndex.Normalize</c>, which strips ANY extension: only the server and
+    /// client script extensions come off here, since <c>#insert</c> names a header in full.
+    /// </summary>
+    private static string ImportPathOf(string path)
+    {
+        return StripExtension(PathUtil.NormalizeScriptPath(path));
     }
 
     private static string StripExtension(string path)

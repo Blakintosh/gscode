@@ -70,18 +70,11 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
 
     protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGet(identifier.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
-        {
-            return Task.CompletedTask;
-        }
-
-        // Freshened, not the last analysis to have finished. Analysis is debounced 250 ms behind
-        // the keystrokes, so LatestResult routinely describes text the client has already changed —
-        // and a token is a LINE, CHARACTER and LENGTH, so colouring computed against stale text
-        // lands on the wrong characters. It then looks correct again after the next edit, when a
-        // fresh analysis happens to have caught up, which is exactly how the desync presented.
-        ParseResult? result = _documents.AnalyzeIfStale(document, cancellationToken);
-        if ( result is null )
+        // Freshened rather than the last analysis to have finished: a token is a LINE, CHARACTER
+        // and LENGTH, so colouring computed against text the client has already changed lands on
+        // the wrong characters — see DocumentStore.TryAnalyzeFresh.
+        if ( !_documents.TryAnalyzeFresh(
+            identifier.TextDocument.Uri.GetFileSystemPath(), cancellationToken, out OpenDocument _, out ParseResult result) )
         {
             return Task.CompletedTask;
         }

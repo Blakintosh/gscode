@@ -31,6 +31,22 @@ public class CodeActionHandlerTests
 
     private static TextRange WholeFile => TextRange.FromCoordinates(0, 0, 1000, 0);
 
+    /// <summary>
+    /// The import paths the add-#using fix would offer over the whole file. The sites carry the
+    /// call each answers; these tests only ask which files would be imported.
+    /// </summary>
+    private static List<string> MissingUsingPaths(ParseResult asking, LanguageStore store, string askingPath)
+    {
+        List<string> paths = [];
+        foreach ( CodeActionHandler.MissingUsing site in CodeActionHandler.FindMissingUsingSites(
+            asking, store, "raw", askingPath, WholeFile) )
+        {
+            paths.Add(site.Path);
+        }
+
+        return paths;
+    }
+
     private static ScriptDatabase DatabaseWithUtil()
     {
         ScriptDatabase database = new();
@@ -116,7 +132,7 @@ public class CodeActionHandlerTests
         string askingPath = @"C:\bo3\share\raw\scripts\main.gsc";
         ParseResult asking = AnalyzeAt("#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
-        List<string> missing = CodeActionHandler.FindMissingUsings(asking, database.Gsc, "raw", askingPath, WholeFile);
+        List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
 
         Assert.Equal(new[] { "scripts\\util" }, missing);
     }
@@ -129,7 +145,7 @@ public class CodeActionHandlerTests
         ParseResult asking = AnalyzeAt(
             "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
-        List<string> missing = CodeActionHandler.FindMissingUsings(asking, database.Gsc, "raw", askingPath, WholeFile);
+        List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
 
         Assert.Empty(missing);
     }
@@ -141,7 +157,7 @@ public class CodeActionHandlerTests
         string askingPath = @"C:\bo3\share\raw\scripts\util_more.gsc";
         ParseResult asking = AnalyzeAt("#namespace util;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
-        List<string> missing = CodeActionHandler.FindMissingUsings(asking, database.Gsc, "raw", askingPath, WholeFile);
+        List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
 
         Assert.Empty(missing);
     }

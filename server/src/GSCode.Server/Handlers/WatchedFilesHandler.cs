@@ -65,7 +65,7 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
         // work or, with unsaved edits, quietly replace its record with older content.
         bool OwnedByEditor(string candidate)
         {
-            return _documents.TryGet(candidate, out OpenDocument _);
+            return _documents.IsOpen(candidate);
         }
 
         foreach ( FileEvent change in request.Changes )

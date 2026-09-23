@@ -78,9 +78,13 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
     private int _startedTotal = -1;
     private bool _startedSent;
 
+    /// <summary>The code-lens refresh request, through the seam the dependent refresher sends it by.</summary>
+    private readonly ICodeLensRefreshSink _codeLenses;
+
     public IndexProgressNotifier(ILanguageServerFacade server)
     {
         _server = server;
+        _codeLenses = new LanguageServerCodeLensRefreshSink(server);
     }
 
     /// <summary>Holds every notification until <paramref name="settled"/> completes.</summary>
@@ -265,15 +269,12 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
     /// function that has plenty. Nothing else invalidates them: the client re-requests on edit,
     /// which never covers a file the user is not looking at.
     ///
-    /// Fire-and-forget: a client that does not support it just errors, and a failed refresh is
-    /// cosmetic — the next edit re-requests anyway.
+    /// Through the same sink the dependent refresher uses, so the spec's request-not-notification
+    /// shape and its fire-and-forget fault handling are written once. A failed refresh is cosmetic:
+    /// the next edit re-requests anyway.
     /// </summary>
     private void RequestCodeLensRefresh()
     {
-        // A REQUEST per the spec, not a notification: the client answers with null. Not awaited,
-        // because Completed is called on the indexing path and must not block on the client.
-        _ = _server.SendRequest("workspace/codeLens/refresh")
-            .ReturningVoid(CancellationToken.None)
-            .ContinueWith(static _ => { }, TaskScheduler.Default);
+        _codeLenses.Request();
     }
 }

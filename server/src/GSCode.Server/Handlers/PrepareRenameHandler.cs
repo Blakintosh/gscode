@@ -20,17 +20,26 @@ public sealed class PrepareRenameHandler : IPrepareRenameHandler
     private readonly NavigationSupport _support;
     private readonly BuiltinApiSet _builtins;
     private readonly ObjectFields _objectFields;
+    private readonly TextDocumentSelector _selector;
 
-    public PrepareRenameHandler(NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields)
+    public PrepareRenameHandler(
+        NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields, TextDocumentSelector selector)
     {
         _support = support;
         _builtins = builtins;
         _objectFields = objectFields;
+        _selector = selector;
     }
 
+    /// <summary>
+    /// The same options its sibling registers, selector included. Leaving the selector out is not
+    /// the bug it looks like - VS Code fills a null one with the client's own document selector,
+    /// built from the same script globs - but one of the two rename handlers naming its scope and
+    /// the other not is a difference the next reader has to go and disprove.
+    /// </summary>
     public RenameRegistrationOptions GetRegistrationOptions(RenameCapability capability, ClientCapabilities clientCapabilities)
     {
-        return new RenameRegistrationOptions { PrepareProvider = true };
+        return new RenameRegistrationOptions { DocumentSelector = _selector, PrepareProvider = true };
     }
 
     public Task<RangeOrPlaceholderRange?> Handle(PrepareRenameParams request, CancellationToken cancellationToken)

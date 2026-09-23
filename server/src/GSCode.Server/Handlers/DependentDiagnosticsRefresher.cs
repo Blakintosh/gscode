@@ -142,11 +142,24 @@ public sealed class DependentDiagnosticsRefresher
     /// </param>
     public void Schedule(string originPath = "")
     {
+        Restart([originPath]);
+    }
+
+    /// <summary>
+    /// Adds origins to the waiting set and restarts the debounce: the pass in flight is cancelled
+    /// and a new one takes over everything waiting, including whatever the cancelled one had left.
+    /// </summary>
+    private void Restart(IReadOnlyCollection<string> origins)
+    {
         CancellationTokenSource pending = new();
 
         lock ( _gate )
         {
-            _origins.Add(originPath);
+            foreach ( string originPath in origins )
+            {
+                _origins.Add(originPath);
+            }
+
             _pending?.Cancel();
             _pending = pending;
         }
@@ -270,20 +283,7 @@ public sealed class DependentDiagnosticsRefresher
             return;
         }
 
-        CancellationTokenSource pending = new();
-
-        lock ( _gate )
-        {
-            foreach ( string originPath in outstanding )
-            {
-                _origins.Add(originPath);
-            }
-
-            _pending?.Cancel();
-            _pending = pending;
-        }
-
-        _ = RunAsync(pending.Token);
+        Restart(outstanding);
     }
 
     /// <summary>
@@ -440,7 +440,7 @@ public sealed class DependentDiagnosticsRefresher
                     continue;
                 }
 
-                if ( documents.TryGet(path, out OpenDocument _) )
+                if ( documents.IsOpen(path) )
                 {
                     continue;
                 }

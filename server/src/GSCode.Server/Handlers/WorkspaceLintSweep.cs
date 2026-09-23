@@ -121,7 +121,7 @@ public sealed class WorkspaceLintSweep
     {
         // An open document's buffer is the source of truth and already carries the richer,
         // live-analysis diagnostics; reading disk here would describe text the user has replaced.
-        if ( _documents.TryGet(record.Path, out OpenDocument _) )
+        if ( _documents.IsOpen(record.Path) )
         {
             return false;
         }

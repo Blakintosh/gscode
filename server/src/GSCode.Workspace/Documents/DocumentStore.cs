@@ -169,18 +169,65 @@ public sealed class DocumentStore
     }
 
     /// <summary>
+    /// Whether the editor has this file OPEN, which is the question "who owns this file's text".
+    /// An open buffer is the source of truth: it may hold unsaved edits, so anything that would
+    /// read the file from disk — a lint sweep, a watched-file re-index, the workspace diagnostics
+    /// publisher — has to leave it to the live-analysis path instead.
+    ///
+    /// Six callers each asked it as a <see cref="TryGet"/> with a discarded out parameter, which
+    /// reads as a lookup rather than as the ownership rule it is.
+    /// </summary>
+    public bool IsOpen(string path)
+    {
+        return _documents.ContainsKey(PathUtil.NormalizeAbsolute(path));
+    }
+
+    /// <summary>
+    /// An open document and a parse of the text it holds RIGHT NOW, re-analysing first when the
+    /// last one has been overtaken. False when the path is not open.
+    ///
+    /// The freshening is the point, and it is why this is not <see cref="TryGetAnalyzed"/>. A file
+    /// opened while the startup index is still running has its didOpen analysis queued behind the
+    /// indexer's own thread-pool work (see <c>TextSyncHandler.ScheduleImmediateAnalysis</c>), so a
+    /// request routinely arrives before ANY analysis has published. The cached snapshot is null
+    /// then, and for document symbols, folding and selection ranges the client has no "ask again":
+    /// the outline stayed empty until the next edit. Analysis is also debounced 250 ms behind the
+    /// keystrokes, so a cached parse describes text the user has already replaced — which for
+    /// semantic tokens lands the colouring on the wrong characters.
+    ///
+    /// Five handlers wrote this out for themselves, each with its own copy of that reasoning.
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// Reaches <see cref="AnalyzeIfStale"/>: this runs a full lex, preprocess, parse and extract on
+    /// the REQUEST thread, and every caller is a read path with no debounce in front of it.
+    /// </param>
+    public bool TryAnalyzeFresh(
+        string path, CancellationToken cancellationToken, out OpenDocument document, out ParseResult result)
+    {
+        if ( !TryGet(path, out document) )
+        {
+            result = null!;
+            return false;
+        }
+
+        result = AnalyzeIfStale(document, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
     /// An open document together with its latest completed analysis, or false when the path is not
     /// open or nothing has finished analysing it yet.
     ///
-    /// The pair rather than two steps, because no caller wants one without the other: five handlers
-    /// each wrote the lookup and the null check out by hand, which is five spellings of one
-    /// question. Reads <see cref="OpenDocument.Analysis"/> once, for the reason that property
-    /// exists — a separate <see cref="OpenDocument.LatestResult"/> read can straddle a publish and
-    /// hand back a parse from a different version than the one just found.
+    /// The pair rather than two steps, because no caller wants one without the other. Reads
+    /// <see cref="OpenDocument.Analysis"/> once, for the reason that property exists — a separate
+    /// <see cref="OpenDocument.LatestResult"/> read can straddle a publish and hand back a parse
+    /// from a different version than the one just found.
     ///
-    /// This is the CHEAP resolve, deliberately. It answers only what the store knows; anything
-    /// needing the database, the resolution context or a fresh parse goes through the server's
-    /// navigation support instead.
+    /// This is the CHEAP resolve, deliberately: it answers only what the store already has. A
+    /// caller that needs a parse of the CURRENT text wants <see cref="TryAnalyzeFresh"/>, and one
+    /// needing the database or the resolution context goes through the server's navigation
+    /// support. The handlers that used to read this now take the freshening path, and formatting
+    /// is the caller left.
     /// </summary>
     public bool TryGetAnalyzed(string path, out OpenDocument document, out ParseResult result)
     {

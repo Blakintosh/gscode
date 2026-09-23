@@ -162,7 +162,7 @@ internal sealed class StartupIndexRunner
                     System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
                     IndexOutcome outcome = await indexer.IndexAsync(
                         mode, notifier, _indexingLifetime.Token,
-                        ownedByEditor: candidate => documents.TryGet(candidate, out OpenDocument _));
+                        ownedByEditor: documents.IsOpen);
                     stopwatch.Stop();
                     // Split, because "indexing took 2.8s" hid which half was slow and the two
                     // have nothing to do with each other. Enumeration is serial and depends on

@@ -363,7 +363,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         }
 
         _diagnostics.Publish(document.Path, snapshot.Version, diagnostics);
-        CommitAndRefreshLenses(document, result);
+        CommitAndScheduleDependents(document, result);
 
         double elapsedMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;
 
@@ -400,14 +400,15 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// adding or removing a call left "N references" showing the old number until a reindex.
     ///
     /// The code-lens refresh the client needs on top of that is the fan-out's job rather than this
-    /// method's. It used to be sent from here, once per analysis, undebounced: typing a function's
+    /// method's, which is why the name says nothing about lenses. It used to be sent from here,
+    /// once per analysis, undebounced: typing a function's
     /// name changes the export signature on EVERY keystroke, so a client with lenses on re-requested
     /// them for every visible document about four times a second — and one such request measured
     /// 164 ms on the densest cod4 script (see HandlerCostTests). The refresher already coalesces
     /// exactly this event, over exactly this trigger, and it also covers the on-disk-change case
     /// this method could not see.
     /// </summary>
-    private void CommitAndRefreshLenses(OpenDocument document, ParseResult result)
+    private void CommitAndScheduleDependents(OpenDocument document, ParseResult result)
     {
         ResolutionContext context = _resolver.Current.GetContext(document.Path);
 

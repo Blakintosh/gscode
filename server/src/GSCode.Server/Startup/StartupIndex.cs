@@ -344,8 +344,18 @@ internal sealed class StartupIndexRunner
     // unfragmented, unreturned space that no ordinary collection gives back.
     //
     // Fragmentation was never the thing worth measuring. What the user sees is committed memory, and
-    // CompactOnce is the only thing that returns large-object pages to the OS. It runs once per index,
-    // so its cost is a one-off pause on a thread nobody is waiting on.
+    // CompactOnce is the only thing that returns large-object pages to the OS. It runs once per index.
+    //
+    // Its cost is a one-off pause, and the pause is NOT confined to this thread — the comment here
+    // said so for a while and it was wrong about who waits. Both collections below are
+    // `blocking: true` gen2s, which suspend every thread in the process, and the LSP connection is
+    // live by the time this runs (RunAsync returns as soon as the indexing task is launched). So a
+    // request arriving in that window waits for it: 1.8 s at 50,000 files, once, at the end of
+    // indexing (PERF.md, the scale section, which states this correctly).
+    //
+    // It still earns its place — it returned 446 MB on bo1, and the fragmentation gate that used to
+    // suppress it was the bug. Deferring it to the first idle moment is a separate decision that
+    // needs its own measurement, and is not made here.
     private static void Compact()
     {
         System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;

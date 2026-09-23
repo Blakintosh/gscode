@@ -13,7 +13,8 @@ namespace GSCode.Workspace.Cache;
 /// that enqueues them and a single background writer persists the blobs, so analysis threads
 /// never block on disk. Any version or
 /// server-identity mismatch wipes the cache on open — no migrations. Records are stored
-/// as gzipped JSON blobs; cold start loads them all and re-parses only stale files.
+/// as deflated binary blobs (see RecordSerializer); cold start loads them all and re-parses only
+/// stale files.
 /// </summary>
 public sealed class SqliteCache : IAsyncDisposable
 {
@@ -155,7 +156,7 @@ public sealed class SqliteCache : IAsyncDisposable
     /// Reads every cached entry (warm-restore input) WITHOUT deserializing any of them.
     ///
     /// This used to return finished records, which made it the whole cost of a warm start: one
-    /// thread inflating gzip and parsing JSON over every file's references and diagnostics, run to
+    /// thread inflating and reading records over every file's references and diagnostics, run to
     /// completion before <c>IndexAsync</c> was called at all. Measured back to back in one process,
     /// uninstrumented, that restore against a cold index of the same tree: bo3 1,509 ms against
     /// 390 ms, cod4 720 against 236, bo1 2,747 against 718. The analysis the cache exists to avoid
@@ -213,7 +214,7 @@ public sealed class SqliteCache : IAsyncDisposable
     /// refuses a write because the writer is behind.
     ///
     /// The channel used to be bounded at 4,096 and fed with <c>TryWrite</c>, and the writer did the
-    /// serializing — JSON into gzip, one record at a time on one thread — while every indexing thread
+    /// serializing — one record at a time on one thread — while every indexing thread
     /// produced records. On a stock corpus the backlog never reached the bound. At 50,000 files it
     /// refused 40,889 of them (see PERF.md's scale section), and the next start re-analysed four
     /// files in five while reporting itself warm.
@@ -295,7 +296,7 @@ public sealed class SqliteCache : IAsyncDisposable
     /// The counter is mutated by every producer, which the previous comment here rejected on hot-path
     /// grounds. That cost is one `Interlocked.Increment` beside the channel's own bookkeeping in
     /// `TryWrite`, which is already interlocked — the same order of cost, on a path that then
-    /// serializes and gzips a record.
+    /// serializes and compresses a record.
     /// </summary>
     public async Task WaitForIdleAsync(CancellationToken cancellationToken)
     {

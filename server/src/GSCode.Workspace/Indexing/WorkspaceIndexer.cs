@@ -146,7 +146,7 @@ public sealed class WorkspaceIndexer
     /// The blobs a warm start may restore from, held only for the duration of an indexing pass.
     ///
     /// It used to be set once and kept for the session, and this class is a singleton in the
-    /// server — so a bo3 workspace carried 21 MB of gzipped blobs, and a bo1 one 64 MB, for the
+    /// server — so a bo3 workspace carried 21 MB of compressed blobs, and a bo1 one 64 MB, for the
     /// whole run after the last file that could use them was indexed. Against a 400 MB
     /// steady-state budget that is worth reclaiming.
     ///
@@ -570,7 +570,7 @@ public sealed class WorkspaceIndexer
         //
         // The hash is checked BEFORE the record is materialised, which is the whole point of
         // holding blobs rather than records: a file that has changed costs one hash here and never
-        // pays the gzip inflation or the JSON parse behind it. On a genuinely warm start that saves
+        // pays the inflation or the record read behind it. On a genuinely warm start that saves
         // nothing, since every file matches — what it saves is doing all of that work serially at
         // startup, ahead of this loop, instead of on the loop's own threads.
         if ( allowRestore && _restored.TryGetValue(normalized, out CachedEntry? cached) )

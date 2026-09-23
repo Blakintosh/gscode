@@ -9,7 +9,7 @@ namespace GSCode.Workspace.Cache;
 ///
 /// The reason is that most of the cost of a warm start is that conversion, and a good deal of it is
 /// wasted. <see cref="SqliteCache.LoadAll"/> runs before the indexer knows which files are still
-/// current, so materialising every record there pays gzip inflation and a JSON parse for files that
+/// current, so materialising every record there pays the inflation and the record read for files that
 /// are about to be re-analysed anyway — and pays it on ONE thread, in front of an index that runs on
 /// all of them. Handing the indexer the blob instead moves both halves into its parallel per-file
 /// loop, behind the content-hash check that decides whether the record may be used at all.

@@ -433,6 +433,12 @@ public sealed class LanguageStore
         return _referenceIndex.FilesFor(key);
     }
 
+    /// <summary>Every function key in this store sharing a bare name. See <see cref="ReferenceIndex.KeysNamed"/>.</summary>
+    public List<SymbolKey> ReferenceKeysNamed(string name)
+    {
+        return _referenceIndex.KeysNamed(name);
+    }
+
     /// <summary>Class declarations and inheritance for this language world.</summary>
     public ClassGraph Classes
     {

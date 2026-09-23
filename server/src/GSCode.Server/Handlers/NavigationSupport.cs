@@ -1,3 +1,4 @@
+using GSCode.Workspace.Api;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using System.Collections.Immutable;
@@ -61,11 +62,26 @@ public sealed class NavigationSupport
     private readonly ScriptDatabase _database;
     private readonly ResolverHolder _resolver;
 
-    public NavigationSupport(DocumentStore documents, ScriptDatabase database, ResolverHolder resolver)
+    /// <summary>
+    /// The engine's own function library, for the one question the reference query cannot answer
+    /// from the database: whether a name nothing declares is a BUILTIN or merely unresolved. See
+    /// <see cref="IsBuiltinCall"/>.
+    ///
+    /// Optional because most fixtures construct this with no library and ask it nothing that needs
+    /// one. A null library disables the builtin widening only — every other answer is unchanged —
+    /// which is the right behaviour for a caller that has no engine data to compare against, since
+    /// widening on "nothing declares it" alone would group a typo in one namespace with the same
+    /// typo in another.
+    /// </summary>
+    private readonly BuiltinApiSet? _builtins;
+
+    public NavigationSupport(
+        DocumentStore documents, ScriptDatabase database, ResolverHolder resolver, BuiltinApiSet? builtins = null)
     {
         _documents = documents;
         _database = database;
         _resolver = resolver;
+        _builtins = builtins;
     }
 
     public ScriptDatabase Database
@@ -360,6 +376,18 @@ public sealed class NavigationSupport
                 target.Store, target.ContextId, key, referenceKind, key.Namespace ?? "");
         }
 
+        // A BUILTIN is not reachable under one key either, and for a different reason than a method:
+        // it has no declaration, so extraction keys each call site by the scope it was written in.
+        // Asked under the asking file's own namespace, the query therefore used to return only the
+        // sites that happened to share it — usually just this file. DatabaseQueries has the rule and
+        // the reason; this is where the decision belongs, in the one query every reference-shaped
+        // feature runs, so the list and the CodeLens count cannot disagree about it.
+        if ( IsBuiltinCall(target, key) )
+        {
+            return DatabaseQueries.FindBuiltinReferences(
+                _database, target.Stores, target.Store, target.ContextId, key.Name, onlyPath);
+        }
+
         // Narrowing happens HERE, in the one query both the CodeLens count and the peek list run,
         // so the number and the list cannot disagree. Scoping only the lens once produced a count of
         // 0 beside a list of 1,970.
@@ -402,6 +430,45 @@ public sealed class NavigationSupport
     /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
     /// recoverable and a confidently wrong narrow one is not.
     /// </summary>
+    /// <summary>
+    /// Whether this key names an engine function rather than a script one — the test that decides
+    /// whether the reference query is asked about a KEY or about a NAME.
+    ///
+    /// Both halves are needed. The library alone is not enough: a script may declare a function that
+    /// shares an engine name, and inside that namespace the call means the script's. "Nothing
+    /// declares it" alone is not enough either: that is also true of a typo, and widening a typo
+    /// across namespaces would group unrelated mistakes as one symbol.
+    /// </summary>
+    private bool IsBuiltinCall(SymbolQueryContext target, SymbolKey key)
+    {
+        if ( _builtins is null || key.Kind != SymbolKind.Function )
+        {
+            return false;
+        }
+
+        if ( _builtins.For(target.Language).Find(key.Name) is null )
+        {
+            return false;
+        }
+
+        if ( key.OwnerClass is not null )
+        {
+            return MethodResolution.FindDeclaringClass(
+                target.Store, target.ContextId, key.OwnerClass, key.Name) is null;
+        }
+
+        // The explicit `sys::` form on a namespace dialect: namespace-less by construction, and no
+        // script declaration can claim it. See DatabaseQueries.DeclaresKey, which makes the same
+        // call per candidate key.
+        if ( key.Namespace is null && GameProfile.Active.ResolvesByNamespace )
+        {
+            return true;
+        }
+
+        return DatabaseQueries.LookupFunctions(
+            target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true).Length == 0;
+    }
+
     private string DeclaringFile(SymbolQueryContext target, SymbolKey key)
     {
         if ( key.Kind != SymbolKind.Function )

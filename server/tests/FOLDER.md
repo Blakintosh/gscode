@@ -401,7 +401,9 @@ request · `OnTypeBlockScopeTests` · `UntitledDocumentTests` documents with no 
 `DocumentSymbolNamelessTests` a half-typed declaration, which used to fail the WHOLE outline
 request · `RenameScopeTests` what may be renamed, drawn on ownership rather than kind ·
 `RenameNameValidationTests` what a rename may rename TO · `MacroRenameAcrossLanguagesTests` a macro
-rename reaching both language worlds · `MacroReferenceScopeTests`, `DefinitionHandlerMacroScopeTests`
+rename reaching both language worlds · `BuiltinReferenceTests` a builtin found across every
+namespace, class and `sys::` form that calls it, and a script function sharing an engine name keeping
+its own · `MacroReferenceScopeTests`, `DefinitionHandlerMacroScopeTests`
 two same-named macros in sibling `.gsc`/`.csc` files staying apart · `DocumentHighlightSameFileTests`
 highlight on the shared reference query, asked for one file · `CallHierarchyGroupingTests` one incoming entry per calling
 FUNCTION · `ResolveForQueryTests` hierarchies for files not open · `NamespaceImportFixTests` the

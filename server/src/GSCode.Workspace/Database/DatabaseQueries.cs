@@ -1595,6 +1595,83 @@ public static class DatabaseQueries
         return AnOverlayReferences(stores, askingContextId, narrowed[0].Record.RelativePath, key) ? [] : narrowed;
     }
 
+    /// <summary>
+    /// Every call site of an ENGINE BUILTIN, which is not reachable under one key the way a script
+    /// function is.
+    ///
+    /// A builtin has no declaration, so extraction has nothing to key its call sites to and keys
+    /// each one by the scope it was WRITTEN in: `getentarray()` in `#namespace caller` is
+    /// `(caller, getentarray)`, the same call in `#namespace lib` is `(lib, getentarray)`, inside a
+    /// class it is keyed to the class, and `sys::getentarray()` is `(null, getentarray)`.
+    /// `SymbolExtractor.RecordCalleeReference` says so, and calls the builtin case "a query-time
+    /// concern" — this is that concern. Without it, find-references on a builtin returned only the
+    /// sites that happened to share the asking file's namespace, which on a namespace dialect is
+    /// usually just the file itself.
+    ///
+    /// **A key is included only when nothing DECLARES it**, applied per key rather than once. A name
+    /// can be both an engine function and a script function in some namespace — and where a script
+    /// declares it, those call sites mean that script function and belong to a different answer.
+    /// Merge dialects need no special case: they key every unqualified call `(null, name)` already,
+    /// so the union is the single key they were already using.
+    /// </summary>
+    /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindBuiltinReferences(
+        ScriptDatabase database,
+        ImmutableArray<LanguageStore> stores,
+        LanguageStore store,
+        string askingContextId,
+        string name,
+        string onlyPath = "",
+        GameProfile? profile = null)
+    {
+        GameProfile game = profile ?? GameProfile.Active;
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        HashSet<SymbolKey> asked = [];
+        foreach ( LanguageStore keyStore in stores )
+        {
+            foreach ( SymbolKey key in keyStore.ReferenceKeysNamed(name) )
+            {
+                if ( !asked.Add(key) || DeclaresKey(store, askingContextId, key, game) )
+                {
+                    continue;
+                }
+
+                results.AddRange(FindAllReferences(database, stores, askingContextId, key, onlyPath: onlyPath));
+            }
+        }
+
+        return results.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether a SCRIPT declares this exact function key, visibly from the asking context — the test
+    /// that separates a call meaning the engine's function from one meaning a script's.
+    /// </summary>
+    private static bool DeclaresKey(
+        LanguageStore store, string askingContextId, SymbolKey key, GameProfile game)
+    {
+        if ( key.OwnerClass is not null )
+        {
+            return MethodResolution.FindDeclaringClass(store, askingContextId, key.OwnerClass, key.Name) is not null;
+        }
+
+        // On a namespace dialect a namespace-less function key is the EXPLICIT builtin form,
+        // `sys::name` — `RecordCalleeReference` drops the qualifier precisely because builtins are
+        // namespace-less. No script declaration can claim it, and asking the question below would
+        // hand it to any namespace that happens to declare the name: without this, a workspace
+        // where one file declares `getentarray()` hid every `sys::getentarray()` in the rest of it.
+        if ( key.Namespace is null && game.ResolvesByNamespace )
+        {
+            return false;
+        }
+
+        return LookupFunctions(
+            store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true).Length > 0;
+    }
+
     /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferences(
         LanguageStore store,

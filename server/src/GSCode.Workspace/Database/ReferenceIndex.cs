@@ -45,4 +45,25 @@ public sealed class ReferenceIndex
     {
         return _index.FilesFor(key);
     }
+
+    /// <summary>
+    /// Every FUNCTION key sharing a bare name, whatever namespace or owning class it carries.
+    ///
+    /// For the one question that is about a name rather than about a key: an engine builtin has no
+    /// declaration, so its call sites are keyed by whatever scope each was WRITTEN in — the file's
+    /// namespace, the enclosing class, or nothing at all for `sys::`. Reading the index's KEY SET
+    /// rather than its records keeps that bounded by how many distinct scopes mention the name, not
+    /// by how many files exist; it is the shape `DeclarationIndex.NamesStartingWith` already uses
+    /// for completion.
+    /// </summary>
+    public List<SymbolKey> KeysNamed(string name)
+    {
+        List<SymbolKey> keys = [];
+        _index.CollectKeys(
+            key => key.Kind == SymbolKind.Function && string.Equals(key.Name, name, StringComparison.Ordinal),
+            static _ => true,
+            keys);
+
+        return keys;
+    }
 }

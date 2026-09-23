@@ -139,6 +139,16 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   none". A record already states its context id and declared namespaces, so the fallback costs no
   resolver call and no re-parse; nothing a hierarchy asks needs a syntax tree. `FindAllReferences`
   takes either.
+- `IsBuiltinCall` + the builtin arm of `FindAllReferences` — a BUILTIN is not reachable under one key
+  either, for a different reason than a method: it has no declaration, so extraction keys each call
+  site by the scope it was WRITTEN in, and asking under the asking file's own namespace returned only
+  the sites sharing it. Decided here, in the one query every reference-shaped feature runs, so the
+  list and the CodeLens count cannot disagree. It takes BOTH halves: the engine library (a name
+  nothing declares may simply be a typo, and widening a typo across namespaces would group unrelated
+  mistakes) and "nothing declares this key" (a script may declare a function sharing an engine name,
+  and inside that namespace the call means the script's). The `BuiltinApiSet` is optional on the
+  constructor — a fixture with no engine data disables this widening only, which is the correct
+  answer for a caller that cannot tell a builtin from a typo.
 - Both overloads take a `CancellationToken`, and it is REQUIRED rather than defaulted. `ResolveFresh`
   runs a full lex, preprocess, parse and extract on the request thread, and every caller of it is a
   read path with no debounce in front of it, so a request the client had already cancelled used to

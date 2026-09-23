@@ -167,7 +167,8 @@ internal static class ServerServices
         services.AddSingleton(provider => new NavigationSupport(
             provider.GetRequiredService<DocumentStore>(),
             provider.GetRequiredService<ScriptDatabase>(),
-            provider.GetRequiredService<ResolverHolder>()));
+            provider.GetRequiredService<ResolverHolder>(),
+            provider.GetRequiredService<BuiltinApiSet>()));
         services.AddSingleton(provider => new CompletionEngine(
             provider.GetRequiredService<ScriptDatabase>(),
             provider.GetRequiredService<BuiltinApiSet>(),

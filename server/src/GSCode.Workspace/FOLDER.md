@@ -110,6 +110,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `sealed class ReferenceIndex` — the inverted key→files index. `KeysOf` turns a record's
   reference list into keys outside the caller's write gate; the storage and the diff come from
   `PackedInvertedIndex<SymbolKey>`. Exact ranges come from scanning the named files' reference lists.
+  `KeysNamed(name)` answers the one question that is about a NAME rather than a key — an engine
+  builtin, whose call sites are keyed by whatever scope each was written in — by reading the index's
+  KEY SET, so it stays bounded by how many distinct scopes mention the name rather than by how many
+  files exist. Same shape `DeclarationIndex.NamesStartingWith` uses for completion.
 
 ## Database/DeclarationIndex.cs
 

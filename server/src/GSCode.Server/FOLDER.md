@@ -371,10 +371,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   two families is on — the macro pass reads the preprocessor's invocation list and needs no flow
   analysis. ResolveProvider is false, so the resolve handler is a passthrough.
 
-  Parameter names come from four callee forms. A bare name and a `ns::fn` are answered from the
-  SYNTAX, through `UnqualifiedParameterNames` (script functions in the file's namespaces, else
-  builtins; a method first inside a class body) and `QualifiedParameterNames` (namespace first,
-  then the qualifier as a class name). The two indirect forms are answered from the flow pass
+  Parameter names come from five callee forms. A bare name, a `ns::fn` and the merge dialects'
+  `maps\_utility::fn` are answered from the SYNTAX, through `UnqualifiedParameterNames` (which asks
+  `CallResolution.UnqualifiedFunction` — the include scope on a merge dialect, the declared
+  namespaces on BO3 — then falls back to builtins; a method first inside a class body),
+  `QualifiedParameterNames` (namespace first, then the qualifier as a class name) and
+  `PathQualifiedParameterNames` (`CallResolution.PathQualifiedFunction`, scoped to the file the path
+  names). The two indirect forms are answered from the flow pass
   instead, because their callee is a VALUE and the syntax only names a local: `[[ ptr ]]( … )`
   reads the `ScrFunctionRef` the pointer carries, and `[[ obj ]]->method( … )` reads the object's
   `InstanceClass`. Both showed nothing at all before, which on a BO3 script is most of the
@@ -389,6 +392,20 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   found by scanning the file text after it, through the same
   `MacroExpansionPreview.ArgumentSpansFollowing` the macro hover reads, so a hint can never name
   an argument the hover splits differently.
+
+  Three rules decide which hints come OUT, and all three exist because the obvious version was
+  wrong. Every hint goes through `AddHint`, which drops a label already emitted at that position:
+  a macro naming its parameter twice splices the same argument tokens twice, so the tree holds two
+  calls at one range, and a nested invocation inside a `#define` body is re-recorded on every
+  expansion of the outer macro. The window is tested against the position the LABEL goes at, not
+  against the construct that owns it — testing the call's start dropped every label of a
+  multi-line argument list whose callee sat above the viewport. And an argument that already spells
+  its parameter's name is left unlabelled, bare identifiers only.
+
+  `CollectCalls` takes the window and prunes as it descends (a parser range spans everything its
+  node contains; a node with an EMPTY range is descended into anyway, since error recovery is
+  normal here), and resolution is memoised per request by (enclosing class, qualifier, name). Both
+  are per-frame costs: the client sends one request per visible range.
 
 ## Handlers/DocumentFormattingHandler.cs
 

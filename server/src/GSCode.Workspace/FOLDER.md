@@ -144,6 +144,22 @@ lints, `Completion/` and `Typing/` the information surfaces.
   Unifying all three would take a flag to tell the two shapes apart, which is the sign they are not
   one shape.
 
+## Database/CallResolution.cs
+
+- `static CallResolution` — which function a WRITTEN call names, shared by signature help and the
+  parameter-name inlay hints. `EnclosingClassAt`, `UnqualifiedFunction` (the
+  `ResolvesByNamespace` split: `FunctionInIncludeScope` on the merge dialects, the declared-namespace
+  loop on BO3) and `PathQualifiedFunction` (`maps\_utility::name`, scoped to the file the path names
+  by asking with an empty asking path). Builtins are NOT consulted here: the two callers present an
+  engine function differently enough that each keeps its own fallback.
+- It exists because the two had a resolver each and one of them never got the merge-dialect rule, so
+  inlay hints answered only for the asking file's own functions on four of the five games. What stays
+  separate is what genuinely differs: signature help is token-driven and works before there is a
+  tree, the hints walk the tree, and each builds a different answer from the same symbol.
+- One disagreement is left and documented at all three sites rather than settled by refactor:
+  `Foo::bar()` where `Foo` is both a namespace and a class resolves class-first in signature help and
+  namespace-first in the hints. BO3 ships three such names.
+
 ## Database/FunctionLookupCache.cs
 
 - `sealed class FunctionLookupCache` — a memo over `LookupFunctions` for the span of ONE file's

@@ -224,7 +224,7 @@ public sealed class SignatureEngine
         // happens to sit in, so resolving it through the enclosing class would answer with whichever
         // class the cursor is inside and show that one's parameter names. Only `[[self]]->` names
         // the enclosing class; every other receiver is untyped and takes the by-name candidates.
-        string? enclosingClass = EnclosingClassAt(result, position);
+        string? enclosingClass = CallResolution.EnclosingClassAt(result, position);
 
         if ( arrow != ArrowReceiver.None )
         {
@@ -261,30 +261,16 @@ public sealed class SignatureEngine
             return qualified.Length == 0 ? null : BuildSignature(qualified[0].Function, qualified[0].OwnerClass, activeParameter);
         }
 
-        // A merge dialect (#include: CoD4/WaW/MW2/BO1) has no #namespace, so SymbolExtractor
-        // defaults every function's namespace to its FILE NAME STEM — a resolution fallback that
-        // names no scope anybody wrote. Asking by declared (stem) namespace here, as the namespace
-        // dialect does below, would miss every function reached only through #include, which is how
-        // these games bring another file's functions into scope. Mirrors the split completion
-        // already makes in CompletionEngine.Producers.cs.
-        if ( !game.ResolvesByNamespace )
-        {
-            // The bounded lookup, not the whole scope: this runs on every keystroke inside an
-            // argument list (`,` is a retrigger character), and building every function the scope
-            // offers in order to read one of them is the cost, not the match.
-            FunctionSymbol? included = DatabaseQueries.FunctionInIncludeScope(
-                store, contextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result), keyName);
+        // Shared with the parameter-name inlay hints, which ask the same question about the same
+        // call and used to answer it with a second copy of this — one that had never been given
+        // the merge-dialect half, and was silent on every cross-file call on four of the five games.
+        // See CallResolution for the split and why it exists.
+        //
+        // A function found by namespace carries no owner class — only a method lookup sets one — so
+        // nothing is lost by taking the symbol rather than the ResolvedFunction here.
+        FunctionSymbol? script = CallResolution.UnqualifiedFunction(store, contextId, result, keyName, game);
 
-            return included is null ? null : BuildSignature(included, null, activeParameter);
-        }
-
-        ImmutableArray<ResolvedFunction> functions = LookupUnqualified(result, store, contextId, keyName);
-        if ( functions.Length == 0 )
-        {
-            return null;
-        }
-
-        return BuildSignature(functions[0].Function, functions[0].OwnerClass, activeParameter);
+        return script is null ? null : BuildSignature(script, null, activeParameter);
     }
 
     /// <summary>Whether the call being helped is an arrow call, and whether its receiver is <c>self</c>.</summary>
@@ -409,23 +395,6 @@ public sealed class SignatureEngine
         return MethodResolution.LookupMethods(store, contextId, canonical.OwnerClass, canonical.Name);
     }
 
-    /// <summary>
-    /// The class whose body contains this offset, by range containment over the file's own classes.
-    /// There are at most a handful per file, so this stays cheaper than any index would be.
-    /// </summary>
-    private static string? EnclosingClassAt(ParseResult result, Position position)
-    {
-        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
-        {
-            if ( classSymbol.FullRange.Contains(position) )
-            {
-                return classSymbol.KeyName;
-            }
-        }
-
-        return null;
-    }
-
     private SignatureResult BuildSignature(FunctionSymbol function, ClassSymbol? ownerClass, int activeParameter)
     {
         ImmutableArray<SignatureParameter>.Builder parameters = ImmutableArray.CreateBuilder<SignatureParameter>();
@@ -446,25 +415,6 @@ public sealed class SignatureEngine
             parameters.ToImmutable(),
             ClampActive(activeParameter, parameters.Count),
             signatureLabel);
-    }
-
-    private ImmutableArray<ResolvedFunction> LookupUnqualified(ParseResult result, LanguageStore store, string contextId, string keyName)
-    {
-        // Try each namespace the file participates in. Hoisted out of the loop: it was rebuilt on
-        // every iteration, and the spans it was read from included a phantom whose lookup scanned
-        // the whole store to return nothing.
-        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
-
-        foreach ( string declared in askingNamespaces )
-        {
-            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, declared, keyName, askingNamespaces: askingNamespaces);
-            if ( found.Length > 0 )
-            {
-                return found;
-            }
-        }
-
-        return [];
     }
 
     private static SignatureResult BuildBuiltinSignature(BuiltinFunction builtin, int activeParameter)

@@ -567,6 +567,13 @@ shape rather than re-deriving it.
   the window and prunes as it descends, and resolution is memoised per request (PERF.md). The
   discard-afterwards was also a correctness bug — it tested the CALL's start, so a multi-line
   argument list below the top of the viewport lost every label.
+- **`Foo::bar()` where `Foo` is both a namespace and a class resolves differently in signature
+  help and in inlay hints.** Signature help tries the class first, the hints try the namespace
+  first, and each says so where it does it. `CallResolution` shares everything else the two ask
+  about a call site; this one was left rather than settled by a refactor, because either order
+  changes a shipped answer. Measured on BO3: 3 names collide (`phalanx`, `robotphalanx`,
+  `throttle`) against 427 namespaces and 37 classes, so the decision is cheap to make and cheap to
+  defer — but it is a decision, not an oversight.
 - **The scale sweep does not time inlay hints.** `ScalePerfTests.Handlers` covers codeLens,
   references and rename; this handler runs per keystroke and has no row, so the flat-between-10K-
   and-50K property is argued from the code rather than measured. It holds by construction today:

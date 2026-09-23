@@ -464,7 +464,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     {
         if ( call.Callee is IdentifierNode identifier )
         {
-            string? scope = EnclosingClassAt(target, call.Range.Start);
+            string? scope = CallResolution.EnclosingClassAt(target.Result, call.Range.Start);
             (string? Scope, string? Qualifier, string Name) key =
                 (scope, null, NameTable.Shared.InternLower(identifier.Token.Text));
 
@@ -541,46 +541,15 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// <summary>A bare name: a script function the file's scope reaches, else a builtin.</summary>
     private ImmutableArray<string> UnqualifiedParameterNames(NavigationTarget target, string name)
     {
-        // Interned once outside the loop below, not recomputed per namespace tried — a file
-        // importing several namespaces was lowercasing the same name once per candidate.
+        // Interned once outside the resolver, which compares ordinally.
         string keyName = NameTable.Shared.InternLower(name);
 
-        if ( !GameProfile.Active.ResolvesByNamespace )
-        {
-            // A merge dialect (#include: CoD4/WaW/MW2/BO1) has no #namespace, so the extractor
-            // defaults every function's namespace to its FILE NAME STEM — a fallback naming a
-            // scope nobody wrote. Asking by declared namespace there answers only for the asking
-            // file's OWN functions and misses everything #include brings in, which is how these
-            // games reach another file at all. It looked like the family worked on CoD4 because
-            // same-file calls did get labels; every cross-file one was silently unlabelled.
-            //
-            // SignatureEngine makes exactly this split for exactly this reason, and the two answer
-            // one question about one call site, so they have to make it the same way.
-            FunctionSymbol? included = DatabaseQueries.FunctionInIncludeScope(
-                target.Store,
-                target.ContextId,
-                target.Path,
-                DatabaseQueries.IncludedScriptPaths(target.Result),
-                keyName);
+        FunctionSymbol? script = CallResolution.UnqualifiedFunction(
+            target.Store, target.ContextId, target.Result, keyName);
 
-            if ( included is not null )
-            {
-                return [.. included.Parameters.Select(static p => p.Name)];
-            }
-        }
-        else
+        if ( script is not null )
         {
-            // The DECLARED namespace set, not the spans — a phantom span cost a full store scan
-            // here on every hint.
-            foreach ( string declared in target.Result.Extraction.DeclaredNamespaces )
-            {
-                ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                    target.Store, target.ContextId, target.Path, declared, keyName, askingNamespaces: target.Namespaces);
-                if ( found.Length > 0 )
-                {
-                    return [.. found[0].Function.Parameters.Select(static p => p.Name)];
-                }
-            }
+            return [.. script.Parameters.Select(static p => p.Name)];
         }
 
         BuiltinFunction? builtin = _builtins.For(target.Language).Find(name);
@@ -636,12 +605,8 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             return UnqualifiedParameterNames(target, path.NameToken.Text);
         }
 
-        FunctionSymbol? found = DatabaseQueries.FunctionInIncludeScope(
-            target.Store,
-            target.ContextId,
-            askingPath: "",
-            [RelativePathIndex.Normalize(path.Path)],
-            NameTable.Shared.InternLower(path.NameToken.Text));
+        FunctionSymbol? found = CallResolution.PathQualifiedFunction(
+            target.Store, target.ContextId, path.Path, NameTable.Shared.InternLower(path.NameToken.Text));
 
         return found is null ? default : [.. found.Parameters.Select(static p => p.Name)];
     }
@@ -671,20 +636,6 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         }
 
         return [.. methods[0].Function.Parameters.Select(static p => p.Name)];
-    }
-
-    /// <summary>The class whose body contains this position, over the file's own handful of classes.</summary>
-    private static string? EnclosingClassAt(NavigationTarget target, Position position)
-    {
-        foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
-        {
-            if ( classSymbol.FullRange.Contains(position) )
-            {
-                return classSymbol.KeyName;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

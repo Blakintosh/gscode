@@ -421,17 +421,17 @@
         "doc-data-types": {
             "name": "entity.name.type.documentation.gsc",
             "comment": "GSC/CSC data types to show in documentation",
-            "match": "(any|void|bool|int|float|number|vector|string|istring|entity|struct|object|array|weapon|vehicle|player|actor|aitype|pathnode|sentient|vehiclenode|hudelem)"
+            "match": "\\b(any|void|bool|int|float|number|vector|string|istring|entity|struct|object|array|weapon|vehicle|player|actor|aitype|pathnode|sentient|vehiclenode|hudelem)\\b"
         },
         "doc-data-modifiers": {
             "name": "storage.modifier.documentation.gsc",
             "comment": "GSC/CSC modifiers to show in documentation",
-            "match": "(const|\\?|undefined)"
+            "match": "(\\bconst\\b|\\bundefined\\b|\\?(?=[>\\]]))"
         },
         "doc-comment-descriptor": {
             "name": "comment.block.documentation.descriptor.gsc",
             "comment": "GSC/CSC function description",
-            "match": "\"(.*?): (.*)\"",
+            "match": "\"([^\"]*?):\\s*(.*?)\"?\\s*$",
             "captures": {
                 "1": { "name": "entity.name.tag.documentation.gsc" },
                 "2": {

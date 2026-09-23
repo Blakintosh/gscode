@@ -6,6 +6,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
+using Position = GSCode.Core.Text.Position;
 using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
@@ -71,7 +72,10 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
             askingNamespaces: target.Namespaces);
 
         List<Location> implementations = [];
-        HashSet<string> emitted = new(StringComparer.Ordinal);
+        // A TUPLE, not a joined string. The set exists only to spot the same declaration reached
+        // twice — a raw file and the mod overlay replacing it — and a joined key allocated a string
+        // per candidate to answer that.
+        HashSet<(string Path, Position At)> emitted = [];
 
         foreach ( ResolvedFunction function in resolved )
         {
@@ -106,7 +110,7 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
         string classKeyName,
         string methodKeyName,
         List<Location> into,
-        HashSet<string> emitted)
+        HashSet<(string Path, Position At)> emitted)
     {
         Queue<(string ClassKeyName, int Depth)> pending = new();
         HashSet<string> visited = new(StringComparer.Ordinal) { classKeyName };
@@ -139,7 +143,7 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
     }
 
     private static void AddOverride(
-        ResolvedClass child, string methodKeyName, List<Location> into, HashSet<string> emitted)
+        ResolvedClass child, string methodKeyName, List<Location> into, HashSet<(string Path, Position At)> emitted)
     {
         foreach ( FunctionSymbol method in child.Class.Methods )
         {
@@ -156,7 +160,7 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
 
             // A class the store holds twice — a raw file and the mod overlay replacing it — would
             // otherwise be offered as two identical jumps.
-            if ( emitted.Add(path + "|" + range.Start.Line + ":" + range.Start.Character) )
+            if ( emitted.Add((path, range.Start)) )
             {
                 into.Add(LspMapping.LocationAt(path, range));
             }

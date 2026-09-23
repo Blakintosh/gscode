@@ -211,13 +211,19 @@ public static class DatabaseQueries
             return matches;
         }
 
-        HashSet<string> overlayIdentities = new(StringComparer.Ordinal);
+        // A TUPLE, not a joined string. This runs over every match, and the join allocated one
+        // string per match on the way in and another per match on the way out — on the
+        // workspace-symbol path with an empty query that is two strings per function in the
+        // workspace, to build a key nothing keeps. A value tuple compares the same two strings
+        // ordinally and allocates nothing, and it cannot be fooled by a separator appearing inside
+        // a path the way a join can.
+        HashSet<(string RelativePath, string KeyName)> overlayIdentities = [];
         foreach ( T match in matches )
         {
             ScriptRecord record = recordOf(match);
             if ( record.ContextId != "raw" && record.RelativePath.Length > 0 )
             {
-                overlayIdentities.Add(record.RelativePath + "|" + keyNameOf(match));
+                overlayIdentities.Add((record.RelativePath, keyNameOf(match)));
             }
         }
 
@@ -230,7 +236,7 @@ public static class DatabaseQueries
             // overlay exists at this file's path at all, which is what actually decides whether
             // the engine ever loads the raw copy.
             bool shadowedOut = record.ContextId == "raw"
-                && (overlayIdentities.Contains(record.RelativePath + "|" + keyNameOf(match))
+                && (overlayIdentities.Contains((record.RelativePath, keyNameOf(match)))
                     || (store?.HasOverlayAt(record.RelativePath, askingContextId) ?? false));
 
             if ( !shadowedOut )

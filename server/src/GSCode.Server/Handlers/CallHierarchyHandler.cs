@@ -178,7 +178,11 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
     internal static List<IncomingGroup> GroupIncomingCalls(
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references)
     {
-        Dictionary<string, IncomingGroup> byCaller = new(StringComparer.Ordinal);
+        // Keyed by a TUPLE rather than a joined string. This runs once per reference, and on a
+        // stock utility that is tens of thousands of them, each allocating a key the dictionary
+        // keeps only in order to compare it. A caller nothing contains groups by path alone, which
+        // the default position stands in for — no real declaration's name starts before (0,0).
+        Dictionary<(string Path, Position Caller), IncomingGroup> byCaller = [];
         foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
         {
             if ( entry.Kind == ReferenceKind.Definition )
@@ -187,9 +191,9 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             }
 
             FunctionSymbol? caller = ContainingFunction(record, entry.Range.Start);
-            string groupKey = caller is null
-                ? record.Path
-                : $"{record.Path}\u0000{caller.NameRange.Start.Line}:{caller.NameRange.Start.Character}";
+            (string Path, Position Caller) groupKey = caller is null
+                ? (record.Path, default)
+                : (record.Path, caller.NameRange.Start);
 
             if ( !byCaller.TryGetValue(groupKey, out IncomingGroup group) )
             {

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
@@ -24,6 +25,40 @@ public sealed class HoverHandler : HoverHandlerBase
     private readonly BuiltinApiSet _builtins;
     private readonly ObjectFields _objectFields;
     private readonly TextDocumentSelector _selector;
+
+    /// <summary>
+    /// One assignment-inference walk per document VERSION, not per hover.
+    ///
+    /// <see cref="InferredFieldType"/> asks <see cref="FlowTyper.InferAssignments(ParseResult)"/>,
+    /// which walks every function in the file — and unlike <see cref="FlowTyper.InferValues"/> it
+    /// carries NO memoisation of its own, so building a fresh typer per request (which this did)
+    /// re-walked the whole file for every hover over a field. Hovering is a mouse-move away.
+    ///
+    /// Keyed by <see cref="ParseResult"/> reference, the same identity
+    /// <see cref="InlayHintHandler"/>'s own cache uses and for the same reason: an unchanged
+    /// document hands back the SAME instance, and a ConditionalWeakTable entry is collectible the
+    /// moment nothing else holds its ParseResult — when the document closes or is next edited.
+    ///
+    /// Only the RESULT is shared, never the typer. A <see cref="FlowTyper"/> carries a cursor and a
+    /// recording table as instance state, so two concurrent requests holding one would interfere;
+    /// an <c>ImmutableArray</c> cannot.
+    /// </summary>
+    private readonly ConditionalWeakTable<ParseResult, InferredAssignments> _assignmentCache = new();
+
+    /// <summary>
+    /// A box for the array, because <see cref="ConditionalWeakTable{TKey, TValue}"/> takes a
+    /// reference type and an <c>ImmutableArray</c> is a struct. Holding the builder instead would
+    /// have meant copying the array back out on every read, which is the cost being removed.
+    /// </summary>
+    private sealed class InferredAssignments
+    {
+        public InferredAssignments(ImmutableArray<InferredAssignment> assignments)
+        {
+            Assignments = assignments;
+        }
+
+        public ImmutableArray<InferredAssignment> Assignments { get; }
+    }
 
     public HoverHandler(NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields, TextDocumentSelector selector)
     {
@@ -376,6 +411,27 @@ public sealed class HoverHandler : HoverHandlerBase
     }
 
     /// <summary>
+    /// This document's inferred assignments, walked once per version. See
+    /// <see cref="_assignmentCache"/>.
+    /// </summary>
+    internal ImmutableArray<InferredAssignment> AssignmentsOf(NavigationTarget target)
+    {
+        if ( _assignmentCache.TryGetValue(target.Result, out InferredAssignments? cached) )
+        {
+            return cached.Assignments;
+        }
+
+        InferredAssignments inferred = new(
+            new FlowTyper(_builtins.For(target.Language), _objectFields).InferAssignments(target.Result));
+
+        // AddOrUpdate rather than Add: two hovers on the same unchanged document can race this
+        // miss, and the walk is pure, so the race costs a duplicate computation rather than a wrong
+        // answer. Add would throw on the loser instead.
+        _assignmentCache.AddOrUpdate(target.Result, inferred);
+        return inferred.Assignments;
+    }
+
+    /// <summary>
     /// The type this file's own writes give a field, or Unknown when they disagree or there are
     /// none. Every write has to agree: <c>self.state = "idle"</c> in one function and
     /// <c>self.state = 3</c> in another means the field genuinely holds both, and picking whichever
@@ -383,12 +439,11 @@ public sealed class HoverHandler : HoverHandlerBase
     /// </summary>
     private ScrType InferredFieldType(NavigationTarget target, string name, out string display)
     {
-        FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
         ScrType agreed = ScrType.Unknown;
         display = "";
         bool seen = false;
 
-        foreach ( InferredAssignment assignment in typer.InferAssignments(target.Result) )
+        foreach ( InferredAssignment assignment in AssignmentsOf(target) )
         {
             if ( !assignment.IsField
                 || !string.Equals(assignment.Name, name, StringComparison.OrdinalIgnoreCase) )

@@ -175,6 +175,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   cursor is NOT on a classified reference, it renders a documented keyword/directive
   (`TryKeywordDocHover` over `KeywordDocs`: isdefined, notify, `#using`, …), then falls back to
   FlowTyper's `TryGetLocalTypeAt` to show `(local) name: type` for an inferred local variable.
+- `_assignmentCache` — one `InferAssignments` walk per document VERSION, keyed by `ParseResult`
+  reference exactly as `InlayHintHandler`'s own cache is. Unlike `InferValues`, that walk carries no
+  memoisation of its own, so the fresh `FlowTyper` this built per request re-walked every function in
+  the file for every hover over a field — and hovering is a mouse-move away. Only the RESULT is
+  shared, never the typer: a `FlowTyper` keeps a cursor and a recording table as instance state, so
+  two concurrent requests holding one would interfere, and an `ImmutableArray` cannot.
 - `DefinitionLink(path, range)` puts a markdown link to the declaration under the signature of a
   function, class or macro — a fenced `scripts\zm\_util.gsc:118` linked to `file:///…#L118,10`, the label
   script-relative and fenced so a path's backslashes and underscores survive markdown, the target a

@@ -402,7 +402,8 @@ two same-named macros in sibling `.gsc`/`.csc` files staying apart · `DocumentH
 highlight on the shared reference query · `CallHierarchyGroupingTests` one incoming entry per calling
 FUNCTION · `ResolveForQueryTests` hierarchies for files not open · `NamespaceImportFixTests` the
 add-`#using` fix driven through the handler · `WorkspaceSymbolShadowingTests` · `KeywordHoverTests`,
-`BuiltinMacroHoverTests` (`__FUNCTION__`/`__FILE__` where written) · `CompletionLabelDetailsTests`,
+`BuiltinMacroHoverTests` (`__FUNCTION__`/`__FILE__` where written), `HoverInferenceReuseTests`
+one assignment walk per version · `CompletionLabelDetailsTests`,
 `CompletionSortTextTests` · `InlayHintMacroTests`, `InlayHintTypeCacheTests` one flow pass per version.
 
 **Analysis ordering and publishing.** `AnalysisGateTests`, `SingleFlightAnalysisTests` one analysis

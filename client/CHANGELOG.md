@@ -9,6 +9,8 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 ### Fixed
 - Typing `func` offered `funcauto` first, so `func` + Tab wrote an autoexec function. The plain
   function declaration now heads the list, followed by `funcauto` and `funcpriv`.
+- The formatter dropped the space before a ternary's `:`, so `b ? 1 : 2` came out `b ? 1: 2`.
+  A ternary's colon is now spaced like any other operator; `case 1:` and `default:` stay tight.
 
 ## 2.0.2
 

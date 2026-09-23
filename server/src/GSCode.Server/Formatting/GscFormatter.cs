@@ -471,6 +471,11 @@ public static class GscFormatter
         // The closer needs the same answer, hence a stack rather than a flag.
         List<bool> callParens = new();
 
+        // The '?'s still waiting for their ':'. A ':' that answers one is a ternary's and is spaced
+        // like any binary operator; any other is a label's (`case 1:`, `default:`) and hugs what it
+        // ends. A count rather than a flag, so a nested ternary pairs each ':' with its own '?'.
+        int openTernaries = 0;
+
         for ( int index = 0; index < significant.Count; index++ )
         {
             Token token = significant[index].Token;
@@ -532,7 +537,8 @@ public static class GscFormatter
                 {
                     // The token before the operator decides whether `-`, `+` and `&` are unary.
                     TokenKind beforePrevious = index >= 2 ? significant[index - 2].Token.Kind : TokenKind.OpenBrace;
-                    output.Append(Separator(beforePrevious, previous.Kind, token.Kind, insideCallParen, options));
+                    bool ternaryColon = token.Kind == TokenKind.Colon && openTernaries > 0;
+                    output.Append(Separator(beforePrevious, previous.Kind, token.Kind, insideCallParen, ternaryColon, options));
                 }
 
                 output.Append(token.GetText(text));
@@ -561,6 +567,21 @@ public static class GscFormatter
             {
                 parenDepth++;
                 callParens.Add(index > 0 && !IsGroupingParen(significant[index - 1].Token.Kind));
+            }
+
+            if ( token.Kind == TokenKind.QuestionMark )
+            {
+                openTernaries++;
+            }
+            else if ( token.Kind == TokenKind.Colon && openTernaries > 0 )
+            {
+                openTernaries--;
+            }
+            else if ( token.Kind is TokenKind.Semicolon or TokenKind.OpenBrace or TokenKind.CloseBrace )
+            {
+                // A statement boundary: whatever was left unanswered was malformed, and must not
+                // turn a later label's ':' into a ternary's.
+                openTernaries = 0;
             }
 
             unbraced.AfterToken(token.Kind);
@@ -799,7 +820,8 @@ public static class GscFormatter
     }
 
     private static string Separator(
-        TokenKind beforePrevious, TokenKind previous, TokenKind current, bool insideCallParen, FormatOptions options)
+        TokenKind beforePrevious, TokenKind previous, TokenKind current, bool insideCallParen, bool ternaryColon,
+        FormatOptions options)
     {
         // Parenthesis interior padding: "( x )", but "()" stays tight. A call's parentheses and a
         // control-flow/grouping pair each follow their own setting, so `if ( x )` with `foo(x)` --
@@ -852,6 +874,12 @@ public static class GscFormatter
         if ( IsUnaryHere(beforePrevious, previous) )
         {
             return "";
+        }
+
+        // `b ? 1 : 2`, where NoSpaceBefore would give the label's `b ? 1: 2`.
+        if ( ternaryColon )
+        {
+            return " ";
         }
 
         if ( NoSpaceBefore(current) )

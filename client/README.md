@@ -181,6 +181,7 @@ guideline](../server/FORMATTING.md).
 ### 2.0.3 (latest)
 
 - Typing `func` offers the plain function declaration first, ahead of `funcauto` and `funcpriv`, so `func` + Tab no longer writes an autoexec function.
+- The formatter keeps the space before a ternary's `:` (`b ? 1 : 2`, not `b ? 1: 2`).
 
 ### 2.0.2
 

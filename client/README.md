@@ -180,6 +180,7 @@ guideline](../server/FORMATTING.md).
 
 ### 2.0.3 (latest)
 
+- `gscode.format.indentCaseBlocks`: turn off to put a braced case body's `{` level with its `case` label instead of indented inside it.
 - Typing `func` offers the plain function declaration first, ahead of `funcauto` and `funcpriv`, so `func` + Tab no longer writes an autoexec function.
 - The formatter keeps the space before a ternary's `:` (`b ? 1 : 2`, not `b ? 1: 2`).
 

@@ -380,6 +380,12 @@
 						"description": "Put a space between a control-flow keyword and its parenthesis: 'if ( x )' rather than 'if( x )'. Applies to if, while, for, foreach and switch; 'return (' and 'case (' always keep their space. Independent of padParens, so 'if(x)', 'if( x )', 'if (x)' and 'if ( x )' are all reachable.",
 						"scope": "window"
 					},
+					"gscode.format.indentCaseBlocks": {
+						"type": "boolean",
+						"default": true,
+						"description": "Indent a braced case body inside its label, so the '{' sits one level in from 'case' and the statements two. Turn off to put the '{' level with 'case' and the statements one level in. A case body without braces is indented one level either way.",
+						"scope": "window"
+					},
 					"gscode.format.maxBlankLines": {
 						"type": "integer",
 						"default": 2,

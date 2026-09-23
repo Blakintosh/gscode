@@ -59,6 +59,9 @@ public sealed class ServerSettings
     /// <summary>Whether a control-flow keyword is spaced from its parenthesis: `if (` against `if(`.</summary>
     public bool FormatSpaceBeforeControlParen { get; set; } = true;
 
+    /// <summary>Whether a braced case body is indented inside its label.</summary>
+    public bool FormatIndentCaseBlocks { get; set; } = true;
+
     /// <summary>The longest run of blank lines the formatter preserves.</summary>
     public int FormatMaxBlankLines { get; set; } = 2;
 
@@ -154,6 +157,9 @@ public sealed class ServerSettings
         FormatSpaceBeforeControlParen = section.Value<bool?>("format.spaceBeforeControlParen")
             ?? section["format"]?.Value<bool?>("spaceBeforeControlParen")
             ?? FormatSpaceBeforeControlParen;
+        FormatIndentCaseBlocks = section.Value<bool?>("format.indentCaseBlocks")
+            ?? section["format"]?.Value<bool?>("indentCaseBlocks")
+            ?? FormatIndentCaseBlocks;
         FormatMaxBlankLines = section.Value<int?>("format.maxBlankLines")
             ?? section["format"]?.Value<int?>("maxBlankLines")
             ?? FormatMaxBlankLines;

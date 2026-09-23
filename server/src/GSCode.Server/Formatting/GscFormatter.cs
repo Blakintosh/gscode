@@ -476,6 +476,10 @@ public static class GscFormatter
         // ends. A count rather than a flag, so a nested ternary pairs each ':' with its own '?'.
         int openTernaries = 0;
 
+        // Whether the last significant token ended a case label, so a '{' now opens that case's
+        // body as a block. Comments in between do not count as the body.
+        bool labelJustEnded = false;
+
         for ( int index = 0; index < significant.Count; index++ )
         {
             Token token = significant[index].Token;
@@ -505,6 +509,15 @@ public static class GscFormatter
             if ( token.Kind == TokenKind.CloseBrace && blocks.Count > 0 )
             {
                 blocks.RemoveAt(blocks.Count - 1);
+            }
+
+            // With indentCaseBlocks off, a case body that is one braced block sits level with its
+            // label rather than a level inside it, so the block pays for the indent the case would
+            // otherwise add. Anything after its '}' in the same case stays at that level too.
+            if ( labelJustEnded && token.Kind == TokenKind.OpenBrace && !options.IndentCaseBlocks
+                && blocks.Count > 0 && blocks[^1].IsSwitch )
+            {
+                blocks[^1].CaseBraced = true;
             }
 
             // A label sits at the block's own level, so it does not get its own case indent.
@@ -561,6 +574,13 @@ public static class GscFormatter
             if ( isLabel && blocks.Count > 0 && blocks[^1].IsSwitch )
             {
                 blocks[^1].CaseOpen = true;
+                blocks[^1].CaseBraced = false;
+            }
+
+            if ( !LineFacts.IsComment(token.Kind) )
+            {
+                // Read before the ternary count below moves: a ':' with no '?' waiting is a label's.
+                labelJustEnded = token.Kind == TokenKind.Colon && openTernaries == 0;
             }
 
             if ( token.Kind == TokenKind.OpenParen )
@@ -597,6 +617,9 @@ public static class GscFormatter
         public bool IsSwitch { get; init; }
 
         public bool CaseOpen { get; set; }
+
+        /// <summary>Whether the open case's body is a braced block that takes no case indent.</summary>
+        public bool CaseBraced { get; set; }
     }
 
     /// <summary>
@@ -609,7 +632,7 @@ public static class GscFormatter
         int total = 0;
         for ( int index = 0; index < blocks.Count; index++ )
         {
-            if ( !blocks[index].CaseOpen )
+            if ( !blocks[index].CaseOpen || blocks[index].CaseBraced )
             {
                 continue;
             }

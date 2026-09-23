@@ -6,6 +6,10 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 
 ## 2.0.3
 
+### Added
+- `gscode.format.indentCaseBlocks`: turn off to put a braced case body's `{` level with its `case`
+  label, so the statements inside sit one level in rather than two.
+
 ### Fixed
 - Typing `func` offered `funcauto` first, so `func` + Tab wrote an autoexec function. The plain
   function declaration now heads the list, followed by `funcauto` and `funcpriv`.

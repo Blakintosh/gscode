@@ -282,6 +282,7 @@ function flop()
 | `editor.insertSpaces` | `false` for gsc/csc/gsh | Tabs. Arrives per request in the LSP payload |
 | `editor.tabSize` | `4` | Columns per level; only meaningful when indenting with spaces |
 | `gscode.format.padParens` | `true` | `if ( x )` against `if (x)` — the interior, not the keyword gap |
+| `gscode.format.indentCaseBlocks` | `true` | A braced case body's `{` indented inside its label; off puts it level with `case` |
 | `gscode.format.maxBlankLines` | `2` | Longest run of blank lines preserved |
 | `gscode.format.sortDirectives` | `true` | Group and sort the leading directive block. Format Document only |
 | `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; range and on-type are clipped to the group around the cursor |

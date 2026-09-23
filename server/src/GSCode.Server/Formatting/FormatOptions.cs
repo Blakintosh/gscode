@@ -38,6 +38,11 @@ namespace GSCode.Server.Formatting;
 /// Whether a control-flow keyword is separated from its parenthesis: <c>if ( x )</c> against
 /// <c>if( x )</c>. Independent of the interior padding, so every combination is reachable.
 /// </param>
+/// <param name="IndentCaseBlocks">
+/// Whether a case body that is a braced block is indented inside its label, putting its contents
+/// two levels in from the <c>case</c>. Off, the <c>{</c> sits level with the label and the contents
+/// one level in. A bare case body is indented one level either way.
+/// </param>
 /// <param name="MaxBlankLines">
 /// The longest run of blank lines to preserve. Two by default, which keeps the 2,477 double blanks
 /// in the stock scripts while still collapsing the 152 longer runs.
@@ -62,6 +67,7 @@ public readonly record struct FormatOptions(
     bool PadCallParens = true,
     bool PadBrackets = true,
     bool SpaceBeforeControlParen = true,
+    bool IndentCaseBlocks = true,
     int MaxBlankLines = 2,
     bool SortDirectives = true,
     bool AlignConsecutive = false)
@@ -76,7 +82,7 @@ public readonly record struct FormatOptions(
     /// </summary>
     public static FormatOptions Default { get; } = new(
         IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true,
-        SpaceBeforeControlParen: true, MaxBlankLines: 2,
+        SpaceBeforeControlParen: true, IndentCaseBlocks: true, MaxBlankLines: 2,
         SortDirectives: true, AlignConsecutive: false);
 
     /// <summary>One level of indentation as text.</summary>
@@ -104,6 +110,7 @@ public readonly record struct FormatOptions(
             PadCallParens: settings.FormatPadCallParens,
             PadBrackets: settings.FormatPadBrackets,
             SpaceBeforeControlParen: settings.FormatSpaceBeforeControlParen,
+            IndentCaseBlocks: settings.FormatIndentCaseBlocks,
             MaxBlankLines: Math.Max(0, settings.FormatMaxBlankLines),
             SortDirectives: settings.FormatSortDirectives,
             AlignConsecutive: settings.FormatAlignConsecutive);

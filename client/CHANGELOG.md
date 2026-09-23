@@ -16,6 +16,8 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   `__FUNCTION__` and `__FILE__` hover where they are written; keyword-shaped macro names such as
   `DEFAULT` get the macro colour.
 - Organize Imports removes every unused `#using` in the file, not only the one under the cursor.
+- **Generate ScriptDoc block**, offered on a function that has none: the tags the stock scripts
+  use, with the parameters filled in from the signature and marked mandatory or optional.
 - Hovering a script function, class or macro now shows where it is declared, as a link to that
   file and line — the answer a macro's hover could not give before, since an `#insert`ed
   `#define` lives in a header the file never names.
@@ -33,6 +35,9 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 - Diagnostics for closed files are only re-sent when they change.
 
 ### Fixed
+- The `doc` snippet on the four pre-BO3 games now writes the `///ScriptDocBegin`/`///ScriptDocEnd`
+  fence, without which what it inserted read back as an ordinary comment and the function it
+  documented hovered with no documentation at all.
 - Diagnostics from an older analysis no longer replace newer ones, reappear on a closed file, or
   show twice under two spellings of the same path.
 - The startup index no longer overwrites an open document, runs twice at once, or survives

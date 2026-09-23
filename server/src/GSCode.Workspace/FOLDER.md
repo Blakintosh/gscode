@@ -311,6 +311,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - Each entry is gated on a keyword or directive passed to `GscKeywords.IsAvailable`, so a snippet
   and the word it writes cannot disagree about which games have it. The ScriptDoc pair is the
   exception, gated on `ScriptDocStyle` because neither form is a word.
+- The pre-BO3 ScriptDoc snippet writes the `///ScriptDocBegin`/`///ScriptDocEnd` fence and quotes
+  its lines. It did neither for a long time, and what it inserted therefore read back as an ordinary
+  comment — `SymbolExtractor.IsDocCommentToken` requires the fence there, since a pre-BO3 doc block
+  has no delimiter of its own — so the function it documented hovered bare. `ScriptDocTemplate`
+  renders the same shape for the code action.
 - `Entry.Retrigger` reopens the suggestion list after a snippet is accepted, and only `precache`
   sets it. Its first argument is an asset type, the list of those is per-world, and carrying the
   names in the body would be a second copy of `PrecacheAssetTypes` with the `.gsc`/`.csc` split

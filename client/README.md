@@ -232,7 +232,7 @@ A complete ground-up rewrite of the language server and extension for speed, low
 - A hover names where its subject is declared and links to it, so a function or a macro reached through an `#insert` says which file it came from without a jump. **Go to Implementations** answers the question go-to-definition cannot — which subclasses override this method — and **Go to Type Definition** on a local opens the class it holds.
 - Type-flow inference powers inferred-type inlay hints and local-variable hovers, seeded with engine object-field types.
 - Formatting (whole document, selection, and on-type) is whitespace-only and corruption-proof: it refuses files with syntax errors and re-checks its own output so it can never alter your tokens.
-- Code actions cover remove-duplicate-`#using` and add-missing-`#using`, backed by a namespace-usage lint.
+- Code actions cover remove-duplicate-`#using`, add-missing-`#using`, Organize Imports, and **Generate ScriptDoc block** — a doc block for an undocumented function, with its parameters filled in and written in the dialect's own ScriptDoc form.
 - Macros defined in `.gsh` headers are first-class symbols with go-to-definition, references, and hover via token provenance.
 - Added support for four earlier games — Call of Duty 4, World at War, Modern Warfare 2 and Black Ops — with each dialect's keywords, import style, function-pointer and ScriptDoc syntax, and bundled engine data driven by one game profile rather than by branching.
 - Replaced `TA_TOOLS_PATH` with `gscode.rawPath` and `gscode.modsPath`, both derived from the game install where possible, so a mod or a loose folder of scripts resolves against the game's own scripts.

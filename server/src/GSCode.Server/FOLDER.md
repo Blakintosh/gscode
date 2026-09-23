@@ -444,6 +444,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
     `SymbolExtractor.RecordCalleeReference`). Qualifying is therefore an insert at the range start,
     and a wrong qualifier is replaced over the range scanned back from it.
 
+- `AddGenerateScriptDocAction` — "Generate ScriptDoc block" on a function or method whose `Doc` is
+  `None`, rendering `ScriptDocTemplate` in the dialect's style with the declaration's own
+  indentation and inserting it above the declaration line. A `Refactor`, not a `QuickFix`, and with
+  no diagnostic behind it on purpose: an undocumented function is not a fault — the stock scripts
+  ship thousands — so there is no rule to bind to and one would be noise on code that works. Both
+  declaration lists are walked, since `Extraction.Functions` holds top-level functions only.
+  Skips a nameless declaration (half-typed code is the normal state) and one that arrived through an
+  `#insert`, whose ranges are true in the header and whose edit would land in the wrong file.
+
 ## Formatting/GscFormatter.cs
 
 - `FormatMinimalEdits(ParseResult)` returns the formatting result as per-region `FormatEdit`s —

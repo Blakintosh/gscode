@@ -273,6 +273,19 @@ needs to know WHY a type is unknown.
     fence is the only thing separating documentation from a comment that happens to sit above a
     function; without this check every such comment would be read as one.
 
+## Docs/ScriptDocTemplate.cs
+
+- `Render(functionName, parameters, hasVarargs, style, indent)` — an EMPTY doc block for a function
+  that has none, with everything the signature already states filled in and the rest left as
+  `<summary>`/`<description>` placeholders. The inverse of `ScriptDocComment.Parse`: what this
+  writes, that reads back, and `GenerateScriptDocTests` pins the round trip per dialect.
+- A parameter with a default value renders as `OptionalArg` in `[brackets]`, everything else as
+  `MandatoryArg` in `<angles>` — nothing else in a GSC signature distinguishes the two.
+- The pre-BO3 form carries the `///ScriptDocBegin`/`///ScriptDocEnd` fence, which is not decoration:
+  a doc block there is an ordinary `/* … */` comment, so the fence is the only thing that makes it
+  documentation at all (`HasTripleSlashFence`). Every line is quoted in both dialects, which is how
+  the shipped scripts write them.
+
 ## GameProfile.cs
 
 - `record GameProfile` — the portability seam: all game-specific knowledge (extensions,

@@ -1,6 +1,7 @@
 using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Docs;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
@@ -14,6 +15,8 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using LspDiagnostic = OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic;
 using Position = GSCode.Core.Text.Position;
+using ClassSymbol = GSCode.Core.Symbols.ClassSymbol;
+using FunctionSymbol = GSCode.Core.Symbols.FunctionSymbol;
 using ReferenceEntry = GSCode.Core.Symbols.ReferenceEntry;
 using ReferenceKind = GSCode.Core.Symbols.ReferenceKind;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
@@ -50,14 +53,18 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         {
             DocumentSelector = _selector,
 
-            // SourceOrganizeImports alongside QuickFix. VS Code's "Source Action..." and "Organize
-            // Imports" context-menu entries ask the client's own capability negotiation whether a
-            // server offers that KIND before ever sending a request — with only QuickFix
-            // registered, both menus showed nothing to pick, not an empty result from an actual
-            // request. This server never had a "source" action to offer before the organize-imports
-            // one below existed, which is why the registration stopped at QuickFix in the first
-            // place; Refactor stays unregistered for the same reason — nothing here refactors.
-            CodeActionKinds = new Container<CodeActionKind>(CodeActionKind.QuickFix, CodeActionKind.SourceOrganizeImports),
+            // Every kind this handler can produce has to be named here. VS Code's "Source
+            // Action..." and "Refactor..." context-menu entries ask the client's own capability
+            // negotiation whether a server offers that KIND before ever sending a request — with
+            // only QuickFix registered, both menus showed nothing to pick, not an empty result
+            // from an actual request.
+            //
+            // Refactor is here for "Generate ScriptDoc block", which cannot be a QuickFix: a quick
+            // fix with no diagnostic behind it is never presented as the fix FOR anything, and
+            // there is no missing-documentation diagnostic — nor should there be, since it would
+            // fire on the thousands of undocumented functions the stock scripts ship.
+            CodeActionKinds = new Container<CodeActionKind>(
+                CodeActionKind.QuickFix, CodeActionKind.Refactor, CodeActionKind.SourceOrganizeImports),
         };
     }
 
@@ -113,6 +120,8 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         }
 
         AddDiagnosticFixes(request, result, actions, DiagnosticsForFixes(request, result, document, cancellationToken), target);
+
+        AddGenerateScriptDocAction(request.TextDocument.Uri, result, selection, actions);
 
         // Same TriggerKind gate as DiagnosticsForFixes: VS Code never polls a Source Action
         // request the way it polls QuickFix for the lightbulb, so this only ever runs on an
@@ -1173,6 +1182,106 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// <summary>What <see cref="QuickFix(string, DocumentUri, IEnumerable{TextEdit}, Container{LspDiagnostic}, bool)"/>
     /// builds, generalised over the action's <see cref="CodeActionKind"/> — every quick fix in this
     /// file is one, and <see cref="AddOrganizeImportsAction"/> is the one caller that is not.</summary>
+    /// <summary>
+    /// "Generate ScriptDoc block" on a function or method that has none.
+    ///
+    /// A Refactor rather than a QuickFix, and deliberately without a diagnostic behind it: an
+    /// undocumented function is not a fault. The stock scripts ship thousands of them, so a
+    /// missing-documentation rule would be noise on code that works, which is the bar
+    /// <c>add-diagnostic</c> sets. The action stands on its own.
+    ///
+    /// Offered on the declaration the selection sits in — both loops, because
+    /// <c>Extraction.Functions</c> holds top-level functions only and a class's methods hang off
+    /// the class, the same split <see cref="CodeLensHandler"/> walks.
+    /// </summary>
+    private static void AddGenerateScriptDocAction(
+        DocumentUri uri, ParseResult result, TextRange selection, List<CommandOrCodeAction> actions)
+    {
+        FunctionSymbol? declaration = UndocumentedDeclarationAt(result, selection.Start);
+        if ( declaration is null )
+        {
+            return;
+        }
+
+        int line = declaration.FullRange.Start.Line;
+        string block = ScriptDocTemplate.Render(
+            declaration.Name,
+            declaration.Parameters,
+            declaration.HasVarargs,
+            GameProfile.Active.ScriptDocStyle,
+            IndentOf(result, line));
+
+        TextRange insertAt = new(new Position(line, 0), new Position(line, 0));
+        actions.Add(new CommandOrCodeAction(BuildAction(
+            "Generate ScriptDoc block for '" + declaration.Name + "'",
+            uri,
+            [new TextEdit { Range = insertAt.ToLsp(), NewText = block }],
+            diagnostics: null,
+            CodeActionKind.Refactor)));
+    }
+
+    /// <summary>
+    /// The function or method whose body contains <paramref name="position"/> and which has no doc
+    /// block, or null.
+    ///
+    /// A nameless declaration is skipped rather than offered an empty block: a handler runs on
+    /// every keystroke, so a function whose name has not been typed yet is the normal state, not a
+    /// fault.
+    /// </summary>
+    private static FunctionSymbol? UndocumentedDeclarationAt(ParseResult result, Position position)
+    {
+        foreach ( FunctionSymbol function in result.Extraction.Functions )
+        {
+            if ( IsUndocumentedAt(function, position) )
+            {
+                return function;
+            }
+        }
+
+        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
+        {
+            foreach ( FunctionSymbol method in classSymbol.Methods )
+            {
+                if ( IsUndocumentedAt(method, position) )
+                {
+                    return method;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsUndocumentedAt(FunctionSymbol function, Position position)
+    {
+        // SourceFile names the header an #insert brought the declaration in from, where the ranges
+        // are true and the edit would land in the wrong file entirely.
+        return function.SourceFile.Length == 0
+            && function.Name.Length > 0
+            && function.Doc.IsNone
+            && function.FullRange.Contains(position);
+    }
+
+    /// <summary>The leading whitespace of a line, which a generated block has to repeat — a method
+    /// sits inside a class body and a block flush left above it would be the only thing in the file
+    /// at column zero.</summary>
+    private static string IndentOf(ParseResult result, int line)
+    {
+        if ( line < 0 || line >= result.Text.LineCount )
+        {
+            return "";
+        }
+
+        int start = result.Text.GetOffset(new Position(line, 0));
+        int cursor = start;
+        while ( cursor < result.Text.Length && (result.Text.Text[cursor] == ' ' || result.Text.Text[cursor] == '\t') )
+        {
+            cursor++;
+        }
+
+        return result.Text.Text[start..cursor];
+    }
+
     private static CodeAction BuildAction(
         string title,
         DocumentUri uri,

@@ -145,10 +145,20 @@ public static class GscSnippets
         "",
         InsideFunction: false);
 
+    /// <summary>
+    /// The pre-BO3 form, where the fence is not decoration. A doc block there is an ORDINARY
+    /// <c>/* … */</c> comment, so <c>///ScriptDocBegin</c>/<c>///ScriptDocEnd</c> is the only thing
+    /// separating documentation from a comment that happens to sit above a function —
+    /// <c>SymbolExtractor.IsDocCommentToken</c> requires it, and this snippet shipped without one,
+    /// so what it inserted read back as a plain comment and the function it documented hovered
+    /// bare. The lines are quoted for the same reason the BO3 form's are: that is how the shipped
+    /// scripts write them, which is what <c>ScriptDocComment.Parse</c>'s unquote step exists for.
+    /// </summary>
     private static readonly Entry TripleSlashScriptDoc = new(
         "doc",
-        "/*\n\tName: ${1:name}( <${2:arg}> )\n\tSummary: ${3:What it does.}\n\tModule: ${4:Utility}\n"
-            + "\tMandatoryArg: <${2:arg}> : ${5:description}\n\tExample: ${6}\n*/",
+        "/*\n///ScriptDocBegin\n\"Name: ${1:name}( <${2:arg}> )\"\n\"Summary: ${3:What it does.}\"\n"
+            + "\"Module: ${4:Utility}\"\n\"MandatoryArg: <${2:arg}> : ${5:description}\"\n"
+            + "\"Example: ${6}\"\n///ScriptDocEnd\n*/",
         "ScriptDoc block.",
         "",
         InsideFunction: false);

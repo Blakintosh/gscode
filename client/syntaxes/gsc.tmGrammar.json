@@ -431,7 +431,7 @@
         "doc-comment-descriptor": {
             "name": "comment.block.documentation.descriptor.gsc",
             "comment": "GSC/CSC function description",
-            "match": "\"([^\"]*?):\\s*(.*?)\"?\\s*$",
+            "match": "^\\s*\"?(\\w+)\\s*:\\s*(.*?)\"?\\s*$",
             "captures": {
                 "1": { "name": "entity.name.tag.documentation.gsc" },
                 "2": {

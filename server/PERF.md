@@ -2057,6 +2057,46 @@ A real request's window is a screenful, not a whole 465-declaration file, so the
 in the editor is smaller than either column — these are the same upper-bound sample the codeLens
 numbers above are, not a steady-state estimate.
 
+### 2026-09-23: the walk is pruned by the window, and resolution is answered once per callee
+
+The paragraph above says the window check sits "correctly gated before `ResolveParameterNames`
+runs". It did, but it was checking the wrong thing: `window.Contains(node.Range.Start)` asked
+whether the CALL began on screen, so a multi-line argument list whose callee was a line above the
+viewport contributed nothing, and `CollectCalls` walked the whole tree to discard it
+(`FOLLOWUPS.md` had the walk half of that written down already). Both are fixed together, because
+fixing the cost without the correctness would have baked the wrong test into the traversal:
+
+- `CollectCalls` takes the window and prunes as it descends. A parser range spans everything its
+  node contains, so a subtree that misses the window holds no call that could hit it. A node whose
+  range is EMPTY is descended into anyway — error recovery is normal here, and a node that never
+  got a real range would otherwise take its children with it.
+- Resolution is memoised per REQUEST, keyed by (enclosing class, qualifier, name). A script calls
+  the same handful of names repeatedly and each miss is a store query — per declared namespace on
+  BO3, over the include scope on the merge dialects — so a file calling `is_player()` fifty times
+  asked the same question fifty times, per request, while scrolling sends one per frame. Per
+  request and discarded with it, for `FunctionLookupCache`'s reason: an answer that outlived the
+  request would need invalidating on an edit anywhere in the workspace.
+
+`HandlerCostTests` uses a WHOLE-DOCUMENT window, so it measures none of the pruning — it prices
+the memo against the work the same run added, since the merge dialects had just been given back
+the cross-file resolution they were failing at (`InlayHintHandler`, the `ResolvesByNamespace`
+split). Two runs each:
+
+| worst single file, whole-file window | before | run 1 | run 2 |
+|---|---:|---:|---:|
+| bo3 inlayHint | 16.4 ms | 18.9 ms | 25.3 ms |
+| cod4 inlayHint | 39.6 ms | 34.1 ms | 20.7 ms |
+
+The two runs disagree by more than the change does, which is this file's standing result for these
+sweeps rather than a surprise — cod4's worst FILE is not even stable between them (`airlift.gsc`
+at 34.1 ms, `_utility.gsc` at 16.9 ms in the run where `_utility.gsc` had been 39.6 ms before).
+What the numbers do support is the weaker claim worth making: CoD4 now resolves cross-file calls it
+previously gave up on, and is not paying more wall clock for it.
+
+The editor's real saving is the one this harness cannot see. A viewport is a screenful, and the
+pruning is what stops a scroll through `_zm.gsc` walking 191 declarations' worth of tree per frame
+to keep the twenty nodes on screen.
+
 ## Measured: SCALE, 10,000 to 50,000 files
 
 Every figure above comes from a stock corpus, and the largest is bo1's 2,963 files. A mod workspace

@@ -562,8 +562,17 @@ shape rather than re-deriving it.
   and line-splits it about six. The guard lex must stay; the aligners run in sequence on
   progressively rewritten text, so sharing one lex between them is a redesign of how they hand work
   along rather than a rename.
-- **Inlay hints** walk the whole tree in `CollectCalls` and discard what is outside the requested
-  window afterwards, rather than filtering before the walk.
+- ~~**Inlay hints** walk the whole tree in `CollectCalls` and discard what is outside the requested
+  window afterwards, rather than filtering before the walk.~~ Done 2026-09-23: `CollectCalls` takes
+  the window and prunes as it descends, and resolution is memoised per request (PERF.md). The
+  discard-afterwards was also a correctness bug — it tested the CALL's start, so a multi-line
+  argument list below the top of the viewport lost every label.
+- **The scale sweep does not time inlay hints.** `ScalePerfTests.Handlers` covers codeLens,
+  references and rename; this handler runs per keystroke and has no row, so the flat-between-10K-
+  and-50K property is argued from the code rather than measured. It holds by construction today:
+  the merge-dialect route is scoped to the asking file and its direct includes, and the path route
+  asks `FilesAt` for one path — neither touches `AllRecords`. Adding the row is what would keep
+  it true.
 
 **Reads still wider than their answer.**
 

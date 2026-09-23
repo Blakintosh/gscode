@@ -16,6 +16,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using GSCode.Core;
 using Position = GSCode.Core.Text.Position;
+using ParameterMemo = System.Collections.Generic.Dictionary<(string? Scope, string? Qualifier, string Name), System.Collections.Immutable.ImmutableArray<string>>;
 
 // The implicit string -> InlayHint.Label conversion is nullable-annotated, so assigning a
 // non-null string trips CS8601; suppressed for this file (the values are always non-null).
@@ -312,10 +313,21 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         HashSet<(Position Position, string Label)> seen,
         CancellationToken cancellationToken)
     {
+        // Resolution is answered once per distinct callee, not once per call site. A script calls
+        // the same handful of names over and over, and each miss is a store query — per declared
+        // namespace on BO3, over the include scope on the merge dialects — so a file calling
+        // is_player() fifty times asked the same question fifty times, on every request, while
+        // scrolling sends one request per frame.
+        //
+        // Per REQUEST and thrown away with it, for FunctionLookupCache's reason: an answer that
+        // outlived the request would have to be invalidated by an edit anywhere in the workspace,
+        // which is a subscription problem rather than a dictionary.
+        ParameterMemo memo = new();
+
         // Per call site, because resolving one can run a store lookup per declared namespace. The
         // client sends one of these per visible range, so scrolling produces a request per frame
         // and cancels the ones it has scrolled past.
-        foreach ( ExprNode node in CollectCalls(target.Result.Tree.Root) )
+        foreach ( ExprNode node in CollectCalls(target.Result.Tree.Root, window) )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -343,7 +355,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
                 continue;
             }
 
-            ImmutableArray<string> parameters = ResolveParameterNames(target, types, node);
+            ImmutableArray<string> parameters = ResolveParameterNames(target, types, node, memo);
             if ( parameters.IsDefaultOrEmpty )
             {
                 continue;
@@ -386,7 +398,8 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// and the syntax names a local. Both were silent before: a pointer call is how most of a Black
     /// Ops III script's dispatch is written, so that was the majority of calls in some files.
     /// </summary>
-    private ImmutableArray<string> ResolveParameterNames(NavigationTarget target, ScriptTypes types, ExprNode node)
+    private ImmutableArray<string> ResolveParameterNames(
+        NavigationTarget target, ScriptTypes types, ExprNode node, ParameterMemo memo)
     {
         if ( node is ArrowCallNode arrowCall )
         {
@@ -421,50 +434,108 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
                 return default;
             }
 
-            return reference.Namespace is null
+            // The pointer's TARGET is a name like any other, so it shares the memo with the
+            // written forms below: the same function reached through a pointer and by name is one
+            // question asked twice.
+            (string? Scope, string? Qualifier, string Name) pointerKey = (null, reference.Namespace, reference.Name);
+            if ( memo.TryGetValue(pointerKey, out ImmutableArray<string> cachedPointer) )
+            {
+                return cachedPointer;
+            }
+
+            ImmutableArray<string> resolved = reference.Namespace is null
                 ? UnqualifiedParameterNames(target, reference.Name)
                 : QualifiedParameterNames(target, reference.Namespace, reference.Name);
+
+            memo[pointerKey] = resolved;
+            return resolved;
         }
 
-        return ResolveNamedParameterNames(target, call);
+        return ResolveNamedParameterNames(target, call, memo);
     }
 
-    private ImmutableArray<string> ResolveNamedParameterNames(NavigationTarget target, CallNode call)
+    /// <summary>
+    /// The three WRITTEN callee forms — a bare name, <c>ns::name</c>, and the path form — answered
+    /// once per distinct callee. The enclosing class is part of the key rather than of the answer:
+    /// a bare name inside a class body means a method first, and two classes in one file can spell
+    /// the same call differently.
+    /// </summary>
+    private ImmutableArray<string> ResolveNamedParameterNames(NavigationTarget target, CallNode call, ParameterMemo memo)
     {
         if ( call.Callee is IdentifierNode identifier )
         {
-            // Inside a class body a bare name is a method first — so this has to be asked before the
-            // namespace and builtin lookups below, or an inherited method's hints come out as some
-            // unrelated engine function's parameter names.
-            string? enclosingClass = EnclosingClassAt(target, call.Range.Start);
-            if ( enclosingClass is not null )
-            {
-                ImmutableArray<string> method = MethodParameterNames(
-                    target, new SymbolKey(
-                        null, NameTable.Shared.InternLower(identifier.Token.Text), GSCode.Core.Symbols.SymbolKind.Function, enclosingClass),
-                    ReferenceKind.Call);
+            string? scope = EnclosingClassAt(target, call.Range.Start);
+            (string? Scope, string? Qualifier, string Name) key =
+                (scope, null, NameTable.Shared.InternLower(identifier.Token.Text));
 
-                if ( !method.IsDefault )
-                {
-                    return method;
-                }
+            if ( memo.TryGetValue(key, out ImmutableArray<string> cached) )
+            {
+                return cached;
             }
 
-            return UnqualifiedParameterNames(target, identifier.Token.Text);
+            ImmutableArray<string> answer = BareParameterNames(target, identifier, scope);
+            memo[key] = answer;
+            return answer;
         }
 
         if ( call.Callee is QualifiedNode qualified )
         {
-            return QualifiedParameterNames(
+            (string? Scope, string? Qualifier, string Name) key = (
+                null,
+                NameTable.Shared.InternLower(qualified.NamespaceToken.Text),
+                NameTable.Shared.InternLower(qualified.NameToken.Text));
+
+            if ( memo.TryGetValue(key, out ImmutableArray<string> cached) )
+            {
+                return cached;
+            }
+
+            ImmutableArray<string> answer = QualifiedParameterNames(
                 target, qualified.NamespaceToken.Text, qualified.NameToken.Text);
+
+            memo[key] = answer;
+            return answer;
         }
 
         if ( call.Callee is PathQualifiedNode path )
         {
-            return PathQualifiedParameterNames(target, path);
+            (string? Scope, string? Qualifier, string Name) key = (
+                null, path.Path, NameTable.Shared.InternLower(path.NameToken.Text));
+
+            if ( memo.TryGetValue(key, out ImmutableArray<string> cached) )
+            {
+                return cached;
+            }
+
+            ImmutableArray<string> answer = PathQualifiedParameterNames(target, path);
+            memo[key] = answer;
+            return answer;
         }
 
         return default;
+    }
+
+    /// <summary>A bare callee: the enclosing class's method where there is one, else the file's scope.</summary>
+    private ImmutableArray<string> BareParameterNames(
+        NavigationTarget target, IdentifierNode identifier, string? enclosingClass)
+    {
+        // Inside a class body a bare name is a method first — so this has to be asked before the
+        // namespace and builtin lookups below, or an inherited method's hints come out as some
+        // unrelated engine function's parameter names.
+        if ( enclosingClass is not null )
+        {
+            ImmutableArray<string> method = MethodParameterNames(
+                target, new SymbolKey(
+                    null, NameTable.Shared.InternLower(identifier.Token.Text), GSCode.Core.Symbols.SymbolKind.Function, enclosingClass),
+                ReferenceKind.Call);
+
+            if ( !method.IsDefault )
+            {
+                return method;
+            }
+        }
+
+        return UnqualifiedParameterNames(target, identifier.Token.Text);
     }
 
     /// <summary>A bare name: a script function the file's scope reaches, else a builtin.</summary>
@@ -616,8 +687,21 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         return null;
     }
 
-    /// <summary>Every call site in the tree — the four <c>CallNode</c> forms and arrow method calls.</summary>
-    private static IEnumerable<ExprNode> CollectCalls(AstNode root)
+    /// <summary>
+    /// Every call site the window can see — the four <c>CallNode</c> forms and arrow method calls.
+    ///
+    /// Pruned as it descends rather than filtered afterwards. A request covers a screenful, the
+    /// client sends one per visible range, and scrolling fires one per frame, so walking all of
+    /// <c>_zm.gsc</c> to keep twenty nodes was the whole of the walk's cost repeated per frame.
+    /// A parser range spans everything the node contains, so a subtree that misses the window
+    /// entirely holds no call that could hit it.
+    ///
+    /// A node whose range is EMPTY is descended into regardless. Error recovery is the normal
+    /// state here, and a node that never got a real range would otherwise take its children with
+    /// it — a silent loss of hints on exactly the half-written code this handler runs against
+    /// most.
+    /// </summary>
+    private static IEnumerable<ExprNode> CollectCalls(AstNode root, TextRange window)
     {
         Stack<AstNode> stack = new();
         stack.Push(root);
@@ -632,6 +716,11 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
 
             foreach ( AstNode child in AstSearch.ChildrenOf(node) )
             {
+                if ( child.Range.End > child.Range.Start && !window.Overlaps(child.Range) )
+                {
+                    continue;
+                }
+
                 stack.Push(child);
             }
         }

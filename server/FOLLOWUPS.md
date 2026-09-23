@@ -542,6 +542,98 @@ levers measured but unpulled, each with the condition that would change that:
   sampled requests at 50K), not with a walk. A lazier location list is the only lever, and nothing
   has asked for it.
 
+### 5. What the 2026-09-23 audit found and did not take
+
+A read of the handler paths, the retained-memory shape and the cache path after the scale pass. What
+it found worth doing has shipped (the git history for that date, and PERF.md for the two
+measurements). These are the rest, with what each would cost, so the next reader starts from the
+shape rather than re-deriving it.
+
+**Per-request work nothing caches per document version.**
+
+- **Semantic tokens** build the whole file's token list, a `claimed` set and a sort on every request,
+  with no per-`ParseResult` cache — the one `InlayHintHandler` and `HoverHandler` both have. The win
+  is real but smaller than theirs: a keystroke produces a NEW parse, so it would only hit on repeated
+  requests at one version, which is what `range` requests during a scroll are. `Range = true` is
+  advertised and the range request runs the identical whole-file `Tokenize`, which is the larger half.
+- **Formatting** computes the WHOLE document's edits and the range and on-type handlers then filter
+  them, and on-type fires on every `;` and `}`. The formatter also lexes its text four times
+  (`AssignmentAligner`, `ColumnAligner`, `FormatScope`, and the corruption guard in `GscFormatter`)
+  and line-splits it about six. The guard lex must stay; the aligners run in sequence on
+  progressively rewritten text, so sharing one lex between them is a redesign of how they hand work
+  along rather than a rename.
+- **Inlay hints** walk the whole tree in `CollectCalls` and discard what is outside the requested
+  window afterwards, rather than filtering before the walk.
+
+**Reads still wider than their answer.**
+
+- **Workspace symbol search** walks every record and every declaration in both stores, and an EMPTY
+  query matches all of them — which is what VS Code sends when the symbol picker opens.
+  `MaxResults = 256` is applied after the full collection AND after shadowing. **An early exit is not
+  available without changing the answer**, and that is the finding rather than a detail:
+  `ApplyShadowing` decides over the SET, so a raw match kept early can still be shadowed by an
+  overlay found later, and a walk that stopped cannot know that. The real fix is the prefix or
+  trigram index PERF.md parks — or its cheaper form, matching against `DeclarationIndex`'s distinct
+  key set through `CollectKeys`, which completion already uses, and resolving to records afterwards.
+- **`DatabaseQueries.FindReferences`** narrows the FILES by index and then scans each candidate
+  file's entire reference list for the key. Affects references, rename, CodeLens and call hierarchy.
+- **`MethodResolution.FindReferencesForCall`** is asked before every ordinary function lookup and
+  answers nothing for a plain function; it builds a dictionary and copies it out to say so.
+- **`WorkspaceDiagnosticsPublisher.Refresh()`** walks every record in the database, and
+  `DependentDiagnosticsRefresher` calls it after re-linting a handful of closed dependents. Off the
+  request path and debounced, so not a keystroke cost — but the caller already knows which paths
+  changed.
+
+**Memory, and the measurement that does not exist yet.**
+
+- **The warm arm's retained memory has never been measured at scale.** Every figure in the scale
+  table is a COLD index, and `RecordSerializer`'s reader builds strings straight from UTF-8 with a
+  per-BLOB string table that never touches `NameTable` — so a warm start at 50,000 files may hold
+  private copies of every name, namespace and path per record. PERF.md closed this concern in 2026-07
+  on a 1,105-file corpus, where the warm live set came in 3.9 MB LOWER; that is not the same question
+  at 50K, where every generated copy imports the same stock utilities. **Add the warm-arm row to
+  `ScalePerfTests` first** — it is worth having whatever it says — and intern on restore only if it
+  shows a gap, re-checking that the CPU cost does not move the 4 s warm start.
+- **Single-entry collections allocated per file or per path segment.**
+  `LanguageStore._overlayContextsByRelativePath` allocates an inner `ConcurrentDictionary` per
+  distinct relative path with any non-raw record — roughly one per file in a mod-rooted tree, almost
+  always holding one entry. `PathTreeIndex.Child.ByContext` is a `Dictionary` per path SEGMENT, the
+  same shape. `PackedInvertedIndex` already solves this exactly: hold the bare value, promote to a
+  set on the second. The indexes cost about 50 MB at bo3 50K against 2.3 GB, so size it first.
+- **`FunctionSymbol.Doc` keeps `ScriptDocComment.RawText`** — the whole doc-block body of every
+  documented function — for CLOSED files, and only hover reads it. Measure what it costs before
+  deciding: dropping it changes what a closed file can answer.
+
+**Analysed and NOT a lever, recorded so the idea is not re-derived from the shape:**
+
+- **The preprocessor's `[.. _output]`** looks like a second full `PToken` array that a pre-sized
+  builder should avoid. It is not avoidable: the pre-size is a ratio and the result must be exact, so
+  a list backing array plus an exact array is the minimum either way — `ImmutableArray.Builder` with
+  `MoveToImmutable`, or `Array.Resize`, allocate and copy identically. The only way out is giving
+  `PreprocessResult` a buffer-plus-length instead of an `ImmutableArray`, which is a parser-wide API
+  change for one allocation.
+- **`Lexer`'s `ToImmutable()`** has the same shape and the same answer. Pre-sizing its builder by a
+  characters-per-token ratio is separately REJECTED with evidence in PERF.md (bo1 486 to 596 MB of
+  holes).
+
+**Still worth measuring, in the cache path.**
+
+- **Restore reads every file TWICE.** `WorkspaceIndexer` reads and hashes the file, and then
+  `DiskStillMatches` reads the whole file AGAIN and compares the entire string, on both the restore
+  and the analyse path. It is a race guard whose real backstop is the watched-file event, and it is
+  not part of the stat-first trade above — it was never measured separately. A streaming byte compare
+  would keep the guarantee exactly and drop a file-sized string per file; a stat compare would drop
+  the read but weaken the guard.
+- **Enumeration is serial and blocks every worker** (`WorkspaceIndexer`'s own doc: 295,640 files to
+  find 1,105). PERF.md measures 0.1 s at 50K with a WARM OS cache, which is the best case and not a
+  user's first start. Feeding `Parallel.ForEachAsync` from the enumerable through a channel is the
+  change — but **measure a cold-OS-cache, game-install-rooted workspace first**, and do not make it
+  if the gap is not there: it is the most structural item here and the only one that touches indexing
+  order.
+- **The `deps` table is dead.** Never written, never read; only `ApplyDelete` still touches it. It
+  stays so an existing database still opens, which is worth a schema-version decision rather than a
+  quiet removal.
+
 ---
 
 ## Decided — not doing

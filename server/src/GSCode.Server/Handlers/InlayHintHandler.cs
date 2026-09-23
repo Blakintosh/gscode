@@ -275,11 +275,33 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
                 return identifier.Token.Provenance.DefinitionSite is not null;
             case CallNode { Callee: QualifiedNode qualified }:
                 return qualified.NameToken.Provenance.DefinitionSite is not null;
-            case CallNode { Callee: PointerDerefNode { Pointer: IdentifierNode pointer } }:
-                return pointer.Token.Provenance.DefinitionSite is not null;
+            case CallNode { Callee: PathQualifiedNode path }:
+                return path.NameToken.Provenance.DefinitionSite is not null;
+            case CallNode { Callee: PointerDerefNode deref }:
+                return DerefFromMacroExpansion(deref);
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Whether a <c>[[ ... ]]()</c> callee was produced by expanding a macro body.
+    ///
+    /// The pointer is not always a bare identifier — <c>[[ self.callback ]]()</c> holds it in a
+    /// field — and the shapes that were not listed answered "not from a macro", which let an
+    /// expansion be hinted at the invocation's own range. Asking the pointer EXPRESSION rather than
+    /// enumerating its forms inline is what keeps the answer right as the grammar grows.
+    /// </summary>
+    private static bool DerefFromMacroExpansion(PointerDerefNode deref)
+    {
+        return deref.Pointer switch
+        {
+            IdentifierNode identifier => identifier.Token.Provenance.DefinitionSite is not null,
+            MemberNode member => member.NameToken.Provenance.DefinitionSite is not null,
+            QualifiedNode qualified => qualified.NameToken.Provenance.DefinitionSite is not null,
+            PathQualifiedNode path => path.NameToken.Provenance.DefinitionSite is not null,
+            _ => false,
+        };
     }
 
     private void AddParameterNameHints(
@@ -420,25 +442,56 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
                 target, qualified.NamespaceToken.Text, qualified.NameToken.Text);
         }
 
+        if ( call.Callee is PathQualifiedNode path )
+        {
+            return PathQualifiedParameterNames(target, path);
+        }
+
         return default;
     }
 
-    /// <summary>A bare name: a script function in one of the file's namespaces, else a builtin.</summary>
+    /// <summary>A bare name: a script function the file's scope reaches, else a builtin.</summary>
     private ImmutableArray<string> UnqualifiedParameterNames(NavigationTarget target, string name)
     {
         // Interned once outside the loop below, not recomputed per namespace tried — a file
         // importing several namespaces was lowercasing the same name once per candidate.
         string keyName = NameTable.Shared.InternLower(name);
 
-        // The DECLARED namespace set, not the spans — a phantom span cost a full store scan here on
-        // every hint.
-        foreach ( string declared in target.Result.Extraction.DeclaredNamespaces )
+        if ( !GameProfile.Active.ResolvesByNamespace )
         {
-            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                target.Store, target.ContextId, target.Path, declared, keyName, askingNamespaces: target.Namespaces);
-            if ( found.Length > 0 )
+            // A merge dialect (#include: CoD4/WaW/MW2/BO1) has no #namespace, so the extractor
+            // defaults every function's namespace to its FILE NAME STEM — a fallback naming a
+            // scope nobody wrote. Asking by declared namespace there answers only for the asking
+            // file's OWN functions and misses everything #include brings in, which is how these
+            // games reach another file at all. It looked like the family worked on CoD4 because
+            // same-file calls did get labels; every cross-file one was silently unlabelled.
+            //
+            // SignatureEngine makes exactly this split for exactly this reason, and the two answer
+            // one question about one call site, so they have to make it the same way.
+            FunctionSymbol? included = DatabaseQueries.FunctionInIncludeScope(
+                target.Store,
+                target.ContextId,
+                target.Path,
+                DatabaseQueries.IncludedScriptPaths(target.Result),
+                keyName);
+
+            if ( included is not null )
             {
-                return [.. found[0].Function.Parameters.Select(static p => p.Name)];
+                return [.. included.Parameters.Select(static p => p.Name)];
+            }
+        }
+        else
+        {
+            // The DECLARED namespace set, not the spans — a phantom span cost a full store scan
+            // here on every hint.
+            foreach ( string declared in target.Result.Extraction.DeclaredNamespaces )
+            {
+                ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
+                    target.Store, target.ContextId, target.Path, declared, keyName, askingNamespaces: target.Namespaces);
+                if ( found.Length > 0 )
+                {
+                    return [.. found[0].Function.Parameters.Select(static p => p.Name)];
+                }
             }
         }
 
@@ -473,6 +526,36 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             target,
             new SymbolKey(qualifierKey, nameKey, GSCode.Core.Symbols.SymbolKind.Function),
             ReferenceKind.Call);
+    }
+
+    /// <summary>
+    /// A <c>maps\_utility::set_ambient( ... )</c> reference - the Infinity Ward path form, which
+    /// only the merge dialects have.
+    ///
+    /// The path names the FILE the function is in rather than a namespace, so this is a lookup by
+    /// name scoped to that one file. Asked with an EMPTY asking path on purpose: the scope helper
+    /// searches the asking file first otherwise, and a path call names where it wants to go.
+    ///
+    /// These were silent, and on these games that is most cross-file calls - CoD4's shipped scripts
+    /// write <c>maps\_utility::createOneshotEffect</c> alone 3,147 times.
+    /// </summary>
+    private ImmutableArray<string> PathQualifiedParameterNames(NavigationTarget target, PathQualifiedNode path)
+    {
+        // The `::foo` local form carries an empty path and means this file, which is the question
+        // the unqualified route already answers.
+        if ( path.Path.Length == 0 )
+        {
+            return UnqualifiedParameterNames(target, path.NameToken.Text);
+        }
+
+        FunctionSymbol? found = DatabaseQueries.FunctionInIncludeScope(
+            target.Store,
+            target.ContextId,
+            askingPath: "",
+            [RelativePathIndex.Normalize(path.Path)],
+            NameTable.Shared.InternLower(path.NameToken.Text));
+
+        return found is null ? default : [.. found.Parameters.Select(static p => p.Name)];
     }
 
     /// <summary>

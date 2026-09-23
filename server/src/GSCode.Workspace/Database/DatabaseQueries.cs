@@ -33,7 +33,19 @@ public sealed record ResolvedFunction(FunctionSymbol Function, ScriptRecord Reco
 }
 
 /// <summary>A resolved class with its declaring record.</summary>
-public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record);
+public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record)
+{
+    /// <summary>
+    /// The file <see cref="ClassSymbol.NameRange"/> is actually a position IN, by the rule
+    /// <see cref="ResolvedFunction.DeclaringPath"/> states at length: a class declared inside an
+    /// <c>#insert</c>ed header carries a header-true range, and pairing that with the including
+    /// file's path points at whatever text happens to sit at that line and column over there.
+    /// </summary>
+    public string DeclaringPath
+    {
+        get { return Class.SourceFile.Length > 0 ? Class.SourceFile : Record.Path; }
+    }
+}
 
 /// <summary>
 /// The files an <c>#include</c> chain reaches, and whether the walk saw all of them.

@@ -4,8 +4,10 @@ using GSCode.Parser;
 using GSCode.Parser.Lexing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
+using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Typing;
 using GSCode.Server.Mapping;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -85,6 +87,40 @@ public sealed class HoverHandler : HoverHandlerBase
         return Task.FromResult<Hover?>(null);
     }
 
+    /// <summary>
+    /// A markdown link to a declaration, for the line under a hover's signature. Functions, classes
+    /// and macros all get one; builtins, keywords and fields never reach it — the first two because
+    /// the engine declares them and there is nothing to open, a field because its "definition" is
+    /// every write that agrees rather than one place.
+    ///
+    /// <paramref name="path"/> is the file <paramref name="range"/> is truly a position in, which
+    /// for a symbol that arrived through an <c>#insert</c> is the HEADER and not the including
+    /// file — <see cref="ResolvedFunction.DeclaringPath"/> and
+    /// <see cref="ResolvedClass.DeclaringPath"/> answer that for a symbol, and a macro definition's
+    /// <c>SourceFile</c> does for a macro. Pairing a header-true range with the including file's
+    /// path points at whatever text happens to sit at that line and column over there.
+    ///
+    /// The target is spelled as a <c>#L&lt;line&gt;,&lt;column&gt;</c> fragment on the file URI,
+    /// which is how an editor is told to put the caret somewhere rather than merely open the file;
+    /// both halves are 1-based there while ours are 0-based. The label is script-relative so it
+    /// reads the way the scripts themselves name files, and is fenced as code so a path's
+    /// backslashes and underscores are not eaten as markdown escapes and emphasis.
+    /// </summary>
+    private string DefinitionLink(string path, TextRange range)
+    {
+        Position start = range.Start;
+
+        ResolutionContext context = _support.Resolver.GetContext(path);
+        string relative = _support.Resolver.GetScriptRelativePath(path, context);
+
+        // "" means the file is under no known root — an untitled or out-of-tree script. Its own
+        // name is still more use to the reader than an absolute path the widget would wrap.
+        string label = relative.Length > 0 ? relative : System.IO.Path.GetFileName(path);
+
+        string uri = DocumentUri.FromFileSystemPath(path).ToString();
+        return $"[`{label}:{start.Line + 1}`]({uri}#L{start.Line + 1},{start.Character + 1})";
+    }
+
     private string? RenderHover(
         NavigationTarget target, SymbolKey key, TextRange hitRange, ReferenceKind referenceKind)
     {
@@ -100,7 +136,10 @@ public sealed class HoverHandler : HoverHandlerBase
 
                 if ( functions.Length > 0 )
                 {
-                    return MarkdownDocRenderer.RenderFunction(functions[0].Function, functions[0].OwnerClass);
+                    return MarkdownDocRenderer.RenderFunction(
+                        functions[0].Function,
+                        functions[0].OwnerClass,
+                        DefinitionLink(functions[0].DeclaringPath, functions[0].Function.NameRange));
                 }
 
                 // Fall back to the namespace-less builtin library.
@@ -111,14 +150,35 @@ public sealed class HoverHandler : HoverHandlerBase
             {
                 ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
                     target.Store, target.ContextId, key.Namespace, key.Name);
-                return classes.Length > 0 ? MarkdownDocRenderer.RenderClass(classes[0].Class) : null;
+                if ( classes.Length == 0 )
+                {
+                    return null;
+                }
+
+                return MarkdownDocRenderer.RenderClass(
+                    classes[0].Class, DefinitionLink(classes[0].DeclaringPath, classes[0].Class.NameRange));
             }
             case SymbolKind.Macro:
             {
-                MacroRecord? macro = FindMacro(target, key.Name);
-                return macro is not null
-                    ? MarkdownDocRenderer.RenderMacro(macro, FindMacroExpansion(target, key.Name, hitRange))
-                    : null;
+                GSCode.Parser.Preprocessing.MacroDefinition? macro = FindMacro(target, key.Name);
+                if ( macro is null )
+                {
+                    return null;
+                }
+
+                // SourceFile is null for a macro this file defines itself; non-null names the .gsh
+                // an #insert brought it in from, which is the answer the reader does not otherwise
+                // have.
+                string macroPath = macro.SourceFile ?? target.Path;
+                return MarkdownDocRenderer.RenderMacro(
+                    new MacroRecord(
+                        macro.Name,
+                        macro.IsFunctionLike,
+                        macro.Parameters ?? [],
+                        macro.NameRange,
+                        macro.Documentation ?? ""),
+                    FindMacroExpansion(target, key.Name, hitRange),
+                    DefinitionLink(macroPath, macro.NameRange));
             }
             case SymbolKind.Field:
                 return RenderField(key.Name, target.Language, target);
@@ -213,19 +273,19 @@ public sealed class HoverHandler : HoverHandlerBase
         return [];
     }
 
-    private MacroRecord? FindMacro(NavigationTarget target, string name)
+    /// <summary>
+    /// The definition in effect for <paramref name="name"/> — the document's own macros, then any
+    /// GSH it consults. The DEFINITION rather than a <see cref="MacroRecord"/> built from it,
+    /// because the record drops <c>SourceFile</c>, and which file the <c>#define</c> is in is half
+    /// of what the hover now reports.
+    /// </summary>
+    private static GSCode.Parser.Preprocessing.MacroDefinition? FindMacro(NavigationTarget target, string name)
     {
-        // The document's own macros, then any GSH it consults.
         foreach ( GSCode.Parser.Preprocessing.MacroDefinition definition in target.Result.Preprocessed.Macros.All )
         {
             if ( string.Equals(definition.Name, name, StringComparison.Ordinal) )
             {
-                return new MacroRecord(
-                    definition.Name,
-                    definition.IsFunctionLike,
-                    definition.Parameters ?? [],
-                    definition.NameRange,
-                    definition.Documentation ?? "");
+                return definition;
             }
         }
 

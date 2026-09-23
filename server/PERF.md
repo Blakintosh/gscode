@@ -1347,6 +1347,42 @@ Two things this measurement also settled:
 If cold ever climbs again without fragmentation climbing with it, that is the leak-hunt
 signal — a genuinely higher live set means the analysis path is retaining something.
 
+### 2026-09-23: the leaf symbols were classes, and RETAINED memory moved for the first time
+
+Every memory change above is an ALLOCATION-SHAPE change, and each was held to the constraint that
+retained memory must not move. This is the first one aimed at retained memory itself, so the same
+discipline runs inverted: live must go down and nothing else may.
+
+`AssignmentSymbol`, `ParameterSymbol`, `MemberSymbol`, `NamespaceSpan`, `DependencyEdge` and
+`PathCallReference` were `sealed record` CLASSES held in `ImmutableArray` fields of a `ScriptRecord`
+— so each cost a 16-byte object header plus an 8-byte array slot on top of its fields, and there is
+one `AssignmentSymbol` per assignment in every function body of every file, kept for CLOSED files.
+`ReferenceEntry` beside them has been a `readonly record struct` laid out inline for exactly this
+reason, as have `SymbolKey`, `TextRange` and `Position`.
+
+Live set 15 s after indexing, uninstrumented, before and after in the same session:
+
+| | files | before | after | |
+|---|---:|---:|---:|---:|
+| bo3 | 1,085 | 59.3 MB | 57.3 MB | −3.4% |
+| cod4 | 904 | 58.9 MB | 57.2 MB | −2.9% |
+| waw | 1,978 | 98.1 MB | 95.1 MB | −3.1% |
+| mw2 | 1,479 | 84.6 MB | 82.3 MB | −2.7% |
+| bo1 | 2,963 | 166.9 MB | 161.2 MB | −3.4% |
+
+**About 3%, on every game, in the same direction** — roughly 1.9 KB a file on bo1. Read it as what
+it is: a real and repeatable reduction, and a small one. The per-file cost is dominated by the
+strings and the reference array, not by the headers on the small leaves, so this is the floor of
+what object-shape work can return rather than an indication there is more of it to find.
+
+`FunctionSymbol` and `ClassSymbol` were deliberately left as classes: they are large, and
+`ClassSymbol.Constructor`/`Destructor` are nullable, which a struct cannot be without changing what
+"absent" means.
+
+**Nothing else moved**, which is the check that makes the number attributable: the whole solution
+compiled with no change to any call site — no null comparison, no cast, no `FirstOrDefault` over
+these types existed to break — and all 2,925 unit tests pass.
+
 ## Measured: the GC, which was three quarters of the cold index
 
 The cold-index sections above all say the same thing — `index.analyse` is 86–93% of thread-time —

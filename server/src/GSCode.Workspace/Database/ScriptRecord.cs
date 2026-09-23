@@ -23,7 +23,7 @@ public sealed record MacroRecord(
 /// <param name="ResolvedPath">Normalized absolute target, or "" when unresolved.</param>
 /// <param name="IsInsert">True for #insert edges (GSH), false for #using.</param>
 /// <param name="Range">Directive range in the root file.</param>
-public sealed record DependencyEdge(string RawPath, string ResolvedPath, bool IsInsert, TextRange Range);
+public readonly record struct DependencyEdge(string RawPath, string ResolvedPath, bool IsInsert, TextRange Range);
 
 /// <summary>
 /// The complete, immutable knowledge about one script file. Updates build a whole new

@@ -12,7 +12,7 @@ namespace GSCode.Core.Symbols;
 /// <param name="Name">Display-case name.</param>
 /// <param name="ByRef">Declared with &amp; (array pass-by-reference).</param>
 /// <param name="DefaultValueText">The default value as written, or "" when none.</param>
-public sealed record ParameterSymbol(string Name, bool ByRef, string DefaultValueText);
+public readonly record struct ParameterSymbol(string Name, bool ByRef, string DefaultValueText);
 
 /// <summary>One tracked assignment: a local (foo = x) or a field write (self.foo = x).</summary>
 /// <param name="OwnerName">Lowercase owner: "" for locals, else self/level/game/world/anim or the variable's name.</param>
@@ -25,7 +25,7 @@ public sealed record ParameterSymbol(string Name, bool ByRef, string DefaultValu
 /// worth a line in the outline, where `i`, `key` and `value` from every loop in the file drown
 /// the names that mean something.
 /// </param>
-public sealed record AssignmentSymbol(
+public readonly record struct AssignmentSymbol(
     string OwnerName, string Name, string KeyName, TextRange Range, bool IsLoopVariable = false);
 
 /// <summary>One declared function (top-level or class method).</summary>
@@ -75,7 +75,7 @@ public sealed record FunctionSymbol
 }
 
 /// <summary>One class 'var' member.</summary>
-public sealed record MemberSymbol(string Name, string KeyName, TextRange Range);
+public readonly record struct MemberSymbol(string Name, string KeyName, TextRange Range);
 
 /// <summary>One declared class.</summary>
 public sealed record ClassSymbol
@@ -125,7 +125,7 @@ public sealed record ClassSymbol
 /// phantom hard to filter: a file with NO <c>#namespace</c> at all has only the implicit span, and
 /// its functions genuinely do live in the namespace named after it.
 /// </summary>
-public sealed record NamespaceSpan(string Name, string KeyName, TextRange NameRange, TextRange GovernedRange);
+public readonly record struct NamespaceSpan(string Name, string KeyName, TextRange NameRange, TextRange GovernedRange);
 
 /// <summary>
 /// The one definition of "which namespaces does this file declare into", shared by the extraction

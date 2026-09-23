@@ -12,7 +12,7 @@ namespace GSCode.Parser.Extraction;
 /// whole include scope. <see cref="NameRange"/> matches the reference's range, which is how the two
 /// are paired. The leading <c>::foo</c> local form has an empty path and is not recorded.
 /// </summary>
-public sealed record PathCallReference(string Path, TextRange NameRange);
+public readonly record struct PathCallReference(string Path, TextRange NameRange);
 
 /// <summary>
 /// The extracted symbol surface of one file: namespaces, declarations with their

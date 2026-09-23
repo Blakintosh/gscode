@@ -15,6 +15,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using GSCode.Core;
+using Position = GSCode.Core.Text.Position;
 
 // The implicit string -> InlayHint.Label conversion is nullable-annotated, so assigning a
 // non-null string trips CS8601; suppressed for this file (the values are always non-null).
@@ -82,6 +83,10 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         TextRange window = request.Range.ToCore();
         List<InlayHint> hints = [];
 
+        // Shared by all three families: one label per position, whichever family got there first.
+        // See AddHint for the two ways one position legitimately arrives twice.
+        HashSet<(Position Position, string Label)> seen = [];
+
         // Both families that need the flow pass read the SAME cached ScriptTypes now — the
         // parameter-name pass for what a `[[ ptr ]]` holds, the type-hint pass for
         // `types.Assignments`, which InferValues computes as part of the same walk it memoises
@@ -106,28 +111,64 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
                 // The list itself carries them all, because hover needs the later ones.
                 if ( inferred.IsFirstForName && window.Contains(inferred.NameRange.Start) )
                 {
-                    hints.Add(new InlayHint
-                    {
-                        Position = inferred.NameRange.End.ToLsp(),
-                        Label = ": " + inferred.Display,
-                        Kind = InlayHintKind.Type,
-                        PaddingLeft = false,
-                    });
+                    AddHint(hints, seen, inferred.NameRange.End, ": " + inferred.Display, InlayHintKind.Type);
                 }
             }
         }
 
         if ( _settings.InlayParameterNames )
         {
-            AddParameterNameHints(target, types, window, hints, cancellationToken);
+            AddParameterNameHints(target, types, window, hints, seen, cancellationToken);
         }
 
         if ( _settings.InlayMacroParameterNames )
         {
-            AddMacroParameterNameHints(target, window, hints, cancellationToken);
+            AddMacroParameterNameHints(target, window, hints, seen, cancellationToken);
         }
 
         return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
+    }
+
+    /// <summary>
+    /// Adds one hint unless an identical one is already there.
+    ///
+    /// Two different things can legitimately produce the same label at the same position, and the
+    /// client draws one label per hint, so without this they stack on top of each other:
+    ///
+    /// A macro body that names a parameter twice splices the SAME argument tokens twice
+    /// (<c>ExpandBody</c> does an <c>AddRange</c> of them, so they keep the call site's own
+    /// provenance), and the parser builds a node per splice. <c>#define TWICE( __a ) __a; __a;</c>
+    /// invoked as <c>TWICE( foo( x ) )</c> therefore yields two <c>foo( x )</c> calls at ONE range
+    /// — and they are correctly not treated as expansion-born, since the author did write that call.
+    ///
+    /// A nested invocation inside a <c>#define</c> body is re-recorded on every expansion of the
+    /// outer macro, so a macro used three times contributes three identical invocations.
+    ///
+    /// Neither is wrong upstream. Both are the same question here — is this label already on screen
+    /// at this spot — so both are answered in one place rather than guarded at each producer.
+    /// </summary>
+    private static void AddHint(
+        List<InlayHint> hints,
+        HashSet<(Position Position, string Label)> seen,
+        Position position,
+        string label,
+        InlayHintKind kind)
+    {
+        if ( !seen.Add((position, label)) )
+        {
+            return;
+        }
+
+        hints.Add(new InlayHint
+        {
+            Position = position.ToLsp(),
+            Label = label,
+            Kind = kind,
+            PaddingLeft = false,
+
+            // A `name:` label wants a space after it; a `: int` one is already spaced by its colon.
+            PaddingRight = kind == InlayHintKind.Parameter,
+        });
     }
 
     /// <summary>
@@ -165,7 +206,11 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// function's parameters the name is often worth less than the space it takes.
     /// </summary>
     private static void AddMacroParameterNameHints(
-        NavigationTarget target, TextRange window, List<InlayHint> hints, CancellationToken cancellationToken)
+        NavigationTarget target,
+        TextRange window,
+        List<InlayHint> hints,
+        HashSet<(Position Position, string Label)> seen,
+        CancellationToken cancellationToken)
     {
         string text = target.Result.Text.Text;
 
@@ -175,7 +220,16 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
 
             // Only invocations written in THIS file: one reached through an #insert has its range
             // in the header's coordinates, which here would land on unrelated lines.
-            if ( invocation.SourceFile is not null || !window.Contains(invocation.Range.Start) )
+            if ( invocation.SourceFile is not null )
+            {
+                continue;
+            }
+
+            // The NAME may sit above the window while the arguments it labels are inside it, so the
+            // only cheap rejection here is a name that starts after the window ends — its arguments
+            // follow the name, so they cannot be inside either. Everything else is decided per
+            // argument below, against the position the label actually goes at.
+            if ( invocation.Range.Start >= window.End )
             {
                 continue;
             }
@@ -201,13 +255,11 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             int count = Math.Min(parameters.Length, spans.Length);
             for ( int index = 0; index < count; index++ )
             {
-                hints.Add(new InlayHint
+                Position position = target.Result.Text.GetPosition(spans[index].Start);
+                if ( window.Contains(position) )
                 {
-                    Position = target.Result.Text.GetPosition(spans[index].Start).ToLsp(),
-                    Label = parameters[index] + ":",
-                    Kind = InlayHintKind.Parameter,
-                    PaddingRight = true,
-                });
+                    AddHint(hints, seen, position, parameters[index] + ":", InlayHintKind.Parameter);
+                }
             }
         }
     }
@@ -235,6 +287,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         ScriptTypes types,
         TextRange window,
         List<InlayHint> hints,
+        HashSet<(Position Position, string Label)> seen,
         CancellationToken cancellationToken)
     {
         // Per call site, because resolving one can run a store lookup per declared namespace. The
@@ -251,7 +304,12 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
                 _ => [],
             };
 
-            if ( arguments.Length == 0 || !window.Contains(node.Range.Start) )
+            // OVERLAPS, not "starts inside". A call's arguments can be on screen while its callee
+            // is a line or two above — every multi-line argument list at the top of the viewport is
+            // this — and testing the call's start dropped all of its labels until the user scrolled
+            // up far enough to bring the name itself into the window. Which labels come out is then
+            // decided per argument, against the position each label goes at.
+            if ( arguments.Length == 0 || !window.Overlaps(node.Range) )
             {
                 continue;
             }
@@ -272,13 +330,11 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             int count = Math.Min(parameters.Length, arguments.Length);
             for ( int index = 0; index < count; index++ )
             {
-                hints.Add(new InlayHint
+                Position position = arguments[index].Range.Start;
+                if ( window.Contains(position) )
                 {
-                    Position = arguments[index].Range.Start.ToLsp(),
-                    Label = parameters[index] + ":",
-                    Kind = InlayHintKind.Parameter,
-                    PaddingRight = true,
-                });
+                    AddHint(hints, seen, position, parameters[index] + ":", InlayHintKind.Parameter);
+                }
             }
         }
     }
@@ -447,7 +503,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     }
 
     /// <summary>The class whose body contains this position, over the file's own handful of classes.</summary>
-    private static string? EnclosingClassAt(NavigationTarget target, GSCode.Core.Text.Position position)
+    private static string? EnclosingClassAt(NavigationTarget target, Position position)
     {
         foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
         {

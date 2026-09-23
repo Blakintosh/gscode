@@ -350,6 +350,21 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   because the formatter refuses files with syntax errors, a half-typed document is left alone
   until it parses again.
 
+## Handlers/ImportEdits.cs
+
+- `PathOf(path)` — a script path in the form an import directive names it: normalized, with the
+  server or client script extension stripped and nothing else (an `#insert` names a header in
+  full). The one spelling: the set built from a file's OWN directives is compared against the ones
+  built from a declaring record's relative path, so two spellings that drift offer an import the
+  file already has. Four copies of this were collapsed into one before it moved here.
+- `InsertionPoint<TNode>(result, beforeLine)` — where a new import goes: after the last one of its
+  kind, else the top of the file. Serves `#using` and `#include` alike; the `#include` version was
+  once a verbatim copy with the node type swapped, the same lesson `FindRemovableDuplicates`
+  learned when a `#using`-only helper left the four merge games with a lint and no fix. `beforeLine`
+  caps which directives count, so moving a misplaced `#using` cannot target a point below itself.
+- Shared rather than private to `CodeActionHandler` because a second writer exists: completion,
+  which offers a function from an unimported file and inserts the same directive.
+
 ## Handlers/CodeActionHandler.cs
 
 - `CallFixContext` — the per-REQUEST state both call fixes share: the name→declarations lookup
@@ -363,16 +378,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   declaration was an honest answer; here the function demonstrably exists and a second copy is a bug.
   Preferred only when a single file can supply it, since several same-named functions is the normal
   state of a merge dialect.
-- `ImportInsertionPoint<TNode>` serves `#using` and `#include` alike. The `#include` version was a
-  verbatim copy with the node type swapped — the same lesson `FindRemovableDuplicates` already
-  learned, where a `#using`-only helper left the four merge games with a lint and no fix.
 - Quick fixes over the open document. `FindRemovableDuplicates(result, selection)` returns the
   import directives — `#using` AND `#include` — whose (case-insensitive) path was already imported
   earlier and whose line overlaps the selection → a "Remove duplicate ..." QuickFix deleting the
   line, bound to the 5018 reported over it. Each directive keeps its own set, mirroring
   `DuplicateImportLint`; no dialect has both forms, so they never meet.
   `FindMissingUsingSites(result, store, contextId, askingPath, selection)` returns the distinct
-  script-relative paths (extension stripped, through `ImportPathOf`) of visible files defining a
+  script-relative paths (extension stripped, through `ImportEdits.PathOf`) of visible files defining a
   qualified call whose namespace the file doesn't import, each paired with the call site it
   answers (own-namespace calls and already-imported files skipped) →
   an "Add #using ..." QuickFix inserting the directive after the last existing #using (or at the

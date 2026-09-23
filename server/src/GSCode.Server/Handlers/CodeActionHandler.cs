@@ -89,7 +89,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is not null )
         {
-            Position insertAt = ImportInsertionPoint<UsingNode>(result);
+            Position insertAt = ImportEdits.InsertionPoint<UsingNode>(result);
             List<MissingUsing> missing = FindMissingUsingSites(result, target.Store, target.ContextId, target.Path, selection);
 
             // How many imports could serve each call site. One means the fix is unambiguous and can
@@ -374,12 +374,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         public Position UsingInsertAt
         {
-            get { return _usingInsertAt ??= ImportInsertionPoint<UsingNode>(Result); }
+            get { return _usingInsertAt ??= ImportEdits.InsertionPoint<UsingNode>(Result); }
         }
 
         public Position IncludeInsertAt
         {
-            get { return _includeInsertAt ??= ImportInsertionPoint<IncludeNode>(Result); }
+            get { return _includeInsertAt ??= ImportEdits.InsertionPoint<IncludeNode>(Result); }
         }
 
         /// <summary>
@@ -397,7 +397,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             {
                 if ( element is UsingNode usingNode )
                 {
-                    paths.Add(ImportPathOf(usingNode.Path));
+                    paths.Add(ImportEdits.PathOf(usingNode.Path));
                 }
             }
 
@@ -615,7 +615,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             return;
         }
 
-        Position insertAt = ImportInsertionPoint<UsingNode>(result, range.Start.Line);
+        Position insertAt = ImportEdits.InsertionPoint<UsingNode>(result, range.Start.Line);
         if ( insertAt.Line >= range.Start.Line )
         {
             // Nowhere earlier to move it to; leave the diagnostic without a fix.
@@ -712,7 +712,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            string usingPath = ImportPathOf(resolved.Record.RelativePath);
+            string usingPath = ImportEdits.PathOf(resolved.Record.RelativePath);
 
             // One offer per namespace+file pair. The same namespace spread over several files is
             // normal, and each file is a genuinely different import.
@@ -802,7 +802,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            string includePath = ImportPathOf(resolved.Record.RelativePath);
+            string includePath = ImportEdits.PathOf(resolved.Record.RelativePath);
             if ( !existingIncludes.Contains(includePath) )
             {
                 candidates.Add(includePath);
@@ -1072,7 +1072,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                     continue;
                 }
 
-                string usingPath = ImportPathOf(resolved.Record.RelativePath);
+                string usingPath = ImportEdits.PathOf(resolved.Record.RelativePath);
                 if ( existingUsings.Contains(usingPath) || !offered.Add(usingPath) )
                 {
                     continue;
@@ -1083,32 +1083,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         }
 
         return missing;
-    }
-
-    /// <summary>
-    /// Where a new import belongs: just after the last one of its kind, else the top of the file.
-    /// <paramref name="beforeLine"/> caps which directives count, so moving a misplaced <c>#using</c>
-    /// does not target a point below itself — the directive being moved is the very thing that must
-    /// not anchor the insertion.
-    /// </summary>
-    /// <typeparam name="TNode">
-    /// <c>UsingNode</c> or <c>IncludeNode</c>. Written once for both rather than per directive: this
-    /// file learned the same lesson at <see cref="FindRemovableDuplicates"/>, where a
-    /// <c>#using</c>-only helper left the four merge games with a lint and no fix behind it.
-    /// </typeparam>
-    private static Position ImportInsertionPoint<TNode>(ParseResult result, int beforeLine = int.MaxValue)
-        where TNode : AstNode
-    {
-        int line = 0;
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            if ( element is TNode && element.Range.Start.Line < beforeLine )
-            {
-                line = element.Range.Start.Line + 1;
-            }
-        }
-
-        return new Position(line, 0);
     }
 
     private static CodeAction BuildRemoveAction(
@@ -1233,40 +1207,5 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     {
         return QuickFix(
             title, uri, edits, diagnostic is null ? null : new Container<LspDiagnostic>(diagnostic), preferred);
-    }
-
-    /// <summary>
-    /// A path in the form an import directive names a script in: normalized, and without the
-    /// language's own extension. Written once because the set built from the file's OWN directives
-    /// is compared against the ones built from a declaring record's relative path — two spellings
-    /// would offer an import the file already has.
-    ///
-    /// Not <c>RelativePathIndex.Normalize</c>, which strips ANY extension: only the server and
-    /// client script extensions come off here, since <c>#insert</c> names a header in full.
-    /// </summary>
-    private static string ImportPathOf(string path)
-    {
-        return StripExtension(PathUtil.NormalizeScriptPath(path));
-    }
-
-    private static string StripExtension(string path)
-    {
-        // Scripts are reached by #using, which names them without extension. Strip the server
-        // or client extension; headers keep theirs (#insert names them in full). Two checks
-        // rather than a loop over an array literal built fresh per call — GameProfile.Active can
-        // change mid-session, so the two extensions cannot be cached, and there are only ever two.
-        string serverExtension = GameProfile.Active.ServerScriptExtension;
-        if ( path.EndsWith(serverExtension, StringComparison.Ordinal) )
-        {
-            return path[..^serverExtension.Length];
-        }
-
-        string clientExtension = GameProfile.Active.ClientScriptExtension;
-        if ( path.EndsWith(clientExtension, StringComparison.Ordinal) )
-        {
-            return path[..^clientExtension.Length];
-        }
-
-        return path;
     }
 }

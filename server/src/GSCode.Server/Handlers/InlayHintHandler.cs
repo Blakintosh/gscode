@@ -353,12 +353,29 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             for ( int index = 0; index < count; index++ )
             {
                 Position position = arguments[index].Range.Start;
-                if ( window.Contains(position) )
+                if ( window.Contains(position) && !SaysItsOwnName(arguments[index], parameters[index]) )
                 {
                     AddHint(hints, seen, position, parameters[index] + ":", InlayHintKind.Parameter);
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the argument already spells the parameter's name, making the label say nothing.
+    ///
+    /// <c>give_weapon( player, weapon )</c> reading <c>give_weapon( player: player, weapon: weapon )</c>
+    /// is noise, and GSC's habit of naming a local after the parameter it feeds makes it common.
+    ///
+    /// BARE IDENTIFIERS only. A field access whose last segment happens to match —
+    /// <c>give_weapon( self.weapon )</c> against a <c>weapon</c> parameter — is not the same
+    /// claim: the agreement there can be coincidence, and hiding the label would hide the one thing
+    /// the reader could not already see.
+    /// </summary>
+    private static bool SaysItsOwnName(ExprNode argument, string parameterName)
+    {
+        return argument is IdentifierNode identifier
+            && string.Equals(identifier.Token.Text, parameterName, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

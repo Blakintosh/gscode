@@ -47,23 +47,24 @@ public class InlayHintParameterTests
         + "{\n"                                        // 6
         + "}\n"                                        // 7
         + "\n"                                         // 8
-        + "function run( player )\n"                   // 9
+        + "function run( who )\n"                      // 9
         + "{\n"                                        // 10
-        + "    apply( player, 3 );\n"                  // 11
+        + "    apply( who, 3 );\n"                     // 11
         + "\n"                                         // 12
         + "    util::give_weapon(\n"                   // 13
-        + "        player,\n"                          // 14
+        + "        who,\n"                             // 14
         + "        \"smg\" );\n"                       // 15
         + "\n"                                         // 16
-        + "    TWICE( apply( player, 7 ) );\n"         // 17
-        + "    custom_builtin( 5 );\n"                 // 18
-        + "}\n";                                       // 19
+        + "    TWICE( apply( who, 7 ) );\n"            // 17
+        + "    apply( target, amount );\n"             // 18
+        + "    custom_builtin( 5 );\n"                 // 19
+        + "}\n";                                       // 20
 
     private const string UtilSource =
         "#namespace util;\n"
-        + "function give_weapon( player, weapon )\n"
-        + "{\n"
-        + "}\n";
+        + "function give_weapon( player, weapon )\n"   // 21
+        + "{\n"                                        // 22
+        + "}\n";                                       // 23
 
     /// <summary>Only the call-site family on, so nothing else can supply a hint under test.</summary>
     private static ServerSettings ParametersOnly()
@@ -155,7 +156,7 @@ public class InlayHintParameterTests
     {
         List<InlayHint> hints = await HintsAsync(ParametersOnly());
 
-        InlayHint target = At(hints, 11, ColumnOf(11, "player"));
+        InlayHint target = At(hints, 11, ColumnOf(11, "who"));
         Assert.Equal("target:", target.Label.String);
         Assert.Equal(InlayHintKind.Parameter, target.Kind);
         Assert.True(target.PaddingRight);
@@ -168,7 +169,7 @@ public class InlayHintParameterTests
     {
         List<InlayHint> hints = await HintsAsync(ParametersOnly());
 
-        Assert.Equal("player:", At(hints, 14, ColumnOf(14, "player")).Label.String);
+        Assert.Equal("player:", At(hints, 14, ColumnOf(14, "who")).Label.String);
         Assert.Equal("weapon:", At(hints, 15, ColumnOf(15, "\"smg\"")).Label.String);
     }
 
@@ -177,7 +178,20 @@ public class InlayHintParameterTests
     {
         List<InlayHint> hints = await HintsAsync(ParametersOnly());
 
-        Assert.Equal("duration:", At(hints, 18, ColumnOf(18, "5")).Label.String);
+        Assert.Equal("duration:", At(hints, 19, ColumnOf(19, "5")).Label.String);
+    }
+
+    [Fact]
+    public async Task AnArgumentThatAlreadySpellsItsParameterIsNotLabelled()
+    {
+        // `apply( target, amount )` against `function apply( target, amount )` would render as
+        // `apply( target: target, amount: amount )`, which says nothing the line does not already.
+        // The fixture's other calls pass `who`, so they keep their labels — that is the half of
+        // this rule worth pinning, since a suppression that fires too widely is silent.
+        List<InlayHint> hints = await HintsAsync(ParametersOnly());
+
+        Assert.DoesNotContain(hints, hint => hint.Position.Line == 18);
+        Assert.Contains(hints, hint => hint.Position.Line == 11);
     }
 
     [Fact]
@@ -190,7 +204,7 @@ public class InlayHintParameterTests
         List<InlayHint> hints = await HintsAsync(ParametersOnly(), new LspRange(14, 0, 16, 0));
 
         Assert.Equal(2, hints.Count);
-        Assert.Equal("player:", At(hints, 14, ColumnOf(14, "player")).Label.String);
+        Assert.Equal("player:", At(hints, 14, ColumnOf(14, "who")).Label.String);
         Assert.Equal("weapon:", At(hints, 15, ColumnOf(15, "\"smg\"")).Label.String);
     }
 

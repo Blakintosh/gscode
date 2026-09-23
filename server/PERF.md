@@ -1383,6 +1383,30 @@ what object-shape work can return rather than an indication there is more of it 
 compiled with no change to any call site — no null comparison, no cast, no `FirstOrDefault` over
 these types existed to break — and all 2,925 unit tests pass.
 
+### 2026-09-23: interning the directive paths and the context id, measured and REJECTED
+
+The audit that found the leaf symbols also found two strings a record keeps that nothing interns,
+and both looked like the same shape as the `NameTable` work that came before. Neither survives being
+sized, and this records the sizing so nobody re-derives the idea from the shape alone.
+
+- **`DependencyEdge.RawPath`** is assembled token by token with a `StringBuilder` in the parser, so
+  every file that writes `#include maps\_utility` holds its own copy. Counted over the cod4 corpus:
+  **835 `#include` occurrences, 68 distinct** — so interning would drop about 767 strings, on the
+  order of 58 KB against 57 MB retained. Scaled to a 50,000-file workspace it is a few MB against
+  2.3 GB.
+- **`ScriptRecord.ContextId`** is concatenated per record, so a mod workspace holds one
+  identical-but-distinct `"mod:name"` per file. At 50,000 files that is roughly 2.5 MB, and it
+  cannot be seen at all on the corpora here, every one of which is `raw` — already a shared literal.
+
+Implemented and measured anyway, since the argument above is an estimate and the probe is not: live
+set 15 s after indexing moved 57.3 → 56.4 MB on bo3 and **not at all** on cod4 (57.2), waw (95.1),
+mw2 (82.3 → 81.9) or bo1 (161.2 → 161.1) — inside the run-to-run spread this file documents
+everywhere. Reverted.
+
+What it would have cost is the reason not to keep it for the few MB: `ScriptDatabase` has no
+`NameTable`, every other interning site is handed one explicitly, and this would have reached for
+`NameTable.Shared` as a hidden global to buy a quantity the probe cannot see.
+
 ## Measured: the GC, which was three quarters of the cold index
 
 The cold-index sections above all say the same thing — `index.analyse` is 86–93% of thread-time —

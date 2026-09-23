@@ -203,36 +203,26 @@ public static class MethodResolution
     public static string? FindDeclaringClass(
         LanguageStore store, string askingContextId, string classKeyName, string methodKeyName)
     {
-        HashSet<string> visited = new(StringComparer.Ordinal);
-        string? current = classKeyName;
+        string? declaring = null;
 
-        for ( int depth = 0; depth < MaxDepth; depth++ )
+        // No localClasses: this answers a question about what the STORE holds, and handing it the
+        // parse in hand would change which declaration wins. Passing the default is exactly what
+        // this walk did for itself before it was shared.
+        WalkAncestors(store, askingContextId, classKeyName, default, (classSymbol, _) =>
         {
-            if ( current is null || !visited.Add(current) )
-            {
-                return null;
-            }
-
-            ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
-                store, askingContextId, namespaceName: null, current);
-
-            if ( classes.Length == 0 )
-            {
-                return null;
-            }
-
-            foreach ( FunctionSymbol method in classes[0].Class.Methods )
+            foreach ( FunctionSymbol method in classSymbol.Methods )
             {
                 if ( string.Equals(method.KeyName, methodKeyName, StringComparison.Ordinal) )
                 {
-                    return current;
+                    declaring = classSymbol.KeyName;
+                    return false;
                 }
             }
 
-            current = classes[0].Class.ParentKeyName;
-        }
+            return true;
+        });
 
-        return null;
+        return declaring;
     }
 
     /// <summary>
@@ -255,43 +245,19 @@ public static class MethodResolution
         ImmutableArray<ClassSymbol> localClasses = default)
     {
         Dictionary<string, ClassMethod> byName = new(StringComparer.Ordinal);
-        HashSet<string> visited = new(StringComparer.Ordinal);
-        string? current = classKeyName;
 
-        for ( int depth = 0; depth < MaxDepth; depth++ )
+        WalkAncestors(store, askingContextId, classKeyName, localClasses, (classSymbol, record) =>
         {
-            if ( current is null || !visited.Add(current) )
-            {
-                break;
-            }
-
-            ClassSymbol? resolved = FindLocal(localClasses, current);
-            ScriptRecord? record = null;
-
-            if ( resolved is null )
-            {
-                ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
-                    store, askingContextId, namespaceName: null, current);
-
-                if ( classes.Length == 0 )
-                {
-                    break;
-                }
-
-                resolved = classes[0].Class;
-                record = classes[0].Record;
-            }
-
-            foreach ( FunctionSymbol method in resolved.Methods )
+            foreach ( FunctionSymbol method in classSymbol.Methods )
             {
                 // TryAdd, not assignment: the walk starts at the most derived class, so the first
                 // declaration of a name seen is the one that wins — which is what makes an override
                 // shadow the method it overrides instead of being offered beside it.
-                byName.TryAdd(method.KeyName, new ClassMethod(method, resolved, record));
+                byName.TryAdd(method.KeyName, new ClassMethod(method, classSymbol, record));
             }
 
-            current = resolved.ParentKeyName;
-        }
+            return true;
+        });
 
         return [.. byName.Values];
     }
@@ -312,6 +278,44 @@ public static class MethodResolution
         ImmutableArray<ClassSymbol> localClasses = default)
     {
         Dictionary<string, ClassMember> byName = new(StringComparer.OrdinalIgnoreCase);
+
+        WalkAncestors(store, askingContextId, classKeyName, localClasses, (classSymbol, _) =>
+        {
+            foreach ( MemberSymbol member in classSymbol.Members )
+            {
+                // TryAdd for the reason MethodsOf uses it: the walk starts at the most derived
+                // class, so a redeclared name resolves to the nearest declaration rather than
+                // being offered twice.
+                byName.TryAdd(member.Name, new ClassMember(member, classSymbol));
+            }
+
+            return true;
+        });
+
+        return [.. byName.Values];
+    }
+
+    /// <summary>
+    /// Walks a class and its ancestors, MOST DERIVED FIRST, handing each resolved class to
+    /// <paramref name="visit"/> until it returns false or the chain ends.
+    ///
+    /// Three callers had written this walk out themselves - <see cref="FindDeclaringClass"/>,
+    /// <see cref="MethodsOf"/> and <see cref="MembersOf"/> - and every rule in it has to hold for
+    /// all three: the most-derived-first order that makes an override win, the
+    /// <see cref="MaxDepth"/> bound that stops a cycle the lint missed, the visited set that stops
+    /// a diamond, and a local class winning over the store's copy of the same name. A change to any
+    /// of those had to land in three places for the three answers to keep agreeing with each other.
+    ///
+    /// The record handed to <paramref name="visit"/> is null when the class came from
+    /// <paramref name="localClasses"/> rather than from the store - see <see cref="ClassMethod"/>.
+    /// </summary>
+    private static void WalkAncestors(
+        LanguageStore store,
+        string askingContextId,
+        string classKeyName,
+        ImmutableArray<ClassSymbol> localClasses,
+        Func<ClassSymbol, ScriptRecord?, bool> visit)
+    {
         HashSet<string> visited = new(StringComparer.Ordinal);
         string? current = classKeyName;
 
@@ -319,10 +323,11 @@ public static class MethodResolution
         {
             if ( current is null || !visited.Add(current) )
             {
-                break;
+                return;
             }
 
             ClassSymbol? resolved = FindLocal(localClasses, current);
+            ScriptRecord? record = null;
 
             if ( resolved is null )
             {
@@ -331,24 +336,20 @@ public static class MethodResolution
 
                 if ( classes.Length == 0 )
                 {
-                    break;
+                    return;
                 }
 
                 resolved = classes[0].Class;
+                record = classes[0].Record;
             }
 
-            foreach ( MemberSymbol member in resolved.Members )
+            if ( !visit(resolved, record) )
             {
-                // TryAdd for the reason MethodsOf uses it: the walk starts at the most derived
-                // class, so a redeclared name resolves to the nearest declaration rather than
-                // being offered twice.
-                byName.TryAdd(member.Name, new ClassMember(member, resolved));
+                return;
             }
 
             current = resolved.ParentKeyName;
         }
-
-        return [.. byName.Values];
     }
 
     private static ClassSymbol? FindLocal(ImmutableArray<ClassSymbol> localClasses, string classKeyName)

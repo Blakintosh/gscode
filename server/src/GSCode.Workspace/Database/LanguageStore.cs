@@ -104,21 +104,119 @@ public sealed class LanguageStore
         return _records.TryGetValue(normalizedPath, out record!);
     }
 
-    /// <summary>Swaps in a new record and diffs it into the reference index and the class graph.</summary>
+    /// <summary>
+    /// What one record contributes to every index here, built from the INCOMING record alone.
+    ///
+    /// It exists to be built OUTSIDE the write gate. Each of these is O(symbols in the file) —
+    /// thousands of references for a large script — and none of them depends on what the store
+    /// currently holds, so serialising them made every indexing thread wait on every other thread's
+    /// hashing, which was 22% of CoD4's cold-index thread-time at 21x parallelism. The gate covers
+    /// only the swap and the dictionary mutations it orders.
+    /// </summary>
+    private sealed class Contributions
+    {
+        /// <summary>What a file contributes once it is gone: nothing, in every index.</summary>
+        public static Contributions None { get; } = new(
+            [], DeclarationIndex.DeclaredKeys.None, [], null, [],
+            DirectiveIndex.Contribution.None, VocabularyIndex.Contribution.None);
+
+        private Contributions(
+            HashSet<SymbolKey> referenceKeys,
+            DeclarationIndex.DeclaredKeys declaredNames,
+            HashSet<string> namespaces,
+            string? relativeKey,
+            HashSet<string> dependencyKeys,
+            DirectiveIndex.Contribution directives,
+            VocabularyIndex.Contribution vocabulary)
+        {
+            ReferenceKeys = referenceKeys;
+            DeclaredNames = declaredNames;
+            Namespaces = namespaces;
+            RelativeKey = relativeKey;
+            DependencyKeys = dependencyKeys;
+            Directives = directives;
+            Vocabulary = vocabulary;
+        }
+
+        public HashSet<SymbolKey> ReferenceKeys { get; }
+
+        public DeclarationIndex.DeclaredKeys DeclaredNames { get; }
+
+        public HashSet<string> Namespaces { get; }
+
+        public string? RelativeKey { get; }
+
+        public HashSet<string> DependencyKeys { get; }
+
+        public DirectiveIndex.Contribution Directives { get; }
+
+        public VocabularyIndex.Contribution Vocabulary { get; }
+
+        public static Contributions Of(ScriptRecord record)
+        {
+            return new Contributions(
+                ReferenceIndex.KeysOf(record.References),
+                DeclarationIndex.KeysOf(record),
+                NamespaceIndex.NamespacesOf(record.Functions),
+                RelativePathIndex.KeyOf(record),
+                DependentsIndex.KeysOf(record),
+                DirectiveIndex.Of(record),
+                VocabularyIndex.Of(record));
+        }
+    }
+
+    /// <summary>
+    /// Replaces one file's contribution to EVERY index, under the caller's gate.
+    ///
+    /// The one place the index list is written out. <see cref="Upsert"/> and <see cref="Remove"/>
+    /// each named all nine for themselves, so adding a tenth index was two edits and forgetting the
+    /// removal half left a deleted file's keys in the index with nothing to report it. A removal is
+    /// an upsert whose contribution is <see cref="Contributions.None"/> and whose next record is
+    /// null, which is what every index's own diff already means by an empty new set.
+    ///
+    /// The `PerfTracker` scopes therefore cover removals too, where they used to cover upserts
+    /// alone. Nothing in `PERF.md`'s table moves: it measures cold-index thread-time, and a cold
+    /// index removes nothing.
+    /// </summary>
+    /// <param name="previous">
+    /// The record being replaced, readable only under the gate — reading it outside would let two
+    /// upserts of one file diff against the same version. Null on a cold index, where every OLD set
+    /// below is empty.
+    /// </param>
+    private void ApplyIndexes(string path, ScriptRecord? previous, ScriptRecord? next, Contributions contributions)
+    {
+        PerfTracker.Begin("upsert.reference");
+        _referenceIndex.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? []), contributions.ReferenceKeys);
+        PerfTracker.End();
+
+        PerfTracker.Begin("upsert.declaration");
+        _declarationIndex.Apply(path, DeclarationIndex.KeysOf(previous), contributions.DeclaredNames);
+        PerfTracker.End();
+
+        PerfTracker.Begin("upsert.namespace");
+        _namespaceIndex.Apply(path, NamespaceIndex.NamespacesOf(previous?.Functions ?? []), contributions.Namespaces);
+        PerfTracker.End();
+
+        PerfTracker.Begin("upsert.class");
+        // The graph reads its own previous contribution, so an empty `next` IS its removal.
+        _classGraph.Apply(path, next?.Classes ?? []);
+        PerfTracker.End();
+
+        _relativePathIndex.Apply(path, RelativePathIndex.KeyOf(previous), contributions.RelativeKey);
+        _dependents.Apply(path, DependentsIndex.KeysOf(previous), contributions.DependencyKeys);
+        _directives.Apply(path, DirectiveIndex.Of(previous), contributions.Directives);
+        _pathTree.Apply(previous, next);
+
+        PerfTracker.Begin("upsert.vocabulary");
+        _vocabulary.Apply(path, VocabularyIndex.Of(previous), contributions.Vocabulary);
+        PerfTracker.End();
+    }
+
+    /// <summary>Swaps in a new record and diffs it into every index.</summary>
     public void Upsert(ScriptRecord record)
     {
-        // Built BEFORE the gate. Both are O(symbols in the file) — thousands of references for a
-        // large script — and they depend only on the INCOMING record, so nothing about them needs
-        // to be serialised. Doing them inside meant every indexing thread waited on every other
-        // thread's hashing, which made this stage 22% of CoD4's cold-index thread-time at 21x
-        // parallelism. The gate now covers only the swap and the dictionary mutations it orders.
-        HashSet<SymbolKey> newKeys = ReferenceIndex.KeysOf(record.References);
-        DeclarationIndex.DeclaredKeys newNames = DeclarationIndex.KeysOf(record);
-        HashSet<string> newNamespaces = NamespaceIndex.NamespacesOf(record.Functions);
-        string? newRelativeKey = RelativePathIndex.KeyOf(record);
-        HashSet<string> newDependencyKeys = DependentsIndex.KeysOf(record);
-        DirectiveIndex.Contribution newDirectives = DirectiveIndex.Of(record);
-        VocabularyIndex.Contribution newVocabulary = VocabularyIndex.Of(record);
+        // Built BEFORE the gate — see Contributions for what that is worth.
+        Contributions contributions = Contributions.Of(record);
 
         lock ( GateFor(record.Path) )
         {
@@ -126,33 +224,7 @@ public sealed class LanguageStore
             _records[record.Path] = record;
             AdjustOverlayCount(previous, record);
 
-            // The OLD sets still have to be built here: `previous` is only knowable under the gate,
-            // and reading it outside would let two upserts of one file diff against the same
-            // version. On a cold index it is always null and these are empty.
-            PerfTracker.Begin("upsert.reference");
-            _referenceIndex.Apply(record.Path, ReferenceIndex.KeysOf(previous?.References ?? []), newKeys);
-            PerfTracker.End();
-
-            PerfTracker.Begin("upsert.declaration");
-            _declarationIndex.Apply(record.Path, DeclarationIndex.KeysOf(previous), newNames);
-            PerfTracker.End();
-
-            PerfTracker.Begin("upsert.namespace");
-            _namespaceIndex.Apply(record.Path, NamespaceIndex.NamespacesOf(previous?.Functions ?? []), newNamespaces);
-            PerfTracker.End();
-
-            PerfTracker.Begin("upsert.class");
-            _classGraph.Apply(record.Path, record.Classes);
-            PerfTracker.End();
-
-            _relativePathIndex.Apply(record.Path, RelativePathIndex.KeyOf(previous), newRelativeKey);
-            _dependents.Apply(record.Path, DependentsIndex.KeysOf(previous), newDependencyKeys);
-            _directives.Apply(record.Path, DirectiveIndex.Of(previous), newDirectives);
-            _pathTree.Apply(previous, record);
-
-            PerfTracker.Begin("upsert.vocabulary");
-            _vocabulary.Apply(record.Path, VocabularyIndex.Of(previous), newVocabulary);
-            PerfTracker.End();
+            ApplyIndexes(record.Path, previous, record, contributions);
         }
     }
 
@@ -194,15 +266,7 @@ public sealed class LanguageStore
             if ( _records.TryRemove(normalizedPath, out ScriptRecord? previous) )
             {
                 AdjustOverlayCount(previous, next: null);
-                _referenceIndex.Apply(normalizedPath, ReferenceIndex.KeysOf(previous.References), []);
-                _declarationIndex.Apply(normalizedPath, DeclarationIndex.KeysOf(previous), DeclarationIndex.DeclaredKeys.None);
-                _namespaceIndex.Apply(normalizedPath, NamespaceIndex.NamespacesOf(previous.Functions), []);
-                _classGraph.Remove(normalizedPath);
-                _relativePathIndex.Apply(normalizedPath, RelativePathIndex.KeyOf(previous), null);
-                _dependents.Apply(normalizedPath, DependentsIndex.KeysOf(previous), []);
-                _directives.Apply(normalizedPath, DirectiveIndex.Of(previous), DirectiveIndex.Contribution.None);
-                _pathTree.Apply(previous, null);
-                _vocabulary.Apply(normalizedPath, VocabularyIndex.Of(previous), VocabularyIndex.Contribution.None);
+                ApplyIndexes(normalizedPath, previous, next: null, Contributions.None);
             }
         }
     }

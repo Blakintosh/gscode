@@ -386,6 +386,28 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// The asking file's own record, then the records at each of <paramref name="normalizedPaths"/>
+    /// — the candidate scope behind <see cref="FunctionsInIncludeScope"/> and
+    /// <see cref="AllVisibleClasses"/>, which ask the same question about two different symbols.
+    ///
+    /// Only the CANDIDATES are shared. Each caller keeps its own dedupe and its own
+    /// <see cref="ApplyShadowing"/> pass, because their comparers differ and folding those together
+    /// would change an answer rather than tidy one.
+    /// </summary>
+    private static List<ScriptRecord> ScopeRecords(
+        LanguageStore store, string normalizedAskingPath, ImmutableArray<string> normalizedPaths)
+    {
+        List<ScriptRecord> records = [];
+        if ( normalizedAskingPath.Length > 0 && store.TryGet(normalizedAskingPath, out ScriptRecord asking) )
+        {
+            records.Add(asking);
+        }
+
+        records.AddRange(RecordsAt(store, normalizedPaths));
+        return records;
+    }
+
+    /// <summary>
     /// The records at each of <paramref name="normalizedPaths"/> (already in
     /// <see cref="RelativePathIndex.Normalize"/>'s form), each path asked once.
     /// </summary>
@@ -477,7 +499,7 @@ public static class DatabaseQueries
                 continue;
             }
 
-            string normalized = NormalizeScriptPath(path);
+            string normalized = RelativePathIndex.Normalize(path);
             if ( normalized.Length > 0 && !paths.Contains(normalized) )
             {
                 paths.Add(normalized);
@@ -485,15 +507,6 @@ public static class DatabaseQueries
         }
 
         return paths.ToImmutable();
-    }
-
-    /// <summary>
-    /// The comparison key for a script path written in a directive: canonical script form, minus
-    /// the extension, because <c>#using</c> and <c>#include</c> name a file without one.
-    /// </summary>
-    private static string NormalizeScriptPath(string path)
-    {
-        return PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(path));
     }
 
     /// <summary>
@@ -668,7 +681,7 @@ public static class DatabaseQueries
             return references;
         }
 
-        string declaring = NormalizeScriptPath(declaringRelativePath);
+        string declaring = RelativePathIndex.Normalize(declaringRelativePath);
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder kept =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
@@ -707,7 +720,7 @@ public static class DatabaseQueries
         GameProfile? profile = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
-        string declaring = NormalizeScriptPath(declaringRelativePath);
+        string declaring = RelativePathIndex.Normalize(declaringRelativePath);
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder kept =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
@@ -771,7 +784,7 @@ public static class DatabaseQueries
             return false;
         }
 
-        string normalized = NormalizeScriptPath(relativePath);
+        string normalized = RelativePathIndex.Normalize(relativePath);
         foreach ( LanguageStore store in stores )
         {
             foreach ( string path in store.FilesAt(normalized) )
@@ -817,7 +830,7 @@ public static class DatabaseQueries
         {
             if ( pathCall.NameRange == entry.Range )
             {
-                return NormalizeScriptPath(pathCall.Path) == declaring;
+                return RelativePathIndex.Normalize(pathCall.Path) == declaring;
             }
         }
 
@@ -835,7 +848,7 @@ public static class DatabaseQueries
 
         if ( declaresItself )
         {
-            return NormalizeScriptPath(record.RelativePath) == declaring;
+            return RelativePathIndex.Normalize(record.RelativePath) == declaring;
         }
 
         return CanReach(record, declaring);
@@ -869,19 +882,19 @@ public static class DatabaseQueries
     /// </summary>
     public static bool Reaches(ScriptRecord record, string declaringRelativePath)
     {
-        return CanReach(record, NormalizeScriptPath(declaringRelativePath));
+        return CanReach(record, RelativePathIndex.Normalize(declaringRelativePath));
     }
 
     private static bool CanReach(ScriptRecord record, string declaring)
     {
-        if ( NormalizeScriptPath(record.RelativePath) == declaring )
+        if ( RelativePathIndex.Normalize(record.RelativePath) == declaring )
         {
             return true;
         }
 
         foreach ( DependencyEdge edge in record.Dependencies )
         {
-            if ( !edge.IsInsert && NormalizeScriptPath(edge.RawPath) == declaring )
+            if ( !edge.IsInsert && RelativePathIndex.Normalize(edge.RawPath) == declaring )
             {
                 return true;
             }
@@ -889,7 +902,7 @@ public static class DatabaseQueries
 
         foreach ( PathCallReference pathCall in record.PathCallTargets )
         {
-            if ( NormalizeScriptPath(pathCall.Path) == declaring )
+            if ( RelativePathIndex.Normalize(pathCall.Path) == declaring )
             {
                 return true;
             }
@@ -907,8 +920,8 @@ public static class DatabaseQueries
         string selfRelativePath,
         ImmutableArray<string> includedPaths)
     {
-        string relative = NormalizeScriptPath(recordRelativePath);
-        return relative == NormalizeScriptPath(selfRelativePath) || includedPaths.Contains(relative);
+        string relative = RelativePathIndex.Normalize(recordRelativePath);
+        return relative == RelativePathIndex.Normalize(selfRelativePath) || includedPaths.Contains(relative);
     }
 
     /// <summary>
@@ -969,13 +982,7 @@ public static class DatabaseQueries
 
         // The asking file itself, then the files its includes name — read from the relative-path
         // index rather than found by normalizing every record's path, which is what this walked.
-        List<ScriptRecord> inScope = [];
-        if ( normalizedAskingPath.Length > 0 && store.TryGet(normalizedAskingPath, out ScriptRecord self) )
-        {
-            inScope.Add(self);
-        }
-
-        inScope.AddRange(RecordsAt(store, includedPaths));
+        List<ScriptRecord> inScope = ScopeRecords(store, normalizedAskingPath, includedPaths);
 
         HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
         foreach ( ScriptRecord record in inScope )
@@ -1034,13 +1041,7 @@ public static class DatabaseQueries
         // The asking file and the files it imports, read by path: this runs per keystroke behind
         // statement-scope completion. It used to read every class-declaring file and keep the
         // imported ones, and in a large workspace every copy of a class-declaring file is one.
-        List<ScriptRecord> candidates = [];
-        if ( normalizedAskingPath.Length > 0 && store.TryGet(normalizedAskingPath, out ScriptRecord asking) )
-        {
-            candidates.Add(asking);
-        }
-
-        candidates.AddRange(RecordsAt(store, importedPaths));
+        List<ScriptRecord> candidates = ScopeRecords(store, normalizedAskingPath, importedPaths);
 
         HashSet<string> seen = new(StringComparer.Ordinal);
         foreach ( ScriptRecord record in candidates )

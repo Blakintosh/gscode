@@ -148,6 +148,8 @@ public sealed class ScriptDatabase
 
     public void UpsertGsh(ScriptRecord record)
     {
+        // Built before the gate, for the reason <see cref="LanguageStore.Upsert"/> builds its own
+        // contribution there.
         DirectiveIndex.Contribution newDirectives = DirectiveIndex.Of(record);
         HashSet<SymbolKey> newReferenceKeys = ReferenceIndex.KeysOf(record.References);
 
@@ -155,10 +157,26 @@ public sealed class ScriptDatabase
         {
             _gshRecords.TryGetValue(record.Path, out ScriptRecord? previous);
             _gshRecords[record.Path] = record;
-            _gshDirectives.Apply(record.Path, DirectiveIndex.Of(previous), newDirectives);
-            _gshPathTree.Apply(previous, record);
-            _gshReferences.Apply(record.Path, ReferenceIndex.KeysOf(previous?.References ?? []), newReferenceKeys);
+            ApplyGshIndexes(record.Path, previous, record, newDirectives, newReferenceKeys);
         }
+    }
+
+    /// <summary>
+    /// Replaces one header's contribution to the header store's three indexes, under
+    /// <see cref="_gshGate"/> — <see cref="LanguageStore.ApplyIndexes"/> for the script stores.
+    /// The one place this list is written out, so a fourth header index is one edit rather than
+    /// two, and cannot be added to the upsert half alone.
+    /// </summary>
+    private void ApplyGshIndexes(
+        string path,
+        ScriptRecord? previous,
+        ScriptRecord? next,
+        DirectiveIndex.Contribution directives,
+        HashSet<SymbolKey> referenceKeys)
+    {
+        _gshDirectives.Apply(path, DirectiveIndex.Of(previous), directives);
+        _gshPathTree.Apply(previous, next);
+        _gshReferences.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? []), referenceKeys);
     }
 
     /// <summary>
@@ -186,9 +204,8 @@ public sealed class ScriptDatabase
         {
             if ( _gshRecords.TryRemove(normalizedPath, out ScriptRecord? previous) )
             {
-                _gshDirectives.Apply(normalizedPath, DirectiveIndex.Of(previous), DirectiveIndex.Contribution.None);
-                _gshPathTree.Apply(previous, null);
-                _gshReferences.Apply(normalizedPath, ReferenceIndex.KeysOf(previous.References), []);
+                ApplyGshIndexes(
+                    normalizedPath, previous, next: null, DirectiveIndex.Contribution.None, []);
             }
         }
     }
@@ -277,21 +294,17 @@ public sealed class ScriptDatabase
         PerfTracker.End();
 
         PerfTracker.Begin("commit.upsert");
-        if ( record.Language == ScriptLanguage.Gsh )
-        {
-            UpsertGsh(record);
-        }
-        else
-        {
-            StoreFor(record.Language).Upsert(record);
-        }
-
+        CommitRecord(record);
         PerfTracker.End();
 
         return record;
     }
 
-    /// <summary>Stores a pre-built record (from the cache) without re-analysing.</summary>
+    /// <summary>
+    /// Stores a pre-built record (from the cache) without re-analysing — and the one place a
+    /// record is routed to the store that owns it, which <see cref="Commit"/> reaches through.
+    /// A header goes to the shared GSH store, everything else to its language world.
+    /// </summary>
     public void CommitRecord(ScriptRecord record)
     {
         if ( record.Language == ScriptLanguage.Gsh )

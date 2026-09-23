@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -374,7 +373,7 @@ public sealed partial class CompletionEngine
         ParseResult result, string contextId, string writtenPath, string callSuffix, bool parameterHints)
     {
         LanguageStore store = _database.StoreFor(result.Language);
-        string normalizedWritten = PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(writtenPath));
+        string normalizedWritten = RelativePathIndex.Normalize(writtenPath);
 
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);

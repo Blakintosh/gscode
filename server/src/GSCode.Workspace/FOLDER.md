@@ -24,6 +24,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `ClassGraph` — the per-language reverse index of class declarations, parent links, and method
   names. Replaces repeated workspace-wide scans with path-valued buckets that can be updated or
   removed exactly when one file changes.
+- `Apply(path, classes)` is the only entry point, and a REMOVAL is `Apply(path, [])` — the graph
+  reads the previous contribution itself, so an empty one empties exactly the buckets that file
+  touched. There is no `Remove`: a second entry point would be one more place for the buckets to be
+  emptied differently.
 - Class declarers are bucketed twice, by bare name and by `(namespace, name)`, in the same `Apply`.
   `LookupClasses` reads the qualified bucket whenever it is given a namespace: in a workspace of
   per-copy namespaces every copy of a class-declaring file shares the bare-name bucket, and a
@@ -44,6 +48,15 @@ lints, `Completion/` and `Typing/` the information surfaces.
   behind `HasOverlayAt`. Upsert swaps records atomically and diffs every index; GSC/CSC isolation is
   two instances of this class, never a filter. Every index key set is built OUTSIDE the write gate,
   from the incoming record alone; only the previous record's is built inside.
+- The index list is written out ONCE, in the private `ApplyIndexes(path, previous, next,
+  contributions)`. `Upsert` and `Remove` both call it — a removal is an upsert whose contribution is
+  `Contributions.None` and whose next record is null, which is what each index's own diff already
+  means by an empty new set. Both used to name all nine indexes for themselves, so a tenth was two
+  edits and forgetting the removal half left a deleted file's keys in the index silently. The
+  `upsert.*` PerfTracker scopes therefore cover removals too; `PERF.md`'s table is unaffected,
+  since it measures cold-index thread-time and a cold index removes nothing.
+- `Contributions` is the private holder for what one record contributes to all nine, built by
+  `Contributions.Of(record)` outside the gate — the shape that keeps the per-file hashing off it.
 - The rule the indexes exist for: nothing a keystroke or a request pays may walk `AllRecords`. At
   50,000 files each walk that did became a per-request cost growing with the workspace — completion,
   one file's lint pass, CodeLens (PERF.md, the scale section). A new query that needs "every record
@@ -138,6 +151,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   walks that normalized every record's path per request to find the handful an import list names
   (`ImportedNamespaces`, `FunctionsInIncludeScope`, inline `path::` completion), reached through
   `DatabaseQueries.RecordsAt`.
+- `Normalize` is THE spelling of that form, not one of several. Everything that compares a written
+  path against this index folds it here — the reachability queries look their answer up in
+  `FilesAt`/`FilesNaming`, which are keyed on it, so a second spelling that drifted would match
+  nothing and report an empty result rather than an error.
 
 ## Database/DependentsIndex.cs
 
@@ -182,10 +199,13 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 - `sealed class ScriptDatabase` — the façade: `Gsc`/`Csc` stores + the shared GSH
   record map (headers serve both worlds). The header store keeps its own `DirectiveIndex`,
-  `PathTreeIndex` and `ReferenceIndex`, diffed in `UpsertGsh`/`RemoveGsh` under ONE gate — headers
+  `PathTreeIndex` and `ReferenceIndex`, diffed in the private `ApplyGshIndexes` that both
+  `UpsertGsh` and `RemoveGsh` call, under ONE gate — headers
   are a few hundred files, so the per-path striping the script stores need buys nothing — and read
   through `GshFilesWriting`, `GshFilesInserting`, `GshPathChildren` and `GshFilesReferencing`. `Commit` builds and stores a record from a
-  ParseResult; `BuildRecord` is the pure builder (macros filtered to file-local,
+  ParseResult, through `CommitRecord` — the one place a record is routed to the store that owns it,
+  headers to the shared GSH store and everything else to its language world. `BuildRecord` is the
+  pure builder (macros filtered to file-local,
   dependency edges from inserts + usings, xxHash64 content hash). `CanSee` encodes the
   visibility rule (raw←raw; mod M←{M,raw}; workspace←{workspaces,raw}); `ContextIdOf`
   stringifies contexts. `SetDiagnostics(path, language, expectedContentHash, diagnostics)`
@@ -318,7 +338,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `HitKind` + `PositionHit` + `static SymbolAtPosition.Resolve` — the one resolver behind
   hover/definition/references/highlight/documentLink: finds the classified reference
   (function/class/macro/field/literal) or #using/#insert dependency path at a position,
-  working from either a stored ScriptRecord or an open document's live ParseResult.
+  working from either a stored ScriptRecord or an open document's live ParseResult. Both overloads
+  read the reference list through one private `ResolveReference`, so the macro guard — never resolve
+  a cursor to text a macro expanded into — has one place to change rather than two.
 
 ## Database/LocalDefinition.cs
 
@@ -413,6 +435,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `ClassMethod` / `static MethodResolution` — canonicalizes class-method call keys across bare,
   qualified, inherited, and unknown-receiver arrow calls. It supplies the shared method surface
   for completion/signature help/hover and the reference union used by definitions and code lenses.
+- Every ancestor walk goes through the private `WalkAncestors` — most derived first, `MaxDepth`
+  bounded, visited-set guarded, a local class beating the store's copy of the same name.
+  `FindDeclaringClass`, `MethodsOf` and `MembersOf` had each written that walk out, so a change to
+  any of those rules had to land in three places for the three answers to keep agreeing.
 
 ## Indexing/WorkspaceIndexer.cs
 

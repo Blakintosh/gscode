@@ -44,7 +44,13 @@ public sealed class ClassGraph
     /// <summary>
     /// Replaces everything one file contributes. The previous contribution is read from the graph
     /// itself rather than passed in, so the index cannot drift out of step with a caller that
-    /// supplied the wrong "before" — and <see cref="Remove"/> is just an empty contribution.
+    /// supplied the wrong "before".
+    ///
+    /// REMOVAL IS AN EMPTY CONTRIBUTION — <c>Apply(path, [])</c> — and there is no separate method
+    /// for it, because a second entry point would be one more place for the buckets to be emptied
+    /// differently. <c>LanguageStore.ApplyIndexes</c> removes a file exactly this way, passing the
+    /// gone record's empty class list, which is what every other index here means by an empty new
+    /// set.
     /// </summary>
     public void Apply(string path, ImmutableArray<ClassSymbol> classes)
     {
@@ -93,12 +99,6 @@ public sealed class ClassGraph
                 }
             }
         }
-    }
-
-    /// <summary>Drops everything a file contributed (it was deleted from disk).</summary>
-    public void Remove(string path)
-    {
-        Apply(path, []);
     }
 
     /// <summary>Paths of files declaring a class of this name (snapshot).</summary>

@@ -38,7 +38,18 @@ public sealed class RelativePathIndex
         return Normalize(record.RelativePath);
     }
 
-    /// <summary>A script path in the index's key form.</summary>
+    /// <summary>
+    /// A script path in the index's key form — and THE comparison key for a script path written in
+    /// a directive: canonical script form, minus the extension, because <c>#using</c> and
+    /// <c>#include</c> name a file without one.
+    ///
+    /// Every caller that compares a written path against this index must fold it here rather than
+    /// spell the two calls itself. The reachability queries in
+    /// <see cref="DatabaseQueries.FindReferencesReaching"/> look their answer up in
+    /// <see cref="LanguageStore.FilesAt"/> and <see cref="LanguageStore.FilesNaming"/>, which are
+    /// keyed on this — a second spelling that drifted would match nothing and report an empty
+    /// result rather than an error.
+    /// </summary>
     public static string Normalize(string scriptPath)
     {
         return PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(scriptPath));

@@ -235,6 +235,10 @@ was done about it. One scope per index, inside the path gate, two cold-index run
 | **`upsert.class`** *(one lock)* | **0.5% / 0.3%** | **0.0% / 0.0%** |
 | **`upsert.namespace`** *(one lock)* | **0.1% / 0.1%** | **0.3% / 0.0%** |
 
+The `upsert.*` scopes now sit in `LanguageStore.ApplyIndexes`, which `Remove` calls as well as
+`Upsert`, so they cover both directions of the diff. The numbers below are unaffected: they are
+cold-index thread-time, and a cold index removes nothing.
+
 **Together they are 0.1–0.8%, and 9–10 ms per run.** Sharding them would buy nothing measurable and
 add two more shard arrays to maintain. Not done, and this is the record of why — the next person to
 notice a process-wide lock in the commit path should read this row before opening the file.

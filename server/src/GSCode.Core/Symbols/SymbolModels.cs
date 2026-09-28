@@ -195,6 +195,29 @@ public enum ReferenceKind
     AddressOf,
     ClassUse,
     FieldAccess,
+
+    /// <summary>
+    /// The field on the LEFT of an assignment — <c>level.x = 1</c>, <c>self.owner += 2</c>.
+    ///
+    /// A field has no declaration, so nothing ever emits a <see cref="Definition"/> for one, and
+    /// go-to-definition on <c>level.craftable_shield_grab</c> answered with an empty list: the
+    /// handler keeps only Definition entries and a field only ever produced
+    /// <see cref="FieldAccess"/>. A write is the closest thing a field HAS to a declaration — it is
+    /// where the name comes into existence and where its value is decided — so separating it from a
+    /// read is what lets that question be answered at all.
+    ///
+    /// Deliberately NOT <see cref="Definition"/>. Every write is one, there is usually more than
+    /// one, and the surfaces that treat a Definition as THE declaration — the CodeLens anchor, the
+    /// hierarchies' anchoring step, <c>DatabaseQueries.DeclaresKey</c> — would each have had to
+    /// learn that a field's is plural. A separate kind leaves all of them reading false as before
+    /// and lets the two handlers that want writes ask for them.
+    ///
+    /// A compound assignment reads before it writes; it is recorded as a write alone, matching how
+    /// an editor colours <c>x += 1</c> and how the typing layer's own <c>FieldWrite.Value</c> is
+    /// left null for that form.
+    /// </summary>
+    FieldWrite,
+
     MacroUse,
     Literal,
 

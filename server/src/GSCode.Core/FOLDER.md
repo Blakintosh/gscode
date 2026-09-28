@@ -79,7 +79,14 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
     enum until an expansion overwriting the kind left every `Kind == Call` rule blind to a call a
     macro produced. When `FromMacro` is set, `Range` is the INVOCATION site, not the callee.
     `IsFunctionCall` is the named call to a script function that five cross-file lints open on.
-    Two kinds worth knowing by name: `MethodCall` is the `[[expr]]->m()` arrow form, split out from
+    Three kinds worth knowing by name. `FieldWrite` is the field on the LEFT of an assignment,
+    split from `FieldAccess` because a field is DECLARED nowhere: nothing ever emits a `Definition`
+    for one, so go-to-definition answered every field with an empty list until its writes could be
+    told from its reads. Not folded into `Definition`, because every write is one and the surfaces
+    that read a Definition as THE declaration (the CodeLens anchor, the hierarchies' anchoring step,
+    `DeclaresKey`) would each have had to learn that a field's is plural. Both kinds carry the same
+    key, so find-references, rename and the `FilesReferencing` index are unchanged.
+    `MethodCall` is the `[[expr]]->m()` arrow form, split out from
     plain `Call` because the arrow GUARANTEES a class method even though its receiver's class is
     usually unknown statically — without the split, an untyped arrow call is indistinguishable from
     an unresolved builtin or unqualified call, which forced the resolution lint to suppress every

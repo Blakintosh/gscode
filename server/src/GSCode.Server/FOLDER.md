@@ -205,6 +205,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - Go-to-definition: functions/classes/macros via their Definition references across the
   visible context; #using/#insert paths jump to the resolved target file.
+- A FIELD is answered from its `FieldWrite` references instead, because a field is declared
+  nowhere and so has no Definition entry anywhere - F12 on `level.craftable_shield_grab` returned
+  an empty list. Its writes are what the question means for a name that comes into existence by
+  being assigned to, and there are usually several, which the protocol already allows for.
+  `ScopeToIncludes` still applies, so a file that writes the field itself is offered its own write
+  first.
 - `ScopeToIncludes` narrows the result to what the call actually reaches: a path call names one file
   and pins to it, anything else prefers the file itself plus `DatabaseQueries.LinkedScriptPaths`.
   Every dialect, not just the merging ones — two BO3 scripts sharing a `#namespace` (the `mp` and
@@ -247,7 +253,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/DocumentHighlightHandler.cs
 
 - Highlights every occurrence of the symbol under the cursor within the current file
-  (definition sites as Write, others as Read). Goes through `NavigationSupport.FindReferencesInFile`
+  (definition sites and field WRITES as Write, others as Read - a field has no Definition entry,
+  so before `FieldWrite` existed the `= 1` that set `level.x` highlighted as a read like any use). Goes through `NavigationSupport.FindReferencesInFile`
   — the same shared query find-references and the CodeLens count use, ASKED for one file rather than
   asked wide and filtered — instead of a raw key comparison over this file's own
   `Extraction.References`. The raw comparison could not canonicalize a method key the way the shared

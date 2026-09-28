@@ -52,6 +52,17 @@ public sealed class SymbolExtractor
     // rather than a name. Nested so an inner expression does not clear an outer concatenation.
     private bool _inStringConcatenation;
 
+    // The range of the field name an assignment is about to write, so that the ordinary expression
+    // walk over the target records it as a write rather than a read.
+    //
+    // A range rather than the token, because the walk reaches the same MemberNode a moment later
+    // through the generic expression case and has to recognise it there; a range is unique to one
+    // token's position, where token identity is a property this file does not otherwise rely on.
+    //
+    // Only the OUTERMOST member of the target is the write. `level.a[ level.b ].c = 1` writes `c`
+    // and reads `a` and `b`, and each of those reaches RecordFieldReference from the same walk.
+    private TextRange? _fieldWriteRange;
+
     private readonly GameProfile _profile;
 
     private SymbolExtractor(string rootFilePath, NameTable names, SourceText text, ImmutableArray<Token> rawTokens, GameProfile profile)
@@ -655,10 +666,20 @@ public sealed class SymbolExtractor
         switch ( expression )
         {
             case AssignmentNode assignment:
+            {
                 RecordAssignmentTarget(assignment.Target, assignments);
+
+                // Set across the TARGET walk only. The value is an ordinary expression — `level.a =
+                // level.b` writes `a` and reads `b` — and a nested assignment inside it brings its
+                // own target, so the previous range is restored rather than cleared.
+                TextRange? enclosingWrite = _fieldWriteRange;
+                _fieldWriteRange = assignment.Target is MemberNode target ? target.NameToken.RootRange : null;
                 WalkExpression(assignment.Target, assignments);
+                _fieldWriteRange = enclosingWrite;
+
                 WalkExpression(assignment.Value, assignments);
                 return;
+            }
             case BinaryNode binary:
             {
                 // A string literal spliced into a `+` chain is a message fragment, not a name, so
@@ -931,10 +952,22 @@ public sealed class SymbolExtractor
         }
     }
 
+    /// <summary>
+    /// One <c>obj.name</c> site, as a read unless an enclosing assignment is writing exactly this
+    /// name — see <see cref="_fieldWriteRange"/>.
+    ///
+    /// Both kinds carry the SAME key, which is what keeps find-references, rename and the
+    /// <c>FilesReferencing</c> index answering as they did: the kind separates a write from a read
+    /// without splitting the symbol they both name.
+    /// </summary>
     private void RecordFieldReference(PToken nameToken)
     {
         SymbolKey key = new(null, _names.InternLower(nameToken.Text), SymbolKind.Field);
-        AddReference(key, nameToken, ReferenceKind.FieldAccess);
+        ReferenceKind kind = _fieldWriteRange == nameToken.RootRange
+            ? ReferenceKind.FieldWrite
+            : ReferenceKind.FieldAccess;
+
+        AddReference(key, nameToken, kind);
     }
 
     private void RecordLiteralReference(LiteralNode literal)

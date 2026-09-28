@@ -19,6 +19,9 @@ namespace GSCode.Server.Handlers;
 /// <summary>
 /// Go-to-definition for functions, classes, and macros (via their Definition references),
 /// plus #using/#insert paths jumping to the target file. Builtins have no definition.
+///
+/// A FIELD is the one kind whose answer is not a Definition reference, because a field is declared
+/// nowhere: it is answered from its WRITES instead. See the comment at <c>declaring</c> below.
 /// </summary>
 public sealed class DefinitionHandler : DefinitionHandlerBase
 {
@@ -91,9 +94,17 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             }
         }
 
+        // A FIELD has no declaration, so it has no Definition entry and this used to return an
+        // empty list for every one of them — F12 on `level.craftable_shield_grab` did nothing at
+        // all. Its writes are what the question means: the places the name comes into existence
+        // and its value is decided. Usually several, which the protocol already allows for.
+        ReferenceKind declaring = hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Field
+            ? ReferenceKind.FieldWrite
+            : ReferenceKind.Definition;
+
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
             [.. DefinitionSources(target, hit.Key, hit.ReferenceKind)
-                .Where(static source => source.Entry.Kind == ReferenceKind.Definition)];
+                .Where(source => source.Entry.Kind == declaring)];
 
         sources = ScopeToIncludes(target, hit, sources);
 

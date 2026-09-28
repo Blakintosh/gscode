@@ -64,10 +64,15 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
                 continue;
             }
 
+            // A field has no Definition entry — it is declared nowhere — so before FieldWrite
+            // existed every occurrence of `level.x` highlighted as a read, including the `= 1`
+            // that set it. The two kinds are the same question asked of two symbol kinds.
+            bool isWrite = entry.Kind == ReferenceKind.Definition || entry.Kind == ReferenceKind.FieldWrite;
+
             highlights.Add(new DocumentHighlight
             {
                 Range = entry.Range.ToLsp(),
-                Kind = entry.Kind == ReferenceKind.Definition ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
+                Kind = isWrite ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
             });
         }
 

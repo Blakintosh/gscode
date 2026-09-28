@@ -33,9 +33,9 @@ public class InlayHintParameterTests
     private const string UtilPath = @"c:\bo3\share\raw\scripts\util.gsc";
 
     /// <summary>
-    /// One file exercising each callee form the family resolves, plus the two shapes that used to
-    /// go wrong: a call whose arguments sit below its own first line, and a macro that names its
-    /// argument twice.
+    /// One file exercising each callee form the family resolves, plus the three shapes that used to
+    /// go wrong: a call whose arguments sit below its own first line, a macro that names its
+    /// argument twice, and an argument that is a macro named after the parameter it feeds.
     /// </summary>
     private const string MainSource =
         "#using scripts\\util;\n"                      // 0
@@ -58,13 +58,20 @@ public class InlayHintParameterTests
         + "    TWICE( apply( who, 7 ) );\n"            // 17
         + "    apply( target, amount );\n"             // 18
         + "    custom_builtin( 5 );\n"                 // 19
-        + "}\n";                                       // 20
+        + "}\n"                                        // 20
+        + "\n"                                         // 21
+        + "#define AMOUNT 4\n"                         // 22
+        + "\n"                                         // 23
+        + "function boost( who )\n"                    // 24
+        + "{\n"                                        // 25
+        + "    apply( who, AMOUNT );\n"                // 26
+        + "}\n";                                       // 27
 
     private const string UtilSource =
         "#namespace util;\n"
-        + "function give_weapon( player, weapon )\n"   // 21
-        + "{\n"                                        // 22
-        + "}\n";                                       // 23
+        + "function give_weapon( player, weapon )\n"
+        + "{\n"
+        + "}\n";
 
     /// <summary>Only the call-site family on, so nothing else can supply a hint under test.</summary>
     private static ServerSettings ParametersOnly()
@@ -192,6 +199,23 @@ public class InlayHintParameterTests
 
         Assert.DoesNotContain(hints, hint => hint.Position.Line == 18);
         Assert.Contains(hints, hint => hint.Position.Line == 11);
+    }
+
+    [Fact]
+    public async Task AMacroArgumentNamedAfterItsParameterIsNotLabelled()
+    {
+        // `apply( who, AMOUNT )` against `apply( target, amount )`. The tree cannot see this: by
+        // the time there is one, the second argument is the literal 4 that `#define AMOUNT 4`
+        // expanded to, so the suppression reads the name back from the preprocessor's invocation
+        // list. Found by the corpus sweep in BO3's craftables scripts, which pass DELETE_TRIGGER
+        // and PERSISTENT to parameters of those names.
+        //
+        // The first argument keeps its label, which is the half that catches a suppression keyed on
+        // the call rather than on the argument.
+        List<InlayHint> hints = await HintsAsync(ParametersOnly());
+
+        Assert.Contains(hints, hint => hint.Position.Line == 26 && hint.Label.String == "target:");
+        Assert.DoesNotContain(hints, hint => hint.Position.Line == 26 && hint.Label.String == "amount:");
     }
 
     [Fact]

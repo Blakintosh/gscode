@@ -324,6 +324,12 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         // which is a subscription problem rather than a dictionary.
         ParameterMemo memo = new();
 
+        // What the reader sees where a macro was invoked, keyed by where the expansion's tokens
+        // report themselves. An expanded argument's node is the VALUE — `DELETE_TRIGGER` is the
+        // literal 1 by the time there is a tree — so the name on screen is recoverable only from
+        // the invocation list, and SaysItsOwnName has nothing to compare against without it.
+        Dictionary<Position, string> macroNames = MacroNamesByPosition(target);
+
         // Per call site, because resolving one can run a store lookup per declared namespace. The
         // client sends one of these per visible range, so scrolling produces a request per frame
         // and cancels the ones it has scrolled past.
@@ -365,7 +371,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             for ( int index = 0; index < count; index++ )
             {
                 Position position = arguments[index].Range.Start;
-                if ( window.Contains(position) && !SaysItsOwnName(arguments[index], parameters[index]) )
+                if ( window.Contains(position) && !SaysItsOwnName(arguments[index], parameters[index], macroNames) )
                 {
                     AddHint(hints, seen, position, parameters[index] + ":", InlayHintKind.Parameter);
                 }
@@ -383,11 +389,49 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// <c>give_weapon( self.weapon )</c> against a <c>weapon</c> parameter — is not the same
     /// claim: the agreement there can be coincidence, and hiding the label would hide the one thing
     /// the reader could not already see.
+    ///
+    /// A MACRO NAME counts as one of those bare words, because a macro name is what the reader has
+    /// in front of them. <c>craftable_trigger_think( ..., DELETE_TRIGGER, PERSISTENT )</c> against
+    /// <c>delete_trigger</c> and <c>persistent</c> parameters is the same repetition spelled in
+    /// capitals, and the corpus sweep found it in the shipped zombie scripts. The tree cannot see
+    /// it — the argument node there is the literal the macro expands to — so the name comes from
+    /// <paramref name="macroNames"/>, which the preprocessor recorded at the invocation site.
     /// </summary>
-    private static bool SaysItsOwnName(ExprNode argument, string parameterName)
+    private static bool SaysItsOwnName(
+        ExprNode argument, string parameterName, Dictionary<Position, string> macroNames)
     {
-        return argument is IdentifierNode identifier
-            && string.Equals(identifier.Token.Text, parameterName, StringComparison.OrdinalIgnoreCase);
+        if ( argument is IdentifierNode identifier )
+        {
+            return string.Equals(identifier.Token.Text, parameterName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return macroNames.TryGetValue(argument.Range.Start, out string? invoked)
+            && string.Equals(invoked, parameterName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Every macro invocation written in THIS file, by the position its expansion's tokens report.
+    ///
+    /// One reached through an <c>#insert</c> carries the header's coordinates, which would collide
+    /// with unrelated positions in the root file, so those are left out exactly as the macro hint
+    /// family leaves them out.
+    ///
+    /// Built once per request rather than searched per argument: the list is short, the arguments
+    /// are not, and the client sends one request per visible range while scrolling.
+    /// </summary>
+    private static Dictionary<Position, string> MacroNamesByPosition(NavigationTarget target)
+    {
+        Dictionary<Position, string> names = [];
+
+        foreach ( MacroInvocation invocation in target.Result.Preprocessed.MacroInvocations )
+        {
+            if ( invocation.SourceFile is null )
+            {
+                names[invocation.Range.Start] = invocation.Name;
+            }
+        }
+
+        return names;
     }
 
     /// <summary>

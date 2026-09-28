@@ -400,7 +400,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   expansion of the outer macro. The window is tested against the position the LABEL goes at, not
   against the construct that owns it — testing the call's start dropped every label of a
   multi-line argument list whose callee sat above the viewport. And an argument that already spells
-  its parameter's name is left unlabelled, bare identifiers only.
+  its parameter's name is left unlabelled — a bare identifier, or an object-like macro name, since
+  `DELETE_TRIGGER` against a `delete_trigger` parameter is the same repetition in capitals and the
+  tree sees only the literal it expanded to (`MacroNamesByPosition` reads the name back from
+  `PreprocessResult.MacroInvocations`, root-file invocations only). A field access whose last
+  segment happens to agree keeps its label: that can be coincidence.
 
   `CollectCalls` takes the window and prunes as it descends (a parser range spans everything its
   node contains; a node with an EMPTY range is descended into anyway, since error recovery is

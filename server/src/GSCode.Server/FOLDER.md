@@ -412,9 +412,17 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   is callable is what was put in it, and `level thread [[ level.callback ]]()` is how a script
   spells the indirect call whose target the hierarchy exists to trace. Only prepare knows about
   fields - an item is a function either way.
-- An incoming caller's item is keyed through `GameProfile.KeyNamespace`, because expanding it asks
-  for references to that key. On a merge dialect the declared namespace is the file stem, which no
+- An incoming caller's item is keyed the way its own callers' references are indexed, because
+  expanding it asks for references to that key: a method by its owner class, a function through
+  `GameProfile.KeyNamespace`. On a merge dialect the declared namespace is the file stem, which no
   call is keyed under, so a caller keyed on it expanded to nothing (`CallHierarchyDialectTests`).
+- Methods, end to end (`CallHierarchyMethodTests`). An item's `Data` carries the key's owner class
+  as well as its namespace and name, since the item round-trips through the client and a method
+  that came back as a free function of the same name matched no call. The containing function of
+  a call site is `EnclosingFunction.At`, which finds methods; the old top-level-only walk named the
+  FILE as the caller of anything called from a method. Outgoing takes `MethodCall` (the arrow form)
+  as well as `Call`, and resolves a method key through `MethodResolution` rather than the function
+  lookup, which knows nothing of classes.
 - Incoming and outgoing resolve their item through `ResolveForQuery`, so a caller or callee in a
   file the user does not have open still answers, and they read the item's own `DocumentUri` rather
   than round-tripping it through `new Uri(string)` — which throws `UriFormatException` on input

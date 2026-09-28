@@ -116,18 +116,8 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             // A call outside every function body — a file-scope constant's initialiser, say — has
             // no calling function to name, so the file stands in for it.
             //
-            // The caller is keyed on its KEY namespace, not its declared one, because expanding this
-            // item asks for the references to that key. A merge dialect declares a function into its
-            // file stem but keys every call to it with no namespace, so the declared one matched no
-            // reference and the caller reported no callers of its own.
             CallHierarchyItem item = group.Caller is not null
-                ? MakeItem(
-                    new SymbolKey(
-                        GameProfile.Active.KeyNamespace(group.Caller.Namespace),
-                        group.Caller.KeyName,
-                        SymbolKind.Function),
-                    group.Record,
-                    group.Caller.NameRange.ToLsp())
+                ? MakeItem(CallerKey(group.Caller), group.Record, group.Caller.NameRange.ToLsp())
                 : MakeFileItem(group.Record);
 
             incoming.Add(new CallHierarchyIncomingCall { From = item, FromRanges = new Container<LspRange>(group.Ranges) });
@@ -148,27 +138,31 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         // Find this function's definition record, then the call references inside its body range.
-        ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
-            target.Store, target.ContextId, target.Path, key.Value.Namespace, key.Value.Name, askingNamespaces: target.Namespaces);
+        ImmutableArray<ResolvedFunction> functions = Declarations(target, key.Value, ReferenceKind.Call, out SymbolKey _);
         if ( functions.Length == 0 )
         {
             return Task.FromResult<Container<CallHierarchyOutgoingCall>?>(null);
         }
 
         ResolvedFunction self = functions[0];
-        Dictionary<SymbolKey, List<LspRange>> calls = new();
+        Dictionary<OutgoingSite, List<LspRange>> calls = new();
         foreach ( ReferenceEntry entry in self.Record.References )
         {
             // !entry.FromMacro preserves what the collapsed kind used to do here. An expanded call
             // is keyed to its INVOCATION range, so a macro used twice in one function would list the
             // same outgoing edge at ranges that spell the macro's name, not the callee's.
-            if ( entry.Kind == ReferenceKind.Call && !entry.FromMacro && entry.Key.Kind == SymbolKind.Function
+            //
+            // A MethodCall is the `[[ x ]]->m()` arrow form, which is how one method calls another;
+            // leaving it out made a method's outgoing calls to its own class's methods invisible.
+            bool isCall = entry.Kind == ReferenceKind.Call || entry.Kind == ReferenceKind.MethodCall;
+            if ( isCall && !entry.FromMacro && entry.Key.Kind == SymbolKind.Function
                 && self.Function.FullRange.Contains(entry.Range.Start) )
             {
-                if ( !calls.TryGetValue(entry.Key, out List<LspRange>? ranges) )
+                OutgoingSite site = new(entry.Key, entry.Kind);
+                if ( !calls.TryGetValue(site, out List<LspRange>? ranges) )
                 {
                     ranges = [];
-                    calls[entry.Key] = ranges;
+                    calls[site] = ranges;
                 }
 
                 ranges.Add(entry.Range.ToLsp());
@@ -176,20 +170,69 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         List<CallHierarchyOutgoingCall> outgoing = [];
-        foreach ( (SymbolKey callee, List<LspRange> ranges) in calls )
+        foreach ( KeyValuePair<OutgoingSite, List<LspRange>> call in calls )
         {
-            ImmutableArray<ResolvedFunction> resolved = DatabaseQueries.LookupFunctions(
-                target.Store, target.ContextId, target.Path, callee.Namespace, callee.Name, askingNamespaces: target.Namespaces);
+            ImmutableArray<ResolvedFunction> resolved = Declarations(target, call.Key.Key, call.Key.Kind, out SymbolKey callee);
             if ( resolved.Length == 0 )
             {
                 continue;
             }
 
+            List<LspRange> ranges = call.Value;
             CallHierarchyItem item = MakeItem(callee, resolved[0].Record, resolved[0].Function.NameRange.ToLsp());
             outgoing.Add(new CallHierarchyOutgoingCall { To = item, FromRanges = new Container<LspRange>(ranges) });
         }
 
         return Task.FromResult<Container<CallHierarchyOutgoingCall>?>(new Container<CallHierarchyOutgoingCall>(outgoing));
+    }
+
+    /// <summary>
+    /// The key a calling function's own callers are indexed under, which is what expanding its item
+    /// asks for. A method is keyed by its owner class. A function is keyed on its KEY namespace, not
+    /// its declared one: a merge dialect declares a function into its file stem but keys every call
+    /// to it with no namespace, so the declared one matched no reference.
+    /// </summary>
+    private static SymbolKey CallerKey(FunctionSymbol caller)
+    {
+        if ( caller.OwnerClassKeyName is string ownerClass )
+        {
+            return new SymbolKey(null, caller.KeyName, SymbolKind.Function, ownerClass);
+        }
+
+        return new SymbolKey(GameProfile.Active.KeyNamespace(caller.Namespace), caller.KeyName, SymbolKind.Function);
+    }
+
+    /// <summary>One distinct callee inside a body: the key as written, and how it was called.</summary>
+    private readonly record struct OutgoingSite(SymbolKey Key, ReferenceKind Kind);
+
+    /// <summary>
+    /// The declarations a function or method key names, and the key an item for them should carry.
+    ///
+    /// A method goes through <see cref="MethodResolution"/> — canonicalized to the class that
+    /// declares it, then looked up there — because the function lookup knows nothing of classes and
+    /// answered every method with nothing, which left a method's outgoing calls, and every method it
+    /// called, off the tree. An arrow call on a receiver whose class is unknown is keyed with no
+    /// owner, the same as an unqualified call; the kind is what tells the two apart, so it is passed
+    /// to the canonicalization rather than guessed from the key. The canonical key is handed back so
+    /// the callee's own item names the declaring class and expands like any other.
+    /// </summary>
+    private static ImmutableArray<ResolvedFunction> Declarations(
+        SymbolQueryContext target, SymbolKey key, ReferenceKind kind, out SymbolKey canonical)
+    {
+        if ( key.OwnerClass is null && kind != ReferenceKind.MethodCall )
+        {
+            canonical = key;
+            return DatabaseQueries.LookupFunctions(
+                target.Store, target.ContextId, target.Path, key.Namespace, key.Name, askingNamespaces: target.Namespaces);
+        }
+
+        canonical = MethodResolution.Canonicalize(target.Store, target.ContextId, key, kind);
+        if ( canonical.OwnerClass is null )
+        {
+            return [];
+        }
+
+        return MethodResolution.LookupMethods(target.Store, target.ContextId, canonical.OwnerClass, canonical.Name);
     }
 
     /// <summary>One caller entry: the file, the function inside it that makes the calls, and where.</summary>
@@ -226,7 +269,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
                 continue;
             }
 
-            FunctionSymbol? caller = ContainingFunction(record, entry.Range.Start);
+            FunctionSymbol? caller = EnclosingFunction.At(record.Functions, record.Classes, entry.Range.Start);
             (string Path, Position Caller) groupKey = caller is null
                 ? (record.Path, default)
                 : (record.Path, caller.NameRange.Start);
@@ -243,19 +286,6 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         return [.. byCaller.Values];
     }
 
-    private static FunctionSymbol? ContainingFunction(ScriptRecord record, Position start)
-    {
-        foreach ( FunctionSymbol function in record.Functions )
-        {
-            if ( function.FullRange.Contains(start) )
-            {
-                return function;
-            }
-        }
-
-        return null;
-    }
-
     private static CallHierarchyItem MakeItem(SymbolKey key, ScriptRecord record, TextRange nameRange)
     {
         return MakeItem(key, record, nameRange.ToLsp());
@@ -270,7 +300,10 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             Uri = DocumentUri.FromFileSystemPath(record.Path),
             Range = nameRange,
             SelectionRange = nameRange,
-            Data = JToken.FromObject(new { ns = key.Namespace ?? "", name = key.Name }),
+            // Everything the key needs has to survive the round trip through the client. The owner
+            // was once left out, so a method's item came back as a free function of the same name,
+            // which nothing calls: its incoming calls were always empty.
+            Data = JToken.FromObject(new { ns = key.Namespace ?? "", name = key.Name, owner = key.OwnerClass ?? "" }),
         };
     }
 
@@ -296,11 +329,12 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 
         string ns = item.Data["ns"]?.ToString() ?? "";
         string name = item.Data["name"]?.ToString() ?? "";
+        string owner = item.Data["owner"]?.ToString() ?? "";
         if ( name.Length == 0 )
         {
             return null;
         }
 
-        return new SymbolKey(ns.Length > 0 ? ns : null, name, SymbolKind.Function);
+        return new SymbolKey(ns.Length > 0 ? ns : null, name, SymbolKind.Function, owner.Length > 0 ? owner : null);
     }
 }

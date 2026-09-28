@@ -417,7 +417,9 @@ namespace, class and `sys::` form that calls it, and a script function sharing a
 its own · `MacroReferenceScopeTests`, `DefinitionHandlerMacroScopeTests`
 two same-named macros in sibling `.gsc`/`.csc` files staying apart · `DocumentHighlightSameFileTests`
 highlight on the shared reference query, asked for one file · `CallHierarchyGroupingTests` one incoming entry per calling
-FUNCTION · `CallHierarchyDialectTests` a caller expanding to its own callers on both dialect families · `ResolveForQueryTests` hierarchies for files not open · `NamespaceImportFixTests` the
+FUNCTION · `CallHierarchyDialectTests` a caller expanding to its own callers on both dialect families ·
+`CallHierarchyMethodTests` a class method prepared from the editor, expanded to its caller and to
+its callee · `ResolveForQueryTests` hierarchies for files not open · `NamespaceImportFixTests` the
 add-`#using` fix driven through the handler · `WorkspaceSymbolShadowingTests` · `KeywordHoverTests`,
 `BuiltinMacroHoverTests` (`__FUNCTION__`/`__FILE__` where written), `HoverInferenceReuseTests`
 one assignment walk per version · `CompletionLabelDetailsTests`,
